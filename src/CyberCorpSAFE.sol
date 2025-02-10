@@ -53,6 +53,7 @@ contract CyberCorpSAFE is ICyberCorpSAFE, ERC721A {
                 revert TokenOwnedByZeroAddress();
             }
             isTokenTransferrable[id] = enabled;
+            emit TransferabilitySet(id, enabled);
             unchecked {
                 ++i;
             }
@@ -123,5 +124,10 @@ contract CyberCorpSAFE is ICyberCorpSAFE, ERC721A {
     function _char(bytes1 b) internal pure returns (bytes1 c) {
         if (uint8(b) < 10) return bytes1(uint8(b) + 0x30);
         else return bytes1(uint8(b) + 0x57);
+    }
+
+    function setGlobalTransfersEnabled(bool enabled) public onlyCyberCorpOwner {
+        globalTransfersEnabled = enabled;
+        emit GlobalTransferabilitySet(enabled);
     }
 }

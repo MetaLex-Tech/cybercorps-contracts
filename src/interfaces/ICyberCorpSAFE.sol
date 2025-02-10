@@ -20,4 +20,9 @@ interface ICyberCorpSAFE is IERC721A {
 
     function isTokenTransferrable(uint256 tokenId) external view returns (bool);
     function globalTransfersEnabled() external view returns (bool);
+
+    function setGlobalTransfersEnabled(bool enabled) external;
+
+    event TransferabilitySet(uint256 indexed tokenId, bool enabled);
+    event GlobalTransferabilitySet(bool enabled);
 }
