@@ -20,8 +20,8 @@ contract DeployCyberCorpsScript is Script {
 
         // Load and validate salt
         bytes32 salt;
-        try vm.envUint("SALT") returns (uint256 value) {
-            salt = bytes32(value);
+        try vm.envString("SALT") returns (string memory value) {
+            salt = bytes32(bytes(value));
         } catch {
             revert MissingSalt();
         }
@@ -29,9 +29,10 @@ contract DeployCyberCorpsScript is Script {
         // Get deployment params
         string memory name = "CyberCorps";
         string memory symbol = "CyCos";
+        address usdc = 0xf08A50178dfcDe18524640EA6618a1f965821715;
 
         // Get creation bytecode with constructor args
-        bytes memory creationCode = abi.encodePacked(type(CyberCorps).creationCode, abi.encode(name, symbol));
+        bytes memory creationCode = abi.encodePacked(type(CyberCorps).creationCode, abi.encode(name, symbol, usdc));
 
         // Get factory instance
         DeterministicDeployFactory factory = DeterministicDeployFactory(factoryAddress);
