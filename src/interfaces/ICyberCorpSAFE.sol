@@ -7,9 +7,7 @@ error OnlyCyberCorpsContract();
 
 interface ICyberCorpSAFE is IERC721A {
     struct CyberCorpSAFEDetails {
-        address principalToken;
         uint256 principalAmount;
-        address valuationToken;
         uint256 valuationCap;
     }
 

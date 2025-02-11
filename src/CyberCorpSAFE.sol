@@ -11,6 +11,7 @@ import {Base64} from "openzeppelin-contracts/utils/Base64.sol";
 contract CyberCorpSAFE is ICyberCorpSAFE, ERC721A {
     ICyberCorps public immutable cyberCorps;
     uint256 public immutable cyberCorpId;
+    address public immutable USDC;
 
     bool public globalTransfersEnabled = false;
     mapping(uint256 => bool) public isTokenTransferrable;
@@ -35,14 +36,19 @@ contract CyberCorpSAFE is ICyberCorpSAFE, ERC721A {
         _;
     }
 
-    constructor(ICyberCorps cyberCorps_, uint256 cyberCorpId_, string memory name_, string memory symbol_)
-        ERC721A(name_, symbol_)
-    {
+    constructor(
+        ICyberCorps cyberCorps_,
+        uint256 cyberCorpId_,
+        string memory name_,
+        string memory symbol_,
+        address USDC_
+    ) ERC721A(name_, symbol_) {
         if (msg.sender != address(cyberCorps_)) {
             revert OnlyCyberCorpsContract();
         }
         cyberCorps = cyberCorps_;
         cyberCorpId = cyberCorpId_;
+        USDC = USDC_;
     }
 
     function setAreTokensTransferrable(uint256[] calldata ids, bool enabled) public onlyCyberCorpOwner {
@@ -81,19 +87,12 @@ contract CyberCorpSAFE is ICyberCorpSAFE, ERC721A {
     function tokenURI(uint256 tokenId) public view override(ERC721A, IERC721A) returns (string memory) {
         bytes memory dataURI = abi.encodePacked(
             "{",
-            '"name": "SAFE #',
+            '"id": "',
             _toString(tokenId),
             '",',
-            '"description": "A Simple Agreement for Future Equity token",',
             '"details": {',
-            '"principalToken": "',
-            _toHexString(safeDetails(tokenId).principalToken),
-            '",',
             '"principalAmount": "',
             _toString(safeDetails(tokenId).principalAmount),
-            '",',
-            '"valuationToken": "',
-            _toHexString(safeDetails(tokenId).valuationToken),
             '",',
             '"valuationCap": "',
             _toString(safeDetails(tokenId).valuationCap),

@@ -6,9 +6,12 @@ import {IERC721A} from "erc721a/contracts/interfaces/IERC721A.sol";
 interface ICyberCorps is IERC721A {
     struct CyberCorpInfo {
         string name;
+        string symbol;
         bool active;
     }
 
     function mintCyberCorp(address to_, CyberCorpInfo memory info_) external;
     function enableSAFEs(uint256 tokenId) external;
+
+    event SAFEsEnalbed(uint256 indexed tokenId, address SAFEContract);
 }
