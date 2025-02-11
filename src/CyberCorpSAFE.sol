@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.20;
 
-import {ERC721A} from "erc721a/contracts/ERC721A.sol";
-import {IERC721A} from "erc721a/contracts/interfaces/IERC721A.sol";
-import {IERC721AQueryable} from "erc721a/contracts/interfaces/IERC721AQueryable.sol";
+import {ERC721AQueryable, ERC721A} from "erc721a/contracts/extensions/ERC721AQueryable.sol";
+import {IERC721AQueryable, IERC721A} from "erc721a/contracts/interfaces/IERC721AQueryable.sol";
 import {ICyberCorps} from "./interfaces/ICyberCorps.sol";
 import {ICyberCorpSAFE} from "./interfaces/ICyberCorpSAFE.sol";
 import {Base64} from "openzeppelin-contracts/utils/Base64.sol";
 
-contract CyberCorpSAFE is ICyberCorpSAFE, ERC721A {
+contract CyberCorpSAFE is ICyberCorpSAFE, ERC721AQueryable {
     ICyberCorps public immutable cyberCorps;
     uint256 public immutable cyberCorpId;
     address public immutable USDC;

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.20;
 
-import {IERC721A} from "erc721a/contracts/interfaces/IERC721A.sol";
+import {IERC721AQueryable} from "erc721a/contracts/interfaces/IERC721AQueryable.sol";
 
 error OnlyCyberCorpsContract();
 
-interface ICyberCorpSAFE is IERC721A {
+interface ICyberCorpSAFE is IERC721AQueryable {
     struct CyberCorpSAFEDetails {
         uint256 principalAmount;
         uint256 valuationCap;

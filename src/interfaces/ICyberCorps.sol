@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.20;
 
-import {IERC721A} from "erc721a/contracts/interfaces/IERC721A.sol";
+import {IERC721AQueryable} from "erc721a/contracts/interfaces/IERC721AQueryable.sol";
 
-interface ICyberCorps is IERC721A {
+interface ICyberCorps is IERC721AQueryable {
     struct CyberCorpInfo {
         string name;
         string symbol;
