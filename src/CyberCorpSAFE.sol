@@ -90,11 +90,11 @@ contract CyberCorpSAFE is ICyberCorpSAFE, ERC721AQueryable {
             _toString(tokenId),
             '",',
             '"details": {',
-            '"principalAmount": "',
-            _toString(safeDetails(tokenId).principalAmount),
+            '"purchaseAmount": "',
+            _toString(safeDetails(tokenId).purchaseAmount),
             '",',
-            '"valuationCap": "',
-            _toString(safeDetails(tokenId).valuationCap),
+            '"postMoneyValuationCap": "',
+            _toString(safeDetails(tokenId).postMoneyValuationCap),
             '"}',
             "}"
         );
