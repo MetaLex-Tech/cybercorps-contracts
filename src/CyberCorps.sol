@@ -66,6 +66,6 @@ contract CyberCorps is ERC721AQueryable, ICyberCorps {
             )
         );
         SAFEContractForCorp[tokenId] = deployedSafeContract;
-        emit SAFEsEnalbed(tokenId, deployedSafeContract);
+        emit SAFEsEnabled(tokenId, deployedSafeContract);
     }
 }
