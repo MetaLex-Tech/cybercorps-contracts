@@ -13,13 +13,13 @@ contract CyberCorpSAFE is ICyberCorpSAFE, ERC721AQueryable {
     address public immutable USDC;
 
     bool public globalTransfersEnabled = false;
-    mapping(uint256 => bool) public isTokenTransferrable;
+    mapping(uint256 => bool) public isTokenTransferable;
     mapping(uint256 => CyberCorpSAFEDetails) private _safeDetails;
 
     error OnlyCyberCorpsContract();
     error OnlyCyberCorpOwner();
     error TokenOwnedByZeroAddress();
-    error TokenNotTransferrable(uint256 tokenId);
+    error TokenNotTransferable(uint256 tokenId);
 
     modifier onlyCyberCorps() {
         if (msg.sender != address(cyberCorps)) {
@@ -50,14 +50,14 @@ contract CyberCorpSAFE is ICyberCorpSAFE, ERC721AQueryable {
         USDC = USDC_;
     }
 
-    function setAreTokensTransferrable(uint256[] calldata ids, bool enabled) public onlyCyberCorpOwner {
+    function setAreTokensTransferable(uint256[] calldata ids, bool enabled) public onlyCyberCorpOwner {
         uint256 length = ids.length;
         for (uint256 i = 0; i < length;) {
             uint256 id = ids[i];
             if (cyberCorps.ownerOf(id) == address(0)) {
                 revert TokenOwnedByZeroAddress();
             }
-            isTokenTransferrable[id] = enabled;
+            isTokenTransferable[id] = enabled;
             emit TransferabilitySet(id, enabled);
             unchecked {
                 ++i;
@@ -77,9 +77,9 @@ contract CyberCorpSAFE is ICyberCorpSAFE, ERC721AQueryable {
         override
     {
         if (from == address(0)) return; // mint
-        if (globalTransfersEnabled) return; // all tokens are freely transferrable
+        if (globalTransfersEnabled) return; // all tokens are freely transferable
         for (uint256 i = 0; i < quantity; ++i) {
-            if (!isTokenTransferrable[startTokenId + i]) revert TokenNotTransferrable(startTokenId + i);
+            if (!isTokenTransferable[startTokenId + i]) revert TokenNotTransferable(startTokenId + i);
         }
     }
 
