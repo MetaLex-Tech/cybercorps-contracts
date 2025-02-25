@@ -1,4 +1,3 @@
-
 pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
@@ -13,7 +12,7 @@ interface ITransferRestrictionHook {
     ) external view returns (bool allowed, string memory reason);
 }
 
-contract CyberCorpsAgreement is ERC721 {
+contract CyberCerts is ERC721 {
     // Custom errors
     error NotIssuanceManager();
     error TokenNotTransferable();
@@ -29,12 +28,17 @@ contract CyberCorpsAgreement is ERC721 {
     struct AgreementDetails {
         string issuerName;
         string investorName;
-        string securityType;
-        uint256 purchaseAmount;
-        uint256 postMoneyValuationCap;
-        string safeTextURI;
-        bool transferable;
+        string securityClass; //I suggest using 'class' as a more generalized and legally proper replacement for 'type', examples include "common stock, preferred stock, SAFE, SAFT, SAFTE, Token Purchase Agreement, Token Warrant 
+        string securitySeries; //Examples include "Series Seed," "Series A," etc.
+        string signingOfficerName;
+        string signingOfficerTitle;
+        string legalAgreementTextURI;
         string legend;
+        uint256 investmentAmount;
+        uint256 issuerUSDValuationAtTimeofInvestment;
+        uint256 unitsRepresented; //# of shares or other units represented by a certificate that represents multiple units 
+        bool transferable;
+
         
         // Additional legal details
         string governingJurisdiction;
@@ -62,7 +66,7 @@ contract CyberCorpsAgreement is ERC721 {
     event RestrictionHookSet(string indexed securityType, address hookAddress);
     event GlobalRestrictionHookSet(address hookAddress);
 
-    constructor() ERC721("CyberCorpsAgreement", "CCA") {
+    constructor() ERC721("CyberCerts", "CCA") {
         issuanceManager = msg.sender; // Set by IM or deployer
     }
 
