@@ -11,12 +11,12 @@ interface ICyberCorpSAFE is IERC721AQueryable {
         uint256 valuationCap;
     }
 
-    function setAreTokensTransferrable(uint256[] calldata ids, bool enabled) external;
+    function setAreTokensTransferable(uint256[] calldata ids, bool enabled) external;
     function createSAFE(address recipient, CyberCorpSAFEDetails memory details) external;
 
     function safeDetails(uint256 tokenId) external view returns (CyberCorpSAFEDetails memory);
 
-    function isTokenTransferrable(uint256 tokenId) external view returns (bool);
+    function isTokenTransferable(uint256 tokenId) external view returns (bool);
     function globalTransfersEnabled() external view returns (bool);
 
     function setGlobalTransfersEnabled(bool enabled) external;
