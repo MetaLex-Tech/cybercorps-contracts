@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.20;
 
 import {ERC721AQueryable, ERC721A} from "erc721a/contracts/extensions/ERC721AQueryable.sol";
