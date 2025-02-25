@@ -13,7 +13,7 @@ interface ITransferRestrictionHook {
     ) external view returns (bool allowed, string memory reason);
 }
 
-contract CyberCorpsAgreement is ERC721 {
+contract CyberCorpsCertificate is ERC721 {
     // Custom errors
     error NotIssuanceManager();
     error TokenNotTransferable();
@@ -25,8 +25,8 @@ contract CyberCorpsAgreement is ERC721 {
     
     address public issuanceManager;
     
-    // Agreement details
-    struct AgreementDetails {
+    // Certificate details
+    struct CertificateDetails {
         string issuerName;
         string investorName;
         string securityType;
@@ -48,8 +48,8 @@ contract CyberCorpsAgreement is ERC721 {
         uint256[] endorsementTimestamps;
     }
     
-    // Mapping from token ID to agreement details
-    mapping(uint256 => AgreementDetails) public agreements;
+    // Mapping from token ID to certificate details
+    mapping(uint256 => CertificateDetails) public certificates;
     // Mapping for token URIs
     mapping(uint256 => string) private _tokenURIs;
     // Mapping for custom restriction hooks by security type
@@ -57,12 +57,12 @@ contract CyberCorpsAgreement is ERC721 {
     // Global restriction hook (applies to all tokens)
     ITransferRestrictionHook public globalRestrictionHook;
     
-    event AgreementCreated(uint256 indexed tokenId, string issuerName, string investorName);
-    event AgreementEndorsed(uint256 indexed tokenId, address indexed endorser, string signatureURI, uint256 timestamp);
+    event CertificateCreated(uint256 indexed tokenId, string issuerName, string investorName);
+    event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, string signatureURI, uint256 timestamp);
     event RestrictionHookSet(string indexed securityType, address hookAddress);
     event GlobalRestrictionHookSet(address hookAddress);
 
-    constructor() ERC721("CyberCorpsAgreement", "CCA") {
+    constructor() ERC721("CyberCorpsCertificate", "CCA") {
         issuanceManager = msg.sender; // Set by IM or deployer
     }
 
@@ -85,19 +85,19 @@ contract CyberCorpsAgreement is ERC721 {
         emit GlobalRestrictionHookSet(hookAddress);
     }
 
-    // Restricted minting with full agreement details
+    // Restricted minting with full certificate details
     function safeMint(
         address to, 
         uint256 tokenId,
-        AgreementDetails memory details
+        CertificateDetails memory details
     ) external {
         if (msg.sender != issuanceManager) revert NotIssuanceManager();
         _safeMint(to, tokenId);
         
-        // Store agreement details
-        agreements[tokenId] = details;
+        // Store certificate details
+        certificates[tokenId] = details;
         
-        emit AgreementCreated(tokenId, details.issuerName, details.investorName);
+        emit CertificateCreated(tokenId, details.issuerName, details.investorName);
     }
     
     // Simplified mint for backward compatibility
@@ -106,28 +106,28 @@ contract CyberCorpsAgreement is ERC721 {
         _safeMint(to, tokenId);
     }
 
-    // Add issuer signature to an agreement
+    // Add issuer signature to an certificate
     function addIssuerSignature(uint256 tokenId, string calldata signatureURI) external {
         if (msg.sender != issuanceManager) revert NotIssuanceManager();
-        agreements[tokenId].issuerSignatureURI = signatureURI;
+        certificates[tokenId].issuerSignatureURI = signatureURI;
     }
     
     // Add endorsement (for transfers in secondary market)
     function addEndorsement(uint256 tokenId, address endorser, string calldata signatureURI) external {
         if (msg.sender != issuanceManager) revert NotIssuanceManager();
         
-        AgreementDetails storage details = agreements[tokenId];
+        CertificateDetails storage details = certificates[tokenId];
         details.endorsementSigners.push(endorser);
         details.endorsementSignatureURIs.push(signatureURI);
         details.endorsementTimestamps.push(block.timestamp);
         
-        emit AgreementEndorsed(tokenId, endorser, signatureURI, block.timestamp);
+        emit CertificateEndorsed(tokenId, endorser, signatureURI, block.timestamp);
     }
     
-    // Update agreement details (for admin purposes)
-    function updateAgreementDetails(uint256 tokenId, AgreementDetails calldata details) external {
+    // Update certificate details (for admin purposes)
+    function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external {
         if (msg.sender != issuanceManager) revert NotIssuanceManager();
-        agreements[tokenId] = details;
+        certificates[tokenId] = details;
     }
 
     // Restricted burning
@@ -135,8 +135,8 @@ contract CyberCorpsAgreement is ERC721 {
         if (msg.sender != issuanceManager) revert NotIssuanceManager();
         _burn(tokenId);
         
-        // Clear agreement details
-        delete agreements[tokenId];
+        // Clear certificate details
+        delete certificates[tokenId];
         if (bytes(_tokenURIs[tokenId]).length != 0) {
             delete _tokenURIs[tokenId];
         }
@@ -152,10 +152,10 @@ contract CyberCorpsAgreement is ERC721 {
         // Skip restriction checks for minting (from == address(0)) and burning (to == address(0))
         if (from != address(0) && to != address(0)) {
             // This is a transfer, check built-in transferability flag
-            if (!agreements[tokenId].transferable) revert TokenNotTransferable();
+            if (!certificates[tokenId].transferable) revert TokenNotTransferable();
             
             // Check security type-specific hook if it exists
-            string memory securityType = agreements[tokenId].securityType;
+            string memory securityType = certificates[tokenId].securityType;
             ITransferRestrictionHook typeHook = restrictionHooks[securityType];
             
             if (address(typeHook) != address(0)) {
@@ -178,10 +178,10 @@ contract CyberCorpsAgreement is ERC721 {
         return super._update(to, tokenId, auth);
     }
     
-    // Get full agreement details
-    function getAgreementDetails(uint256 tokenId) external view returns (AgreementDetails memory) {
+    // Get full certificate details
+    function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory) {
         if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
-        return agreements[tokenId];
+        return certificates[tokenId];
     }
     
     // Get endorsement history
@@ -191,7 +191,7 @@ contract CyberCorpsAgreement is ERC721 {
         uint256[] memory timestamps
     ) {
         if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
-        AgreementDetails memory details = agreements[tokenId];
+        CertificateDetails memory details = certificates[tokenId];
         
         return (
             details.endorsementSigners,
