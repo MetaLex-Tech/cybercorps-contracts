@@ -13,5 +13,5 @@ interface ICyberCorps is IERC721AQueryable {
     function mintCyberCorp(address to_, CyberCorpInfo memory info_) external;
     function enableSAFEs(uint256 tokenId) external;
 
-    event SAFEsEnalbed(uint256 indexed tokenId, address SAFEContract);
+    event SAFEsEnabled(uint256 indexed tokenId, address SAFEContract);
 }
