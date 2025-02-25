@@ -4,9 +4,4 @@ out = "out"
 libs = ["lib", "dependencies"]
 optimizer = true
 
-[dependencies]
-forge-std = "1.9.6"
-erc721a = "4.3.0"
-"@openzeppelin-contracts" = "5.2.0"
-
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
