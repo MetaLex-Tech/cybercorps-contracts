@@ -25,7 +25,7 @@ contract CyberCerts is ERC721 {
     address public issuanceManager;
     
     // Agreement details
-    struct AgreementDetails {
+    struct CertificateDetails {
         string issuerName;
         string investorName;
         string securityClass; //I suggest using 'class' as a more generalized and legally proper replacement for 'type', examples include "common stock, preferred stock, SAFE, SAFT, SAFTE, Token Purchase Agreement, Token Warrant 
@@ -39,7 +39,6 @@ contract CyberCerts is ERC721 {
         uint256 unitsRepresented; //# of shares or other units represented by a certificate that represents multiple units 
         bool transferable;
 
-        
         // Additional legal details
         string governingJurisdiction;
         string contactDetails;
@@ -53,7 +52,7 @@ contract CyberCerts is ERC721 {
     }
     
     // Mapping from token ID to agreement details
-    mapping(uint256 => AgreementDetails) public agreements;
+    mapping(uint256 => CertificateDetails) public agreements;
     // Mapping for token URIs
     mapping(uint256 => string) private _tokenURIs;
     // Mapping for custom restriction hooks by security type
@@ -93,7 +92,7 @@ contract CyberCerts is ERC721 {
     function safeMint(
         address to, 
         uint256 tokenId,
-        AgreementDetails memory details
+        CertificateDetails memory details
     ) external {
         if (msg.sender != issuanceManager) revert NotIssuanceManager();
         _safeMint(to, tokenId);
@@ -120,7 +119,7 @@ contract CyberCerts is ERC721 {
     function addEndorsement(uint256 tokenId, address endorser, string calldata signatureURI) external {
         if (msg.sender != issuanceManager) revert NotIssuanceManager();
         
-        AgreementDetails storage details = agreements[tokenId];
+        CertificateDetails storage details = agreements[tokenId];
         details.endorsementSigners.push(endorser);
         details.endorsementSignatureURIs.push(signatureURI);
         details.endorsementTimestamps.push(block.timestamp);
@@ -129,7 +128,7 @@ contract CyberCerts is ERC721 {
     }
     
     // Update agreement details (for admin purposes)
-    function updateAgreementDetails(uint256 tokenId, AgreementDetails calldata details) external {
+    function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external {
         if (msg.sender != issuanceManager) revert NotIssuanceManager();
         agreements[tokenId] = details;
     }
@@ -159,7 +158,7 @@ contract CyberCerts is ERC721 {
             if (!agreements[tokenId].transferable) revert TokenNotTransferable();
             
             // Check security type-specific hook if it exists
-            string memory securityType = agreements[tokenId].securityType;
+            string memory securityType = agreements[tokenId].securityClass;
             ITransferRestrictionHook typeHook = restrictionHooks[securityType];
             
             if (address(typeHook) != address(0)) {
@@ -183,7 +182,7 @@ contract CyberCerts is ERC721 {
     }
     
     // Get full agreement details
-    function getAgreementDetails(uint256 tokenId) external view returns (AgreementDetails memory) {
+    function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory) {
         if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
         return agreements[tokenId];
     }
@@ -195,7 +194,7 @@ contract CyberCerts is ERC721 {
         uint256[] memory timestamps
     ) {
         if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
-        AgreementDetails memory details = agreements[tokenId];
+        CertificateDetails memory details = agreements[tokenId];
         
         return (
             details.endorsementSigners,

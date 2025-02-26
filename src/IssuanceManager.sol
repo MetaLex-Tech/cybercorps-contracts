@@ -1,10 +1,9 @@
-
 pragma solidity 0.8.28;
 
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
-import "./CyberCorpCertificate.sol";
+import "./CyberCerts.sol";
 
 contract IssuanceManager is BorgAuthACL {
     // Custom errors
@@ -21,8 +20,11 @@ contract IssuanceManager is BorgAuthACL {
     string public companyContactDetails;
     string public defaultDisputeResolution;
     string public defaultLegend;
+    
+    // Mapping to track proxy addresses for each token ID
+    mapping(uint256 => address) private _proxyAddresses;
 
-    event CertificateCreated(uint256 indexed tokenId, address indexed investor, uint256 amount, uint256 cap, uint256 discount);
+    event CertificateCreated(uint256 indexed tokenId, address indexed investor, uint256 amount, uint256 cap);
     event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
     event CertificateSigned(uint256 indexed tokenId, string signatureURI);
@@ -52,45 +54,22 @@ contract IssuanceManager is BorgAuthACL {
 
     function issue(
         address investor,
-        string calldata investorName,
-        uint256 amount,
-        uint256 cap,
-        uint256 discount,
-        string calldata safeTextURI,
-        bool transferable,
-        string calldata legend
+        CyberCerts.CertificateDetails memory _details
     ) public onlyOwner returns (uint256 tokenId) {
         if (bytes(companyName).length == 0) revert CompanyDetailsNotSet();
         tokenId = _tokenIdCounter++;
         
         BeaconProxy proxy = new BeaconProxy(
             address(beacon),
-            abi.encodeWithSelector(CyberCorpsCertificate.initialize.selector)
+            abi.encodeWithSelector(CyberCerts.initialize.selector)
         );
-        
-        // Create certificate details
-        CyberCorpsCertificate.CertificateDetails memory details = CyberCorpsCertificate.CertificateDetails({
-            issuerName: companyName,
-            investorName: investorName,
-            securityType: "SAFE",
-            purchaseAmount: amount,
-            postMoneyValuationCap: cap,
-            safeTextURI: safeTextURI,
-            transferable: transferable,
-            legend: legend,
-            governingJurisdiction: companyJurisdiction,
-            contactDetails: companyContactDetails,
-            disputeResolutionMethod: defaultDisputeResolution,
-            issuerSignatureURI: "",
-            endorsementSigners: new address[](0),
-            endorsementSignatureURIs: new string[](0),
-            endorsementTimestamps: new uint256[](0)
-        });
 
-        CyberCorpsCertificate(address(proxy)).safeMint(investor, tokenId, details);
+        CyberCerts(address(proxy)).safeMint(investor, tokenId, _details);
 
+        // Store the proxy address for this token ID
+        _proxyAddresses[tokenId] = address(proxy);
 
-        emit CertificateCreated(tokenId, investor, amount, cap, discount);
+        emit CertificateCreated(tokenId, investor, _details.investmentAmount, _details.issuerUSDValuationAtTimeofInvestment);
         return tokenId;
     }
     
@@ -98,7 +77,7 @@ contract IssuanceManager is BorgAuthACL {
     function signCertificate(uint256 tokenId, string calldata signatureURI) external onlyAdmin {
         if (bytes(signatureURI).length == 0) revert SignatureURIRequired();
         
-        CyberCorpsCertificate certificate = getCertificateContract(tokenId);
+        CyberCerts certificate = getCertificateContract(tokenId);
         certificate.addIssuerSignature(tokenId, signatureURI);
         
         emit CertificateSigned(tokenId, signatureURI);
@@ -108,34 +87,34 @@ contract IssuanceManager is BorgAuthACL {
     function endorseCertificate(uint256 tokenId, address endorser, string calldata signatureURI) external onlyAdmin {
         if (bytes(signatureURI).length == 0) revert SignatureURIRequired();
         
-        CyberCorpsCertificate certificate = getCertificateContract(tokenId);
+        CyberCerts certificate = getCertificateContract(tokenId);
         certificate.addEndorsement(tokenId, endorser, signatureURI);
         
         emit CertificateEndorsed(tokenId, endorser, signatureURI);
     }
     
     // Helper function to get the certificate contract
-    function getCertificateContract(uint256 tokenId) internal view returns (CyberCorpsCertificate) {
-        // This is a simplified approach - in a real implementation, you'd need to track
-        // the proxy address for each token ID
-        return CyberCorpsCertificate(address(beacon));
+    function getCertificateContract(uint256 tokenId) internal view returns (CyberCerts) {
+        address proxyAddress = _proxyAddresses[tokenId];
+        if (proxyAddress == address(0)) revert TokenProxyNotFound();
+        return CyberCerts(proxyAddress);
     }
 
     //placeholder function, do not edit
     function convert(uint256 tokenId, address convertTo, uint256 stockAmount) external onlyOwner {
         // Get certificate details
-        CyberCorpsCertificate certificate = getCertificateContract(tokenId);
-        CyberCorpsCertificate.CertificateDetails memory details = certificate.getCertificateDetails(tokenId);
+        CyberCerts certificate = getCertificateContract(tokenId);
+        CyberCerts.CertificateDetails memory details = certificate.getCertificateDetails(tokenId);
         
         // Verify it's a SAFE
-        if (keccak256(bytes(details.securityType)) != keccak256(bytes("SAFE"))) revert NotSAFEToken();
+        if (keccak256(bytes(details.securityClass)) != keccak256(bytes("SAFE"))) revert NotSAFEToken();
         
         // Get the proxy address for this token
         address proxyAddress = UpgradeableBeacon(beacon).implementation();
         if (proxyAddress == address(0)) revert TokenProxyNotFound();
         
         // Burn the SAFE token
-        CyberCorpsCertificate(proxyAddress).burn(tokenId);
+        CyberCerts(proxyAddress).burn(tokenId);
         
         // Issue a new stock token
         uint256 newTokenId = 0;
