@@ -1,6 +1,7 @@
 pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "./interfaces/IIssuanceManager.sol";
 
 // Interface for transfer restriction hooks
 interface ITransferRestrictionHook {
@@ -26,33 +27,32 @@ contract CyberCerts is ERC721 {
     
     // Agreement details
     struct CertificateDetails {
-        string issuerName;
         string investorName;
         string securityClass; //I suggest using 'class' as a more generalized and legally proper replacement for 'type', examples include "common stock, preferred stock, SAFE, SAFT, SAFTE, Token Purchase Agreement, Token Warrant 
         string securitySeries; //Examples include "Series Seed," "Series A," etc.
         string signingOfficerName;
         string signingOfficerTitle;
-        string legalAgreementTextURI;
-        string legend;
+       // string legalAgreementTextURI;
+
         uint256 investmentAmount;
         uint256 issuerUSDValuationAtTimeofInvestment;
         uint256 unitsRepresented; //# of shares or other units represented by a certificate that represents multiple units 
         bool transferable;
-
         // Additional legal details
-        string governingJurisdiction;
-        string contactDetails;
-        string disputeResolutionMethod;
-        
+        string legalDetails; //governingJurisdiction, contactDetails, disputeResolutionMethod, legalAgreementTextURI
         // Signature and endorsement tracking
         string issuerSignatureURI;
-        address[] endorsementSigners;
-        string[] endorsementSignatureURIs;
-        uint256[] endorsementTimestamps;
+    }
+
+    struct endorsement {
+        address endorser;
+        string signatureURI;
+        uint256 timestamp;
     }
     
     // Mapping from token ID to agreement details
     mapping(uint256 => CertificateDetails) public agreements;
+    mapping(uint256 => endorsement[]) public endorsements;
     // Mapping for token URIs
     mapping(uint256 => string) private _tokenURIs;
     // Mapping for custom restriction hooks by security type
@@ -99,8 +99,8 @@ contract CyberCerts is ERC721 {
         
         // Store agreement details
         agreements[tokenId] = details;
-        
-        emit AgreementCreated(tokenId, details.issuerName, details.investorName);
+        string memory issuerName = IIssuanceManager(issuanceManager).companyName();
+        emit AgreementCreated(tokenId, issuerName, details.investorName);
     }
     
     // Simplified mint for backward compatibility
@@ -120,9 +120,8 @@ contract CyberCerts is ERC721 {
         if (msg.sender != issuanceManager) revert NotIssuanceManager();
         
         CertificateDetails storage details = agreements[tokenId];
-        details.endorsementSigners.push(endorser);
-        details.endorsementSignatureURIs.push(signatureURI);
-        details.endorsementTimestamps.push(block.timestamp);
+        endorsement memory newEndorsement = endorsement(endorser, signatureURI, block.timestamp);
+        endorsements[tokenId].push(newEndorsement);
         
         emit AgreementEndorsed(tokenId, endorser, signatureURI, block.timestamp);
     }
@@ -188,18 +187,17 @@ contract CyberCerts is ERC721 {
     }
     
     // Get endorsement history
-    function getEndorsementHistory(uint256 tokenId) external view returns (
-        address[] memory signers,
-        string[] memory signatureURIs,
-        uint256[] memory timestamps
+    function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (
+        address endorser,
+        string memory signatureURI,
+        uint256 timestamp
     ) {
         if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
-        CertificateDetails memory details = agreements[tokenId];
-        
+        endorsement memory details = endorsements[tokenId][index];
         return (
-            details.endorsementSigners,
-            details.endorsementSignatureURIs,
-            details.endorsementTimestamps
+            details.endorser,
+            details.signatureURI,
+            details.timestamp
         );
     }
 
