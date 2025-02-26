@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
-import "./CyberCorpAgreement.sol";
+import "./CyberCorpCertificate.sol";
 
 contract IssuanceManager is BorgAuthACL {
     // Custom errors
@@ -22,11 +22,11 @@ contract IssuanceManager is BorgAuthACL {
     string public defaultDisputeResolution;
     string public defaultLegend;
 
-    event AgreementCreated(uint256 indexed tokenId, address indexed investor, uint256 amount, uint256 cap, uint256 discount);
+    event CertificateCreated(uint256 indexed tokenId, address indexed investor, uint256 amount, uint256 cap, uint256 discount);
     event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
-    event AgreementSigned(uint256 indexed tokenId, string signatureURI);
-    event AgreementEndorsed(uint256 indexed tokenId, address indexed endorser, string signatureURI);
+    event CertificateSigned(uint256 indexed tokenId, string signatureURI);
+    event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, string signatureURI);
 
     constructor(address initialImplementation, BorgAuth _auth) BorgAuthACL(_auth) {
         beacon = new UpgradeableBeacon(initialImplementation, address(this));
@@ -65,11 +65,11 @@ contract IssuanceManager is BorgAuthACL {
         
         BeaconProxy proxy = new BeaconProxy(
             address(beacon),
-            abi.encodeWithSelector(CyberCorpsAgreement.initialize.selector)
+            abi.encodeWithSelector(CyberCorpsCertificate.initialize.selector)
         );
         
-        // Create agreement details
-        CyberCorpsAgreement.AgreementDetails memory details = CyberCorpsAgreement.AgreementDetails({
+        // Create certificate details
+        CyberCorpsCertificate.CertificateDetails memory details = CyberCorpsCertificate.CertificateDetails({
             issuerName: companyName,
             investorName: investorName,
             securityType: "SAFE",
@@ -87,45 +87,45 @@ contract IssuanceManager is BorgAuthACL {
             endorsementTimestamps: new uint256[](0)
         });
 
-        CyberCorpsAgreement(address(proxy)).safeMint(investor, tokenId, details);
+        CyberCorpsCertificate(address(proxy)).safeMint(investor, tokenId, details);
 
 
-        emit AgreementCreated(tokenId, investor, amount, cap, discount);
+        emit CertificateCreated(tokenId, investor, amount, cap, discount);
         return tokenId;
     }
     
-    // Add issuer signature to an agreement
-    function signAgreement(uint256 tokenId, string calldata signatureURI) external onlyAdmin {
+    // Add issuer signature to an certificate
+    function signCertificate(uint256 tokenId, string calldata signatureURI) external onlyAdmin {
         if (bytes(signatureURI).length == 0) revert SignatureURIRequired();
         
-        CyberCorpsAgreement agreement = getAgreementContract(tokenId);
-        agreement.addIssuerSignature(tokenId, signatureURI);
+        CyberCorpsCertificate certificate = getCertificateContract(tokenId);
+        certificate.addIssuerSignature(tokenId, signatureURI);
         
-        emit AgreementSigned(tokenId, signatureURI);
+        emit CertificateSigned(tokenId, signatureURI);
     }
     
     // Add endorsement for secondary market transfer
-    function endorseAgreement(uint256 tokenId, address endorser, string calldata signatureURI) external onlyAdmin {
+    function endorseCertificate(uint256 tokenId, address endorser, string calldata signatureURI) external onlyAdmin {
         if (bytes(signatureURI).length == 0) revert SignatureURIRequired();
         
-        CyberCorpsAgreement agreement = getAgreementContract(tokenId);
-        agreement.addEndorsement(tokenId, endorser, signatureURI);
+        CyberCorpsCertificate certificate = getCertificateContract(tokenId);
+        certificate.addEndorsement(tokenId, endorser, signatureURI);
         
-        emit AgreementEndorsed(tokenId, endorser, signatureURI);
+        emit CertificateEndorsed(tokenId, endorser, signatureURI);
     }
     
-    // Helper function to get the agreement contract
-    function getAgreementContract(uint256 tokenId) internal view returns (CyberCorpsAgreement) {
+    // Helper function to get the certificate contract
+    function getCertificateContract(uint256 tokenId) internal view returns (CyberCorpsCertificate) {
         // This is a simplified approach - in a real implementation, you'd need to track
         // the proxy address for each token ID
-        return CyberCorpsAgreement(address(beacon));
+        return CyberCorpsCertificate(address(beacon));
     }
 
     //placeholder function, do not edit
     function convert(uint256 tokenId, address convertTo, uint256 stockAmount) external onlyOwner {
-        // Get agreement details
-        CyberCorpsAgreement agreement = getAgreementContract(tokenId);
-        CyberCorpsAgreement.AgreementDetails memory details = agreement.getAgreementDetails(tokenId);
+        // Get certificate details
+        CyberCorpsCertificate certificate = getCertificateContract(tokenId);
+        CyberCorpsCertificate.CertificateDetails memory details = certificate.getCertificateDetails(tokenId);
         
         // Verify it's a SAFE
         if (keccak256(bytes(details.securityType)) != keccak256(bytes("SAFE"))) revert NotSAFEToken();
@@ -135,7 +135,7 @@ contract IssuanceManager is BorgAuthACL {
         if (proxyAddress == address(0)) revert TokenProxyNotFound();
         
         // Burn the SAFE token
-        CyberCorpsAgreement(proxyAddress).burn(tokenId);
+        CyberCorpsCertificate(proxyAddress).burn(tokenId);
         
         // Issue a new stock token
         uint256 newTokenId = 0;
