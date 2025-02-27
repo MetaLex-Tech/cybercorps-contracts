@@ -4,6 +4,7 @@ import "./libs/auth.sol";
 import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "./CyberCerts.sol";
+import "./interfaces/ICyberCorp.sol";
 
 contract IssuanceManager is BorgAuthACL {
     // Custom errors
@@ -14,13 +15,8 @@ contract IssuanceManager is BorgAuthACL {
     
     UpgradeableBeacon public beacon;
     uint256 private _tokenIdCounter;
-    // Company details
-    string public companyName;
-    string public companyJurisdiction;
-    string public companyContactDetails;
-    string public defaultDisputeResolution;
-    string public defaultLegend;
-    
+    address public CORP;
+
     // Mapping to track proxy addresses for each token ID
     mapping(uint256 => address) private _proxyAddresses;
 
@@ -30,33 +26,21 @@ contract IssuanceManager is BorgAuthACL {
     event CertificateSigned(uint256 indexed tokenId, string signatureURI);
     event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, string signatureURI);
 
-    constructor(address initialImplementation, BorgAuth _auth) BorgAuthACL(_auth) {
-        beacon = new UpgradeableBeacon(initialImplementation, address(this));
+    constructor(address _CORP, BorgAuth _auth) BorgAuthACL(_auth) {
+        CORP = _CORP;
         _tokenIdCounter = 1;
     }
     
-    // Set company details
-    function setCompanyDetails(
-        string calldata _companyName,
-        string calldata _companyJurisdiction,
-        string calldata _companyContactDetails,
-        string calldata _defaultDisputeResolution,
-        string calldata _defaultLegend
-    ) external onlyAdmin {
-        companyName = _companyName;
-        companyJurisdiction = _companyJurisdiction;
-        companyContactDetails = _companyContactDetails;
-        defaultDisputeResolution = _defaultDisputeResolution;
-        defaultLegend = _defaultLegend;
-        
-        emit CompanyDetailsUpdated(_companyName, _companyJurisdiction);
+    function createCert(address initialImplementation) public onlyOwner returns (uint256 tokenId) {
+        beacon = new UpgradeableBeacon(initialImplementation, address(this));
     }
+
 
     function issue(
         address investor,
         CyberCerts.CertificateDetails memory _details
     ) public onlyOwner returns (uint256 tokenId) {
-        if (bytes(companyName).length == 0) revert CompanyDetailsNotSet();
+        if (bytes(ICyberCorp(CORP).companyName()).length == 0) revert CompanyDetailsNotSet();
         tokenId = _tokenIdCounter++;
         
         BeaconProxy proxy = new BeaconProxy(
@@ -107,7 +91,7 @@ contract IssuanceManager is BorgAuthACL {
         CyberCerts.CertificateDetails memory details = certificate.getCertificateDetails(tokenId);
         
         // Verify it's a SAFE
-        if (keccak256(bytes(details.securityClass)) != keccak256(bytes("SAFE"))) revert NotSAFEToken();
+        if (details.securityType != SecurityClass.SAFE) revert NotSAFEToken();
         
         // Get the proxy address for this token
         address proxyAddress = UpgradeableBeacon(beacon).implementation();

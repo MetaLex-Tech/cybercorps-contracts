@@ -2,6 +2,7 @@ pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "./interfaces/IIssuanceManager.sol";
+import "./CyberCorpConstants.sol";
 
 // Interface for transfer restriction hooks
 interface ITransferRestrictionHook {
@@ -24,12 +25,13 @@ contract CyberCerts is ERC721 {
     error TransferRestricted(string reason);
     
     address public issuanceManager;
+    string ledger;
     
     // Agreement details
     struct CertificateDetails {
         string investorName;
-        string securityClass; //I suggest using 'class' as a more generalized and legally proper replacement for 'type', examples include "common stock, preferred stock, SAFE, SAFT, SAFTE, Token Purchase Agreement, Token Warrant 
-        string securitySeries; //Examples include "Series Seed," "Series A," etc.
+        SecurityClass securityType; //I suggest using 'class' as a more generalized and legally proper replacement for 'type', examples include "common stock, preferred stock, SAFE, SAFT, SAFTE, Token Purchase Agreement, Token Warrant 
+        SecuritySeries securitySeries; //Examples include "Series Seed," "Series A," etc.
         string signingOfficerName;
         string signingOfficerTitle;
        // string legalAgreementTextURI;
@@ -56,17 +58,23 @@ contract CyberCerts is ERC721 {
     // Mapping for token URIs
     mapping(uint256 => string) private _tokenURIs;
     // Mapping for custom restriction hooks by security type
-    mapping(string => ITransferRestrictionHook) public restrictionHooks;
+    mapping(SecurityClass => ITransferRestrictionHook) public restrictionHooks;
     // Global restriction hook (applies to all tokens)
     ITransferRestrictionHook public globalRestrictionHook;
     
     event AgreementCreated(uint256 indexed tokenId, string issuerName, string investorName);
     event AgreementEndorsed(uint256 indexed tokenId, address indexed endorser, string signatureURI, uint256 timestamp);
-    event RestrictionHookSet(string indexed securityType, address hookAddress);
+    event RestrictionHookSet(SecurityClass securityType, address hookAddress);
     event GlobalRestrictionHookSet(address hookAddress);
 
-    constructor() ERC721("CyberCerts", "CCA") {
+    modifier onlyIssuanceManager() {
+        if (msg.sender != issuanceManager) revert NotIssuanceManager();
+        _;
+    }
+
+    constructor(string memory _ledger) ERC721("CyberCerts", "CCA") {
         issuanceManager = msg.sender; // Set by IM or deployer
+        ledger = _ledger;
     }
 
     // Called by proxy on deployment (if needed)
@@ -74,16 +82,20 @@ contract CyberCerts is ERC721 {
         // Placeholder for initialization logic
     }
 
-    // Set a restriction hook for a specific security type
-    function setRestrictionHook(string calldata securityType, address hookAddress) external {
+    function updateLedger(string memory _ledger) external onlyIssuanceManager {
         if (msg.sender != issuanceManager) revert NotIssuanceManager();
+        ledger = _ledger;
+    }
+
+    // Set a restriction hook for a specific security type
+    function setRestrictionHook(SecurityClass securityType, address hookAddress) external onlyIssuanceManager {
+
         restrictionHooks[securityType] = ITransferRestrictionHook(hookAddress);
         emit RestrictionHookSet(securityType, hookAddress);
     }
     
     // Set a global restriction hook that applies to all tokens
-    function setGlobalRestrictionHook(address hookAddress) external {
-        if (msg.sender != issuanceManager) revert NotIssuanceManager();
+    function setGlobalRestrictionHook(address hookAddress) external onlyIssuanceManager {
         globalRestrictionHook = ITransferRestrictionHook(hookAddress);
         emit GlobalRestrictionHookSet(hookAddress);
     }
@@ -93,8 +105,7 @@ contract CyberCerts is ERC721 {
         address to, 
         uint256 tokenId,
         CertificateDetails memory details
-    ) external {
-        if (msg.sender != issuanceManager) revert NotIssuanceManager();
+    ) external onlyIssuanceManager {
         _safeMint(to, tokenId);
         
         // Store agreement details
@@ -104,20 +115,17 @@ contract CyberCerts is ERC721 {
     }
     
     // Simplified mint for backward compatibility
-    function safeMint(address to, uint256 tokenId) external {
-        if (msg.sender != issuanceManager) revert NotIssuanceManager();
+    function safeMint(address to, uint256 tokenId) external onlyIssuanceManager {
         _safeMint(to, tokenId);
     }
 
     // Add issuer signature to an agreement
-    function addIssuerSignature(uint256 tokenId, string calldata signatureURI) external {
-        if (msg.sender != issuanceManager) revert NotIssuanceManager();
+    function addIssuerSignature(uint256 tokenId, string calldata signatureURI) external onlyIssuanceManager {
         agreements[tokenId].issuerSignatureURI = signatureURI;
     }
     
     // Add endorsement (for transfers in secondary market)
     function addEndorsement(uint256 tokenId, address endorser, string calldata signatureURI) external {
-        if (msg.sender != issuanceManager) revert NotIssuanceManager();
         
         CertificateDetails storage details = agreements[tokenId];
         endorsement memory newEndorsement = endorsement(endorser, signatureURI, block.timestamp);
@@ -127,8 +135,7 @@ contract CyberCerts is ERC721 {
     }
     
     // Update agreement details (for admin purposes)
-    function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external {
-        if (msg.sender != issuanceManager) revert NotIssuanceManager();
+    function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external onlyIssuanceManager {
         agreements[tokenId] = details;
     }
 
@@ -157,7 +164,7 @@ contract CyberCerts is ERC721 {
             if (!agreements[tokenId].transferable) revert TokenNotTransferable();
             
             // Check security type-specific hook if it exists
-            string memory securityType = agreements[tokenId].securityClass;
+            SecurityClass securityType = agreements[tokenId].securityType;
             ITransferRestrictionHook typeHook = restrictionHooks[securityType];
             
             if (address(typeHook) != address(0)) {
