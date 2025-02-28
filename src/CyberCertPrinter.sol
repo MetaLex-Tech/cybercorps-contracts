@@ -1,6 +1,7 @@
 pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./CyberCorpConstants.sol";
 
@@ -14,7 +15,7 @@ interface ITransferRestrictionHook {
     ) external view returns (bool allowed, string memory reason);
 }
 
-contract CyberCerts is ERC721 {
+contract CyberCertPrinter is ERC721Enumerable {
     // Custom errors
     error NotIssuanceManager();
     error TokenNotTransferable();
@@ -25,13 +26,13 @@ contract CyberCerts is ERC721 {
     error TransferRestricted(string reason);
     
     address public issuanceManager;
+    SecurityClass securityType; 
+    SecuritySeries securitySeries; 
     string ledger;
     
     // Agreement details
     struct CertificateDetails {
         string investorName;
-        SecurityClass securityType; //I suggest using 'class' as a more generalized and legally proper replacement for 'type', examples include "common stock, preferred stock, SAFE, SAFT, SAFTE, Token Purchase Agreement, Token Warrant 
-        SecuritySeries securitySeries; //Examples include "Series Seed," "Series A," etc.
         string signingOfficerName;
         string signingOfficerTitle;
        // string legalAgreementTextURI;
@@ -40,6 +41,7 @@ contract CyberCerts is ERC721 {
         uint256 issuerUSDValuationAtTimeofInvestment;
         uint256 unitsRepresented; //# of shares or other units represented by a certificate that represents multiple units 
         bool transferable;
+
         // Additional legal details
         string legalDetails; //governingJurisdiction, contactDetails, disputeResolutionMethod, legalAgreementTextURI
         // Signature and endorsement tracking
@@ -51,18 +53,20 @@ contract CyberCerts is ERC721 {
         string signatureURI;
         uint256 timestamp;
     }
-    
+
     // Mapping from token ID to agreement details
     mapping(uint256 => CertificateDetails) public agreements;
     mapping(uint256 => endorsement[]) public endorsements;
+    mapping(uint256 => SecurityStatus) public securityStatus;
     // Mapping for token URIs
     mapping(uint256 => string) private _tokenURIs;
     // Mapping for custom restriction hooks by security type
-    mapping(SecurityClass => ITransferRestrictionHook) public restrictionHooks;
+    mapping(uint256 => ITransferRestrictionHook) public restrictionHooksById;
     // Global restriction hook (applies to all tokens)
     ITransferRestrictionHook public globalRestrictionHook;
     
-    event AgreementCreated(uint256 indexed tokenId, string issuerName, string investorName);
+    event CertCreated(uint256 indexed tokenId);
+    event CertAssigned(uint256 indexed tokenId, string issuerName, string investorName);
     event AgreementEndorsed(uint256 indexed tokenId, address indexed endorser, string signatureURI, uint256 timestamp);
     event RestrictionHookSet(SecurityClass securityType, address hookAddress);
     event GlobalRestrictionHookSet(address hookAddress);
@@ -72,7 +76,7 @@ contract CyberCerts is ERC721 {
         _;
     }
 
-    constructor(string memory _ledger) ERC721("CyberCerts", "CCA") {
+    constructor(string memory _ledger, string memory name, string memory ticker) ERC721(name, ticker) {
         issuanceManager = msg.sender; // Set by IM or deployer
         ledger = _ledger;
     }
@@ -88,10 +92,9 @@ contract CyberCerts is ERC721 {
     }
 
     // Set a restriction hook for a specific security type
-    function setRestrictionHook(SecurityClass securityType, address hookAddress) external onlyIssuanceManager {
-
-        restrictionHooks[securityType] = ITransferRestrictionHook(hookAddress);
-        emit RestrictionHookSet(securityType, hookAddress);
+    function setRestrictionHook(uint256 _id, address _hookAddress) external onlyIssuanceManager {
+        restrictionHooksById[_id] = ITransferRestrictionHook(_hookAddress);
+        emit RestrictionHookSet(securityType, _hookAddress);
     }
     
     // Set a global restriction hook that applies to all tokens
@@ -100,8 +103,15 @@ contract CyberCerts is ERC721 {
         emit GlobalRestrictionHookSet(hookAddress);
     }
 
-    // Restricted minting with full agreement details
     function safeMint(
+        uint256 tokenId
+    ) external onlyIssuanceManager {
+        _safeMint(address(this), tokenId);
+        emit CertCreated(tokenId);
+    }
+
+    // Restricted minting with full agreement details
+    function safeMintAndAssign(
         address to, 
         uint256 tokenId,
         CertificateDetails memory details
@@ -111,7 +121,8 @@ contract CyberCerts is ERC721 {
         // Store agreement details
         agreements[tokenId] = details;
         string memory issuerName = IIssuanceManager(issuanceManager).companyName();
-        emit AgreementCreated(tokenId, issuerName, details.investorName);
+        emit CertCreated(tokenId);
+        emit CertAssigned(tokenId, issuerName, details.investorName);
     }
     
     // Simplified mint for backward compatibility
@@ -164,8 +175,8 @@ contract CyberCerts is ERC721 {
             if (!agreements[tokenId].transferable) revert TokenNotTransferable();
             
             // Check security type-specific hook if it exists
-            SecurityClass securityType = agreements[tokenId].securityType;
-            ITransferRestrictionHook typeHook = restrictionHooks[securityType];
+
+            ITransferRestrictionHook typeHook = restrictionHooksById[tokenId];
             
             if (address(typeHook) != address(0)) {
                 (bool allowed, string memory reason) = typeHook.checkTransferRestriction(

@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
-import "./CyberCerts.sol";
+import "./CyberCertPrinter.sol";
 import "./interfaces/ICyberCorp.sol";
 
 contract IssuanceManager is BorgAuthACL {
@@ -38,17 +38,17 @@ contract IssuanceManager is BorgAuthACL {
 
     function issue(
         address investor,
-        CyberCerts.CertificateDetails memory _details
+        CyberCertPrinter.CertificateDetails memory _details
     ) public onlyOwner returns (uint256 tokenId) {
         if (bytes(ICyberCorp(CORP).companyName()).length == 0) revert CompanyDetailsNotSet();
         tokenId = _tokenIdCounter++;
         
         BeaconProxy proxy = new BeaconProxy(
             address(beacon),
-            abi.encodeWithSelector(CyberCerts.initialize.selector)
+            abi.encodeWithSelector(CyberCertPrinter.initialize.selector)
         );
 
-        CyberCerts(address(proxy)).safeMint(investor, tokenId, _details);
+        CyberCertPrinter(address(proxy)).safeMintAndAssign(investor, tokenId, _details);
 
         // Store the proxy address for this token ID
         _proxyAddresses[tokenId] = address(proxy);
@@ -61,7 +61,7 @@ contract IssuanceManager is BorgAuthACL {
     function signCertificate(uint256 tokenId, string calldata signatureURI) external onlyAdmin {
         if (bytes(signatureURI).length == 0) revert SignatureURIRequired();
         
-        CyberCerts certificate = getCertificateContract(tokenId);
+        CyberCertPrinter certificate = getCertificateContract(tokenId);
         certificate.addIssuerSignature(tokenId, signatureURI);
         
         emit CertificateSigned(tokenId, signatureURI);
@@ -71,34 +71,34 @@ contract IssuanceManager is BorgAuthACL {
     function endorseCertificate(uint256 tokenId, address endorser, string calldata signatureURI) external onlyAdmin {
         if (bytes(signatureURI).length == 0) revert SignatureURIRequired();
         
-        CyberCerts certificate = getCertificateContract(tokenId);
+        CyberCertPrinter certificate = getCertificateContract(tokenId);
         certificate.addEndorsement(tokenId, endorser, signatureURI);
         
         emit CertificateEndorsed(tokenId, endorser, signatureURI);
     }
     
     // Helper function to get the certificate contract
-    function getCertificateContract(uint256 tokenId) internal view returns (CyberCerts) {
+    function getCertificateContract(uint256 tokenId) internal view returns (CyberCertPrinter) {
         address proxyAddress = _proxyAddresses[tokenId];
         if (proxyAddress == address(0)) revert TokenProxyNotFound();
-        return CyberCerts(proxyAddress);
+        return CyberCertPrinter(proxyAddress);
     }
 
     //placeholder function, do not edit
     function convert(uint256 tokenId, address convertTo, uint256 stockAmount) external onlyOwner {
         // Get certificate details
-        CyberCerts certificate = getCertificateContract(tokenId);
-        CyberCerts.CertificateDetails memory details = certificate.getCertificateDetails(tokenId);
+        CyberCertPrinter certificate = getCertificateContract(tokenId);
+        CyberCertPrinter.CertificateDetails memory details = certificate.getCertificateDetails(tokenId);
         
         // Verify it's a SAFE
-        if (details.securityType != SecurityClass.SAFE) revert NotSAFEToken();
+       // if (details. != SecurityClass.SAFE) revert NotSAFEToken();
         
         // Get the proxy address for this token
         address proxyAddress = UpgradeableBeacon(beacon).implementation();
         if (proxyAddress == address(0)) revert TokenProxyNotFound();
         
         // Burn the SAFE token
-        CyberCerts(proxyAddress).burn(tokenId);
+        CyberCertPrinter(proxyAddress).burn(tokenId);
         
         // Issue a new stock token
         uint256 newTokenId = 0;

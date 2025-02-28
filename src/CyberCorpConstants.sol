@@ -29,9 +29,7 @@ enum SecuritySeries {
 }
 
 enum SecurityStatus {
-    Issued,
-    Redeemed,
-    Expired,
-    Cancelled
+    Unassigned,
+    Assigned,
+    Void
 }
-

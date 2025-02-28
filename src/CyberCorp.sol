@@ -13,7 +13,6 @@ contract CyberCorp is BorgAuthACL {
     string public defaultLegend;
     address public issuanceManager;
 
-
     constructor(BorgAuth _auth, string memory _companyName, string memory _companyJurisdiction, string memory _companyContactDetails, string memory _defaultDisputeResolution, string memory _defaultLegend) BorgAuthACL(_auth) {
         companyName = _companyName;
         companyJurisdiction = _companyJurisdiction;
@@ -30,8 +29,16 @@ contract CyberCorp is BorgAuthACL {
         defaultLegend = _defaultLegend;
     }
 
-    function createIssuanceManager() external onlyOwner() {
-        issuanceManager = address(new IssuanceManager(address(this), AUTH));
+    function createIssuanceManager(address _optionalAuth) external onlyOwner() {
+        if (_optionalAuth == address(0)) {
+            issuanceManager = address(new IssuanceManager(address(this), AUTH));
+        } else {
+            issuanceManager = address(new IssuanceManager(address(this), BorgAuth(_optionalAuth)));
+        }
+    }
+
+    function isCompanyOfficer(address _address) external view returns (bool) {
+        return (AUTH.userRoles(_address) >= AUTH.OWNER_ROLE());
     }
 
 }
