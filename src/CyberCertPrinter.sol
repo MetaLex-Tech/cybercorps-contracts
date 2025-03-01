@@ -20,6 +20,7 @@ contract CyberCertPrinter is ERC721Enumerable {
     error NotIssuanceManager();
     error TokenNotTransferable();
     error TokenDoesNotExist();
+    error InvalidTokenId();
     error URIQueryForNonexistentToken();
     error URISetForNonexistentToken();
     error ConversionNotImplemented();
@@ -86,6 +87,10 @@ contract CyberCertPrinter is ERC721Enumerable {
         // Placeholder for initialization logic
     }
 
+    function updateIssuanceManager(address _issuanceManager) external onlyIssuanceManager {
+        issuanceManager = _issuanceManager;
+    }
+
     function updateLedger(string memory _ledger) external onlyIssuanceManager {
         if (msg.sender != issuanceManager) revert NotIssuanceManager();
         ledger = _ledger;
@@ -105,9 +110,10 @@ contract CyberCertPrinter is ERC721Enumerable {
 
     function safeMint(
         uint256 tokenId
-    ) external onlyIssuanceManager {
+    ) external onlyIssuanceManager returns (uint256) {
         _safeMint(address(this), tokenId);
         emit CertCreated(tokenId);
+        return tokenId;
     }
 
     // Restricted minting with full agreement details
@@ -115,7 +121,7 @@ contract CyberCertPrinter is ERC721Enumerable {
         address to, 
         uint256 tokenId,
         CertificateDetails memory details
-    ) external onlyIssuanceManager {
+    ) external onlyIssuanceManager returns (uint256) {
         _safeMint(to, tokenId);
         
         // Store agreement details
@@ -123,6 +129,20 @@ contract CyberCertPrinter is ERC721Enumerable {
         string memory issuerName = IIssuanceManager(issuanceManager).companyName();
         emit CertCreated(tokenId);
         emit CertAssigned(tokenId, issuerName, details.investorName);
+        return tokenId;
+    }
+
+    function assignCert(
+        uint256 tokenId,
+        address to,
+        CertificateDetails memory details
+    ) external onlyIssuanceManager returns (uint256) {
+        if(ownerOf(tokenId) != address(this)) revert InvalidTokenId();
+        agreements[tokenId] = details;
+        string memory issuerName = IIssuanceManager(issuanceManager).companyName();
+        _transfer(address(this), to, tokenId);
+        emit CertAssigned(tokenId, issuerName, details.investorName);
+        return tokenId;
     }
     
     // Simplified mint for backward compatibility
