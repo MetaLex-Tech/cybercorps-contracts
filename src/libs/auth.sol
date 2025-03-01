@@ -8,17 +8,18 @@
 _/_/_/      _/_/    _/    _/    _/_/_/      _/    _/    _/_/        _/      _/    */ 
 pragma solidity 0.8.28;
 
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "../interfaces/IAuthAdapter.sol";
 
 /// @title  BorgAuth
 /// @author MetaLeX Labs, Inc.
 /// @notice ACL with extensibility for different role hierarchies and custom adapters
-contract BorgAuth {
-    //cosntants built-in roles, authority works as a hierarchy
+contract BorgAuth is Initializable {
+    //constants built-in roles, authority works as a hierarchy
     uint256 public constant OWNER_ROLE = 99;
     uint256 public constant ADMIN_ROLE = 98;
     uint256 public constant PRIVILEGED_ROLE = 97;
-    address pendingOwner;
+    address public pendingOwner;
 
     //mappings and events
     mapping(address => uint256) public userRoles;
@@ -32,8 +33,14 @@ contract BorgAuth {
     error BorgAuth_SetAnotherOwner();
     error BorgAuth_ZeroAddress();
 
-    /// @notice deployer is owner
+    /// @notice Empty constructor for implementation contract
     constructor() {
+        // No initialization here since we're using the initialize pattern
+    }
+
+    /// @notice Initializer replacing the constructor - sets the deployer/initializer as owner
+    /// @dev Use this instead of constructor when deployed behind a proxy
+    function initialize() external initializer {
         _updateRole(msg.sender, OWNER_ROLE);
     }
 
@@ -96,7 +103,7 @@ contract BorgAuth {
         }
     }
 
-    /// @notice interal function to add a role to a user
+    /// @notice internal function to add a role to a user
     /// @param role role to update
     /// @param user address of user
     function _updateRole(
@@ -110,17 +117,23 @@ contract BorgAuth {
 
 /// @title BorgAuthACL
 /// @notice ACL with modifiers for different roles
-abstract contract BorgAuthACL {
+abstract contract BorgAuthACL is Initializable {
     //BorgAuth instance
-    BorgAuth public immutable AUTH;
+    BorgAuth public AUTH;
 
     // @dev zero address error
     error BorgAuthACL_ZeroAddress();
 
-    /// @notice set AUTH to BorgAuth instance
-    constructor(BorgAuth _auth) {
-        if(address(_auth) == address(0)) revert BorgAuthACL_ZeroAddress();
-        AUTH = _auth;
+    /// @notice Empty constructor for implementation contract
+    constructor() {
+        // No initialization here for proxy compatibility
+    }
+
+    /// @notice Initializer for BorgAuthACL
+    /// @param _auth Address of the BorgAuth contract
+    function __BorgAuthACL_init(address _auth) internal onlyInitializing {
+        if(_auth == address(0)) revert BorgAuthACL_ZeroAddress();
+        AUTH = BorgAuth(_auth);
     }
 
     //common modifiers and general access control onlyRole

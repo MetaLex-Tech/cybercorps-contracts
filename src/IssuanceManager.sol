@@ -27,13 +27,30 @@ contract IssuanceManager is BorgAuthACL {
     event CertificateSigned(uint256 indexed tokenId, string signatureURI);
     event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, string signatureURI);
 
-    constructor(BorgAuth _auth) BorgAuthACL(_auth) {
+    constructor(BorgAuth _auth) {
 
     }
 
-    function initialize(address _CORP, address _CyberCertPrinterImplementation) public {
+    /// @notice Initializer function that sets up the contract
+    /// @param _auth Address of the BorgAuth contract
+    /// @param _CORP Address of the CyberCorp contract
+    /// @param _CyberCertPrinterImplementation Implementation address for CyberCertPrinter
+    function initialize(
+        address _auth,
+        address _CORP,
+        address _CyberCertPrinterImplementation
+    ) external initializer {
+        // Initialize BorgAuthACL
+        __BorgAuthACL_init(_auth);
+        
+        // Set CORP address
         CORP = _CORP;
-        CyberCertPrinterBeacon = new UpgradeableBeacon(_CyberCertPrinterImplementation, address(this));
+        
+        // Create beacon with implementation
+        CyberCertPrinterBeacon = new UpgradeableBeacon(
+            _CyberCertPrinterImplementation,
+            address(this)
+        );
     }
     
     function createCertPrinter(address initialImplementation, string memory _ledger, string memory _name, string memory _ticker) public onlyOwner returns (address) {

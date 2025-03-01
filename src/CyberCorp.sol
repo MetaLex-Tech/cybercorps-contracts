@@ -18,12 +18,17 @@ contract CyberCorp is BorgAuthACL {
 
     UpgradeableBeacon public beacon;
 
-    constructor(BorgAuth _auth, string memory _companyName, string memory _companyJurisdiction, string memory _companyContactDetails, string memory _defaultDisputeResolution, string memory _defaultLegend) BorgAuthACL(_auth) {
+    constructor(BorgAuth _auth, string memory _companyName, string memory _companyJurisdiction, string memory _companyContactDetails, string memory _defaultDisputeResolution, string memory _defaultLegend) {
         companyName = _companyName;
         companyJurisdiction = _companyJurisdiction;
         companyContactDetails = _companyContactDetails;
         defaultDisputeResolution = _defaultDisputeResolution;
         defaultLegend = _defaultLegend;
+    }
+
+    function initialize(address _issuanceManager, address _auth) external onlyOwner() {
+        issuanceManager = _issuanceManager;
+          __BorgAuthACL_init(_auth);
     }
 
     function setCompanyDetails(string memory _companyName, string memory _companyJurisdiction, string memory _companyContactDetails, string memory _defaultDisputeResolution, string memory _defaultLegend) external onlyOwner() {
