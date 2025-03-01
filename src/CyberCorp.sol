@@ -2,6 +2,9 @@ pragma solidity 0.8.28;
 
 import "./libs/auth.sol";
 import "./IssuanceManager.sol";
+import "./libs/auth.sol";
+import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
+import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
 contract CyberCorp is BorgAuthACL {
 
@@ -12,6 +15,8 @@ contract CyberCorp is BorgAuthACL {
     string public defaultDisputeResolution;
     string public defaultLegend;
     address public issuanceManager;
+
+    UpgradeableBeacon public beacon;
 
     constructor(BorgAuth _auth, string memory _companyName, string memory _companyJurisdiction, string memory _companyContactDetails, string memory _defaultDisputeResolution, string memory _defaultLegend) BorgAuthACL(_auth) {
         companyName = _companyName;
@@ -31,14 +36,19 @@ contract CyberCorp is BorgAuthACL {
 
     function createIssuanceManager(address _optionalAuth) external onlyOwner() {
         if (_optionalAuth == address(0)) {
-            issuanceManager = address(new IssuanceManager(address(this), AUTH));
+            issuanceManager = address(new IssuanceManager(AUTH));
         } else {
-            issuanceManager = address(new IssuanceManager(address(this), BorgAuth(_optionalAuth)));
+            issuanceManager = address(new IssuanceManager(BorgAuth(_optionalAuth)));
         }
     }
 
     function isCompanyOfficer(address _address) external view returns (bool) {
         return (AUTH.userRoles(_address) >= AUTH.OWNER_ROLE());
+    }
+
+    function _getBytecode() private view returns (bytes memory bytecode) {
+        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
+        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(beacon, ""));
     }
 
 }

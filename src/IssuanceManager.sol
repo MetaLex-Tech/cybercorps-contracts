@@ -3,6 +3,8 @@ pragma solidity 0.8.28;
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "@openzeppelin/contracts/utils/Create2.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 import "./CyberCertPrinter.sol";
 import "./interfaces/ICyberCorp.sol";
 
@@ -13,8 +15,7 @@ contract IssuanceManager is BorgAuthACL {
     error TokenProxyNotFound();
     error NotSAFEToken();
     
-    UpgradeableBeacon public beacon;
-    uint256 private _tokenIdCounter;
+    UpgradeableBeacon public CyberCertPrinterBeacon;
     address public CORP;
 
     // Mapping to track proxy addresses for each token ID
@@ -26,14 +27,20 @@ contract IssuanceManager is BorgAuthACL {
     event CertificateSigned(uint256 indexed tokenId, string signatureURI);
     event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, string signatureURI);
 
-    constructor(address _CORP, BorgAuth _auth) BorgAuthACL(_auth) {
+    constructor(BorgAuth _auth) BorgAuthACL(_auth) {
+
+    }
+
+    function initialize(address _CORP, address _CyberCertPrinterImplementation) public {
         CORP = _CORP;
-        _tokenIdCounter = 1;
+        CyberCertPrinterBeacon = new UpgradeableBeacon(_CyberCertPrinterImplementation, address(this));
     }
     
     function createCertPrinter(address initialImplementation, string memory _ledger, string memory _name, string memory _ticker) public onlyOwner returns (address) {
         //add new proxy to a set CyberCertPrinter deployement
+        bytes32 salt = keccak256(abi.encodePacked(certifications.length, address(this)));
         address newCert = address(new CyberCertPrinter(_ledger, _name, _ticker));
+        Create2.deploy(0, salt, _getBytecode());
         certifications.push(newCert);
         return newCert;
     }
@@ -88,7 +95,6 @@ contract IssuanceManager is BorgAuthACL {
         emit CertificateEndorsed(tokenId, endorser, signatureURI);
     }
     
-
     //placeholder function, do not edit
     function convert(address certAddress, uint256 tokenId, address convertTo, uint256 stockAmount) external onlyOwner {
         // Get certificate details
@@ -99,7 +105,7 @@ contract IssuanceManager is BorgAuthACL {
        // if (details. != SecurityClass.SAFE) revert NotSAFEToken();
         
         // Get the proxy address for this token
-        address proxyAddress = UpgradeableBeacon(beacon).implementation();
+        address proxyAddress = UpgradeableBeacon(CyberCertPrinterBeacon).implementation();
         if (proxyAddress == address(0)) revert TokenProxyNotFound();
         
         // Burn the SAFE token
@@ -110,13 +116,17 @@ contract IssuanceManager is BorgAuthACL {
 
         emit Converted(tokenId, newTokenId);
     }
-    
 
     function upgradeImplementation(address _newImplementation) external onlyAdmin {
-        UpgradeableBeacon(beacon).upgradeTo(_newImplementation);
+        UpgradeableBeacon(CyberCertPrinterBeacon).upgradeTo(_newImplementation);
     }
 
     function getBeaconImplementation() external view returns (address) {
-        return UpgradeableBeacon(beacon).implementation();
+        return UpgradeableBeacon(CyberCertPrinterBeacon).implementation();
+    }
+
+    function _getBytecode() private view returns (bytes memory bytecode) {
+        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
+        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(CyberCertPrinterBeacon, ""));
     }
 }
