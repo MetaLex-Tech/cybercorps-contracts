@@ -27,7 +27,7 @@ contract IssuanceManager is BorgAuthACL {
     event CertificateSigned(uint256 indexed tokenId, string signatureURI);
     event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, string signatureURI);
 
-    constructor(BorgAuth _auth) {
+    constructor() {
 
     }
 

@@ -17,6 +17,7 @@ contract CyberCorp is BorgAuthACL {
     address public issuanceManager;
 
     UpgradeableBeacon public beacon;
+    address public cyberCertPrinterImplementation;
 
     constructor(BorgAuth _auth, string memory _companyName, string memory _companyJurisdiction, string memory _companyContactDetails, string memory _defaultDisputeResolution, string memory _defaultLegend) {
         companyName = _companyName;
@@ -40,11 +41,12 @@ contract CyberCorp is BorgAuthACL {
     }
 
     function createIssuanceManager(address _optionalAuth) external onlyOwner() {
-        if (_optionalAuth == address(0)) {
-            issuanceManager = address(new IssuanceManager(AUTH));
-        } else {
-            issuanceManager = address(new IssuanceManager(BorgAuth(_optionalAuth)));
-        }
+            issuanceManager = address(new IssuanceManager());
+            if(_optionalAuth != address(0)) {
+                IssuanceManager(issuanceManager).initialize(address(AUTH), address(this), cyberCertPrinterImplementation);
+            } else {
+                IssuanceManager(issuanceManager).initialize(_optionalAuth, address(this), cyberCertPrinterImplementation);
+            }
     }
 
     function isCompanyOfficer(address _address) external view returns (bool) {
