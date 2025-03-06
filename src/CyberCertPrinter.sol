@@ -1,7 +1,8 @@
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./CyberCorpConstants.sol";
 
@@ -15,7 +16,7 @@ interface ITransferRestrictionHook {
     ) external view returns (bool allowed, string memory reason);
 }
 
-contract CyberCertPrinter is ERC721Enumerable {
+contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable {
     // Custom errors
     error NotIssuanceManager();
     error TokenNotTransferable();
@@ -77,14 +78,16 @@ contract CyberCertPrinter is ERC721Enumerable {
         _;
     }
 
-    constructor(string memory _ledger, string memory name, string memory ticker) ERC721(name, ticker) {
-        issuanceManager = msg.sender; // Set by IM or deployer
-        ledger = _ledger;
+    constructor()  {
     }
 
     // Called by proxy on deployment (if needed)
-    function initialize() external {
-        // Placeholder for initialization logic
+    function initialize(string memory _ledger, string memory name, string memory ticker, address _issuanceManager) external {
+        __ERC721_init(name, ticker);
+        __ERC721Enumerable_init();
+        __UUPSUpgradeable_init();
+        issuanceManager = _issuanceManager;
+        ledger = _ledger;
     }
 
     function updateIssuanceManager(address _issuanceManager) external onlyIssuanceManager {
@@ -271,4 +274,16 @@ contract CyberCertPrinter is ERC721Enumerable {
     function _exists(uint256 tokenId) internal view virtual returns (bool) {
         return _ownerOf(tokenId) != address(0);
     }
+
+    /**
+     * @dev Function that should revert when `msg.sender` is not authorized to upgrade the contract. Called by
+     * {upgradeTo} and {upgradeToAndCall}.
+     *
+     * Normally, this function will use an xref:access.adoc[access control] modifier such as {Ownable-onlyOwner}.
+     *
+     * ```solidity
+     * function _authorizeUpgrade(address) internal override onlyOwner {}
+     * ```
+     */
+    function _authorizeUpgrade(address newImplementation) internal virtual override onlyIssuanceManager {}
 }

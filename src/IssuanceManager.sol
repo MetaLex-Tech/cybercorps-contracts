@@ -56,9 +56,10 @@ contract IssuanceManager is BorgAuthACL {
     function createCertPrinter(address initialImplementation, string memory _ledger, string memory _name, string memory _ticker) public onlyOwner returns (address) {
         //add new proxy to a set CyberCertPrinter deployement
         bytes32 salt = keccak256(abi.encodePacked(certifications.length, address(this)));
-        address newCert = address(new CyberCertPrinter(_ledger, _name, _ticker));
+        address newCert = address(new CyberCertPrinter());
         Create2.deploy(0, salt, _getBytecode());
         certifications.push(newCert);
+        CyberCertPrinter(newCert).initialize(_ledger, _name, _ticker, address(this));
         return newCert;
     }
 

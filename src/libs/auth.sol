@@ -8,7 +8,7 @@
 _/_/_/      _/_/    _/    _/    _/_/_/      _/    _/    _/_/        _/      _/    */ 
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "../interfaces/IAuthAdapter.sol";
 
 /// @title  BorgAuth
