@@ -147,4 +147,12 @@ contract IssuanceManager is BorgAuthACL {
         bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
         bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(CyberCertPrinterBeacon, ""));
     }
+
+    function companyName() external view returns (string memory) {
+        return ICyberCorp(CORP).companyName();
+    }
+
+    function companyJurisdiction() external view returns (string memory) {
+        return ICyberCorp(CORP).companyJurisdiction();
+    }
 }

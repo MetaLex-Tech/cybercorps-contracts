@@ -6,16 +6,6 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./CyberCorpConstants.sol";
 
-// Interface for transfer restriction hooks
-interface ITransferRestrictionHook {
-    function checkTransferRestriction(
-        address from,
-        address to,
-        uint256 tokenId,
-        bytes memory data
-    ) external view returns (bool allowed, string memory reason);
-}
-
 contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable {
     // Custom errors
     error NotIssuanceManager();

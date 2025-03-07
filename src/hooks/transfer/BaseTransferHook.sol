@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import "../interfaces/ITransferRestrictionHook.sol";
-import "../libs/auth.sol";
+import "../../interfaces/ITransferRestrictionHook.sol";
+import "../../libs/auth.sol";
 
 /// @title BaseTransferHook
 /// @notice Base contract for implementing transfer restriction hooks
@@ -18,7 +18,7 @@ abstract contract BaseTransferHook is ITransferRestrictionHook, BorgAuthACL {
     // Event for when the hook is enabled/disabled
     event HookStatusChanged(bool enabled);
     
-    constructor(address _auth) BorgAuthACL(_auth) {}
+    constructor(address _auth) BorgAuthACL() {}
     
     /// @notice Enable or disable the hook
     /// @param _enabled Whether to enable or disable the hook
