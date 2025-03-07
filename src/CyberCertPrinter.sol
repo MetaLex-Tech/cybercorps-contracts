@@ -102,9 +102,10 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     }
 
     function safeMint(
-        uint256 tokenId
+        uint256 tokenId,
+        address to
     ) external onlyIssuanceManager returns (uint256) {
-        _safeMint(address(this), tokenId);
+        _safeMint(to, tokenId);
         emit CertCreated(tokenId);
         return tokenId;
     }
@@ -126,14 +127,15 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     }
 
     function assignCert(
+        address from,
         uint256 tokenId,
         address to,
         CertificateDetails memory details
     ) external onlyIssuanceManager returns (uint256) {
-        if(ownerOf(tokenId) != address(this)) revert InvalidTokenId();
+        if(ownerOf(tokenId) != from) revert InvalidTokenId();
         agreements[tokenId] = details;
         string memory issuerName = IIssuanceManager(issuanceManager).companyName();
-        _transfer(address(this), to, tokenId);
+       // _transfer(from, to, tokenId);
         emit CertAssigned(tokenId, issuerName, details.investorName);
         return tokenId;
     }

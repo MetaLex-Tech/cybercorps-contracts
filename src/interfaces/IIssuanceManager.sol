@@ -52,11 +52,13 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
 
     function createCert(
         address certAddress,
-        uint256 tokenId
+        uint256 tokenId,
+        address to
     ) external returns (uint256);
 
     function assignCert(
         address certAddress,
+        address from,
         uint256 tokenId,
         address investor,
         CertificateDetails memory _details
