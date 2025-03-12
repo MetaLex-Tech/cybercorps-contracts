@@ -8,21 +8,22 @@ import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
 contract CyberCorp is BorgAuthACL {
 
-    // Company details
-    string public companyName;
-    string public companyJurisdiction;
-    string public companyContactDetails;
+    // cyberCORP details
+    string public cyberCORPName; //this should be the legal name of the entity, including any designation such as "Inc." or "LLC" etc. 
+    string public cyberCORPType; //this should be the legal entity type, for example, "corporation" or "limited liability company" 
+    string public cyberCORPJurisdiction; //this should be the jurisdiction of incorporation of the entity, e.g. "Delaware"
+    string public cyberCORPContactDetails; 
     string public defaultDisputeResolution;
-    string public defaultLegend;
+    string public defaultLegend; //default legend (relating to transferability restrictions etc.) for NFT certs 
     address public issuanceManager;
 
     UpgradeableBeacon public beacon;
     address public cyberCertPrinterImplementation;
 
-    constructor(BorgAuth _auth, string memory _companyName, string memory _companyJurisdiction, string memory _companyContactDetails, string memory _defaultDisputeResolution, string memory _defaultLegend) {
-        companyName = _companyName;
-        companyJurisdiction = _companyJurisdiction;
-        companyContactDetails = _companyContactDetails;
+    constructor(BorgAuth _auth, string memory _cyberCORPName, string memory _cyberCORPJurisdiction, string memory _cyberCORPContactDetails, string memory _defaultDisputeResolution, string memory _defaultLegend) {
+        cyberCORPName = _cyberCORPName;
+        cyberCORPJurisdiction = _cyberCORPJurisdiction;
+        cyberCORPContactDetails = _cyberCORPContactDetails;
         defaultDisputeResolution = _defaultDisputeResolution;
         defaultLegend = _defaultLegend;
     }
@@ -32,10 +33,10 @@ contract CyberCorp is BorgAuthACL {
           __BorgAuthACL_init(_auth);
     }
 
-    function setCompanyDetails(string memory _companyName, string memory _companyJurisdiction, string memory _companyContactDetails, string memory _defaultDisputeResolution, string memory _defaultLegend) external onlyOwner() {
-        companyName = _companyName;
-        companyJurisdiction = _companyJurisdiction;
-        companyContactDetails = _companyContactDetails;
+    function setcyberCORPDetails(string memory _cyberCORPName, string memory _cyberCORPJurisdiction, string memory _cyberCORPContactDetails, string memory _defaultDisputeResolution, string memory _defaultLegend) external onlyOwner() {
+        cyberCORPName = _cyberCORPName;
+        cyberCORPJurisdiction = _cyberCORPJurisdiction;
+        cyberCORPContactDetails = _cyberCORPContactDetails;
         defaultDisputeResolution = _defaultDisputeResolution;
         defaultLegend = _defaultLegend;
     }
@@ -49,7 +50,7 @@ contract CyberCorp is BorgAuthACL {
             }
     }
 
-    function isCompanyOfficer(address _address) external view returns (bool) {
+    function iscyberCORPOfficer(address _address) external view returns (bool) {
         return (AUTH.userRoles(_address) >= AUTH.OWNER_ROLE());
     }
 
