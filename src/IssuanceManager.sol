@@ -70,6 +70,13 @@ contract IssuanceManager is BorgAuthACL {
         return id;
     }
 
+    function createCert(address certAddress, address to, CyberCertPrinter.CertificateDetails memory _details) public onlyOwner returns (uint256) {
+        CyberCertPrinter cert = CyberCertPrinter(certAddress);
+        uint256 tokenId = cert.totalSupply();
+        uint256 id = cert.safeMint(tokenId, to, _details);
+        return id;
+    }
+
     function assignCert(address certAddress, address from, uint256 tokenId, address investor, CyberCertPrinter.CertificateDetails memory _details) public onlyOwner {
         CyberCertPrinter cert = CyberCertPrinter(certAddress);
         cert.assignCert(from, tokenId, investor, _details);

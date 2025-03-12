@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "./interfaces/IIssuanceManager.sol";
+import "../dependencies/cyberCorpTripler/src/interfaces/IIssuanceManager.sol";
 import "./CyberCorpConstants.sol";
 
 contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable {
@@ -105,6 +105,17 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         uint256 tokenId,
         address to
     ) external onlyIssuanceManager returns (uint256) {
+        _safeMint(to, tokenId);
+        emit CertCreated(tokenId);
+        return tokenId;
+    }
+
+    function safeMint(
+        uint256 tokenId,
+        address to,
+        CertificateDetails memory details
+    ) external onlyIssuanceManager returns (uint256) {
+        agreements[tokenId] = details;
         _safeMint(to, tokenId);
         emit CertCreated(tokenId);
         return tokenId;
