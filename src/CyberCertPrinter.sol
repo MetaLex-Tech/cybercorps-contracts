@@ -32,9 +32,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     // Mapping from token ID to agreement details
     mapping(uint256 => CertificateDetails) public agreements;
     mapping(uint256 => endorsement[]) public endorsements;
-    mapping(uint256 => SecurityStatus) public securityStatus;
-    // Mapping for token URIs
-    mapping(uint256 => string) private _tokenURIs;
+
     // Mapping for custom restriction hooks by security type
     mapping(uint256 => ITransferRestrictionHook) public restrictionHooksById;
     // Global restriction hook (applies to all tokens)
@@ -138,7 +136,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     // Add endorsement (for transfers in secondary market)
     function addEndorsement(uint256 tokenId, address endorser, string calldata signatureURI) external {
         
-        CertificateDetails storage details = agreements[tokenId];
         endorsement memory newEndorsement = endorsement(endorser, signatureURI, block.timestamp);
         endorsements[tokenId].push(newEndorsement);
         
@@ -157,9 +154,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         
         // Clear agreement details
         delete agreements[tokenId];
-        if (bytes(_tokenURIs[tokenId]).length != 0) {
-            delete _tokenURIs[tokenId];
-        }
     }
     
     /**
@@ -224,11 +218,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         if (!_exists(tokenId)) revert URIQueryForNonexistentToken();
 
         return super.tokenURI(tokenId);
-    }
-    
-    function _setTokenURI(uint256 tokenId, string memory _tokenURI) internal virtual {
-        if (!_exists(tokenId)) revert URISetForNonexistentToken();
-        _tokenURIs[tokenId] = _tokenURI;
     }
     
     function _exists(uint256 tokenId) internal view virtual returns (bool) {

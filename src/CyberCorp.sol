@@ -1,10 +1,9 @@
 pragma solidity 0.8.28;
 
 import "./libs/auth.sol";
-import "./IssuanceManager.sol";
-import "./libs/auth.sol";
 import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "../dependencies/cyberCorpTripler/src/interfaces/IIssuanceManager.sol";
 
 contract CyberCorp is BorgAuthACL {
 
@@ -41,13 +40,8 @@ contract CyberCorp is BorgAuthACL {
         defaultLegend = _defaultLegend;
     }
 
-    function createIssuanceManager(address _optionalAuth) external onlyOwner() {
-            issuanceManager = address(new IssuanceManager());
-            if(_optionalAuth != address(0)) {
-                IssuanceManager(issuanceManager).initialize(address(AUTH), address(this), cyberCertPrinterImplementation);
-            } else {
-                IssuanceManager(issuanceManager).initialize(_optionalAuth, address(this), cyberCertPrinterImplementation);
-            }
+    function setIssuanceManager(address _issuanceManager) external onlyOwner() {
+        issuanceManager = _issuanceManager;
     }
 
     function iscyberCORPOfficer(address _address) external view returns (bool) {

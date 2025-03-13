@@ -7,7 +7,11 @@ import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {CertificateDetails, IIssuanceManager} from "../dependencies/cyberCorpTripler/src/interfaces/IIssuanceManager.sol";
 import {AgreementV2Factory} from "../dependencies/cyberCorpTripler/src/RicardianTriplerOpenOfferCyberCorpSAFE.sol";
 import {DoubleTokenLexscrowRegistry} from "../dependencies/cyberCorpTripler/src/DoubleTokenLexscrowRegistry.sol";
-// import {Counter} from "../src/Counter.sol";
+import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
+import {CyberAgreementFactory} from "../src/CyberAgreementFactory.sol";
+import {ERC721LexscrowFactory} from "../dependencies/cyberCorpTripler/src/ERC721LexscrowFactory.sol";
+
 
 contract CyberCorpTest is Test {
 //     Counter public counter;
@@ -19,12 +23,19 @@ contract CyberCorpTest is Test {
        
         ///deploy cyberCertPrinterImplementation
         vm.startPrank(0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B);
+        address issuanceManagerFactory = address(new IssuanceManagerFactory(address(0)));
         address cyberCertPrinterImplementation = address(new CyberCertPrinter());
         CyberCertPrinter cyberCertPrinter = CyberCertPrinter(cyberCertPrinterImplementation);
         cyberCertPrinter.initialize("", "", "", address(0));
+        address cyberCorpSingleFactory = address(new CyberCorpSingleFactory());
+
 
         DoubleTokenLexscrowRegistry registry = new DoubleTokenLexscrowRegistry(0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B);
-        cyberCorpFactory = new CyberCorpFactory(address(registry), cyberCertPrinterImplementation);
+        address lexscrowFactory = address(new ERC721LexscrowFactory());
+        address cyberAgreementFactory = address(new CyberAgreementFactory(address(lexscrowFactory)));
+
+        cyberCorpFactory = new CyberCorpFactory(address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, cyberAgreementFactory);
+        registry.enableFactory(cyberAgreementFactory);
         registry.updateAdmin(address(cyberCorpFactory));
         cyberCorpFactory.acceptRegistryAdmin();
         vm.stopPrank();
