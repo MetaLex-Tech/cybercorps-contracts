@@ -86,15 +86,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
 
     function safeMint(
         uint256 tokenId,
-        address to
-    ) external onlyIssuanceManager returns (uint256) {
-        _safeMint(to, tokenId);
-        emit CertCreated(tokenId);
-        return tokenId;
-    }
-
-    function safeMint(
-        uint256 tokenId,
         address to,
         CertificateDetails memory details
     ) external onlyIssuanceManager returns (uint256) {
@@ -227,27 +218,10 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
             details.timestamp
         );
     }
-
-    // Placeholder for SAFE/stock-specific logic (upgradable)
-    function convert(uint256 tokenId) external virtual {
-        revert ConversionNotImplemented();
-    }
     
     // URI storage functionality
     function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
         if (!_exists(tokenId)) revert URIQueryForNonexistentToken();
-
-        string memory _tokenURI = _tokenURIs[tokenId];
-        string memory base = _baseURI();
-
-        // If there is no base URI, return the token URI.
-        if (bytes(base).length == 0) {
-            return _tokenURI;
-        }
-        // If both are set, concatenate the baseURI and tokenURI (via abi.encodePacked).
-        if (bytes(_tokenURI).length > 0) {
-            return string(abi.encodePacked(base, _tokenURI));
-        }
 
         return super.tokenURI(tokenId);
     }

@@ -183,7 +183,7 @@ contract CyberCorpFactory {
             ""
         );
 
-        CyberCertPrinter certPrinter = CyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter(cyberCertPrinterImplementation, "", certName, certSymbol));
+        ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter(cyberCertPrinterImplementation, "", certName, certSymbol));
         certPrinterAddress = address(certPrinter);  
 
         NFTAsset memory _nftAsset = NFTAsset({

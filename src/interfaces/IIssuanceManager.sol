@@ -4,8 +4,8 @@ pragma solidity 0.8.28;
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
-import "./ICyberCorp.sol";
-import "./ITransferRestrictionHook.sol";
+import "../../dependencies/cyberCorpTripler/src/interfaces/ICyberCorp.sol";
+import "../../dependencies/cyberCorpTripler/src/interfaces/ITransferRestrictionHook.sol";
 
 //Adapter interface for custom auth roles. Allows extensibility for different auth protocols i.e. hats.
 interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {

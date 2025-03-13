@@ -5,9 +5,8 @@ import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-import "./CyberCertPrinter.sol";
-import "../dependencies/cyberCorpTripler/src/interfaces/ICyberCorp.sol";
-import "../dependencies/cyberCorpTripler/src/interfaces/IIssuanceManager.sol";
+import "./interfaces/ICyberCertPrinter.sol";
+
 
 contract IssuanceManager is BorgAuthACL {
     // Custom errors
@@ -20,7 +19,7 @@ contract IssuanceManager is BorgAuthACL {
     address public CORP;
 
     // Mapping to track proxy addresses for each token ID
-    address[] public certifications;
+    address[] public printers;
 
     event CertificateCreated(uint256 indexed tokenId, address indexed investor, uint256 amount, uint256 cap);
     event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
@@ -55,30 +54,23 @@ contract IssuanceManager is BorgAuthACL {
     
     function createCertPrinter(address initialImplementation, string memory _ledger, string memory _name, string memory _ticker) public onlyOwner returns (address) {
         //add new proxy to a set CyberCertPrinter deployement
-        bytes32 salt = keccak256(abi.encodePacked(certifications.length, address(this)));
-        address newCert = address(new CyberCertPrinter());
-        Create2.deploy(0, salt, _getBytecode());
-        certifications.push(newCert);
-        CyberCertPrinter(newCert).initialize(_ledger, _name, _ticker, address(this));
+        bytes32 salt = keccak256(abi.encodePacked(printers.length, address(this)));
+        address newCert = Create2.deploy(0, salt, _getBytecode());
+        printers.push(newCert);
+        ICyberCertPrinter(newCert).initialize(_ledger, _name, _ticker, address(this));
         return newCert;
     }
 
-    function createCert(address certAddress, address to) public onlyOwner returns (uint256) {
-        CyberCertPrinter cert = CyberCertPrinter(certAddress);
-        uint256 tokenId = cert.totalSupply();
-        uint256 id = cert.safeMint(tokenId, to);
-        return id;
-    }
 
     function createCert(address certAddress, address to, CertificateDetails memory _details) public onlyOwner returns (uint256) {
-        CyberCertPrinter cert = CyberCertPrinter(certAddress);
+        ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         uint256 tokenId = cert.totalSupply();
         uint256 id = cert.safeMint(tokenId, to, _details);
         return id;
     }
 
     function assignCert(address certAddress, address from, uint256 tokenId, address investor, CertificateDetails memory _details) public onlyOwner {
-        CyberCertPrinter cert = CyberCertPrinter(certAddress);
+        ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         cert.assignCert(from, tokenId, investor, _details);
     }
 
@@ -88,14 +80,9 @@ contract IssuanceManager is BorgAuthACL {
         CertificateDetails memory _details
     ) public onlyOwner returns (uint256 tokenId) {
         if (bytes(ICyberCorp(CORP).companyName()).length == 0) revert CompanyDetailsNotSet();
-        CyberCertPrinter cert = CyberCertPrinter(certAddress);
+        ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         tokenId = cert.totalSupply();
-        
-        /*BeaconProxy proxy = new BeaconProxy(
-            address(beacon),
-            abi.encodeWithSelector(CyberCertPrinter.initialize.selector)
-        );*/
-
+    
         cert.safeMintAndAssign(investor, tokenId, _details);
         emit CertificateCreated(tokenId, investor, _details.investmentAmount, _details.issuerUSDValuationAtTimeofInvestment);
         return tokenId;
@@ -105,7 +92,7 @@ contract IssuanceManager is BorgAuthACL {
     function signCertificate(address certAddress, uint256 tokenId, string calldata signatureURI) external onlyAdmin {
         if (bytes(signatureURI).length == 0) revert SignatureURIRequired();
         
-        CyberCertPrinter certificate = CyberCertPrinter(certAddress);
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.addIssuerSignature(tokenId, signatureURI);
         
         emit CertificateSigned(tokenId, signatureURI);
@@ -115,33 +102,12 @@ contract IssuanceManager is BorgAuthACL {
     function endorseCertificate(address certAddress, uint256 tokenId, address endorser, string calldata signatureURI) external onlyAdmin {
         if (bytes(signatureURI).length == 0) revert SignatureURIRequired();
         
-        CyberCertPrinter certificate = CyberCertPrinter(certAddress);
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.addEndorsement(tokenId, endorser, signatureURI);
         
         emit CertificateEndorsed(tokenId, endorser, signatureURI);
     }
     
-    //placeholder function, do not edit
-    function convert(address certAddress, uint256 tokenId, address convertTo, uint256 stockAmount) external onlyOwner {
-        // Get certificate details
-        CyberCertPrinter certificate = CyberCertPrinter(certAddress);
-        CertificateDetails memory details = certificate.getCertificateDetails(tokenId);
-        
-        // Verify it's a SAFE
-       // if (details. != SecurityClass.SAFE) revert NotSAFEToken();
-        
-        // Get the proxy address for this token
-        address proxyAddress = UpgradeableBeacon(CyberCertPrinterBeacon).implementation();
-        if (proxyAddress == address(0)) revert TokenProxyNotFound();
-        
-        // Burn the SAFE token
-        CyberCertPrinter(proxyAddress).burn(tokenId);
-        
-        // Issue a new stock token
-        uint256 newTokenId = 0;
-
-        emit Converted(tokenId, newTokenId);
-    }
 
     function upgradeImplementation(address _newImplementation) external onlyAdmin {
         UpgradeableBeacon(CyberCertPrinterBeacon).upgradeTo(_newImplementation);
