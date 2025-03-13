@@ -6,7 +6,8 @@ import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "./CyberCertPrinter.sol";
-import "./interfaces/ICyberCorp.sol";
+import "../dependencies/cyberCorpTripler/src/interfaces/ICyberCorp.sol";
+import "../dependencies/cyberCorpTripler/src/interfaces/IIssuanceManager.sol";
 
 contract IssuanceManager is BorgAuthACL {
     // Custom errors
@@ -28,7 +29,6 @@ contract IssuanceManager is BorgAuthACL {
     event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, string signatureURI);
 
     constructor() {
-
     }
 
     /// @notice Initializer function that sets up the contract
@@ -70,14 +70,14 @@ contract IssuanceManager is BorgAuthACL {
         return id;
     }
 
-    function createCert(address certAddress, address to, CyberCertPrinter.CertificateDetails memory _details) public onlyOwner returns (uint256) {
+    function createCert(address certAddress, address to, CertificateDetails memory _details) public onlyOwner returns (uint256) {
         CyberCertPrinter cert = CyberCertPrinter(certAddress);
         uint256 tokenId = cert.totalSupply();
         uint256 id = cert.safeMint(tokenId, to, _details);
         return id;
     }
 
-    function assignCert(address certAddress, address from, uint256 tokenId, address investor, CyberCertPrinter.CertificateDetails memory _details) public onlyOwner {
+    function assignCert(address certAddress, address from, uint256 tokenId, address investor, CertificateDetails memory _details) public onlyOwner {
         CyberCertPrinter cert = CyberCertPrinter(certAddress);
         cert.assignCert(from, tokenId, investor, _details);
     }
@@ -85,7 +85,7 @@ contract IssuanceManager is BorgAuthACL {
     function createCertAndAssign(
         address certAddress,
         address investor,
-        CyberCertPrinter.CertificateDetails memory _details
+        CertificateDetails memory _details
     ) public onlyOwner returns (uint256 tokenId) {
         if (bytes(ICyberCorp(CORP).companyName()).length == 0) revert CompanyDetailsNotSet();
         CyberCertPrinter cert = CyberCertPrinter(certAddress);
@@ -125,7 +125,7 @@ contract IssuanceManager is BorgAuthACL {
     function convert(address certAddress, uint256 tokenId, address convertTo, uint256 stockAmount) external onlyOwner {
         // Get certificate details
         CyberCertPrinter certificate = CyberCertPrinter(certAddress);
-        CyberCertPrinter.CertificateDetails memory details = certificate.getCertificateDetails(tokenId);
+        CertificateDetails memory details = certificate.getCertificateDetails(tokenId);
         
         // Verify it's a SAFE
        // if (details. != SecurityClass.SAFE) revert NotSAFEToken();

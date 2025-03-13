@@ -35,7 +35,6 @@ contract BorgAuth is Initializable {
 
     /// @notice Empty constructor for implementation contract
     constructor() {
-        // No initialization here since we're using the initialize pattern
     }
 
     /// @notice Initializer replacing the constructor - sets the deployer/initializer as owner
@@ -126,7 +125,6 @@ abstract contract BorgAuthACL is Initializable {
 
     /// @notice Empty constructor for implementation contract
     constructor() {
-        // No initialization here for proxy compatibility
     }
 
     /// @notice Initializer for BorgAuthACL

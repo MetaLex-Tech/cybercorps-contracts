@@ -28,7 +28,7 @@ contract CyberCorp is BorgAuthACL {
         defaultLegend = _defaultLegend;
     }
 
-    function initialize(address _issuanceManager, address _auth) external onlyOwner() {
+    function initialize(address _issuanceManager, address _auth) initializer external {
         issuanceManager = _issuanceManager;
           __BorgAuthACL_init(_auth);
     }

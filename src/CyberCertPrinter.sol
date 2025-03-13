@@ -4,6 +4,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721Enumer
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "../dependencies/cyberCorpTripler/src/interfaces/IIssuanceManager.sol";
+import "../dependencies/cyberCorpTripler/src/interfaces/ITransferRestrictionHook.sol";
 import "./CyberCorpConstants.sol";
 
 contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable {
@@ -21,24 +22,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     SecurityClass securityType; 
     SecuritySeries securitySeries; 
     string ledger;
-    
-    // Agreement details
-    struct CertificateDetails {
-        string investorName;
-        string signingOfficerName;
-        string signingOfficerTitle;
-       // string legalAgreementTextURI;
-
-        uint256 investmentAmount;
-        uint256 issuerUSDValuationAtTimeofInvestment;
-        uint256 unitsRepresented; //# of shares or other units represented by a certificate that represents multiple units 
-        bool transferable;
-
-        // Additional legal details
-        string legalDetails; //governingJurisdiction, contactDetails, disputeResolutionMethod, legalAgreementTextURI
-        // Signature and endorsement tracking
-        string issuerSignatureURI;
-    }
 
     struct endorsement {
         address endorser;
@@ -72,9 +55,9 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     }
 
     // Called by proxy on deployment (if needed)
-    function initialize(string memory _ledger, string memory name, string memory ticker, address _issuanceManager) external {
+    function initialize(string memory _ledger, string memory name, string memory ticker, address _issuanceManager) external initializer {
         __ERC721_init(name, ticker);
-        __ERC721Enumerable_init();
+        __ERC721Enumerable_init_unchained();
         __UUPSUpgradeable_init();
         issuanceManager = _issuanceManager;
         ledger = _ledger;
