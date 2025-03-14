@@ -9,8 +9,9 @@ import "../dependencies/cyberCorpTripler/src/interfaces/ICyberCorp.sol";
 import "./interfaces/ICyberCorpSingleFactory.sol";
 import "./interfaces/ICyberCertPrinter.sol";
 import "./interfaces/ICyberAgreementFactory.sol";
-import "../dependencies/cyberCorpTripler/src/interfaces/IAgreementV2Factory.sol";
+import "../dependencies/cyberCorpTripler/src/interfaces/IAgreementFactory.sol";
 import "../dependencies/cyberCorpTripler/src/interfaces/IDoubleTokenLexscrowRegistry.sol";
+import "../dependencies/cyberCorpTripler/src/interfaces/CyberCorpConstants.sol";
 
 contract CyberCorpFactory {
     error InvalidSalt();
@@ -68,7 +69,6 @@ contract CyberCorpFactory {
 
         cyberCorpAddress = ICyberCorpSingleFactory(cyberCorpSingleFactory).deployCyberCorpSingle(salt, authAddress, companyName, companyJurisdiction, companyContactDetails, defaultDisputeResolution, defaultLegend);
 
-        address lexscrowFactory;
         (agreementFactoryAddress, lexscrowFactory) = ICyberAgreementFactory(cyberAgreementFactory).deployAgreementFactory(registryAddress, issuanceManagerAddress);
 
         IDoubleTokenLexscrowRegistry(registryAddress).enableFactory(agreementFactoryAddress);
@@ -103,6 +103,8 @@ contract CyberCorpFactory {
         string memory companyName,
         string memory certName,
         string memory certSymbol,
+        SecurityClass securityClass,
+        SecuritySeries securitySeries,
         CertificateDetails memory _details
     ) external returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address agreementFactoryAddress, address certPrinterAddress) {
 
@@ -116,7 +118,9 @@ contract CyberCorpFactory {
             ""
         );
 
-        ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter(cyberCertPrinterImplementation, "", certName, certSymbol));
+        //append companyname " " and then the certName
+        string memory certNameWithCompany = string.concat(companyName, " ", certName); 
+        ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter(cyberCertPrinterImplementation, "", certNameWithCompany, certSymbol, securityClass, securitySeries));
         certPrinterAddress = address(certPrinter);  
 
         NFTAsset memory _nftAsset = NFTAsset({
@@ -158,7 +162,7 @@ contract CyberCorpFactory {
         BorgAuth(auth).updateRole(agreementFactoryAddress, 99);
 
 
-        (address _agreementAddress, address _lexscrow) = IAgreementV2Factory(agreementFactoryAddress).deployLexscrowAndProposeOpenOfferERC721LexscrowAgreement(_agreementDetails, lexscrowFactory, _details);
+        (address _agreementAddress, address _lexscrow) = IAgreementFactory(agreementFactoryAddress).deployLexscrowAndProposeSAFEDeal(_agreementDetails, lexscrowFactory, _details);
 
         emit AgreementDeployed(agreementFactoryAddress, _agreementAddress, _lexscrow, salt);
 

@@ -5,7 +5,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "../dependencies/cyberCorpTripler/src/interfaces/IIssuanceManager.sol";
 import "../dependencies/cyberCorpTripler/src/interfaces/ITransferRestrictionHook.sol";
-import "./CyberCorpConstants.sol";
+import "../dependencies/cyberCorpTripler/src/interfaces/CyberCorpConstants.sol";
 
 contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable {
     // Custom errors
@@ -53,12 +53,14 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     }
 
     // Called by proxy on deployment (if needed)
-    function initialize(string memory _ledger, string memory name, string memory ticker, address _issuanceManager) external initializer {
+    function initialize(string memory _ledger, string memory name, string memory ticker, address _issuanceManager, SecurityClass _securityType, SecuritySeries _securitySeries) external initializer {
         __ERC721_init(name, ticker);
         __ERC721Enumerable_init_unchained();
         __UUPSUpgradeable_init();
         issuanceManager = _issuanceManager;
         ledger = _ledger;
+        securityType = _securityType;
+        securitySeries = _securitySeries;
     }
 
     function updateIssuanceManager(address _issuanceManager) external onlyIssuanceManager {

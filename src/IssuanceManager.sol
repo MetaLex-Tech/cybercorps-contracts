@@ -21,11 +21,13 @@ contract IssuanceManager is BorgAuthACL {
     // Mapping to track proxy addresses for each token ID
     address[] public printers;
 
-    event CertificateCreated(uint256 indexed tokenId, address indexed investor, uint256 amount, uint256 cap);
+    event CertPrinterCreated(address indexed certificate, string ledger, string name, string ticker, SecurityClass securityType, SecuritySeries securitySeries);
+    event CertificateCreated(uint256 indexed tokenId, address indexed certificate, uint256 amount, uint256 cap);
     event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
-    event CertificateSigned(uint256 indexed tokenId, string signatureURI);
-    event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, string signatureURI);
+    event CertificateAssigned(uint256 indexed tokenId, address indexed certificate, address indexed investor, CertificateDetails details);
+    event CertificateSigned(uint256 indexed tokenId, address indexed certificate, string signatureURI);
+    event CertificateEndorsed(uint256 indexed tokenId, address indexed certificate, address indexed endorser, string signatureURI);
 
     constructor() {
     }
@@ -52,12 +54,13 @@ contract IssuanceManager is BorgAuthACL {
         );
     }
     
-    function createCertPrinter(address initialImplementation, string memory _ledger, string memory _name, string memory _ticker) public onlyOwner returns (address) {
+    function createCertPrinter(address initialImplementation, string memory _ledger, string memory _name, string memory _ticker, SecurityClass _securityType, SecuritySeries _securitySeries) public onlyOwner returns (address) {
         //add new proxy to a set CyberCertPrinter deployement
         bytes32 salt = keccak256(abi.encodePacked(printers.length, address(this)));
         address newCert = Create2.deploy(0, salt, _getBytecode());
         printers.push(newCert);
-        ICyberCertPrinter(newCert).initialize(_ledger, _name, _ticker, address(this));
+        ICyberCertPrinter(newCert).initialize(_ledger, _name, _ticker, address(this), _securityType, _securitySeries);
+        emit CertPrinterCreated(newCert, _ledger, _name, _ticker, _securityType, _securitySeries);
         return newCert;
     }
 
@@ -66,12 +69,14 @@ contract IssuanceManager is BorgAuthACL {
         ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         uint256 tokenId = cert.totalSupply();
         uint256 id = cert.safeMint(tokenId, to, _details);
+        emit CertificateCreated(tokenId, certAddress, _details.investmentAmount, _details.issuerUSDValuationAtTimeofInvestment);
         return id;
     }
 
     function assignCert(address certAddress, address from, uint256 tokenId, address investor, CertificateDetails memory _details) public onlyOwner {
         ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         cert.assignCert(from, tokenId, investor, _details);
+        emit CertificateAssigned(tokenId, certAddress, investor, _details);
     }
 
     function createCertAndAssign(
@@ -84,7 +89,7 @@ contract IssuanceManager is BorgAuthACL {
         tokenId = cert.totalSupply();
     
         cert.safeMintAndAssign(investor, tokenId, _details);
-        emit CertificateCreated(tokenId, investor, _details.investmentAmount, _details.issuerUSDValuationAtTimeofInvestment);
+        emit CertificateCreated(tokenId, certAddress, _details.investmentAmount, _details.issuerUSDValuationAtTimeofInvestment);
         return tokenId;
     }
     
@@ -95,7 +100,7 @@ contract IssuanceManager is BorgAuthACL {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.addIssuerSignature(tokenId, signatureURI);
         
-        emit CertificateSigned(tokenId, signatureURI);
+        emit CertificateSigned(tokenId, certAddress, signatureURI);
     }
     
     // Add endorsement for secondary market transfer
@@ -104,8 +109,7 @@ contract IssuanceManager is BorgAuthACL {
         
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.addEndorsement(tokenId, endorser, signatureURI);
-        
-        emit CertificateEndorsed(tokenId, endorser, signatureURI);
+        emit CertificateEndorsed(tokenId, certAddress, endorser, signatureURI);
     }
     
 

@@ -1,7 +1,7 @@
 pragma solidity 0.8.28;
 
 import "../dependencies/cyberCorpTripler/src/ERC721LexscrowFactory.sol";
-import "../dependencies/cyberCorpTripler/src/RicardianTriplerOpenOfferCyberCorpSAFE.sol";
+import "../dependencies/cyberCorpTripler/src/SAFEDealManager.sol";
 
 contract CyberAgreementFactory {
 
@@ -12,7 +12,7 @@ contract CyberAgreementFactory {
     }
 
     function deployAgreementFactory(address _registryAddress, address _issuanceManagerAddress) public returns (address, address) {
-        address agreementFactoryAddress = address(new AgreementV2Factory(_registryAddress, _issuanceManagerAddress));
+        address agreementFactoryAddress = address(new AgreementFactory(_registryAddress, _issuanceManagerAddress));
 
         return (agreementFactoryAddress, lexscrowFactory);
     }

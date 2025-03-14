@@ -5,12 +5,13 @@ import {Test, console} from "forge-std/Test.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {CertificateDetails, IIssuanceManager} from "../dependencies/cyberCorpTripler/src/interfaces/IIssuanceManager.sol";
-import {AgreementV2Factory} from "../dependencies/cyberCorpTripler/src/RicardianTriplerOpenOfferCyberCorpSAFE.sol";
+import {AgreementFactory} from "../dependencies/cyberCorpTripler/src/SAFEDealManager.sol";
 import {DoubleTokenLexscrowRegistry} from "../dependencies/cyberCorpTripler/src/DoubleTokenLexscrowRegistry.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {CyberAgreementFactory} from "../src/CyberAgreementFactory.sol";
 import {ERC721LexscrowFactory} from "../dependencies/cyberCorpTripler/src/ERC721LexscrowFactory.sol";
+import "../dependencies/cyberCorpTripler/src/interfaces/CyberCorpConstants.sol";
 
 
 contract CyberCorpTest is Test {
@@ -26,7 +27,7 @@ contract CyberCorpTest is Test {
         address issuanceManagerFactory = address(new IssuanceManagerFactory(address(0)));
         address cyberCertPrinterImplementation = address(new CyberCertPrinter());
         CyberCertPrinter cyberCertPrinter = CyberCertPrinter(cyberCertPrinterImplementation);
-        cyberCertPrinter.initialize("", "", "", address(0));
+        cyberCertPrinter.initialize("", "", "", address(0), SecurityClass.SAFE, SecuritySeries.SeriesPreSeed);
         address cyberCorpSingleFactory = address(new CyberCorpSingleFactory());
 
 
@@ -63,7 +64,9 @@ contract CyberCorpTest is Test {
             "CyberCorp",
             "",
             "",
-            _details
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesPreSeed,
+          _details
         );
      }
 }
