@@ -134,6 +134,10 @@ abstract contract BorgAuthACL is Initializable {
         AUTH = BorgAuth(_auth);
     }
 
+    function userRoles(address user) public view returns (uint256) {
+        return AUTH.userRoles(user);
+    }
+
     //common modifiers and general access control onlyRole
     modifier onlyOwner() {
         AUTH.onlyRole(AUTH.OWNER_ROLE(), msg.sender);

@@ -69,4 +69,31 @@ contract CyberCorpTest is Test {
           _details
         );
      }
+
+     function testNet() public {
+      vm.startPrank(0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B);
+      CyberCorpFactory cyberCorpFactoryLive = CyberCorpFactory(0x2aDA6E66a92CbF283B9F2f4f095Fe705faD357B8);
+      
+      CertificateDetails memory _details = CertificateDetails({
+          investorName: "",
+          signingOfficerName: "",
+          signingOfficerTitle: "",
+          investmentAmount: 0,
+          issuerUSDValuationAtTimeofInvestment: 10000000,
+          unitsRepresented: 0,
+          transferable: false,
+          legalDetails: "Legal Details, jusidictione etc",
+          issuerSignatureURI: ""
+      });
+      
+      cyberCorpFactory.deployCyberCorpAndCreateOffer(
+        bytes32(uint256(1)),
+        "CyberCorp",
+        "",
+        "",
+        SecurityClass.SAFE,
+        SecuritySeries.SeriesPreSeed,
+        _details
+      );
+     }
 }
