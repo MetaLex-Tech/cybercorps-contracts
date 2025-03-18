@@ -12,6 +12,8 @@ import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {CyberAgreementFactory} from "../src/CyberAgreementFactory.sol";
 import {ERC721LexscrowFactory} from "../dependencies/cyberCorpTripler/src/ERC721LexscrowFactory.sol";
 import "../dependencies/cyberCorpTripler/src/interfaces/CyberCorpConstants.sol";
+import {BorgAuth} from "../src/libs/auth.sol";
+import {CyberDealRegistry} from "../src/CyberDealRegistry.sol";
 
 
 contract CyberCorpTest is Test {
@@ -68,6 +70,39 @@ contract CyberCorpTest is Test {
             SecuritySeries.SeriesPreSeed,
           _details
         );
+     }
+
+     function testCreateContract() public {
+      vm.startPrank(0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B);
+      BorgAuth auth = new BorgAuth();
+      auth.initialize();
+      CyberDealRegistry registry = new CyberDealRegistry();
+      registry.initialize(address(auth));
+      string[] memory globalFields = new string[](1);
+      globalFields[0] = "Global Field 1";
+      string[] memory partyFields = new string[](1);
+      partyFields[0] = "Party Field 1";
+      string[] memory globalValues = new string[](1);
+      globalValues[0] = "Global Value 1";
+      string[] memory partyValues = new string[](1);
+      partyValues[0] = "Party Value 1";
+
+      string[] memory partyValuesB = new string[](1);
+      partyValuesB[0] = "Party Value B";
+      address[] memory parties = new address[](2);
+      parties[0] = address(0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B);
+      parties[1] = address(0);
+      registry.createTemplate(bytes32(uint256(1)), "CyberCorp", "ipfs.io/ipfs/[cid]", globalFields, partyFields);
+      registry.createContract(bytes32(uint256(1)), bytes32(uint256(1)), globalValues, parties);
+      registry.signContract(bytes32(uint256(1)), partyValues, false);
+      string memory contractURI = registry.getContractURI(bytes32(uint256(1)));
+      console.log(contractURI);
+      vm.stopPrank();
+      vm.startPrank(0x2aDA6E66a92CbF283B9F2f4f095Fe705faD357B8);
+      registry.signContract(bytes32(uint256(1)), partyValuesB, true);
+      contractURI = registry.getContractURI(bytes32(uint256(1)));
+      console.log(contractURI);
+      vm.stopPrank();
      }
 
      function testNet() public {

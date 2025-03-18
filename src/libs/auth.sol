@@ -102,6 +102,21 @@ contract BorgAuth is Initializable {
         }
     }
 
+    /// @notice check role for user, revert if not authorized
+    /// @param user address of user
+    /// @param role of user
+    function matchRole(uint256 role, address user) public view {
+        uint256 authorized = userRoles[user];
+
+        if (authorized != role) {
+            address adapter = roleAdapters[role];
+            if (adapter != address(0)) 
+                if (IAuthAdapter(adapter).isAuthorized(user) == role) 
+                    return;
+            revert BorgAuth_NotAuthorized(role, user);
+        }
+    }
+
     /// @notice internal function to add a role to a user
     /// @param role role to update
     /// @param user address of user
@@ -156,6 +171,11 @@ abstract contract BorgAuthACL is Initializable {
 
     modifier onlyRole(uint256 _role) {
         AUTH.onlyRole(_role, msg.sender);
+        _;
+    }
+
+    modifier matchRole(uint256 _role) {
+        AUTH.matchRole(_role, msg.sender);
         _;
     }
 }
