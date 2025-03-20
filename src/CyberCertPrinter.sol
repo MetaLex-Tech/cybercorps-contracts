@@ -3,9 +3,9 @@ pragma solidity 0.8.28;
 import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "../dependencies/cyberCorpTripler/src/interfaces/IIssuanceManager.sol";
-import "../dependencies/cyberCorpTripler/src/interfaces/ITransferRestrictionHook.sol";
-import "../dependencies/cyberCorpTripler/src/interfaces/CyberCorpConstants.sol";
+import "./interfaces/IIssuanceManager.sol";
+import "./interfaces/ITransferRestrictionHook.sol";
+import "./CyberCorpConstants.sol";
 
 contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable {
     // Custom errors
@@ -168,7 +168,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         // Skip restriction checks for minting (from == address(0)) and burning (to == address(0))
         if (from != address(0) && to != address(0)) {
             // This is a transfer, check built-in transferability flag
-            if (!agreements[tokenId].transferable) revert TokenNotTransferable();
+           // if (!agreements[tokenId].transferable) revert TokenNotTransferable();
             
             // Check security type-specific hook if it exists
 

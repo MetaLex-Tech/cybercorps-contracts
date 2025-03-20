@@ -21,7 +21,7 @@ contract IssuanceManager is BorgAuthACL {
     // Mapping to track proxy addresses for each token ID
     address[] public printers;
 
-    event CertPrinterCreated(address indexed certificate, string ledger, string name, string ticker, SecurityClass securityType, SecuritySeries securitySeries);
+    event CertPrinterCreated(address indexed certificate, address indexed corp, string ledger, string name, string ticker, SecurityClass securityType, SecuritySeries securitySeries);
     event CertificateCreated(uint256 indexed tokenId, address indexed certificate, uint256 amount, uint256 cap);
     event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
@@ -60,7 +60,7 @@ contract IssuanceManager is BorgAuthACL {
         address newCert = Create2.deploy(0, salt, _getBytecode());
         printers.push(newCert);
         ICyberCertPrinter(newCert).initialize(_ledger, _name, _ticker, address(this), _securityType, _securitySeries);
-        emit CertPrinterCreated(newCert, _ledger, _name, _ticker, _securityType, _securitySeries);
+        emit CertPrinterCreated(newCert, CORP, _ledger, _name, _ticker, _securityType, _securitySeries);
         return newCert;
     }
 

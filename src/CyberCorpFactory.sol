@@ -4,14 +4,15 @@ import "./interfaces/IIssuanceManagerFactory.sol";
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
-import "../dependencies/cyberCorpTripler/src/interfaces/IIssuanceManager.sol";
-import "../dependencies/cyberCorpTripler/src/interfaces/ICyberCorp.sol";
+import "./interfaces/IIssuanceManager.sol";
+import "./interfaces/ICyberCorp.sol";
+import "./interfaces/IDealManagerFactory.sol";
+import "./interfaces/IDealManager.sol";
 import "./interfaces/ICyberCorpSingleFactory.sol";
 import "./interfaces/ICyberCertPrinter.sol";
 import "./interfaces/ICyberAgreementFactory.sol";
-import "../dependencies/cyberCorpTripler/src/interfaces/IAgreementFactory.sol";
-import "../dependencies/cyberCorpTripler/src/interfaces/IDoubleTokenLexscrowRegistry.sol";
-import "../dependencies/cyberCorpTripler/src/interfaces/CyberCorpConstants.sol";
+import "./interfaces/ICyberDealRegistry.sol";
+import "./CyberCorpConstants.sol";
 
 contract CyberCorpFactory {
     error InvalidSalt();
@@ -22,6 +23,7 @@ contract CyberCorpFactory {
     address public issuanceManagerFactory;
     address public cyberCorpSingleFactory;
     address public cyberAgreementFactory;
+    address public dealManagerFactory;
     address public stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;//base main net 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
 
     event CyberCorpDeployed(
@@ -39,12 +41,12 @@ contract CyberCorpFactory {
         bytes32 salt
     );
 
-    constructor(address _registryAddress, address _cyberCertPrinterImplementation, address _issuanceManagerFactory, address _cyberCorpSingleFactory, address _cyberAgreementFactory) {
+    constructor(address _registryAddress, address _cyberCertPrinterImplementation, address _issuanceManagerFactory, address _cyberCorpSingleFactory, address _dealManagerFactory) {
         registryAddress = _registryAddress;
         cyberCertPrinterImplementation = _cyberCertPrinterImplementation;
         issuanceManagerFactory = _issuanceManagerFactory;
         cyberCorpSingleFactory = _cyberCorpSingleFactory;
-        cyberAgreementFactory = _cyberAgreementFactory;
+        dealManagerFactory = _dealManagerFactory;
     }
 
     function deployCyberCorp(
@@ -53,7 +55,9 @@ contract CyberCorpFactory {
         string memory companyJurisdiction,
         string memory companyContactDetails,
         string memory defaultDisputeResolution,
-        string memory defaultLegend
+        string memory defaultLegend,
+        address _companyPayable,
+        address _officer
     ) public returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address agreementFactoryAddress, address lexscrowFactory) {
         if (salt == bytes32(0)) revert InvalidSalt();
 
@@ -64,24 +68,26 @@ contract CyberCorpFactory {
         
         // Initialize BorgAuth
         BorgAuth(authAddress).initialize();
+        BorgAuth(authAddress).updateRole(msg.sender, 200);
 
         issuanceManagerAddress = IIssuanceManagerFactory(issuanceManagerFactory).deployIssuanceManager(salt);
 
-        cyberCorpAddress = ICyberCorpSingleFactory(cyberCorpSingleFactory).deployCyberCorpSingle(salt, authAddress, companyName, companyJurisdiction, companyContactDetails, defaultDisputeResolution, defaultLegend);
+        cyberCorpAddress = ICyberCorpSingleFactory(cyberCorpSingleFactory).deployCyberCorpSingle(salt, authAddress, companyName, companyJurisdiction, companyContactDetails, defaultDisputeResolution, defaultLegend, issuanceManagerAddress, _companyPayable, _officer);
 
-        (agreementFactoryAddress, lexscrowFactory) = ICyberAgreementFactory(cyberAgreementFactory).deployAgreementFactory(registryAddress, issuanceManagerAddress);
-
-        IDoubleTokenLexscrowRegistry(registryAddress).enableFactory(agreementFactoryAddress);
-
+        //deploy deal manager
+        address dealManagerAddress = IDealManagerFactory(dealManagerFactory).deployDealManager();
         // Initialize IssuanceManager
         IIssuanceManager(issuanceManagerAddress).initialize(
             authAddress,
             cyberCorpAddress,
             cyberCertPrinterImplementation
         );
+
+        //update role for issuance manager
+        IDealManager(dealManagerAddress).initialize(authAddress, cyberCorpAddress, registryAddress, issuanceManagerAddress);
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
-        // Initialize CyberCorp
-        ICyberCorp(cyberCorpAddress).initialize(issuanceManagerAddress, authAddress);
+        BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
+
 
         emit CyberCorpDeployed(
             cyberCorpAddress,
@@ -91,31 +97,35 @@ contract CyberCorpFactory {
             salt
         );
 
-        return (cyberCorpAddress, authAddress, issuanceManagerAddress, agreementFactoryAddress, lexscrowFactory);
-    }
-
-    function acceptRegistryAdmin() external {
-        IDoubleTokenLexscrowRegistry(registryAddress).acceptAdminRole();
+        return (cyberCorpAddress, authAddress, issuanceManagerAddress, agreementFactoryAddress, dealManagerAddress);
     }
 
     function deployCyberCorpAndCreateOffer(
         bytes32 salt,
         string memory companyName,
+        address _companyPayable,
         string memory certName,
         string memory certSymbol,
         SecurityClass securityClass,
         SecuritySeries securitySeries,
+        bytes32 _templateId,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        uint256 _paymentAmount,
+        string[] memory _partyValues,
         CertificateDetails memory _details
-    ) external returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address agreementFactoryAddress, address certPrinterAddress) {
+    ) external returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress, address certPrinterAddress, bytes32 id) {
 
-        address lexscrowFactory;
-        (cyberCorpAddress, authAddress, issuanceManagerAddress, agreementFactoryAddress, lexscrowFactory) = deployCyberCorp(
+        address agreementFactoryAddress;
+        (cyberCorpAddress, authAddress, issuanceManagerAddress, agreementFactoryAddress, dealManagerAddress) = deployCyberCorp(
             salt,
             companyName,
             "",
             "",
             "",
-            ""
+            "",
+            _companyPayable,
+            msg.sender
         );
 
         //append companyname " " and then the certName
@@ -123,48 +133,10 @@ contract CyberCorpFactory {
         ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter(cyberCertPrinterImplementation, "", certNameWithCompany, certSymbol, securityClass, securitySeries));
         certPrinterAddress = address(certPrinter);  
 
-        NFTAsset memory _nftAsset = NFTAsset({
-            tokenContract: certPrinterAddress,
-            tokenId: 1
-        });
+        //create a deal
+        id = IDealManager(dealManagerAddress).proposeDeal(certPrinterAddress, certPrinter.totalSupply(), stable, _paymentAmount, _templateId, _globalValues, _parties, _details);
 
-        LockedAsset memory _lockedAsset = LockedAsset({
-            tokenContract: stable,
-            totalAmount: 1
-        });
-
-
-        Party memory _partyA = Party({
-            partyBlockchainAddy: address(msg.sender),
-            partyName: companyName,
-            contactDetails: ""
-        });
-
-        Party memory _partyB = Party({
-            partyBlockchainAddy: address(0x0),
-            partyName: "",
-            contactDetails: ""
-        });
-
-
-        AgreementDetailsV2 memory _agreementDetails = AgreementDetailsV2({
-            partyA: _partyA,
-            partyB: _partyB,
-            lockedAssetPartyA: _nftAsset,
-            lockedAssetPartyB: _lockedAsset,
-            expirationTime: block.timestamp + 1000000000000000000000000,
-            secret: bytes32(0),
-            conditions: new Condition[](0),
-            otherConditions: ""
-        });
-
-        address auth = address(IIssuanceManager(issuanceManagerAddress).AUTH());
-        BorgAuth(auth).updateRole(agreementFactoryAddress, 99);
-
-
-        (address _agreementAddress, address _lexscrow) = IAgreementFactory(agreementFactoryAddress).deployLexscrowAndProposeSAFEDeal(_agreementDetails, lexscrowFactory, _details);
-
-        emit AgreementDeployed(agreementFactoryAddress, _agreementAddress, _lexscrow, salt);
+        //emit AgreementDeployed(agreementFactoryAddress, _agreementAddress, _lexscrow, salt);
 
     }
 } 

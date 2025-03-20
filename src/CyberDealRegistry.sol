@@ -9,7 +9,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     struct Template {
         string legalContractUri; // Off-chain legal contract URI
         string title;
-        string[] globalFields; // Field names that are the same for all contracts
+        string[] globalFields; // Field names that are the same for all agreements
         string[] partyFields; // party Fields that will be different per party
     }
 
@@ -27,10 +27,10 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     mapping(bytes32 => Template) public templates;
 
     // Mapping of contractId => contract data
-    mapping(bytes32 => ContractData) public contracts;
+    mapping(bytes32 => ContractData) public agreements;
 
-    // A mapping connecting an address to all the contracts they are a party to
-    mapping(address => bytes32[]) public contractsForParty;
+    // A mapping connecting an address to all the agreements they are a party to
+    mapping(address => bytes32[]) public agreementsForParty;
 
     event TemplateCreated(
         bytes32 indexed templateId,
@@ -46,7 +46,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         address[] parties
     );
 
-    event ContractSigned(
+    event AgreementSigned(
         bytes32 indexed contractId,
         address indexed party,
         uint256 timestamp
@@ -106,12 +106,13 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     }
 
     function createContract(
-        bytes32 contractId,
         bytes32 templateId,
         string[] memory globalValues,
         address[] memory parties
-    ) external onlyAdmin {
-        if (contracts[contractId].parties.length > 0) {
+    ) external returns (bytes32 contractId) {
+        //create hash from templateId, globalValues, and parties
+        contractId = keccak256(abi.encode(templateId, globalValues, parties));
+        if (agreements[contractId].parties.length > 0) {
             revert ContractAlreadyExists();
         }
 
@@ -136,7 +137,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             }
         }
 
-        ContractData storage contractData = contracts[contractId];
+        ContractData storage contractData = agreements[contractId];
         contractData.templateId = templateId;
         contractData.globalValues = globalValues;
         contractData.parties = parties;
@@ -144,9 +145,9 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         emit ContractCreated(contractId, templateId, parties);
 
-        // Add to the party's list of contracts
+        // Add to the party's list of agreements
         for (uint256 i = 0; i < parties.length; i++) {
-            contractsForParty[parties[i]].push(contractId);
+            agreementsForParty[parties[i]].push(contractId);
         }
     }
 
@@ -155,7 +156,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         string[] memory partyValues,
         bool fillUnallocated // to fill a 0 address or not
     ) external {
-        ContractData storage contractData = contracts[contractId];
+        ContractData storage contractData = agreements[contractId];
         if (contractData.parties.length == 0) revert ContractDoesNotExist();
         if (contractData.signedAt[msg.sender] != 0) revert AlreadySigned();
 
@@ -178,7 +179,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         contractData.signedAt[msg.sender] = timestamp;
         uint256 totalSignatures = ++contractData.numSignatures;
 
-        emit ContractSigned(contractId, msg.sender, timestamp);
+        emit AgreementSigned(contractId, msg.sender, timestamp);
 
         if (totalSignatures == contractData.parties.length) {
             emit ContractFullySigned(contractId, timestamp);
@@ -188,7 +189,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
      function getParties(
         bytes32 contractId
     ) external view returns (address[] memory) {
-        return contracts[contractId].parties;
+        return agreements[contractId].parties;
     }
 
     function hasSigned(
@@ -196,20 +197,20 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         address signer
     ) external view returns (bool) {
         if (signer == address(0)) revert NotAParty();
-        return contracts[contractId].signedAt[signer] != 0;
+        return agreements[contractId].signedAt[signer] != 0;
     }
 
     function getSignatureTimestamp(
         bytes32 contractId,
         address signer
     ) external view returns (uint256) {
-        return contracts[contractId].signedAt[signer];
+        return  agreements[contractId].signedAt[signer];
     }
 
     function allPartiesSigned(bytes32 contractId) external view returns (bool) {
         return
-            contracts[contractId].numSignatures ==
-            contracts[contractId].parties.length;
+            agreements[contractId].numSignatures ==
+            agreements[contractId].parties.length;
     }
 
     function getContractDetails(
@@ -231,7 +232,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             bytes32 transactionHash
         )
     {
-        ContractData storage contractData = contracts[contractId];
+        ContractData storage contractData = agreements[contractId];
         Template memory template = templates[contractData.templateId];
 
         if (contractData.parties.length == 0) revert ContractDoesNotExist();
@@ -287,16 +288,16 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         bytes32 contractId,
         address signer
     ) external view returns (string[] memory signerValues) {
-        ContractData storage contractData = contracts[contractId];
+        ContractData storage contractData = agreements[contractId];
         return (contractData.partyValues[signer]);
     }
 
-    // This makes fetching all contracts for a party easier from a client, as the
+    // This makes fetching all agreements for a party easier from a client, as the
     // default getter requires an index
-    function getContractsForParty(
+    function getAgreementsForParty(
         address party
     ) external view returns (bytes32[] memory) {
-        return contractsForParty[party];
+        return agreementsForParty[party];
     }
 
     function isParty(
@@ -306,7 +307,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         if (user == address(0)) {
             return false;
         }
-        address[] memory parties = contracts[contractId].parties;
+        address[] memory parties = agreements[contractId].parties;
         for (uint256 i = 0; i < parties.length; i++) {
             if (parties[i] == user) {
                 return true;
@@ -318,7 +319,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     function getFirstOpenPartyIndex(
         bytes32 contractId
     ) internal view returns (uint256) {
-        ContractData storage contractData = contracts[contractId];
+        ContractData storage contractData = agreements[contractId];
         for (uint256 i = 0; i < contractData.parties.length; i++) {
             if (contractData.parties[i] == address(0)) {
                 return i;
@@ -328,8 +329,8 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         return 0;
     }
 
-    function getContractURI(bytes32 contractId) external view returns (string memory) {
-        ContractData storage contractData = contracts[contractId];
+    function getContractJson(bytes32 contractId) external view returns (string memory) {
+        ContractData storage contractData = agreements[contractId];
         Template storage template = templates[contractData.templateId];
         
         // Start with basic fields
@@ -440,6 +441,6 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     // Add a function to get the transaction hash
     function getContractTransactionHash(bytes32 contractId) external view returns (bytes32) {
-        return contracts[contractId].transactionHash;
+        return agreements[contractId].transactionHash;
     }
 }

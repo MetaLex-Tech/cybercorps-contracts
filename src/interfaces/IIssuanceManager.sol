@@ -4,12 +4,10 @@ pragma solidity 0.8.28;
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
-import "../../dependencies/cyberCorpTripler/src/interfaces/ICyberCorp.sol";
-import "../../dependencies/cyberCorpTripler/src/interfaces/ITransferRestrictionHook.sol";
+import "./ICyberCorp.sol";
+import "./ITransferRestrictionHook.sol";
+import "../CyberCorpConstants.sol";
 
-//Adapter interface for custom auth roles. Allows extensibility for different auth protocols i.e. hats.
-interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
-    // Structs
     struct CertificateDetails {
         string investorName;
         string signingOfficerName;
@@ -21,6 +19,11 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
         string legalDetails;
         string issuerSignatureURI;
     }
+
+
+//Adapter interface for custom auth roles. Allows extensibility for different auth protocols i.e. hats.
+interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
+    // Structs
 
     struct Endorsement {
         address endorser;
@@ -47,13 +50,10 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
         address initialImplementation,
         string memory _ledger,
         string memory _name,
-        string memory _ticker
+        string memory _ticker,
+        SecurityClass _securityClass,
+        SecuritySeries _securitySeries
     ) external returns (address);
-
-    function createCert(
-        address certAddress,
-        address to
-    ) external returns (uint256);
 
     function createCert(
         address certAddress,
@@ -137,4 +137,5 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
     function certifications(uint256) external view returns (address);
     function companyName() external view returns (string memory);
     function companyJurisdiction() external view returns (string memory);
+    function AUTH() external view returns (address);
 }

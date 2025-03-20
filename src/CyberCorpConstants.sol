@@ -33,3 +33,11 @@ enum SecurityStatus {
     Assigned,
     Void
 }
+
+struct CompanyOfficer {
+    address eoa;
+    string name;
+    string email;
+    string title;
+    string role;
+}

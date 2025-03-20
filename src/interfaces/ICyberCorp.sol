@@ -7,4 +7,6 @@ interface ICyberCorp {
     function companyContactDetails() external view returns (string memory);
     function defaultDisputeResolution() external view returns (string memory);
     function defaultLegend() external view returns (string memory);
+    function companyPayable() external view returns (address);
 }
+
