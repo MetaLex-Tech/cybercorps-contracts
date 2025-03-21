@@ -33,8 +33,12 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         bytes32 transactionHash; // Hash of the transaction that created this contract
     }
     
+    // This data is what is signed by each party
     struct SignatureData {
         bytes32 contractId;
+        string legalContractUri;
+        string[] globalFields;
+        string[] partyFields;
         string[] globalValues;
         string[] partyValues;
     }
@@ -102,7 +106,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         );
         
         SIGNATUREDATA_TYPEHASH = keccak256(
-                "SignatureData(bytes32 contractId,string[] globalValues,string[] partyValues)"
+                "SignatureData(bytes32 contractId,string legalContractUri,string[] globalFields,string[] partyFields,string[] globalValues,string[] partyValues)"
             );
     }
     
@@ -200,6 +204,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         bool fillUnallocated // to fill a 0 address or not
     ) public {
         ContractData storage contractData = agreements[contractId];
+        Template memory template = templates[contractData.templateId];
         if (contractData.parties.length == 0) revert ContractDoesNotExist();
         if (contractData.signedAt[signer] != 0) revert AlreadySigned();
 
@@ -215,13 +220,15 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         // Verify the signature
         if (!_verifySignature(signer, SignatureData({
             contractId: contractId,
+            legalContractUri: template.legalContractUri,
+            globalFields: template.globalFields,
+            partyFields: template.partyFields,
             globalValues: contractData.globalValues,
             partyValues: partyValues
         }), signature)) {
             revert SignatureVerificationFailed();
         }
 
-        Template storage template = templates[contractData.templateId];
         if (partyValues.length != template.partyFields.length)
             revert MismatchedFieldsLength();
 
@@ -473,6 +480,9 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                     abi.encode(
                         SIGNATUREDATA_TYPEHASH,
                         data.contractId,
+                        data.legalContractUri,
+                        _hashStringArray(data.globalFields),
+                        _hashStringArray(data.partyFields),
                         _hashStringArray(data.globalValues),
                         _hashStringArray(data.partyValues)
                     )

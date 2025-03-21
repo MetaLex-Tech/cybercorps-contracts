@@ -103,10 +103,18 @@ contract CyberCorpTest is Test {
             abi.encode(bytes32(uint256(1)), globalValues, parties)
         );
 
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
         bytes memory signature = _signAgreementTypedData(
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
             globalValues,
             partyValues,
             testPrivateKey
@@ -173,6 +181,9 @@ contract CyberCorpTest is Test {
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
             globalValues,
             partyValues,
             testPrivateKey
@@ -196,6 +207,9 @@ contract CyberCorpTest is Test {
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
             globalValues,
             partyValuesB,
             newPartyPk
@@ -240,10 +254,18 @@ contract CyberCorpTest is Test {
             abi.encode(bytes32(uint256(1)), globalValues, parties)
         );
 
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
         bytes memory proposerSignature = _signAgreementTypedData(
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
             globalValues,
             partyValues,
             testPrivateKey
@@ -284,6 +306,9 @@ contract CyberCorpTest is Test {
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
             globalValues,
             partyValuesB,
             newPartyPk
@@ -312,17 +337,30 @@ contract CyberCorpTest is Test {
         bytes32 _domainSeparator,
         bytes32 _typeHash,
         bytes32 contractId,
+        string memory contractUri,
+        string[] memory globalFields,
+        string[] memory partyFields,
         string[] memory globalValues,
         string[] memory partyValues,
         uint256 privKey
     ) internal pure returns (bytes memory signature) {
         // Hash string arrays the same way as the contract
+        bytes32 globalFieldsHash = _hashStringArray(globalFields);
+        bytes32 partyFieldsHash = _hashStringArray(partyFields);
         bytes32 globalValuesHash = _hashStringArray(globalValues);
         bytes32 partyValuesHash = _hashStringArray(partyValues);
 
         // Create the message hash using the same approach as the contract
         bytes32 structHash = keccak256(
-            abi.encode(_typeHash, contractId, globalValuesHash, partyValuesHash)
+            abi.encode(
+                _typeHash,
+                contractId,
+                contractUri,
+                globalFieldsHash,
+                partyFieldsHash,
+                globalValuesHash,
+                partyValuesHash
+            )
         );
 
         bytes32 digest = keccak256(
