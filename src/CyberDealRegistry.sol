@@ -198,7 +198,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         string[] memory partyValues,
         bytes calldata signature, 
         bool fillUnallocated // to fill a 0 address or not
-    ) internal {
+    ) public {
         ContractData storage contractData = agreements[contractId];
         if (contractData.parties.length == 0) revert ContractDoesNotExist();
         if (contractData.signedAt[signer] != 0) revert AlreadySigned();

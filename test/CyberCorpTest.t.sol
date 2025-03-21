@@ -76,7 +76,7 @@ contract CyberCorpTest is Test {
        string[] memory globalValues = new string[](1);
        globalValues[0] = "Global Value 1";
        address[] memory parties = new address[](2);
-       parties[0] = address(0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B);
+       parties[0] = address(testAddress);
        parties[1] = address(0);
        uint256 _paymentAmount = 1000000000000000000;
        string[] memory partyValues = new string[](1);
@@ -96,7 +96,7 @@ contract CyberCorpTest is Test {
       cyberCorpFactory.deployCyberCorpAndCreateOffer(
         bytes32(uint256(1)),
         "CyberCorp",
-        0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B,
+        testAddress,
         "SAFE",
         "SAFE",
         SecurityClass.SAFE,
@@ -112,7 +112,7 @@ contract CyberCorpTest is Test {
      }
 
      function testCreateContract() public {
-      vm.startPrank(0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B);
+      vm.startPrank(testAddress);
       BorgAuth auth = new BorgAuth();
       auth.initialize();
       CyberDealRegistry registry = new CyberDealRegistry();
@@ -145,7 +145,7 @@ contract CyberCorpTest is Test {
            testPrivateKey
       );      
  
-      registry.signContract(id, partyValues, signature, false);
+      registry.signContractFor(testAddress, id, partyValues, signature, false);
       string memory contractURI = registry.getContractJson(bytes32(uint256(1)));
       
       uint256 newPartyPk = 80085;
@@ -169,7 +169,7 @@ contract CyberCorpTest is Test {
      }
 
      function testNet() public {
-      vm.startPrank(0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B);
+      vm.startPrank(testAddress);
       CyberCorpFactory cyberCorpFactoryLive = CyberCorpFactory(0x2aDA6E66a92CbF283B9F2f4f095Fe705faD357B8);
       
       CertificateDetails memory _details = CertificateDetails({
@@ -261,24 +261,47 @@ contract CyberCorpTest is Test {
      }
 
 
-    function _signAgreementTypedData (
-        bytes32 _domainSeparator,
-        bytes32 _typeHash,
-        bytes32 contractId,
-        string[] memory globalValues,
-        string[] memory partyValues,
-        uint256 privKey
-    ) internal pure returns (bytes memory signature) {
-        bytes32 digest = MessageHashUtils.toTypedDataHash(_domainSeparator, keccak256(
-           abi.encode(
-              _typeHash,
-              contractId,
-              globalValues,
-              partyValues
-           ) 
-        ));
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privKey, digest);
-        signature = abi.encodePacked(r, s, v);        
-        return signature;
-    }
+     function _signAgreementTypedData(
+         bytes32 _domainSeparator,
+         bytes32 _typeHash,
+         bytes32 contractId,
+         string[] memory globalValues,
+         string[] memory partyValues,
+         uint256 privKey
+     ) internal pure returns (bytes memory signature) {
+         // Hash string arrays the same way as the contract
+         bytes32 globalValuesHash = _hashStringArray(globalValues);
+         bytes32 partyValuesHash = _hashStringArray(partyValues);
+         
+         // Create the message hash using the same approach as the contract
+         bytes32 structHash = keccak256(
+             abi.encode(
+                 _typeHash,
+                 contractId,
+                 globalValuesHash,
+                 partyValuesHash
+             )
+         );
+         
+         bytes32 digest = keccak256(
+             abi.encodePacked(
+                 "\x19\x01",
+                 _domainSeparator,
+                 structHash
+             )
+         );
+         
+         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privKey, digest);
+         signature = abi.encodePacked(r, s, v);        
+         return signature;
+     }
+     
+     // Add this helper function to your test contract
+     function _hashStringArray(string[] memory array) internal pure returns (bytes32) {
+         bytes32[] memory hashes = new bytes32[](array.length);
+         for (uint256 i = 0; i < array.length; i++) {
+             hashes[i] = keccak256(bytes(array[i]));
+         }
+         return keccak256(abi.encodePacked(hashes));
+     }
 }
