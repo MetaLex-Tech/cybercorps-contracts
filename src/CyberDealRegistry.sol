@@ -463,7 +463,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         return recoveredSigner == signer;
     }
     
-    // Helper function to hash the typed data (ContractData) according to EIP-712
+    // Helper function to hash the typed data (SignatureData) according to EIP-712
     function _hashTypedDataV4(SignatureData memory data) internal view returns (bytes32) {
         return keccak256(
             abi.encodePacked(
