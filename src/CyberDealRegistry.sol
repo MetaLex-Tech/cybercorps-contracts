@@ -6,6 +6,14 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./libs/auth.sol";
 
 contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
+    
+    // Domain information
+    string public constant name = "CyberDealRegistry"; 
+    string public version;
+    bytes32 public DOMAIN_SEPARATOR;
+    // Type hash for ContractData
+    bytes32 public SIGNATUREDATA_TYPEHASH;
+    
     struct Template {
         string legalContractUri; // Off-chain legal contract URI
         string title;
@@ -21,6 +29,12 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         mapping(address => uint256) signedAt; // Timestamp when each party signed (0 if unsigned)
         uint256 numSignatures; // Number of parties who have signed
         bytes32 transactionHash; // Hash of the transaction that created this contract
+    }
+    
+    struct SignatureData {
+        bytes32 contractId;
+        string[] globalValues;
+        string[] partyValues;
     }
 
     // Mapping of templateId => template data
@@ -59,6 +73,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     error ContractAlreadyExists();
     error ContractDoesNotExist();
     error NotAParty();
+    error SignatureVerificationFailed();
     error AlreadySigned();
     error MismatchedFieldsLength();
     error FirstPartyZeroAddress();
@@ -72,6 +87,21 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     function initialize(address _auth) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
+        
+        version = "1";
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes(name)),
+                keccak256(bytes(version)),
+                block.chainid,
+                address(this)
+            )
+        );
+        
+        SIGNATUREDATA_TYPEHASH = keccak256(
+                "SignatureData(bytes32 contractId,string[] globalValues,string[] partyValues)"
+            );
     }
     
     function createTemplate(
@@ -151,27 +181,20 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         }
     }
     
+    function signContract(
+        bytes32 contractId,
+        string[] memory partyValues,
+        bytes calldata signature,
+        bool fillUnallocated // to fill a 0 address or not
+    ) external {
+        signContractFor(msg.sender, contractId, partyValues, signature, fillUnallocated);
+    }
+    
     function signContractFor(
         address signer,
         bytes32 contractId,
         string[] memory partyValues,
-        bool fillUnallocated // to fill a 0 address or not
-    ) external {
-        _signFor(signer, contractId, partyValues, fillUnallocated);
-    }
-
-    function signContract(
-        bytes32 contractId,
-        string[] memory partyValues,
-        bool fillUnallocated // to fill a 0 address or not
-    ) external {
-        _signFor(msg.sender, contractId, partyValues, fillUnallocated);
-    }
-    
-    function _signFor(
-        address signer,
-        bytes32 contractId,
-        string[] memory partyValues,
+        bytes calldata signature, 
         bool fillUnallocated // to fill a 0 address or not
     ) internal {
         ContractData storage contractData = agreements[contractId];
@@ -185,6 +208,13 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                 revert NotAParty();
             // There is a spare slot, assign the sender to this slot.
             contractData.parties[firstOpenPartyIndex] = signer;
+        }
+        
+        // Compute the hash that the user has signed
+        bytes32 hash = keccak256(abi.encode(contractId, contractData.globalValues, partyValues));
+        // Verify the signature
+        if (!_verifySignature(signer, hash, signature)) {
+            revert SignatureVerificationFailed();
         }
 
         Template storage template = templates[contractData.templateId];
@@ -412,6 +442,48 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         json = string.concat(json, ', "isComplete": ', contractData.numSignatures == contractData.parties.length ? 'true' : 'false');
         json = string.concat(json, '}');
         return json;
+    }
+    
+    function _verifySignature(
+        address signer,
+        SignatureData memory data,
+        bytes memory signature
+    ) internal view returns (bool) {
+        // Hash the data (ContractData) according to EIP-712
+        bytes32 digest = _hashTypedDataV4(data);
+
+        // Recover the signer address
+        address recoveredSigner = digest.recover(signature);
+
+        // Check if the recovered address matches the expected signer
+        return recoveredSigner == signer;
+    }
+    
+    // Helper function to hash the typed data (ContractData) according to EIP-712
+    function _hashTypedDataV4(SignatureData memory data) internal view returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                DOMAIN_SEPARATOR,
+                keccak256(
+                    abi.encode(
+                        SIGNATUREDATA_TYPEHASH,
+                        data.contractId,
+                        _hashStringArray(data.globalValues),
+                        _hashStringArray(data.partyValues)
+                    )
+                )
+            )
+        );
+    }
+    
+    // Helper function to hash string arrays
+    function _hashStringArray(string[] memory array) internal pure returns (bytes32) {
+        bytes32[] memory hashes = new bytes32[](array.length);
+        for (uint256 i = 0; i < array.length; i++) {
+            hashes[i] = keccak256(bytes(array[i]));
+        }
+        return keccak256(abi.encodePacked(hashes));
     }
 
     // Helper function to convert bytes32 to string
