@@ -345,45 +345,53 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         ));
 
         // Add global fields and values as key-value pairs
-        for (uint256 i = 0; i < template.globalFields.length; i++) {
-            json = string.concat(json, '"', template.globalFields[i], '": "', contractData.globalValues[i], '"');
-            if (i < template.globalFields.length - 1) {
-                json = string.concat(json, ',');
+        if (template.globalFields.length > 0) {
+            for (uint256 i = 0; i < template.globalFields.length; i++) {
+                json = string.concat(json, '"', template.globalFields[i], '": "', contractData.globalValues[i], '"');
+                if (i + 1 < template.globalFields.length) {
+                    json = string.concat(json, ',');
+                }
             }
         }
         json = string.concat(json, '}, "parties": {');
 
         // Add parties and their values as key-value pairs
-        for (uint256 i = 0; i < contractData.parties.length; i++) {
-            address party = contractData.parties[i];
-            json = string.concat(json, '"', _addressToString(party), '": {');
-            
-            //check if parties have added their values and if not, add a blank value
-            if(contractData.partyValues[party].length > i)
-            {
+        if (contractData.parties.length > 0) {
+            for (uint256 i = 0; i < contractData.parties.length; i++) {
+                address party = contractData.parties[i];
+                json = string.concat(json, '"', _addressToString(party), '": {');
+                
                 // Add party fields and values
-                string[] memory values = contractData.partyValues[party];
-                for (uint256 j = 0; j < template.partyFields.length; j++) {
-                    json = string.concat(json, '"', template.partyFields[j], '": "', values[j], '"');
-                    if (j < template.partyFields.length - 1) {
-                        json = string.concat(json, ',');
+                if (template.partyFields.length > 0) {
+                    string[] memory values = contractData.partyValues[party];
+                    for (uint256 j = 0; j < template.partyFields.length; j++) {
+                        json = string.concat(json, '"', template.partyFields[j], '": "');
+                        if (values.length > j) {
+                            json = string.concat(json, values[j]);
+                        }
+                        json = string.concat(json, '"');
+                        if (j + 1 < template.partyFields.length) {
+                            json = string.concat(json, ',');
+                        }
                     }
                 }
-            }
-            
-            // Add signature timestamp
-            json = string.concat(json, ', "signedAt": ', _uint256ToString(contractData.signedAt[party]));
-            json = string.concat(json, '}');
-            
-            if (i < contractData.parties.length - 1) {
-                json = string.concat(json, ',');
+                
+                // Add signature timestamp
+                if (template.partyFields.length > 0) {
+                    json = string.concat(json, ',');
+                }
+                json = string.concat(json, '"signedAt": ', _uint256ToString(contractData.signedAt[party]));
+                json = string.concat(json, '}');
+                
+                if (i + 1 < contractData.parties.length) {
+                    json = string.concat(json, ',');
+                }
             }
         }
         
         // Add metadata
         json = string.concat(json, '}, "numSignatures": ', _uint256ToString(contractData.numSignatures));
         json = string.concat(json, ', "isComplete": ', contractData.numSignatures == contractData.parties.length ? 'true' : 'false');
-        json = string.concat(json, ', "isSigned": ', contractData.signedAt[msg.sender] != 0 ? 'true' : 'false');
         json = string.concat(json, '}');
         return json;
     }
@@ -392,26 +400,24 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     function _bytes32ToString(bytes32 _bytes32) internal pure returns (string memory) {
         bytes memory bytesArray = new bytes(64);
         for (uint256 i = 0; i < 32; i++) {
-            bytes1 char = bytes1(bytes32(uint256(_bytes32) * 2 ** (8 * i)));
-            bytesArray[i*2] = char;
-            bytesArray[i*2+1] = char;
+            uint8 b = uint8(uint8(bytes1(bytes32(_bytes32) >> (8 * (31 - i)))));
+            bytesArray[i*2] = bytes1(uint8(b/16 + (b/16 < 10 ? 48 : 87)));
+            bytesArray[i*2+1] = bytes1(uint8(b%16 + (b%16 < 10 ? 48 : 87)));
         }
         return string(bytesArray);
     }
 
     // Helper function to convert address to string
     function _addressToString(address _addr) internal pure returns (string memory) {
-        bytes memory s = new bytes(42);
-        s[0] = "0";
-        s[1] = "x";
+        bytes memory s = new bytes(40);
         for (uint256 i = 0; i < 20; i++) {
-            bytes1 b = bytes1(uint8(uint256(uint160(_addr)) / (2**(8*(19 - i)))));
-            uint8 hi = uint8(b) / 16;
-            uint8 lo = uint8(b) - 16 * hi;
-            s[2+2*i] = hi >= 10 ? bytes1(hi + 87) : bytes1(hi + 48);
-            s[2+2*i+1] = lo >= 10 ? bytes1(lo + 87) : bytes1(lo + 48);
+            bytes1 b = bytes1(uint8(uint160(_addr) >> (8 * (19 - i))));
+            uint8 hi = uint8(b) >> 4;
+            uint8 lo = uint8(b) & 0x0f;
+            s[2*i] = bytes1(hi + (hi < 10 ? 48 : 87));
+            s[2*i+1] = bytes1(lo + (lo < 10 ? 48 : 87));
         }
-        return string(s);
+        return string(abi.encodePacked("0x", s));
     }
 
     // Helper function to convert uint256 to string
@@ -429,7 +435,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         uint256 k = len;
         while (_i != 0) {
             k = k-1;
-            uint8 temp = (48 + uint8(_i - _i / 10 * 10));
+            uint8 temp = uint8(48 + (_i % 10));
             bytes1 b1 = bytes1(temp);
             bstr[k] = b1;
             _i /= 10;

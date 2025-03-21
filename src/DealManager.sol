@@ -14,6 +14,22 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
 
     error ZeroAddress();
 
+    event DealProposed(
+        bytes32 indexed agreementId,
+        address indexed certAddress,
+        uint256 indexed certId,
+        address paymentToken,
+        uint256 paymentAmount,
+        bytes32 templateId,
+        address[] parties
+    );
+
+    event DealFinalized(
+        bytes32 indexed agreementId,
+        address indexed signer,
+        bool fillUnallocated
+    );
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
     }
@@ -41,6 +57,17 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         Token[] memory buyerAssets = new Token[](1);
         buyerAssets[0] = Token(TokenType.ERC20, _paymentToken, 0, _paymentAmount);
         createEscrow(agreementId, _parties[1], corpAssets, buyerAssets);
+
+        emit DealProposed(
+            agreementId,
+            _certAddress,
+            _certId,
+            _paymentToken,
+            _paymentAmount,
+            _templateId,
+            _parties
+        );
+
         return agreementId;
     }
 
@@ -48,6 +75,12 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         updateEscrow(agreementId, msg.sender);
         ICyberDealRegistry(DEAL_REGISTRY).signContract(agreementId, partyValues, _fillUnallocated);
         finalizeDeal(agreementId);
+
+        emit DealFinalized(
+            agreementId,
+            msg.sender,
+            _fillUnallocated
+        );
     }
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
