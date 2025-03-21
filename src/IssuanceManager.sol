@@ -54,7 +54,7 @@ contract IssuanceManager is BorgAuthACL {
         );
     }
     
-    function createCertPrinter(address initialImplementation, string memory _ledger, string memory _name, string memory _ticker, SecurityClass _securityType, SecuritySeries _securitySeries) public onlyOwner returns (address) {
+    function createCertPrinter(string memory _ledger, string memory _name, string memory _ticker, SecurityClass _securityType, SecuritySeries _securitySeries) public onlyOwner returns (address) {
         //add new proxy to a set CyberCertPrinter deployement
         bytes32 salt = keccak256(abi.encodePacked(printers.length, address(this)));
         address newCert = Create2.deploy(0, salt, _getBytecode());

@@ -39,6 +39,10 @@ interface ICyberDealRegistry {
 
     event ContractFullySigned(bytes32 indexed contractId, uint256 timestamp);
 
+    function addCyberCorpFactory (address cyberCorpFactory) external; 
+    
+    function addDealManager (address dealManager) external;    
+    
     function createTemplate(
         bytes32 templateId,
         string memory title,
@@ -59,6 +63,13 @@ interface ICyberDealRegistry {
         bool fillUnallocated
     ) external;
 
+    function signContractFor(
+        address signer,
+        bytes32 contractId,
+        string[] memory partyValues,
+        bool fillUnallocated
+    ) external;
+    
     function getParties(bytes32 contractId) external view returns (address[] memory);
 
     function hasSigned(bytes32 contractId, address signer) external view returns (bool);

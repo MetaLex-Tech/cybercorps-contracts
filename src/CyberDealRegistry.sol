@@ -74,6 +74,15 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         __BorgAuthACL_init(_auth);
     }
 
+    function addCyberCorpFactory (address cyberCorpFactory) public onlyOwner {
+        AUTH.updateRole(cyberCorpFactory, 98); // Sets as admin
+    }
+    
+    // DealManagers can sign for parties
+    function addDealManager (address dealManager) public onlyAdmin {
+        AUTH.updateRole(dealManager, 97); // Sets as privileged
+    }
+    
     function createTemplate(
         bytes32 templateId,
         string memory title,
@@ -150,23 +159,41 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             agreementsForParty[parties[i]].push(contractId);
         }
     }
+    
+    function signContractFor(
+        address signer,
+        bytes32 contractId,
+        string[] memory partyValues,
+        bool fillUnallocated // to fill a 0 address or not
+    ) external onlyPriv {
+        _signFor(signer, contractId, partyValues, fillUnallocated);
+    }
 
     function signContract(
         bytes32 contractId,
         string[] memory partyValues,
         bool fillUnallocated // to fill a 0 address or not
     ) external {
+        _signFor(msg.sender, contractId, partyValues, fillUnallocated);
+    }
+    
+    function _signFor(
+        address signer,
+        bytes32 contractId,
+        string[] memory partyValues,
+        bool fillUnallocated // to fill a 0 address or not
+    ) internal {
         ContractData storage contractData = agreements[contractId];
         if (contractData.parties.length == 0) revert ContractDoesNotExist();
-        if (contractData.signedAt[msg.sender] != 0) revert AlreadySigned();
+        if (contractData.signedAt[signer] != 0) revert AlreadySigned();
 
-        if (!isParty(contractId, msg.sender)) {
+        if (!isParty(contractId, signer)) {
             // Not a named party, so check if there's an open slot
             uint256 firstOpenPartyIndex = getFirstOpenPartyIndex(contractId);
             if (firstOpenPartyIndex == 0 || !fillUnallocated)
                 revert NotAParty();
             // There is a spare slot, assign the sender to this slot.
-            contractData.parties[firstOpenPartyIndex] = msg.sender;
+            contractData.parties[firstOpenPartyIndex] = signer;
         }
 
         Template storage template = templates[contractData.templateId];
@@ -175,11 +202,11 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         uint256 timestamp = block.timestamp;
 
-        contractData.partyValues[msg.sender] = partyValues;
-        contractData.signedAt[msg.sender] = timestamp;
+        contractData.partyValues[signer] = partyValues;
+        contractData.signedAt[signer] = timestamp;
         uint256 totalSignatures = ++contractData.numSignatures;
 
-        emit AgreementSigned(contractId, msg.sender, timestamp);
+        emit AgreementSigned(contractId, signer, timestamp);
 
         if (totalSignatures == contractData.parties.length) {
             emit ContractFullySigned(contractId, timestamp);
