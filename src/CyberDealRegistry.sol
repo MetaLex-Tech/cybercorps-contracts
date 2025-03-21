@@ -4,9 +4,11 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./libs/auth.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
-    
+
+    using ECDSA for bytes32;
     // Domain information
     string public constant name = "CyberDealRegistry"; 
     string public version;
@@ -210,10 +212,12 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             contractData.parties[firstOpenPartyIndex] = signer;
         }
         
-        // Compute the hash that the user has signed
-        bytes32 hash = keccak256(abi.encode(contractId, contractData.globalValues, partyValues));
         // Verify the signature
-        if (!_verifySignature(signer, hash, signature)) {
+        if (!_verifySignature(signer, SignatureData({
+            contractId: contractId,
+            globalValues: contractData.globalValues,
+            partyValues: partyValues
+        }), signature)) {
             revert SignatureVerificationFailed();
         }
 

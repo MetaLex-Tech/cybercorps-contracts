@@ -23,7 +23,7 @@ contract CyberCorpFactory {
     address public issuanceManagerFactory;
     address public cyberCorpSingleFactory;
     address public cyberAgreementFactory;
-   address public dealManagerFactory;
+    address public dealManagerFactory;
     address public stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;//base main net 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
 
     event CyberCorpDeployed(
@@ -108,10 +108,10 @@ contract CyberCorpFactory {
         address[] memory _parties,
         uint256 _paymentAmount,
         string[] memory _partyValues,
+        bytes memory signature,
         CertificateDetails memory _details
     ) external returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress, address certPrinterAddress, bytes32 id) {
 
-        address agreementFactoryAddress;
         (cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress) = deployCyberCorp(
             salt,
             companyName,
@@ -128,10 +128,20 @@ contract CyberCorpFactory {
         ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter("", certNameWithCompany, certSymbol, securityClass, securitySeries));
         certPrinterAddress = address(certPrinter);
 
-        //create a deal
-        id = IDealManager(dealManagerAddress).proposeDeal(msg.sender, certPrinterAddress, certPrinter.totalSupply(), stable, _paymentAmount, _templateId, _globalValues, _parties, _details);
-
-        //emit AgreementDeployed(agreementFactoryAddress, _agreementAddress, _lexscrow, salt);
+        // Create and sign deal
+        id = IDealManager(dealManagerAddress).proposeAndSignDeal(
+            certPrinterAddress,
+            certPrinter.totalSupply(),
+            stable,
+            _paymentAmount,
+            _templateId,
+            _globalValues,
+            _parties,
+            _details,
+            msg.sender,
+            signature,
+            _partyValues
+        );
 
     }
 }
