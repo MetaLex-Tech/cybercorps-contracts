@@ -39,8 +39,6 @@ contract BaseScript is Script {
         CyberDealRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "ipfs.io/ipfs/[cid]", globalFields, partyFields);
 
         CyberCorpFactory cyberCorpFactory = new CyberCorpFactory(address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory);
-        // Add the cybercorpfactory as a registry admin so that it can in turn add privileged dealmanagers to support signing for the parties
-        CyberDealRegistry(registry).addCyberCorpFactory(address(cyberCorpFactory));
 
         console.log("cyberCertPrinterImplementation: ", address(cyberCertPrinterImplementation));
         console.log("CyberDealRegistry: ", address(registry));

@@ -87,8 +87,6 @@ contract CyberCorpFactory {
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
 
-        ICyberDealRegistry(registryAddress).addDealManager(dealManagerAddress);
-
         emit CyberCorpDeployed(
             cyberCorpAddress,
             authAddress,

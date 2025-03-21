@@ -73,15 +73,6 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
     }
-
-    function addCyberCorpFactory (address cyberCorpFactory) public onlyOwner {
-        AUTH.updateRole(cyberCorpFactory, 98); // Sets as admin
-    }
-    
-    // DealManagers can sign for parties
-    function addDealManager (address dealManager) public onlyAdmin {
-        AUTH.updateRole(dealManager, 97); // Sets as privileged
-    }
     
     function createTemplate(
         bytes32 templateId,
@@ -165,7 +156,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         bytes32 contractId,
         string[] memory partyValues,
         bool fillUnallocated // to fill a 0 address or not
-    ) external onlyPriv {
+    ) external {
         _signFor(signer, contractId, partyValues, fillUnallocated);
     }
 

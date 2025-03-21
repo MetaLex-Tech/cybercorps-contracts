@@ -39,10 +39,6 @@ interface ICyberDealRegistry {
 
     event ContractFullySigned(bytes32 indexed contractId, uint256 timestamp);
 
-    function addCyberCorpFactory (address cyberCorpFactory) external; 
-    
-    function addDealManager (address dealManager) external;    
-    
     function createTemplate(
         bytes32 templateId,
         string memory title,
