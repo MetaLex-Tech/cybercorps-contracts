@@ -47,7 +47,6 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
     ) external;
 
     function createCertPrinter(
-        address initialImplementation,
         string memory _ledger,
         string memory _name,
         string memory _ticker,

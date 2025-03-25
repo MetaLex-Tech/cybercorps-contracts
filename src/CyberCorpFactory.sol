@@ -30,8 +30,7 @@ contract CyberCorpFactory {
         address indexed cyberCorp,
         address indexed auth,
         address indexed issuanceManager,
-        address agreementFactory,
-        bytes32 salt
+        address dealManager
     );
 
     event AgreementDeployed(
@@ -58,14 +57,14 @@ contract CyberCorpFactory {
         string memory defaultLegend,
         address _companyPayable,
         address _officer
-    ) public returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address agreementFactoryAddress, address lexscrowFactory) {
+    ) public returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress) {
         if (salt == bytes32(0)) revert InvalidSalt();
 
         // Deploy BorgAuth with CREATE2
         bytes memory authBytecode = type(BorgAuth).creationCode;
         bytes32 authSalt = keccak256(abi.encodePacked("auth", salt));
         authAddress = Create2.deploy(0, authSalt, authBytecode);
-        
+
         // Initialize BorgAuth
         BorgAuth(authAddress).initialize();
         BorgAuth(authAddress).updateRole(msg.sender, 200);
@@ -75,7 +74,7 @@ contract CyberCorpFactory {
         cyberCorpAddress = ICyberCorpSingleFactory(cyberCorpSingleFactory).deployCyberCorpSingle(salt, authAddress, companyName, companyJurisdiction, companyContactDetails, defaultDisputeResolution, defaultLegend, issuanceManagerAddress, _companyPayable, _officer);
 
         //deploy deal manager
-        address dealManagerAddress = IDealManagerFactory(dealManagerFactory).deployDealManager();
+        dealManagerAddress = IDealManagerFactory(dealManagerFactory).deployDealManager();
         // Initialize IssuanceManager
         IIssuanceManager(issuanceManagerAddress).initialize(
             authAddress,
@@ -88,16 +87,12 @@ contract CyberCorpFactory {
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
 
-
         emit CyberCorpDeployed(
             cyberCorpAddress,
             authAddress,
             issuanceManagerAddress,
-            agreementFactoryAddress,
-            salt
+            dealManagerAddress
         );
-
-        return (cyberCorpAddress, authAddress, issuanceManagerAddress, agreementFactoryAddress, dealManagerAddress);
     }
 
     function deployCyberCorpAndCreateOffer(
@@ -113,11 +108,11 @@ contract CyberCorpFactory {
         address[] memory _parties,
         uint256 _paymentAmount,
         string[] memory _partyValues,
+        bytes memory signature,
         CertificateDetails memory _details
     ) external returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress, address certPrinterAddress, bytes32 id) {
 
-        address agreementFactoryAddress;
-        (cyberCorpAddress, authAddress, issuanceManagerAddress, agreementFactoryAddress, dealManagerAddress) = deployCyberCorp(
+        (cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress) = deployCyberCorp(
             salt,
             companyName,
             "",
@@ -129,14 +124,24 @@ contract CyberCorpFactory {
         );
 
         //append companyname " " and then the certName
-        string memory certNameWithCompany = string.concat(companyName, " ", certName); 
-        ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter(cyberCertPrinterImplementation, "", certNameWithCompany, certSymbol, securityClass, securitySeries));
-        certPrinterAddress = address(certPrinter);  
+        string memory certNameWithCompany = string.concat(companyName, " ", certName);
+        ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter("", certNameWithCompany, certSymbol, securityClass, securitySeries));
+        certPrinterAddress = address(certPrinter);
 
-        //create a deal
-        id = IDealManager(dealManagerAddress).proposeDeal(certPrinterAddress, certPrinter.totalSupply(), stable, _paymentAmount, _templateId, _globalValues, _parties, _details);
-
-        //emit AgreementDeployed(agreementFactoryAddress, _agreementAddress, _lexscrow, salt);
+        // Create and sign deal
+        id = IDealManager(dealManagerAddress).proposeAndSignDeal(
+            certPrinterAddress,
+            certPrinter.totalSupply(),
+            stable,
+            _paymentAmount,
+            _templateId,
+            _globalValues,
+            _parties,
+            _details,
+            msg.sender,
+            signature,
+            _partyValues
+        );
 
     }
-} 
+}

@@ -4,8 +4,18 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./libs/auth.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
+
+    using ECDSA for bytes32;
+    // Domain information
+    string public constant name = "CyberDealRegistry"; 
+    string public version;
+    bytes32 public DOMAIN_SEPARATOR;
+    // Type hash for ContractData
+    bytes32 public SIGNATUREDATA_TYPEHASH;
+    
     struct Template {
         string legalContractUri; // Off-chain legal contract URI
         string title;
@@ -21,6 +31,16 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         mapping(address => uint256) signedAt; // Timestamp when each party signed (0 if unsigned)
         uint256 numSignatures; // Number of parties who have signed
         bytes32 transactionHash; // Hash of the transaction that created this contract
+    }
+    
+    // This data is what is signed by each party
+    struct SignatureData {
+        bytes32 contractId;
+        string legalContractUri;
+        string[] globalFields;
+        string[] partyFields;
+        string[] globalValues;
+        string[] partyValues;
     }
 
     // Mapping of templateId => template data
@@ -59,6 +79,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     error ContractAlreadyExists();
     error ContractDoesNotExist();
     error NotAParty();
+    error SignatureVerificationFailed();
     error AlreadySigned();
     error MismatchedFieldsLength();
     error FirstPartyZeroAddress();
@@ -72,8 +93,23 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     function initialize(address _auth) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
+        
+        version = "1";
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes(name)),
+                keccak256(bytes(version)),
+                block.chainid,
+                address(this)
+            )
+        );
+        
+        SIGNATUREDATA_TYPEHASH = keccak256(
+                "SignatureData(bytes32 contractId,string legalContractUri,string[] globalFields,string[] partyFields,string[] globalValues,string[] partyValues)"
+            );
     }
-
+    
     function createTemplate(
         bytes32 templateId,
         string memory title,
@@ -150,36 +186,59 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             agreementsForParty[parties[i]].push(contractId);
         }
     }
-
+    
     function signContract(
         bytes32 contractId,
         string[] memory partyValues,
+        bytes calldata signature,
         bool fillUnallocated // to fill a 0 address or not
     ) external {
+        signContractFor(msg.sender, contractId, partyValues, signature, fillUnallocated);
+    }
+    
+    function signContractFor(
+        address signer,
+        bytes32 contractId,
+        string[] memory partyValues,
+        bytes calldata signature, 
+        bool fillUnallocated // to fill a 0 address or not
+    ) public {
         ContractData storage contractData = agreements[contractId];
+        Template memory template = templates[contractData.templateId];
         if (contractData.parties.length == 0) revert ContractDoesNotExist();
-        if (contractData.signedAt[msg.sender] != 0) revert AlreadySigned();
+        if (contractData.signedAt[signer] != 0) revert AlreadySigned();
 
-        if (!isParty(contractId, msg.sender)) {
+        if (!isParty(contractId, signer)) {
             // Not a named party, so check if there's an open slot
             uint256 firstOpenPartyIndex = getFirstOpenPartyIndex(contractId);
             if (firstOpenPartyIndex == 0 || !fillUnallocated)
                 revert NotAParty();
             // There is a spare slot, assign the sender to this slot.
-            contractData.parties[firstOpenPartyIndex] = msg.sender;
+            contractData.parties[firstOpenPartyIndex] = signer;
+        }
+        
+        // Verify the signature
+        if (!_verifySignature(signer, SignatureData({
+            contractId: contractId,
+            legalContractUri: template.legalContractUri,
+            globalFields: template.globalFields,
+            partyFields: template.partyFields,
+            globalValues: contractData.globalValues,
+            partyValues: partyValues
+        }), signature)) {
+            revert SignatureVerificationFailed();
         }
 
-        Template storage template = templates[contractData.templateId];
         if (partyValues.length != template.partyFields.length)
             revert MismatchedFieldsLength();
 
         uint256 timestamp = block.timestamp;
 
-        contractData.partyValues[msg.sender] = partyValues;
-        contractData.signedAt[msg.sender] = timestamp;
+        contractData.partyValues[signer] = partyValues;
+        contractData.signedAt[signer] = timestamp;
         uint256 totalSignatures = ++contractData.numSignatures;
 
-        emit AgreementSigned(contractId, msg.sender, timestamp);
+        emit AgreementSigned(contractId, signer, timestamp);
 
         if (totalSignatures == contractData.parties.length) {
             emit ContractFullySigned(contractId, timestamp);
@@ -394,6 +453,51 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         json = string.concat(json, ', "isComplete": ', contractData.numSignatures == contractData.parties.length ? 'true' : 'false');
         json = string.concat(json, '}');
         return json;
+    }
+    
+    function _verifySignature(
+        address signer,
+        SignatureData memory data,
+        bytes memory signature
+    ) internal view returns (bool) {
+        // Hash the data (ContractData) according to EIP-712
+        bytes32 digest = _hashTypedDataV4(data);
+
+        // Recover the signer address
+        address recoveredSigner = digest.recover(signature);
+
+        // Check if the recovered address matches the expected signer
+        return recoveredSigner == signer;
+    }
+    
+    // Helper function to hash the typed data (SignatureData) according to EIP-712
+    function _hashTypedDataV4(SignatureData memory data) internal view returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                DOMAIN_SEPARATOR,
+                keccak256(
+                    abi.encode(
+                        SIGNATUREDATA_TYPEHASH,
+                        data.contractId,
+                        keccak256(bytes(data.legalContractUri)),
+                        _hashStringArray(data.globalFields),
+                        _hashStringArray(data.partyFields),
+                        _hashStringArray(data.globalValues),
+                        _hashStringArray(data.partyValues)
+                    )
+                )
+            )
+        );
+    }
+    
+    // Helper function to hash string arrays
+    function _hashStringArray(string[] memory array) internal pure returns (bytes32) {
+        bytes32[] memory hashes = new bytes32[](array.length);
+        for (uint256 i = 0; i < array.length; i++) {
+            hashes[i] = keccak256(bytes(array[i]));
+        }
+        return keccak256(abi.encodePacked(hashes));
     }
 
     // Helper function to convert bytes32 to string

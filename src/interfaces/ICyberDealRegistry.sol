@@ -16,6 +16,12 @@ interface ICyberDealRegistry {
         uint256 numSignatures;
         bytes32 transactionHash;
     }
+    
+    struct SignatureData {
+        bytes32 contractId;
+        string[] globalValues;
+        string[] partyValues;
+    }
 
     event TemplateCreated(
         bytes32 indexed templateId,
@@ -38,6 +44,9 @@ interface ICyberDealRegistry {
     );
 
     event ContractFullySigned(bytes32 indexed contractId, uint256 timestamp);
+    
+    function DOMAIN_SEPARATOR() external view returns (bytes32);
+    function SIGNATUREDATA_TYPEHASH() external view returns (bytes32);
 
     function createTemplate(
         bytes32 templateId,
@@ -56,9 +65,18 @@ interface ICyberDealRegistry {
     function signContract(
         bytes32 contractId,
         string[] memory partyValues,
+        bytes memory signature,
         bool fillUnallocated
     ) external;
 
+    function signContractFor(
+        address signer,
+        bytes32 contractId,
+        string[] memory partyValues,
+        bytes memory signature,
+        bool fillUnallocated
+    ) external;
+    
     function getParties(bytes32 contractId) external view returns (address[] memory);
 
     function hasSigned(bytes32 contractId, address signer) external view returns (bool);
