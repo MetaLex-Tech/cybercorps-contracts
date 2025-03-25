@@ -345,6 +345,7 @@ contract CyberCorpTest is Test {
         uint256 privKey
     ) internal pure returns (bytes memory signature) {
         // Hash string arrays the same way as the contract
+        bytes32 contractUriHash = keccak256(bytes(contractUri));
         bytes32 globalFieldsHash = _hashStringArray(globalFields);
         bytes32 partyFieldsHash = _hashStringArray(partyFields);
         bytes32 globalValuesHash = _hashStringArray(globalValues);
@@ -355,7 +356,7 @@ contract CyberCorpTest is Test {
             abi.encode(
                 _typeHash,
                 contractId,
-                contractUri,
+                contractUriHash,
                 globalFieldsHash,
                 partyFieldsHash,
                 globalValuesHash,

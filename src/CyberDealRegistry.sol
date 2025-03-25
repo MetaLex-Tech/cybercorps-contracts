@@ -480,7 +480,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                     abi.encode(
                         SIGNATUREDATA_TYPEHASH,
                         data.contractId,
-                        data.legalContractUri,
+                        keccak256(bytes(data.legalContractUri)),
                         _hashStringArray(data.globalFields),
                         _hashStringArray(data.partyFields),
                         _hashStringArray(data.globalValues),
