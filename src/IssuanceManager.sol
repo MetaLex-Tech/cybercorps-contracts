@@ -25,9 +25,6 @@ contract IssuanceManager is BorgAuthACL {
     event CertificateCreated(uint256 indexed tokenId, address indexed certificate, uint256 amount, uint256 cap);
     event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
-    event CertificateAssigned(uint256 indexed tokenId, address indexed certificate, address indexed investor, CertificateDetails details);
-    event CertificateSigned(uint256 indexed tokenId, address indexed certificate, string signatureURI);
-    event CertificateEndorsed(uint256 indexed tokenId, address indexed certificate, address indexed endorser, string signatureURI);
 
     constructor() {
     }
@@ -54,12 +51,12 @@ contract IssuanceManager is BorgAuthACL {
         );
     }
     
-    function createCertPrinter(string memory _ledger, string memory _name, string memory _ticker, SecurityClass _securityType, SecuritySeries _securitySeries) public onlyOwner returns (address) {
+    function createCertPrinter(string memory _ledger, string memory _name, string memory _ticker, string memory _certificateUri, SecurityClass _securityType, SecuritySeries _securitySeries) public onlyOwner returns (address) {
         //add new proxy to a set CyberCertPrinter deployement
         bytes32 salt = keccak256(abi.encodePacked(printers.length, address(this)));
         address newCert = Create2.deploy(0, salt, _getBytecode());
         printers.push(newCert);
-        ICyberCertPrinter(newCert).initialize(_ledger, _name, _ticker, address(this), _securityType, _securitySeries);
+        ICyberCertPrinter(newCert).initialize(_ledger, _name, _ticker, _certificateUri, address(this), _securityType, _securitySeries);
         emit CertPrinterCreated(newCert, CORP, _ledger, _name, _ticker, _securityType, _securitySeries);
         return newCert;
     }
@@ -76,7 +73,6 @@ contract IssuanceManager is BorgAuthACL {
     function assignCert(address certAddress, address from, uint256 tokenId, address investor, CertificateDetails memory _details) public onlyOwner {
         ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         cert.assignCert(from, tokenId, investor, _details);
-        emit CertificateAssigned(tokenId, certAddress, investor, _details);
     }
 
     function createCertAndAssign(
@@ -99,8 +95,6 @@ contract IssuanceManager is BorgAuthACL {
         
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.addIssuerSignature(tokenId, signatureURI);
-        
-        emit CertificateSigned(tokenId, certAddress, signatureURI);
     }
     
     // Add endorsement for secondary market transfer
@@ -109,7 +103,6 @@ contract IssuanceManager is BorgAuthACL {
         
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.addEndorsement(tokenId, endorser, signatureURI);
-        emit CertificateEndorsed(tokenId, certAddress, endorser, signatureURI);
     }
     
 

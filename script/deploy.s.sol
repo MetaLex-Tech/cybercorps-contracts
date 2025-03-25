@@ -27,7 +27,7 @@ contract BaseScript is Script {
         address issuanceManagerFactory = address(new IssuanceManagerFactory(address(0)));
         address cyberCertPrinterImplementation = address(new CyberCertPrinter());
         CyberCertPrinter cyberCertPrinter = CyberCertPrinter(cyberCertPrinterImplementation);
-        cyberCertPrinter.initialize("", "", "", address(0), SecurityClass.SAFE, SecuritySeries.SeriesPreSeed);
+        cyberCertPrinter.initialize("", "", "", "ipfs.io/ipfs/[cid]", address(0), SecurityClass.SAFE, SecuritySeries.SeriesPreSeed);
         address cyberCorpSingleFactory = address(new CyberCorpSingleFactory());
         address dealManagerFactory = address(new DealManagerFactory());
         address registry = address(new CyberDealRegistry());

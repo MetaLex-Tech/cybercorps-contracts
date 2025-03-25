@@ -101,6 +101,7 @@ contract CyberCorpFactory {
         address _companyPayable,
         string memory certName,
         string memory certSymbol,
+        string memory certificateUri,
         SecurityClass securityClass,
         SecuritySeries securitySeries,
         bytes32 _templateId,
@@ -125,7 +126,7 @@ contract CyberCorpFactory {
 
         //append companyname " " and then the certName
         string memory certNameWithCompany = string.concat(companyName, " ", certName);
-        ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter("", certNameWithCompany, certSymbol, securityClass, securitySeries));
+        ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter("", certNameWithCompany, certSymbol, certificateUri, securityClass, securitySeries));
         certPrinterAddress = address(certPrinter);
 
         // Create and sign deal

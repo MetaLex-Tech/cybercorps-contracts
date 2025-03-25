@@ -27,8 +27,10 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
 
     struct Endorsement {
         address endorser;
-        string signatureURI;
         uint256 timestamp;
+        bytes32 signatureHash;
+        address registry;  //optional
+        bytes32 agreementId; //optional
     }
 
     // Events
@@ -50,6 +52,7 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
         string memory _ledger,
         string memory _name,
         string memory _ticker,
+        string memory _certificateUri,
         SecurityClass _securityClass,
         SecuritySeries _securitySeries
     ) external returns (address);

@@ -21,6 +21,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     address public issuanceManager;
     SecurityClass securityType; 
     SecuritySeries securitySeries; 
+    string certificateUri;
     string ledger;
 
     struct endorsement {
@@ -38,9 +39,9 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     // Global restriction hook (applies to all tokens)
     ITransferRestrictionHook public globalRestrictionHook;
     
-    event CertCreated(uint256 indexed tokenId);
-    event CertAssigned(uint256 indexed tokenId, string issuerName, string investorName);
-    event AgreementEndorsed(uint256 indexed tokenId, address indexed endorser, string signatureURI, uint256 timestamp);
+    event CertificateCreated(uint256 indexed tokenId);
+    event CertificateAssigned(uint256 indexed tokenId, string issuerName, string investorName);
+    event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, string signatureURI, uint256 timestamp);
     event RestrictionHookSet(SecurityClass securityType, address hookAddress);
     event GlobalRestrictionHookSet(address hookAddress);
 
@@ -53,7 +54,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     }
 
     // Called by proxy on deployment (if needed)
-    function initialize(string memory _ledger, string memory name, string memory ticker, address _issuanceManager, SecurityClass _securityType, SecuritySeries _securitySeries) external initializer {
+    function initialize(string memory _ledger, string memory name, string memory ticker, string memory _certificateUri, address _issuanceManager, SecurityClass _securityType, SecuritySeries _securitySeries) external initializer {
         __ERC721_init(name, ticker);
         __ERC721Enumerable_init_unchained();
         __UUPSUpgradeable_init();
@@ -61,6 +62,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         ledger = _ledger;
         securityType = _securityType;
         securitySeries = _securitySeries;
+        certificateUri = _certificateUri;
     }
 
     function updateIssuanceManager(address _issuanceManager) external onlyIssuanceManager {
@@ -91,7 +93,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     ) external onlyIssuanceManager returns (uint256) {
         agreements[tokenId] = details;
         _safeMint(to, tokenId);
-        emit CertCreated(tokenId);
+        emit CertificateCreated(tokenId);
         return tokenId;
     }
 
@@ -106,8 +108,8 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         // Store agreement details
         agreements[tokenId] = details;
         string memory issuerName = IIssuanceManager(issuanceManager).companyName();
-        emit CertCreated(tokenId);
-        emit CertAssigned(tokenId, issuerName, details.investorName);
+        emit CertificateCreated(tokenId);
+        emit CertificateAssigned(tokenId, issuerName, details.investorName);
         return tokenId;
     }
 
@@ -121,7 +123,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         agreements[tokenId] = details;
         string memory issuerName = IIssuanceManager(issuanceManager).companyName();
        // _transfer(from, to, tokenId);
-        emit CertAssigned(tokenId, issuerName, details.investorName);
+        emit CertificateAssigned(tokenId, issuerName, details.investorName);
         return tokenId;
     }
     
@@ -141,7 +143,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         endorsement memory newEndorsement = endorsement(endorser, signatureURI, block.timestamp);
         endorsements[tokenId].push(newEndorsement);
         
-        emit AgreementEndorsed(tokenId, endorser, signatureURI, block.timestamp);
+        emit CertificateEndorsed(tokenId, endorser, signatureURI, block.timestamp);
     }
     
     // Update agreement details (for admin purposes)

@@ -44,6 +44,7 @@ contract CyberCorpTest is Test {
             "",
             "",
             "",
+            "ipfs.io/ipfs/[cid]",
             address(0),
             SecurityClass.SAFE,
             SecuritySeries.SeriesPreSeed
@@ -127,6 +128,7 @@ contract CyberCorpTest is Test {
             testAddress,
             "SAFE",
             "SAFE",
+            "ipfs.io/ipfs/[cid]",
             SecurityClass.SAFE,
             SecuritySeries.SeriesPreSeed,
             bytes32(uint256(1)),
@@ -284,6 +286,7 @@ contract CyberCorpTest is Test {
                 testAddress,
                 "SAFE",
                 "SAFE",
+                "ipfs.io/ipfs/[cid]",
                 SecurityClass.SAFE,
                 SecuritySeries.SeriesPreSeed,
                 bytes32(uint256(1)),
