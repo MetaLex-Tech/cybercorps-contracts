@@ -25,7 +25,7 @@ import "../CyberCorpConstants.sol";
 interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
     // Structs
 
-    struct Endorsement {
+    struct endorsement {
         address endorser;
         uint256 timestamp;
         bytes32 signatureHash;

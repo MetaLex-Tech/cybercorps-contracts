@@ -26,12 +26,16 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
 
     struct endorsement {
         address endorser;
-        string signatureURI;
         uint256 timestamp;
+        bytes32 signatureHash;
+        address registry;  //optional
+        bytes32 agreementId; //optional
+        address endorsee;
+        string endorseeName;
     }
 
     // Mapping from token ID to agreement details
-    mapping(uint256 => CertificateDetails) public agreements;
+    mapping(uint256 => CertificateDetails) public certificateDetails;
     mapping(uint256 => endorsement[]) public endorsements;
 
     // Mapping for custom restriction hooks by security type
@@ -41,7 +45,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     
     event CertificateCreated(uint256 indexed tokenId);
     event CertificateAssigned(uint256 indexed tokenId, string issuerName, string investorName);
-    event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, string signatureURI, uint256 timestamp);
+    event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, address endorsee, string endorseeName, address registry, bytes32 agreementId, uint256 index, uint256 timestamp);
     event RestrictionHookSet(SecurityClass securityType, address hookAddress);
     event GlobalRestrictionHookSet(address hookAddress);
 
@@ -91,7 +95,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         address to,
         CertificateDetails memory details
     ) external onlyIssuanceManager returns (uint256) {
-        agreements[tokenId] = details;
+        certificateDetails[tokenId] = details;
         _safeMint(to, tokenId);
         emit CertificateCreated(tokenId);
         return tokenId;
@@ -106,7 +110,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         _safeMint(to, tokenId);
         
         // Store agreement details
-        agreements[tokenId] = details;
+        certificateDetails[tokenId] = details;
         string memory issuerName = IIssuanceManager(issuanceManager).companyName();
         emit CertificateCreated(tokenId);
         emit CertificateAssigned(tokenId, issuerName, details.investorName);
@@ -120,7 +124,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         CertificateDetails memory details
     ) external onlyIssuanceManager returns (uint256) {
         if(ownerOf(tokenId) != from) revert InvalidTokenId();
-        agreements[tokenId] = details;
+        certificateDetails[tokenId] = details;
         string memory issuerName = IIssuanceManager(issuanceManager).companyName();
        // _transfer(from, to, tokenId);
         emit CertificateAssigned(tokenId, issuerName, details.investorName);
@@ -134,21 +138,24 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
 
     // Add issuer signature to an agreement
     function addIssuerSignature(uint256 tokenId, string calldata signatureURI) external onlyIssuanceManager {
-        agreements[tokenId].issuerSignatureURI = signatureURI;
+        certificateDetails[tokenId].issuerSignatureURI = signatureURI;
     }
     
     // Add endorsement (for transfers in secondary market)
-    function addEndorsement(uint256 tokenId, address endorser, string calldata signatureURI) external {
-        
-        endorsement memory newEndorsement = endorsement(endorser, signatureURI, block.timestamp);
+    function addEndorsement(uint256 tokenId, endorsement memory newEndorsement) public {
         endorsements[tokenId].push(newEndorsement);
-        
-        emit CertificateEndorsed(tokenId, endorser, signatureURI, block.timestamp);
+
+        emit CertificateEndorsed(tokenId, newEndorsement.endorser, newEndorsement.endorsee, newEndorsement.endorseeName, newEndorsement.registry, newEndorsement.agreementId, endorsements[tokenId].length - 1, block.timestamp);
+    }
+
+    function endorseAndTransfer(uint256 tokenId, endorsement memory newEndorsement, address from, address to) external {
+        addEndorsement(tokenId, newEndorsement);
+        _transfer(from, to, tokenId);
     }
     
     // Update agreement details (for admin purposes)
     function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external onlyIssuanceManager {
-        agreements[tokenId] = details;
+        certificateDetails[tokenId] = details;
     }
 
     // Restricted burning
@@ -157,7 +164,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         _burn(tokenId);
         
         // Clear agreement details
-        delete agreements[tokenId];
+        delete certificateDetails[tokenId];
     }
     
     /**
@@ -170,7 +177,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         // Skip restriction checks for minting (from == address(0)) and burning (to == address(0))
         if (from != address(0) && to != address(0)) {
             // This is a transfer, check built-in transferability flag
-           // if (!agreements[tokenId].transferable) revert TokenNotTransferable();
+           // if (!certificateDetails[tokenId].transferable) revert TokenNotTransferable();
             
             // Check security type-specific hook if it exists
 
@@ -199,21 +206,29 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     // Get full agreement details
     function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory) {
         if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
-        return agreements[tokenId];
+        return certificateDetails[tokenId];
     }
     
     // Get endorsement history
     function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (
         address endorser,
-        string memory signatureURI,
-        uint256 timestamp
+        string memory endorseeName,
+        address registry,
+        bytes32 agreementId,
+        uint256 timestamp,
+        bytes32 signatureHash,
+        address endorsee
     ) {
         if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
         endorsement memory details = endorsements[tokenId][index];
         return (
             details.endorser,
-            details.signatureURI,
-            details.timestamp
+            details.endorseeName,
+            details.registry,
+            details.agreementId,
+            details.timestamp,
+            details.signatureHash,
+            details.endorsee
         );
     }
     

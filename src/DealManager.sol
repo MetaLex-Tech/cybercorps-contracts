@@ -21,12 +21,16 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         address paymentToken,
         uint256 paymentAmount,
         bytes32 templateId,
+        address corp,
+        address dealRegistry,
         address[] parties
     );
 
     event DealFinalized(
         bytes32 indexed agreementId,
         address indexed signer,
+        address indexed corp,
+        address dealRegistry,
         bool fillUnallocated
     );
 
@@ -74,6 +78,8 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
             _paymentToken,
             _paymentAmount,
             _templateId,
+            CORP,
+            address(DEAL_REGISTRY),
             _parties
         );
         
@@ -108,6 +114,8 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         emit DealFinalized(
             agreementId,
             msg.sender,
+            CORP,
+            address(DEAL_REGISTRY),
             _fillUnallocated
         );
     }
