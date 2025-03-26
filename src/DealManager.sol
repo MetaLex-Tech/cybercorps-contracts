@@ -98,6 +98,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     ) public returns (bytes32 agreementId){
         agreementId = proposeDeal(_certPrinterAddress, _certId, _paymentToken, _paymentAmount, _templateId, _globalValues, _parties, _certDetails);
         // NOTE: proposer is expected to be listed as a party in the parties array.
+        escrows[agreementId].signature = signature;
         ICyberDealRegistry(DEAL_REGISTRY).signContractFor(proposer, agreementId, partyValues, signature, false);
         
         return agreementId;

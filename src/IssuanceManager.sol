@@ -22,7 +22,7 @@ contract IssuanceManager is BorgAuthACL {
     address[] public printers;
 
     event CertPrinterCreated(address indexed certificate, address indexed corp, string ledger, string name, string ticker, SecurityClass securityType, SecuritySeries securitySeries);
-    event CertificateCreated(uint256 indexed tokenId, address indexed certificate, uint256 amount, uint256 cap);
+    event CertificateCreated(uint256 indexed tokenId, address indexed certificate, uint256 amount, uint256 cap, CertificateDetails details);
     event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
 
@@ -66,7 +66,7 @@ contract IssuanceManager is BorgAuthACL {
         ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         uint256 tokenId = cert.totalSupply();
         uint256 id = cert.safeMint(tokenId, to, _details);
-        emit CertificateCreated(tokenId, certAddress, _details.investmentAmount, _details.issuerUSDValuationAtTimeofInvestment);
+        emit CertificateCreated(tokenId, certAddress, _details.investmentAmount, _details.issuerUSDValuationAtTimeofInvestment, _details);
         return id;
     }
 
@@ -85,7 +85,7 @@ contract IssuanceManager is BorgAuthACL {
         tokenId = cert.totalSupply();
     
         cert.safeMintAndAssign(investor, tokenId, _details);
-        emit CertificateCreated(tokenId, certAddress, _details.investmentAmount, _details.issuerUSDValuationAtTimeofInvestment);
+        emit CertificateCreated(tokenId, certAddress, _details.investmentAmount, _details.issuerUSDValuationAtTimeofInvestment, _details);
         return tokenId;
     }
     
@@ -102,8 +102,8 @@ contract IssuanceManager is BorgAuthACL {
         if (bytes(signatureURI).length == 0) revert SignatureURIRequired();
         
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
-        //todo fix this
-        endorsement memory newEndorsement = endorsement(endorser, block.timestamp, agreementId, address(0), agreementId, address(0), "");
+        bytes memory blankSignature = abi.encodePacked(bytes32(0));
+        endorsement memory newEndorsement = endorsement(endorser, block.timestamp, blankSignature, address(0), agreementId, address(0), "");
         certificate.addEndorsement(tokenId, newEndorsement);
     }
     

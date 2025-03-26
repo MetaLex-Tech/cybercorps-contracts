@@ -32,6 +32,7 @@ abstract contract LexScroWLite is Initializable {
         address counterParty;
         Token[] corpAssets;
         Token[] buyerAssets;
+        bytes signature;
     }
 
     mapping(bytes32 => PendingDeal) public escrows;
@@ -45,7 +46,8 @@ abstract contract LexScroWLite is Initializable {
     }
 
     function createEscrow(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets) public {
-        escrows[agreementId] = PendingDeal(agreementId, counterParty, corpAssets, buyerAssets);
+        bytes memory blankSignature = abi.encodePacked(bytes32(0));
+        escrows[agreementId] = PendingDeal(agreementId, counterParty, corpAssets, buyerAssets, blankSignature);
     }
 
     function updateEscrow(bytes32 agreementId, address counterParty) public 
@@ -68,8 +70,7 @@ abstract contract LexScroWLite is Initializable {
         }
        }
 
-       //endorsement memory newEndorsement = endorsement(escrows[agreementId].counterParty, block.timestamp, agreementId,
-       endorsement memory newEndorsement = endorsement(address(this), block.timestamp, agreementId, address(DEAL_REGISTRY), agreementId, deal.counterParty, buyerName);
+       endorsement memory newEndorsement = endorsement(address(this), block.timestamp, deal.signature, address(DEAL_REGISTRY), agreementId, deal.counterParty, buyerName);
        ICyberCertPrinter(deal.corpAssets[0].tokenAddress).addEndorsement(deal.corpAssets[0].tokenId, newEndorsement);
 
        //transfer tokens

@@ -7,7 +7,7 @@ import "../CyberCorpConstants.sol";
     struct endorsement {
         address endorser;
         uint256 timestamp;
-        bytes32 signatureHash;
+        bytes signatureHash;
         address registry;  //optional
         bytes32 agreementId; //optional
         address endorsee;

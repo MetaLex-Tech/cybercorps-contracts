@@ -188,10 +188,12 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
             }
 
             //check endorsement and update owners
-            if(endorsements[tokenId].length > 0) {
+            if(from == owners[tokenId].ownerAddress) {
+                
+            }
+            else if(endorsements[tokenId].length > 0) {
                 endorsement memory endorsement = endorsements[tokenId][endorsements[tokenId].length - 1];
-                if(endorsement.endorser != from) revert EndorsementNotSignedOrInvalid();
-                if(endorsement.endorsee != to) revert EndorsementNotSignedOrInvalid();
+                if(endorsement.endorsee != to && endorsement.endorser != to) revert EndorsementNotSignedOrInvalid();
 
                 owners[tokenId] = OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
             }
@@ -215,7 +217,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         address registry,
         bytes32 agreementId,
         uint256 timestamp,
-        bytes32 signatureHash,
+        bytes memory signatureHash,
         address endorsee
     ) {
         if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
