@@ -5,11 +5,10 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./libs/LexScroWLite.sol";
-import "./interfaces/ICyberDealRegistry.sol";
 import "./libs/auth.sol";
 
 contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLite {
-    ICyberDealRegistry public DEAL_REGISTRY;
+
     IIssuanceManager public ISSUANCE_MANAGER;
 
     error ZeroAddress();
@@ -41,12 +40,10 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     function initialize(address _auth, address _corp, address _dealRegistry, address _issuanceManager) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
-        __LexScroWLite_init(_corp);
+        __LexScroWLite_init(_corp, _dealRegistry);
 
         if (_corp == address(0)) revert ZeroAddress();
         CORP = _corp;
-        if (_dealRegistry == address(0)) revert ZeroAddress();
-        DEAL_REGISTRY = ICyberDealRegistry(_dealRegistry);
         if (_issuanceManager == address(0)) revert ZeroAddress();
         ISSUANCE_MANAGER = IIssuanceManager(_issuanceManager);
     }
@@ -106,10 +103,10 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         return agreementId;
     }
 
-    function finalizeDeal(address signer, bytes32 agreementId, string[] memory partyValues, bytes memory signature, bool _fillUnallocated) public {
+    function finalizeDeal(address signer, bytes32 agreementId, string[] memory partyValues, bytes memory signature, bool _fillUnallocated, string memory name) public {
         updateEscrow(agreementId, msg.sender);
         ICyberDealRegistry(DEAL_REGISTRY).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated);
-        finalizeDeal(agreementId);
+        finalizeDeal(agreementId, name);
 
         emit DealFinalized(
             agreementId,

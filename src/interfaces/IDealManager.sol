@@ -34,7 +34,8 @@ interface IDealManager {
         bytes32 _agreementId,
         string[] memory _partyValues,
         bytes memory signature,
-        bool _fillUnallocated
+        bool _fillUnallocated,
+        string memory buyerName
     ) external;
 
     function initialize(

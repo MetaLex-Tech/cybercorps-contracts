@@ -9,7 +9,6 @@ import "./ITransferRestrictionHook.sol";
 import "../CyberCorpConstants.sol";
 
     struct CertificateDetails {
-        string investorName;
         string signingOfficerName;
         string signingOfficerTitle;
         uint256 investmentAmount;
@@ -20,6 +19,10 @@ import "../CyberCorpConstants.sol";
         string issuerSignatureURI;
     }
 
+    struct OwnerDetails {
+        string name;
+        address ownerAddress;
+    }
 
 //Adapter interface for custom auth roles. Allows extensibility for different auth protocols i.e. hats.
 interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {

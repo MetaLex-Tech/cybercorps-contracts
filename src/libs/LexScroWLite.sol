@@ -5,10 +5,14 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "../interfaces/ICyberCorp.sol";
+import "../interfaces/ICyberDealRegistry.sol";
+import "../interfaces/ICyberCertPrinter.sol";
+
 
 abstract contract LexScroWLite is Initializable {
 
     address public CORP;
+    ICyberDealRegistry public DEAL_REGISTRY;
 
     enum TokenType {
         ERC20,
@@ -35,8 +39,9 @@ abstract contract LexScroWLite is Initializable {
     constructor() {
     }
 
-    function __LexScroWLite_init(address _corp) internal onlyInitializing  {
+    function __LexScroWLite_init(address _corp, address _dealRegistry) internal onlyInitializing  {
         CORP = _corp;
+        DEAL_REGISTRY = ICyberDealRegistry(_dealRegistry);
     }
 
     function createEscrow(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets) public {
@@ -48,7 +53,7 @@ abstract contract LexScroWLite is Initializable {
         escrows[agreementId].counterParty = counterParty;
     }
 
-    function finalizeDeal(bytes32 agreementId) public {
+    function finalizeDeal(bytes32 agreementId, string memory buyerName) public {
         PendingDeal storage deal = escrows[agreementId];
 
        for(uint256 i = 0; i < deal.buyerAssets.length; i++) {
@@ -62,6 +67,10 @@ abstract contract LexScroWLite is Initializable {
             IERC1155(deal.buyerAssets[i].tokenAddress).safeTransferFrom(deal.counterParty, ICyberCorp(CORP).companyPayable(), deal.buyerAssets[i].tokenId, deal.buyerAssets[i].amount, "");
         }
        }
+
+       //endorsement memory newEndorsement = endorsement(escrows[agreementId].counterParty, block.timestamp, agreementId,
+       endorsement memory newEndorsement = endorsement(address(this), block.timestamp, agreementId, address(DEAL_REGISTRY), agreementId, deal.counterParty, buyerName);
+       ICyberCertPrinter(deal.corpAssets[0].tokenAddress).addEndorsement(deal.corpAssets[0].tokenId, newEndorsement);
 
        //transfer tokens
        for(uint256 i = 0; i < deal.corpAssets.length; i++) {

@@ -6,6 +6,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./interfaces/ITransferRestrictionHook.sol";
 import "./CyberCorpConstants.sol";
+import {endorsement} from "./interfaces/ICyberCertPrinter.sol";
 
 contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable {
     // Custom errors
@@ -17,6 +18,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     error URISetForNonexistentToken();
     error ConversionNotImplemented();
     error TransferRestricted(string reason);
+    error EndorsementNotSignedOrInvalid();
     
     address public issuanceManager;
     SecurityClass securityType; 
@@ -24,19 +26,10 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     string certificateUri;
     string ledger;
 
-    struct endorsement {
-        address endorser;
-        uint256 timestamp;
-        bytes32 signatureHash;
-        address registry;  //optional
-        bytes32 agreementId; //optional
-        address endorsee;
-        string endorseeName;
-    }
-
     // Mapping from token ID to agreement details
     mapping(uint256 => CertificateDetails) public certificateDetails;
     mapping(uint256 => endorsement[]) public endorsements;
+    mapping(uint256 => OwnerDetails) public owners;
 
     // Mapping for custom restriction hooks by security type
     mapping(uint256 => ITransferRestrictionHook) public restrictionHooksById;
@@ -113,7 +106,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         certificateDetails[tokenId] = details;
         string memory issuerName = IIssuanceManager(issuanceManager).companyName();
         emit CertificateCreated(tokenId);
-        emit CertificateAssigned(tokenId, issuerName, details.investorName);
         return tokenId;
     }
 
@@ -127,7 +119,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         certificateDetails[tokenId] = details;
         string memory issuerName = IIssuanceManager(issuanceManager).companyName();
        // _transfer(from, to, tokenId);
-        emit CertificateAssigned(tokenId, issuerName, details.investorName);
         return tokenId;
     }
     
@@ -144,7 +135,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     // Add endorsement (for transfers in secondary market)
     function addEndorsement(uint256 tokenId, endorsement memory newEndorsement) public {
         endorsements[tokenId].push(newEndorsement);
-
         emit CertificateEndorsed(tokenId, newEndorsement.endorser, newEndorsement.endorsee, newEndorsement.endorseeName, newEndorsement.registry, newEndorsement.agreementId, endorsements[tokenId].length - 1, block.timestamp);
     }
 
@@ -180,7 +170,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
            // if (!certificateDetails[tokenId].transferable) revert TokenNotTransferable();
             
             // Check security type-specific hook if it exists
-
             ITransferRestrictionHook typeHook = restrictionHooksById[tokenId];
             
             if (address(typeHook) != address(0)) {
@@ -197,6 +186,16 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
                 );
                 if (!allowed) revert TransferRestricted(reason);
             }
+
+            //check endorsement and update owners
+            if(endorsements[tokenId].length > 0) {
+                endorsement memory endorsement = endorsements[tokenId][endorsements[tokenId].length - 1];
+                if(endorsement.endorser != from) revert EndorsementNotSignedOrInvalid();
+                if(endorsement.endorsee != to) revert EndorsementNotSignedOrInvalid();
+
+                owners[tokenId] = OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
+            }
+            else revert EndorsementNotSignedOrInvalid();
         }
         
         // Call the parent implementation to handle the actual transfer

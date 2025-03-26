@@ -4,6 +4,16 @@ pragma solidity 0.8.28;
 import "./IIssuanceManager.sol";
 import "../CyberCorpConstants.sol";
 
+    struct endorsement {
+        address endorser;
+        uint256 timestamp;
+        bytes32 signatureHash;
+        address registry;  //optional
+        bytes32 agreementId; //optional
+        address endorsee;
+        string endorseeName;
+    }
+
 interface ICyberCertPrinter {
     function initialize(string memory _ledger, string memory name, string memory ticker, string memory _certificateUri, address _issuanceManager, SecurityClass _securityType, SecuritySeries _securitySeries) external;
     function updateIssuanceManager(address _issuanceManager) external;
@@ -15,7 +25,8 @@ interface ICyberCertPrinter {
     function assignCert(address from, uint256 tokenId, address to, CertificateDetails memory details) external returns (uint256);
     function safeMint(address to, uint256 tokenId) external;
     function addIssuerSignature(uint256 tokenId, string calldata signatureURI) external;
-    function addEndorsement(uint256 tokenId, address endorser, string calldata signatureURI) external;
+    function addEndorsement(uint256 tokenId, endorsement memory newEndorsement) external;
+    function endorseAndTransfer(uint256 tokenId, endorsement memory newEndorsement, address from, address to) external;
     function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external;
     function burn(uint256 tokenId) external;
     function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory);

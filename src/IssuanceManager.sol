@@ -98,11 +98,13 @@ contract IssuanceManager is BorgAuthACL {
     }
     
     // Add endorsement for secondary market transfer
-    function endorseCertificate(address certAddress, uint256 tokenId, address endorser, string calldata signatureURI) external onlyAdmin {
+    function endorseCertificate(address certAddress, uint256 tokenId, address endorser, string calldata signatureURI, bytes32 agreementId) external onlyAdmin {
         if (bytes(signatureURI).length == 0) revert SignatureURIRequired();
         
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
-        certificate.addEndorsement(tokenId, endorser, signatureURI);
+        //todo fix this
+        endorsement memory newEndorsement = endorsement(endorser, block.timestamp, agreementId, address(0), agreementId, address(0), "");
+        certificate.addEndorsement(tokenId, newEndorsement);
     }
     
 

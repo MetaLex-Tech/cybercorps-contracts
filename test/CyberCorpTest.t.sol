@@ -80,7 +80,6 @@ contract CyberCorpTest is Test {
 
     function testOffer() public {
         CertificateDetails memory _details = CertificateDetails({
-            investorName: "",
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
@@ -232,7 +231,6 @@ contract CyberCorpTest is Test {
         );
 
         CertificateDetails memory _details = CertificateDetails({
-            investorName: "",
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
@@ -331,7 +329,8 @@ contract CyberCorpTest is Test {
             id,
             partyValuesB,
             newPartySignature,
-            true
+            true,
+            "John Doe"
         );
         vm.stopPrank();
     }
