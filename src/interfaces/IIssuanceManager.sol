@@ -14,7 +14,6 @@ import "../CyberCorpConstants.sol";
         uint256 investmentAmount;
         uint256 issuerUSDValuationAtTimeofInvestment;
         uint256 unitsRepresented;
-        bool transferable;
         string legalDetails;
         string issuerSignatureURI;
     }

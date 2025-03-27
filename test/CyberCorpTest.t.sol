@@ -85,7 +85,6 @@ contract CyberCorpTest is Test {
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            transferable: false,
             legalDetails: "Legal Details, jusidictione etc",
             issuerSignatureURI: ""
         });
@@ -236,7 +235,6 @@ contract CyberCorpTest is Test {
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            transferable: false,
             legalDetails: "Legal Details, jusidictione etc",
             issuerSignatureURI: ""
         });
