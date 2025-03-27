@@ -101,7 +101,7 @@ contract IssuanceManager is BorgAuthACL {
     // Add endorsement for secondary market transfer
     function endorseCertificate(address certAddress, uint256 tokenId, address endorser, bytes memory signature, bytes32 agreementId) external onlyAdmin {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
-        endorsement memory newEndorsement = endorsement(endorser, block.timestamp, signature, address(0), agreementId, address(0), "");
+        Endorsement memory newEndorsement = Endorsement(endorser, block.timestamp, signature, address(0), agreementId, address(0), "");
         certificate.addEndorsement(tokenId, newEndorsement);
         emit CertificateEndorsed(tokenId, endorser, address(0), "", address(0), agreementId, block.timestamp);
     }

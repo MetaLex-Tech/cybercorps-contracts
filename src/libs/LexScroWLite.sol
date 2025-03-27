@@ -70,7 +70,7 @@ abstract contract LexScroWLite is Initializable {
         }
        }
 
-       endorsement memory newEndorsement = endorsement(address(this), block.timestamp, deal.signature, address(DEAL_REGISTRY), agreementId, deal.counterParty, buyerName);
+       Endorsement memory newEndorsement = Endorsement(address(this), block.timestamp, deal.signature, address(DEAL_REGISTRY), agreementId, deal.counterParty, buyerName);
        ICyberCertPrinter(deal.corpAssets[0].tokenAddress).addEndorsement(deal.corpAssets[0].tokenId, newEndorsement);
 
        //transfer tokens

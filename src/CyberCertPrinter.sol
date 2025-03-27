@@ -6,7 +6,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./interfaces/ITransferRestrictionHook.sol";
 import "./CyberCorpConstants.sol";
-import {endorsement} from "./interfaces/ICyberCertPrinter.sol";
+import {Endorsement} from "./interfaces/ICyberCertPrinter.sol";
 
 contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable {
     // Custom errors
@@ -28,7 +28,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
 
     // Mapping from token ID to agreement details
     mapping(uint256 => CertificateDetails) public certificateDetails;
-    mapping(uint256 => endorsement[]) public endorsements;
+    mapping(uint256 => Endorsement[]) public endorsements;
     mapping(uint256 => OwnerDetails) public owners;
 
     // Mapping for custom restriction hooks by security type
@@ -37,7 +37,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     ITransferRestrictionHook public globalRestrictionHook;
     
     event CertificateCreated(uint256 indexed tokenId);
-    event CertificateAssigned(uint256 indexed tokenId, string issuerName, string investorName);
+    event CertificateAssigned(uint256 indexed tokenId, address indexed investorAddress, string investorName, string issuerName);
     event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, address endorsee, string endorseeName, address registry, bytes32 agreementId, uint256 index, uint256 timestamp);
     event RestrictionHookSet(SecurityClass securityType, address hookAddress);
     event GlobalRestrictionHookSet(address hookAddress);
@@ -133,12 +133,12 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     }
     
     // Add endorsement (for transfers in secondary market)
-    function addEndorsement(uint256 tokenId, endorsement memory newEndorsement) public {
+    function addEndorsement(uint256 tokenId, Endorsement memory newEndorsement) public {
         endorsements[tokenId].push(newEndorsement);
         emit CertificateEndorsed(tokenId, newEndorsement.endorser, newEndorsement.endorsee, newEndorsement.endorseeName, newEndorsement.registry, newEndorsement.agreementId, endorsements[tokenId].length - 1, block.timestamp);
     }
 
-    function endorseAndTransfer(uint256 tokenId, endorsement memory newEndorsement, address from, address to) external {
+    function endorseAndTransfer(uint256 tokenId, Endorsement memory newEndorsement, address from, address to) external {
         addEndorsement(tokenId, newEndorsement);
         _transfer(from, to, tokenId);
     }
@@ -192,7 +192,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
                 
             }
             else if(endorsements[tokenId].length > 0) {
-                endorsement memory endorsement = endorsements[tokenId][endorsements[tokenId].length - 1];
+                Endorsement memory endorsement = endorsements[tokenId][endorsements[tokenId].length - 1];
                 if(endorsement.endorsee != to && endorsement.endorser != to) revert EndorsementNotSignedOrInvalid();
 
                 owners[tokenId] = OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
@@ -221,7 +221,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         address endorsee
     ) {
         if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
-        endorsement memory details = endorsements[tokenId][index];
+        Endorsement memory details = endorsements[tokenId][index];
         return (
             details.endorser,
             details.endorseeName,
