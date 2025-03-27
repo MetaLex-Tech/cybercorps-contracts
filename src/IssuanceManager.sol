@@ -103,7 +103,7 @@ contract IssuanceManager is BorgAuthACL {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         endorsement memory newEndorsement = endorsement(endorser, block.timestamp, signature, address(0), agreementId, address(0), "");
         certificate.addEndorsement(tokenId, newEndorsement);
-        emit CertificateEndorsed(tokenId, endorser, address(0), "", address(0), agreementId, 0, block.timestamp);
+        emit CertificateEndorsed(tokenId, endorser, address(0), "", address(0), agreementId, block.timestamp);
     }
     
 

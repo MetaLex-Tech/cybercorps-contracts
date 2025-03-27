@@ -26,15 +26,6 @@ import "../CyberCorpConstants.sol";
 
 //Adapter interface for custom auth roles. Allows extensibility for different auth protocols i.e. hats.
 interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
-    // Structs
-
-    struct endorsement {
-        address endorser;
-        uint256 timestamp;
-        bytes32 signatureHash;
-        address registry;  //optional
-        bytes32 agreementId; //optional
-    }
 
     // Events
     event CertificateCreated(uint256 indexed tokenId, address indexed investor, uint256 amount, uint256 cap);
