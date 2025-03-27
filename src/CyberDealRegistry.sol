@@ -143,11 +143,12 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     function createContract(
         bytes32 templateId,
+        uint256 salt,
         string[] memory globalValues,
         address[] memory parties
     ) external returns (bytes32 contractId) {
         //create hash from templateId, globalValues, and parties
-        contractId = keccak256(abi.encode(templateId, globalValues, parties));
+        contractId = keccak256(abi.encode(templateId, salt, globalValues, parties));
         if (agreements[contractId].parties.length > 0) {
             revert ContractAlreadyExists();
         }

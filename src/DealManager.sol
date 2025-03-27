@@ -54,12 +54,13 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         address _paymentToken, 
         uint256 _paymentAmount, 
         bytes32 _templateId, 
+        uint256 _salt,
         string[] memory _globalValues, 
         address[] memory _parties, 
         CertificateDetails memory _certDetails
     ) public onlyOwner returns (bytes32 agreementId){
         IIssuanceManager(ISSUANCE_MANAGER).createCert(_certPrinterAddress, address(this), _certDetails);
-        agreementId = ICyberDealRegistry(DEAL_REGISTRY).createContract(_templateId, _globalValues, _parties);
+        agreementId = ICyberDealRegistry(DEAL_REGISTRY).createContract(_templateId, _salt, _globalValues, _parties);
 
         Token[] memory corpAssets = new Token[](1);
         corpAssets[0] = Token(TokenType.ERC721, _certPrinterAddress, _certId, 1);
@@ -89,6 +90,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         address _paymentToken, 
         uint256 _paymentAmount, 
         bytes32 _templateId, 
+        uint256 _salt,
         string[] memory _globalValues, 
         address[] memory _parties, 
         CertificateDetails memory _certDetails,
@@ -96,7 +98,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         bytes memory signature,
         string[] memory partyValues // These are the party values for the proposer
     ) public returns (bytes32 agreementId){
-        agreementId = proposeDeal(_certPrinterAddress, _certId, _paymentToken, _paymentAmount, _templateId, _globalValues, _parties, _certDetails);
+        agreementId = proposeDeal(_certPrinterAddress, _certId, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails);
         // NOTE: proposer is expected to be listed as a party in the parties array.
         escrows[agreementId].signature = signature;
         ICyberDealRegistry(DEAL_REGISTRY).signContractFor(proposer, agreementId, partyValues, signature, false);

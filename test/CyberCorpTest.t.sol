@@ -99,7 +99,7 @@ contract CyberCorpTest is Test {
         partyValues[0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), globalValues, parties)
+            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
         );
 
         string[] memory globalFields = new string[](1);
@@ -121,7 +121,7 @@ contract CyberCorpTest is Test {
 
         vm.startPrank(testAddress);
         cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            bytes32(uint256(1)),
+            block.timestamp,
             "CyberCorp",
             testAddress,
             "SAFE",
@@ -169,12 +169,13 @@ contract CyberCorpTest is Test {
         );
         bytes32 id = registry.createContract(
             bytes32(uint256(1)),
+            block.timestamp,
             globalValues,
             parties
         );
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), globalValues, parties)
+            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
         );
 
         bytes memory signature = _signAgreementTypedData(
@@ -249,7 +250,7 @@ contract CyberCorpTest is Test {
         partyValues[0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), globalValues, parties)
+            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
         );
 
         string[] memory globalFields = new string[](1);
@@ -277,7 +278,7 @@ contract CyberCorpTest is Test {
             address cyberCertPrinterAddr,
             bytes32 id
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-                bytes32(uint256(1)),
+                block.timestamp,
                 "CyberCorp",
                 testAddress,
                 "SAFE",

@@ -10,6 +10,7 @@ interface IDealManager {
         address _paymentToken,
         uint256 _paymentAmount,
         bytes32 _templateId,
+        uint256 _salt,
         string[] memory _globalValues,
         address[] memory _parties,
         CertificateDetails memory _certDetails
@@ -21,6 +22,7 @@ interface IDealManager {
         address _paymentToken,
         uint256 _paymentAmount,
         bytes32 _templateId,
+        uint256 _salt,
         string[] memory _globalValues,
         address[] memory _parties,
         CertificateDetails memory _certDetails,

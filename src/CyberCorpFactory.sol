@@ -96,7 +96,7 @@ contract CyberCorpFactory {
     }
 
     function deployCyberCorpAndCreateOffer(
-        bytes32 salt,
+        uint256 salt,
         string memory companyName,
         address _companyPayable,
         string memory certName,
@@ -113,8 +113,11 @@ contract CyberCorpFactory {
         CertificateDetails memory _details
     ) external returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress, address certPrinterAddress, bytes32 id) {
 
+        //create bytes32 salt
+        bytes32 corpSalt = keccak256(abi.encodePacked(salt));
+
         (cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress) = deployCyberCorp(
-            salt,
+            corpSalt,
             companyName,
             "",
             "",
@@ -136,6 +139,7 @@ contract CyberCorpFactory {
             stable,
             _paymentAmount,
             _templateId,
+            salt,
             _globalValues,
             _parties,
             _details,

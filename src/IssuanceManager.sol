@@ -25,7 +25,6 @@ contract IssuanceManager is BorgAuthACL {
     event CertificateCreated(uint256 indexed tokenId, address indexed certificate, uint256 amount, uint256 cap, CertificateDetails details);
     event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
-    event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, address indexed registry, string endorseeName, address endorsee, bytes32 agreementId, uint256 timestamp);
 
     constructor() {
     }
@@ -103,7 +102,6 @@ contract IssuanceManager is BorgAuthACL {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         Endorsement memory newEndorsement = Endorsement(endorser, block.timestamp, signature, address(0), agreementId, address(0), "");
         certificate.addEndorsement(tokenId, newEndorsement);
-        emit CertificateEndorsed(tokenId, endorser, address(0), "", address(0), agreementId, block.timestamp);
     }
     
 
