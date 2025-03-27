@@ -187,14 +187,26 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
                 if (!allowed) revert TransferRestricted(reason);
             }
 
+            address ownerAddress = owners[tokenId].ownerAddress;
             //check endorsement and update owners
-            if(from == owners[tokenId].ownerAddress) {
-                
+            if(from == ownerAddress) {
+                if(endorsements[tokenId].length > 0) {
+                    Endorsement memory endorsement = endorsements[tokenId][endorsements[tokenId].length - 1];
+                    if (endorsement.endorsee == to) {
+                        // Endorsement exists; ownership will be updated
+                        // FIXME: issuerName needs to be populated.
+                        emit CertificateAssigned(tokenId, to, endorsement.endorseeName, "");
+                        owners[tokenId] = OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
+                    } 
+                } 
+                // NOTE: we don't revert in this block: Owner is able to transfer to another address without an endorsement, but it does not update the owner
             }
             else if(endorsements[tokenId].length > 0) {
+                // Token is not being transferred from the current owner. It can only be transferrred to the latest endorsee, or the current owner
                 Endorsement memory endorsement = endorsements[tokenId][endorsements[tokenId].length - 1];
-                if(endorsement.endorsee != to && endorsement.endorser != to) revert EndorsementNotSignedOrInvalid();
+                if(endorsement.endorsee != to && ownerAddress != to) revert EndorsementNotSignedOrInvalid();
 
+                emit CertificateAssigned(tokenId, to, endorsement.endorseeName, "");
                 owners[tokenId] = OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
             }
             else revert EndorsementNotSignedOrInvalid();
