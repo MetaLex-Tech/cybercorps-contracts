@@ -1,12 +1,14 @@
-pragma solidity 0.8.28;
+// SPDX-License-Identifier: unlicensed
+pragma solidity ^0.8.0;
 
 import "./libs/auth.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
-import "../dependencies/cyberCorpTripler/src/interfaces/IIssuanceManager.sol";
+import "./interfaces/IIssuanceManager.sol";
 
-contract CyberCorp is BorgAuthACL {
-
+contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
     // cyberCORP details
     string public cyberCORPName; //this should be the legal name of the entity, including any designation such as "Inc." or "LLC" etc. 
     string public cyberCORPType; //this should be the legal entity type, for example, "corporation" or "limited liability company" 
@@ -15,24 +17,48 @@ contract CyberCorp is BorgAuthACL {
     string public defaultDisputeResolution;
     string public defaultLegend; //default legend (relating to transferability restrictions etc.) for NFT certs 
     address public issuanceManager;
+    address public companyPayable;
+
+    CompanyOfficer[] public companyOfficers;
 
     UpgradeableBeacon public beacon;
     address public cyberCertPrinterImplementation;
 
-    constructor(BorgAuth _auth, string memory _cyberCORPName, string memory _cyberCORPJurisdiction, string memory _cyberCORPContactDetails, string memory _defaultDisputeResolution, string memory _defaultLegend) {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+    }
+
+    function initialize(
+        address _auth,
+        string memory _cyberCORPName,
+        string memory _cyberCORPJurisdiction,
+        string memory _cyberCORPContactDetails,
+        string memory _defaultDisputeResolution,
+        string memory _defaultLegend,
+        address _issuanceManager,
+        address _companyPayable,
+        address officer
+    ) public initializer {
+        __UUPSUpgradeable_init();
+        __BorgAuthACL_init(_auth);
+        
         cyberCORPName = _cyberCORPName;
         cyberCORPJurisdiction = _cyberCORPJurisdiction;
         cyberCORPContactDetails = _cyberCORPContactDetails;
         defaultDisputeResolution = _defaultDisputeResolution;
         defaultLegend = _defaultLegend;
-    }
-
-    function initialize(address _issuanceManager, address _auth) initializer external {
         issuanceManager = _issuanceManager;
-          __BorgAuthACL_init(_auth);
+        companyPayable = _companyPayable;
+        companyOfficers.push(CompanyOfficer(officer, "", "", "", ""));
     }
 
-    function setcyberCORPDetails(string memory _cyberCORPName, string memory _cyberCORPJurisdiction, string memory _cyberCORPContactDetails, string memory _defaultDisputeResolution, string memory _defaultLegend) external onlyOwner() {
+    function setcyberCORPDetails(
+        string memory _cyberCORPName,
+        string memory _cyberCORPJurisdiction,
+        string memory _cyberCORPContactDetails,
+        string memory _defaultDisputeResolution,
+        string memory _defaultLegend
+    ) external onlyOwner() {
         cyberCORPName = _cyberCORPName;
         cyberCORPJurisdiction = _cyberCORPJurisdiction;
         cyberCORPContactDetails = _cyberCORPContactDetails;
@@ -53,4 +79,5 @@ contract CyberCorp is BorgAuthACL {
         bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(beacon, ""));
     }
 
+    function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
 }
