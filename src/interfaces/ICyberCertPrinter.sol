@@ -23,15 +23,21 @@ interface ICyberCertPrinter {
     function safeMint(uint256 tokenId, address to, CertificateDetails memory details) external returns (uint256);
     function safeMintAndAssign(address to, uint256 tokenId, CertificateDetails memory details) external returns (uint256);
     function assignCert(address from, uint256 tokenId, address to, CertificateDetails memory details) external returns (uint256);
-    function safeMint(address to, uint256 tokenId) external;
     function addIssuerSignature(uint256 tokenId, string calldata signatureURI) external;
     function addEndorsement(uint256 tokenId, endorsement memory newEndorsement) external;
     function endorseAndTransfer(uint256 tokenId, endorsement memory newEndorsement, address from, address to) external;
     function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external;
     function burn(uint256 tokenId) external;
     function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory);
-    function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (address endorser, string memory signatureURI, uint256 timestamp);
-    function convert(uint256 tokenId) external  ;
+    function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (
+        address endorser,
+        string memory endorseeName,
+        address registry,
+        bytes32 agreementId,
+        uint256 timestamp,
+        bytes memory signatureHash,
+        address endorsee
+    );
     function tokenURI(uint256 tokenId) external view returns (string memory);
     function totalSupply() external view returns (uint256);
 }

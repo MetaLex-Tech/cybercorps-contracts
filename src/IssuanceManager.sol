@@ -25,6 +25,7 @@ contract IssuanceManager is BorgAuthACL {
     event CertificateCreated(uint256 indexed tokenId, address indexed certificate, uint256 amount, uint256 cap, CertificateDetails details);
     event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
+    event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, address indexed registry, string endorseeName, address endorsee, bytes32 agreementId, uint256 timestamp);
 
     constructor() {
     }
@@ -98,13 +99,11 @@ contract IssuanceManager is BorgAuthACL {
     }
     
     // Add endorsement for secondary market transfer
-    function endorseCertificate(address certAddress, uint256 tokenId, address endorser, string calldata signatureURI, bytes32 agreementId) external onlyAdmin {
-        if (bytes(signatureURI).length == 0) revert SignatureURIRequired();
-        
+    function endorseCertificate(address certAddress, uint256 tokenId, address endorser, bytes memory signature, bytes32 agreementId) external onlyAdmin {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
-        bytes memory blankSignature = abi.encodePacked(bytes32(0));
-        endorsement memory newEndorsement = endorsement(endorser, block.timestamp, blankSignature, address(0), agreementId, address(0), "");
+        endorsement memory newEndorsement = endorsement(endorser, block.timestamp, signature, address(0), agreementId, address(0), "");
         certificate.addEndorsement(tokenId, newEndorsement);
+        emit CertificateEndorsed(tokenId, endorser, address(0), "", address(0), agreementId, 0, block.timestamp);
     }
     
 
