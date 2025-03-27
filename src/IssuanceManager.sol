@@ -67,7 +67,7 @@ contract IssuanceManager is BorgAuthACL {
         ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         uint256 tokenId = cert.totalSupply();
         uint256 id = cert.safeMint(tokenId, to, _details);
-        emit CertificateCreated(tokenId, certAddress, _details.investmentAmount, _details.issuerUSDValuationAtTimeofInvestment, _details, );
+        emit CertificateCreated(tokenId, certAddress, _details.investmentAmount, _details.issuerUSDValuationAtTimeofInvestment, _details);
         return id;
     }
 
