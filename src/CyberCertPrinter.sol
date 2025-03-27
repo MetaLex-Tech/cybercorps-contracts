@@ -212,13 +212,13 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
             }
             else revert EndorsementNotSignedOrInvalid();
 
-            // Emit custom transfer event with additional details
-            emit CyberCertTransfer(
-                from,
-                to,
-                tokenId
-            );
         }
+        // Emit custom transfer event for indexing
+        emit CyberCertTransfer(
+            from,
+            to,
+            tokenId
+        );
         
         // Call the parent implementation to handle the actual transfer
         return super._update(to, tokenId, auth);

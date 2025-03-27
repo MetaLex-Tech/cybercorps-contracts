@@ -30,7 +30,8 @@ contract CyberCorpFactory {
         address indexed cyberCorp,
         address indexed auth,
         address indexed issuanceManager,
-        address dealManager
+        address dealManager,
+        string companyName
     );
 
     event AgreementDeployed(
