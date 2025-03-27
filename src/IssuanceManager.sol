@@ -81,7 +81,7 @@ contract IssuanceManager is BorgAuthACL {
         address investor,
         CertificateDetails memory _details
     ) public onlyOwner returns (uint256 tokenId) {
-        if (bytes(ICyberCorp(CORP).companyName()).length == 0) revert CompanyDetailsNotSet();
+        if (bytes(ICyberCorp(CORP).cyberCORPName()).length == 0) revert CompanyDetailsNotSet();
         ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         tokenId = cert.totalSupply();
     
@@ -121,10 +121,10 @@ contract IssuanceManager is BorgAuthACL {
     }
 
     function companyName() external view returns (string memory) {
-        return ICyberCorp(CORP).companyName();
+        return ICyberCorp(CORP).cyberCORPName();
     }
 
     function companyJurisdiction() external view returns (string memory) {
-        return ICyberCorp(CORP).companyJurisdiction();
+        return ICyberCorp(CORP).cyberCORPJurisdiction();
     }
 }

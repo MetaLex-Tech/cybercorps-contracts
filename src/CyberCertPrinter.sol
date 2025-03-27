@@ -36,7 +36,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     // Global restriction hook (applies to all tokens)
     ITransferRestrictionHook public globalRestrictionHook;
     
-    event CertificateCreated(uint256 indexed tokenId);
+    event CyberCertPrinter_CertificateCreated(uint256 indexed tokenId);
     event CertificateAssigned(uint256 indexed tokenId, address indexed investorAddress, string investorName, string issuerName);
     event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, address endorsee, string endorseeName, address registry, bytes32 agreementId, uint256 index, uint256 timestamp);
     event RestrictionHookSet(SecurityClass securityType, address hookAddress);
@@ -91,7 +91,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     ) external onlyIssuanceManager returns (uint256) {
         certificateDetails[tokenId] = details;
         _safeMint(to, tokenId);
-        emit CertificateCreated(tokenId);
+        emit CyberCertPrinter_CertificateCreated(tokenId);
         return tokenId;
     }
 
@@ -106,7 +106,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         // Store agreement details
         certificateDetails[tokenId] = details;
         string memory issuerName = IIssuanceManager(issuanceManager).companyName();
-        emit CertificateCreated(tokenId);
+        emit CyberCertPrinter_CertificateCreated(tokenId);
         return tokenId;
     }
 
@@ -196,7 +196,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
                     if (endorsement.endorsee == to) {
                         // Endorsement exists; ownership will be updated
                         // FIXME: issuerName needs to be populated.
-                        emit CertificateAssigned(tokenId, to, endorsement.endorseeName, "");
+                        emit CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(issuanceManager).companyName());
                         owners[tokenId] = OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
                     } 
                 } 
@@ -207,7 +207,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
                 Endorsement memory endorsement = endorsements[tokenId][endorsements[tokenId].length - 1];
                 if(endorsement.endorsee != to && ownerAddress != to) revert EndorsementNotSignedOrInvalid();
 
-                emit CertificateAssigned(tokenId, to, endorsement.endorseeName, "");
+                emit CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(issuanceManager).companyName());
                 owners[tokenId] = OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
             }
             else revert EndorsementNotSignedOrInvalid();
