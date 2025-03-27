@@ -41,6 +41,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, address endorsee, string endorseeName, address registry, bytes32 agreementId, uint256 index, uint256 timestamp);
     event RestrictionHookSet(SecurityClass securityType, address hookAddress);
     event GlobalRestrictionHookSet(address hookAddress);
+    event CyberCertTransfer(address indexed from, address indexed to, uint256 indexed tokenId);
 
     modifier onlyIssuanceManager() {
         if (msg.sender != issuanceManager) revert NotIssuanceManager();
@@ -210,6 +211,13 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
                 owners[tokenId] = OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
             }
             else revert EndorsementNotSignedOrInvalid();
+
+            // Emit custom transfer event with additional details
+            emit CyberCertTransfer(
+                from,
+                to,
+                tokenId
+            );
         }
         
         // Call the parent implementation to handle the actual transfer
