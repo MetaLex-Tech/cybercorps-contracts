@@ -23,8 +23,8 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     address public issuanceManager;
     SecurityClass securityType; 
     SecuritySeries securitySeries; 
-    string certificateUri;
-    string ledger;
+    string public certificateUri;
+    string public ledger;
 
     // Mapping from token ID to agreement details
     mapping(uint256 => CertificateDetails) public certificateDetails;
