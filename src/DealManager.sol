@@ -33,6 +33,8 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         bool fillUnallocated
     );
 
+    mapping(bytes32 => string[]) public counterPartyValues;
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
     }
@@ -104,6 +106,49 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         ICyberDealRegistry(DEAL_REGISTRY).signContractFor(proposer, agreementId, partyValues, signature, false);
         
         return agreementId;
+    }
+
+    function proposeAndSignClosedDeal(
+        address _certPrinterAddress, 
+        uint256 _certId, 
+        address _paymentToken, 
+        uint256 _paymentAmount, 
+        bytes32 _templateId, 
+        uint256 _salt,
+        string[] memory _globalValues, 
+        address[] memory _parties, 
+        CertificateDetails memory _certDetails,
+        address proposer,
+        bytes memory signature,
+        string[] memory partyValues,
+        string[] memory _counterPartyValues
+    ) public returns (bytes32 agreementId){
+        agreementId = proposeDeal(_certPrinterAddress, _certId, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails);
+        // NOTE: proposer is expected to be listed as a party in the parties array.
+        escrows[agreementId].signature = signature;
+        counterPartyValues[agreementId] = _counterPartyValues;
+        ICyberDealRegistry(DEAL_REGISTRY).signContractFor(proposer, agreementId, partyValues, signature, false);
+        
+    }
+
+    function finalizeClosedDeal(address signer, bytes32 agreementId, string[] memory partyValues, bytes memory signature, bool _fillUnallocated, string memory name) public {
+        string[] memory counterPartyCheck = counterPartyValues[agreementId];
+        if (counterPartyCheck.length == 0) revert("Counter party values not found");
+        //check if counterPartyCheck and partyValues are the same
+        for (uint256 i = 0; i < counterPartyCheck.length; i++) {
+            if (counterPartyCheck[i] != partyValues[i]) revert("Counter party values do not match");
+        }
+        updateEscrow(agreementId, msg.sender);
+        ICyberDealRegistry(DEAL_REGISTRY).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated);
+        finalizeDeal(agreementId, name);
+
+        emit DealFinalized(
+            agreementId,
+            msg.sender,
+            CORP,
+            address(DEAL_REGISTRY),
+            _fillUnallocated
+        );
     }
 
     function finalizeDeal(address signer, bytes32 agreementId, string[] memory partyValues, bytes memory signature, bool _fillUnallocated, string memory name) public {
