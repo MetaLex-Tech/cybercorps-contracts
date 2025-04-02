@@ -31,6 +31,22 @@ interface IDealManager {
         string[] memory paryValues
     ) external returns (bytes32 agreementId);
 
+    function proposeAndSignClosedDeal(
+        address _certPrinterAddress,
+        uint256 _certId,
+        address _paymentToken,
+        uint256 _paymentAmount,
+        bytes32 _templateId,
+        uint256 _salt,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        CertificateDetails memory _certDetails,
+        address proposer,
+        bytes memory signature,
+        string[] memory partyValues,
+        string[] memory counterPartyValues
+    ) external returns (bytes32 agreementId);
+
     function finalizeDeal(
         address signer,
         bytes32 _agreementId,

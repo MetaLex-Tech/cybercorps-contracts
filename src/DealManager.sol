@@ -132,30 +132,19 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         
     }
 
-    function finalizeClosedDeal(address signer, bytes32 agreementId, string[] memory partyValues, bytes memory signature, bool _fillUnallocated, string memory name) public {
-        string[] memory counterPartyCheck = counterPartyValues[agreementId];
-        if (counterPartyCheck.length == 0) revert("Counter party values not found");
-        //check if counterPartyCheck and partyValues are the same
-        for (uint256 i = 0; i < counterPartyCheck.length; i++) {
-            if (keccak256(abi.encodePacked(counterPartyCheck[i])) != keccak256(abi.encodePacked(partyValues[i]))) revert CounterPartyValueMismatch();
-        }
-        updateEscrow(agreementId, msg.sender);
-        ICyberDealRegistry(DEAL_REGISTRY).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated);
-        finalizeDeal(agreementId, name);
-
-        emit DealFinalized(
-            agreementId,
-            msg.sender,
-            CORP,
-            address(DEAL_REGISTRY),
-            _fillUnallocated
-        );
-    }
-
     function finalizeDeal(address signer, bytes32 agreementId, string[] memory partyValues, bytes memory signature, bool _fillUnallocated, string memory name) public {
+        string[] memory counterPartyCheck = counterPartyValues[agreementId];
+        if(counterPartyCheck.length > 0) 
+        {
+            for (uint256 i = 0; i < counterPartyCheck.length; i++) {
+                if (keccak256(abi.encodePacked(counterPartyCheck[i])) != keccak256(abi.encodePacked(partyValues[i]))) revert CounterPartyValueMismatch();
+            }   
+        }
+        
         updateEscrow(agreementId, msg.sender);
         ICyberDealRegistry(DEAL_REGISTRY).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated);
         finalizeDeal(agreementId, name);
+
 
         emit DealFinalized(
             agreementId,
