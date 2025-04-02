@@ -19,12 +19,14 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     error ConversionNotImplemented();
     error TransferRestricted(string reason);
     error EndorsementNotSignedOrInvalid();
+    error InvalidEndorsement();
     
     address public issuanceManager;
     SecurityClass securityType; 
     SecuritySeries securitySeries; 
     string public certificateUri;
     string public ledger;
+    bool transferable;
 
     // Mapping from token ID to agreement details
     mapping(uint256 => CertificateDetails) public certificateDetails;
@@ -135,6 +137,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     
     // Add endorsement (for transfers in secondary market)
     function addEndorsement(uint256 tokenId, Endorsement memory newEndorsement) public {
+        if(msg.sender != issuanceManager && msg.sender != ownerOf(tokenId)) revert InvalidEndorsement();
         endorsements[tokenId].push(newEndorsement);
         emit CertificateEndorsed(tokenId, newEndorsement.endorser, newEndorsement.endorsee, newEndorsement.endorseeName, newEndorsement.registry, newEndorsement.agreementId, endorsements[tokenId].length - 1, block.timestamp);
     }
