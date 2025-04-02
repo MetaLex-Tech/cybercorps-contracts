@@ -91,7 +91,8 @@ contract CyberCorpFactory {
             cyberCorpAddress,
             authAddress,
             issuanceManagerAddress,
-            dealManagerAddress
+            dealManagerAddress,
+            companyName
         );
     }
 
