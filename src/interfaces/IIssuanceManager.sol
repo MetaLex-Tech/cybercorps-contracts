@@ -8,24 +8,23 @@ import "./ICyberCorp.sol";
 import "./ITransferRestrictionHook.sol";
 import "../CyberCorpConstants.sol";
 
-    struct CertificateDetails {
-        string signingOfficerName;
-        string signingOfficerTitle;
-        uint256 investmentAmount;
-        uint256 issuerUSDValuationAtTimeofInvestment;
-        uint256 unitsRepresented;
-        string legalDetails;
-        string issuerSignatureURI;
-    }
+struct CertificateDetails {
+    string signingOfficerName;
+    string signingOfficerTitle;
+    uint256 investmentAmount;
+    uint256 issuerUSDValuationAtTimeofInvestment;
+    uint256 unitsRepresented;
+    string legalDetails;
+    string issuerSignatureURI;
+}
 
-    struct OwnerDetails {
-        string name;
-        address ownerAddress;
-    }
+struct OwnerDetails {
+    string name;
+    address ownerAddress;
+}
 
 //Adapter interface for custom auth roles. Allows extensibility for different auth protocols i.e. hats.
 interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
-
     // Events
     event CertificateCreated(uint256 indexed tokenId, address indexed investor, uint256 amount, uint256 cap);
     event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
@@ -35,11 +34,7 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
     event WhitelistUpdated(address indexed account, bool whitelisted);
 
     // Issuance Manager Functions
-    function initialize(
-        address _auth,
-        address _CORP,
-        address _CyberCertPrinterImplementation
-    ) external;
+    function initialize(address _auth, address _CORP, address _CyberCertPrinterImplementation) external;
 
     function createCertPrinter(
         string memory _ledger,
@@ -50,11 +45,9 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
         SecuritySeries _securitySeries
     ) external returns (address);
 
-    function createCert(
-        address certAddress,
-        address to,
-        CertificateDetails memory _details
-    ) external returns (uint256);
+    function createCert(address certAddress, address to, CertificateDetails memory _details)
+        external
+        returns (uint256);
 
     function assignCert(
         address certAddress,
@@ -64,65 +57,35 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
         CertificateDetails memory _details
     ) external;
 
-    function createCertAndAssign(
-        address certAddress,
-        address investor,
-        CertificateDetails memory _details
-    ) external returns (uint256 tokenId);
+    function createCertAndAssign(address certAddress, address investor, CertificateDetails memory _details)
+        external
+        returns (uint256 tokenId);
 
-    function signCertificate(
-        address certAddress,
-        uint256 tokenId,
-        string calldata signatureURI
-    ) external;
+    function signCertificate(address certAddress, uint256 tokenId, string calldata signatureURI) external;
 
-    function endorseCertificate(
-        address certAddress,
-        uint256 tokenId,
-        address endorser,
-        string calldata signatureURI
-    ) external;
+    function endorseCertificate(address certAddress, uint256 tokenId, address endorser, string calldata signatureURI)
+        external;
 
-    function convert(
-        address certAddress,
-        uint256 tokenId,
-        address convertTo,
-        uint256 stockAmount
-    ) external;
+    function convert(address certAddress, uint256 tokenId, address convertTo, uint256 stockAmount) external;
 
-    function upgradeImplementation(
-        address _newImplementation
-    ) external;
+    function upgradeImplementation(address _newImplementation) external;
 
     function getBeaconImplementation() external view returns (address);
 
     // Certificate Details Functions
-    function getCertificateDetails(
-        uint256 tokenId
-    ) external view returns (CertificateDetails memory);
+    function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory);
 
-    function getEndorsementHistory(
-        uint256 tokenId,
-        uint256 index
-    ) external view returns (
-        address endorser,
-        string memory signatureURI,
-        uint256 timestamp
-    );
+    function getEndorsementHistory(uint256 tokenId, uint256 index)
+        external
+        view
+        returns (address endorser, string memory signatureURI, uint256 timestamp);
 
     // Transfer Hook Functions
-    function setRestrictionHook(
-        uint256 _id,
-        address _hookAddress
-    ) external;
+    function setRestrictionHook(uint256 _id, address _hookAddress) external;
 
-    function setGlobalRestrictionHook(
-        address hookAddress
-    ) external;
+    function setGlobalRestrictionHook(address hookAddress) external;
 
-    function restrictionHooksById(
-        uint256 tokenId
-    ) external view returns (ITransferRestrictionHook);
+    function restrictionHooksById(uint256 tokenId) external view returns (ITransferRestrictionHook);
 
     function globalRestrictionHook() external view returns (ITransferRestrictionHook);
 

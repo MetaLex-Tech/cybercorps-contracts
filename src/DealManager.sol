@@ -8,7 +8,6 @@ import "./libs/LexScroWLite.sol";
 import "./libs/auth.sol";
 
 contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLite {
-
     IIssuanceManager public ISSUANCE_MANAGER;
 
     error ZeroAddress();
@@ -34,10 +33,12 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     );
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
-    }
+    constructor() {}
 
-    function initialize(address _auth, address _corp, address _dealRegistry, address _issuanceManager) public initializer {
+    function initialize(address _auth, address _corp, address _dealRegistry, address _issuanceManager)
+        public
+        initializer
+    {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
         __LexScroWLite_init(_corp, _dealRegistry);
@@ -49,16 +50,16 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     }
 
     function proposeDeal(
-        address _certPrinterAddress, 
-        uint256 _certId, 
-        address _paymentToken, 
-        uint256 _paymentAmount, 
-        bytes32 _templateId, 
+        address _certPrinterAddress,
+        uint256 _certId,
+        address _paymentToken,
+        uint256 _paymentAmount,
+        bytes32 _templateId,
         uint256 _salt,
-        string[] memory _globalValues, 
-        address[] memory _parties, 
+        string[] memory _globalValues,
+        address[] memory _parties,
         CertificateDetails memory _certDetails
-    ) public onlyOwner returns (bytes32 agreementId){
+    ) public onlyOwner returns (bytes32 agreementId) {
         IIssuanceManager(ISSUANCE_MANAGER).createCert(_certPrinterAddress, address(this), _certDetails);
         agreementId = ICyberDealRegistry(DEAL_REGISTRY).createContract(_templateId, _salt, _globalValues, _parties);
 
@@ -80,44 +81,55 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
             address(DEAL_REGISTRY),
             _parties
         );
-        
+
         return agreementId;
     }
-    
+
     function proposeAndSignDeal(
-        address _certPrinterAddress, 
-        uint256 _certId, 
-        address _paymentToken, 
-        uint256 _paymentAmount, 
-        bytes32 _templateId, 
+        address _certPrinterAddress,
+        uint256 _certId,
+        address _paymentToken,
+        uint256 _paymentAmount,
+        bytes32 _templateId,
         uint256 _salt,
-        string[] memory _globalValues, 
-        address[] memory _parties, 
+        string[] memory _globalValues,
+        address[] memory _parties,
         CertificateDetails memory _certDetails,
         address proposer,
         bytes memory signature,
         string[] memory partyValues // These are the party values for the proposer
-    ) public returns (bytes32 agreementId){
-        agreementId = proposeDeal(_certPrinterAddress, _certId, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails);
+    ) public returns (bytes32 agreementId) {
+        agreementId = proposeDeal(
+            _certPrinterAddress,
+            _certId,
+            _paymentToken,
+            _paymentAmount,
+            _templateId,
+            _salt,
+            _globalValues,
+            _parties,
+            _certDetails
+        );
         // NOTE: proposer is expected to be listed as a party in the parties array.
         escrows[agreementId].signature = signature;
         ICyberDealRegistry(DEAL_REGISTRY).signContractFor(proposer, agreementId, partyValues, signature, false);
-        
+
         return agreementId;
     }
 
-    function finalizeDeal(address signer, bytes32 agreementId, string[] memory partyValues, bytes memory signature, bool _fillUnallocated, string memory name) public {
+    function finalizeDeal(
+        address signer,
+        bytes32 agreementId,
+        string[] memory partyValues,
+        bytes memory signature,
+        bool _fillUnallocated,
+        string memory name
+    ) public {
         updateEscrow(agreementId, msg.sender);
         ICyberDealRegistry(DEAL_REGISTRY).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated);
         finalizeDeal(agreementId, name);
 
-        emit DealFinalized(
-            agreementId,
-            msg.sender,
-            CORP,
-            address(DEAL_REGISTRY),
-            _fillUnallocated
-        );
+        emit DealFinalized(agreementId, msg.sender, CORP, address(DEAL_REGISTRY), _fillUnallocated);
     }
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}

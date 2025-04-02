@@ -18,7 +18,7 @@ import {console} from "forge-std/console.sol";
 import "../src/CyberCorpConstants.sol";
 
 contract BaseScript is Script {
-     function run() public {
+    function run() public {
         address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         vm.startBroadcast(deployerPrivateKey);
@@ -27,7 +27,9 @@ contract BaseScript is Script {
         address issuanceManagerFactory = address(new IssuanceManagerFactory(address(0)));
         address cyberCertPrinterImplementation = address(new CyberCertPrinter());
         CyberCertPrinter cyberCertPrinter = CyberCertPrinter(cyberCertPrinterImplementation);
-        cyberCertPrinter.initialize("", "", "", "ipfs.io/ipfs/[cid]", address(0), SecurityClass.SAFE, SecuritySeries.SeriesPreSeed);
+        cyberCertPrinter.initialize(
+            "", "", "", "ipfs.io/ipfs/[cid]", address(0), SecurityClass.SAFE, SecuritySeries.SeriesPreSeed
+        );
         address cyberCorpSingleFactory = address(new CyberCorpSingleFactory());
         address dealManagerFactory = address(new DealManagerFactory());
         address registry = address(new CyberDealRegistry());
@@ -36,15 +38,23 @@ contract BaseScript is Script {
         globalFields[0] = "Global Field 1";
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
-        CyberDealRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "ipfs.io/ipfs/[cid]", globalFields, partyFields);
+        CyberDealRegistry(registry).createTemplate(
+            bytes32(uint256(1)), "SAFE", "ipfs.io/ipfs/[cid]", globalFields, partyFields
+        );
 
-        CyberCorpFactory cyberCorpFactory = new CyberCorpFactory(address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory);
+        CyberCorpFactory cyberCorpFactory = new CyberCorpFactory(
+            address(registry),
+            cyberCertPrinterImplementation,
+            issuanceManagerFactory,
+            cyberCorpSingleFactory,
+            dealManagerFactory
+        );
 
         console.log("cyberCertPrinterImplementation: ", address(cyberCertPrinterImplementation));
         console.log("CyberDealRegistry: ", address(registry));
         console.log("CyberCorpFactory: ", address(cyberCorpFactory));
 
-           /* address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));
+        /* address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));
             uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
             vm.startBroadcast(deployerPrivateKey);
 
@@ -65,6 +75,5 @@ contract BaseScript is Script {
             console.log("CyberCorpFactory: ", address(cyberCorpFactory));
             console.log("lexscrowFactory: ", address(lexscrowFactory));
             console.log("cyberAgreementFactory: ", address(cyberAgreementFactory));*/
-        
-     }
+    }
 }

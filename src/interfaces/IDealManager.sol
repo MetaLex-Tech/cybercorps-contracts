@@ -40,10 +40,5 @@ interface IDealManager {
         string memory buyerName
     ) external;
 
-    function initialize(
-        address _auth,
-        address _corp,
-        address _dealRegistry,
-        address _issuanceManager
-    ) external;
+    function initialize(address _auth, address _corp, address _dealRegistry, address _issuanceManager) external;
 }

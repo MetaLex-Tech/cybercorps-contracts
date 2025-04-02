@@ -11,10 +11,8 @@ interface ITransferRestrictionHook {
     /// @param data Additional data passed to the hook
     /// @return allowed Whether the transfer is allowed
     /// @return reason The reason if the transfer is not allowed
-    function checkTransferRestriction(
-        address from,
-        address to,
-        uint256 tokenId,
-        bytes memory data
-    ) external view returns (bool allowed, string memory reason);
-} 
+    function checkTransferRestriction(address from, address to, uint256 tokenId, bytes memory data)
+        external
+        view
+        returns (bool allowed, string memory reason);
+}

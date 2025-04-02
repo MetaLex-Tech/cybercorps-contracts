@@ -11,7 +11,8 @@ contract IssuanceManagerFactory {
         issuanceManagerImplementation = _issuanceManagerImplementation;
     }
 
-    function deployIssuanceManager(bytes32 salt) public returns (address issuanceManagerAddress) {        // Deploy IssuanceManager with CREATE2
+    function deployIssuanceManager(bytes32 salt) public returns (address issuanceManagerAddress) {
+        // Deploy IssuanceManager with CREATE2
         bytes memory issuanceManagerBytecode = type(IssuanceManager).creationCode;
         bytes32 issuanceManagerSalt = keccak256(abi.encodePacked("issuanceManager", salt));
         issuanceManagerAddress = Create2.deploy(0, issuanceManagerSalt, issuanceManagerBytecode);
