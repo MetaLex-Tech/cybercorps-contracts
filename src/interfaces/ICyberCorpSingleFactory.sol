@@ -1,3 +1,4 @@
+
 pragma solidity 0.8.28;
 
 interface ICyberCorpSingleFactory {
@@ -13,4 +14,7 @@ interface ICyberCorpSingleFactory {
         address _companyPayable,
         address _officer
     ) external returns (address cyberCorpAddress);
-}
+}   
+
+
+

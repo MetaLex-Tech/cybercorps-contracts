@@ -25,9 +25,17 @@ interface ICyberDealRegistry {
         string[] signerFields
     );
 
-    event ContractCreated(bytes32 indexed contractId, bytes32 indexed templateId, address[] parties);
+    event ContractCreated(
+        bytes32 indexed contractId,
+        bytes32 indexed templateId,
+        address[] parties
+    );
 
-    event AgreementSigned(bytes32 indexed contractId, address indexed party, uint256 timestamp);
+    event AgreementSigned(
+        bytes32 indexed contractId,
+        address indexed party,
+        uint256 timestamp
+    );
 
     event ContractFullySigned(bytes32 indexed contractId, uint256 timestamp);
 
@@ -39,17 +47,24 @@ interface ICyberDealRegistry {
         string[] memory partyFields
     ) external;
 
-    function createContract(bytes32 templateId, uint256 salt, string[] memory globalValues, address[] memory parties)
-        external
-        returns (bytes32);
+    function createContract(
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties
+    ) external returns (bytes32);
 
-    function signContract(bytes32 contractId, string[] memory partyValues, bool fillUnallocated) external;
+    function signContract(
+        bytes32 contractId,
+        string[] memory partyValues,
+        bool fillUnallocated
+    ) external;
 
     function signContractFor(
         address signer,
         bytes32 contractId,
         string[] memory partyValues,
-        bytes calldata signature,
+        bytes calldata signature, 
         bool fillUnallocated // to fill a 0 address or not
     ) external;
 
@@ -61,7 +76,9 @@ interface ICyberDealRegistry {
 
     function allPartiesSigned(bytes32 contractId) external view returns (bool);
 
-    function getContractDetails(bytes32 contractId)
+    function getContractDetails(
+        bytes32 contractId
+    )
         external
         view
         returns (
@@ -78,12 +95,21 @@ interface ICyberDealRegistry {
             bytes32 transactionHash
         );
 
-    function getTemplateDetails(bytes32 templateId)
+    function getTemplateDetails(
+        bytes32 templateId
+    )
         external
         view
-        returns (string memory legalContractUri, string[] memory globalFields, string[] memory signerFields);
+        returns (
+            string memory legalContractUri,
+            string[] memory globalFields,
+            string[] memory signerFields
+        );
 
-    function getSignerValues(bytes32 contractId, address signer) external view returns (string[] memory signerValues);
+    function getSignerValues(
+        bytes32 contractId,
+        address signer
+    ) external view returns (string[] memory signerValues);
 
     function getAgreementsForParty(address party) external view returns (bytes32[] memory);
 

@@ -27,10 +27,11 @@ jobs:
         run: |
           forge --version
 
-      - name: Run Forge fmt
-        run: |
-          forge fmt --check
-        id: fmt
+      # Disabled for now until we have a less-disruptive workflow
+#      - name: Run Forge fmt
+#        run: |
+#          forge fmt --check
+#        id: fmt
 
       - name: Run Forge build
         run: |

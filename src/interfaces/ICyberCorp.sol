@@ -9,3 +9,4 @@ interface ICyberCorp {
     function defaultLegend() external view returns (string memory);
     function companyPayable() external view returns (address);
 }
+

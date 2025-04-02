@@ -5,7 +5,7 @@
    _/    _/  _/    _/  _/    _/  _/            _/    _/  _/    _/      _/      _/    _/    
   _/_/_/    _/    _/  _/_/_/    _/  _/_/      _/_/_/_/  _/    _/      _/      _/_/_/_/     
  _/    _/  _/    _/  _/    _/  _/    _/      _/    _/  _/    _/      _/      _/    _/      
-_/_/_/      _/_/    _/    _/    _/_/_/      _/    _/    _/_/        _/      _/    */
+_/_/_/      _/_/    _/    _/    _/_/_/      _/    _/    _/_/        _/      _/    */ 
 pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -34,7 +34,8 @@ contract BorgAuth is Initializable {
     error BorgAuth_ZeroAddress();
 
     /// @notice Empty constructor for implementation contract
-    constructor() {}
+    constructor() {
+    }
 
     /// @notice Initializer replacing the constructor - sets the deployer/initializer as owner
     /// @dev Use this instead of constructor when deployed behind a proxy
@@ -45,12 +46,15 @@ contract BorgAuth is Initializable {
     /// @notice update role for user
     /// @param user address of user
     /// @param role role to update
-    function updateRole(address user, uint256 role) external {
-        onlyRole(OWNER_ROLE, msg.sender);
-        if (user == msg.sender && role < OWNER_ROLE) revert BorgAuth_SetAnotherOwner();
+    function updateRole(
+        address user,
+        uint256 role
+    ) external {
+         onlyRole(OWNER_ROLE, msg.sender);
+         if(user == msg.sender && role < OWNER_ROLE) revert BorgAuth_SetAnotherOwner();
         _updateRole(user, role);
     }
-
+    
     /// @notice initialize ownership transfer
     /// @param newOwner address of new owner
     function initTransferOwnership(address newOwner) external {
@@ -91,11 +95,9 @@ contract BorgAuth is Initializable {
 
         if (authorized < role) {
             address adapter = roleAdapters[role];
-            if (adapter != address(0)) {
-                if (IAuthAdapter(adapter).isAuthorized(user) >= role) {
+            if (adapter != address(0)) 
+                if (IAuthAdapter(adapter).isAuthorized(user) >= role) 
                     return;
-                }
-            }
             revert BorgAuth_NotAuthorized(role, user);
         }
     }
@@ -108,11 +110,9 @@ contract BorgAuth is Initializable {
 
         if (authorized != role) {
             address adapter = roleAdapters[role];
-            if (adapter != address(0)) {
-                if (IAuthAdapter(adapter).isAuthorized(user) == role) {
+            if (adapter != address(0)) 
+                if (IAuthAdapter(adapter).isAuthorized(user) == role) 
                     return;
-                }
-            }
             revert BorgAuth_NotAuthorized(role, user);
         }
     }
@@ -120,7 +120,10 @@ contract BorgAuth is Initializable {
     /// @notice internal function to add a role to a user
     /// @param role role to update
     /// @param user address of user
-    function _updateRole(address user, uint256 role) internal {
+    function _updateRole(
+        address user,
+        uint256 role
+    ) internal {
         userRoles[user] = role;
         emit RoleUpdated(user, role);
     }
@@ -136,12 +139,13 @@ abstract contract BorgAuthACL is Initializable {
     error BorgAuthACL_ZeroAddress();
 
     /// @notice Empty constructor for implementation contract
-    constructor() {}
+    constructor() {
+    }
 
     /// @notice Initializer for BorgAuthACL
     /// @param _auth Address of the BorgAuth contract
     function __BorgAuthACL_init(address _auth) internal onlyInitializing {
-        if (_auth == address(0)) revert BorgAuthACL_ZeroAddress();
+        if(_auth == address(0)) revert BorgAuthACL_ZeroAddress();
         AUTH = BorgAuth(_auth);
     }
 

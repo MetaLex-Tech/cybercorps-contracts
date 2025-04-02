@@ -31,11 +31,23 @@ contract CyberCorpTest is Test {
         vm.startPrank(testAddress);
         BorgAuth auth = new BorgAuth();
         auth.initialize();
-        address issuanceManagerFactory = address(new IssuanceManagerFactory(address(0)));
-        address cyberCertPrinterImplementation = address(new CyberCertPrinter());
-        CyberCertPrinter cyberCertPrinter = CyberCertPrinter(cyberCertPrinterImplementation);
+        address issuanceManagerFactory = address(
+            new IssuanceManagerFactory(address(0))
+        );
+        address cyberCertPrinterImplementation = address(
+            new CyberCertPrinter()
+        );
+        CyberCertPrinter cyberCertPrinter = CyberCertPrinter(
+            cyberCertPrinterImplementation
+        );
         cyberCertPrinter.initialize(
-            "", "", "", "ipfs.io/ipfs/[cid]", address(0), SecurityClass.SAFE, SecuritySeries.SeriesPreSeed
+            "",
+            "",
+            "",
+            "ipfs.io/ipfs/[cid]",
+            address(0),
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesPreSeed
         );
         address cyberCorpSingleFactory = address(new CyberCorpSingleFactory());
 
@@ -47,7 +59,13 @@ contract CyberCorpTest is Test {
         globalFields[0] = "Global Field 1";
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
-        registry.createTemplate(bytes32(uint256(1)), "SAFE", "ipfs.io/ipfs/[cid]", globalFields, partyFields);
+        registry.createTemplate(
+            bytes32(uint256(1)),
+            "SAFE",
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields
+        );
 
         cyberCorpFactory = new CyberCorpFactory(
             address(registry),
@@ -80,7 +98,9 @@ contract CyberCorpTest is Test {
         string[] memory partyValues = new string[](1);
         partyValues[0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties));
+        bytes32 contractId = keccak256(
+            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+        );
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -140,10 +160,23 @@ contract CyberCorpTest is Test {
         address[] memory parties = new address[](2);
         parties[0] = address(testAddress);
         parties[1] = address(0);
-        registry.createTemplate(bytes32(uint256(1)), "CyberCorp", "ipfs.io/ipfs/[cid]", globalFields, partyFields);
-        bytes32 id = registry.createContract(bytes32(uint256(1)), block.timestamp, globalValues, parties);
+        registry.createTemplate(
+            bytes32(uint256(1)),
+            "CyberCorp",
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields
+        );
+        bytes32 id = registry.createContract(
+            bytes32(uint256(1)),
+            block.timestamp,
+            globalValues,
+            parties
+        );
 
-        bytes32 contractId = keccak256(abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties));
+        bytes32 contractId = keccak256(
+            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+        );
 
         bytes memory signature = _signAgreementTypedData(
             registry.DOMAIN_SEPARATOR(),
@@ -157,8 +190,16 @@ contract CyberCorpTest is Test {
             testPrivateKey
         );
 
-        registry.signContractFor(testAddress, id, partyValues, signature, false);
-        string memory contractURI = registry.getContractJson(bytes32(uint256(1)));
+        registry.signContractFor(
+            testAddress,
+            id,
+            partyValues,
+            signature,
+            false
+        );
+        string memory contractURI = registry.getContractJson(
+            bytes32(uint256(1))
+        );
 
         uint256 newPartyPk = 80085;
         address newPartyAddr = vm.addr(newPartyPk);
@@ -185,7 +226,9 @@ contract CyberCorpTest is Test {
 
     function testNet() public {
         vm.startPrank(testAddress);
-        CyberCorpFactory cyberCorpFactoryLive = CyberCorpFactory(0x2aDA6E66a92CbF283B9F2f4f095Fe705faD357B8);
+        CyberCorpFactory cyberCorpFactoryLive = CyberCorpFactory(
+            0x2aDA6E66a92CbF283B9F2f4f095Fe705faD357B8
+        );
 
         CertificateDetails memory _details = CertificateDetails({
             signingOfficerName: "",
@@ -206,7 +249,9 @@ contract CyberCorpTest is Test {
         string[] memory partyValues = new string[](1);
         partyValues[0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties));
+        bytes32 contractId = keccak256(
+            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+        );
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -233,22 +278,22 @@ contract CyberCorpTest is Test {
             address cyberCertPrinterAddr,
             bytes32 id
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            testAddress,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            proposerSignature,
-            _details
-        );
+                block.timestamp,
+                "CyberCorp",
+                testAddress,
+                "SAFE",
+                "SAFE",
+                "ipfs.io/ipfs/[cid]",
+                SecurityClass.SAFE,
+                SecuritySeries.SeriesPreSeed,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                proposerSignature,
+                _details
+            );
         vm.stopPrank();
 
         uint256 newPartyPk = 80085;
@@ -269,9 +314,23 @@ contract CyberCorpTest is Test {
             newPartyPk
         );
         IDealManager dealManager = IDealManager(dealManagerAddr);
-        deal(0x036CbD53842c5426634e7929541eC2318f3dCF7e, newPartyAddr, _paymentAmount);
-        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(address(dealManager), _paymentAmount);
-        dealManager.finalizeDeal(newPartyAddr, id, partyValuesB, newPartySignature, true, "John Doe");
+        deal(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e,
+            newPartyAddr,
+            _paymentAmount
+        );
+        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(
+            address(dealManager),
+            _paymentAmount
+        );
+        dealManager.finalizeDeal(
+            newPartyAddr,
+            id,
+            partyValuesB,
+            newPartySignature,
+            true,
+            "John Doe"
+        );
         vm.stopPrank();
     }
 
@@ -306,7 +365,9 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", _domainSeparator, structHash));
+        bytes32 digest = keccak256(
+            abi.encodePacked("\x19\x01", _domainSeparator, structHash)
+        );
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privKey, digest);
         signature = abi.encodePacked(r, s, v);
@@ -314,7 +375,9 @@ contract CyberCorpTest is Test {
     }
 
     // Add this helper function to your test contract
-    function _hashStringArray(string[] memory array) internal pure returns (bytes32) {
+    function _hashStringArray(
+        string[] memory array
+    ) internal pure returns (bytes32) {
         bytes32[] memory hashes = new bytes32[](array.length);
         for (uint256 i = 0; i < array.length; i++) {
             hashes[i] = keccak256(bytes(array[i]));
