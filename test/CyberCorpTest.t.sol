@@ -23,6 +23,7 @@ contract CyberCorpTest is Test {
     CyberDealRegistry registry;
     uint256 testPrivateKey;
     address testAddress;
+    address counterPartyAddress = 0x1A762EfF397a3C519da3dF9FCDDdca7D1BD43B5e;
 
     function setUp() public {
         ///deploy cyberCertPrinterImplementation
@@ -138,6 +139,115 @@ contract CyberCorpTest is Test {
             _details
         );
         vm.stopPrank();
+    }
+
+    function testCreateClosedContract() public {
+        uint256 newPartyPk = 80085;
+        address newPartyAddr = vm.addr(newPartyPk);
+
+        CertificateDetails memory _details = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmount: 0,
+            issuerUSDValuationAtTimeofInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jusidictione etc",
+            issuerSignatureURI: ""
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress);
+        parties[1] = address(newPartyAddr);
+        uint256 _paymentAmount = 1000000000000000000;
+        string[] memory partyValues = new string[](1);
+        partyValues[0] = "Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues,
+            testPrivateKey
+        );
+
+        string[] memory counterPartyValues = new string[](1);
+        counterPartyValues[0] = "Counter Party Value 1";
+
+        vm.startPrank(testAddress);
+         (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address cyberCertPrinterAddr,
+            bytes32 id
+        ) = cyberCorpFactory.deployCyberCorpAndCreateClosedOffer(
+            block.timestamp,
+            "CyberCorp",
+            testAddress,
+            "SAFE",
+            "SAFE",
+            "ipfs.io/ipfs/[cid]",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesPreSeed,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            counterPartyValues
+        );
+        vm.stopPrank();
+        IDealManager dealManager = IDealManager(dealManagerAddr);
+        vm.startPrank(newPartyAddr);
+         deal(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e,
+            newPartyAddr,
+            _paymentAmount
+        );
+        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(
+            address(dealManager),
+            _paymentAmount
+        );
+        bytes memory newPartySignature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            counterPartyValues,
+            newPartyPk
+        );
+        
+        dealManager.finalizeDeal(
+            newPartyAddr,
+            contractId,
+            counterPartyValues,
+            newPartySignature,
+            true,
+            "Counter Party Name"
+        );
+        vm.stopPrank();
+
     }
 
     function testCreateContract() public {
