@@ -27,15 +27,16 @@ abstract contract LexScroWLite is Initializable {
         uint256 amount;
     }
 
-    struct PendingDeal {
+    struct Escrow {
         bytes32 agreementId;
         address counterParty;
         Token[] corpAssets;
         Token[] buyerAssets;
         bytes signature;
+        uint256 expiry;
     }
 
-    mapping(bytes32 => PendingDeal) public escrows;
+    mapping(bytes32 => Escrow) public escrows;
 
     constructor() {
     }
@@ -45,9 +46,9 @@ abstract contract LexScroWLite is Initializable {
         DEAL_REGISTRY = ICyberDealRegistry(_dealRegistry);
     }
 
-    function createEscrow(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets) public {
+    function createEscrow(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets, uint256 expiry) public {
         bytes memory blankSignature = abi.encodePacked(bytes32(0));
-        escrows[agreementId] = PendingDeal(agreementId, counterParty, corpAssets, buyerAssets, blankSignature);
+        escrows[agreementId] =  Escrow(agreementId, counterParty, corpAssets, buyerAssets, blankSignature, expiry);
     }
 
     function updateEscrow(bytes32 agreementId, address counterParty) public 
@@ -56,7 +57,7 @@ abstract contract LexScroWLite is Initializable {
     }
 
     function finalizeDeal(bytes32 agreementId, string memory buyerName) public {
-        PendingDeal storage deal = escrows[agreementId];
+        Escrow storage deal = escrows[agreementId];
 
        for(uint256 i = 0; i < deal.buyerAssets.length; i++) {
         if(deal.buyerAssets[i].tokenType == TokenType.ERC20) {

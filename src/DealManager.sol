@@ -60,7 +60,8 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         uint256 _salt,
         string[] memory _globalValues, 
         address[] memory _parties, 
-        CertificateDetails memory _certDetails
+        CertificateDetails memory _certDetails,
+        uint256 expiry
     ) public onlyOwner returns (bytes32 agreementId){
         IIssuanceManager(ISSUANCE_MANAGER).createCert(_certPrinterAddress, address(this), _certDetails);
         agreementId = ICyberDealRegistry(DEAL_REGISTRY).createContract(_templateId, _salt, _globalValues, _parties);
@@ -70,7 +71,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
 
         Token[] memory buyerAssets = new Token[](1);
         buyerAssets[0] = Token(TokenType.ERC20, _paymentToken, 0, _paymentAmount);
-        createEscrow(agreementId, _parties[1], corpAssets, buyerAssets);
+        createEscrow(agreementId, _parties[1], corpAssets, buyerAssets, expiry);
 
         emit DealProposed(
             agreementId,
@@ -98,7 +99,8 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         address[] memory _parties, 
         CertificateDetails memory _certDetails,
         string[] memory _creatingPartyValues,
-        string[] memory _counterPartyValues
+        string[] memory _counterPartyValues,
+        uint256 expiry
     ) public onlyOwner returns (bytes32 agreementId){
         IIssuanceManager(ISSUANCE_MANAGER).createCert(_certPrinterAddress, address(this), _certDetails);
         agreementId = ICyberDealRegistry(DEAL_REGISTRY).createClosedContract(_templateId, _salt, _globalValues, _parties, _creatingPartyValues, _counterPartyValues);
@@ -108,7 +110,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
 
         Token[] memory buyerAssets = new Token[](1);
         buyerAssets[0] = Token(TokenType.ERC20, _paymentToken, 0, _paymentAmount);
-        createEscrow(agreementId, _parties[1], corpAssets, buyerAssets);
+        createEscrow(agreementId, _parties[1], corpAssets, buyerAssets, expiry);
 
         emit DealProposed(
             agreementId,
@@ -137,9 +139,10 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         CertificateDetails memory _certDetails,
         address proposer,
         bytes memory signature,
-        string[] memory partyValues // These are the party values for the proposer
+        string[] memory partyValues, // These are the party values for the proposer
+        uint256 expiry
     ) public returns (bytes32 agreementId){
-        agreementId = proposeDeal(_certPrinterAddress, _certId, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails);
+        agreementId = proposeDeal(_certPrinterAddress, _certId, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails, expiry);
         // NOTE: proposer is expected to be listed as a party in the parties array.
         escrows[agreementId].signature = signature;
         ICyberDealRegistry(DEAL_REGISTRY).signContractFor(proposer, agreementId, partyValues, signature, false);
@@ -160,9 +163,10 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         address proposer,
         bytes memory signature,
         string[] memory partyValues,
-        string[] memory _counterPartyValues
+        string[] memory _counterPartyValues,
+        uint256 expiry
     ) public returns (bytes32 agreementId){
-        agreementId = proposeClosedDeal(_certPrinterAddress, _certId, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails, partyValues, _counterPartyValues);
+        agreementId = proposeClosedDeal(_certPrinterAddress, _certId, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails, partyValues, _counterPartyValues, expiry);
         // NOTE: proposer is expected to be listed as a party in the parties array.
         escrows[agreementId].signature = signature;
         counterPartyValues[agreementId] = _counterPartyValues;

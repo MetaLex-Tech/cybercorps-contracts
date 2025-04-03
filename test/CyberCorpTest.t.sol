@@ -136,7 +136,8 @@ contract CyberCorpTest is Test {
             _paymentAmount,
             partyValues,
             signature,
-            _details
+            _details,
+            block.timestamp + 1000000
         );
         vm.stopPrank();
     }
@@ -212,7 +213,8 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
-            counterPartyValues
+            counterPartyValues,
+            block.timestamp + 1000000
         );
         vm.stopPrank();
         IDealManager dealManager = IDealManager(dealManagerAddr);
@@ -402,7 +404,8 @@ contract CyberCorpTest is Test {
                 _paymentAmount,
                 partyValues,
                 proposerSignature,
-                _details
+                _details,
+                block.timestamp + 1000000
             );
         vm.stopPrank();
 

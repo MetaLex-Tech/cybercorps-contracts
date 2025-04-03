@@ -112,7 +112,8 @@ contract CyberCorpFactory {
         uint256 _paymentAmount,
         string[] memory _partyValues,
         bytes memory signature,
-        CertificateDetails memory _details
+        CertificateDetails memory _details,
+        uint256 expiry
     ) external returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress, address certPrinterAddress, bytes32 id) {
 
         //create bytes32 salt
@@ -147,7 +148,8 @@ contract CyberCorpFactory {
             _details,
             msg.sender,
             signature,
-            _partyValues
+            _partyValues,
+            expiry
         );
 
     }
@@ -168,7 +170,8 @@ contract CyberCorpFactory {
         string[] memory _partyValues,
         bytes memory signature,
         CertificateDetails memory _details,
-        string[] memory _counterPartyValues
+        string[] memory _counterPartyValues,
+        uint256 expiry
     ) external returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress, address certPrinterAddress, bytes32 id) {
 
         //create bytes32 salt
@@ -204,7 +207,8 @@ contract CyberCorpFactory {
             msg.sender,
             signature,
             _partyValues,
-            _counterPartyValues
+            _counterPartyValues,
+            expiry
         );
 
     }
