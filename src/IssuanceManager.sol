@@ -104,6 +104,10 @@ contract IssuanceManager is BorgAuthACL {
         certificate.addEndorsement(tokenId, newEndorsement);
     }
     
+    function setGlobalTransferable(address certAddress, bool transferable) external onlyAdmin {
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        certificate.setGlobalTransferable(transferable);
+    }
 
     function upgradeImplementation(address _newImplementation) external onlyAdmin {
         UpgradeableBeacon(CyberCertPrinterBeacon).upgradeTo(_newImplementation);

@@ -41,7 +41,8 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     event CyberCertPrinter_CertificateCreated(uint256 indexed tokenId);
     event CertificateAssigned(uint256 indexed tokenId, address indexed investorAddress, string investorName, string issuerName);
     event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, address endorsee, string endorseeName, address registry, bytes32 agreementId, uint256 index, uint256 timestamp);
-    event RestrictionHookSet(SecurityClass securityType, address hookAddress);
+    event RestrictionHookSet(uint256 indexed tokenId, address hookAddress);
+    event GlobalTransferableSet(bool transferable);
     event GlobalRestrictionHookSet(address hookAddress);
     event CyberCertTransfer(address indexed from, address indexed to, uint256 indexed tokenId);
 
@@ -77,13 +78,18 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     // Set a restriction hook for a specific security type
     function setRestrictionHook(uint256 _id, address _hookAddress) external onlyIssuanceManager {
         restrictionHooksById[_id] = ITransferRestrictionHook(_hookAddress);
-        emit RestrictionHookSet(securityType, _hookAddress);
+        emit RestrictionHookSet(_id, _hookAddress);
     }
     
     // Set a global restriction hook that applies to all tokens
     function setGlobalRestrictionHook(address hookAddress) external onlyIssuanceManager {
         globalRestrictionHook = ITransferRestrictionHook(hookAddress);
         emit GlobalRestrictionHookSet(hookAddress);
+    }
+
+    function setGlobalTransferable(bool _transferable) external onlyIssuanceManager {
+        transferable = _transferable;
+        emit GlobalTransferableSet(transferable);
     }
 
     function safeMint(
