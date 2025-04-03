@@ -204,7 +204,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
                     Endorsement memory endorsement = endorsements[tokenId][endorsements[tokenId].length - 1];
                     if (endorsement.endorsee == to) {
                         // Endorsement exists; ownership will be updated
-                        // FIXME: issuerName needs to be populated.
                         emit CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(issuanceManager).companyName());
                         owners[tokenId] = OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
                     } 

@@ -17,3 +17,7 @@ docs/
 # Soldeer
 /dependencies
 /broadcast
+
+# IDE
+/.idea/
+/.vscode/
