@@ -32,6 +32,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     mapping(uint256 => CertificateDetails) public certificateDetails;
     mapping(uint256 => Endorsement[]) public endorsements;
     mapping(uint256 => OwnerDetails) public owners;
+    mapping(uint256 => SecurityStatus) public securityStatus;
 
     // Mapping for custom restriction hooks by security type
     mapping(uint256 => ITransferRestrictionHook) public restrictionHooksById;
@@ -40,6 +41,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     
     event CyberCertPrinter_CertificateCreated(uint256 indexed tokenId);
     event CertificateAssigned(uint256 indexed tokenId, address indexed investorAddress, string investorName, string issuerName);
+    event CertificateVoided(uint256 indexed tokenId, uint256 timestamp);
     event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, address endorsee, string endorseeName, address registry, bytes32 agreementId, uint256 index, uint256 timestamp);
     event RestrictionHookSet(uint256 indexed tokenId, address hookAddress);
     event GlobalTransferableSet(bool transferable);
@@ -259,6 +261,11 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
             details.signatureHash,
             details.endorsee
         );
+    }
+
+    function voidCert(uint256 tokenId) external onlyIssuanceManager {
+        securityStatus[tokenId] = SecurityStatus.Void;
+        emit CertificateVoided(tokenId, block.timestamp);
     }
     
     // URI storage functionality

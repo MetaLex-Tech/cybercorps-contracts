@@ -38,6 +38,8 @@ abstract contract LexScroWLite is Initializable {
 
     mapping(bytes32 => Escrow) public escrows;
 
+    error DealExpired();
+
     constructor() {
     }
 
@@ -58,6 +60,7 @@ abstract contract LexScroWLite is Initializable {
 
     function finalizeDeal(bytes32 agreementId, string memory buyerName) public {
         Escrow storage deal = escrows[agreementId];
+        if(block.timestamp > deal.expiry) revert DealExpired();
 
        for(uint256 i = 0; i < deal.buyerAssets.length; i++) {
         if(deal.buyerAssets[i].tokenType == TokenType.ERC20) {
@@ -87,6 +90,10 @@ abstract contract LexScroWLite is Initializable {
         }
        }
 
+    }
+
+    function voidEscrow(bytes32 agreementId) internal {
+        delete escrows[agreementId];
     }
 
     //receiver erc721s

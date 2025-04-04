@@ -83,6 +83,11 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
         string calldata signatureURI
     ) external;
 
+    function voidCertificate(
+        address certAddress,
+        uint256 tokenId
+    ) external;
+
     function convert(
         address certAddress,
         uint256 tokenId,

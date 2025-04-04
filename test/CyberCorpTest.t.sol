@@ -252,6 +252,76 @@ contract CyberCorpTest is Test {
 
     }
 
+    function testVoidCertificate() public {
+
+         CertificateDetails memory _details = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmount: 0,
+            issuerUSDValuationAtTimeofInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jusidictione etc",
+            issuerSignatureURI: ""
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress);
+        parties[1] = address(0);
+        uint256 _paymentAmount = 1000000000000000000;
+        string[] memory partyValues = new string[](1);
+        partyValues[0] = "Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues,
+            testPrivateKey
+        );
+
+        vm.startPrank(testAddress);
+        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address cyberCertPrinterAddr, bytes32 id) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            testAddress,
+            "SAFE",
+            "SAFE",
+            "ipfs.io/ipfs/[cid]",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesPreSeed,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+
+        //wait for 1000000 blocks
+        vm.warp(block.timestamp + 1000001);
+        vm.startPrank(testAddress);
+        IDealManager(dealManagerAddr).voidExpiredDeal(contractId);
+        vm.stopPrank();
+    }
+
     function testCreateContract() public {
         vm.startPrank(testAddress);
         BorgAuth auth = new BorgAuth();

@@ -29,6 +29,7 @@ interface ICyberCertPrinter {
     function endorseAndTransfer(uint256 tokenId, Endorsement memory newEndorsement, address from, address to) external;
     function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external;
     function burn(uint256 tokenId) external;
+    function voidCert(uint256 tokenId) external;
     function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory);
     function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (
         address endorser,

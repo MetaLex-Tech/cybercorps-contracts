@@ -58,6 +58,10 @@ interface IDealManager {
         string memory buyerName
     ) external;
 
+    function voidExpiredDeal(
+        bytes32 _agreementId
+    ) external;
+
     function initialize(
         address _auth,
         address _corp,

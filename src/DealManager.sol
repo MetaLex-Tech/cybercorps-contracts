@@ -194,5 +194,15 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         );
     }
 
+    function voidExpiredDeal(bytes32 agreementId) public {
+        Escrow storage deal = escrows[agreementId];
+        for(uint256 i = 0; i < deal.corpAssets.length; i++) {
+            if(deal.corpAssets[i].tokenType == TokenType.ERC721) {
+                IIssuanceManager(ISSUANCE_MANAGER).voidCertificate(deal.corpAssets[i].tokenAddress, deal.corpAssets[i].tokenId);
+            }
+        }
+        voidEscrow(agreementId);
+    }
+
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
 }
