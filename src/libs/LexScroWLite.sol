@@ -27,6 +27,12 @@ abstract contract LexScroWLite is Initializable {
         uint256 amount;
     }
 
+    enum EscrowStatus {
+        PENDING,
+        FINALIZED,
+        VOIDED
+    }
+
     struct Escrow {
         bytes32 agreementId;
         address counterParty;
@@ -34,6 +40,7 @@ abstract contract LexScroWLite is Initializable {
         Token[] buyerAssets;
         bytes signature;
         uint256 expiry;
+        EscrowStatus status;
     }
 
     mapping(bytes32 => Escrow) public escrows;
@@ -50,7 +57,7 @@ abstract contract LexScroWLite is Initializable {
 
     function createEscrow(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets, uint256 expiry) public {
         bytes memory blankSignature = abi.encodePacked(bytes32(0));
-        escrows[agreementId] =  Escrow(agreementId, counterParty, corpAssets, buyerAssets, blankSignature, expiry);
+        escrows[agreementId] =  Escrow(agreementId, counterParty, corpAssets, buyerAssets, blankSignature, expiry, EscrowStatus.PENDING);
     }
 
     function updateEscrow(bytes32 agreementId, address counterParty) public 
@@ -90,10 +97,15 @@ abstract contract LexScroWLite is Initializable {
         }
        }
 
+       deal.status = EscrowStatus.FINALIZED;   
     }
 
     function voidEscrow(bytes32 agreementId) internal {
-        delete escrows[agreementId];
+        escrows[agreementId].status = EscrowStatus.VOIDED;
+    }
+
+    function getEscrowDetails(bytes32 agreementId) public view returns (Escrow memory) {
+        return escrows[agreementId];
     }
 
     //receiver erc721s
