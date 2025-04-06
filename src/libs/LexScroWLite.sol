@@ -30,6 +30,7 @@ abstract contract LexScroWLite is Initializable {
 
     enum EscrowStatus {
         PENDING,
+        PAID,
         FINALIZED,
         VOIDED
     }
@@ -48,6 +49,9 @@ abstract contract LexScroWLite is Initializable {
     mapping(bytes32 => ICondition[]) public conditionsByEscrow;
 
     error DealExpired();
+    error EscrowNotPending();
+    error EscrowNotPaid();
+    error CounterPartyNotSet();
 
     constructor() {
     }
@@ -67,19 +71,40 @@ abstract contract LexScroWLite is Initializable {
         escrows[agreementId].counterParty = counterParty;
     }
 
+    function handleCounterPartyPayment(bytes32 agreementId) public {
+        Escrow storage deal = escrows[agreementId];
+        if(deal.status != EscrowStatus.PENDING) revert EscrowNotPending();
+        if(deal.counterParty == address(0)) revert CounterPartyNotSet();
+
+        for(uint256 i = 0; i < deal.buyerAssets.length; i++) {
+            if(deal.buyerAssets[i].tokenType == TokenType.ERC20) {
+                IERC20(deal.buyerAssets[i].tokenAddress).transferFrom(deal.counterParty, address(this), deal.buyerAssets[i].amount);
+            }
+            else if(deal.buyerAssets[i].tokenType == TokenType.ERC721) {
+                IERC721(deal.buyerAssets[i].tokenAddress).safeTransferFrom(deal.counterParty, address(this), deal.buyerAssets[i].tokenId);
+            }
+            else if(deal.buyerAssets[i].tokenType == TokenType.ERC1155) {
+                IERC1155(deal.buyerAssets[i].tokenAddress).safeTransferFrom(deal.counterParty, address(this), deal.buyerAssets[i].tokenId, deal.buyerAssets[i].amount, "");
+            }
+        }
+
+       deal.status = EscrowStatus.PAID;
+    }
+
     function finalizeDeal(bytes32 agreementId, string memory buyerName) public {
         Escrow storage deal = escrows[agreementId];
         if(block.timestamp > deal.expiry) revert DealExpired();
+        if(deal.status != EscrowStatus.PAID) revert EscrowNotPaid();
 
        for(uint256 i = 0; i < deal.buyerAssets.length; i++) {
         if(deal.buyerAssets[i].tokenType == TokenType.ERC20) {
-            IERC20(deal.buyerAssets[i].tokenAddress).transferFrom(deal.counterParty, ICyberCorp(CORP).companyPayable(), deal.buyerAssets[i].amount);
+            IERC20(deal.buyerAssets[i].tokenAddress).transfer(ICyberCorp(CORP).companyPayable(), deal.buyerAssets[i].amount);
         }
         else if(deal.buyerAssets[i].tokenType == TokenType.ERC721) {
-            IERC721(deal.buyerAssets[i].tokenAddress).safeTransferFrom(deal.counterParty, ICyberCorp(CORP).companyPayable(), deal.buyerAssets[i].tokenId);
+            IERC721(deal.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), ICyberCorp(CORP).companyPayable(), deal.buyerAssets[i].tokenId);
         }
         else if(deal.buyerAssets[i].tokenType == TokenType.ERC1155) {
-            IERC1155(deal.buyerAssets[i].tokenAddress).safeTransferFrom(deal.counterParty, ICyberCorp(CORP).companyPayable(), deal.buyerAssets[i].tokenId, deal.buyerAssets[i].amount, "");
+            IERC1155(deal.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), ICyberCorp(CORP).companyPayable(), deal.buyerAssets[i].tokenId, deal.buyerAssets[i].amount, "");
         }
        }
 

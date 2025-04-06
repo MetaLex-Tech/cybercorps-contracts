@@ -36,6 +36,8 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
 
     mapping(bytes32 => string[]) public counterPartyValues;
 
+    error AgreementConditionsNotMet();
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
     }
@@ -150,6 +152,18 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         return agreementId;
     }
 
+    function signDealAndPay(
+        bytes32 agreementId,
+        address signer,
+        bytes memory signature,
+        string[] memory partyValues,
+        bool _fillUnallocated,
+        string memory name
+    ) public {
+        ICyberDealRegistry(DEAL_REGISTRY).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated);
+        updateEscrow(agreementId, msg.sender);
+    }
+
     function proposeAndSignClosedDeal(
         address _certPrinterAddress, 
         uint256 _certId, 
@@ -180,9 +194,11 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
             if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert CounterPartyValueMismatch();
         }
         
+        if(!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
         
         ICyberDealRegistry(DEAL_REGISTRY).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated);
         updateEscrow(agreementId, msg.sender);
+        handleCounterPartyPayment(agreementId);
         finalizeDeal(agreementId, name);
 
 
