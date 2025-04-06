@@ -240,7 +240,7 @@ contract CyberCorpTest is Test {
             newPartyPk
         );
         
-        dealManager.finalizeDeal(
+        dealManager.signAndFinalizeDeal(
             newPartyAddr,
             contractId,
             counterPartyValues,
@@ -506,7 +506,7 @@ contract CyberCorpTest is Test {
             address(dealManager),
             _paymentAmount
         );
-        dealManager.finalizeDeal(
+        dealManager.signAndFinalizeDeal(
             newPartyAddr,
             id,
             partyValuesB,

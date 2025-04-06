@@ -8,9 +8,10 @@ import "../interfaces/ICyberCorp.sol";
 import "../interfaces/ICyberDealRegistry.sol";
 import "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICondition.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 
-abstract contract LexScroWLite is Initializable {
+abstract contract LexScroWLite is Initializable, ReentrancyGuard {
 
     address public CORP;
     ICyberDealRegistry public DEAL_REGISTRY;

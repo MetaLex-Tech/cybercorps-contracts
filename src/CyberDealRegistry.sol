@@ -31,6 +31,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         mapping(address => uint256) signedAt; // Timestamp when each party signed (0 if unsigned)
         uint256 numSignatures; // Number of parties who have signed
         bytes32 transactionHash; // Hash of the transaction that created this contract
+        bool isVoided; // Whether the contract has been voided
     }
     
     // This data is what is signed by each party
@@ -316,6 +317,25 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         if (totalSignatures == agreementData.parties.length) {
             emit ContractFullySigned(contractId, timestamp);
         }
+    }
+
+    function voidContractFor(bytes32 contractId, address party, bytes calldata signature) public {
+        //make sure the party is a party to the contract
+        if(!isParty(contractId, party)) revert NotAParty();
+
+        //verify the signature
+        if (!_verifySignature(party, SignatureData({
+            contractId: contractId,
+            legalContractUri: templates[agreements[contractId].templateId].legalContractUri,
+            globalFields: templates[agreements[contractId].templateId].globalFields,
+            partyFields: templates[agreements[contractId].templateId].partyFields,
+            globalValues: agreements[contractId].globalValues,
+            partyValues: new string[](0)
+        }), signature)) revert SignatureVerificationFailed();
+        
+        AgreementData storage agreementData = agreements[contractId];
+        if(agreementData.isVoided) revert ContractAlreadyVoided();
+        agreementData.isVoided = true;
     }
 
      function getParties(

@@ -187,7 +187,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         ICyberDealRegistry(DEAL_REGISTRY).signContractFor(proposer, agreementId, partyValues, signature, false);
     }
 
-    function finalizeDeal(address signer, bytes32 agreementId, string[] memory partyValues, bytes memory signature, bool _fillUnallocated, string memory name) public {
+    function signAndFinalizeDeal(address signer, bytes32 agreementId, string[] memory partyValues, bytes memory signature, bool _fillUnallocated, string memory name) public {
         string[] memory counterPartyCheck = counterPartyValues[agreementId];
         if(counterPartyCheck.length > 0) 
         {
@@ -196,7 +196,9 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         
         if(!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
         
-        ICyberDealRegistry(DEAL_REGISTRY).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated);
+        if(!ICyberDealRegistry(DEAL_REGISTRY).hasSigned(agreementId, signer))
+            ICyberDealRegistry(DEAL_REGISTRY).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated);
+
         updateEscrow(agreementId, msg.sender);
         handleCounterPartyPayment(agreementId);
         finalizeDeal(agreementId, name);
@@ -211,7 +213,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         );
     }
 
-    function voidExpiredDeal(bytes32 agreementId) public {
+    function voidExpiredDeal(bytes32 agreementId, bytes memory signature) public {
         Escrow storage deal = escrows[agreementId];
         for(uint256 i = 0; i < deal.corpAssets.length; i++) {
             if(deal.corpAssets[i].tokenType == TokenType.ERC721) {
@@ -219,7 +221,18 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
             }
         }
         voidEscrow(agreementId);
+        ICyberDealRegistry(DEAL_REGISTRY).voidContractFor(agreementId, msg.sender, signature);
     }
+
+    function revokeDeal(bytes32 agreementId) public {
+        if(escrows[agreementId].status == EscrowStatus.PENDING) 
+            ICyberDealRegistry(DEAL_REGISTRY).voidContract(agreementId);
+        else
+            revert DealNotPending();
+        ICyberDealRegistry(DEAL_REGISTRY).voidContract(agreementId);
+    }
+
+    function 
 
     /*function addCondition(Logic _op, address _condition) public onlyOwner {
         _addCondition(_op, _condition);
