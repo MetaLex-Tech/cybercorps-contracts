@@ -180,8 +180,9 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
             if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert CounterPartyValueMismatch();
         }
         
-        updateEscrow(agreementId, msg.sender);
+        
         ICyberDealRegistry(DEAL_REGISTRY).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated);
+        updateEscrow(agreementId, msg.sender);
         finalizeDeal(agreementId, name);
 
 
@@ -203,6 +204,15 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         }
         voidEscrow(agreementId);
     }
+
+    /*function addCondition(Logic _op, address _condition) public onlyOwner {
+        _addCondition(_op, _condition);
+    }
+
+    function removeCondition(address _condition) public onlyOwner {
+        _removeCondition(_condition);
+    }*/
+
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
 }

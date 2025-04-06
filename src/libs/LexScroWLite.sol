@@ -7,6 +7,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "../interfaces/ICyberCorp.sol";
 import "../interfaces/ICyberDealRegistry.sol";
 import "../interfaces/ICyberCertPrinter.sol";
+import "ConditionManager/interfaces/ICondition.sol";
 
 
 abstract contract LexScroWLite is Initializable {
@@ -44,6 +45,7 @@ abstract contract LexScroWLite is Initializable {
     }
 
     mapping(bytes32 => Escrow) public escrows;
+    mapping(bytes32 => ICondition[]) public conditionsByEscrow;
 
     error DealExpired();
 
@@ -98,6 +100,19 @@ abstract contract LexScroWLite is Initializable {
        }
 
        deal.status = EscrowStatus.FINALIZED;   
+    }
+
+    function conditionCheck(bytes32 agreementId) public view returns (bool) {
+        ICondition[] memory conditionsToCheck = conditionsByEscrow[agreementId];
+        Escrow memory deal = escrows[agreementId];
+        //convert bytes32 to bytes
+        bytes memory agreementIdBytes = abi.encodePacked(agreementId);
+        
+        for(uint256 i = 0; i < conditionsToCheck.length; i++) {
+                if(!ICondition(conditionsToCheck[i]).checkCondition(address(this), msg.sig, agreementIdBytes)) 
+                    return false;
+        }
+        return true;
     }
 
     function voidEscrow(bytes32 agreementId) internal {
