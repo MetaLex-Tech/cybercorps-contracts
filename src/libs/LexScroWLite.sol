@@ -7,7 +7,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "../interfaces/ICyberCorp.sol";
 import "../interfaces/ICyberDealRegistry.sol";
 import "../interfaces/ICyberCertPrinter.sol";
-import "ConditionManager/interfaces/ICondition.sol";
+import "../interfaces/ICondition.sol";
 
 
 abstract contract LexScroWLite is Initializable {
