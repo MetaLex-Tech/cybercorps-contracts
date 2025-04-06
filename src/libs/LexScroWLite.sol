@@ -7,6 +7,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "../interfaces/ICyberCorp.sol";
 import "../interfaces/ICyberDealRegistry.sol";
 import "../interfaces/ICyberCertPrinter.sol";
+import "ConditionManager/interfaces/ICondition.sol";
 
 
 abstract contract LexScroWLite is Initializable {
@@ -27,15 +28,26 @@ abstract contract LexScroWLite is Initializable {
         uint256 amount;
     }
 
-    struct PendingDeal {
+    enum EscrowStatus {
+        PENDING,
+        FINALIZED,
+        VOIDED
+    }
+
+    struct Escrow {
         bytes32 agreementId;
         address counterParty;
         Token[] corpAssets;
         Token[] buyerAssets;
         bytes signature;
+        uint256 expiry;
+        EscrowStatus status;
     }
 
-    mapping(bytes32 => PendingDeal) public escrows;
+    mapping(bytes32 => Escrow) public escrows;
+    mapping(bytes32 => ICondition[]) public conditionsByEscrow;
+
+    error DealExpired();
 
     constructor() {
     }
@@ -45,9 +57,9 @@ abstract contract LexScroWLite is Initializable {
         DEAL_REGISTRY = ICyberDealRegistry(_dealRegistry);
     }
 
-    function createEscrow(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets) public {
+    function createEscrow(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets, uint256 expiry) public {
         bytes memory blankSignature = abi.encodePacked(bytes32(0));
-        escrows[agreementId] = PendingDeal(agreementId, counterParty, corpAssets, buyerAssets, blankSignature);
+        escrows[agreementId] =  Escrow(agreementId, counterParty, corpAssets, buyerAssets, blankSignature, expiry, EscrowStatus.PENDING);
     }
 
     function updateEscrow(bytes32 agreementId, address counterParty) public 
@@ -56,7 +68,8 @@ abstract contract LexScroWLite is Initializable {
     }
 
     function finalizeDeal(bytes32 agreementId, string memory buyerName) public {
-        PendingDeal storage deal = escrows[agreementId];
+        Escrow storage deal = escrows[agreementId];
+        if(block.timestamp > deal.expiry) revert DealExpired();
 
        for(uint256 i = 0; i < deal.buyerAssets.length; i++) {
         if(deal.buyerAssets[i].tokenType == TokenType.ERC20) {
@@ -86,6 +99,28 @@ abstract contract LexScroWLite is Initializable {
         }
        }
 
+       deal.status = EscrowStatus.FINALIZED;   
+    }
+
+    function conditionCheck(bytes32 agreementId) public view returns (bool) {
+        ICondition[] memory conditionsToCheck = conditionsByEscrow[agreementId];
+        Escrow memory deal = escrows[agreementId];
+        //convert bytes32 to bytes
+        bytes memory agreementIdBytes = abi.encodePacked(agreementId);
+        
+        for(uint256 i = 0; i < conditionsToCheck.length; i++) {
+                if(!ICondition(conditionsToCheck[i]).checkCondition(address(this), msg.sig, agreementIdBytes)) 
+                    return false;
+        }
+        return true;
+    }
+
+    function voidEscrow(bytes32 agreementId) internal {
+        escrows[agreementId].status = EscrowStatus.VOIDED;
+    }
+
+    function getEscrowDetails(bytes32 agreementId) public view returns (Escrow memory) {
+        return escrows[agreementId];
     }
 
     //receiver erc721s

@@ -43,6 +43,9 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         string[] partyValues;
     }
 
+    // Closed Agreement Data
+    mapping(bytes32 => string[]) public closedAgreementValues;
+
     // Mapping of templateId => template data
     mapping(bytes32 => Template) public templates;
 
@@ -85,6 +88,8 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     error FirstPartyZeroAddress();
     error DuplicateParty();
     error TitleEmpty();
+    error InvalidPartyCount();
+    error ClosedAgreementPartyValueMismatch();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -187,6 +192,65 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             agreementsForParty[parties[i]].push(contractId);
         }
     }
+
+    function createClosedContract(
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[] memory creatingPartyValues,
+        string[] memory counterPartyValues
+    ) external returns (bytes32 contractId) {
+        //create hash from templateId, globalValues, and parties
+        contractId = keccak256(abi.encode(templateId, salt, globalValues, parties));
+        if (agreements[contractId].parties.length > 0) {
+            revert ContractAlreadyExists();
+        }
+
+        Template storage template = templates[templateId];
+        if (bytes(template.legalContractUri).length == 0) {
+            revert TemplateDoesNotExist();
+        }
+
+        if (globalValues.length != template.globalFields.length) {
+            revert MismatchedFieldsLength();
+        }
+
+        if((creatingPartyValues.length != counterPartyValues.length) || (creatingPartyValues.length != template.partyFields.length) || (counterPartyValues.length != template.partyFields.length)) {
+            revert MismatchedFieldsLength();
+        }
+
+        if(parties.length != 2) {
+            revert InvalidPartyCount();
+        }
+
+        if (parties[0] == address(0) || parties[1] == address(0)) {
+            revert FirstPartyZeroAddress();
+        }
+
+        for (uint256 i = 0; i < parties.length; i++) {
+            for (uint256 j = i + 1; j < parties.length; j++) {
+                if (parties[i] == parties[j]) {
+                    revert DuplicateParty();
+                }
+            }
+        }
+
+        AgreementData storage agreementData = agreements[contractId];
+        agreementData.templateId = templateId;
+        agreementData.globalValues = globalValues;
+        agreementData.parties = parties;
+        agreementData.transactionHash = blockhash(block.number - 1); // Store the transaction hash
+        agreementData.partyValues[parties[0]] = creatingPartyValues;
+        agreementData.partyValues[parties[1]] = counterPartyValues;
+
+        emit ContractCreated(contractId, templateId, parties);
+
+        // Add to the party's list of agreements
+        for (uint256 i = 0; i < parties.length; i++) {
+            agreementsForParty[parties[i]].push(contractId);
+        }
+    }
     
     function signContract(
         bytes32 contractId,
@@ -216,6 +280,14 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                 revert NotAParty();
             // There is a spare slot, assign the sender to this slot.
             agreementData.parties[firstOpenPartyIndex] = signer;
+        }
+
+        //verify if the contract is closed
+        if(agreementData.partyValues[signer].length > 0) {
+            //check that the submitted partyValues match
+            if (keccak256(abi.encode(agreementData.partyValues[signer])) != keccak256(abi.encode(partyValues))) {
+                revert ClosedAgreementPartyValueMismatch();
+            }
         }
         
         // Verify the signature

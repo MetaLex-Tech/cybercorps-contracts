@@ -103,7 +103,16 @@ contract IssuanceManager is BorgAuthACL {
         Endorsement memory newEndorsement = Endorsement(endorser, block.timestamp, signature, address(0), agreementId, address(0), "");
         certificate.addEndorsement(tokenId, newEndorsement);
     }
+
+    function voidCertificate(address certAddress, uint256 tokenId) external onlyAdmin {
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        certificate.voidCert(tokenId);
+    }
     
+    function setGlobalTransferable(address certAddress, bool transferable) external onlyAdmin {
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        certificate.setGlobalTransferable(transferable);
+    }
 
     function upgradeImplementation(address _newImplementation) external onlyAdmin {
         UpgradeableBeacon(CyberCertPrinterBeacon).upgradeTo(_newImplementation);

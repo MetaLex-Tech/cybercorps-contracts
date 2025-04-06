@@ -21,6 +21,7 @@ interface ICyberCertPrinter {
     function setRestrictionHook(uint256 _id, address _hookAddress) external;
     function setGlobalRestrictionHook(address hookAddress) external;
     function safeMint(uint256 tokenId, address to, CertificateDetails memory details) external returns (uint256);
+    function setGlobalTransferable(bool _transferable) external;
     function safeMintAndAssign(address to, uint256 tokenId, CertificateDetails memory details) external returns (uint256);
     function assignCert(address from, uint256 tokenId, address to, CertificateDetails memory details) external returns (uint256);
     function addIssuerSignature(uint256 tokenId, string calldata signatureURI) external;
@@ -28,6 +29,7 @@ interface ICyberCertPrinter {
     function endorseAndTransfer(uint256 tokenId, Endorsement memory newEndorsement, address from, address to) external;
     function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external;
     function burn(uint256 tokenId) external;
+    function voidCert(uint256 tokenId) external;
     function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory);
     function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (
         address endorser,
