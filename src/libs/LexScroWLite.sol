@@ -103,37 +103,62 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
        deal.status = EscrowStatus.PAID;
     }
 
-    function finalizeEscrow(bytes32 agreementId) internal {
+    function voidAndRefund(bytes32 agreementId) internal nonReentrant {
         Escrow storage deal = escrows[agreementId];
+        if(deal.status != EscrowStatus.PAID) revert EscrowNotPaid();
+        if(!ICyberDealRegistry(DEAL_REGISTRY).isVoided(agreementId)) revert DealNotVoided();
+        
+        // Refund buyer assets first
+        for(uint256 i = 0; i < deal.buyerAssets.length; i++) {
+            if(deal.buyerAssets[i].tokenType == TokenType.ERC20) {
+                IERC20(deal.buyerAssets[i].tokenAddress).transfer(deal.counterParty, deal.buyerAssets[i].amount);
+            }
+            else if(deal.buyerAssets[i].tokenType == TokenType.ERC721) {
+                IERC721(deal.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), deal.counterParty, deal.buyerAssets[i].tokenId);
+            }
+            else if(deal.buyerAssets[i].tokenType == TokenType.ERC1155) {
+                IERC1155(deal.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), deal.counterParty, deal.buyerAssets[i].tokenId, deal.buyerAssets[i].amount, "");
+            }
+        }
+
+        deal.status = EscrowStatus.VOIDED;
+    }
+
+    function finalizeEscrow(bytes32 agreementId) internal nonReentrant {
+        Escrow storage deal = escrows[agreementId];
+        
+        // Check all conditions before proceeding
         if(block.timestamp > deal.expiry) revert DealExpired();
         if(deal.status != EscrowStatus.PAID) revert EscrowNotPaid();
 
-       for(uint256 i = 0; i < deal.buyerAssets.length; i++) {
-        if(deal.buyerAssets[i].tokenType == TokenType.ERC20) {
-            IERC20(deal.buyerAssets[i].tokenAddress).transfer(ICyberCorp(CORP).companyPayable(), deal.buyerAssets[i].amount);
-        }
-        else if(deal.buyerAssets[i].tokenType == TokenType.ERC721) {
-            IERC721(deal.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), ICyberCorp(CORP).companyPayable(), deal.buyerAssets[i].tokenId);
-        }
-        else if(deal.buyerAssets[i].tokenType == TokenType.ERC1155) {
-            IERC1155(deal.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), ICyberCorp(CORP).companyPayable(), deal.buyerAssets[i].tokenId, deal.buyerAssets[i].amount, "");
-        }
-       }
+        // Update state before external calls
+        deal.status = EscrowStatus.FINALIZED;
 
-       //transfer tokens
-       for(uint256 i = 0; i < deal.corpAssets.length; i++) {
-        if(deal.corpAssets[i].tokenType == TokenType.ERC20) {
-            IERC20(deal.corpAssets[i].tokenAddress).transfer(deal.counterParty, deal.corpAssets[i].amount);
+        // Transfer buyer assets to company
+        for(uint256 i = 0; i < deal.buyerAssets.length; i++) {
+            if(deal.buyerAssets[i].tokenType == TokenType.ERC20) {
+                IERC20(deal.buyerAssets[i].tokenAddress).transfer(ICyberCorp(CORP).companyPayable(), deal.buyerAssets[i].amount);
+            }
+            else if(deal.buyerAssets[i].tokenType == TokenType.ERC721) {
+                IERC721(deal.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), ICyberCorp(CORP).companyPayable(), deal.buyerAssets[i].tokenId);
+            }
+            else if(deal.buyerAssets[i].tokenType == TokenType.ERC1155) {
+                IERC1155(deal.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), ICyberCorp(CORP).companyPayable(), deal.buyerAssets[i].tokenId, deal.buyerAssets[i].amount, "");
+            }
         }
-        else if(deal.corpAssets[i].tokenType == TokenType.ERC721) {
-            IERC721(deal.corpAssets[i].tokenAddress).safeTransferFrom(address(this), deal.counterParty, deal.corpAssets[i].tokenId);
-        }
-        else if(deal.corpAssets[i].tokenType == TokenType.ERC1155) {
-            IERC1155(deal.corpAssets[i].tokenAddress).safeTransferFrom(address(this), deal.counterParty, deal.corpAssets[i].tokenId, deal.corpAssets[i].amount, "");
-        }
-       }
 
-       deal.status = EscrowStatus.FINALIZED;   
+        // Transfer corp assets to counter party
+        for(uint256 i = 0; i < deal.corpAssets.length; i++) {
+            if(deal.corpAssets[i].tokenType == TokenType.ERC20) {
+                IERC20(deal.corpAssets[i].tokenAddress).transfer(deal.counterParty, deal.corpAssets[i].amount);
+            }
+            else if(deal.corpAssets[i].tokenType == TokenType.ERC721) {
+                IERC721(deal.corpAssets[i].tokenAddress).safeTransferFrom(address(this), deal.counterParty, deal.corpAssets[i].tokenId);
+            }
+            else if(deal.corpAssets[i].tokenType == TokenType.ERC1155) {
+                IERC1155(deal.corpAssets[i].tokenAddress).safeTransferFrom(address(this), deal.counterParty, deal.corpAssets[i].tokenId, deal.corpAssets[i].amount, "");
+            }
+        }
     }
 
     function conditionCheck(bytes32 agreementId) public view returns (bool) {
@@ -147,15 +172,6 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
                     return false;
         }
         return true;
-    }
-
-    function voidAndRefund(bytes32 agreementId) internal {
-        if(escrows[agreementId].status != EscrowStatus.PAID) revert EscrowNotPaid();
-        voidEscrow(agreementId);
-        for(uint256 i = 0; i < escrows[agreementId].corpAssets.length; i++) {
-            IERC20(escrows[agreementId].corpAssets[i].tokenAddress).transfer(escrows[agreementId].counterParty, escrows[agreementId].corpAssets[i].amount);
-        }
-        
     }
 
     function voidEscrow(bytes32 agreementId) internal {

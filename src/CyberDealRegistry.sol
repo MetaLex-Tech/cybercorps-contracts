@@ -683,8 +683,8 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         return agreements[contractId].finalized;
     }
 
-    function isVoided(bytes32 contractId) external view returns (bool) {
-        return ((voidedBy[contractId].length == agreements[contractId].numSignatures) || (voidedBy[contractId].length == 1 && expiry[contractId] < block.timestamp));
+    function isVoided(bytes32 contractId) public view returns (bool) {
+        return ((voidedBy[contractId].length == agreements[contractId].numSignatures && voidedBy[contractId].length > 0) || (voidedBy[contractId].length == 1 && expiry[contractId] < block.timestamp));
     }
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
