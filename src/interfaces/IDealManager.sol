@@ -77,7 +77,21 @@ interface IDealManager {
     ) external;
 
     function voidExpiredDeal(
-        bytes32 _agreementId
+        bytes32 _agreementId,
+        address signer,
+        bytes memory signature
+    ) external;
+
+    function revokeDeal(
+        bytes32 _agreementId,
+        address signer,
+        bytes memory signature
+    ) external;
+
+    function signToVoid(
+        bytes32 _agreementId,
+        address signer,
+        bytes memory signature
     ) external;
 
     function initialize(

@@ -37,6 +37,8 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     mapping(bytes32 => string[]) public counterPartyValues;
 
     error AgreementConditionsNotMet();
+    error DealNotPending();
+
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -213,7 +215,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         );
     }
 
-    function voidExpiredDeal(bytes32 agreementId, bytes memory signature) public {
+    function voidExpiredDeal(bytes32 agreementId, address signer, bytes memory signature) public {
         Escrow storage deal = escrows[agreementId];
         for(uint256 i = 0; i < deal.corpAssets.length; i++) {
             if(deal.corpAssets[i].tokenType == TokenType.ERC721) {
@@ -221,18 +223,22 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
             }
         }
         voidEscrow(agreementId);
-        ICyberDealRegistry(DEAL_REGISTRY).voidContractFor(agreementId, msg.sender, signature);
+        ICyberDealRegistry(DEAL_REGISTRY).voidContractFor(agreementId, signer, signature);
     }
 
-    function revokeDeal(bytes32 agreementId) public {
+    function revokeDeal(bytes32 agreementId, address signer, bytes memory signature) public {
         if(escrows[agreementId].status == EscrowStatus.PENDING) 
-            ICyberDealRegistry(DEAL_REGISTRY).voidContract(agreementId);
+            ICyberDealRegistry(DEAL_REGISTRY).voidContractFor(agreementId, signer, signature);
         else
             revert DealNotPending();
-        ICyberDealRegistry(DEAL_REGISTRY).voidContract(agreementId);
+        ICyberDealRegistry(DEAL_REGISTRY).voidContractFor(agreementId, signer, signature);
     }
 
-    function 
+    function signToVoid(bytes32 agreementId, address signer, bytes memory signature) public {
+        ICyberDealRegistry(DEAL_REGISTRY).voidContractFor(agreementId, signer, signature);
+        if(ICyberDealRegistry(DEAL_REGISTRY).isVoided(agreementId) && escrows[agreementId].status == EscrowStatus.PAID)
+            voidEscrow(agreementId);
+    }
 
     /*function addCondition(Logic _op, address _condition) public onlyOwner {
         _addCondition(_op, _condition);

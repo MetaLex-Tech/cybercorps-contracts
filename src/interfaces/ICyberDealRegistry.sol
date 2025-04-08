@@ -77,6 +77,13 @@ interface ICyberDealRegistry {
         bool fillUnallocated // to fill a 0 address or not
     ) external;
 
+    //function voidContractFor(bytes32 contractId, address party, bytes calldata signature) public {
+    function voidContractFor(
+        bytes32 contractId,
+        address party,
+        bytes calldata signature
+    ) external;
+
     function getParties(bytes32 contractId) external view returns (address[] memory);
 
     function hasSigned(bytes32 contractId, address signer) external view returns (bool);
@@ -119,6 +126,8 @@ interface ICyberDealRegistry {
         bytes32 contractId,
         address signer
     ) external view returns (string[] memory signerValues);
+
+    function isVoided(bytes32 contractId) external view returns (bool);
 
     function getAgreementsForParty(address party) external view returns (bytes32[] memory);
 

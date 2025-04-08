@@ -318,7 +318,7 @@ contract CyberCorpTest is Test {
         //wait for 1000000 blocks
         vm.warp(block.timestamp + 1000001);
         vm.startPrank(testAddress);
-        IDealManager(dealManagerAddr).voidExpiredDeal(contractId);
+        IDealManager(dealManagerAddr).voidExpiredDeal(contractId, testAddress, signature);
         vm.stopPrank();
     }
 

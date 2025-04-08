@@ -31,7 +31,8 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         mapping(address => uint256) signedAt; // Timestamp when each party signed (0 if unsigned)
         uint256 numSignatures; // Number of parties who have signed
         bytes32 transactionHash; // Hash of the transaction that created this contract
-        bool isVoided; // Whether the contract has been voided
+        address finalizer;
+        bool finalized;
     }
     
     // This data is what is signed by each party
@@ -55,6 +56,10 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     // A mapping connecting an address to all the agreements they are a party to
     mapping(address => bytes32[]) public agreementsForParty;
+
+    mapping(bytes32 => address[]) public voidedBy;
+
+    mapping(bytes32 => uint256) public expiry;
 
     event TemplateCreated(
         bytes32 indexed templateId,
@@ -91,6 +96,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     error TitleEmpty();
     error InvalidPartyCount();
     error ClosedAgreementPartyValueMismatch();
+    error ContractAlreadyVoided();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -323,6 +329,8 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         //make sure the party is a party to the contract
         if(!isParty(contractId, party)) revert NotAParty();
 
+        AgreementData storage agreementData = agreements[contractId];
+
         //verify the signature
         if (!_verifySignature(party, SignatureData({
             contractId: contractId,
@@ -330,12 +338,15 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             globalFields: templates[agreements[contractId].templateId].globalFields,
             partyFields: templates[agreements[contractId].templateId].partyFields,
             globalValues: agreements[contractId].globalValues,
-            partyValues: new string[](0)
+            partyValues: agreementData.partyValues[party]
         }), signature)) revert SignatureVerificationFailed();
+
+        for (uint256 i = 0; i < voidedBy[contractId].length; i++) {
+            if(voidedBy[contractId][i] == party) revert ContractAlreadyVoided();
+        }
+
+        voidedBy[contractId].push(party);
         
-        AgreementData storage agreementData = agreements[contractId];
-        if(agreementData.isVoided) revert ContractAlreadyVoided();
-        agreementData.isVoided = true;
     }
 
      function getParties(
@@ -638,6 +649,10 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             _i /= 10;
         }
         return string(bstr);
+    }
+
+    function isVoided(bytes32 contractId) external view returns (bool) {
+        return ((voidedBy[contractId].length == agreements[contractId].numSignatures) || (voidedBy[contractId].length == 1 && expiry[contractId] < block.timestamp));
     }
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}

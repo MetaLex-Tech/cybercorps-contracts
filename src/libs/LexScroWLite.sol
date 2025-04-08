@@ -141,6 +141,15 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
         return true;
     }
 
+    function voidAndRefund(bytes32 agreementId  ) public {
+        if(escrows[agreementId].status != EscrowStatus.PAID) revert EscrowNotPaid();
+        voidEscrow(agreementId);
+        for(uint256 i = 0; i < escrows[agreementId].corpAssets.length; i++) {
+            IERC20(escrows[agreementId].corpAssets[i].tokenAddress).transfer(escrows[agreementId].counterParty, escrows[agreementId].corpAssets[i].amount);
+        }
+        
+    }
+
     function voidEscrow(bytes32 agreementId) internal {
         escrows[agreementId].status = EscrowStatus.VOIDED;
     }
