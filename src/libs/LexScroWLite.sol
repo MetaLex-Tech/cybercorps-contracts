@@ -53,6 +53,12 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
     error EscrowNotPending();
     error EscrowNotPaid();
     error CounterPartyNotSet();
+    error DealNotFullySigned();
+    error DealNotFinalized();
+    error DealAlreadyFinalized();
+    error DealNotVoided();
+    error DealNotPaid();
+    error DealVoided();
 
     constructor() {
     }
@@ -62,17 +68,22 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
         DEAL_REGISTRY = ICyberDealRegistry(_dealRegistry);
     }
 
-    function createEscrow(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets, uint256 expiry) public {
+    function createEscrow(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets, uint256 expiry) internal {
         bytes memory blankSignature = abi.encodePacked(bytes32(0));
         escrows[agreementId] =  Escrow(agreementId, counterParty, corpAssets, buyerAssets, blankSignature, expiry, EscrowStatus.PENDING);
     }
 
-    function updateEscrow(bytes32 agreementId, address counterParty) public 
+    function updateEscrow(bytes32 agreementId, address counterParty, string memory buyerName) internal 
     {
         escrows[agreementId].counterParty = counterParty;
+
+        Escrow storage deal = escrows[agreementId];
+
+        Endorsement memory newEndorsement = Endorsement(address(this), block.timestamp, deal.signature, address(DEAL_REGISTRY), agreementId, deal.counterParty, buyerName);
+       ICyberCertPrinter(deal.corpAssets[0].tokenAddress).addEndorsement(deal.corpAssets[0].tokenId, newEndorsement);
     }
 
-    function handleCounterPartyPayment(bytes32 agreementId) public {
+    function handleCounterPartyPayment(bytes32 agreementId) internal {
         Escrow storage deal = escrows[agreementId];
         if(deal.status != EscrowStatus.PENDING) revert EscrowNotPending();
         if(deal.counterParty == address(0)) revert CounterPartyNotSet();
@@ -92,7 +103,7 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
        deal.status = EscrowStatus.PAID;
     }
 
-    function finalizeDeal(bytes32 agreementId, string memory buyerName) public {
+    function finalizeEscrow(bytes32 agreementId) internal {
         Escrow storage deal = escrows[agreementId];
         if(block.timestamp > deal.expiry) revert DealExpired();
         if(deal.status != EscrowStatus.PAID) revert EscrowNotPaid();
@@ -108,9 +119,6 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
             IERC1155(deal.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), ICyberCorp(CORP).companyPayable(), deal.buyerAssets[i].tokenId, deal.buyerAssets[i].amount, "");
         }
        }
-
-       Endorsement memory newEndorsement = Endorsement(address(this), block.timestamp, deal.signature, address(DEAL_REGISTRY), agreementId, deal.counterParty, buyerName);
-       ICyberCertPrinter(deal.corpAssets[0].tokenAddress).addEndorsement(deal.corpAssets[0].tokenId, newEndorsement);
 
        //transfer tokens
        for(uint256 i = 0; i < deal.corpAssets.length; i++) {
@@ -141,7 +149,7 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
         return true;
     }
 
-    function voidAndRefund(bytes32 agreementId  ) public {
+    function voidAndRefund(bytes32 agreementId) internal {
         if(escrows[agreementId].status != EscrowStatus.PAID) revert EscrowNotPaid();
         voidEscrow(agreementId);
         for(uint256 i = 0; i < escrows[agreementId].corpAssets.length; i++) {

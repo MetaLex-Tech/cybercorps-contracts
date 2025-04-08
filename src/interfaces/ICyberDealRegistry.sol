@@ -51,7 +51,8 @@ interface ICyberDealRegistry {
         bytes32 templateId,
         uint256 salt,
         string[] memory globalValues,
-        address[] memory parties
+        address[] memory parties,
+        address finalizer
     ) external returns (bytes32);
 
     function createClosedContract(
@@ -60,7 +61,8 @@ interface ICyberDealRegistry {
         string[] memory globalValues,
         address[] memory parties,
         string[] memory creatingPartyValues,
-        string[] memory counterPartyValues
+        string[] memory counterPartyValues,
+        address finalizer
     ) external returns (bytes32);
     
     function signContract(
@@ -83,6 +85,8 @@ interface ICyberDealRegistry {
         address party,
         bytes calldata signature
     ) external;
+
+    function finalizeContract(bytes32 contractId) external;
 
     function getParties(bytes32 contractId) external view returns (address[] memory);
 
@@ -134,4 +138,8 @@ interface ICyberDealRegistry {
     function getContractJson(bytes32 contractId) external view returns (string memory);
 
     function getContractTransactionHash(bytes32 contractId) external view returns (bytes32);
+
+    function isFinalized(bytes32 contractId) external view returns (bool);
+
+    function allPartiesFinalized(bytes32 contractId) external view returns (bool);
 }

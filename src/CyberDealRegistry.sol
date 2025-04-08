@@ -33,6 +33,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         bytes32 transactionHash; // Hash of the transaction that created this contract
         address finalizer;
         bool finalized;
+        bytes32 secretHash;
     }
     
     // This data is what is signed by each party
@@ -97,6 +98,9 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     error InvalidPartyCount();
     error ClosedAgreementPartyValueMismatch();
     error ContractAlreadyVoided();
+    error NotFinalizer();
+    error ContractAlreadyFinalized();
+    error ContractNotFullySigned();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -120,6 +124,11 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         SIGNATUREDATA_TYPEHASH = keccak256(
                 "SignatureData(bytes32 contractId,string legalContractUri,string[] globalFields,string[] partyFields,string[] globalValues,string[] partyValues)"
             );
+    }
+
+    modifier onlyFinalizer(bytes32 contractId) {
+        if(agreements[contractId].finalizer != msg.sender) revert NotFinalizer();
+        _;
     }
     
     function createTemplate(
@@ -157,7 +166,8 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         bytes32 templateId,
         uint256 salt,
         string[] memory globalValues,
-        address[] memory parties
+        address[] memory parties,
+        address finalizer
     ) external returns (bytes32 contractId) {
         //create hash from templateId, globalValues, and parties
         contractId = keccak256(abi.encode(templateId, salt, globalValues, parties));
@@ -191,6 +201,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         agreementData.globalValues = globalValues;
         agreementData.parties = parties;
         agreementData.transactionHash = blockhash(block.number - 1); // Store the transaction hash
+        agreementData.finalizer = finalizer;
 
         emit ContractCreated(contractId, templateId, parties);
 
@@ -206,7 +217,8 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         string[] memory globalValues,
         address[] memory parties,
         string[] memory creatingPartyValues,
-        string[] memory counterPartyValues
+        string[] memory counterPartyValues,
+        address finalizer
     ) external returns (bytes32 contractId) {
         //create hash from templateId, globalValues, and parties
         contractId = keccak256(abi.encode(templateId, salt, globalValues, parties));
@@ -250,6 +262,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         agreementData.transactionHash = blockhash(block.number - 1); // Store the transaction hash
         agreementData.partyValues[parties[0]] = creatingPartyValues;
         agreementData.partyValues[parties[1]] = counterPartyValues;
+        agreementData.finalizer = finalizer;
 
         emit ContractCreated(contractId, templateId, parties);
 
@@ -346,10 +359,17 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         }
 
         voidedBy[contractId].push(party);
-        
     }
 
-     function getParties(
+    function finalizeContract(bytes32 contractId) public onlyFinalizer(contractId) {
+        AgreementData storage agreementData = agreements[contractId];
+        if(agreementData.finalized) revert ContractAlreadyFinalized();
+        if(agreementData.parties.length == 0) revert ContractDoesNotExist();
+        if(!allPartiesSigned(contractId)) revert ContractNotFullySigned();
+        agreementData.finalized = true;
+    }
+
+    function getParties(
         bytes32 contractId
     ) external view returns (address[] memory) {
         return agreements[contractId].parties;
@@ -370,7 +390,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         return  agreements[contractId].signedAt[signer];
     }
 
-    function allPartiesSigned(bytes32 contractId) external view returns (bool) {
+    function allPartiesSigned(bytes32 contractId) public view returns (bool) {
         return
             agreements[contractId].numSignatures ==
             agreements[contractId].parties.length;
@@ -649,6 +669,10 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             _i /= 10;
         }
         return string(bstr);
+    }
+
+    function isFinalized(bytes32 contractId) external view returns (bool) {
+        return agreements[contractId].finalized;
     }
 
     function isVoided(bytes32 contractId) external view returns (bool) {

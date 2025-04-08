@@ -353,7 +353,8 @@ contract CyberCorpTest is Test {
             bytes32(uint256(1)),
             block.timestamp,
             globalValues,
-            parties
+            parties,
+            address(testAddress)
         );
 
         bytes32 contractId = keccak256(
