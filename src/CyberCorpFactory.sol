@@ -136,9 +136,9 @@ contract CyberCorpFactory {
         certPrinterAddress = address(certPrinter);
 
         // Create and sign deal
-        id = IDealManager(dealManagerAddress).proposeAndSignDeal(
+        uint256 certId;
+        (id, certId) = IDealManager(dealManagerAddress).proposeAndSignDeal(
             certPrinterAddress,
-            certPrinter.totalSupply(),
             stable,
             _paymentAmount,
             _templateId,
@@ -194,9 +194,9 @@ contract CyberCorpFactory {
         certPrinterAddress = address(certPrinter);
 
         // Create and sign deal
-        id = IDealManager(dealManagerAddress).proposeAndSignClosedDeal(
+        uint256 certId;
+        (id, certId) = IDealManager(dealManagerAddress).proposeAndSignClosedDeal(
             certPrinterAddress,
-            certPrinter.totalSupply(),
             stable,
             _paymentAmount,
             _templateId,

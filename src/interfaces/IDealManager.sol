@@ -6,7 +6,6 @@ import "./IIssuanceManager.sol";
 interface IDealManager {
     function proposeDeal(
         address _certPrinterAddress,
-        uint256 _certId,
         address _paymentToken,
         uint256 _paymentAmount,
         bytes32 _templateId,
@@ -18,7 +17,6 @@ interface IDealManager {
 
     function proposeAndSignDeal(
         address _certPrinterAddress,
-        uint256 _certId,
         address _paymentToken,
         uint256 _paymentAmount,
         bytes32 _templateId,
@@ -30,7 +28,7 @@ interface IDealManager {
         bytes memory signature,
         string[] memory paryValues,
         uint256 expiry
-    ) external returns (bytes32 agreementId);
+    ) external returns (bytes32 agreementId, uint256 certId);
 
     function signDealAndPay(
         address signer,
@@ -43,7 +41,6 @@ interface IDealManager {
 
     function proposeAndSignClosedDeal(
         address _certPrinterAddress,
-        uint256 _certId,
         address _paymentToken,
         uint256 _paymentAmount,
         bytes32 _templateId,
@@ -56,7 +53,7 @@ interface IDealManager {
         string[] memory partyValues,
         string[] memory counterPartyValues,
         uint256 expiry
-    ) external returns (bytes32 agreementId);
+    ) external returns (bytes32 agreementId, uint256 certId);
 
     function finalizeDeal(
         address signer,

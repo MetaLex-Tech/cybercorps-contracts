@@ -57,7 +57,6 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
 
     function proposeDeal(
         address _certPrinterAddress, 
-        uint256 _certId, 
         address _paymentToken, 
         uint256 _paymentAmount, 
         bytes32 _templateId, 
@@ -66,12 +65,12 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         address[] memory _parties, 
         CertificateDetails memory _certDetails,
         uint256 expiry
-    ) public onlyOwner returns (bytes32 agreementId){
-        IIssuanceManager(ISSUANCE_MANAGER).createCert(_certPrinterAddress, address(this), _certDetails);
+    ) public onlyOwner returns (bytes32 agreementId, uint256 certId){
+        certId = IIssuanceManager(ISSUANCE_MANAGER).createCert(_certPrinterAddress, address(this), _certDetails);
         agreementId = ICyberDealRegistry(DEAL_REGISTRY).createContract(_templateId, _salt, _globalValues, _parties, address(this));
 
         Token[] memory corpAssets = new Token[](1);
-        corpAssets[0] = Token(TokenType.ERC721, _certPrinterAddress, _certId, 1);
+        corpAssets[0] = Token(TokenType.ERC721, _certPrinterAddress, certId, 1);
 
         Token[] memory buyerAssets = new Token[](1);
         buyerAssets[0] = Token(TokenType.ERC20, _paymentToken, 0, _paymentAmount);
@@ -80,7 +79,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         emit DealProposed(
             agreementId,
             _certPrinterAddress,
-            _certId,
+            certId,
             _paymentToken,
             _paymentAmount,
             _templateId,
@@ -88,13 +87,10 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
             address(DEAL_REGISTRY),
             _parties
         );
-        
-        return agreementId;
     }
 
     function proposeClosedDeal(
         address _certPrinterAddress, 
-        uint256 _certId, 
         address _paymentToken, 
         uint256 _paymentAmount, 
         bytes32 _templateId, 
@@ -105,12 +101,12 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         string[] memory _creatingPartyValues,
         string[] memory _counterPartyValues,
         uint256 expiry
-    ) public onlyOwner returns (bytes32 agreementId){
-        IIssuanceManager(ISSUANCE_MANAGER).createCert(_certPrinterAddress, address(this), _certDetails);
+    ) public onlyOwner returns (bytes32 agreementId, uint256 certId){
+        certId = IIssuanceManager(ISSUANCE_MANAGER).createCert(_certPrinterAddress, address(this), _certDetails);
         agreementId = ICyberDealRegistry(DEAL_REGISTRY).createClosedContract(_templateId, _salt, _globalValues, _parties, _creatingPartyValues, _counterPartyValues, address(this));
 
         Token[] memory corpAssets = new Token[](1);
-        corpAssets[0] = Token(TokenType.ERC721, _certPrinterAddress, _certId, 1);
+        corpAssets[0] = Token(TokenType.ERC721, _certPrinterAddress, certId, 1);
 
         Token[] memory buyerAssets = new Token[](1);
         buyerAssets[0] = Token(TokenType.ERC20, _paymentToken, 0, _paymentAmount);
@@ -119,7 +115,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         emit DealProposed(
             agreementId,
             _certPrinterAddress,
-            _certId,
+            certId,
             _paymentToken,
             _paymentAmount,
             _templateId,
@@ -127,13 +123,10 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
             address(DEAL_REGISTRY),
             _parties
         );
-        
-        return agreementId;
     }
     
     function proposeAndSignDeal(
         address _certPrinterAddress, 
-        uint256 _certId, 
         address _paymentToken, 
         uint256 _paymentAmount, 
         bytes32 _templateId, 
@@ -145,13 +138,33 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         bytes memory signature,
         string[] memory partyValues, // These are the party values for the proposer
         uint256 expiry
-    ) public returns (bytes32 agreementId){
-        agreementId = proposeDeal(_certPrinterAddress, _certId, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails, expiry);
+    ) public returns (bytes32 agreementId, uint256 certId){
+        (agreementId, certId) = proposeDeal(_certPrinterAddress, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails, expiry);
         // NOTE: proposer is expected to be listed as a party in the parties array.
         escrows[agreementId].signature = signature;
         ICyberDealRegistry(DEAL_REGISTRY).signContractFor(proposer, agreementId, partyValues, signature, false);
-        
-        return agreementId;
+    }
+
+    function proposeAndSignClosedDeal(
+        address _certPrinterAddress, 
+        address _paymentToken, 
+        uint256 _paymentAmount, 
+        bytes32 _templateId, 
+        uint256 _salt,
+        string[] memory _globalValues, 
+        address[] memory _parties, 
+        CertificateDetails memory _certDetails,
+        address proposer,
+        bytes memory signature,
+        string[] memory partyValues,
+        string[] memory _counterPartyValues,
+        uint256 expiry
+    ) public returns (bytes32 agreementId, uint256 certId){
+        (agreementId, certId) = proposeClosedDeal(_certPrinterAddress, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails, partyValues, _counterPartyValues, expiry);
+        // NOTE: proposer is expected to be listed as a party in the parties array.
+        escrows[agreementId].signature = signature;
+        counterPartyValues[agreementId] = _counterPartyValues;
+        ICyberDealRegistry(DEAL_REGISTRY).signContractFor(proposer, agreementId, partyValues, signature, false);
     }
 
     function signDealAndPay(
@@ -169,29 +182,6 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         ICyberDealRegistry(DEAL_REGISTRY).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated);
         updateEscrow(agreementId, msg.sender, name);
         handleCounterPartyPayment(agreementId);
-    }
-
-    function proposeAndSignClosedDeal(
-        address _certPrinterAddress, 
-        uint256 _certId, 
-        address _paymentToken, 
-        uint256 _paymentAmount, 
-        bytes32 _templateId, 
-        uint256 _salt,
-        string[] memory _globalValues, 
-        address[] memory _parties, 
-        CertificateDetails memory _certDetails,
-        address proposer,
-        bytes memory signature,
-        string[] memory partyValues,
-        string[] memory _counterPartyValues,
-        uint256 expiry
-    ) public returns (bytes32 agreementId){
-        agreementId = proposeClosedDeal(_certPrinterAddress, _certId, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails, partyValues, _counterPartyValues, expiry);
-        // NOTE: proposer is expected to be listed as a party in the parties array.
-        escrows[agreementId].signature = signature;
-        counterPartyValues[agreementId] = _counterPartyValues;
-        ICyberDealRegistry(DEAL_REGISTRY).signContractFor(proposer, agreementId, partyValues, signature, false);
     }
 
     function signAndFinalizeDeal(address signer, bytes32 agreementId, string[] memory partyValues, bytes memory signature, bool _fillUnallocated, string memory name) public {
