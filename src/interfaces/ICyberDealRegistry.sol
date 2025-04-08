@@ -52,6 +52,7 @@ interface ICyberDealRegistry {
         uint256 salt,
         string[] memory globalValues,
         address[] memory parties,
+        bytes32 secretHash,
         address finalizer
     ) external returns (bytes32);
 
@@ -62,13 +63,17 @@ interface ICyberDealRegistry {
         address[] memory parties,
         string[] memory creatingPartyValues,
         string[] memory counterPartyValues,
+        bytes32 secretHash,
         address finalizer
+
+
     ) external returns (bytes32);
     
     function signContract(
         bytes32 contractId,
         string[] memory partyValues,
-        bool fillUnallocated
+        bool fillUnallocated,
+        string memory secret
     ) external;
 
     function signContractFor(
@@ -76,7 +81,8 @@ interface ICyberDealRegistry {
         bytes32 contractId,
         string[] memory partyValues,
         bytes calldata signature, 
-        bool fillUnallocated // to fill a 0 address or not
+        bool fillUnallocated, // to fill a 0 address or not
+        string memory secret 
     ) external;
 
     //function voidContractFor(bytes32 contractId, address party, bytes calldata signature) public {

@@ -27,17 +27,10 @@ interface IDealManager {
         address proposer,
         bytes memory signature,
         string[] memory paryValues,
+        bytes32 secretHash,
         uint256 expiry
     ) external returns (bytes32 agreementId, uint256 certId);
 
-    function signDealAndPay(
-        address signer,
-        bytes32 _agreementId,
-        string[] memory _partyValues,
-        bytes memory signature,
-        bool _fillUnallocated,
-        string memory name
-    ) external;
 
     function proposeAndSignClosedDeal(
         address _certPrinterAddress,
@@ -52,6 +45,7 @@ interface IDealManager {
         bytes memory signature,
         string[] memory partyValues,
         string[] memory counterPartyValues,
+        bytes32 secretHash,
         uint256 expiry
     ) external returns (bytes32 agreementId, uint256 certId);
 
@@ -61,8 +55,20 @@ interface IDealManager {
         string[] memory _partyValues,
         bytes memory signature,
         bool _fillUnallocated,
-        string memory buyerName
+        string memory buyerName,
+        string memory secret
     ) external;
+
+    function signDealAndPay(
+        address signer,
+        bytes32 agreementId,
+        bytes memory signature,
+        string[] memory partyValues,
+        bool _fillUnallocated,
+        string memory name,
+        string memory secret
+    ) external;
+    
 
     function signAndFinalizeDeal(
         address signer,
@@ -70,7 +76,8 @@ interface IDealManager {
         string[] memory _partyValues,
         bytes memory signature,
         bool _fillUnallocated,
-        string memory buyerName
+        string memory buyerName,
+        string memory secret
     ) external;
 
     function voidExpiredDeal(

@@ -62,6 +62,8 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     mapping(bytes32 => uint256) public expiry;
 
+    mapping(bytes32 => bytes32) public secrets;
+
     event TemplateCreated(
         bytes32 indexed templateId,
         string indexed title,
@@ -102,6 +104,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     error ContractAlreadyFinalized();
     error ContractNotFullySigned();
     error ContractExpired();
+    error InvalidSecret();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -168,6 +171,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         uint256 salt,
         string[] memory globalValues,
         address[] memory parties,
+        bytes32 secretHash,
         address finalizer
     ) external returns (bytes32 contractId) {
         //create hash from templateId, globalValues, and parties
@@ -203,7 +207,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         agreementData.parties = parties;
         agreementData.transactionHash = blockhash(block.number - 1); // Store the transaction hash
         agreementData.finalizer = finalizer;
-
+        secrets[contractId] = secretHash;
         emit ContractCreated(contractId, templateId, parties);
 
         // Add to the party's list of agreements
@@ -219,6 +223,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         address[] memory parties,
         string[] memory creatingPartyValues,
         string[] memory counterPartyValues,
+        bytes32 secretHash,
         address finalizer
     ) external returns (bytes32 contractId) {
         //create hash from templateId, globalValues, and parties
@@ -264,7 +269,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         agreementData.partyValues[parties[0]] = creatingPartyValues;
         agreementData.partyValues[parties[1]] = counterPartyValues;
         agreementData.finalizer = finalizer;
-
+        secrets[contractId] = secretHash;
         emit ContractCreated(contractId, templateId, parties);
 
         // Add to the party's list of agreements
@@ -277,9 +282,10 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         bytes32 contractId,
         string[] memory partyValues,
         bytes calldata signature,
-        bool fillUnallocated // to fill a 0 address or not
+        bool fillUnallocated, // to fill a 0 address or not
+        string memory secret
     ) external {
-        signContractFor(msg.sender, contractId, partyValues, signature, fillUnallocated);
+        signContractFor(msg.sender, contractId, partyValues, signature, fillUnallocated, secret);
     }
     
     function signContractFor(
@@ -287,7 +293,8 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         bytes32 contractId,
         string[] memory partyValues,
         bytes calldata signature, 
-        bool fillUnallocated // to fill a 0 address or not
+        bool fillUnallocated, // to fill a 0 address or not
+        string memory secret
     ) public {
         AgreementData storage agreementData = agreements[contractId];
         Template memory template = templates[agreementData.templateId];
@@ -298,6 +305,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         if (expiry[contractId] > 0 && expiry[contractId] < block.timestamp) revert ContractExpired();
 
         if (!isParty(contractId, signer)) {
+            if(secrets[contractId] > 0 && keccak256(abi.encode(secret)) != secrets[contractId]) revert InvalidSecret();
             // Not a named party, so check if there's an open slot
             uint256 firstOpenPartyIndex = getFirstOpenPartyIndex(contractId);
             if (firstOpenPartyIndex == 0 || !fillUnallocated)
