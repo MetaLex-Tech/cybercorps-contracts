@@ -101,6 +101,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     error NotFinalizer();
     error ContractAlreadyFinalized();
     error ContractNotFullySigned();
+    error ContractExpired();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -292,6 +293,9 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         Template memory template = templates[agreementData.templateId];
         if (agreementData.parties.length == 0) revert ContractDoesNotExist();
         if (agreementData.signedAt[signer] != 0) revert AlreadySigned();
+        if (isVoided(contractId)) revert ContractAlreadyVoided();
+        if (agreementData.finalized) revert ContractAlreadyFinalized();
+        if (expiry[contractId] > 0 && expiry[contractId] < block.timestamp) revert ContractExpired();
 
         if (!isParty(contractId, signer)) {
             // Not a named party, so check if there's an open slot
@@ -343,6 +347,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         if(!isParty(contractId, party)) revert NotAParty();
 
         AgreementData storage agreementData = agreements[contractId];
+        if (agreementData.finalized) revert ContractAlreadyFinalized();
 
         //verify the signature
         if (!_verifySignature(party, SignatureData({
@@ -366,6 +371,9 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         if(agreementData.finalized) revert ContractAlreadyFinalized();
         if(agreementData.parties.length == 0) revert ContractDoesNotExist();
         if(!allPartiesSigned(contractId)) revert ContractNotFullySigned();
+        if(isVoided(contractId)) revert ContractAlreadyVoided();
+        if(expiry[contractId] > 0 && expiry[contractId] < block.timestamp) revert ContractExpired();
+        
         agreementData.finalized = true;
     }
 
