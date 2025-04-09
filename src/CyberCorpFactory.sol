@@ -11,7 +11,7 @@ import "./interfaces/IDealManager.sol";
 import "./interfaces/ICyberCorpSingleFactory.sol";
 import "./interfaces/ICyberCertPrinter.sol";
 import "./interfaces/ICyberAgreementFactory.sol";
-import "./interfaces/ICyberDealRegistry.sol";
+import "./interfaces/ICyberAgreementRegistry.sol";
 import "./CyberCorpConstants.sol";
 
 contract CyberCorpFactory {
@@ -110,9 +110,10 @@ contract CyberCorpFactory {
         string[] memory _globalValues,
         address[] memory _parties,
         uint256 _paymentAmount,
-        string[] memory _partyValues,
+        string[][] memory _partyValues,
         bytes memory signature,
         CertificateDetails memory _details,
+        address[] memory conditions,
         bytes32 secretHash,
         uint256 expiry
     ) external returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress, address certPrinterAddress, bytes32 id) {
@@ -150,67 +151,7 @@ contract CyberCorpFactory {
             msg.sender,
             signature,
             _partyValues,
-            secretHash,
-            expiry
-        );
-
-    }
-
-    function deployCyberCorpAndCreateClosedOffer(
-        uint256 salt,
-        string memory companyName,
-        address _companyPayable,
-        string memory certName,
-        string memory certSymbol,
-        string memory certificateUri,
-        SecurityClass securityClass,
-        SecuritySeries securitySeries,
-        bytes32 _templateId,
-        string[] memory _globalValues,
-        address[] memory _parties,
-        uint256 _paymentAmount,
-        string[] memory _partyValues,
-        bytes memory signature,
-        CertificateDetails memory _details,
-        string[] memory _counterPartyValues,
-        bytes32 secretHash,
-        uint256 expiry
-    ) external returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress, address certPrinterAddress, bytes32 id) {
-
-        //create bytes32 salt
-        bytes32 corpSalt = keccak256(abi.encodePacked(salt));
-
-        (cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress) = deployCyberCorp(
-            corpSalt,
-            companyName,
-            "",
-            "",
-            "",
-            "",
-            _companyPayable,
-            msg.sender
-        );
-
-        //append companyname " " and then the certName
-        string memory certNameWithCompany = string.concat(companyName, " ", certName);
-        ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter("", certNameWithCompany, certSymbol, certificateUri, securityClass, securitySeries));
-        certPrinterAddress = address(certPrinter);
-
-        // Create and sign deal
-        uint256 certId;
-        (id, certId) = IDealManager(dealManagerAddress).proposeAndSignClosedDeal(
-            certPrinterAddress,
-            stable,
-            _paymentAmount,
-            _templateId,
-            salt,
-            _globalValues,
-            _parties,
-            _details,
-            msg.sender,
-            signature,
-            _partyValues,
-            _counterPartyValues,
+            conditions,
             secretHash,
             expiry
         );

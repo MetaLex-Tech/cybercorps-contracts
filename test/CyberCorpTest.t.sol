@@ -10,7 +10,7 @@ import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {CyberAgreementFactory} from "../src/CyberAgreementFactory.sol";
 import "../src/CyberCorpConstants.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CyberDealRegistry} from "../src/CyberDealRegistry.sol";
+import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -20,10 +20,11 @@ contract CyberCorpTest is Test {
     //     Counter public counter;
 
     CyberCorpFactory cyberCorpFactory;
-    CyberDealRegistry registry;
+    CyberAgreementRegistry registry;
     uint256 testPrivateKey;
     address testAddress;
     address counterPartyAddress = 0x1A762EfF397a3C519da3dF9FCDDdca7D1BD43B5e;
+    address[] conditions = new address[](0);
 
     function setUp() public {
         ///deploy cyberCertPrinterImplementation
@@ -54,8 +55,8 @@ contract CyberCorpTest is Test {
 
         address dealManagerFactory = address(new DealManagerFactory());
 
-        registry = new CyberDealRegistry();
-        CyberDealRegistry(registry).initialize(address(auth));
+        registry = new CyberAgreementRegistry();
+        CyberAgreementRegistry(registry).initialize(address(auth));
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
         string[] memory partyFields = new string[](1);
@@ -96,8 +97,9 @@ contract CyberCorpTest is Test {
         parties[0] = address(testAddress);
         parties[1] = address(0);
         uint256 _paymentAmount = 1000000000000000000;
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Party Value 1";
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
             abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
@@ -116,7 +118,7 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[0],
             testPrivateKey
         );
 
@@ -137,6 +139,7 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
+            conditions,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -163,8 +166,11 @@ contract CyberCorpTest is Test {
         parties[0] = address(testAddress);
         parties[1] = address(newPartyAddr);
         uint256 _paymentAmount = 1000000000000000000;
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Party Value 1";
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+        partyValues[1] = new string[](1);
+        partyValues[1][0] = "Counter Party Value 1";
 
         bytes32 contractId = keccak256(
             abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
@@ -175,6 +181,7 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
+
         bytes memory signature = _signAgreementTypedData(
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
@@ -183,12 +190,10 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[0],
             testPrivateKey
         );
 
-        string[] memory counterPartyValues = new string[](1);
-        counterPartyValues[0] = "Counter Party Value 1";
 
         vm.startPrank(testAddress);
          (
@@ -198,7 +203,7 @@ contract CyberCorpTest is Test {
             address dealManagerAddr,
             address cyberCertPrinterAddr,
             bytes32 id
-        ) = cyberCorpFactory.deployCyberCorpAndCreateClosedOffer(
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
             testAddress,
@@ -214,7 +219,7 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
-            counterPartyValues,
+            conditions,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -238,14 +243,14 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            counterPartyValues,
+            partyValues[1],
             newPartyPk
         );
         
         dealManager.signAndFinalizeDeal(
             newPartyAddr,
             contractId,
-            counterPartyValues,
+            partyValues[1],
             newPartySignature,
             true,
             "Counter Party Name",
@@ -273,8 +278,9 @@ contract CyberCorpTest is Test {
         parties[0] = address(testAddress);
         parties[1] = address(0);
         uint256 _paymentAmount = 1000000000000000000;
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Party Value 1";
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
             abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
@@ -293,7 +299,7 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[0],
             testPrivateKey
         );
 
@@ -314,6 +320,7 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
+            conditions,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -330,7 +337,7 @@ contract CyberCorpTest is Test {
         vm.startPrank(testAddress);
         BorgAuth auth = new BorgAuth();
         auth.initialize();
-        CyberDealRegistry registry = new CyberDealRegistry();
+        CyberAgreementRegistry registry = new CyberAgreementRegistry();
         registry.initialize(address(auth));
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -338,8 +345,9 @@ contract CyberCorpTest is Test {
         partyFields[0] = "Party Field 1";
         string[] memory globalValues = new string[](1);
         globalValues[0] = "Global Value 1";
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Party Value 1";
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
 
         string[] memory partyValuesB = new string[](1);
         partyValuesB[0] = "Party Value B";
@@ -358,8 +366,10 @@ contract CyberCorpTest is Test {
             block.timestamp,
             globalValues,
             parties,
+            partyValues,
             bytes32(0),
-            address(testAddress)
+            address(testAddress),
+            block.timestamp + 1000000
         );
 
         bytes32 contractId = keccak256(
@@ -374,14 +384,14 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[0],
             testPrivateKey
         );
 
         registry.signContractFor(
             testAddress,
             id,
-            partyValues,
+            partyValues[0],
             signature,
             false,
             ""
@@ -435,8 +445,9 @@ contract CyberCorpTest is Test {
         parties[0] = testAddress;
         parties[1] = address(0);
         uint256 _paymentAmount = 1000000000000000000;
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Party Value 1";
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
             abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
@@ -455,7 +466,7 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[0],
             testPrivateKey
         );
 
@@ -482,6 +493,7 @@ contract CyberCorpTest is Test {
                 partyValues,
                 proposerSignature,
                 _details,
+                conditions,
                 bytes32(0),
                 block.timestamp + 1000000
             );
@@ -544,8 +556,9 @@ contract CyberCorpTest is Test {
         parties[0] = testAddress;
         parties[1] = address(0);
         uint256 _paymentAmount = 1000000000000000000;
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Party Value 1";
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
 
         // Create secret hash from "passphrase"
         bytes32 secretHash = keccak256(abi.encodePacked("passphrase"));
@@ -567,7 +580,7 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[0],
             testPrivateKey
         );
 
@@ -594,6 +607,7 @@ contract CyberCorpTest is Test {
                 partyValues,
                 proposerSignature,
                 _details,
+                conditions,
                 secretHash,
                 block.timestamp + 1000000
             );
@@ -659,8 +673,9 @@ contract CyberCorpTest is Test {
         parties[0] = testAddress;
         parties[1] = address(0);
         uint256 _paymentAmount = 1000000000000000000;
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Party Value 1";
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
 
         // Create secret hash from "passphrase"
         bytes32 secretHash = keccak256(abi.encode("passphrase"));
@@ -682,7 +697,7 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[0],
             testPrivateKey
         );
 
@@ -709,6 +724,7 @@ contract CyberCorpTest is Test {
                 partyValues,
                 proposerSignature,
                 _details,
+                conditions,
                 secretHash,
                 block.timestamp + 1000000
             );
@@ -828,8 +844,9 @@ contract CyberCorpTest is Test {
         parties[0] = testAddress;
         parties[1] = address(0);
         uint256 _paymentAmount = 1000000000000000000;
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Party Value 1";
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
             abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
@@ -843,7 +860,7 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[0],
             testPrivateKey
         );
 
@@ -870,6 +887,7 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
+            conditions,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -901,8 +919,9 @@ contract CyberCorpTest is Test {
         parties[0] = testAddress;
         parties[1] = address(0);
         uint256 _paymentAmount = 1000000000000000000;
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Party Value 1";
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
             abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
@@ -916,7 +935,7 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[0],
             testPrivateKey
         );
 
@@ -943,6 +962,7 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
+            conditions,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1007,8 +1027,9 @@ contract CyberCorpTest is Test {
         parties[0] = testAddress;
         parties[1] = address(0);
         uint256 _paymentAmount = 1000000000000000000;
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Party Value 1";
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
             abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
@@ -1022,7 +1043,7 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[0],
             testPrivateKey
         );
 
@@ -1049,6 +1070,7 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
+            conditions,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1080,8 +1102,10 @@ contract CyberCorpTest is Test {
         parties[0] = testAddress;
         parties[1] = address(0);
         uint256 _paymentAmount = 1000000000000000000;
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Party Value 1";
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+        
 
         bytes32 contractId = keccak256(
             abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
@@ -1095,7 +1119,7 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[0],
             testPrivateKey
         );
 
@@ -1122,6 +1146,7 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
+            conditions,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1156,8 +1181,9 @@ contract CyberCorpTest is Test {
         parties[0] = testAddress;
         parties[1] = address(0);
         uint256 _paymentAmount = 1000000000000000000;
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Party Value 1";
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
             abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
@@ -1171,7 +1197,7 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[0],
             testPrivateKey
         );
 
@@ -1198,6 +1224,7 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
+            conditions,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1207,7 +1234,7 @@ contract CyberCorpTest is Test {
         IDealManager(dealManagerAddr).finalizeDeal(
             testAddress,
             id,
-            partyValues,
+            partyValues[0],
             signature,
             false,
             "John Doe",
@@ -1238,8 +1265,9 @@ contract CyberCorpTest is Test {
         parties[0] = testAddress;
         parties[1] = address(0);
         uint256 _paymentAmount = 1000000000000000000;
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Party Value 1";
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
             abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
@@ -1253,7 +1281,7 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[0],
             testPrivateKey
         );
 
@@ -1280,6 +1308,7 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
+            conditions,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1346,8 +1375,9 @@ contract CyberCorpTest is Test {
         parties[0] = testAddress;
         parties[1] = address(0);
         uint256 _paymentAmount = 1000000000000000000;
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Party Value 1";
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
             abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
@@ -1361,7 +1391,7 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[0],
             testPrivateKey
         );
 
@@ -1388,6 +1418,7 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
+            conditions,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1435,7 +1466,7 @@ contract CyberCorpTest is Test {
         IDealManager(dealManagerAddr).finalizeDeal(
             testAddress,
             id,
-            partyValues,
+            partyValues[0],
             signature,
             false,
             "",
@@ -1466,8 +1497,9 @@ contract CyberCorpTest is Test {
         parties[0] = testAddress;
         parties[1] = address(0);
         uint256 _paymentAmount = 1000000000000000000;
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Party Value 1";
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
             abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
@@ -1481,7 +1513,7 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[0],
             testPrivateKey
         );
 
@@ -1508,6 +1540,7 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
+            conditions,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1578,8 +1611,9 @@ contract CyberCorpTest is Test {
         parties[0] = testAddress;
         parties[1] = address(0);
         uint256 _paymentAmount = 1000000000000000000;
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Party Value 1";
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
 
         bytes32 secretHash = keccak256(abi.encodePacked("passphrase"));
 
@@ -1595,7 +1629,7 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[0],
             testPrivateKey
         );
 
@@ -1622,6 +1656,7 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
+            conditions,
             secretHash,
             block.timestamp + 1000000
         );
@@ -1691,8 +1726,9 @@ contract CyberCorpTest is Test {
         parties[0] = testAddress;
         parties[1] = address(0);
         uint256 _paymentAmount = 1000000000000000000;
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Party Value 1";
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
             abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
@@ -1706,7 +1742,7 @@ contract CyberCorpTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[0],
             testPrivateKey
         );
 
@@ -1733,6 +1769,7 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
+            conditions,
             bytes32(0),
             block.timestamp + 1000000
         );

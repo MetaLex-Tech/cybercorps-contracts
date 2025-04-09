@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "../interfaces/ICyberCorp.sol";
-import "../interfaces/ICyberDealRegistry.sol";
+import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICondition.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -14,7 +14,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 abstract contract LexScroWLite is Initializable, ReentrancyGuard {
 
     address public CORP;
-    ICyberDealRegistry public DEAL_REGISTRY;
+    ICyberAgreementRegistry public DEAL_REGISTRY;
 
     enum TokenType {
         ERC20,
@@ -60,12 +60,16 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
     error DealNotPaid();
     error DealVoided();
 
+    event DealVoidedAt(bytes32 agreementId, address counterParty, uint256 timestamp);
+    event DealPaidAt(bytes32 agreementId, address counterParty, uint256 timestamp);
+    event DealFinalizedAt(bytes32 agreementId, address counterParty, uint256 timestamp);
+
     constructor() {
     }
 
     function __LexScroWLite_init(address _corp, address _dealRegistry) internal onlyInitializing  {
         CORP = _corp;
-        DEAL_REGISTRY = ICyberDealRegistry(_dealRegistry);
+        DEAL_REGISTRY = ICyberAgreementRegistry(_dealRegistry);
     }
 
     function createEscrow(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets, uint256 expiry) internal {
@@ -106,7 +110,7 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
     function voidAndRefund(bytes32 agreementId) internal nonReentrant {
         Escrow storage deal = escrows[agreementId];
         if(deal.status != EscrowStatus.PAID) revert EscrowNotPaid();
-        if(!ICyberDealRegistry(DEAL_REGISTRY).isVoided(agreementId)) revert DealNotVoided();
+        if(!ICyberAgreementRegistry(DEAL_REGISTRY).isVoided(agreementId)) revert DealNotVoided();
         
         // Refund buyer assets first
         for(uint256 i = 0; i < deal.buyerAssets.length; i++) {
@@ -121,7 +125,7 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
             }
         }
 
-        deal.status = EscrowStatus.VOIDED;
+        voidEscrow(agreementId);
     }
 
     function finalizeEscrow(bytes32 agreementId) internal nonReentrant {
@@ -176,6 +180,7 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
 
     function voidEscrow(bytes32 agreementId) internal {
         escrows[agreementId].status = EscrowStatus.VOIDED;
+        emit DealVoidedAt(agreementId, escrows[agreementId].counterParty, block.timestamp);
     }
 
     function getEscrowDetails(bytes32 agreementId) public view returns (Escrow memory) {
