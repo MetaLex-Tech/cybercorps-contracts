@@ -70,19 +70,9 @@ $ cast --help
 ```mermaid
 graph TD
     subgraph proposer
-        subgraph nonClosed["Non-closed (counter-party values are not set)"]
-            deployCyberCorpAndCreateOffer(["deployCyberCorpAndCreateOffer"])
-            proposeDeal[proposeDeal<br><br>status = PENDING]
-        end
+        deployCyberCorpAndCreateOffer(["deployCyberCorpAndCreateOffer<br><br>status = PENDING"])
         
-        subgraph closed["Closed (counter-party values are set)"]
-            deployCyberCorpAndCreateClosedOffer(["deployCyberCorpAndCreateClosedOffer(counterPartyValues)"])
-            proposeClosedDeal["proposeClosedDeal(counterPartyValues)<br><br>status = PENDING"]
-        end
-        
-        deployCyberCorp
-        
-        signContractFor["signContractFor(proposer)"]
+        deployCyberCorpAndCreateClosedOffer(["deployCyberCorpAndCreateClosedOffer(counterPartyValues)<br><br>status = PENDING"])                
     end
     
     subgraph counterParty
@@ -96,19 +86,11 @@ graph TD
         signToVoid["signToVoid<br><br>status = VOIDED"]
     end
     
-    deployCyberCorpAndCreateOffer([deployCyberCorpAndCreateOffer])
-        --> deployCyberCorp 
-        --> proposeDeal 
-        --> signContractFor
+    deployCyberCorpAndCreateOffer --> signAndFinalizeDeal
+    deployCyberCorpAndCreateClosedOffer --> signDealAndPay
     
-    deployCyberCorpAndCreateClosedOffer
-        --> deployCyberCorp
-        --> proposeClosedDeal 
-        --> signContractFor
-        
-    signContractFor --> signAndFinalizeDeal
-    signContractFor --> signDealAndPay
-    signContractFor --> voidExpiredDeal
+    deployCyberCorpAndCreateOffer --> voidExpiredDeal
+    deployCyberCorpAndCreateClosedOffer --> voidExpiredDeal
     
     signDealAndPay --> finalizeDeal
     signDealAndPay --> signToVoid
