@@ -214,7 +214,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
             voidAndRefund(agreementId);
     }
 
-    function addCondition(bytes32 agreementId, address condition) public {
+    function addCondition(bytes32 agreementId, address condition) public onlyOwner {
         //make sure the contract is still pending
         if(escrows[agreementId].status != EscrowStatus.PENDING) revert DealNotPending();
         //make sure the condition is not already in the list
@@ -224,7 +224,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         conditionsByEscrow[agreementId].push(ICondition(condition));
     }
 
-    function removeConditionAt(bytes32 agreementId, uint256 index) public {
+    function removeConditionAt(bytes32 agreementId, uint256 index) public onlyOwner {
         //make sure the contract is still pending
         if(escrows[agreementId].status != EscrowStatus.PENDING) revert DealNotPending();
         //make sure the condition is in the list
@@ -236,7 +236,6 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         }
         conditionsByEscrow[agreementId].pop();
     }
-
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
 }
