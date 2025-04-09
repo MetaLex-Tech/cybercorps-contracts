@@ -71,13 +71,29 @@ $ cast --help
 graph TD
     start([start])
     
-    start -->|"proposer.<br>deployCyberCorpAndCreateOffer()"| pending[PENDING]
+    start -->|"proposer.<br>deployCyberCorpAndCreateOffer()"| pending[agreement.isFinalized = FALSE<br>agreement.isVoided = FALSE<br>escrow = PENDING]
     start -->|"proposer.<br>deployCyberCorpAndCreateClosedOffer()"| pending
     
-    pending -->|"counterParty.<br>signDealAndPay()"| paid[PAID]
-    pending -->|"counterParty.<br>signAndFinalizeDeal()"| finalized[FINALIZED]
-    pending -->|"anyone.<br>voidExpiredDeal()"| voided[VOIDED]
+    pending -->|"counterParty.<br>signAndFinalizeDeal()"| signAndFinalizeDealCheckFinalizer{has finalizer?}
+    pending -->|"counterParty.<br>signDealAndPay()"| signDealAndPayCheckFinalizer{has finalizer?}
+    pending -->|"anyone.<br>voidExpiredDeal()"| expiryCheck{expired?}
     
-    paid -->|"anyone.<br>finalizeDeal()"| finalized
-    paid -->|"anyone.<br>signToVoid()"| voided
+    expiryCheck -->|yes| voided[agreement.isFinalized = FALSE<br>agreement.isVoided = TRUE<br>escrow = VOIDED]
+    %% TODO Is that right?
+    expiryCheck -->|no| onlyEscrowVoided[agreement.isFinalized = FALSE<br>agreement.isVoided = FALSE<br>escrow = VOIDED]
+    
+    signDealAndPayCheckFinalizer -->|yes| paidWithFinalizer[agreement.isFinalized = FALSE<br>agreement.isVoided = FALSE<br>escrow = PAID]
+    signDealAndPayCheckFinalizer -->|no| paidWithoutFinalizer[agreement.isFinalized = TRUE<br>agreement.isVoided = FALSE<br>escrow = PAID]
+    
+    signAndFinalizeDealCheckFinalizer -->|yes| finalized[agreement.isFinalized = TRUE<br>agreement.isVoided = FALSE<br>escrow = FINALIZED]
+    %% TODO Is that right?
+    signAndFinalizeDealCheckFinalizer -->|no| revertNotFinalizer
+
+    %% TODO Is that right?    
+    paidWithoutFinalizer -->|"anyone.<br>finalizeDeal()"| revertNotFinalizer
+    
+    paidWithFinalizer -->|"anyone.<br>finalizeDeal()"| finalized
+    paidWithFinalizer -->|"anyone.<br>signToVoid()"| voided
+    
+    %% TODO When does revokeDeal happen?
 ```
