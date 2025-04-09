@@ -69,31 +69,15 @@ $ cast --help
 
 ```mermaid
 graph TD
-    subgraph proposer
-        deployCyberCorpAndCreateOffer(["deployCyberCorpAndCreateOffer<br><br>status = PENDING"])
-        
-        deployCyberCorpAndCreateClosedOffer(["deployCyberCorpAndCreateClosedOffer(counterPartyValues)<br><br>status = PENDING"])                
-    end
+    start([start])
     
-    subgraph counterParty
-        signAndFinalizeDeal["signAndFinalizeDeal(counterPartyValues)<br><br>status = FINALIZED"]
-        signDealAndPay["signDealAndPay<br><br>status = PAID"]
-    end
+    start -->|"proposer.<br>deployCyberCorpAndCreateOffer()"| pending[PENDING]
+    start -->|"proposer.<br>deployCyberCorpAndCreateClosedOffer()"| pending
     
-    subgraph anyone
-        finalizeDeal["finalizeDeal<br><br>status = FINALIZED"]
-        voidExpiredDeal["voidExpiredDeal<br><br>status = VOIDED"]
-        signToVoid["signToVoid<br><br>status = VOIDED"]
-    end
+    pending -->|"counterParty.<br>signDealAndPay()"| paid[PAID]
+    pending -->|"counterParty.<br>signAndFinalizeDeal()"| finalized[FINALIZED]
+    pending -->|"anyone.<br>voidExpiredDeal()"| voided[VOIDED]
     
-    deployCyberCorpAndCreateOffer --> signAndFinalizeDeal
-    deployCyberCorpAndCreateClosedOffer --> signDealAndPay
-    
-    deployCyberCorpAndCreateOffer --> voidExpiredDeal
-    deployCyberCorpAndCreateClosedOffer --> voidExpiredDeal
-    
-    signDealAndPay --> finalizeDeal
-    signDealAndPay --> signToVoid
-    
-    signAndFinalizeDeal --> voidExpiredDealRevert[\"voidExpiredDeal<br><br>revert!"\]
+    paid -->|"anyone.<br>finalizeDeal()"| finalized
+    paid -->|"anyone.<br>signToVoid()"| voided
 ```
