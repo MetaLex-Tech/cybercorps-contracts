@@ -32,6 +32,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         uint256 numSignatures; // Number of parties who have signed
         address finalizer;
         bool finalized;
+        bool voided;
         bytes32 secretHash;
         uint256 expiry;
     }
@@ -77,6 +78,12 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     event AgreementSigned(
         bytes32 indexed contractId,
         address indexed party,
+        uint256 timestamp
+    );
+
+    event ContractVoided(
+        bytes32 indexed contractId,
+        address[] voidSigners,
         uint256 timestamp
     );
 
@@ -326,6 +333,26 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         }
 
         voidRequestedBy[contractId].push(party);
+
+        //void the contract if the number of void requests is equal to the number of parties or if the expiry is in the past
+        if(voidRequestedBy[contractId].length == agreements[contractId].parties.length && voidRequestedBy[contractId].length > 0)
+        {
+            agreementData.voided = true;
+        }
+        else if (voidRequestedBy[contractId].length == 1 && agreements[contractId].expiry < block.timestamp)
+        {
+            agreementData.voided = true;
+        }
+
+        for (uint256 i = 0; i < agreementData.parties.length; i++) {
+            if(agreementData.parties[0] == party && agreementData.numSignatures == 1)
+            {
+                agreementData.voided = true;
+            }
+        }
+
+        if(agreementData.voided)
+            emit ContractVoided(contractId, voidRequestedBy[contractId], block.timestamp);
     }
 
     function finalizeContract(bytes32 contractId) public onlyFinalizer(contractId) {
@@ -644,7 +671,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     }
 
     function isVoided(bytes32 contractId) public view returns (bool) {
-        return ((voidRequestedBy[contractId].length == agreements[contractId].numSignatures && voidRequestedBy[contractId].length > 0) || (voidRequestedBy[contractId].length == 1 && agreements[contractId].expiry < block.timestamp));
+        return agreements[contractId].voided;
     }
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
