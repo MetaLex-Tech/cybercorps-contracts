@@ -87,6 +87,12 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         uint256 timestamp
     );
 
+    event ContractFinalized(
+        bytes32 indexed contractId,
+        address finalizer,
+        uint256 timestamp
+    );
+
     event ContractFullySigned(bytes32 indexed contractId, uint256 timestamp);
 
     error TemplateAlreadyExists();
@@ -304,7 +310,10 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         if (totalSignatures == agreementData.parties.length) {
             if(agreementData.finalizer == address(0))
+            {
                 agreementData.finalized = true;
+                emit ContractFinalized(contractId, msg.sender, timestamp);
+            }
 
             emit ContractFullySigned(contractId, timestamp);
         }
@@ -364,6 +373,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         if(agreementData.expiry > 0 && agreementData.expiry < block.timestamp) revert ContractExpired();
         
         agreementData.finalized = true;
+        emit ContractFinalized(contractId, msg.sender, block.timestamp);
     }
 
     function getParties(
