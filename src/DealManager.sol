@@ -146,7 +146,8 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         if(counterPartyCheck.length > 0) {
             if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert CounterPartyValueMismatch();
         }
-
+        else
+            counterPartyValues[agreementId] = partyValues;
         ICyberAgreementRegistry(DEAL_REGISTRY).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
         updateEscrow(agreementId, msg.sender, name);
         handleCounterPartyPayment(agreementId);
@@ -161,7 +162,9 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         if(counterPartyCheck.length > 0) {
             if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert CounterPartyValueMismatch();
         }
-        
+        else
+            counterPartyValues[agreementId] = partyValues;
+            
         if(!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
         
         if(!ICyberAgreementRegistry(DEAL_REGISTRY).hasSigned(agreementId, signer))

@@ -35,6 +35,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         bool voided;
         bytes32 secretHash;
         uint256 expiry;
+        address[] voidRequestedBy;
     }
     
     // This data is what is signed by each party
@@ -58,8 +59,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     // A mapping connecting an address to all the agreements they are a party to
     mapping(address => bytes32[]) public agreementsForParty;
-
-    mapping(bytes32 => address[]) public voidRequestedBy;
 
     event TemplateCreated(
         bytes32 indexed templateId,
@@ -141,7 +140,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     }
 
     modifier onlyFinalizer(bytes32 contractId) {
-        if(agreements[contractId].finalizer != msg.sender) revert NotFinalizer();
+        if(agreements[contractId].finalizer != msg.sender && agreements[contractId].finalizer != address(0)) revert NotFinalizer();
         _;
     }
     
@@ -275,6 +274,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                 revert NotAParty();
             // There is a spare slot, assign the sender to this slot.
             agreementData.parties[firstOpenPartyIndex] = signer;
+            agreementsForParty[agreementData.parties[firstOpenPartyIndex]].push(contractId);
         }
 
         //verify if the contract is closed
@@ -337,31 +337,28 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             partyValues: agreementData.partyValues[party]
         }), signature)) revert SignatureVerificationFailed();
 
-        for (uint256 i = 0; i < voidRequestedBy[contractId].length; i++) {
-            if(voidRequestedBy[contractId][i] == party) revert ContractAlreadyVoided();
+        for (uint256 i = 0; i < agreementData.voidRequestedBy.length; i++) {
+            if(agreementData.voidRequestedBy[i] == party) revert ContractAlreadyVoided();
         }
 
-        voidRequestedBy[contractId].push(party);
+        agreementData.voidRequestedBy.push(party);
 
-        //void the contract if the number of void requests is equal to the number of parties or if the expiry is in the past
-        if(voidRequestedBy[contractId].length == agreements[contractId].parties.length && voidRequestedBy[contractId].length > 0)
+
+        if(agreementData.expiry < block.timestamp)
         {
             agreementData.voided = true;
         }
-        else if (voidRequestedBy[contractId].length == 1 && agreements[contractId].expiry < block.timestamp)
+        else if(agreementData.voidRequestedBy.length == agreementData.parties.length && agreementData.voidRequestedBy.length > 0)
         {
             agreementData.voided = true;
         }
-
-        for (uint256 i = 0; i < agreementData.parties.length; i++) {
-            if(agreementData.parties[0] == party && agreementData.numSignatures == 1)
-            {
-                agreementData.voided = true;
-            }
+        else if(agreementData.parties[0] == party && agreementData.numSignatures == 1)
+        {
+            agreementData.voided = true;
         }
 
         if(agreementData.voided)
-            emit ContractVoided(contractId, voidRequestedBy[contractId], block.timestamp);
+            emit ContractVoided(contractId, agreementData.voidRequestedBy, block.timestamp);
     }
 
     function finalizeContract(bytes32 contractId) public onlyFinalizer(contractId) {
@@ -517,6 +514,10 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         return 0;
     }
 
+    function getVoidRequestedBy(bytes32 contractId) external view returns (address[] memory) {
+        return agreements[contractId].voidRequestedBy;
+    }
+
     function getContractJson(bytes32 contractId) external view returns (string memory) {
         AgreementData storage agreementData = agreements[contractId];
         Template storage template = templates[agreementData.templateId];
@@ -580,7 +581,19 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         // Add metadata
         json = string.concat(json, '}, "numSignatures": ', _uint256ToString(agreementData.numSignatures));
         json = string.concat(json, ', "isComplete": ', agreementData.numSignatures == agreementData.parties.length ? 'true' : 'false');
-        json = string.concat(json, '}');
+        // Add voided status
+        json = string.concat(json, ', "voided": ', agreementData.voided ? 'true' : 'false');
+        // loop and add voidRequestedBy 
+        json = string.concat(json, ', "voidRequestedBy": [');
+        for (uint256 i = 0; i < agreementData.voidRequestedBy.length; i++) {
+            json = string.concat(json, _addressToString(agreementData.voidRequestedBy[i]));
+            if (i + 1 < agreementData.voidRequestedBy.length) {
+                json = string.concat(json, ',');
+            }
+        }
+        // add finalized status
+        json = string.concat(json, ', "finalized": ', agreementData.finalized ? 'true' : 'false');
+        json = string.concat(json, ']}');
         return json;
     }
     
