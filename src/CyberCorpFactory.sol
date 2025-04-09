@@ -11,7 +11,7 @@ import "./interfaces/IDealManager.sol";
 import "./interfaces/ICyberCorpSingleFactory.sol";
 import "./interfaces/ICyberCertPrinter.sol";
 import "./interfaces/ICyberAgreementFactory.sol";
-import "./interfaces/ICyberDealRegistry.sol";
+import "./interfaces/ICyberAgreementRegistry.sol";
 import "./CyberCorpConstants.sol";
 
 contract CyberCorpFactory {

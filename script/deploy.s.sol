@@ -10,7 +10,7 @@ import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {CyberAgreementFactory} from "../src/CyberAgreementFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CyberDealRegistry} from "../src/CyberDealRegistry.sol";
+import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -30,18 +30,18 @@ contract BaseScript is Script {
         cyberCertPrinter.initialize("", "", "", "ipfs.io/ipfs/[cid]", address(0), SecurityClass.SAFE, SecuritySeries.SeriesPreSeed);
         address cyberCorpSingleFactory = address(new CyberCorpSingleFactory());
         address dealManagerFactory = address(new DealManagerFactory());
-        address registry = address(new CyberDealRegistry());
-        CyberDealRegistry(registry).initialize(address(auth));
+        address registry = address(new CyberAgreementRegistry());
+        CyberAgreementRegistry(registry).initialize(address(auth));
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
-        CyberDealRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "ipfs.io/ipfs/[cid]", globalFields, partyFields);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "ipfs.io/ipfs/[cid]", globalFields, partyFields);
 
         CyberCorpFactory cyberCorpFactory = new CyberCorpFactory(address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory);
 
         console.log("cyberCertPrinterImplementation: ", address(cyberCertPrinterImplementation));
-        console.log("CyberDealRegistry: ", address(registry));
+        console.log("CyberAgreementRegistry: ", address(registry));
         console.log("CyberCorpFactory: ", address(cyberCorpFactory));
 
            /* address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));

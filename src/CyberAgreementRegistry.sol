@@ -6,11 +6,11 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
+contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     using ECDSA for bytes32;
     // Domain information
-    string public constant name = "CyberDealRegistry"; 
+    string public constant name = "CyberAgreementRegistry"; 
     string public version;
     bytes32 public DOMAIN_SEPARATOR;
     // Type hash for AgreementData

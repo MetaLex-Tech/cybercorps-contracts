@@ -10,7 +10,7 @@ import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {CyberAgreementFactory} from "../src/CyberAgreementFactory.sol";
 import "../src/CyberCorpConstants.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CyberDealRegistry} from "../src/CyberDealRegistry.sol";
+import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -20,7 +20,7 @@ contract CyberCorpTest is Test {
     //     Counter public counter;
 
     CyberCorpFactory cyberCorpFactory;
-    CyberDealRegistry registry;
+    CyberAgreementRegistry registry;
     uint256 testPrivateKey;
     address testAddress;
     address counterPartyAddress = 0x1A762EfF397a3C519da3dF9FCDDdca7D1BD43B5e;
@@ -55,8 +55,8 @@ contract CyberCorpTest is Test {
 
         address dealManagerFactory = address(new DealManagerFactory());
 
-        registry = new CyberDealRegistry();
-        CyberDealRegistry(registry).initialize(address(auth));
+        registry = new CyberAgreementRegistry();
+        CyberAgreementRegistry(registry).initialize(address(auth));
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
         string[] memory partyFields = new string[](1);
@@ -337,7 +337,7 @@ contract CyberCorpTest is Test {
         vm.startPrank(testAddress);
         BorgAuth auth = new BorgAuth();
         auth.initialize();
-        CyberDealRegistry registry = new CyberDealRegistry();
+        CyberAgreementRegistry registry = new CyberAgreementRegistry();
         registry.initialize(address(auth));
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
