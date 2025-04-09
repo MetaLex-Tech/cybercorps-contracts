@@ -30,10 +30,10 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         mapping(address => string[]) partyValues; // Each signer's field data
         mapping(address => uint256) signedAt; // Timestamp when each party signed (0 if unsigned)
         uint256 numSignatures; // Number of parties who have signed
-        bytes32 transactionHash; // Hash of the transaction that created this contract
         address finalizer;
         bool finalized;
         bytes32 secretHash;
+        uint256 expiry;
     }
     
     // This data is what is signed by each party
@@ -58,11 +58,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     // A mapping connecting an address to all the agreements they are a party to
     mapping(address => bytes32[]) public agreementsForParty;
 
-    mapping(bytes32 => address[]) public voidedBy;
-
-    mapping(bytes32 => uint256) public expiry;
-
-    mapping(bytes32 => bytes32) public secrets;
+    mapping(bytes32 => address[]) public voidRequestedBy;
 
     event TemplateCreated(
         bytes32 indexed templateId,
@@ -105,6 +101,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     error ContractNotFullySigned();
     error ContractExpired();
     error InvalidSecret();
+    error MismatchedPartyValuesLength();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -171,16 +168,17 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         uint256 salt,
         string[] memory globalValues,
         address[] memory parties,
+        string[][] memory partyValues,
         bytes32 secretHash,
-        address finalizer
+        address finalizer,
+        uint256 expiry
     ) external returns (bytes32 contractId) {
-        //create hash from templateId, globalValues, and parties
         contractId = keccak256(abi.encode(templateId, salt, globalValues, parties));
         if (agreements[contractId].parties.length > 0) {
             revert ContractAlreadyExists();
         }
 
-        Template storage template = templates[templateId];
+                Template storage template = templates[templateId];
         if (bytes(template.legalContractUri).length == 0) {
             revert TemplateDoesNotExist();
         }
@@ -205,71 +203,23 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         agreementData.templateId = templateId;
         agreementData.globalValues = globalValues;
         agreementData.parties = parties;
-        agreementData.transactionHash = blockhash(block.number - 1); // Store the transaction hash
         agreementData.finalizer = finalizer;
-        secrets[contractId] = secretHash;
-        emit ContractCreated(contractId, templateId, parties);
+        agreementData.expiry = expiry;
+        agreementData.secretHash = secretHash;
 
-        // Add to the party's list of agreements
-        for (uint256 i = 0; i < parties.length; i++) {
-            agreementsForParty[parties[i]].push(contractId);
-        }
-    }
-
-    function createClosedContract(
-        bytes32 templateId,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[] memory creatingPartyValues,
-        string[] memory counterPartyValues,
-        bytes32 secretHash,
-        address finalizer
-    ) external returns (bytes32 contractId) {
-        //create hash from templateId, globalValues, and parties
-        contractId = keccak256(abi.encode(templateId, salt, globalValues, parties));
-        if (agreements[contractId].parties.length > 0) {
-            revert ContractAlreadyExists();
-        }
-
-        Template storage template = templates[templateId];
-        if (bytes(template.legalContractUri).length == 0) {
-            revert TemplateDoesNotExist();
-        }
-
-        if (globalValues.length != template.globalFields.length) {
-            revert MismatchedFieldsLength();
-        }
-
-        if((creatingPartyValues.length != counterPartyValues.length) || (creatingPartyValues.length != template.partyFields.length) || (counterPartyValues.length != template.partyFields.length)) {
-            revert MismatchedFieldsLength();
-        }
-
-        if(parties.length != 2) {
-            revert InvalidPartyCount();
-        }
-
-        if (parties[0] == address(0) || parties[1] == address(0)) {
-            revert FirstPartyZeroAddress();
-        }
-
-        for (uint256 i = 0; i < parties.length; i++) {
-            for (uint256 j = i + 1; j < parties.length; j++) {
-                if (parties[i] == parties[j]) {
-                    revert DuplicateParty();
-                }
+        //check all arrays inside partyValues are the same length
+        for (uint256 i = 0; i < partyValues.length; i++) {
+            if (partyValues[i].length != template.partyFields.length) {
+                revert MismatchedFieldsLength();
             }
+            //matching address cannot be 0
+            if (parties[i] == address(0)) {
+                revert FirstPartyZeroAddress();
+            }
+            //set agreement partyValues
+            agreements[contractId].partyValues[parties[i]] = partyValues[i];
         }
 
-        AgreementData storage agreementData = agreements[contractId];
-        agreementData.templateId = templateId;
-        agreementData.globalValues = globalValues;
-        agreementData.parties = parties;
-        agreementData.transactionHash = blockhash(block.number - 1); // Store the transaction hash
-        agreementData.partyValues[parties[0]] = creatingPartyValues;
-        agreementData.partyValues[parties[1]] = counterPartyValues;
-        agreementData.finalizer = finalizer;
-        secrets[contractId] = secretHash;
         emit ContractCreated(contractId, templateId, parties);
 
         // Add to the party's list of agreements
@@ -302,10 +252,10 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         if (agreementData.signedAt[signer] != 0) revert AlreadySigned();
         if (isVoided(contractId)) revert ContractAlreadyVoided();
         if (agreementData.finalized) revert ContractAlreadyFinalized();
-        if (expiry[contractId] > 0 && expiry[contractId] < block.timestamp) revert ContractExpired();
+        if (agreementData.expiry > 0 && agreementData.expiry < block.timestamp) revert ContractExpired();
 
         if (!isParty(contractId, signer)) {
-            if(secrets[contractId] > 0 && keccak256(abi.encode(secret)) != secrets[contractId]) revert InvalidSecret();
+            if(agreementData.secretHash > 0 && keccak256(abi.encode(secret)) != agreementData.secretHash) revert InvalidSecret();
             // Not a named party, so check if there's an open slot
             uint256 firstOpenPartyIndex = getFirstOpenPartyIndex(contractId);
             if (firstOpenPartyIndex == 0 || !fillUnallocated)
@@ -346,6 +296,9 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         emit AgreementSigned(contractId, signer, timestamp);
 
         if (totalSignatures == agreementData.parties.length) {
+            if(agreementData.finalizer == address(0))
+                agreementData.finalized = true;
+
             emit ContractFullySigned(contractId, timestamp);
         }
     }
@@ -353,6 +306,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     function voidContractFor(bytes32 contractId, address party, bytes calldata signature) public {
         //make sure the party is a party to the contract
         if(!isParty(contractId, party)) revert NotAParty();
+
 
         AgreementData storage agreementData = agreements[contractId];
         if (agreementData.finalized) revert ContractAlreadyFinalized();
@@ -367,11 +321,11 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             partyValues: agreementData.partyValues[party]
         }), signature)) revert SignatureVerificationFailed();
 
-        for (uint256 i = 0; i < voidedBy[contractId].length; i++) {
-            if(voidedBy[contractId][i] == party) revert ContractAlreadyVoided();
+        for (uint256 i = 0; i < voidRequestedBy[contractId].length; i++) {
+            if(voidRequestedBy[contractId][i] == party) revert ContractAlreadyVoided();
         }
 
-        voidedBy[contractId].push(party);
+        voidRequestedBy[contractId].push(party);
     }
 
     function finalizeContract(bytes32 contractId) public onlyFinalizer(contractId) {
@@ -380,7 +334,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         if(agreementData.parties.length == 0) revert ContractDoesNotExist();
         if(!allPartiesSigned(contractId)) revert ContractNotFullySigned();
         if(isVoided(contractId)) revert ContractAlreadyVoided();
-        if(expiry[contractId] > 0 && expiry[contractId] < block.timestamp) revert ContractExpired();
+        if(agreementData.expiry > 0 && agreementData.expiry < block.timestamp) revert ContractExpired();
         
         agreementData.finalized = true;
     }
@@ -427,8 +381,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             string[][] memory partyValues,
             uint256[] memory signedAt,
             uint256 numSignatures,
-            bool isComplete,
-            bytes32 transactionHash
+            bool isComplete
         )
     {
         AgreementData storage agreementData = agreements[contractId];
@@ -456,8 +409,7 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             allPartyValues,
             allSignedAt,
             agreementData.numSignatures,
-            agreementData.numSignatures == agreementData.parties.length,
-            agreementData.transactionHash
+            agreementData.numSignatures == agreementData.parties.length
         );
     }
 
@@ -692,13 +644,9 @@ contract CyberDealRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     }
 
     function isVoided(bytes32 contractId) public view returns (bool) {
-        return ((voidedBy[contractId].length == agreements[contractId].numSignatures && voidedBy[contractId].length > 0) || (voidedBy[contractId].length == 1 && expiry[contractId] < block.timestamp));
+        return ((voidRequestedBy[contractId].length == agreements[contractId].numSignatures && voidRequestedBy[contractId].length > 0) || (voidRequestedBy[contractId].length == 1 && agreements[contractId].expiry < block.timestamp));
     }
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
 
-    // Add a function to get the transaction hash
-    function getContractTransactionHash(bytes32 contractId) external view returns (bytes32) {
-        return agreements[contractId].transactionHash;
-    }
 }

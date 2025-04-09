@@ -38,7 +38,9 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
 
     error AgreementConditionsNotMet();
     error DealNotPending();
-
+    error PartyValuesLengthMismatch();
+    error ConditionAlreadyExists();
+    error ConditionDoesNotExist();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -64,11 +66,14 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         string[] memory _globalValues, 
         address[] memory _parties, 
         CertificateDetails memory _certDetails,
+        string[][] memory _partyValues,
+        address[] memory conditions,
         bytes32 secretHash,
         uint256 expiry
     ) public onlyOwner returns (bytes32 agreementId, uint256 certId){
+
+        agreementId = ICyberDealRegistry(DEAL_REGISTRY).createContract(_templateId, _salt, _globalValues, _parties, _partyValues, secretHash, address(this), expiry);
         certId = IIssuanceManager(ISSUANCE_MANAGER).createCert(_certPrinterAddress, address(this), _certDetails);
-        agreementId = ICyberDealRegistry(DEAL_REGISTRY).createContract(_templateId, _salt, _globalValues, _parties, secretHash, address(this));
 
         Token[] memory corpAssets = new Token[](1);
         corpAssets[0] = Token(TokenType.ERC721, _certPrinterAddress, certId, 1);
@@ -77,44 +82,12 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         buyerAssets[0] = Token(TokenType.ERC20, _paymentToken, 0, _paymentAmount);
         createEscrow(agreementId, _parties[1], corpAssets, buyerAssets, expiry);
 
-        emit DealProposed(
-            agreementId,
-            _certPrinterAddress,
-            certId,
-            _paymentToken,
-            _paymentAmount,
-            _templateId,
-            CORP,
-            address(DEAL_REGISTRY),
-            _parties
-        );
-    }
+        //set conditions
+        for(uint256 i = 0; i < conditions.length; i++) {
+            conditionsByEscrow[agreementId].push(ICondition(conditions[i]));
+        }
 
-    function proposeClosedDeal(
-        address _certPrinterAddress, 
-        address _paymentToken, 
-        uint256 _paymentAmount, 
-        bytes32 _templateId, 
-        uint256 _salt,
-        string[] memory _globalValues, 
-        address[] memory _parties, 
-        CertificateDetails memory _certDetails,
-        string[] memory _creatingPartyValues,
-        string[] memory _counterPartyValues,
-        bytes32 secretHash,
-        uint256 expiry
-    ) public onlyOwner returns (bytes32 agreementId, uint256 certId){
-        certId = IIssuanceManager(ISSUANCE_MANAGER).createCert(_certPrinterAddress, address(this), _certDetails);
-        agreementId = ICyberDealRegistry(DEAL_REGISTRY).createClosedContract(_templateId, _salt, _globalValues, _parties, _creatingPartyValues, _counterPartyValues, secretHash, address(this));
-
-        Token[] memory corpAssets = new Token[](1);
-        corpAssets[0] = Token(TokenType.ERC721, _certPrinterAddress, certId, 1);
-
-        Token[] memory buyerAssets = new Token[](1);
-        buyerAssets[0] = Token(TokenType.ERC20, _paymentToken, 0, _paymentAmount);
-        createEscrow(agreementId, _parties[1], corpAssets, buyerAssets, expiry);
-
-        emit DealProposed(
+         emit DealProposed(
             agreementId,
             _certPrinterAddress,
             certId,
@@ -138,37 +111,20 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         CertificateDetails memory _certDetails,
         address proposer,
         bytes memory signature,
-        string[] memory partyValues, // These are the party values for the proposer
+        string[][] memory _partyValues, // These are the party values for the proposer
+        address[] memory conditions,
         bytes32 secretHash,
         uint256 expiry
     ) public returns (bytes32 agreementId, uint256 certId){
-        (agreementId, certId) = proposeDeal(_certPrinterAddress, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails, secretHash, expiry);
+        if(_partyValues.length > _parties.length) revert PartyValuesLengthMismatch();
+        (agreementId, certId) = proposeDeal(_certPrinterAddress, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails, _partyValues, conditions, secretHash, expiry);
         // NOTE: proposer is expected to be listed as a party in the parties array.
         escrows[agreementId].signature = signature;
-        ICyberDealRegistry(DEAL_REGISTRY).signContractFor(proposer, agreementId, partyValues, signature, false, "");
-    }
-
-    function proposeAndSignClosedDeal(
-        address _certPrinterAddress, 
-        address _paymentToken, 
-        uint256 _paymentAmount, 
-        bytes32 _templateId, 
-        uint256 _salt,
-        string[] memory _globalValues, 
-        address[] memory _parties, 
-        CertificateDetails memory _certDetails,
-        address proposer,
-        bytes memory signature,
-        string[] memory partyValues,
-        string[] memory _counterPartyValues,
-        bytes32 secretHash,
-        uint256 expiry
-    ) public returns (bytes32 agreementId, uint256 certId){
-        (agreementId, certId) = proposeClosedDeal(_certPrinterAddress, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails, partyValues, _counterPartyValues, secretHash, expiry);
-        // NOTE: proposer is expected to be listed as a party in the parties array.
-        escrows[agreementId].signature = signature;
-        counterPartyValues[agreementId] = _counterPartyValues;
-        ICyberDealRegistry(DEAL_REGISTRY).signContractFor(proposer, agreementId, partyValues, signature, false, "");
+        if(_partyValues.length > 1) {
+            if(_partyValues[1].length != _partyValues[0].length) revert PartyValuesLengthMismatch();
+            counterPartyValues[agreementId] = _partyValues[1];
+        }
+        ICyberDealRegistry(DEAL_REGISTRY).signContractFor(proposer, agreementId, _partyValues[0], signature, false, "");
     }
 
     function signDealAndPay(
@@ -185,6 +141,11 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         if(escrows[agreementId].status != EscrowStatus.PENDING) revert DealNotPending();
         //check if the deal has expired
         if(escrows[agreementId].expiry < block.timestamp) revert DealExpired();
+
+        string[] memory counterPartyCheck = counterPartyValues[agreementId];
+        if(counterPartyCheck.length > 0) {
+            if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert CounterPartyValueMismatch();
+        }
 
         ICyberDealRegistry(DEAL_REGISTRY).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
         updateEscrow(agreementId, msg.sender, name);
@@ -250,16 +211,31 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     function signToVoid(bytes32 agreementId, address signer, bytes memory signature) public {
         ICyberDealRegistry(DEAL_REGISTRY).voidContractFor(agreementId, signer, signature);
         if(ICyberDealRegistry(DEAL_REGISTRY).isVoided(agreementId) && escrows[agreementId].status == EscrowStatus.PAID)
-            voidEscrow(agreementId);
+            voidAndRefund(agreementId);
     }
 
-    /*function addCondition(Logic _op, address _condition) public onlyOwner {
-        _addCondition(_op, _condition);
+    function addCondition(bytes32 agreementId, address condition) public {
+        //make sure the contract is still pending
+        if(escrows[agreementId].status != EscrowStatus.PENDING) revert DealNotPending();
+        //make sure the condition is not already in the list
+        for(uint256 i = 0; i < conditionsByEscrow[agreementId].length; i++) {
+            if(conditionsByEscrow[agreementId][i] == ICondition(condition)) revert ConditionAlreadyExists();
+        }
+        conditionsByEscrow[agreementId].push(ICondition(condition));
     }
 
-    function removeCondition(address _condition) public onlyOwner {
-        _removeCondition(_condition);
-    }*/
+    function removeConditionAt(bytes32 agreementId, uint256 index) public {
+        //make sure the contract is still pending
+        if(escrows[agreementId].status != EscrowStatus.PENDING) revert DealNotPending();
+        //make sure the condition is in the list
+        if(index >= conditionsByEscrow[agreementId].length) revert ConditionDoesNotExist();
+
+        //remove the index and shift the array
+        for(uint256 i = index; i < conditionsByEscrow[agreementId].length - 1; i++) {
+            conditionsByEscrow[agreementId][i] = conditionsByEscrow[agreementId][i + 1];
+        }
+        conditionsByEscrow[agreementId].pop();
+    }
 
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}

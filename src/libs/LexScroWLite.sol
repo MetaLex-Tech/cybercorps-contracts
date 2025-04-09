@@ -60,6 +60,10 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
     error DealNotPaid();
     error DealVoided();
 
+    event DealVoidedAt(bytes32 agreementId, address counterParty, uint256 timestamp);
+    event DealPaidAt(bytes32 agreementId, address counterParty, uint256 timestamp);
+    event DealFinalizedAt(bytes32 agreementId, address counterParty, uint256 timestamp);
+
     constructor() {
     }
 
@@ -121,7 +125,7 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
             }
         }
 
-        deal.status = EscrowStatus.VOIDED;
+        voidEscrow(agreementId);
     }
 
     function finalizeEscrow(bytes32 agreementId) internal nonReentrant {
@@ -176,6 +180,7 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
 
     function voidEscrow(bytes32 agreementId) internal {
         escrows[agreementId].status = EscrowStatus.VOIDED;
+        emit DealVoidedAt(agreementId, escrows[agreementId].counterParty, block.timestamp);
     }
 
     function getEscrowDetails(bytes32 agreementId) public view returns (Escrow memory) {

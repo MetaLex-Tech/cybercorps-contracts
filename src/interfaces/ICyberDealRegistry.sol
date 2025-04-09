@@ -52,23 +52,12 @@ interface ICyberDealRegistry {
         uint256 salt,
         string[] memory globalValues,
         address[] memory parties,
+        string[][] memory partyValues,
         bytes32 secretHash,
-        address finalizer
+        address finalizer, 
+        uint256 expiry
     ) external returns (bytes32);
 
-    function createClosedContract(
-        bytes32 templateId,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[] memory creatingPartyValues,
-        string[] memory counterPartyValues,
-        bytes32 secretHash,
-        address finalizer
-
-
-    ) external returns (bytes32);
-    
     function signContract(
         bytes32 contractId,
         string[] memory partyValues,
