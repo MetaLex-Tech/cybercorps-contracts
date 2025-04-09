@@ -72,13 +72,13 @@ graph TD
     start([start])
     
     start -->|"proposer.<br>deployCyberCorpAndCreateOffer()"| pending[agreement.isFinalized = FALSE<br>agreement.isVoided = FALSE<br>escrow = PENDING]
-    start -->|"proposer.<br>deployCyberCorpAndCreateClosedOffer()"| pending
     
     pending -->|"counterParty.<br>signAndFinalizeDeal()"| signAndFinalizeDealCheckFinalizer{has finalizer?}
     pending -->|"counterParty.<br>signDealAndPay()"| signDealAndPayCheckFinalizer{has finalizer?}
+    pending -->|"proposer.<br>revokeDeal()"| voided[agreement.isFinalized = FALSE<br>agreement.isVoided = TRUE<br>escrow = VOIDED]
     pending -->|"anyone.<br>voidExpiredDeal()"| expiryCheck{expired?}
     
-    expiryCheck -->|yes| voided[agreement.isFinalized = FALSE<br>agreement.isVoided = TRUE<br>escrow = VOIDED]
+    expiryCheck -->|yes| voided
     %% TODO Is that right?
     expiryCheck -->|no| onlyEscrowVoided[agreement.isFinalized = FALSE<br>agreement.isVoided = FALSE<br>escrow = VOIDED]
     
@@ -94,6 +94,4 @@ graph TD
     
     paidWithFinalizer -->|"anyone.<br>finalizeDeal()"| finalized
     paidWithFinalizer -->|"anyone.<br>signToVoid()"| voided
-    
-    %% TODO When does revokeDeal happen?
 ```
