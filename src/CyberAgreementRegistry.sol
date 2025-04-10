@@ -15,6 +15,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     bytes32 public DOMAIN_SEPARATOR;
     // Type hash for AgreementData
     bytes32 public SIGNATUREDATA_TYPEHASH;
+    bytes32 public VOIDSIGNATUREDATA_TYPEHASH;
     
     struct Template {
         string legalContractUri; // Off-chain legal contract URI
@@ -46,6 +47,11 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         string[] partyFields;
         string[] globalValues;
         string[] partyValues;
+    }
+
+    struct VoidSignatureData {
+        bytes32 contractId;
+        address party;
     }
 
     // Closed Agreement Data
@@ -136,6 +142,10 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         
         SIGNATUREDATA_TYPEHASH = keccak256(
                 "SignatureData(bytes32 contractId,string legalContractUri,string[] globalFields,string[] partyFields,string[] globalValues,string[] partyValues)"
+            );
+            
+        VOIDSIGNATUREDATA_TYPEHASH = keccak256(
+                "VoidSignatureData(bytes32 contractId,address party)"
             );
     }
 
@@ -323,18 +333,13 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         //make sure the party is a party to the contract
         if(!isParty(contractId, party)) revert NotAParty();
 
-
         AgreementData storage agreementData = agreements[contractId];
         if (agreementData.finalized) revert ContractAlreadyFinalized();
 
         //verify the signature
-        if (!_verifySignature(party, SignatureData({
+        if (!_verifyVoidSignature(party, VoidSignatureData({
             contractId: contractId,
-            legalContractUri: templates[agreements[contractId].templateId].legalContractUri,
-            globalFields: templates[agreements[contractId].templateId].globalFields,
-            partyFields: templates[agreements[contractId].templateId].partyFields,
-            globalValues: agreements[contractId].globalValues,
-            partyValues: agreementData.partyValues[party]
+            party: party
         }), signature)) revert SignatureVerificationFailed();
 
         for (uint256 i = 0; i < agreementData.voidRequestedBy.length; i++) {
@@ -342,7 +347,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         }
 
         agreementData.voidRequestedBy.push(party);
-
 
         if(agreementData.expiry < block.timestamp)
         {
@@ -698,5 +702,37 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     }
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
+
+    function _verifyVoidSignature(
+        address signer,
+        VoidSignatureData memory data,
+        bytes memory signature
+    ) internal view returns (bool) {
+        // Hash the data (VoidSignatureData) according to EIP-712
+        bytes32 digest = _hashVoidTypedDataV4(data);
+
+        // Recover the signer address
+        address recoveredSigner = digest.recover(signature);
+
+        // Check if the recovered address matches the expected signer
+        return recoveredSigner == signer;
+    }
+
+    // Helper function to hash the typed data (VoidSignatureData) according to EIP-712
+    function _hashVoidTypedDataV4(VoidSignatureData memory data) internal view returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                DOMAIN_SEPARATOR,
+                keccak256(
+                    abi.encode(
+                        VOIDSIGNATUREDATA_TYPEHASH,
+                        data.contractId,
+                        data.party
+                    )
+                )
+            )
+        );
+    }
 
 }

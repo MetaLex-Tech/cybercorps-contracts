@@ -303,6 +303,14 @@ contract CyberCorpTest is Test {
             testPrivateKey
         );
 
+        bytes memory voidSignature = _signVoidRequest(
+            registry.DOMAIN_SEPARATOR(),
+            registry.VOIDSIGNATUREDATA_TYPEHASH(),
+            contractId,
+            testAddress,
+            testPrivateKey
+        );
+
         vm.startPrank(testAddress);
         (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address cyberCertPrinterAddr, bytes32 id) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
@@ -329,7 +337,7 @@ contract CyberCorpTest is Test {
         //wait for 1000000 blocks
         vm.warp(block.timestamp + 1000001);
         vm.startPrank(testAddress);
-        IDealManager(dealManagerAddr).voidExpiredDeal(contractId, testAddress, signature);
+        IDealManager(dealManagerAddr).voidExpiredDeal(contractId, testAddress, voidSignature);
         vm.stopPrank();
     }
 
@@ -811,6 +819,31 @@ contract CyberCorpTest is Test {
         return signature;
     }
 
+    function _signVoidRequest(
+        bytes32 _domainSeparator,
+        bytes32 _typeHash,
+        bytes32 contractId,
+        address party,
+        uint256 privKey
+    ) internal pure returns (bytes memory signature) {
+        // Create the message hash using the same approach as the contract
+        bytes32 structHash = keccak256(
+            abi.encode(
+                _typeHash,
+                contractId,
+                party
+            )
+        );
+
+        bytes32 digest = keccak256(
+            abi.encodePacked("\x19\x01", _domainSeparator, structHash)
+        );
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privKey, digest);
+        signature = abi.encodePacked(r, s, v);
+        return signature;
+    }
+
     // Add this helper function to your test contract
     function _hashStringArray(
         string[] memory array
@@ -864,6 +897,14 @@ contract CyberCorpTest is Test {
             testPrivateKey
         );
 
+        bytes memory voidSignature = _signVoidRequest(
+            registry.DOMAIN_SEPARATOR(),
+            registry.VOIDSIGNATUREDATA_TYPEHASH(),
+            contractId,
+            testAddress,
+            testPrivateKey
+        );
+
         (
             address cyberCorp,
             address auth,
@@ -893,7 +934,7 @@ contract CyberCorpTest is Test {
         );
 
         // Revoke deal before payment
-        IDealManager(dealManagerAddr).revokeDeal(id, testAddress, signature);
+        IDealManager(dealManagerAddr).revokeDeal(id, testAddress, voidSignature);
         vm.stopPrank();
     }
 
@@ -1047,6 +1088,14 @@ contract CyberCorpTest is Test {
             testPrivateKey
         );
 
+        bytes memory voidSignature = _signVoidRequest(
+            registry.DOMAIN_SEPARATOR(),
+            registry.VOIDSIGNATUREDATA_TYPEHASH(),
+            contractId,
+            testAddress,
+            testPrivateKey
+        );
+
         (
             address cyberCorp,
             address auth,
@@ -1076,7 +1125,7 @@ contract CyberCorpTest is Test {
         );
 
         // Sign to void after payment
-        IDealManager(dealManagerAddr).signToVoid(id, testAddress, signature);
+        IDealManager(dealManagerAddr).signToVoid(id, testAddress, voidSignature);
         vm.stopPrank();
     }
 
@@ -1123,6 +1172,14 @@ contract CyberCorpTest is Test {
             testPrivateKey
         );
 
+        bytes memory voidSignature = _signVoidRequest(
+            registry.DOMAIN_SEPARATOR(),
+            registry.VOIDSIGNATUREDATA_TYPEHASH(),
+            contractId,
+            testAddress,
+            testPrivateKey
+        );
+
         (
             address cyberCorp,
             address auth,
@@ -1155,7 +1212,7 @@ contract CyberCorpTest is Test {
         vm.warp(block.timestamp + 1000001);
 
         // Void expired deal
-        IDealManager(dealManagerAddr).voidExpiredDeal(id, testAddress, signature);
+        IDealManager(dealManagerAddr).voidExpiredDeal(id, testAddress, voidSignature);
         vm.stopPrank();
     }
 
@@ -1515,6 +1572,14 @@ contract CyberCorpTest is Test {
             globalValues,
             partyValues[0],
             testPrivateKey
+        );  
+
+        bytes memory voidSignature = _signVoidRequest(
+            registry.DOMAIN_SEPARATOR(),
+            registry.VOIDSIGNATUREDATA_TYPEHASH(),
+            contractId,
+            testAddress,
+            testPrivateKey
         );
 
         (
@@ -1585,7 +1650,7 @@ contract CyberCorpTest is Test {
 
         // Try to void after finalization - should fail
         vm.expectRevert();
-        IDealManager(dealManagerAddr).voidExpiredDeal(id, testAddress, signature);
+        IDealManager(dealManagerAddr).voidExpiredDeal(id, testAddress, voidSignature);
         vm.stopPrank();
     }
 
