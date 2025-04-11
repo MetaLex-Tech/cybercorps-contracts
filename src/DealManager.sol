@@ -23,7 +23,9 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         bytes32 templateId,
         address corp,
         address dealRegistry,
-        address[] parties
+        address[] parties,
+        address[] conditions,
+        bool hasSecret
     );
 
     event DealFinalized(
@@ -96,7 +98,9 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
             _templateId,
             CORP,
             address(DEAL_REGISTRY),
-            _parties
+            _parties,
+            conditions,
+            secretHash > 0
         );
     }
     

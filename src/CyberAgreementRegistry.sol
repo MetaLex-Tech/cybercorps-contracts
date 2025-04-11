@@ -85,6 +85,12 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         address indexed party,
         uint256 timestamp
     );
+    
+    event VoidRequested(
+        bytes32 indexed contractId,
+        address indexed party
+    );
+
 
     event ContractVoided(
         bytes32 indexed contractId,
@@ -347,6 +353,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         }
 
         agreementData.voidRequestedBy.push(party);
+        emit VoidRequested(contractId, party);
 
         if(agreementData.expiry < block.timestamp)
         {

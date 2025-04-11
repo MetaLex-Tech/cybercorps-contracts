@@ -60,9 +60,9 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
     error DealNotPaid();
     error DealVoided();
 
-    event DealVoidedAt(bytes32 agreementId, address counterParty, uint256 timestamp);
-    event DealPaidAt(bytes32 agreementId, address counterParty, uint256 timestamp);
-    event DealFinalizedAt(bytes32 agreementId, address counterParty, uint256 timestamp);
+    event DealVoidedAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
+    event DealPaidAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
+    event DealFinalizedAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
 
     constructor() {
     }
@@ -77,7 +77,7 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
         escrows[agreementId] =  Escrow(agreementId, counterParty, corpAssets, buyerAssets, blankSignature, expiry, EscrowStatus.PENDING);
     }
 
-    function updateEscrow(bytes32 agreementId, address counterParty, string memory buyerName) internal 
+    function updateEscrow(bytes32 agreementId, address counterParty, string memory buyerName) internal
     {
         escrows[agreementId].counterParty = counterParty;
 
@@ -104,14 +104,15 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
             }
         }
 
-       deal.status = EscrowStatus.PAID;
+        emit DealPaidAt(agreementId, address(DEAL_REGISTRY), block.timestamp);
+        deal.status = EscrowStatus.PAID;
     }
 
     function voidAndRefund(bytes32 agreementId) internal nonReentrant {
         Escrow storage deal = escrows[agreementId];
         if(deal.status != EscrowStatus.PAID) revert EscrowNotPaid();
         if(!ICyberAgreementRegistry(DEAL_REGISTRY).isVoided(agreementId)) revert DealNotVoided();
-        
+
         // Refund buyer assets first
         for(uint256 i = 0; i < deal.buyerAssets.length; i++) {
             if(deal.buyerAssets[i].tokenType == TokenType.ERC20) {
@@ -130,13 +131,14 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
 
     function finalizeEscrow(bytes32 agreementId) internal nonReentrant {
         Escrow storage deal = escrows[agreementId];
-        
+
         // Check all conditions before proceeding
         if(block.timestamp > deal.expiry) revert DealExpired();
         if(deal.status != EscrowStatus.PAID) revert EscrowNotPaid();
 
         // Update state before external calls
         deal.status = EscrowStatus.FINALIZED;
+        emit DealFinalizedAt(agreementId, address(DEAL_REGISTRY), block.timestamp);
 
         // Transfer buyer assets to company
         for(uint256 i = 0; i < deal.buyerAssets.length; i++) {
@@ -170,9 +172,9 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
         Escrow memory deal = escrows[agreementId];
         //convert bytes32 to bytes
         bytes memory agreementIdBytes = abi.encodePacked(agreementId);
-        
+
         for(uint256 i = 0; i < conditionsToCheck.length; i++) {
-                if(!ICondition(conditionsToCheck[i]).checkCondition(address(this), msg.sig, agreementIdBytes)) 
+                if(!ICondition(conditionsToCheck[i]).checkCondition(address(this), msg.sig, agreementIdBytes))
                     return false;
         }
         return true;
@@ -180,7 +182,7 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
 
     function voidEscrow(bytes32 agreementId) internal {
         escrows[agreementId].status = EscrowStatus.VOIDED;
-        emit DealVoidedAt(agreementId, escrows[agreementId].counterParty, block.timestamp);
+        emit DealVoidedAt(agreementId, address(DEAL_REGISTRY), block.timestamp);
     }
 
     function getEscrowDetails(bytes32 agreementId) public view returns (Escrow memory) {
