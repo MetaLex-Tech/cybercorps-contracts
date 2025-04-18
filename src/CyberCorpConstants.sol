@@ -37,7 +37,7 @@ enum SecurityStatus {
 struct CompanyOfficer {
     address eoa;
     string name;
-    string email;
+    string contact;
     string title;
     string role;
 }

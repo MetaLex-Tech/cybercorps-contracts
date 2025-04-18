@@ -1,6 +1,8 @@
 
 pragma solidity 0.8.28;
 
+import "../CyberCorpConstants.sol";
+
 interface ICyberCorpSingleFactory {
     function deployCyberCorpSingle(
         bytes32 salt,
@@ -12,7 +14,7 @@ interface ICyberCorpSingleFactory {
         string memory defaultLegend,
         address issuanceManager,
         address _companyPayable,
-        address _officer
+        CompanyOfficer memory _officer
     ) external returns (address cyberCorpAddress);
 }   
 

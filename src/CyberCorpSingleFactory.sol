@@ -19,7 +19,7 @@ contract CyberCorpSingleFactory {
         string memory defaultLegend,
         address issuanceManager,
         address _companyPayable,
-        address _officer
+        CompanyOfficer memory _officer
     ) public returns (address cyberCorpAddress) {
             // Deploy CyberCorp with CREATE2
             bytes memory cyberCorpBytecode = abi.encodePacked(

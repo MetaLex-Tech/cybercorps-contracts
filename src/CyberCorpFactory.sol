@@ -57,7 +57,7 @@ contract CyberCorpFactory {
         string memory defaultDisputeResolution,
         string memory defaultLegend,
         address _companyPayable,
-        address _officer
+        CompanyOfficer memory _officer
     ) public returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress) {
         if (salt == bytes32(0)) revert InvalidSalt();
 
@@ -101,6 +101,7 @@ contract CyberCorpFactory {
         uint256 salt,
         string memory companyName,
         address _companyPayable,
+        CompanyOfficer memory _officer,
         string memory certName,
         string memory certSymbol,
         string memory certificateUri,
@@ -121,6 +122,9 @@ contract CyberCorpFactory {
         //create bytes32 salt
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
 
+        //set this officer's eoa to the sender
+        _officer.eoa = msg.sender;
+
         (cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress) = deployCyberCorp(
             corpSalt,
             companyName,
@@ -129,7 +133,7 @@ contract CyberCorpFactory {
             "",
             "",
             _companyPayable,
-            msg.sender
+            _officer
         );
 
         //append companyname " " and then the certName

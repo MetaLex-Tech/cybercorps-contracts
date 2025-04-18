@@ -37,7 +37,7 @@ contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
         string memory _defaultLegend,
         address _issuanceManager,
         address _companyPayable,
-        address officer
+        CompanyOfficer memory _officer
     ) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
@@ -49,7 +49,7 @@ contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
         defaultLegend = _defaultLegend;
         issuanceManager = _issuanceManager;
         companyPayable = _companyPayable;
-        companyOfficers.push(CompanyOfficer(officer, "", "", "", ""));
+        companyOfficers.push(_officer);
     }
 
     function setcyberCORPDetails(

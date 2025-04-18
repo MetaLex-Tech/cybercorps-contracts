@@ -18,6 +18,7 @@ import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CompanyOfficer} from "../src/storage/CyberCertPrinterStorage.sol";
 
 contract CyberCorpTest is Test {
     //     Counter public counter;
@@ -94,6 +95,14 @@ contract CyberCorpTest is Test {
             issuerSignatureURI: ""
         });
 
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO",
+            role: "Executive"
+        });
+
         string[] memory globalValues = new string[](1);
         globalValues[0] = "Global Value 1";
         address[] memory parties = new address[](2);
@@ -130,6 +139,7 @@ contract CyberCorpTest is Test {
             block.timestamp,
             "CyberCorp",
             testAddress,
+            officer,
             "SAFE",
             "SAFE",
             "ipfs.io/ipfs/[cid]",
@@ -161,6 +171,14 @@ contract CyberCorpTest is Test {
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             issuerSignatureURI: ""
+        });
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO",
+            role: "Executive"
         });
 
         string[] memory globalValues = new string[](1);
@@ -210,6 +228,7 @@ contract CyberCorpTest is Test {
             block.timestamp,
             "CyberCorp",
             testAddress,
+            officer,
             "SAFE",
             "SAFE",
             "ipfs.io/ipfs/[cid]",
@@ -264,8 +283,7 @@ contract CyberCorpTest is Test {
     }
 
     function testVoidCertificate() public {
-
-         CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails memory _details = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
@@ -273,6 +291,14 @@ contract CyberCorpTest is Test {
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             issuerSignatureURI: ""
+        });
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO",
+            role: "Executive"
         });
 
         string[] memory globalValues = new string[](1);
@@ -319,6 +345,7 @@ contract CyberCorpTest is Test {
             block.timestamp,
             "CyberCorp",
             testAddress,
+            officer,
             "SAFE",
             "SAFE",
             "ipfs.io/ipfs/[cid]",
@@ -450,6 +477,14 @@ contract CyberCorpTest is Test {
             issuerSignatureURI: ""
         });
 
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO",
+            role: "Executive"
+        });
+
         string[] memory globalValues = new string[](1);
         globalValues[0] = "Global Value 1";
         address[] memory parties = new address[](2);
@@ -492,6 +527,7 @@ contract CyberCorpTest is Test {
                 block.timestamp,
                 "CyberCorp",
                 testAddress,
+                officer,
                 "SAFE",
                 "SAFE",
                 "ipfs.io/ipfs/[cid]",
@@ -561,6 +597,14 @@ contract CyberCorpTest is Test {
             issuerSignatureURI: ""
         });
 
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO",
+            role: "Executive"
+        });
+
         string[] memory globalValues = new string[](1);
         globalValues[0] = "Global Value 1";
         address[] memory parties = new address[](2);
@@ -606,6 +650,7 @@ contract CyberCorpTest is Test {
                 block.timestamp,
                 "CyberCorp",
                 testAddress,
+                officer,
                 "SAFE",
                 "SAFE",
                 "ipfs.io/ipfs/[cid]",
@@ -678,6 +723,14 @@ contract CyberCorpTest is Test {
             issuerSignatureURI: ""
         });
 
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO",
+            role: "Executive"
+        });
+
         string[] memory globalValues = new string[](1);
         globalValues[0] = "Global Value 1";
         address[] memory parties = new address[](2);
@@ -723,6 +776,7 @@ contract CyberCorpTest is Test {
                 block.timestamp,
                 "CyberCorp",
                 testAddress,
+                officer,
                 "SAFE",
                 "SAFE",
                 "ipfs.io/ipfs/[cid]",
@@ -870,6 +924,14 @@ contract CyberCorpTest is Test {
             issuerSignatureURI: ""
         });
 
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO",
+            role: "Executive"
+        });
+
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
         string[] memory partyFields = new string[](1);
@@ -919,6 +981,7 @@ contract CyberCorpTest is Test {
             block.timestamp,
             "CyberCorp",
             testAddress,
+            officer,
             "SAFE",
             "SAFE",
             "ipfs.io/ipfs/[cid]",
@@ -951,6 +1014,14 @@ contract CyberCorpTest is Test {
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             issuerSignatureURI: ""
+        });
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO",
+            role: "Executive"
         });
 
         string[] memory globalFields = new string[](1);
@@ -994,6 +1065,7 @@ contract CyberCorpTest is Test {
             block.timestamp,
             "CyberCorp",
             testAddress,
+            officer,
             "SAFE",
             "SAFE",
             "ipfs.io/ipfs/[cid]",
@@ -1061,6 +1133,14 @@ contract CyberCorpTest is Test {
             issuerSignatureURI: ""
         });
 
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO",
+            role: "Executive"
+        });
+
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
         string[] memory partyFields = new string[](1);
@@ -1110,6 +1190,7 @@ contract CyberCorpTest is Test {
             block.timestamp,
             "CyberCorp",
             testAddress,
+            officer,
             "SAFE",
             "SAFE",
             "ipfs.io/ipfs/[cid]",
@@ -1142,6 +1223,14 @@ contract CyberCorpTest is Test {
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             issuerSignatureURI: ""
+        });
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO",
+            role: "Executive"
         });
 
         string[] memory globalFields = new string[](1);
@@ -1194,6 +1283,7 @@ contract CyberCorpTest is Test {
             block.timestamp,
             "CyberCorp",
             testAddress,
+            officer,
             "SAFE",
             "SAFE",
             "ipfs.io/ipfs/[cid]",
@@ -1229,6 +1319,14 @@ contract CyberCorpTest is Test {
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             issuerSignatureURI: ""
+        });
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO",
+            role: "Executive"
         });
 
         string[] memory globalFields = new string[](1);
@@ -1272,6 +1370,7 @@ contract CyberCorpTest is Test {
             block.timestamp,
             "CyberCorp",
             testAddress,
+            officer,
             "SAFE",
             "SAFE",
             "ipfs.io/ipfs/[cid]",
@@ -1315,6 +1414,14 @@ contract CyberCorpTest is Test {
             issuerSignatureURI: ""
         });
 
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO",
+            role: "Executive"
+        });
+
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
         string[] memory partyFields = new string[](1);
@@ -1356,6 +1463,7 @@ contract CyberCorpTest is Test {
             block.timestamp,
             "CyberCorp",
             testAddress,
+            officer,
             "SAFE",
             "SAFE",
             "ipfs.io/ipfs/[cid]",
@@ -1425,6 +1533,14 @@ contract CyberCorpTest is Test {
             issuerSignatureURI: ""
         });
 
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO",
+            role: "Executive"
+        });
+
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
         string[] memory partyFields = new string[](1);
@@ -1466,6 +1582,7 @@ contract CyberCorpTest is Test {
             block.timestamp,
             "CyberCorp",
             testAddress,
+            officer,
             "SAFE",
             "SAFE",
             "ipfs.io/ipfs/[cid]",
@@ -1547,6 +1664,14 @@ contract CyberCorpTest is Test {
             issuerSignatureURI: ""
         });
 
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO",
+            role: "Executive"
+        });
+
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
         string[] memory partyFields = new string[](1);
@@ -1596,6 +1721,7 @@ contract CyberCorpTest is Test {
             block.timestamp,
             "CyberCorp",
             testAddress,
+            officer,
             "SAFE",
             "SAFE",
             "ipfs.io/ipfs/[cid]",
@@ -1683,6 +1809,14 @@ contract CyberCorpTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO",
+            role: "Executive"
+        });
+
         bytes32 secretHash = keccak256(abi.encodePacked("passphrase"));
 
         bytes32 contractId = keccak256(
@@ -1712,6 +1846,7 @@ contract CyberCorpTest is Test {
             block.timestamp,
             "CyberCorp",
             testAddress,
+            officer,
             "SAFE",
             "SAFE",
             "ipfs.io/ipfs/[cid]",
@@ -1783,6 +1918,14 @@ contract CyberCorpTest is Test {
             issuerSignatureURI: ""
         });
 
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO",
+            role: "Executive"
+        });
+
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
         string[] memory partyFields = new string[](1);
@@ -1825,6 +1968,7 @@ contract CyberCorpTest is Test {
             block.timestamp,
             "CyberCorp",
             testAddress,
+            officer,
             "SAFE",
             "SAFE",
             "ipfs.io/ipfs/[cid]",
