@@ -4,8 +4,8 @@ pragma solidity ^0.8.18;
 import {Test, console} from "forge-std/Test.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
-import {CertificateDetails, IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
-import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
+import {IssuanceManagerFactory, IssuanceManager} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {CyberAgreementFactory} from "../src/CyberAgreementFactory.sol";
 import "../src/CyberCorpConstants.sol";
@@ -15,6 +15,9 @@ import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
+import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 
 contract CyberCorpTest is Test {
     //     Counter public counter;
@@ -1882,5 +1885,72 @@ contract CyberCorpTest is Test {
             ""
         );
         vm.stopPrank();
+    }
+
+    function testUpgradeCyberCertPrinter() public {
+        // Deploy and initialize IssuanceManager
+        BorgAuth auth = new BorgAuth();
+        auth.initialize();
+        
+        // Deploy initial implementation
+        CyberCertPrinter implementationV1 = new CyberCertPrinter();
+        
+        // Deploy beacon with testAddress as owner
+        UpgradeableBeacon beacon = new UpgradeableBeacon(
+            address(implementationV1),
+            testAddress // Set testAddress as owner
+        );
+        
+        // Deploy proxy
+        bytes memory bytecode = abi.encodePacked(
+            type(BeaconProxy).creationCode,
+            abi.encode(address(beacon), "")
+        );
+        address proxy;
+        assembly {
+            proxy := create(0, add(bytecode, 0x20), mload(bytecode))
+        }
+        
+        // Initialize proxy
+        CyberCertPrinter printer = CyberCertPrinter(proxy);
+        printer.initialize(
+            "test-ledger",
+            "Test Printer",
+            "TEST",
+            "ipfs://test",
+            address(0), // issuanceManager not needed for this test
+            SecurityClass.CommonStock,
+            SecuritySeries.SeriesA
+        );
+        
+        // Verify initial state
+        assertEq(printer.ledger(), "test-ledger");
+        assertEq(printer.certificateUri(), "ipfs://test");
+        
+        // Deploy new implementation
+        CyberCertPrinter implementationV2 = new CyberCertPrinter();
+        
+        // Initialize V2 implementation
+        implementationV2.initialize(
+            "test-ledger",
+            "Test Printer",
+            "TEST",
+            "ipfs://test",
+            address(0), // issuanceManager not needed for this test
+            SecurityClass.CommonStock,
+            SecuritySeries.SeriesA
+        );
+        
+        // Upgrade beacon (must be called by owner)
+        vm.prank(testAddress);
+        beacon.upgradeTo(address(implementationV2));
+        
+        // Verify proxy still works with new implementation
+
+        assertEq(printer.ledger(), "test-ledger");
+        assertEq(printer.certificateUri(), "ipfs://test");
+        
+        // Verify upgrade was successful by checking beacon implementation
+        assertEq(beacon.implementation(), address(implementationV2));
     }
 }

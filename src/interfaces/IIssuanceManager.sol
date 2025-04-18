@@ -7,21 +7,7 @@ import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 import "./ICyberCorp.sol";
 import "./ITransferRestrictionHook.sol";
 import "../CyberCorpConstants.sol";
-
-    struct CertificateDetails {
-        string signingOfficerName;
-        string signingOfficerTitle;
-        uint256 investmentAmount;
-        uint256 issuerUSDValuationAtTimeofInvestment;
-        uint256 unitsRepresented;
-        string legalDetails;
-        string issuerSignatureURI;
-    }
-
-    struct OwnerDetails {
-        string name;
-        address ownerAddress;
-    }
+import "../storage/CyberCertPrinterStorage.sol";
 
 //Adapter interface for custom auth roles. Allows extensibility for different auth protocols i.e. hats.
 interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
