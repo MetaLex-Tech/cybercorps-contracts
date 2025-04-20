@@ -19,6 +19,7 @@ import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/Upgradeabl
 import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {CompanyOfficer} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 
 contract CyberCorpTest is Test {
     //     Counter public counter;
@@ -46,8 +47,11 @@ contract CyberCorpTest is Test {
         CyberCertPrinter cyberCertPrinter = CyberCertPrinter(
             cyberCertPrinterImplementation
         );
+
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "test-legend";
         cyberCertPrinter.initialize(
-            "",
+            defaultLegend,
             "",
             "",
             "ipfs.io/ipfs/[cid]",
@@ -73,12 +77,15 @@ contract CyberCorpTest is Test {
             partyFields
         );
 
+        address uriBuilder = address(new CertificateUriBuilder());
+
         cyberCorpFactory = new CyberCorpFactory(
             address(registry),
             cyberCertPrinterImplementation,
             issuanceManagerFactory,
             cyberCorpSingleFactory,
-            dealManagerFactory
+            dealManagerFactory,
+            uriBuilder
         );
 
         vm.stopPrank();
@@ -92,6 +99,7 @@ contract CyberCorpTest is Test {
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
+
             issuerSignatureURI: ""
         });
 
@@ -170,6 +178,7 @@ contract CyberCorpTest is Test {
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
+
             issuerSignatureURI: ""
         });
 
@@ -290,6 +299,7 @@ contract CyberCorpTest is Test {
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
+
             issuerSignatureURI: ""
         });
 
@@ -474,6 +484,7 @@ contract CyberCorpTest is Test {
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
+
             issuerSignatureURI: ""
         });
 
@@ -594,6 +605,7 @@ contract CyberCorpTest is Test {
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
+
             issuerSignatureURI: ""
         });
 
@@ -720,6 +732,7 @@ contract CyberCorpTest is Test {
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
+
             issuerSignatureURI: ""
         });
 
@@ -921,6 +934,7 @@ contract CyberCorpTest is Test {
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
+
             issuerSignatureURI: ""
         });
 
@@ -1013,6 +1027,7 @@ contract CyberCorpTest is Test {
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
+
             issuerSignatureURI: ""
         });
 
@@ -1130,6 +1145,7 @@ contract CyberCorpTest is Test {
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
+
             issuerSignatureURI: ""
         });
 
@@ -1222,6 +1238,7 @@ contract CyberCorpTest is Test {
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
+
             issuerSignatureURI: ""
         });
 
@@ -1318,6 +1335,7 @@ contract CyberCorpTest is Test {
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
+
             issuerSignatureURI: ""
         });
 
@@ -1411,6 +1429,7 @@ contract CyberCorpTest is Test {
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
+
             issuerSignatureURI: ""
         });
 
@@ -1530,6 +1549,7 @@ contract CyberCorpTest is Test {
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
+
             issuerSignatureURI: ""
         });
 
@@ -1661,6 +1681,7 @@ contract CyberCorpTest is Test {
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
+
             issuerSignatureURI: ""
         });
 
@@ -1792,6 +1813,7 @@ contract CyberCorpTest is Test {
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
+
             issuerSignatureURI: ""
         });
 
@@ -1915,6 +1937,7 @@ contract CyberCorpTest is Test {
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
+
             issuerSignatureURI: ""
         });
 
@@ -2057,8 +2080,10 @@ contract CyberCorpTest is Test {
         
         // Initialize proxy
         CyberCertPrinter printer = CyberCertPrinter(proxy);
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "test-legend";
         printer.initialize(
-            "test-ledger",
+            defaultLegend,
             "Test Printer",
             "TEST",
             "ipfs://test",
@@ -2068,7 +2093,6 @@ contract CyberCorpTest is Test {
         );
         
         // Verify initial state
-        assertEq(printer.ledger(), "test-ledger");
         assertEq(printer.certificateUri(), "ipfs://test");
         
         // Deploy new implementation
@@ -2076,7 +2100,7 @@ contract CyberCorpTest is Test {
         
         // Initialize V2 implementation
         implementationV2.initialize(
-            "test-ledger",
+            defaultLegend,
             "Test Printer",
             "TEST",
             "ipfs://test",
@@ -2090,11 +2114,139 @@ contract CyberCorpTest is Test {
         beacon.upgradeTo(address(implementationV2));
         
         // Verify proxy still works with new implementation
-
-        assertEq(printer.ledger(), "test-ledger");
         assertEq(printer.certificateUri(), "ipfs://test");
         
         // Verify upgrade was successful by checking beacon implementation
         assertEq(beacon.implementation(), address(implementationV2));
     }
+
+    //create test to print certificateuri
+    function testPrintCertificateUri() public {
+ vm.startPrank(testAddress);
+        CyberCorpFactory cyberCorpFactoryLive = CyberCorpFactory(
+            0x2aDA6E66a92CbF283B9F2f4f095Fe705faD357B8
+        );
+
+        CertificateDetails memory _details = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmount: 0,
+            issuerUSDValuationAtTimeofInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jusidictione etc",
+
+            issuerSignatureURI: ""
+        });
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO",
+            role: "Executive"
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = testAddress;
+        parties[1] = address(0);
+        uint256 _paymentAmount = 1000000000000000000;
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory proposerSignature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address cyberCertPrinterAddr,
+            bytes32 id
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+                block.timestamp,
+                "CyberCorp",
+                testAddress,
+                officer,
+                "SAFE",
+                "SAFE",
+                "ipfs.io/ipfs/[cid]",
+                SecurityClass.SAFE,
+                SecuritySeries.SeriesPreSeed,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                proposerSignature,
+                _details,
+                conditions,
+                bytes32(0),
+                block.timestamp + 1000000
+            );
+        vm.stopPrank();
+
+        uint256 newPartyPk = 80085;
+        address newPartyAddr = vm.addr(newPartyPk);
+        string[] memory partyValuesB = new string[](1);
+        partyValuesB[0] = "Party Value B";
+
+        vm.startPrank(newPartyAddr);
+        bytes memory newPartySignature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValuesB,
+            newPartyPk
+        );
+        IDealManager dealManager = IDealManager(dealManagerAddr);
+        deal(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e,
+            newPartyAddr,
+            _paymentAmount
+        );
+        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(
+            address(dealManager),
+            _paymentAmount
+        );
+        dealManager.signAndFinalizeDeal(
+            newPartyAddr,
+            id,
+            partyValuesB,
+            newPartySignature,
+            true,
+            "John Doe",
+            ""
+        );
+        vm.stopPrank();
+
+        string memory certificateUri = CyberCertPrinter(cyberCertPrinterAddr).tokenURI(0);
+        console.log(certificateUri);
+    }
+    
 }

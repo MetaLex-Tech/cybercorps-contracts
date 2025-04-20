@@ -41,7 +41,7 @@ library CyberCertPrinterStorage {
         mapping(uint256 => Endorsement[]) endorsements;
         mapping(uint256 => OwnerDetails) owners;
         mapping(uint256 => SecurityStatus) securityStatus;
-        
+        mapping(uint256 => string[]) certLegend;
         // Restriction hooks
         mapping(uint256 => ITransferRestrictionHook) restrictionHooksById;
         ITransferRestrictionHook globalRestrictionHook;
@@ -51,7 +51,7 @@ library CyberCertPrinterStorage {
         SecurityClass securityType;
         SecuritySeries securitySeries;
         string certificateUri;
-        string ledger;
+        string[] defaultLegend;
         bool transferable;
     }
 
@@ -114,10 +114,6 @@ library CyberCertPrinterStorage {
         cyberCertStorage().certificateUri = _certificateUri;
     }
 
-    function setLedger(string memory _ledger) internal {
-        cyberCertStorage().ledger = _ledger;
-    }
-
     function setTransferable(bool _transferable) internal {
         cyberCertStorage().transferable = _transferable;
     }
@@ -128,5 +124,14 @@ library CyberCertPrinterStorage {
 
     function setGlobalRestrictionHook(ITransferRestrictionHook hook) internal {
         cyberCertStorage().globalRestrictionHook = hook;
+    }
+
+    // Update the getter/setter for defaultLegend
+    function getDefaultLegend() internal view returns (string[] memory) {
+        return cyberCertStorage().defaultLegend;
+    }
+
+    function setDefaultLegend(string[] memory _defaultLegend) internal {
+        cyberCertStorage().defaultLegend = _defaultLegend;
     }
 } 

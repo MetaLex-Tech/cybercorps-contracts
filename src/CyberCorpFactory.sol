@@ -24,6 +24,7 @@ contract CyberCorpFactory {
     address public cyberCorpSingleFactory;
     address public cyberAgreementFactory;
     address public dealManagerFactory;
+    address public uriBuilder;
     address public stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;//base main net 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
 
     event CyberCorpDeployed(
@@ -41,12 +42,13 @@ contract CyberCorpFactory {
         bytes32 salt
     );
 
-    constructor(address _registryAddress, address _cyberCertPrinterImplementation, address _issuanceManagerFactory, address _cyberCorpSingleFactory, address _dealManagerFactory) {
+    constructor(address _registryAddress, address _cyberCertPrinterImplementation, address _issuanceManagerFactory, address _cyberCorpSingleFactory, address _dealManagerFactory, address _uriBuilder) {
         registryAddress = _registryAddress;
         cyberCertPrinterImplementation = _cyberCertPrinterImplementation;
         issuanceManagerFactory = _issuanceManagerFactory;
         cyberCorpSingleFactory = _cyberCorpSingleFactory;
         dealManagerFactory = _dealManagerFactory;
+        uriBuilder = _uriBuilder;
     }
 
     function deployCyberCorp(
@@ -80,7 +82,8 @@ contract CyberCorpFactory {
         IIssuanceManager(issuanceManagerAddress).initialize(
             authAddress,
             cyberCorpAddress,
-            cyberCertPrinterImplementation
+            cyberCertPrinterImplementation,
+            uriBuilder
         );
 
         //update role for issuance manager
@@ -136,9 +139,8 @@ contract CyberCorpFactory {
             _officer
         );
 
-        //append companyname " " and then the certName
-        string memory certNameWithCompany = string.concat(companyName, " ", certName);
-        ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter("", certNameWithCompany, certSymbol, certificateUri, securityClass, securitySeries));
+        string[] memory defaultLegend = new string[](0);
+        ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter(defaultLegend, string.concat(companyName, " ", certName), certSymbol, certificateUri, securityClass, securitySeries));
         certPrinterAddress = address(certPrinter);
 
         // Create and sign deal

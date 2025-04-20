@@ -8,8 +8,7 @@ import "./interfaces/IIssuanceManager.sol";
 import "./interfaces/ITransferRestrictionHook.sol";
 import "./CyberCorpConstants.sol";
 import "./storage/CyberCertPrinterStorage.sol";
-import {Endorsement} from "./storage/CyberCertPrinterStorage.sol";
-
+import "./interfaces/IUriBuilder.sol";
 contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable {
     using CyberCertPrinterStorage for CyberCertPrinterStorage.CyberCertStorage;
 
@@ -24,6 +23,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     error TransferRestricted(string reason);
     error EndorsementNotSignedOrInvalid();
     error InvalidEndorsement();
+    error InvalidLegendIndex();
 
     //events
     event CertificateCreated(uint256 indexed tokenId, address indexed investor, uint256 amount, uint256 cap);
@@ -59,14 +59,14 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     }
 
     // Called by proxy on deployment (if needed)
-    function initialize(string memory _ledger, string memory name, string memory ticker, string memory _certificateUri, address _issuanceManager, SecurityClass _securityType, SecuritySeries _securitySeries) external initializer {
+    function initialize(string[] memory _defaultLegend, string memory name, string memory ticker, string memory _certificateUri, address _issuanceManager, SecurityClass _securityType, SecuritySeries _securitySeries) external initializer {
         __ERC721_init(name, ticker);
         __ERC721Enumerable_init_unchained();
         __UUPSUpgradeable_init();
         
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
         s.issuanceManager = _issuanceManager;
-        s.ledger = _ledger;
+        s.defaultLegend = _defaultLegend;
         s.securityType = _securityType;
         s.securitySeries = _securitySeries;
         s.certificateUri = _certificateUri;
@@ -74,10 +74,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
 
     function updateIssuanceManager(address _issuanceManager) external onlyIssuanceManager {
         CyberCertPrinterStorage.cyberCertStorage().issuanceManager = _issuanceManager;
-    }
-
-    function updateLedger(string memory _ledger) external onlyIssuanceManager {
-        CyberCertPrinterStorage.cyberCertStorage().ledger = _ledger;
     }
 
     // Set a restriction hook for a specific security type
@@ -102,6 +98,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         address to,
         CertificateDetails memory details
     ) external onlyIssuanceManager returns (uint256) {
+        CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId] = CyberCertPrinterStorage.cyberCertStorage().defaultLegend;
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
         _safeMint(to, tokenId);
         emit CyberCertPrinter_CertificateCreated(tokenId);
@@ -114,8 +111,9 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         uint256 tokenId,
         CertificateDetails memory details
     ) external onlyIssuanceManager returns (uint256) {
+        CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId] = CyberCertPrinterStorage.cyberCertStorage().defaultLegend;
         _safeMint(to, tokenId);
-        
+
         // Store agreement details
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
         string memory issuerName = IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName();
@@ -284,12 +282,125 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
         if (!_exists(tokenId)) revert URIQueryForNonexistentToken();
 
-        return super.tokenURI(tokenId);
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        CertificateDetails memory details = s.certificateDetails[tokenId];
+        OwnerDetails memory owner = s.owners[tokenId];
+        string[] memory certLegend = s.certLegend[tokenId];
+        ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
+
+        // Convert storage endorsements to memory array for the builder
+        Endorsement[] memory endorsementsArray = new Endorsement[](s.endorsements[tokenId].length);
+        for (uint256 i = 0; i < s.endorsements[tokenId].length; i++) {
+            endorsementsArray[i] = s.endorsements[tokenId][i];
+        }
+
+        return IUriBuilder(IIssuanceManager(s.issuanceManager).uriBuilder()).buildCertificateUri(
+            corp.cyberCORPName(),
+            corp.cyberCORPType(),
+            corp.cyberCORPJurisdiction(),
+            corp.cyberCORPContactDetails(),
+            s.securityType,
+            s.securitySeries,
+            s.certificateUri,
+            certLegend,
+            details,
+            endorsementsArray,
+            owner
+        );
+    }
+
+    // Helper function to convert SecurityClass enum to string
+    function _securityClassToString(SecurityClass _class) internal pure returns (string memory) {
+        if (_class == SecurityClass.SAFE) return "SAFE";
+        if (_class == SecurityClass.SAFT) return "SAFT";
+        if (_class == SecurityClass.SAFTE) return "SAFTE";
+        if (_class == SecurityClass.TokenPurchaseAgreement) return "TokenPurchaseAgreement";
+        if (_class == SecurityClass.TokenWarrant) return "TokenWarrant";
+        if (_class == SecurityClass.ConvertibleNote) return "ConvertibleNote";
+        if (_class == SecurityClass.CommonStock) return "CommonStock";
+        if (_class == SecurityClass.StockOption) return "StockOption";
+        if (_class == SecurityClass.PreferredStock) return "PreferredStock";
+        if (_class == SecurityClass.RestrictedStockPurchaseAgreement) return "RestrictedStockPurchaseAgreement";
+        if (_class == SecurityClass.RestrictedStockUnit) return "RestrictedStockUnit";
+        if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "RestrictedTokenPurchaseAgreement";
+        if (_class == SecurityClass.RestrictedTokenUnit) return "RestrictedTokenUnit";
+        return "Unknown";
+    }
+
+    // Helper function to convert SecuritySeries enum to string
+    function _securitySeriesToString(SecuritySeries _series) internal pure returns (string memory) {
+        if (_series == SecuritySeries.SeriesPreSeed) return "SeriesPreSeed";
+        if (_series == SecuritySeries.SeriesSeed) return "SeriesSeed";
+        if (_series == SecuritySeries.SeriesA) return "SeriesA";
+        if (_series == SecuritySeries.SeriesB) return "SeriesB";
+        if (_series == SecuritySeries.SeriesC) return "SeriesC";
+        if (_series == SecuritySeries.SeriesD) return "SeriesD";
+        if (_series == SecuritySeries.SeriesE) return "SeriesE";
+        if (_series == SecuritySeries.SeriesF) return "SeriesF";
+        if (_series == SecuritySeries.NA) return "NA";
+        return "Unknown";
+    }
+
+    // Helper function to convert string array to JSON array string with numbered legends
+    function _arrayToJsonString(string[] memory arr) internal pure returns (string memory) {
+        string memory json = "[";
+        for (uint256 i = 0; i < arr.length; i++) {
+            if (i > 0) json = string.concat(json, ",");
+            json = string.concat(json, '{"id": ', _uint256ToString(i + 1), ', "legend": "', arr[i], '"}');
+        }
+        return string.concat(json, "]");
+    }
+
+    // Helper function to convert address to string
+    function _addressToString(address _addr) internal pure returns (string memory) {
+        bytes memory s = new bytes(40);
+        for (uint256 i = 0; i < 20; i++) {
+            bytes1 b = bytes1(uint8(uint160(_addr) >> (8 * (19 - i))));
+            uint8 hi = uint8(b) >> 4;
+            uint8 lo = uint8(b) & 0x0f;
+            s[2*i] = bytes1(hi + (hi < 10 ? 48 : 87));
+            s[2*i+1] = bytes1(lo + (lo < 10 ? 48 : 87));
+        }
+        return string(abi.encodePacked("0x", s));
+    }
+
+    // Helper function to convert uint256 to string
+    function _uint256ToString(uint256 _i) internal pure returns (string memory) {
+        if (_i == 0) {
+            return "0";
+        }
+        uint256 j = _i;
+        uint256 len;
+        while (j != 0) {
+            len++;
+            j /= 10;
+        }
+        bytes memory bstr = new bytes(len);
+        uint256 k = len;
+        while (_i != 0) {
+            k = k-1;
+            uint8 temp = uint8(48 + (_i % 10));
+            bytes1 b1 = bytes1(temp);
+            bstr[k] = b1;
+            _i /= 10;
+        }
+        return string(bstr);
+    }
+
+    // Helper function to convert bytes32 to string
+    function _bytes32ToString(bytes32 _bytes32) internal pure returns (string memory) {
+        bytes memory bytesArray = new bytes(64);
+        for (uint256 i = 0; i < 32; i++) {
+            uint8 b = uint8(uint8(bytes1(bytes32(_bytes32) >> (8 * (31 - i)))));
+            bytesArray[i*2] = bytes1(uint8(b/16 + (b/16 < 10 ? 48 : 87)));
+            bytesArray[i*2+1] = bytes1(uint8(b%16 + (b%16 < 10 ? 48 : 87)));
+        }
+        return string(bytesArray);
     }
 
     // Public getters that directly access storage
-    function ledger() public view returns (string memory) {
-        return CyberCertPrinterStorage.cyberCertStorage().ledger;
+    function defaultLegend() public view returns (string[] memory) {
+        return CyberCertPrinterStorage.cyberCertStorage().defaultLegend;
     }
 
     function certificateUri() public view returns (string memory) {
@@ -316,7 +427,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         return _ownerOf(tokenId) != address(0);
     }
 
-
     /**
      * @dev Function that should revert when `msg.sender` is not authorized to upgrade the contract. Called by
      * {upgradeTo} and {upgradeToAndCall}.
@@ -328,4 +438,63 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
      * ```
      */
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyIssuanceManager {}
+
+    function addLegend(string memory newLegend) external onlyIssuanceManager {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        s.defaultLegend.push(newLegend);
+    }
+
+    function removeLegendAt(uint256 index) external onlyIssuanceManager {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        if (index >= s.defaultLegend.length) revert InvalidLegendIndex();
+
+        // Move the last element to the index being removed (if it's not the last element)
+        // and then pop the last element
+        uint256 lastIndex = s.defaultLegend.length - 1;
+        if (index != lastIndex) {
+            s.defaultLegend[index] = s.defaultLegend[lastIndex];
+        }
+        s.defaultLegend.pop();
+    }
+
+    function getLegendAt(uint256 index) external view returns (string memory) {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        if (index >= s.defaultLegend.length) revert InvalidLegendIndex();
+        
+        return s.defaultLegend[index];
+    }
+
+    function getLegendCount() external view returns (uint256) {
+        return CyberCertPrinterStorage.cyberCertStorage().defaultLegend.length;
+    }
+
+    function addCertLegend(uint256 tokenId, string memory newLegend) external onlyIssuanceManager {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        s.certLegend[tokenId].push(newLegend);
+    }
+
+    function removeCertLegendAt(uint256 tokenId, uint256 index) external onlyIssuanceManager {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        if (index >= s.certLegend[tokenId].length) revert InvalidLegendIndex();
+
+        // Move the last element to the index being removed (if it's not the last element)
+        // and then pop the last element
+        uint256 lastIndex = s.certLegend[tokenId].length - 1;
+        if (index != lastIndex) {
+            s.certLegend[tokenId][index] = s.certLegend[tokenId][lastIndex];
+        }
+        s.certLegend[tokenId].pop();
+    }   
+
+    function getCertLegendAt(uint256 tokenId, uint256 index) external view returns (string memory) {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        if (index >= s.certLegend[tokenId].length) revert InvalidLegendIndex();
+        
+        return s.certLegend[tokenId][index];
+    }   
+
+    function getCertLegendCount(uint256 tokenId) external view returns (uint256) {
+        return CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId].length;
+    }
+    
 }

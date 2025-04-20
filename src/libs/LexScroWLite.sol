@@ -9,45 +9,11 @@ import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICondition.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {LexScrowStorage, Escrow, Token, TokenType, EscrowStatus} from "../storage/LexScrowStorage.sol";
 
 
 abstract contract LexScroWLite is Initializable, ReentrancyGuard {
-
-    address public CORP;
-    ICyberAgreementRegistry public DEAL_REGISTRY;
-
-    enum TokenType {
-        ERC20,
-        ERC721,
-        ERC1155
-    }
-
-    struct Token {
-        TokenType tokenType;
-        address tokenAddress;
-        uint256 tokenId;
-        uint256 amount;
-    }
-
-    enum EscrowStatus {
-        PENDING,
-        PAID,
-        FINALIZED,
-        VOIDED
-    }
-
-    struct Escrow {
-        bytes32 agreementId;
-        address counterParty;
-        Token[] corpAssets;
-        Token[] buyerAssets;
-        bytes signature;
-        uint256 expiry;
-        EscrowStatus status;
-    }
-
-    mapping(bytes32 => Escrow) public escrows;
-    mapping(bytes32 => ICondition[]) public conditionsByEscrow;
+    using LexScrowStorage for LexScrowStorage.LexScrowData;
 
     error DealExpired();
     error EscrowNotPending();
@@ -67,62 +33,77 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
     constructor() {
     }
 
-    function __LexScroWLite_init(address _corp, address _dealRegistry) internal onlyInitializing  {
-        CORP = _corp;
-        DEAL_REGISTRY = ICyberAgreementRegistry(_dealRegistry);
+    function __LexScroWLite_init(address _corp, address _dealRegistry) internal onlyInitializing {
+        LexScrowStorage.setCorp(_corp);
+        LexScrowStorage.setDealRegistry(_dealRegistry);
     }
 
     function createEscrow(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets, uint256 expiry) internal {
         bytes memory blankSignature = abi.encodePacked(bytes32(0));
-        escrows[agreementId] =  Escrow(agreementId, counterParty, corpAssets, buyerAssets, blankSignature, expiry, EscrowStatus.PENDING);
+        Escrow memory newEscrow = Escrow({
+            agreementId: agreementId,
+            counterParty: counterParty,
+            corpAssets: corpAssets,
+            buyerAssets: buyerAssets,
+            signature: blankSignature,
+            expiry: expiry,
+            status: EscrowStatus.PENDING
+        });
+        LexScrowStorage.setEscrow(agreementId, newEscrow);
     }
 
-    function updateEscrow(bytes32 agreementId, address counterParty, string memory buyerName) internal
-    {
-        escrows[agreementId].counterParty = counterParty;
+    function updateEscrow(bytes32 agreementId, address counterParty, string memory buyerName) internal {
+        Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
+        escrow.counterParty = counterParty;
 
-        Escrow storage deal = escrows[agreementId];
-
-        Endorsement memory newEndorsement = Endorsement(address(this), block.timestamp, deal.signature, address(DEAL_REGISTRY), agreementId, deal.counterParty, buyerName);
-       ICyberCertPrinter(deal.corpAssets[0].tokenAddress).addEndorsement(deal.corpAssets[0].tokenId, newEndorsement);
+        Endorsement memory newEndorsement = Endorsement(
+            address(this),
+            block.timestamp,
+            escrow.signature,
+            LexScrowStorage.getDealRegistry(),
+            agreementId,
+            escrow.counterParty,
+            buyerName
+        );
+        ICyberCertPrinter(escrow.corpAssets[0].tokenAddress).addEndorsement(escrow.corpAssets[0].tokenId, newEndorsement);
     }
 
     function handleCounterPartyPayment(bytes32 agreementId) internal {
-        Escrow storage deal = escrows[agreementId];
-        if(deal.status != EscrowStatus.PENDING) revert EscrowNotPending();
-        if(deal.counterParty == address(0)) revert CounterPartyNotSet();
+        Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
+        if(escrow.status != EscrowStatus.PENDING) revert EscrowNotPending();
+        if(escrow.counterParty == address(0)) revert CounterPartyNotSet();
 
-        for(uint256 i = 0; i < deal.buyerAssets.length; i++) {
-            if(deal.buyerAssets[i].tokenType == TokenType.ERC20) {
-                IERC20(deal.buyerAssets[i].tokenAddress).transferFrom(deal.counterParty, address(this), deal.buyerAssets[i].amount);
+        for(uint256 i = 0; i < escrow.buyerAssets.length; i++) {
+            if(escrow.buyerAssets[i].tokenType == TokenType.ERC20) {
+                IERC20(escrow.buyerAssets[i].tokenAddress).transferFrom(escrow.counterParty, address(this), escrow.buyerAssets[i].amount);
             }
-            else if(deal.buyerAssets[i].tokenType == TokenType.ERC721) {
-                IERC721(deal.buyerAssets[i].tokenAddress).safeTransferFrom(deal.counterParty, address(this), deal.buyerAssets[i].tokenId);
+            else if(escrow.buyerAssets[i].tokenType == TokenType.ERC721) {
+                IERC721(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(escrow.counterParty, address(this), escrow.buyerAssets[i].tokenId);
             }
-            else if(deal.buyerAssets[i].tokenType == TokenType.ERC1155) {
-                IERC1155(deal.buyerAssets[i].tokenAddress).safeTransferFrom(deal.counterParty, address(this), deal.buyerAssets[i].tokenId, deal.buyerAssets[i].amount, "");
+            else if(escrow.buyerAssets[i].tokenType == TokenType.ERC1155) {
+                IERC1155(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(escrow.counterParty, address(this), escrow.buyerAssets[i].tokenId, escrow.buyerAssets[i].amount, "");
             }
         }
 
-        emit DealPaidAt(agreementId, address(DEAL_REGISTRY), block.timestamp);
-        deal.status = EscrowStatus.PAID;
+        emit DealPaidAt(agreementId, LexScrowStorage.getDealRegistry(), block.timestamp);
+        escrow.status = EscrowStatus.PAID;
     }
 
     function voidAndRefund(bytes32 agreementId) internal nonReentrant {
-        Escrow storage deal = escrows[agreementId];
-        if(deal.status != EscrowStatus.PAID) revert EscrowNotPaid();
-        if(!ICyberAgreementRegistry(DEAL_REGISTRY).isVoided(agreementId)) revert DealNotVoided();
+        Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
+        if(escrow.status != EscrowStatus.PAID) revert EscrowNotPaid();
+        if(!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId)) revert DealNotVoided();
 
         // Refund buyer assets first
-        for(uint256 i = 0; i < deal.buyerAssets.length; i++) {
-            if(deal.buyerAssets[i].tokenType == TokenType.ERC20) {
-                IERC20(deal.buyerAssets[i].tokenAddress).transfer(deal.counterParty, deal.buyerAssets[i].amount);
+        for(uint256 i = 0; i < escrow.buyerAssets.length; i++) {
+            if(escrow.buyerAssets[i].tokenType == TokenType.ERC20) {
+                IERC20(escrow.buyerAssets[i].tokenAddress).transfer(escrow.counterParty, escrow.buyerAssets[i].amount);
             }
-            else if(deal.buyerAssets[i].tokenType == TokenType.ERC721) {
-                IERC721(deal.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), deal.counterParty, deal.buyerAssets[i].tokenId);
+            else if(escrow.buyerAssets[i].tokenType == TokenType.ERC721) {
+                IERC721(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), escrow.counterParty, escrow.buyerAssets[i].tokenId);
             }
-            else if(deal.buyerAssets[i].tokenType == TokenType.ERC1155) {
-                IERC1155(deal.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), deal.counterParty, deal.buyerAssets[i].tokenId, deal.buyerAssets[i].amount, "");
+            else if(escrow.buyerAssets[i].tokenType == TokenType.ERC1155) {
+                IERC1155(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), escrow.counterParty, escrow.buyerAssets[i].tokenId, escrow.buyerAssets[i].amount, "");
             }
         }
 
@@ -130,63 +111,63 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
     }
 
     function finalizeEscrow(bytes32 agreementId) internal nonReentrant {
-        Escrow storage deal = escrows[agreementId];
+        Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
 
         // Check all conditions before proceeding
-        if(block.timestamp > deal.expiry) revert DealExpired();
-        if(deal.status != EscrowStatus.PAID) revert EscrowNotPaid();
+        if(block.timestamp > escrow.expiry) revert DealExpired();
+        if(escrow.status != EscrowStatus.PAID) revert EscrowNotPaid();
 
         // Update state before external calls
-        deal.status = EscrowStatus.FINALIZED;
-        emit DealFinalizedAt(agreementId, address(DEAL_REGISTRY), block.timestamp);
+        escrow.status = EscrowStatus.FINALIZED;
+        emit DealFinalizedAt(agreementId, LexScrowStorage.getDealRegistry(), block.timestamp);
 
         // Transfer buyer assets to company
-        for(uint256 i = 0; i < deal.buyerAssets.length; i++) {
-            if(deal.buyerAssets[i].tokenType == TokenType.ERC20) {
-                IERC20(deal.buyerAssets[i].tokenAddress).transfer(ICyberCorp(CORP).companyPayable(), deal.buyerAssets[i].amount);
+        for(uint256 i = 0; i < escrow.buyerAssets.length; i++) {
+            if(escrow.buyerAssets[i].tokenType == TokenType.ERC20) {
+                IERC20(escrow.buyerAssets[i].tokenAddress).transfer(ICyberCorp(LexScrowStorage.getCorp()).companyPayable(), escrow.buyerAssets[i].amount);
             }
-            else if(deal.buyerAssets[i].tokenType == TokenType.ERC721) {
-                IERC721(deal.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), ICyberCorp(CORP).companyPayable(), deal.buyerAssets[i].tokenId);
+            else if(escrow.buyerAssets[i].tokenType == TokenType.ERC721) {
+                IERC721(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), ICyberCorp(LexScrowStorage.getCorp()).companyPayable(), escrow.buyerAssets[i].tokenId);
             }
-            else if(deal.buyerAssets[i].tokenType == TokenType.ERC1155) {
-                IERC1155(deal.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), ICyberCorp(CORP).companyPayable(), deal.buyerAssets[i].tokenId, deal.buyerAssets[i].amount, "");
+            else if(escrow.buyerAssets[i].tokenType == TokenType.ERC1155) {
+                IERC1155(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), ICyberCorp(LexScrowStorage.getCorp()).companyPayable(), escrow.buyerAssets[i].tokenId, escrow.buyerAssets[i].amount, "");
             }
         }
 
         // Transfer corp assets to counter party
-        for(uint256 i = 0; i < deal.corpAssets.length; i++) {
-            if(deal.corpAssets[i].tokenType == TokenType.ERC20) {
-                IERC20(deal.corpAssets[i].tokenAddress).transfer(deal.counterParty, deal.corpAssets[i].amount);
+        for(uint256 i = 0; i < escrow.corpAssets.length; i++) {
+            if(escrow.corpAssets[i].tokenType == TokenType.ERC20) {
+                IERC20(escrow.corpAssets[i].tokenAddress).transfer(escrow.counterParty, escrow.corpAssets[i].amount);
             }
-            else if(deal.corpAssets[i].tokenType == TokenType.ERC721) {
-                IERC721(deal.corpAssets[i].tokenAddress).safeTransferFrom(address(this), deal.counterParty, deal.corpAssets[i].tokenId);
+            else if(escrow.corpAssets[i].tokenType == TokenType.ERC721) {
+                IERC721(escrow.corpAssets[i].tokenAddress).safeTransferFrom(address(this), escrow.counterParty, escrow.corpAssets[i].tokenId);
             }
-            else if(deal.corpAssets[i].tokenType == TokenType.ERC1155) {
-                IERC1155(deal.corpAssets[i].tokenAddress).safeTransferFrom(address(this), deal.counterParty, deal.corpAssets[i].tokenId, deal.corpAssets[i].amount, "");
+            else if(escrow.corpAssets[i].tokenType == TokenType.ERC1155) {
+                IERC1155(escrow.corpAssets[i].tokenAddress).safeTransferFrom(address(this), escrow.counterParty, escrow.corpAssets[i].tokenId, escrow.corpAssets[i].amount, "");
             }
         }
     }
 
     function conditionCheck(bytes32 agreementId) public view returns (bool) {
-        ICondition[] memory conditionsToCheck = conditionsByEscrow[agreementId];
-        Escrow memory deal = escrows[agreementId];
+        ICondition[] storage conditions = LexScrowStorage.getConditionsByEscrow(agreementId);
         //convert bytes32 to bytes
         bytes memory agreementIdBytes = abi.encodePacked(agreementId);
 
-        for(uint256 i = 0; i < conditionsToCheck.length; i++) {
-                if(!ICondition(conditionsToCheck[i]).checkCondition(address(this), msg.sig, agreementIdBytes))
-                    return false;
+        for(uint256 i = 0; i < conditions.length; i++) {
+            if(!ICondition(conditions[i]).checkCondition(address(this), msg.sig, agreementIdBytes))
+                return false;
         }
         return true;
     }
 
     function voidEscrow(bytes32 agreementId) internal {
-        escrows[agreementId].status = EscrowStatus.VOIDED;
-        emit DealVoidedAt(agreementId, address(DEAL_REGISTRY), block.timestamp);
+        Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
+        escrow.status = EscrowStatus.VOIDED;
+        emit DealVoidedAt(agreementId, LexScrowStorage.getDealRegistry(), block.timestamp);
     }
 
     function getEscrowDetails(bytes32 agreementId) public view returns (Escrow memory) {
-        return escrows[agreementId];
+        return LexScrowStorage.getEscrow(agreementId);
     }
 
     //receiver erc721s

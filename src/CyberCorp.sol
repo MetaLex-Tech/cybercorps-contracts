@@ -15,14 +15,13 @@ contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
     string public cyberCORPJurisdiction; //this should be the jurisdiction of incorporation of the entity, e.g. "Delaware"
     string public cyberCORPContactDetails; 
     string public defaultDisputeResolution;
+    address public companyPayable;
     string public defaultLegend; //default legend (relating to transferability restrictions etc.) for NFT certs 
     address public issuanceManager;
-    address public companyPayable;
-
+    address public cyberCertPrinterImplementation;
     CompanyOfficer[] public companyOfficers;
 
-    UpgradeableBeacon public beacon;
-    address public cyberCertPrinterImplementation;
+
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -70,13 +69,8 @@ contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
         issuanceManager = _issuanceManager;
     }
 
-    function iscyberCORPOfficer(address _address) external view returns (bool) {
+    function isCyberCORPOfficer(address _address) external view returns (bool) {
         return (AUTH.userRoles(_address) >= AUTH.OWNER_ROLE());
-    }
-
-    function _getBytecode() private view returns (bytes memory bytecode) {
-        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
-        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(beacon, ""));
     }
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}

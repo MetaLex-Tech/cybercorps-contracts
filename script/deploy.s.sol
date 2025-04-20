@@ -17,6 +17,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {console} from "forge-std/console.sol";
 import "../src/CyberCorpConstants.sol";
+import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 
 contract BaseScript is Script {
      function run() public {
@@ -28,7 +29,9 @@ contract BaseScript is Script {
         address issuanceManagerFactory = address(new IssuanceManagerFactory(address(0)));
         address cyberCertPrinterImplementation = address(new CyberCertPrinter());
         CyberCertPrinter cyberCertPrinter = CyberCertPrinter(cyberCertPrinterImplementation);
-        cyberCertPrinter.initialize("", "", "", "ipfs.io/ipfs/[cid]", address(0), SecurityClass.SAFE, SecuritySeries.SeriesPreSeed);
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "";
+        cyberCertPrinter.initialize(defaultLegend, "", "", "ipfs.io/ipfs/[cid]", address(0), SecurityClass.SAFE, SecuritySeries.SeriesPreSeed);
         address cyberCorpSingleFactory = address(new CyberCorpSingleFactory());
         address dealManagerFactory = address(new DealManagerFactory());
         address registry = address(new CyberAgreementRegistry());
@@ -38,8 +41,8 @@ contract BaseScript is Script {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
         CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "ipfs.io/ipfs/[cid]", globalFields, partyFields);
-
-        CyberCorpFactory cyberCorpFactory = new CyberCorpFactory(address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory);
+        address uriBuilder = address(new CertificateUriBuilder());
+        CyberCorpFactory cyberCorpFactory = new CyberCorpFactory(address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder);
 
         console.log("cyberCertPrinterImplementation: ", address(cyberCertPrinterImplementation));
         console.log("CyberAgreementRegistry: ", address(registry));

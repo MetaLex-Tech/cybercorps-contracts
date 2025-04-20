@@ -17,11 +17,12 @@ contract IssuanceManager is BorgAuthACL {
     
     UpgradeableBeacon public CyberCertPrinterBeacon;
     address public CORP;
+    address public uriBuilder;
 
     // Mapping to track proxy addresses for each token ID
     address[] public printers;
 
-    event CertPrinterCreated(address indexed certificate, address indexed corp, string ledger, string name, string ticker, SecurityClass securityType, SecuritySeries securitySeries, string certificateUri);
+    event CertPrinterCreated(address indexed certificate, address indexed corp, string[] ledger, string name, string ticker, SecurityClass securityType, SecuritySeries securitySeries, string certificateUri);
     event CertificateCreated(uint256 indexed tokenId, address indexed certificate, uint256 amount, uint256 cap, CertificateDetails details);
     event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
@@ -36,14 +37,15 @@ contract IssuanceManager is BorgAuthACL {
     function initialize(
         address _auth,
         address _CORP,
-        address _CyberCertPrinterImplementation
+        address _CyberCertPrinterImplementation,
+        address _uriBuilder
     ) external initializer {
         // Initialize BorgAuthACL
         __BorgAuthACL_init(_auth);
         
         // Set CORP address
         CORP = _CORP;
-        
+        uriBuilder = _uriBuilder;
         // Create beacon with implementation
         CyberCertPrinterBeacon = new UpgradeableBeacon(
             _CyberCertPrinterImplementation,
@@ -51,7 +53,7 @@ contract IssuanceManager is BorgAuthACL {
         );
     }
     
-    function createCertPrinter(string memory _ledger, string memory _name, string memory _ticker, string memory _certificateUri, SecurityClass _securityType, SecuritySeries _securitySeries) public onlyOwner returns (address) {
+    function createCertPrinter(string[] memory _ledger, string memory _name, string memory _ticker, string memory _certificateUri, SecurityClass _securityType, SecuritySeries _securitySeries) public onlyOwner returns (address) {
         //add new proxy to a set CyberCertPrinter deployement
         bytes32 salt = keccak256(abi.encodePacked(printers.length, address(this)));
         address newCert = Create2.deploy(0, salt, _getBytecode());

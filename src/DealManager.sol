@@ -6,13 +6,22 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./libs/LexScroWLite.sol";
 import "./libs/auth.sol";
+import "./storage/DealManagerStorage.sol";
+import "./storage/BorgAuthStorage.sol";
 
 contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLite {
+    using DealManagerStorage for DealManagerStorage.DealManagerData;
+    using BorgAuthStorage for BorgAuthStorage.BorgAuthData;
 
     IIssuanceManager public ISSUANCE_MANAGER;
 
     error ZeroAddress();
     error CounterPartyValueMismatch();
+    error AgreementConditionsNotMet();
+    error DealNotPending();
+    error PartyValuesLengthMismatch();
+    error ConditionAlreadyExists();
+    error ConditionDoesNotExist();
 
     event DealProposed(
         bytes32 indexed agreementId,
@@ -38,12 +47,6 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
 
     mapping(bytes32 => string[]) public counterPartyValues;
 
-    error AgreementConditionsNotMet();
-    error DealNotPending();
-    error PartyValuesLengthMismatch();
-    error ConditionAlreadyExists();
-    error ConditionDoesNotExist();
-
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
     }
@@ -51,12 +54,18 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     function initialize(address _auth, address _corp, address _dealRegistry, address _issuanceManager) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
-        __LexScroWLite_init(_corp, _dealRegistry);
-
+        
         if (_corp == address(0)) revert ZeroAddress();
-        CORP = _corp;
+        if (_dealRegistry == address(0)) revert ZeroAddress();
         if (_issuanceManager == address(0)) revert ZeroAddress();
-        ISSUANCE_MANAGER = IIssuanceManager(_issuanceManager);
+
+        // Set storage values
+        LexScrowStorage.setCorp(_corp);
+        LexScrowStorage.setDealRegistry(_dealRegistry);
+        DealManagerStorage.setIssuanceManager(_issuanceManager);
+
+        // Initialize LexScroWLite without setting storage
+        __LexScroWLite_init(_corp, _dealRegistry);
     }
 
     function proposeDeal(
@@ -72,38 +81,49 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         address[] memory conditions,
         bytes32 secretHash,
         uint256 expiry
-    ) public onlyOwner returns (bytes32 agreementId, uint256 certId){
-
-        agreementId = ICyberAgreementRegistry(DEAL_REGISTRY).createContract(_templateId, _salt, _globalValues, _parties, _partyValues, secretHash, address(this), expiry);
-        certId = IIssuanceManager(ISSUANCE_MANAGER).createCert(_certPrinterAddress, address(this), _certDetails);
+    ) public onlyOwner returns (bytes32 agreementId, uint256 certId) {
+        agreementId = ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).createContract(_templateId, _salt, _globalValues, _parties, _partyValues, secretHash, address(this), expiry);
+        
+        certId = DealManagerStorage.getIssuanceManager().createCert(_certPrinterAddress, address(this), _certDetails);
 
         Token[] memory corpAssets = new Token[](1);
         corpAssets[0] = Token(TokenType.ERC721, _certPrinterAddress, certId, 1);
 
         Token[] memory buyerAssets = new Token[](1);
         buyerAssets[0] = Token(TokenType.ERC20, _paymentToken, 0, _paymentAmount);
-        createEscrow(agreementId, _parties[1], corpAssets, buyerAssets, expiry);
+
+        Escrow memory newEscrow = Escrow({
+            agreementId: agreementId,
+            counterParty: _parties[1],
+            corpAssets: corpAssets,
+            buyerAssets: buyerAssets,
+            signature: "",
+            expiry: expiry,
+            status: EscrowStatus.PENDING
+        });
+        
+        LexScrowStorage.setEscrow(agreementId, newEscrow);
 
         //set conditions
         for(uint256 i = 0; i < conditions.length; i++) {
-            conditionsByEscrow[agreementId].push(ICondition(conditions[i]));
+            LexScrowStorage.addConditionToEscrow(agreementId, ICondition(conditions[i]));
         }
 
-         emit DealProposed(
+        emit DealProposed(
             agreementId,
             _certPrinterAddress,
             certId,
             _paymentToken,
             _paymentAmount,
             _templateId,
-            CORP,
-            address(DEAL_REGISTRY),
+            LexScrowStorage.getCorp(),
+            LexScrowStorage.getDealRegistry(),
             _parties,
             conditions,
             secretHash > 0
         );
     }
-    
+
     function proposeAndSignDeal(
         address _certPrinterAddress, 
         address _paymentToken, 
@@ -115,20 +135,24 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         CertificateDetails memory _certDetails,
         address proposer,
         bytes memory signature,
-        string[][] memory _partyValues, // These are the party values for the proposer
+        string[][] memory _partyValues,
         address[] memory conditions,
         bytes32 secretHash,
         uint256 expiry
-    ) public returns (bytes32 agreementId, uint256 certId){
+    ) public returns (bytes32 agreementId, uint256 certId) {
         if(_partyValues.length > _parties.length) revert PartyValuesLengthMismatch();
         (agreementId, certId) = proposeDeal(_certPrinterAddress, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails, _partyValues, conditions, secretHash, expiry);
         // NOTE: proposer is expected to be listed as a party in the parties array.
-        escrows[agreementId].signature = signature;
+        
+        // Update the escrow signature
+        Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
+        escrow.signature = signature;
+
         if(_partyValues.length > 1) {
             if(_partyValues[1].length != _partyValues[0].length) revert PartyValuesLengthMismatch();
-            counterPartyValues[agreementId] = _partyValues[1];
+            DealManagerStorage.setCounterPartyValues(agreementId, _partyValues[1]);
         }
-        ICyberAgreementRegistry(DEAL_REGISTRY).signContractFor(proposer, agreementId, _partyValues[0], signature, false, "");
+        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractFor(proposer, agreementId, _partyValues[0], signature, false, "");
     }
 
     function signDealAndPay(
@@ -140,39 +164,50 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         string memory name,
         string memory secret
     ) public {
-        if(ICyberAgreementRegistry(DEAL_REGISTRY).isVoided(agreementId)) revert DealVoided();
-        if(ICyberAgreementRegistry(DEAL_REGISTRY).isFinalized(agreementId)) revert DealAlreadyFinalized();
-        if(escrows[agreementId].status != EscrowStatus.PENDING) revert DealNotPending();
-        //check if the deal has expired
-        if(escrows[agreementId].expiry < block.timestamp) revert DealExpired();
+        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId)) revert DealVoided();
+        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isFinalized(agreementId)) revert DealAlreadyFinalized();
+        Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
+        if(escrow.status != EscrowStatus.PENDING) revert DealNotPending();
+        if(escrow.expiry < block.timestamp) revert DealExpired();
 
-        string[] memory counterPartyCheck = counterPartyValues[agreementId];
+        string[] storage counterPartyCheck = DealManagerStorage.getCounterPartyValues(agreementId);
         if(counterPartyCheck.length > 0) {
             if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert CounterPartyValueMismatch();
         }
-        else
-            counterPartyValues[agreementId] = partyValues;
-        ICyberAgreementRegistry(DEAL_REGISTRY).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
+        else {
+            DealManagerStorage.setCounterPartyValues(agreementId, partyValues);
+        }
+        
+        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
         updateEscrow(agreementId, msg.sender, name);
         handleCounterPartyPayment(agreementId);
     }
 
-    function signAndFinalizeDeal(address signer, bytes32 agreementId, string[] memory partyValues, bytes memory signature, bool _fillUnallocated, string memory name, string memory secret) public {
-        if(ICyberAgreementRegistry(DEAL_REGISTRY).isVoided(agreementId)) revert DealVoided();
-        if(ICyberAgreementRegistry(DEAL_REGISTRY).isFinalized(agreementId)) revert DealAlreadyFinalized();
-        if(escrows[agreementId].status != EscrowStatus.PENDING) revert DealNotPending();
+    function signAndFinalizeDeal(
+        address signer,
+        bytes32 agreementId,
+        string[] memory partyValues,
+        bytes memory signature,
+        bool _fillUnallocated,
+        string memory name,
+        string memory secret
+    ) public {
+        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId)) revert DealVoided();
+        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isFinalized(agreementId)) revert DealAlreadyFinalized();
+        if(LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PENDING) revert DealNotPending();
 
-        string[] memory counterPartyCheck = counterPartyValues[agreementId];
+        string[] storage counterPartyCheck = DealManagerStorage.getCounterPartyValues(agreementId);
         if(counterPartyCheck.length > 0) {
             if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert CounterPartyValueMismatch();
         }
-        else
-            counterPartyValues[agreementId] = partyValues;
+        else {
+            DealManagerStorage.setCounterPartyValues(agreementId, partyValues);
+        }
             
         if(!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
         
-        if(!ICyberAgreementRegistry(DEAL_REGISTRY).hasSigned(agreementId, signer))
-            ICyberAgreementRegistry(DEAL_REGISTRY).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
+        if(!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).hasSigned(agreementId, signer))
+            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
 
         updateEscrow(agreementId, msg.sender, name);
         handleCounterPartyPayment(agreementId);
@@ -180,69 +215,79 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     }
 
     function finalizeDeal(bytes32 agreementId) public {
-        if(ICyberAgreementRegistry(DEAL_REGISTRY).isVoided(agreementId)) revert DealVoided();
-        if(escrows[agreementId].status != EscrowStatus.PAID) revert DealNotPaid();
-        if(ICyberAgreementRegistry(DEAL_REGISTRY).isFinalized(agreementId)) revert DealAlreadyFinalized();
-        if(!ICyberAgreementRegistry(DEAL_REGISTRY).allPartiesSigned(agreementId)) revert DealNotFullySigned();
+        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId)) revert DealVoided();
+        if(LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PAID) revert DealNotPaid();
+        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isFinalized(agreementId)) revert DealAlreadyFinalized();
+        if(!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).allPartiesSigned(agreementId)) revert DealNotFullySigned();
         if(!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
         
-        ICyberAgreementRegistry(DEAL_REGISTRY).finalizeContract(agreementId);
+        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).finalizeContract(agreementId);
         finalizeEscrow(agreementId);
         emit DealFinalized(
             agreementId,
             msg.sender,
-            CORP,
-            address(DEAL_REGISTRY),
+            LexScrowStorage.getCorp(),
+            LexScrowStorage.getDealRegistry(),
             false
         );
     }
 
     function voidExpiredDeal(bytes32 agreementId, address signer, bytes memory signature) public {
-        Escrow storage deal = escrows[agreementId];
+        Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
         for(uint256 i = 0; i < deal.corpAssets.length; i++) {
             if(deal.corpAssets[i].tokenType == TokenType.ERC721) {
-                IIssuanceManager(ISSUANCE_MANAGER).voidCertificate(deal.corpAssets[i].tokenAddress, deal.corpAssets[i].tokenId);
+                DealManagerStorage.getIssuanceManager().voidCertificate(
+                    deal.corpAssets[i].tokenAddress, 
+                    deal.corpAssets[i].tokenId
+                );
             }
         }
         voidEscrow(agreementId);
-        ICyberAgreementRegistry(DEAL_REGISTRY).voidContractFor(agreementId, signer, signature);
+        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
     }
 
     function revokeDeal(bytes32 agreementId, address signer, bytes memory signature) public {
-        if(escrows[agreementId].status == EscrowStatus.PENDING) 
-            ICyberAgreementRegistry(DEAL_REGISTRY).voidContractFor(agreementId, signer, signature);
+        if(LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PENDING) 
+            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
         else
             revert DealNotPending();
     }
 
     function signToVoid(bytes32 agreementId, address signer, bytes memory signature) public {
-        ICyberAgreementRegistry(DEAL_REGISTRY).voidContractFor(agreementId, signer, signature);
-        if(ICyberAgreementRegistry(DEAL_REGISTRY).isVoided(agreementId) && escrows[agreementId].status == EscrowStatus.PAID)
+        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
+        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId) && LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PAID)
             voidAndRefund(agreementId);
     }
 
     function addCondition(bytes32 agreementId, address condition) public onlyOwner {
         //make sure the contract is still pending
-        if(escrows[agreementId].status != EscrowStatus.PENDING) revert DealNotPending();
+        if(LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PENDING) revert DealNotPending();
         //make sure the condition is not already in the list
-        for(uint256 i = 0; i < conditionsByEscrow[agreementId].length; i++) {
-            if(conditionsByEscrow[agreementId][i] == ICondition(condition)) revert ConditionAlreadyExists();
+        ICondition[] storage conditions = LexScrowStorage.getConditionsByEscrow(agreementId);
+        for(uint256 i = 0; i < conditions.length; i++) {
+            if(conditions[i] == ICondition(condition)) revert ConditionAlreadyExists();
         }
-        conditionsByEscrow[agreementId].push(ICondition(condition));
+        LexScrowStorage.addConditionToEscrow(agreementId, ICondition(condition));
     }
 
     function removeConditionAt(bytes32 agreementId, uint256 index) public onlyOwner {
         //make sure the contract is still pending
-        if(escrows[agreementId].status != EscrowStatus.PENDING) revert DealNotPending();
+        if(LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PENDING) revert DealNotPending();
         //make sure the condition is in the list
-        if(index >= conditionsByEscrow[agreementId].length) revert ConditionDoesNotExist();
+        ICondition[] storage conditions = LexScrowStorage.getConditionsByEscrow(agreementId);
+        if(index >= conditions.length) revert ConditionDoesNotExist();
 
-        //remove the index and shift the array
-        for(uint256 i = index; i < conditionsByEscrow[agreementId].length - 1; i++) {
-            conditionsByEscrow[agreementId][i] = conditionsByEscrow[agreementId][i + 1];
-        }
-        conditionsByEscrow[agreementId].pop();
+        LexScrowStorage.removeConditionFromEscrow(agreementId, index);
     }
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
+
+    // Remove the public state variables since we're using the storage library
+    function issuanceManager() public view returns (IIssuanceManager) {
+        return DealManagerStorage.getIssuanceManager();
+    }
+
+    function getCounterPartyValues(bytes32 agreementId) public view returns (string[] memory) {
+        return DealManagerStorage.getCounterPartyValues(agreementId);
+    }
 }

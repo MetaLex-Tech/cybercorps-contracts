@@ -24,11 +24,12 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
     function initialize(
         address _auth,
         address _CORP,
-        address _CyberCertPrinterImplementation
+        address _CyberCertPrinterImplementation,
+        address _uriBuilder
     ) external;
 
     function createCertPrinter(
-        string memory _ledger,
+        string[] memory _ledger,
         string memory _name,
         string memory _ticker,
         string memory _certificateUri,
@@ -120,6 +121,7 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
     // Beacon Functions
     function CyberCertPrinterBeacon() external view returns (address);
     function CORP() external view returns (address);
+    function uriBuilder() external view returns (address);
     function certifications(uint256) external view returns (address);
     function companyName() external view returns (string memory);
     function companyJurisdiction() external view returns (string memory);
