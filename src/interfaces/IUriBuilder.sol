@@ -15,6 +15,10 @@ interface IUriBuilder {
         string[] memory certLegend,
         CertificateDetails memory details,
         Endorsement[] memory endorsements,
-        OwnerDetails memory owner
+        OwnerDetails memory owner,
+        string[] memory globalFields,
+        string[] memory globalValues,
+        uint256 tokenId,
+        address contractAddress
     ) external view returns (string memory);
 }

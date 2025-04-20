@@ -129,19 +129,30 @@ contract CertificateUriBuilder {
         string[] memory certLegend,
         CertificateDetails memory details,
         Endorsement[] memory endorsements,
-        OwnerDetails memory owner
+        OwnerDetails memory owner,
+        string[] memory globalFields,
+        string[] memory globalValues,
+        uint256 tokenId,
+        address contractAddress
     ) public pure returns (string memory) {
-        // Start building the JSON string
+        // Start building the JSON string with ERC-721 metadata standard format
         string memory json = string(abi.encodePacked(
-            '{"cyberCORPName": "', cyberCORPName,
+            '{"title": "MetaLeX Tokenized Certificate",',
+            '"type": "', securityClassToString(securityType),
+            '", "image": "", "properties": {'
+        ));
+
+        // Add all existing properties under the properties object
+        json = string.concat(json,
+            '"cyberCORPName": "', cyberCORPName,
             '", "cyberCORPType": "', cyberCORPType,
-            '", "cyberCORPJurisdiction": "', cyberCORPJurisdiction,
-            '", "cyberCORPContactDetails": "', cyberCORPContactDetails,
             '", "securityType": "', securityClassToString(securityType),
             '", "securitySeries": "', securitySeriesToString(securitySeries),
             '", "certificateUri": "', certificateUri,
+            '", "cyberCORPJurisdiction": "', cyberCORPJurisdiction,
+            '", "cyberCORPContactDetails": "', cyberCORPContactDetails,
             '", "legend": ', arrayToJsonString(certLegend)
-        ));
+        );
 
         // Add certificate details
         json = string.concat(json, 
@@ -166,8 +177,20 @@ contract CertificateUriBuilder {
                 '", "agreementId": "', bytes32ToString(endorsements[i].agreementId),
                 '", "endorsee": "', addressToString(endorsements[i].endorsee),
                 '", "endorseeName": "', endorsements[i].endorseeName,
-                '"}'
-            );
+                '"');
+
+            // Add purchaseAgreementDetails for the first endorsement only
+            if (i == 0 && globalFields.length > 0) {
+                json = string.concat(json, ', "purchaseAgreementDetails": {');
+                for (uint256 j = 0; j < globalFields.length; j++) {
+                    if (j > 0) json = string.concat(json, ',');
+                    json = string.concat(json, '"', globalFields[j], '": "', 
+                        j < globalValues.length ? globalValues[j] : "", '"');
+                }
+                json = string.concat(json, '}');
+            }
+
+            json = string.concat(json, '}');
         }
         json = string.concat(json, ']');
 
@@ -179,8 +202,8 @@ contract CertificateUriBuilder {
             '"}'
         );
 
-        // Close the JSON object
-        json = string.concat(json, '}');
+        // Close both the properties object and the main JSON object
+        json = string.concat(json, '}}');
 
         return json;
     }

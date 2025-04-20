@@ -9,6 +9,8 @@ import "./interfaces/ITransferRestrictionHook.sol";
 import "./CyberCorpConstants.sol";
 import "./storage/CyberCertPrinterStorage.sol";
 import "./interfaces/IUriBuilder.sol";
+import "./interfaces/ICyberAgreementRegistry.sol";
+
 contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable {
     using CyberCertPrinterStorage for CyberCertPrinterStorage.CyberCertStorage;
 
@@ -290,6 +292,32 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
 
         // Convert storage endorsements to memory array for the builder
         Endorsement[] memory endorsementsArray = new Endorsement[](s.endorsements[tokenId].length);
+        string[] memory globalFields;
+        string[] memory globalValues;
+
+        // If there are endorsements, get the global fields and values from the agreement registry
+        if (s.endorsements[tokenId].length > 0) {
+            Endorsement memory firstEndorsement = s.endorsements[tokenId][0];
+            if (firstEndorsement.registry != address(0) && firstEndorsement.agreementId != bytes32(0)) {
+                ICyberAgreementRegistry registry = ICyberAgreementRegistry(firstEndorsement.registry);
+                (
+                    ,  // bytes32 templateId
+                    ,  // string memory legalContractUri
+                    globalFields,  // string[] memory globalFields
+                    ,  // string[] memory partyFields
+                    globalValues,  // string[] memory globalValues
+                    ,  // address[] memory parties
+                    ,  // string[][] memory partyValues
+                    ,  // uint256[] memory signedAt
+                    ,  // uint256 numSignatures
+                    ,  // bool isComplete
+                ) = registry.getContractDetails(firstEndorsement.agreementId);
+            } else {
+                globalFields = new string[](0);
+                globalValues = new string[](0);
+            }
+        }
+
         for (uint256 i = 0; i < s.endorsements[tokenId].length; i++) {
             endorsementsArray[i] = s.endorsements[tokenId][i];
         }
@@ -305,7 +333,11 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
             certLegend,
             details,
             endorsementsArray,
-            owner
+            owner,
+            globalFields,
+            globalValues,
+            tokenId,
+            address(this)
         );
     }
 

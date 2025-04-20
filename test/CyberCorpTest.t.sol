@@ -65,16 +65,37 @@ contract CyberCorpTest is Test {
 
         registry = new CyberAgreementRegistry();
         CyberAgreementRegistry(registry).initialize(address(auth));
+
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
         registry.createTemplate(
             bytes32(uint256(1)),
-            "SAFE",
+            "Test",
             "ipfs.io/ipfs/[cid]",
             globalFields,
             partyFields
+        );
+
+        string[] memory globalFieldsSafe = new string[](5);
+        globalFieldsSafe[0] = "Purchase Amount";
+        globalFieldsSafe[1] = "Post-Money Valuation Cap";
+        globalFieldsSafe[2] = "Expiration Time";
+        globalFieldsSafe[3] = "Governing Jurisdiction";
+        globalFieldsSafe[4] = "Dispute Resolution";
+
+        string[] memory partyFieldsSafe = new string[](3);
+        partyFieldsSafe[0] = "Name";
+        partyFieldsSafe[1] = "EVM Address";
+        partyFieldsSafe[2] = "Contact";
+
+        registry.createTemplate(
+            bytes32(uint256(2)),
+            "SAFE",
+            "ipfs.io/ipfs/[cid]",
+            globalFieldsSafe,
+            partyFieldsSafe
         );
 
         address uriBuilder = address(new CertificateUriBuilder());
@@ -2128,13 +2149,12 @@ contract CyberCorpTest is Test {
         );
 
         CertificateDetails memory _details = CertificateDetails({
-            signingOfficerName: "",
-            signingOfficerTitle: "",
-            investmentAmount: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
-            unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc",
-
+            signingOfficerName: "Gabe",
+            signingOfficerTitle: "CEO",
+            investmentAmount: 100000,
+            issuerUSDValuationAtTimeofInvestment: 100000000,
+            unitsRepresented: 100000,
+            legalDetails: "Legal Details",
             issuerSignatureURI: ""
         });
 
@@ -2146,24 +2166,39 @@ contract CyberCorpTest is Test {
             role: "Executive"
         });
 
-        string[] memory globalValues = new string[](1);
-        globalValues[0] = "Global Value 1";
+        
+        string[] memory globalFields = new string[](5);
+        globalFields[0] = "Purchase Amount";
+        globalFields[1] = "Post-Money Valuation Cap";
+        globalFields[2] = "Expiration Time";
+        globalFields[3] = "Governing Jurisdiction";
+        globalFields[4] = "Dispute Resolution";
+
         address[] memory parties = new address[](2);
         parties[0] = testAddress;
         parties[1] = address(0);
-        uint256 _paymentAmount = 1000000000000000000;
+        uint256 _paymentAmount = 100000;
+        string[] memory partyFields = new string[](3);
+        partyFields[0] = "Name";
+        partyFields[1] = "EVM Address";
+        partyFields[2] = "Contact";
+
+        string[] memory globalValues = new string[](5);
+        globalValues[0] =  "100000";
+        globalValues[1] = "100000000";
+        globalValues[2] = "12/1/2025";
+        globalValues[3] = "Deleware";
+        globalValues[4] = "Binding Arbitration";
+
         string[][] memory partyValues = new string[][](1);
-        partyValues[0] = new string[](1);
-        partyValues[0][0] = "Party Value 1";
+        partyValues[0] = new string[](3);
+        partyValues[0][0] = "Gabe";
+        partyValues[0][1] = "0xDEADBABE12345678909876543210866666666666";
+        partyValues[0][2] = "@Gabe";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(bytes32(uint256(2)), block.timestamp, globalValues, parties)
         );
-
-        string[] memory globalFields = new string[](1);
-        globalFields[0] = "Global Field 1";
-        string[] memory partyFields = new string[](1);
-        partyFields[0] = "Party Field 1";
 
         bytes memory proposerSignature = _signAgreementTypedData(
             registry.DOMAIN_SEPARATOR(),
@@ -2194,7 +2229,7 @@ contract CyberCorpTest is Test {
                 "ipfs.io/ipfs/[cid]",
                 SecurityClass.SAFE,
                 SecuritySeries.SeriesPreSeed,
-                bytes32(uint256(1)),
+                bytes32(uint256(2)),
                 globalValues,
                 parties,
                 _paymentAmount,
@@ -2209,8 +2244,11 @@ contract CyberCorpTest is Test {
 
         uint256 newPartyPk = 80085;
         address newPartyAddr = vm.addr(newPartyPk);
-        string[] memory partyValuesB = new string[](1);
-        partyValuesB[0] = "Party Value B";
+        string[] memory partyValuesB = new string[](3);
+        partyValuesB[0] = "Mr. Prepop";
+        partyValuesB[1] = "0xDEADBABE12345678909876543210866666666666";
+        partyValuesB[2] = "@0xPrepop";
+
 
         vm.startPrank(newPartyAddr);
         bytes memory newPartySignature = _signAgreementTypedData(

@@ -70,7 +70,7 @@ contract CyberCorpFactory {
 
         // Initialize BorgAuth
         BorgAuth(authAddress).initialize();
-        BorgAuth(authAddress).updateRole(msg.sender, 200);
+        BorgAuth(authAddress).updateRole(_officer.eoa, 200);
 
         issuanceManagerAddress = IIssuanceManagerFactory(issuanceManagerFactory).deployIssuanceManager(salt);
 
