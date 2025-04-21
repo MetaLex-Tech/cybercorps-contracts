@@ -6,27 +6,26 @@ import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "./interfaces/ICyberCertPrinter.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "./storage/IssuanceManagerStorage.sol";
 
 
-contract IssuanceManager is BorgAuthACL {
+contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
+    using IssuanceManagerStorage for IssuanceManagerStorage.IssuanceManagerData;
+
     // Custom errors
     error CompanyDetailsNotSet();
     error SignatureURIRequired();
     error TokenProxyNotFound();
     error NotSAFEToken();
     
-    UpgradeableBeacon public CyberCertPrinterBeacon;
-    address public CORP;
-    address public uriBuilder;
-
-    // Mapping to track proxy addresses for each token ID
-    address[] public printers;
-
     event CertPrinterCreated(address indexed certificate, address indexed corp, string[] ledger, string name, string ticker, SecurityClass securityType, SecuritySeries securitySeries, string certificateUri);
     event CertificateCreated(uint256 indexed tokenId, address indexed certificate, uint256 amount, uint256 cap, CertificateDetails details);
     event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
     }
 
@@ -40,26 +39,28 @@ contract IssuanceManager is BorgAuthACL {
         address _CyberCertPrinterImplementation,
         address _uriBuilder
     ) external initializer {
-        // Initialize BorgAuthACL
+        __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
         
-        // Set CORP address
-        CORP = _CORP;
-        uriBuilder = _uriBuilder;
+        // Set storage values
+        IssuanceManagerStorage.setCORP(_CORP);
+        IssuanceManagerStorage.setUriBuilder(_uriBuilder);
+        
         // Create beacon with implementation
-        CyberCertPrinterBeacon = new UpgradeableBeacon(
+        UpgradeableBeacon beacon = new UpgradeableBeacon(
             _CyberCertPrinterImplementation,
             address(this)
         );
+        IssuanceManagerStorage.setCyberCertPrinterBeacon(beacon);
     }
     
     function createCertPrinter(string[] memory _ledger, string memory _name, string memory _ticker, string memory _certificateUri, SecurityClass _securityType, SecuritySeries _securitySeries) public onlyOwner returns (address) {
         //add new proxy to a set CyberCertPrinter deployement
-        bytes32 salt = keccak256(abi.encodePacked(printers.length, address(this)));
+        bytes32 salt = keccak256(abi.encodePacked(IssuanceManagerStorage.getPrinters().length, address(this)));
         address newCert = Create2.deploy(0, salt, _getBytecode());
-        printers.push(newCert);
+        IssuanceManagerStorage.addPrinter(newCert);
         ICyberCertPrinter(newCert).initialize(_ledger, _name, _ticker, _certificateUri, address(this), _securityType, _securitySeries);
-        emit CertPrinterCreated(newCert, CORP, _ledger, _name, _ticker, _securityType, _securitySeries, _certificateUri);
+        emit CertPrinterCreated(newCert, IssuanceManagerStorage.getCORP(), _ledger, _name, _ticker, _securityType, _securitySeries, _certificateUri);
         return newCert;
     }
 
@@ -82,7 +83,7 @@ contract IssuanceManager is BorgAuthACL {
         address investor,
         CertificateDetails memory _details
     ) public onlyOwner returns (uint256 tokenId) {
-        if (bytes(ICyberCorp(CORP).cyberCORPName()).length == 0) revert CompanyDetailsNotSet();
+        if (bytes(ICyberCorp(IssuanceManagerStorage.getCORP()).cyberCORPName()).length == 0) revert CompanyDetailsNotSet();
         ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         tokenId = cert.totalSupply();
     
@@ -117,23 +118,45 @@ contract IssuanceManager is BorgAuthACL {
     }
 
     function upgradeImplementation(address _newImplementation) external onlyAdmin {
-        UpgradeableBeacon(CyberCertPrinterBeacon).upgradeTo(_newImplementation);
+        IssuanceManagerStorage.updateBeaconImplementation(_newImplementation);
     }
 
     function getBeaconImplementation() external view returns (address) {
-        return UpgradeableBeacon(CyberCertPrinterBeacon).implementation();
+        return IssuanceManagerStorage.getCyberCertPrinterBeacon().implementation();
     }
 
     function _getBytecode() private view returns (bytes memory bytecode) {
         bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
-        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(CyberCertPrinterBeacon, ""));
+        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(IssuanceManagerStorage.getCyberCertPrinterBeacon(), ""));
     }
 
     function companyName() external view returns (string memory) {
-        return ICyberCorp(CORP).cyberCORPName();
+        return ICyberCorp(IssuanceManagerStorage.getCORP()).cyberCORPName();
     }
 
     function companyJurisdiction() external view returns (string memory) {
-        return ICyberCorp(CORP).cyberCORPJurisdiction();
+        return ICyberCorp(IssuanceManagerStorage.getCORP()).cyberCORPJurisdiction();
     }
+
+    // Public getters for storage variables
+    function CORP() external view returns (address) {
+        return IssuanceManagerStorage.getCORP();
+    }
+
+    function uriBuilder() external view returns (address) {
+        return IssuanceManagerStorage.getUriBuilder();
+    }
+
+    function CyberCertPrinterBeacon() external view returns (UpgradeableBeacon) {
+        return IssuanceManagerStorage.getCyberCertPrinterBeacon();
+    }
+
+    function printers(uint256 index) external view returns (address) {
+        return IssuanceManagerStorage.getPrinters()[index];
+    }
+
+    /// @notice Function that authorizes an upgrade to a new implementation
+    /// @dev Only callable by owner due to onlyOwner modifier inherited from BorgAuthACL
+    /// @param newImplementation Address of the new implementation contract
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }

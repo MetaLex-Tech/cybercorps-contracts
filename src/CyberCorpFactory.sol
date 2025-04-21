@@ -77,7 +77,7 @@ contract CyberCorpFactory {
         cyberCorpAddress = ICyberCorpSingleFactory(cyberCorpSingleFactory).deployCyberCorpSingle(salt, authAddress, companyName, companyJurisdiction, companyContactDetails, defaultDisputeResolution, defaultLegend, issuanceManagerAddress, _companyPayable, _officer);
 
         //deploy deal manager
-        dealManagerAddress = IDealManagerFactory(dealManagerFactory).deployDealManager();
+        dealManagerAddress = IDealManagerFactory(dealManagerFactory).deployDealManager(salt);
         // Initialize IssuanceManager
         IIssuanceManager(issuanceManagerAddress).initialize(
             authAddress,
