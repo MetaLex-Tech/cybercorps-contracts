@@ -151,7 +151,7 @@ contract CertificateUriBuilder {
             '", "certificateUri": "', certificateUri,
             '", "cyberCORPJurisdiction": "', cyberCORPJurisdiction,
             '", "cyberCORPContactDetails": "', cyberCORPContactDetails,
-            '", "legend": ', arrayToJsonString(certLegend)
+            '", "restrictiveLegends": ', arrayToJsonString(certLegend)
         );
 
         // Add certificate details

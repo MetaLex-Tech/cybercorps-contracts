@@ -21,6 +21,7 @@ contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
     address public cyberCertPrinterImplementation;
     CompanyOfficer[] public companyOfficers;
 
+    event CyberCORPDetailsUpdated(string cyberCORPName, string cyberCORPType, string cyberCORPJurisdiction, string cyberCORPContactDetails, string defaultDisputeResolution, string defaultLegend);
 
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -53,16 +54,20 @@ contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     function setcyberCORPDetails(
         string memory _cyberCORPName,
+        string memory _cyberCORPType,
         string memory _cyberCORPJurisdiction,
         string memory _cyberCORPContactDetails,
         string memory _defaultDisputeResolution,
         string memory _defaultLegend
     ) external onlyOwner() {
         cyberCORPName = _cyberCORPName;
+        cyberCORPType = _cyberCORPType;
         cyberCORPJurisdiction = _cyberCORPJurisdiction;
         cyberCORPContactDetails = _cyberCORPContactDetails;
         defaultDisputeResolution = _defaultDisputeResolution;
         defaultLegend = _defaultLegend;
+
+        emit CyberCORPDetailsUpdated(cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, defaultDisputeResolution, defaultLegend);
     }
 
     function setIssuanceManager(address _issuanceManager) external onlyOwner() {

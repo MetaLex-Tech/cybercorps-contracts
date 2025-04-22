@@ -471,12 +471,12 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
      */
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyIssuanceManager {}
 
-    function addLegend(string memory newLegend) external onlyIssuanceManager {
+    function addDefaultLegend(string memory newLegend) external onlyIssuanceManager {
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
         s.defaultLegend.push(newLegend);
     }
 
-    function removeLegendAt(uint256 index) external onlyIssuanceManager {
+    function removeDefaultLegendAt(uint256 index) external onlyIssuanceManager {
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
         if (index >= s.defaultLegend.length) revert InvalidLegendIndex();
 
@@ -489,14 +489,14 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         s.defaultLegend.pop();
     }
 
-    function getLegendAt(uint256 index) external view returns (string memory) {
+    function getDefaultLegendAt(uint256 index) external view returns (string memory) {
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
         if (index >= s.defaultLegend.length) revert InvalidLegendIndex();
         
         return s.defaultLegend[index];
     }
 
-    function getLegendCount() external view returns (uint256) {
+    function getDefaultLegendCount() external view returns (uint256) {
         return CyberCertPrinterStorage.cyberCertStorage().defaultLegend.length;
     }
 

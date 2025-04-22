@@ -118,6 +118,7 @@ contract CyberCorpFactory {
         bytes memory signature,
         CertificateDetails memory _details,
         address[] memory conditions,
+        string[] memory _defaultLegend,
         bytes32 secretHash,
         uint256 expiry
     ) external returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress, address certPrinterAddress, bytes32 id) {
@@ -139,8 +140,8 @@ contract CyberCorpFactory {
             _officer
         );
 
-        string[] memory defaultLegend = new string[](0);
-        ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter(defaultLegend, string.concat(companyName, " ", certName), certSymbol, certificateUri, securityClass, securitySeries));
+        //string[] memory defaultLegend = new string[](0);
+        ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter(_defaultLegend, string.concat(companyName, " ", certName), certSymbol, certificateUri, securityClass, securitySeries));
         certPrinterAddress = address(certPrinter);
 
         // Create and sign deal

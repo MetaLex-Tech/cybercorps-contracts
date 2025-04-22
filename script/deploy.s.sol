@@ -36,11 +36,19 @@ contract BaseScript is Script {
         address dealManagerFactory = address(new DealManagerFactory());
         address registry = address(new CyberAgreementRegistry());
         CyberAgreementRegistry(registry).initialize(address(auth));
-        string[] memory globalFields = new string[](1);
-        globalFields[0] = "Global Field 1";
-        string[] memory partyFields = new string[](1);
-        partyFields[0] = "Party Field 1";
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "ipfs.io/ipfs/[cid]", globalFields, partyFields);
+        string[] memory globalFieldsSafe = new string[](5);
+        globalFieldsSafe[0] = "Purchase Amount";
+        globalFieldsSafe[1] = "Post-Money Valuation Cap";
+        globalFieldsSafe[2] = "Expiration Time";
+        globalFieldsSafe[3] = "Governing Jurisdiction";
+        globalFieldsSafe[4] = "Dispute Resolution";
+
+        string[] memory partyFieldsSafe = new string[](3);
+        partyFieldsSafe[0] = "Name";
+        partyFieldsSafe[1] = "EVM Address";
+        partyFieldsSafe[2] = "Contact";
+        
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "ipfs.io/ipfs/[cid]", globalFieldsSafe, partyFieldsSafe);
         address uriBuilder = address(new CertificateUriBuilder());
         CyberCorpFactory cyberCorpFactory = new CyberCorpFactory(address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder);
 

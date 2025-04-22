@@ -30,6 +30,7 @@ contract CyberCorpTest is Test {
     address testAddress;
     address counterPartyAddress = 0x1A762EfF397a3C519da3dF9FCDDdca7D1BD43B5e;
     address[] conditions = new address[](0);
+    string[] legend;
 
     function setUp() public {
         ///deploy cyberCertPrinterImplementation
@@ -109,6 +110,13 @@ contract CyberCorpTest is Test {
             uriBuilder
         );
 
+        legend = new string[](4);
+        legend[0] = "investment advisor certificate custody legend - THE SAFE CERTIFICATE TOKEN MAY NOT BE USED TO EFFECT A TRANSFER OR TO OTHERWISE FACILITATE A CHANGE IN BENEFICIAL OWNERSHIP OF THIS SAFE WITHOUT THE PRIOR CONSENT OF THE COMPANY. ";
+        legend[1] = "restricted security legend - THIS SAFE, THE SAFE CERTIFICATE TOKEN, AND ANY SECURITIES ISSUABLE PURSUANT HERETO OR THERETO ARE 'RESTRICTED SECURITIES' AS DEFINED IN SEC RULE 144. ";
+        legend[2] = "unregistered security legend - THIS SAFE, THE SAFE CERTIFICATE TOKEN AND ANY SECURITIES ISSUABLE PURSUANT HERETO OR THERETO HAVE NOT BEEN REGISTERED UNDER THE SECURITIES ACT OF 1933, AS AMENDED (THE 'SECURITIES ACT'), OR UNDER THE SECURITIES LAWS OF CERTAIN STATES. THESE SECURITIES MAY NOT BE OFFERED, SOLD OR OTHERWISE TRANSFERRED, PLEDGED OR HYPOTHECATED EXCEPT AS PERMITTED IN THIS SAFE AND UNDER THE SECURITIES ACT AND APPLICABLE STATE SECURITIES LAWS PURSUANT TO AN EFFECTIVE REGISTRATION STATEMENT OR AN EXEMPTION THEREFROM. ";
+        legend[3] = "hardfork legend - IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS ORIGINALLY ISSUED UNDERGOES A 'CONTENTIOUS HARDFORK' (AS COMMONLY UNDERSTOOD IN THE BLOCKCHAIN INDUSTRY), NO COPY OF THE SAFE CERTIFICATE TOKEN MAY BE OFFERED, SOLD, OR OTHERWISE TRANSFERRED, PLEDGED, OR HYPOTHECATED UNTIL THE COMPANY HAS DETERMINED, IN ITS SOLE AND ABSOLUTE DISCRETION, WHICH  BLOCKCHAIN SYSTEM (AND WHICH SAFE CERTIFICATE TOKENS) TO TREAT AS CANONICAL, AND THEN ONLY THE SAFE CERTIFICATE TOKEN THUS DETERMINED BY THE COMPANY TO BE CANONICAL MAY BE OFFERED, SOLD, OR OTHERWISE TRANSFERRED, PLEDGED, OR HYPOTHECATED (TO THE EXTENT OTHERWISE PERMITTED).  IN THE EVENT THAT THE BLOCKCHAIN SYSTEM DETERMINED BY THE COMPANY TO BE CANONICAL FOLLOWING A CONTENTIOUS HARDFORK ITSELF SUBSEQUENTLY UNDERGOES ITS CONTENTIOUS HARDFORK, THIS RESTRICTIVE LEGEND SHALL LIKEWISE APPLY TO SUCH CONTENTIOUS HARFORK, MUTATIS MUTANDIS. ";
+
+
         vm.stopPrank();
     }
 
@@ -163,6 +171,23 @@ contract CyberCorpTest is Test {
             testPrivateKey
         );
 
+        /*1. investment advisor certificate custody legend
+
+THE SAFE CERTIFICATE TOKEN MAY NOT BE USED TO EFFECT A TRANSFER OR TO OTHERWISE FACILITATE A CHANGE IN BENEFICIAL OWNERSHIP OF THIS SAFE WITHOUT THE PRIOR CONSENT OF THE COMPANY. 
+
+2. restricted security legend
+
+THIS SAFE, THE SAFE CERTIFICATE TOKEN, AND ANY SECURITIES ISSUABLE PURSUANT HERETO OR THERETO ARE “RESTRICTED SECURITIES” AS DEFINED IN SEC RULE 144. 
+
+3. unregistered security legend
+
+THIS SAFE, THE SAFE CERTIFICATE TOKEN AND ANY SECURITIES ISSUABLE PURSUANT HERETO OR THERETO HAVE NOT BEEN REGISTERED UNDER THE SECURITIES ACT OF 1933, AS AMENDED (THE “SECURITIES ACT”), OR UNDER THE SECURITIES LAWS OF CERTAIN STATES. THESE SECURITIES MAY NOT BE OFFERED, SOLD OR OTHERWISE TRANSFERRED, PLEDGED OR HYPOTHECATED EXCEPT AS PERMITTED IN THIS SAFE AND UNDER THE SECURITIES ACT AND APPLICABLE STATE SECURITIES LAWS PURSUANT TO AN EFFECTIVE REGISTRATION STATEMENT OR AN EXEMPTION THEREFROM.  
+
+4. hardfork legend
+
+IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS ORIGINALLY ISSUED UNDERGOES A “CONTENTIOUS HARDFORK” (AS COMMONLY UNDERSTOOD IN THE BLOCKCHAIN INDUSTRY), NO COPY OF THE SAFE CERTIFICATE TOKEN MAY BE OFFERED, SOLD, OR OTHERWISE TRANSFERRED, PLEDGED, OR HYPOTHECATED UNTIL THE COMPANY HAS DETERMINED, IN ITS SOLE AND ABSOLUTE DISCRETION, WHICH  BLOCKCHAIN SYSTEM (AND WHICH SAFE CERTIFICATE TOKENS) TO TREAT AS CANONICAL, AND THEN ONLY THE SAFE CERTIFICATE TOKEN THUS DETERMINED BY THE COMPANY TO BE CANONICAL MAY BE OFFERED, SOLD, OR OTHERWISE TRANSFERRED, PLEDGED, OR HYPOTHECATED (TO THE EXTENT OTHERWISE PERMITTED).  IN THE EVENT THAT THE BLOCKCHAIN SYSTEM DETERMINED BY THE COMPANY TO BE CANONICAL FOLLOWING A CONTENTIOUS HARDFORK ITSELF SUBSEQUENTLY UNDERGOES ITS CONTENTIOUS HARDFORK, THIS RESTRICTIVE LEGEND SHALL LIKEWISE APPLY TO SUCH CONTENTIOUS HARFORK, MUTATIS MUTANDIS.*/
+
+
         vm.startPrank(testAddress);
         cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
@@ -181,7 +206,8 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
-            conditions,
+            conditions, 
+            legend,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -271,7 +297,8 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
-            conditions,
+            conditions, 
+             legend,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -389,7 +416,8 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
-            conditions,
+            conditions, 
+             legend,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -572,7 +600,8 @@ contract CyberCorpTest is Test {
                 partyValues,
                 proposerSignature,
                 _details,
-                conditions,
+                conditions, 
+                 legend,
                 bytes32(0),
                 block.timestamp + 1000000
             );
@@ -696,7 +725,8 @@ contract CyberCorpTest is Test {
                 partyValues,
                 proposerSignature,
                 _details,
-                conditions,
+                conditions, 
+                 legend,
                 secretHash,
                 block.timestamp + 1000000
             );
@@ -823,7 +853,8 @@ contract CyberCorpTest is Test {
                 partyValues,
                 proposerSignature,
                 _details,
-                conditions,
+                conditions, 
+                 legend,
                 secretHash,
                 block.timestamp + 1000000
             );
@@ -1029,7 +1060,8 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
-            conditions,
+            conditions, 
+             legend,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1114,7 +1146,8 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
-            conditions,
+            conditions, 
+legend,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1240,7 +1273,8 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
-            conditions,
+            conditions, 
+legend,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1334,7 +1368,8 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
-            conditions,
+            conditions, 
+legend,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1422,7 +1457,8 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
-            conditions,
+            conditions, 
+legend,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1516,7 +1552,8 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
-            conditions,
+            conditions, 
+legend,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1636,7 +1673,8 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
-            conditions,
+            conditions, 
+legend,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1776,7 +1814,8 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
-            conditions,
+            conditions, 
+legend,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1902,7 +1941,8 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
-            conditions,
+            conditions, 
+legend,
             secretHash,
             block.timestamp + 1000000
         );
@@ -2025,7 +2065,8 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
-            conditions,
+            conditions, 
+legend,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -2236,7 +2277,8 @@ contract CyberCorpTest is Test {
                 partyValues,
                 proposerSignature,
                 _details,
-                conditions,
+                conditions, 
+legend,
                 bytes32(0),
                 block.timestamp + 1000000
             );

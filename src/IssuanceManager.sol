@@ -155,6 +155,11 @@ contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
         return IssuanceManagerStorage.getPrinters()[index];
     }
 
+    //set uirBuilder
+    function setUriBuilder(address _uriBuilder) external onlyOwner {
+        IssuanceManagerStorage.setUriBuilder(_uriBuilder);
+    }
+
     /// @notice Function that authorizes an upgrade to a new implementation
     /// @dev Only callable by owner due to onlyOwner modifier inherited from BorgAuthACL
     /// @param newImplementation Address of the new implementation contract
