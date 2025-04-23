@@ -243,9 +243,9 @@ contract CyberCorpTest is Test {
         cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
-"Juris",
-"Contact Details",
-"Dispute Res",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
             testAddress,
             officer,
             "SAFE",

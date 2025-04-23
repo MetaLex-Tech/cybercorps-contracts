@@ -76,7 +76,8 @@ contract BorgAuth is Initializable {
     /// @dev Use this instead of constructor when deployed behind a proxy
     function initialize() external initializer {
         _updateRole(msg.sender, OWNER_ROLE);
-        _updateRole(UPGRADER_ADDRESS, UPGRADER_ROLE);
+        if(UPGRADER_ADDRESS != msg.sender)
+            _updateRole(UPGRADER_ADDRESS, UPGRADER_ROLE);
     }
 
     /// @notice update role for user
