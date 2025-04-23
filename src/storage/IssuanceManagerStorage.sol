@@ -41,40 +41,92 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import "./IIssuanceManager.sol";
-import "../CyberCorpConstants.sol";
+import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
-interface ICyberCertPrinter {
-    function initialize(string[] memory defaultLegend, string memory name, string memory ticker, string memory _certificateUri, address _issuanceManager, SecurityClass _securityType, SecuritySeries _securitySeries) external;
-    function updateIssuanceManager(address _issuanceManager) external;
-    function updateDefaultLegend(string[] memory _ledger) external;
-    function defaultLegend() external view returns (string[] memory);
-    function setRestrictionHook(uint256 _id, address _hookAddress) external;
-    function setGlobalRestrictionHook(address hookAddress) external;
-    function safeMint(uint256 tokenId, address to, CertificateDetails memory details) external returns (uint256);
-    function setGlobalTransferable(bool _transferable) external;
-    function safeMintAndAssign(address to, uint256 tokenId, CertificateDetails memory details) external returns (uint256);
-    function assignCert(address from, uint256 tokenId, address to, CertificateDetails memory details) external returns (uint256);
-    function addIssuerSignature(uint256 tokenId, string calldata signatureURI) external;
-    function addEndorsement(uint256 tokenId, Endorsement memory newEndorsement) external;
-    function endorseAndTransfer(uint256 tokenId, Endorsement memory newEndorsement, address from, address to) external;
-    function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external;
-    function burn(uint256 tokenId) external;
-    function voidCert(uint256 tokenId) external;
-    function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory);
-    function addCertLegend(uint256 tokenId, string memory newLegend) external;
-    function removeCertLegendAt(uint256 tokenId, uint256 index) external;
-    function addDefaultLegend(string memory newLegend) external;
-    function removeDefaultLegendAt(uint256 index) external;
-    function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (
-        address endorser,
-        string memory endorseeName,
-        address registry,
-        bytes32 agreementId,
-        uint256 timestamp,
-        bytes memory signatureHash,
-        address endorsee
-    );
-    function tokenURI(uint256 tokenId) external view returns (string memory);
-    function totalSupply() external view returns (uint256);
-}
+library IssuanceManagerStorage {
+    // Storage slot for our struct
+    bytes32 constant STORAGE_POSITION = keccak256("cybercorp.issuancemanager.storage.v1");
+
+    // Main storage layout struct
+    struct IssuanceManagerData {
+        UpgradeableBeacon CyberCertPrinterBeacon;
+        address CORP;
+        address uriBuilder;
+        address[] printers;
+    }
+
+    // Returns the storage layout
+    function issuanceManagerStorage() internal pure returns (IssuanceManagerData storage ds) {
+        bytes32 position = STORAGE_POSITION;
+        assembly {
+            ds.slot := position
+        }
+    }
+
+    // Getters
+    function getCORP() internal view returns (address) {
+        return issuanceManagerStorage().CORP;
+    }
+
+    function getUriBuilder() internal view returns (address) {
+        return issuanceManagerStorage().uriBuilder;
+    }
+
+    function getCyberCertPrinterBeacon() internal view returns (UpgradeableBeacon) {
+        return issuanceManagerStorage().CyberCertPrinterBeacon;
+    }
+
+    function getPrinters() internal view returns (address[] storage) {
+        return issuanceManagerStorage().printers;
+    }
+
+    function getPrinterAt(uint256 index) internal view returns (address) {
+        return issuanceManagerStorage().printers[index];
+    }
+
+
+    function getPrintersCount() internal view returns (uint256) {
+        return issuanceManagerStorage().printers.length;
+    }
+
+    // Setters
+    function setCORP(address _corp) internal {
+        issuanceManagerStorage().CORP = _corp;
+    }
+
+    function setUriBuilder(address _uriBuilder) internal {
+        issuanceManagerStorage().uriBuilder = _uriBuilder;
+    }
+
+    function setCyberCertPrinterBeacon(UpgradeableBeacon _beacon) internal {
+        issuanceManagerStorage().CyberCertPrinterBeacon = _beacon;
+    }
+
+    function addPrinter(address _printer) internal {
+        require(_printer != address(0), "Zero address not allowed");
+        IssuanceManagerData storage s = issuanceManagerStorage();
+        s.printers.push(_printer);
+    }
+
+    function removePrinter(address _printer) internal {
+        IssuanceManagerData storage s = issuanceManagerStorage();
+        
+        // Find and remove from array
+        uint256 length = s.printers.length;
+        for (uint256 i = 0; i < length; i++) {
+            if (s.printers[i] == _printer) {
+                // Move the last element to the position being deleted (unless we're deleting the last element)
+                if (i != length - 1) {
+                    s.printers[i] = s.printers[length - 1];
+                }
+                s.printers.pop();
+                break;
+            }
+        }
+    }
+
+    // Beacon upgrade function
+    function updateBeaconImplementation(address _newImplementation) internal {
+        issuanceManagerStorage().CyberCertPrinterBeacon.upgradeTo(_newImplementation);
+    }
+} 

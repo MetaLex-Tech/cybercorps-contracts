@@ -39,97 +39,142 @@ distributed, transmitted, sublicensed, sold, or otherwise used in any form or by
 mechanical, including photocopying, recording, or by any information storage and retrieval system, 
 except with the express prior written permission of the copyright holder.*/
 
-pragma solidity 0.8.28;
+pragma solidity ^0.8.0;
 
-import "./IIssuanceManager.sol";
+interface ICyberAgreementRegistry {
+    struct Template {
+        string legalContractUri;
+        string title;
+        string[] globalFields;
+        string[] partyFields;
+    }
 
-interface IDealManager {
-    function proposeDeal(
-        address _certPrinterAddress,
-        address _paymentToken,
-        uint256 _paymentAmount,
-        bytes32 _templateId,
-        uint256 _salt,
-        string[] memory _globalValues,
-        address[] memory _parties,
-        CertificateDetails memory _certDetails,
-        string[][] memory _partyValues,
-        address[] memory conditions,
-        bytes32 secretHash,
-        uint256 expiry
-    ) external returns (bytes32 agreementId);
+    struct ContractData {
+        bytes32 templateId;
+        string[] globalValues;
+        address[] parties;
+        uint256 numSignatures;
+        bytes32 transactionHash;
+    }
 
-    function proposeAndSignDeal(
-        address _certPrinterAddress,
-        address _paymentToken,
-        uint256 _paymentAmount,
-        bytes32 _templateId,
-        uint256 _salt,
-        string[] memory _globalValues,
-        address[] memory _parties,
-        CertificateDetails memory _certDetails,
-        address proposer,
-        bytes memory signature,
-        string[][] memory paryValues,
-        address[] memory conditions,
-        bytes32 secretHash,
-        uint256 expiry
-    ) external returns (bytes32 agreementId, uint256 certId);
+    event TemplateCreated(
+        bytes32 indexed templateId,
+        string indexed title,
+        string legalContractUri,
+        string[] globalFields,
+        string[] signerFields
+    );
 
+    event ContractCreated(
+        bytes32 indexed contractId,
+        bytes32 indexed templateId,
+        address[] parties
+    );
 
-    function finalizeDeal(
-        address signer,
-        bytes32 _agreementId,
-        string[] memory _partyValues,
-        bytes memory signature,
-        bool _fillUnallocated,
-        string memory buyerName,
-        string memory secret
+    event AgreementSigned(
+        bytes32 indexed contractId,
+        address indexed party,
+        uint256 timestamp
+    );
+
+    event ContractFullySigned(bytes32 indexed contractId, uint256 timestamp);
+
+    function createTemplate(
+        bytes32 templateId,
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields
     ) external;
 
-    function signDealAndPay(
-        address signer,
-        bytes32 agreementId,
-        bytes memory signature,
+    function createContract(
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        bytes32 secretHash,
+        address finalizer, 
+        uint256 expiry
+    ) external returns (bytes32);
+
+    function signContract(
+        bytes32 contractId,
         string[] memory partyValues,
-        bool _fillUnallocated,
-        string memory name,
-        string memory secret
-    ) external;
-    
-
-    function signAndFinalizeDeal(
-        address signer,
-        bytes32 _agreementId,
-        string[] memory _partyValues,
-        bytes memory signature,
-        bool _fillUnallocated,
-        string memory buyerName,
+        bool fillUnallocated,
         string memory secret
     ) external;
 
-    function voidExpiredDeal(
-        bytes32 _agreementId,
+    function signContractFor(
         address signer,
-        bytes memory signature
+        bytes32 contractId,
+        string[] memory partyValues,
+        bytes calldata signature, 
+        bool fillUnallocated, // to fill a 0 address or not
+        string memory secret 
     ) external;
 
-    function revokeDeal(
-        bytes32 _agreementId,
-        address signer,
-        bytes memory signature
+    //function voidContractFor(bytes32 contractId, address party, bytes calldata signature) public {
+    function voidContractFor(
+        bytes32 contractId,
+        address party,
+        bytes calldata signature
     ) external;
 
-    function signToVoid(
-        bytes32 _agreementId,
-        address signer,
-        bytes memory signature
-    ) external;
+    function finalizeContract(bytes32 contractId) external;
 
-    function initialize(
-        address _auth,
-        address _corp,
-        address _dealRegistry,
-        address _issuanceManager
-    ) external;
+    function getParties(bytes32 contractId) external view returns (address[] memory);
+
+    function hasSigned(bytes32 contractId, address signer) external view returns (bool);
+
+    function getSignatureTimestamp(bytes32 contractId, address signer) external view returns (uint256);
+
+    function allPartiesSigned(bytes32 contractId) external view returns (bool);
+
+    function getContractDetails(
+        bytes32 contractId
+    )
+        external
+        view
+        returns (
+            bytes32 templateId,
+            string memory legalContractUri,
+            string[] memory globalFields,
+            string[] memory partyFields,
+            string[] memory globalValues,
+            address[] memory parties,
+            string[][] memory partyValues,
+            uint256[] memory signedAt,
+            uint256 numSignatures,
+            bool isComplete,
+            bytes32 transactionHash
+        );
+
+    function getTemplateDetails(
+        bytes32 templateId
+    )
+        external
+        view
+        returns (
+            string memory legalContractUri,
+            string[] memory globalFields,
+            string[] memory signerFields
+        );
+
+    function getSignerValues(
+        bytes32 contractId,
+        address signer
+    ) external view returns (string[] memory signerValues);
+
+    function isVoided(bytes32 contractId) external view returns (bool);
+
+    function getAgreementsForParty(address party) external view returns (bytes32[] memory);
+
+    function getContractJson(bytes32 contractId) external view returns (string memory);
+
+    function getContractTransactionHash(bytes32 contractId) external view returns (bytes32);
+
+    function isFinalized(bytes32 contractId) external view returns (bool);
+
+    function allPartiesFinalized(bytes32 contractId) external view returns (bool);
 }

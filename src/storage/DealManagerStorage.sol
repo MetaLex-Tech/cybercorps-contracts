@@ -41,40 +41,62 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import "./IIssuanceManager.sol";
-import "../CyberCorpConstants.sol";
+import "../interfaces/IIssuanceManager.sol";
 
-interface ICyberCertPrinter {
-    function initialize(string[] memory defaultLegend, string memory name, string memory ticker, string memory _certificateUri, address _issuanceManager, SecurityClass _securityType, SecuritySeries _securitySeries) external;
-    function updateIssuanceManager(address _issuanceManager) external;
-    function updateDefaultLegend(string[] memory _ledger) external;
-    function defaultLegend() external view returns (string[] memory);
-    function setRestrictionHook(uint256 _id, address _hookAddress) external;
-    function setGlobalRestrictionHook(address hookAddress) external;
-    function safeMint(uint256 tokenId, address to, CertificateDetails memory details) external returns (uint256);
-    function setGlobalTransferable(bool _transferable) external;
-    function safeMintAndAssign(address to, uint256 tokenId, CertificateDetails memory details) external returns (uint256);
-    function assignCert(address from, uint256 tokenId, address to, CertificateDetails memory details) external returns (uint256);
-    function addIssuerSignature(uint256 tokenId, string calldata signatureURI) external;
-    function addEndorsement(uint256 tokenId, Endorsement memory newEndorsement) external;
-    function endorseAndTransfer(uint256 tokenId, Endorsement memory newEndorsement, address from, address to) external;
-    function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external;
-    function burn(uint256 tokenId) external;
-    function voidCert(uint256 tokenId) external;
-    function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory);
-    function addCertLegend(uint256 tokenId, string memory newLegend) external;
-    function removeCertLegendAt(uint256 tokenId, uint256 index) external;
-    function addDefaultLegend(string memory newLegend) external;
-    function removeDefaultLegendAt(uint256 index) external;
-    function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (
-        address endorser,
-        string memory endorseeName,
-        address registry,
-        bytes32 agreementId,
-        uint256 timestamp,
-        bytes memory signatureHash,
-        address endorsee
-    );
-    function tokenURI(uint256 tokenId) external view returns (string memory);
-    function totalSupply() external view returns (uint256);
-}
+/// @title DealManagerStorage
+/// @notice Storage library for the DealManager contract that handles persistent data storage
+/// @dev Uses the unstructured storage pattern to manage deal-related data
+library DealManagerStorage {
+    // Storage slot for our struct
+    bytes32 constant STORAGE_POSITION = keccak256("cybercorp.deal.manager.storage.v1");
+
+    /// @notice Main storage layout struct that holds all deal manager data
+    /// @dev Uses unstructured storage pattern to avoid storage collisions
+    struct DealManagerData {
+        /// @notice Reference to the issuance manager contract
+        IIssuanceManager issuanceManager;
+        
+        /// @notice Mapping from agreement IDs to their counter party values
+        mapping(bytes32 => string[]) counterPartyValues;
+    }
+
+    /// @notice Retrieves the storage reference for the DealManagerData struct
+    /// @dev Uses assembly to compute the storage position
+    /// @return ds Reference to the DealManagerData struct in storage
+    function dealManagerStorage() internal pure returns (DealManagerData storage ds) {
+        bytes32 position = STORAGE_POSITION;
+        assembly {
+            ds.slot := position
+        }
+    }
+
+    /// @notice Retrieves counter party values for a specific agreement
+    /// @dev Accesses the storage mapping directly
+    /// @param agreementId The unique identifier of the agreement
+    /// @return string[] Array of counter party values
+    function getCounterPartyValues(bytes32 agreementId) internal view returns (string[] storage) {
+        return dealManagerStorage().counterPartyValues[agreementId];
+    }
+
+    /// @notice Retrieves the current issuance manager
+    /// @dev Returns the stored issuance manager reference
+    /// @return IIssuanceManager The current issuance manager contract
+    function getIssuanceManager() internal view returns (IIssuanceManager) {
+        return dealManagerStorage().issuanceManager;
+    }
+
+    /// @notice Sets counter party values for a specific agreement
+    /// @dev Updates the storage mapping with new values
+    /// @param agreementId The unique identifier of the agreement
+    /// @param values Array of counter party values to store
+    function setCounterPartyValues(bytes32 agreementId, string[] memory values) internal {
+        dealManagerStorage().counterPartyValues[agreementId] = values;
+    }
+
+    /// @notice Updates the issuance manager reference
+    /// @dev Sets a new issuance manager contract address
+    /// @param _issuanceManager Address of the new issuance manager contract
+    function setIssuanceManager(address _issuanceManager) internal {
+        dealManagerStorage().issuanceManager = IIssuanceManager(_issuanceManager);
+    }
+} 

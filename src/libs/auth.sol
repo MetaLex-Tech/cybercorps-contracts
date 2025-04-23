@@ -1,11 +1,44 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+/*    .o.                                                                                             
+     .888.                                                                                            
+    .8"888.                                                                                           
+   .8' `888.                                                                                          
+  .88ooo8888.                                                                                         
+ .8'     `888.                                                                                        
+o88o     o8888o                                                                                       
+                                                                                                      
+                                                                                                      
+                                                                                                      
+ooo        ooooo               .             ooooo                  ooooooo  ooooo                    
+`88.       .888'             .o8             `888'                   `8888    d8'                     
+ 888b     d'888   .ooooo.  .o888oo  .oooo.    888          .ooooo.     Y888..8P                       
+ 8 Y88. .P  888  d88' `88b   888   `P  )88b   888         d88' `88b     `8888'                        
+ 8  `888'   888  888ooo888   888    .oP"888   888         888ooo888    .8PY888.                       
+ 8    Y     888  888    .o   888 . d8(  888   888       o 888    .o   d8'  `888b                      
+o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o88888o                    
+                                                                                                      
+                                                                                                      
+                                                                                                      
+  .oooooo.                .o8                            .oooooo.                                     
+ d8P'  `Y8b              "888                           d8P'  `Y8b                                    
+888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.      
+888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b     
+888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888     
+`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
+ `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P 
+             .o..P'                                                                     888           
+             `Y8P'                                                                     o888o          
+_______________________________________________________________________________________________________
 
-/*                                                                                           
-    _/_/_/      _/_/    _/_/_/      _/_/_/        _/_/    _/    _/  _/_/_/_/_/  _/    _/   
-   _/    _/  _/    _/  _/    _/  _/            _/    _/  _/    _/      _/      _/    _/    
-  _/_/_/    _/    _/  _/_/_/    _/  _/_/      _/_/_/_/  _/    _/      _/      _/_/_/_/     
- _/    _/  _/    _/  _/    _/  _/    _/      _/    _/  _/    _/      _/      _/    _/      
-_/_/_/      _/_/    _/    _/    _/_/_/      _/    _/    _/_/        _/      _/    */ 
+All software, documentation and other files and information in this repository (collectively, the "Software")
+are copyright MetaLeX Labs, Inc., a Delaware corporation.
+
+All rights reserved.
+
+The Software is proprietary and shall not, in part or in whole, be used, copied, modified, merged, published, 
+distributed, transmitted, sublicensed, sold, or otherwise used in any form or by any means, electronic or
+mechanical, including photocopying, recording, or by any information storage and retrieval system, 
+except with the express prior written permission of the copyright holder.*/
+
 pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -19,6 +52,8 @@ contract BorgAuth is Initializable {
     uint256 public constant OWNER_ROLE = 99;
     uint256 public constant ADMIN_ROLE = 98;
     uint256 public constant PRIVILEGED_ROLE = 97;
+    uint256 public constant UPGRADER_ROLE = 96;
+    address public constant UPGRADER_ADDRESS = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
     address public pendingOwner;
 
     //mappings and events
@@ -41,6 +76,8 @@ contract BorgAuth is Initializable {
     /// @dev Use this instead of constructor when deployed behind a proxy
     function initialize() external initializer {
         _updateRole(msg.sender, OWNER_ROLE);
+        if(UPGRADER_ADDRESS != msg.sender)
+            _updateRole(UPGRADER_ADDRESS, UPGRADER_ROLE);
     }
 
     /// @notice update role for user
@@ -50,6 +87,7 @@ contract BorgAuth is Initializable {
         address user,
         uint256 role
     ) external {
+         if(role == UPGRADER_ROLE && msg.sender != address(this)) revert BorgAuth_SetAnotherOwner();
          onlyRole(OWNER_ROLE, msg.sender);
          if(user == msg.sender && role < OWNER_ROLE) revert BorgAuth_SetAnotherOwner();
         _updateRole(user, role);
@@ -166,6 +204,11 @@ abstract contract BorgAuthACL is Initializable {
 
     modifier onlyPriv() {
         AUTH.onlyRole(AUTH.PRIVILEGED_ROLE(), msg.sender);
+        _;
+    }
+
+    modifier onlyUpgrader() {
+        AUTH.matchRole(AUTH.UPGRADER_ROLE(), msg.sender);
         _;
     }
 
