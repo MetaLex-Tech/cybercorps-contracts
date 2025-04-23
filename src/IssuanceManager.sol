@@ -1,3 +1,44 @@
+/*    .o.                                                                                         
+     .888.                                                                                        
+    .8"888.                                                                                       
+   .8' `888.                                                                                      
+  .88ooo8888.                                                                                     
+ .8'     `888.                                                                                    
+o88o     o8888o                                                                                   
+                                                                                                  
+                                                                                                  
+                                                                                                  
+ooo        ooooo               .             oooo                                                 
+`88.       .888'             .o8             `888                                                 
+ 888b     d'888   .ooooo.  .o888oo  .oooo.    888   .ooooo.  oooo    ooo                          
+ 8 Y88. .P  888  d88' `88b   888   `P  )88b   888  d88' `88b  `88b..8P'                           
+ 8  `888'   888  888ooo888   888    .oP"888   888  888ooo888    Y888'                             
+ 8    Y     888  888    .o   888 . d8(  888   888  888    .o  .o8"'88b                            
+o8o        o888o `Y8bod8P'   "888" `Y888""8o o888o `Y8bod8P' o88'   888o                          
+                                                                                                  
+                                                                                                  
+                                                                                                  
+  .oooooo.                .o8                            .oooooo.                                 
+ d8P'  `Y8b              "888                           d8P'  `Y8b                                
+888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.  
+888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b 
+888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888 
+`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 
+`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
+ `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P
+             `Y8P'                                                                     o888o  
+_______________________________________________________________________________________________________
+
+All software, documentation and other files and information in this repository (collectively, the "Software")
+are copyright MetaLeX Labs, Inc., a Delaware corporation.
+
+All rights reserved.
+
+The Software is proprietary and shall not, in part or in whole, be used, copied, modified, merged, published, 
+distributed, transmitted, sublicensed, sold, or otherwise used in any form or by any means, electronic or
+mechanical, including photocopying, recording, or by any information storage and retrieval system, 
+except with the express prior written permission of the copyright holder.*/
+
 pragma solidity 0.8.28;
 
 import "./libs/auth.sol";
@@ -107,6 +148,11 @@ contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
         certificate.addEndorsement(tokenId, newEndorsement);
     }
 
+    function updateCertificateDetails(address certAddress, uint256 tokenId, CertificateDetails memory _details) external onlyAdmin {
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        certificate.updateCertificateDetails(tokenId, _details);
+    }
+
     function voidCertificate(address certAddress, uint256 tokenId) external onlyAdmin {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.voidCert(tokenId);
@@ -158,6 +204,37 @@ contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
     //set uirBuilder
     function setUriBuilder(address _uriBuilder) external onlyOwner {
         IssuanceManagerStorage.setUriBuilder(_uriBuilder);
+    }
+
+    // Functions to manage CyberCertPrinter settings
+    function setRestrictionHook(address certAddress, uint256 _id, address _hookAddress) external onlyAdmin {
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        certificate.setRestrictionHook(_id, _hookAddress);
+    }
+
+    function setGlobalRestrictionHook(address certAddress, address hookAddress) external onlyAdmin {
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        certificate.setGlobalRestrictionHook(hookAddress);
+    }
+
+    function addDefaultLegend(address certAddress, string memory newLegend) external onlyAdmin {
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        certificate.addDefaultLegend(newLegend);
+    }
+
+    function removeDefaultLegendAt(address certAddress, uint256 index) external onlyAdmin {
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        certificate.removeDefaultLegendAt(index);
+    }
+
+    function addCertLegend(address certAddress, uint256 tokenId, string memory newLegend) external onlyAdmin {
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        certificate.addCertLegend(tokenId, newLegend);
+    }
+
+    function removeCertLegendAt(address certAddress, uint256 tokenId, uint256 index) external onlyAdmin {
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        certificate.removeCertLegendAt(tokenId, index);
     }
 
     /// @notice Function that authorizes an upgrade to a new implementation

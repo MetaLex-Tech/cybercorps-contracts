@@ -1,4 +1,44 @@
-// SPDX-License-Identifier: UNLICENSED
+/*    .o.                                                                                         
+     .888.                                                                                        
+    .8"888.                                                                                       
+   .8' `888.                                                                                      
+  .88ooo8888.                                                                                     
+ .8'     `888.                                                                                    
+o88o     o8888o                                                                                   
+                                                                                                  
+                                                                                                  
+                                                                                                  
+ooo        ooooo               .             oooo                                                 
+`88.       .888'             .o8             `888                                                 
+ 888b     d'888   .ooooo.  .o888oo  .oooo.    888   .ooooo.  oooo    ooo                          
+ 8 Y88. .P  888  d88' `88b   888   `P  )88b   888  d88' `88b  `88b..8P'                           
+ 8  `888'   888  888ooo888   888    .oP"888   888  888ooo888    Y888'                             
+ 8    Y     888  888    .o   888 . d8(  888   888  888    .o  .o8"'88b                            
+o8o        o888o `Y8bod8P'   "888" `Y888""8o o888o `Y8bod8P' o88'   888o                          
+                                                                                                  
+                                                                                                  
+                                                                                                  
+  .oooooo.                .o8                            .oooooo.                                 
+ d8P'  `Y8b              "888                           d8P'  `Y8b                                
+888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.  
+888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b 
+888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888 
+`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 
+`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
+ `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P
+             `Y8P'                                                                     o888o  
+_______________________________________________________________________________________________________
+
+All software, documentation and other files and information in this repository (collectively, the "Software")
+are copyright MetaLeX Labs, Inc., a Delaware corporation.
+
+All rights reserved.
+
+The Software is proprietary and shall not, in part or in whole, be used, copied, modified, merged, published, 
+distributed, transmitted, sublicensed, sold, or otherwise used in any form or by any means, electronic or
+mechanical, including photocopying, recording, or by any information storage and retrieval system, 
+except with the express prior written permission of the copyright holder.*/
+
 pragma solidity ^0.8.18;
 
 import {Test, console} from "forge-std/Test.sol";
@@ -20,6 +60,7 @@ import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol"
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {CompanyOfficer} from "../src/storage/CyberCertPrinterStorage.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
+import "@openzeppelin/contracts/utils/Create2.sol";
 
 contract CyberCorpTest is Test {
     //     Counter public counter;
@@ -33,18 +74,37 @@ contract CyberCorpTest is Test {
     string[] legend;
 
     function setUp() public {
-        ///deploy cyberCertPrinterImplementation
         testPrivateKey = 1337;
         testAddress = vm.addr(testPrivateKey);
-        vm.startPrank(testAddress);
-        BorgAuth auth = new BorgAuth();
+        vm.startPrank(0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C);
+
+        // Deploy BorgAuth with Create2
+        bytes32 deploySalt = keccak256("AMetaLeXLabsCreation");
+        address authAddress = Create2.computeAddress(
+            deploySalt,
+            keccak256(type(BorgAuth).creationCode)
+        );
+        BorgAuth auth = new BorgAuth{salt: deploySalt}();
         auth.initialize();
-        address issuanceManagerFactory = address(
-            new IssuanceManagerFactory(address(0))
+
+        // Deploy IssuanceManagerFactory with Create2
+        address issuanceManagerFactory = Create2.deploy(
+            0,
+            deploySalt,
+            abi.encodePacked(
+                type(IssuanceManagerFactory).creationCode,
+                abi.encode(address(0))
+            )
         );
-        address cyberCertPrinterImplementation = address(
-            new CyberCertPrinter()
+
+        // Deploy CyberCertPrinter implementation with Create2
+        address cyberCertPrinterImplementation = Create2.deploy(
+            0,
+            deploySalt,
+            type(CyberCertPrinter).creationCode
         );
+
+        // Initialize CyberCertPrinter
         CyberCertPrinter cyberCertPrinter = CyberCertPrinter(
             cyberCertPrinterImplementation
         );
@@ -60,6 +120,7 @@ contract CyberCorpTest is Test {
             SecurityClass.SAFE,
             SecuritySeries.SeriesPreSeed
         );
+
         address cyberCorpSingleFactory = address(new CyberCorpSingleFactory());
 
         address dealManagerFactory = address(new DealManagerFactory());
@@ -80,7 +141,7 @@ contract CyberCorpTest is Test {
         );
 
         string[] memory globalFieldsSafe = new string[](5);
-        globalFieldsSafe[0] = "Purchase Amount";
+        globalFieldsSafe[0] = "Investment Amount";
         globalFieldsSafe[1] = "Post-Money Valuation Cap";
         globalFieldsSafe[2] = "Expiration Time";
         globalFieldsSafe[3] = "Governing Jurisdiction";
@@ -127,17 +188,16 @@ contract CyberCorpTest is Test {
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc",
+            legalDetails: "Legal Details, jusidictione etc" 
 
-            issuerSignatureURI: ""
+            
         });
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
             contact: "test@example.com",
-            title: "CEO",
-            role: "Executive"
+            title: "CEO"
         });
 
         string[] memory globalValues = new string[](1);
@@ -192,6 +252,9 @@ IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS 
         cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
+"Juris",
+"Contact Details",
+"Dispute Res",
             testAddress,
             officer,
             "SAFE",
@@ -224,17 +287,14 @@ IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS 
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc",
-
-            issuerSignatureURI: ""
+            legalDetails: "Legal Details, jusidictione etc" 
         });
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
             contact: "test@example.com",
-            title: "CEO",
-            role: "Executive"
+            title: "CEO"
         });
 
         string[] memory globalValues = new string[](1);
@@ -283,6 +343,9 @@ IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS 
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
+"Juris",
+"Contact Details",
+"Dispute Res",
             testAddress,
             officer,
             "SAFE",
@@ -346,17 +409,16 @@ IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS 
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc",
+            legalDetails: "Legal Details, jusidictione etc" 
 
-            issuerSignatureURI: ""
+            
         });
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
             contact: "test@example.com",
-            title: "CEO",
-            role: "Executive"
+            title: "CEO"
         });
 
         string[] memory globalValues = new string[](1);
@@ -402,6 +464,9 @@ IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS 
         (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address cyberCertPrinterAddr, bytes32 id) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
+"Juris",
+"Contact Details",
+"Dispute Res",
             testAddress,
             officer,
             "SAFE",
@@ -532,17 +597,16 @@ IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS 
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc",
+            legalDetails: "Legal Details, jusidictione etc" 
 
-            issuerSignatureURI: ""
+            
         });
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
             contact: "test@example.com",
-            title: "CEO",
-            role: "Executive"
+            title: "CEO"
         });
 
         string[] memory globalValues = new string[](1);
@@ -586,6 +650,9 @@ IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS 
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
                 block.timestamp,
                 "CyberCorp",
+"Juris",
+"Contact Details",
+"Dispute Res",
                 testAddress,
                 officer,
                 "SAFE",
@@ -654,17 +721,16 @@ IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS 
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc",
+            legalDetails: "Legal Details, jusidictione etc" 
 
-            issuerSignatureURI: ""
+            
         });
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
             contact: "test@example.com",
-            title: "CEO",
-            role: "Executive"
+            title: "CEO"
         });
 
         string[] memory globalValues = new string[](1);
@@ -711,6 +777,9 @@ IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS 
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
                 block.timestamp,
                 "CyberCorp",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
                 testAddress,
                 officer,
                 "SAFE",
@@ -782,17 +851,16 @@ IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS 
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc",
+            legalDetails: "Legal Details, jusidictione etc" 
 
-            issuerSignatureURI: ""
+            
         });
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
             contact: "test@example.com",
-            title: "CEO",
-            role: "Executive"
+            title: "CEO"
         });
 
         string[] memory globalValues = new string[](1);
@@ -839,6 +907,9 @@ IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS 
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
                 block.timestamp,
                 "CyberCorp",
+"Juris",
+"Contact Details",
+"Dispute Res",
                 testAddress,
                 officer,
                 "SAFE",
@@ -985,17 +1056,16 @@ IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS 
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc",
+            legalDetails: "Legal Details, jusidictione etc" 
 
-            issuerSignatureURI: ""
+            
         });
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
             contact: "test@example.com",
-            title: "CEO",
-            role: "Executive"
+            title: "CEO"
         });
 
         string[] memory globalFields = new string[](1);
@@ -1046,6 +1116,9 @@ IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS 
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
+"Juris",
+"Contact Details",
+"Dispute Res",
             testAddress,
             officer,
             "SAFE",
@@ -1079,17 +1152,16 @@ IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS 
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc",
+            legalDetails: "Legal Details, jusidictione etc" 
 
-            issuerSignatureURI: ""
+            
         });
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
             contact: "test@example.com",
-            title: "CEO",
-            role: "Executive"
+            title: "CEO"
         });
 
         string[] memory globalFields = new string[](1);
@@ -1132,6 +1204,9 @@ IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS 
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
+"Juris",
+"Contact Details",
+"Dispute Res",
             testAddress,
             officer,
             "SAFE",
@@ -1198,17 +1273,16 @@ legend,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc",
+            legalDetails: "Legal Details, jusidictione etc" 
 
-            issuerSignatureURI: ""
+            
         });
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
             contact: "test@example.com",
-            title: "CEO",
-            role: "Executive"
+            title: "CEO"
         });
 
         string[] memory globalFields = new string[](1);
@@ -1259,6 +1333,9 @@ legend,
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
+"Juris",
+"Contact Details",
+"Dispute Res",
             testAddress,
             officer,
             "SAFE",
@@ -1292,17 +1369,16 @@ legend,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc",
+            legalDetails: "Legal Details, jusidictione etc" 
 
-            issuerSignatureURI: ""
+            
         });
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
             contact: "test@example.com",
-            title: "CEO",
-            role: "Executive"
+            title: "CEO"
         });
 
         string[] memory globalFields = new string[](1);
@@ -1354,6 +1430,9 @@ legend,
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
+"Juris",
+"Contact Details",
+"Dispute Res",
             testAddress,
             officer,
             "SAFE",
@@ -1390,17 +1469,16 @@ legend,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc",
+            legalDetails: "Legal Details, jusidictione etc" 
 
-            issuerSignatureURI: ""
+            
         });
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
             contact: "test@example.com",
-            title: "CEO",
-            role: "Executive"
+            title: "CEO"
         });
 
         string[] memory globalFields = new string[](1);
@@ -1443,6 +1521,9 @@ legend,
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
+"Juris",
+"Contact Details",
+"Dispute Res",
             testAddress,
             officer,
             "SAFE",
@@ -1485,17 +1566,16 @@ legend,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc",
+            legalDetails: "Legal Details, jusidictione etc" 
 
-            issuerSignatureURI: ""
+            
         });
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
             contact: "test@example.com",
-            title: "CEO",
-            role: "Executive"
+            title: "CEO"
         });
 
         string[] memory globalFields = new string[](1);
@@ -1538,6 +1618,9 @@ legend,
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
+"Juris",
+"Contact Details",
+"Dispute Res",
             testAddress,
             officer,
             "SAFE",
@@ -1606,17 +1689,16 @@ legend,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc",
+            legalDetails: "Legal Details, jusidictione etc" 
 
-            issuerSignatureURI: ""
+            
         });
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
             contact: "test@example.com",
-            title: "CEO",
-            role: "Executive"
+            title: "CEO"
         });
 
         string[] memory globalFields = new string[](1);
@@ -1659,6 +1741,9 @@ legend,
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
+"Juris",
+"Contact Details",
+"Dispute Res",
             testAddress,
             officer,
             "SAFE",
@@ -1739,17 +1824,16 @@ legend,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc",
+            legalDetails: "Legal Details, jusidictione etc" 
 
-            issuerSignatureURI: ""
+            
         });
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
             contact: "test@example.com",
-            title: "CEO",
-            role: "Executive"
+            title: "CEO"
         });
 
         string[] memory globalFields = new string[](1);
@@ -1800,6 +1884,9 @@ legend,
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
+"Juris",
+"Contact Details",
+"Dispute Res",
             testAddress,
             officer,
             "SAFE",
@@ -1872,9 +1959,9 @@ legend,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc",
+            legalDetails: "Legal Details, jusidictione etc" 
 
-            issuerSignatureURI: ""
+            
         });
 
         string[] memory globalFields = new string[](1);
@@ -1895,8 +1982,7 @@ legend,
             eoa: testAddress,
             name: "Test Officer",
             contact: "test@example.com",
-            title: "CEO",
-            role: "Executive"
+            title: "CEO"
         });
 
         bytes32 secretHash = keccak256(abi.encodePacked("passphrase"));
@@ -1927,6 +2013,9 @@ legend,
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
+"Juris",
+"Contact Details",
+"Dispute Res",
             testAddress,
             officer,
             "SAFE",
@@ -1997,17 +2086,16 @@ legend,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc",
+            legalDetails: "Legal Details, jusidictione etc" 
 
-            issuerSignatureURI: ""
+            
         });
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
             contact: "test@example.com",
-            title: "CEO",
-            role: "Executive"
+            title: "CEO"
         });
 
         string[] memory globalFields = new string[](1);
@@ -2051,6 +2139,9 @@ legend,
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
+"Juris",
+"Contact Details",
+"Dispute Res",
             testAddress,
             officer,
             "SAFE",
@@ -2195,25 +2286,24 @@ legend,
             investmentAmount: 100000,
             issuerUSDValuationAtTimeofInvestment: 100000000,
             unitsRepresented: 100000,
-            legalDetails: "Legal Details",
-            issuerSignatureURI: ""
+            legalDetails: "Legal Details" 
         });
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
             contact: "test@example.com",
-            title: "CEO",
-            role: "Executive"
+            title: "CEO"
         });
 
         
         string[] memory globalFields = new string[](5);
-        globalFields[0] = "Purchase Amount";
+        globalFields[0] = "Investment Amount";
         globalFields[1] = "Post-Money Valuation Cap";
         globalFields[2] = "Expiration Time";
         globalFields[3] = "Governing Jurisdiction";
         globalFields[4] = "Dispute Resolution";
+
 
         address[] memory parties = new address[](2);
         parties[0] = testAddress;
@@ -2263,6 +2353,9 @@ legend,
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
                 block.timestamp,
                 "CyberCorp",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
                 testAddress,
                 officer,
                 "SAFE",
@@ -2278,7 +2371,7 @@ legend,
                 proposerSignature,
                 _details,
                 conditions, 
-legend,
+                legend,
                 bytes32(0),
                 block.timestamp + 1000000
             );
@@ -2330,3 +2423,4 @@ legend,
     }
     
 }
+

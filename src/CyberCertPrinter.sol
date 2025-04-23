@@ -1,4 +1,43 @@
-// SPDX-License-Identifier: unlicensed
+/*    .o.                                                                                         
+     .888.                                                                                        
+    .8"888.                                                                                       
+   .8' `888.                                                                                      
+  .88ooo8888.                                                                                     
+ .8'     `888.                                                                                    
+o88o     o8888o                                                                                   
+                                                                                                  
+                                                                                                  
+                                                                                                  
+ooo        ooooo               .             oooo                                                 
+`88.       .888'             .o8             `888                                                 
+ 888b     d'888   .ooooo.  .o888oo  .oooo.    888   .ooooo.  oooo    ooo                          
+ 8 Y88. .P  888  d88' `88b   888   `P  )88b   888  d88' `88b  `88b..8P'                           
+ 8  `888'   888  888ooo888   888    .oP"888   888  888ooo888    Y888'                             
+ 8    Y     888  888    .o   888 . d8(  888   888  888    .o  .o8"'88b                            
+o8o        o888o `Y8bod8P'   "888" `Y888""8o o888o `Y8bod8P' o88'   888o                          
+                                                                                                  
+                                                                                                  
+                                                                                                  
+  .oooooo.                .o8                            .oooooo.                                 
+ d8P'  `Y8b              "888                           d8P'  `Y8b                                
+888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.  
+888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b 
+888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888 
+`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 
+`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
+ `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P
+             `Y8P'                                                                     o888o  
+_______________________________________________________________________________________________________
+
+All software, documentation and other files and information in this repository (collectively, the "Software")
+are copyright MetaLeX Labs, Inc., a Delaware corporation.
+
+All rights reserved.
+
+The Software is proprietary and shall not, in part or in whole, be used, copied, modified, merged, published, 
+distributed, transmitted, sublicensed, sold, or otherwise used in any form or by any means, electronic or
+mechanical, including photocopying, recording, or by any information storage and retrieval system, 
+except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
@@ -6,7 +45,6 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./interfaces/ITransferRestrictionHook.sol";
-import "./CyberCorpConstants.sol";
 import "./storage/CyberCertPrinterStorage.sol";
 import "./interfaces/IUriBuilder.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
@@ -72,6 +110,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         s.securityType = _securityType;
         s.securitySeries = _securitySeries;
         s.certificateUri = _certificateUri;
+        s.endorsementRequired = true;
     }
 
     function updateIssuanceManager(address _issuanceManager) external onlyIssuanceManager {
@@ -140,12 +179,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     function safeMint(address to, uint256 tokenId) external onlyIssuanceManager {
         _safeMint(to, tokenId);
     }
-
-    // Add issuer signature to an agreement
-    function addIssuerSignature(uint256 tokenId, string calldata signatureURI) external onlyIssuanceManager {
-        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
-        s.certificateDetails[tokenId].issuerSignatureURI = signatureURI;
-    }
     
     // Add endorsement (for transfers in secondary market)
     function addEndorsement(uint256 tokenId, Endorsement memory newEndorsement) public {
@@ -191,7 +224,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         // Skip restriction checks for minting (from == address(0)) and burning (to == address(0))
         if (from != address(0) && to != address(0)) {
             // This is a transfer, check built-in transferability flag
-           // if (!certificateDetails[tokenId].transferable) revert TokenNotTransferable();
+            if (!CyberCertPrinterStorage.cyberCertStorage().transferable && from != ICyberCorp(IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).CORP()).dealManager()) revert TokenNotTransferable();
             
             // Check security type-specific hook if it exists
             ITransferRestrictionHook typeHook = CyberCertPrinterStorage.cyberCertStorage().restrictionHooksById[tokenId];
@@ -214,7 +247,11 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
             address ownerAddress = CyberCertPrinterStorage.cyberCertStorage().owners[tokenId].ownerAddress;
             //check endorsement and update owners
             if(from == ownerAddress) {
-                if(CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId].length > 0) {
+                if(!CyberCertPrinterStorage.cyberCertStorage().endorsementRequired) {
+                        emit CertificateAssigned(tokenId, to, "", IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName());
+                        CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails("", to);  
+                }
+                else if(CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId].length > 0) {
                     Endorsement memory endorsement = CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId][CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId].length - 1];
                     if (endorsement.endorsee == to) {
                         // Endorsement exists; ownership will be updated
@@ -222,7 +259,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
                         CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
                     } 
                 } 
-                // NOTE: we don't revert in this block: Owner is able to transfer to another address without an endorsement, but it does not update the owner
+            // NOTE: we don't revert in this block: Owner is able to transfer to another address without an endorsement, but it does not update the owner
             }
             else if(CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId].length > 0) {
                 // Token is not being transferred from the current owner. It can only be transferrred to the latest endorsee, or the current owner
@@ -254,29 +291,14 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     
     // Get endorsement history
     function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (
-        address endorser,
-        string memory endorseeName,
-        address registry,
-        bytes32 agreementId,
-        uint256 timestamp,
-        bytes memory signatureHash,
-        address endorsee
+        Endorsement memory details
     ) {
         if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
-        Endorsement memory details = CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId][index];
-        return (
-            details.endorser,
-            details.endorseeName,
-            details.registry,
-            details.agreementId,
-            details.timestamp,
-            details.signatureHash,
-            details.endorsee
-        );
+             details = CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId][index];
     }
 
     function voidCert(uint256 tokenId) external onlyIssuanceManager {
-        CyberCertPrinterStorage.cyberCertStorage().securityStatus[tokenId] = SecurityStatus.Void;
+        CyberCertPrinterStorage.setSecurityStatus(tokenId, SecurityStatus.Void);
         emit CertificateVoided(tokenId, block.timestamp);
     }
     
@@ -285,13 +307,10 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         if (!_exists(tokenId)) revert URIQueryForNonexistentToken();
 
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
-        CertificateDetails memory details = s.certificateDetails[tokenId];
-        OwnerDetails memory owner = s.owners[tokenId];
         string[] memory certLegend = s.certLegend[tokenId];
         ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
 
         // Convert storage endorsements to memory array for the builder
-        Endorsement[] memory endorsementsArray = new Endorsement[](s.endorsements[tokenId].length);
         string[] memory globalFields;
         string[] memory globalValues;
 
@@ -318,10 +337,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
             }
         }
 
-        for (uint256 i = 0; i < s.endorsements[tokenId].length; i++) {
-            endorsementsArray[i] = s.endorsements[tokenId][i];
-        }
-
         return IUriBuilder(IIssuanceManager(s.issuanceManager).uriBuilder()).buildCertificateUri(
             corp.cyberCORPName(),
             corp.cyberCORPType(),
@@ -331,103 +346,14 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
             s.securitySeries,
             s.certificateUri,
             certLegend,
-            details,
-            endorsementsArray,
-            owner,
+            s.certificateDetails[tokenId],
+            s.endorsements[tokenId],
+            s.owners[tokenId],
             globalFields,
             globalValues,
             tokenId,
             address(this)
         );
-    }
-
-    // Helper function to convert SecurityClass enum to string
-    function _securityClassToString(SecurityClass _class) internal pure returns (string memory) {
-        if (_class == SecurityClass.SAFE) return "SAFE";
-        if (_class == SecurityClass.SAFT) return "SAFT";
-        if (_class == SecurityClass.SAFTE) return "SAFTE";
-        if (_class == SecurityClass.TokenPurchaseAgreement) return "TokenPurchaseAgreement";
-        if (_class == SecurityClass.TokenWarrant) return "TokenWarrant";
-        if (_class == SecurityClass.ConvertibleNote) return "ConvertibleNote";
-        if (_class == SecurityClass.CommonStock) return "CommonStock";
-        if (_class == SecurityClass.StockOption) return "StockOption";
-        if (_class == SecurityClass.PreferredStock) return "PreferredStock";
-        if (_class == SecurityClass.RestrictedStockPurchaseAgreement) return "RestrictedStockPurchaseAgreement";
-        if (_class == SecurityClass.RestrictedStockUnit) return "RestrictedStockUnit";
-        if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "RestrictedTokenPurchaseAgreement";
-        if (_class == SecurityClass.RestrictedTokenUnit) return "RestrictedTokenUnit";
-        return "Unknown";
-    }
-
-    // Helper function to convert SecuritySeries enum to string
-    function _securitySeriesToString(SecuritySeries _series) internal pure returns (string memory) {
-        if (_series == SecuritySeries.SeriesPreSeed) return "SeriesPreSeed";
-        if (_series == SecuritySeries.SeriesSeed) return "SeriesSeed";
-        if (_series == SecuritySeries.SeriesA) return "SeriesA";
-        if (_series == SecuritySeries.SeriesB) return "SeriesB";
-        if (_series == SecuritySeries.SeriesC) return "SeriesC";
-        if (_series == SecuritySeries.SeriesD) return "SeriesD";
-        if (_series == SecuritySeries.SeriesE) return "SeriesE";
-        if (_series == SecuritySeries.SeriesF) return "SeriesF";
-        if (_series == SecuritySeries.NA) return "NA";
-        return "Unknown";
-    }
-
-    // Helper function to convert string array to JSON array string with numbered legends
-    function _arrayToJsonString(string[] memory arr) internal pure returns (string memory) {
-        string memory json = "[";
-        for (uint256 i = 0; i < arr.length; i++) {
-            if (i > 0) json = string.concat(json, ",");
-            json = string.concat(json, '{"id": ', _uint256ToString(i + 1), ', "legend": "', arr[i], '"}');
-        }
-        return string.concat(json, "]");
-    }
-
-    // Helper function to convert address to string
-    function _addressToString(address _addr) internal pure returns (string memory) {
-        bytes memory s = new bytes(40);
-        for (uint256 i = 0; i < 20; i++) {
-            bytes1 b = bytes1(uint8(uint160(_addr) >> (8 * (19 - i))));
-            uint8 hi = uint8(b) >> 4;
-            uint8 lo = uint8(b) & 0x0f;
-            s[2*i] = bytes1(hi + (hi < 10 ? 48 : 87));
-            s[2*i+1] = bytes1(lo + (lo < 10 ? 48 : 87));
-        }
-        return string(abi.encodePacked("0x", s));
-    }
-
-    // Helper function to convert uint256 to string
-    function _uint256ToString(uint256 _i) internal pure returns (string memory) {
-        if (_i == 0) {
-            return "0";
-        }
-        uint256 j = _i;
-        uint256 len;
-        while (j != 0) {
-            len++;
-            j /= 10;
-        }
-        bytes memory bstr = new bytes(len);
-        uint256 k = len;
-        while (_i != 0) {
-            k = k-1;
-            uint8 temp = uint8(48 + (_i % 10));
-            bytes1 b1 = bytes1(temp);
-            bstr[k] = b1;
-            _i /= 10;
-        }
-        return string(bstr);
-    }
-
-    // Helper function to convert bytes32 to string
-    function _bytes32ToString(bytes32 _bytes32) internal pure returns (string memory) {
-        bytes memory bytesArray = new bytes(64);
-        for (uint256 i = 0; i < 32; i++) {
-            uint8 b = uint8(uint8(bytes1(bytes32(_bytes32) >> (8 * (31 - i)))));
-            bytesArray[i*2] = bytes1(uint8(b/16 + (b/16 < 10 ? 48 : 87)));
-            bytesArray[i*2+1] = bytes1(uint8(b%16 + (b%16 < 10 ? 48 : 87)));
-        }
-        return string(bytesArray);
     }
 
     // Public getters that directly access storage
@@ -457,6 +383,10 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     
     function _exists(uint256 tokenId) internal view virtual returns (bool) {
         return _ownerOf(tokenId) != address(0);
+    }
+
+    function endorsementRequired() public view returns (bool) {
+        return CyberCertPrinterStorage.cyberCertStorage().endorsementRequired;
     }
 
     /**
