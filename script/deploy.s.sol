@@ -29,7 +29,7 @@ contract BaseScript is Script {
         address stableArbitrum = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
         address stableBase = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
 
-         address stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;// 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;//0x036CbD53842c5426634e7929541eC2318f3dCF7e; //sepolia base
+         address stable = stableBase;//0x036CbD53842c5426634e7929541eC2318f3dCF7e;// 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;//0x036CbD53842c5426634e7929541eC2318f3dCF7e; //sepolia base
          address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
         //use salt to deploy BorgAuth
         BorgAuth auth = new BorgAuth{salt: salt}();
@@ -65,7 +65,7 @@ contract BaseScript is Script {
         partyFieldsSafe[4] = "investorJurisdiction";
 
       
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "https://ipfs.io/ipfs/bafybeidyuiymbeen46ggt61foln6yelfi5q4qu2diolhcdk324befwg2f4u", globalFieldsSafe, partyFieldsSafe);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "https://ipfs.io/ipfs/bafybeieee4xjqpwcq5nowm4iqw6ik4wkwpz7uqohl3yamypwz54was2h64", globalFieldsSafe, partyFieldsSafe);
 
         auth.updateRole(address(multisig), 200);
         auth.zeroOwner();
