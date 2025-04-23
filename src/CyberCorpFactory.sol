@@ -54,8 +54,9 @@ import "./interfaces/ICyberCertPrinter.sol";
 import "./interfaces/ICyberAgreementFactory.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
 import "./CyberCorpConstants.sol";
+import "./libs/auth.sol";
 
-contract CyberCorpFactory {
+contract CyberCorpFactory is BorgAuthACL {
     error InvalidSalt();
     error DeploymentFailed();
 
@@ -83,14 +84,21 @@ contract CyberCorpFactory {
         bytes32 salt
     );
 
-    constructor(address _registryAddress, address _cyberCertPrinterImplementation, address _issuanceManagerFactory, address _cyberCorpSingleFactory, address _dealManagerFactory, address _uriBuilder, address _payment) {
+    constructor(address _registryAddress, address _cyberCertPrinterImplementation, address _issuanceManagerFactory, address _cyberCorpSingleFactory, address _dealManagerFactory, address _uriBuilder) {
         registryAddress = _registryAddress;
         cyberCertPrinterImplementation = _cyberCertPrinterImplementation;
         issuanceManagerFactory = _issuanceManagerFactory;
         cyberCorpSingleFactory = _cyberCorpSingleFactory;
         dealManagerFactory = _dealManagerFactory;
         uriBuilder = _uriBuilder;
-        stable = _payment;
+
+    }
+
+    function initialize(
+        address _auth
+    ) external initializer {
+        // Initialize BorgAuthACL
+        __BorgAuthACL_init(_auth);
     }
 
     function deployCyberCorp(
@@ -209,5 +217,9 @@ contract CyberCorpFactory {
             expiry
         );
 
+    }
+
+    function setStable(address _stable) external onlyOwner {
+        stable = _stable;
     }
 }

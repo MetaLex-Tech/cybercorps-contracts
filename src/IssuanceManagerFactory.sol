@@ -45,10 +45,8 @@ import "@openzeppelin/contracts/utils/Create2.sol";
 import "./IssuanceManager.sol";
 
 contract IssuanceManagerFactory {
-    address public issuanceManagerImplementation;
 
-    constructor(address _issuanceManagerImplementation) {
-        issuanceManagerImplementation = _issuanceManagerImplementation;
+    constructor() {
     }
 
     function deployIssuanceManager(bytes32 salt) public returns (address issuanceManagerAddress) {        // Deploy IssuanceManager with CREATE2

@@ -173,9 +173,11 @@ contract CyberCorpTest is Test {
             issuanceManagerFactory,
             cyberCorpSingleFactory,
             dealManagerFactory,
-            uriBuilder,
-            0x036CbD53842c5426634e7929541eC2318f3dCF7e
+            uriBuilder
         );
+
+        cyberCorpFactory.initialize(address(auth));
+        cyberCorpFactory.setStable(0x036CbD53842c5426634e7929541eC2318f3dCF7e);
 
         legend = new string[](4);
         legend[0] = "investment advisor certificate custody legend - THE SAFE CERTIFICATE TOKEN MAY NOT BE USED TO EFFECT A TRANSFER OR TO OTHERWISE FACILITATE A CHANGE IN BENEFICIAL OWNERSHIP OF THIS SAFE WITHOUT THE PRIOR CONSENT OF THE COMPANY. ";

@@ -25,19 +25,20 @@ contract BaseScript is Script {
         address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         vm.startBroadcast(deployerPrivateKey);
-         address stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e; //sepolia base
+         address stable = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;//0x036CbD53842c5426634e7929541eC2318f3dCF7e; //sepolia base
+         address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
         //use salt to deploy BorgAuth
         BorgAuth auth = new BorgAuth{salt: salt}();
         auth.initialize();
-        address issuanceManagerFactory = address(new IssuanceManagerFactory(address(0)));
-        address cyberCertPrinterImplementation = address(new CyberCertPrinter());
+        address issuanceManagerFactory = address(new IssuanceManagerFactory{salt: salt}());
+        address cyberCertPrinterImplementation = address(new CyberCertPrinter{salt: salt}());
         CyberCertPrinter cyberCertPrinter = CyberCertPrinter(cyberCertPrinterImplementation);
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "";
         cyberCertPrinter.initialize(defaultLegend, "", "", "ipfs.io/ipfs/[cid]", address(0), SecurityClass.SAFE, SecuritySeries.SeriesPreSeed);
-        address cyberCorpSingleFactory = address(new CyberCorpSingleFactory());
-        address dealManagerFactory = address(new DealManagerFactory());
-        address registry = address(new CyberAgreementRegistry());
+        address cyberCorpSingleFactory = address(new CyberCorpSingleFactory{salt: salt}());
+        address dealManagerFactory = address(new DealManagerFactory{salt: salt}());
+        address registry = address(new CyberAgreementRegistry{salt: salt}());
         CyberAgreementRegistry(registry).initialize(address(auth));
        /* string[] memory globalFieldsSafe = new string[](5);
         globalFieldsSafe[0] = "Purchase Amount";
@@ -52,34 +53,22 @@ contract BaseScript is Script {
         partyFieldsSafe[2] = "Contact";
         
         CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "ipfs.io/ipfs/[cid]", globalFieldsSafe, partyFieldsSafe);*/
-        address uriBuilder = address(new CertificateUriBuilder());
-        CyberCorpFactory cyberCorpFactory = new CyberCorpFactory(address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder, stable);
+        address uriBuilder = address(new CertificateUriBuilder{salt: salt}());
+        CyberCorpFactory cyberCorpFactory = new CyberCorpFactory{salt: salt}(address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder);
+        cyberCorpFactory.initialize(address(auth));
+        cyberCorpFactory.setStable(stable);
 
+        auth.updateRole(address(multisig), 200);
+        auth.zeroOwner();
+
+        console.log("auth: ", address(auth));
+        console.log("issuanceManagerFactory: ", address(issuanceManagerFactory));
+        console.log("cyberCorpSingleFactory: ", address(cyberCorpSingleFactory));
+        console.log("dealManagerFactory: ", address(dealManagerFactory));
+        console.log("uriBuilder: ", address(uriBuilder));
         console.log("cyberCertPrinterImplementation: ", address(cyberCertPrinterImplementation));
         console.log("CyberAgreementRegistry: ", address(registry));
         console.log("CyberCorpFactory: ", address(cyberCorpFactory));
-
-           /* address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));
-            uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
-            vm.startBroadcast(deployerPrivateKey);
-
-            address issuanceManagerFactory = address(new IssuanceManagerFactory(address(0)));
-
-            address cyberCertPrinterImplementation = address(new CyberCertPrinter());
-            CyberCertPrinter cyberCertPrinter = CyberCertPrinter(cyberCertPrinterImplementation);
-            cyberCertPrinter.initialize("", "", "", address(0), SecurityClass.SAFE, SecuritySeries.SeriesPreSeed);
-            CyberCorpSingleFactory cyberCorpSingleFactory = new CyberCorpSingleFactory();
-
-            CyberCorpFactory cyberCorpFactory = new CyberCorpFactory(address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, address(cyberCorpSingleFactory), cyberAgreementFactory);
-            registry.updateAdmin(address(cyberCorpFactory));
-            cyberCorpFactory.acceptRegistryAdmin();
-            vm.stopBroadcast();
-
-            console.log("cyberCertPrinterImplementation: ", address(cyberCertPrinterImplementation));
-            console.log("Registry: ", address(registry));
-            console.log("CyberCorpFactory: ", address(cyberCorpFactory));
-            console.log("lexscrowFactory: ", address(lexscrowFactory));
-            console.log("cyberAgreementFactory: ", address(cyberAgreementFactory));*/
         
      }
 }
