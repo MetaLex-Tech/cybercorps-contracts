@@ -21,10 +21,13 @@ import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 
 contract BaseScript is Script {
      function run() public {
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorp"));
         address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         vm.startBroadcast(deployerPrivateKey);
-        BorgAuth auth = new BorgAuth();
+         address stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e; //sepolia base
+        //use salt to deploy BorgAuth
+        BorgAuth auth = new BorgAuth{salt: salt}();
         auth.initialize();
         address issuanceManagerFactory = address(new IssuanceManagerFactory(address(0)));
         address cyberCertPrinterImplementation = address(new CyberCertPrinter());
@@ -36,7 +39,7 @@ contract BaseScript is Script {
         address dealManagerFactory = address(new DealManagerFactory());
         address registry = address(new CyberAgreementRegistry());
         CyberAgreementRegistry(registry).initialize(address(auth));
-        string[] memory globalFieldsSafe = new string[](5);
+       /* string[] memory globalFieldsSafe = new string[](5);
         globalFieldsSafe[0] = "Purchase Amount";
         globalFieldsSafe[1] = "Post-Money Valuation Cap";
         globalFieldsSafe[2] = "Expiration Time";
@@ -48,9 +51,9 @@ contract BaseScript is Script {
         partyFieldsSafe[1] = "EVM Address";
         partyFieldsSafe[2] = "Contact";
         
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "ipfs.io/ipfs/[cid]", globalFieldsSafe, partyFieldsSafe);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "ipfs.io/ipfs/[cid]", globalFieldsSafe, partyFieldsSafe);*/
         address uriBuilder = address(new CertificateUriBuilder());
-        CyberCorpFactory cyberCorpFactory = new CyberCorpFactory(address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder);
+        CyberCorpFactory cyberCorpFactory = new CyberCorpFactory(address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder, stable);
 
         console.log("cyberCertPrinterImplementation: ", address(cyberCertPrinterImplementation));
         console.log("CyberAgreementRegistry: ", address(registry));

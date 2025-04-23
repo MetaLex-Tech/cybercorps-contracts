@@ -331,7 +331,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         DealManagerStorage.setIssuanceManager(_issuanceManager);
     }
 
-    function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
+    function _authorizeUpgrade(address newImplementation) internal virtual override onlyUpgrader {}
 
     // Remove the public state variables since we're using the storage library
     function issuanceManager() public view returns (IIssuanceManager) {

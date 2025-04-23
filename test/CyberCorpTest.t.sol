@@ -149,10 +149,13 @@ contract CyberCorpTest is Test {
         globalFieldsSafe[5] = "investorType";
         globalFieldsSafe[6] = "investorJurisdiction";
 
-        string[] memory partyFieldsSafe = new string[](3);
+        string[] memory partyFieldsSafe = new string[](5);
         partyFieldsSafe[0] = "Name";
         partyFieldsSafe[1] = "EVMAddress";
         partyFieldsSafe[2] = "contactDetails";
+        partyFieldsSafe[3] = "type";
+        partyFieldsSafe[4] = "jurisdiction";
+
 
         registry.createTemplate(
             bytes32(uint256(2)),
@@ -170,7 +173,8 @@ contract CyberCorpTest is Test {
             issuanceManagerFactory,
             cyberCorpSingleFactory,
             dealManagerFactory,
-            uriBuilder
+            uriBuilder,
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e
         );
 
         legend = new string[](4);
@@ -178,7 +182,6 @@ contract CyberCorpTest is Test {
         legend[1] = "restricted security legend - THIS SAFE, THE SAFE CERTIFICATE TOKEN, AND ANY SECURITIES ISSUABLE PURSUANT HERETO OR THERETO ARE 'RESTRICTED SECURITIES' AS DEFINED IN SEC RULE 144. ";
         legend[2] = "unregistered security legend - THIS SAFE, THE SAFE CERTIFICATE TOKEN AND ANY SECURITIES ISSUABLE PURSUANT HERETO OR THERETO HAVE NOT BEEN REGISTERED UNDER THE SECURITIES ACT OF 1933, AS AMENDED (THE 'SECURITIES ACT'), OR UNDER THE SECURITIES LAWS OF CERTAIN STATES. THESE SECURITIES MAY NOT BE OFFERED, SOLD OR OTHERWISE TRANSFERRED, PLEDGED OR HYPOTHECATED EXCEPT AS PERMITTED IN THIS SAFE AND UNDER THE SECURITIES ACT AND APPLICABLE STATE SECURITIES LAWS PURSUANT TO AN EFFECTIVE REGISTRATION STATEMENT OR AN EXEMPTION THEREFROM. ";
         legend[3] = "hardfork legend - IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS ORIGINALLY ISSUED UNDERGOES A 'CONTENTIOUS HARDFORK' (AS COMMONLY UNDERSTOOD IN THE BLOCKCHAIN INDUSTRY), NO COPY OF THE SAFE CERTIFICATE TOKEN MAY BE OFFERED, SOLD, OR OTHERWISE TRANSFERRED, PLEDGED, OR HYPOTHECATED UNTIL THE COMPANY HAS DETERMINED, IN ITS SOLE AND ABSOLUTE DISCRETION, WHICH  BLOCKCHAIN SYSTEM (AND WHICH SAFE CERTIFICATE TOKENS) TO TREAT AS CANONICAL, AND THEN ONLY THE SAFE CERTIFICATE TOKEN THUS DETERMINED BY THE COMPANY TO BE CANONICAL MAY BE OFFERED, SOLD, OR OTHERWISE TRANSFERRED, PLEDGED, OR HYPOTHECATED (TO THE EXTENT OTHERWISE PERMITTED).  IN THE EVENT THAT THE BLOCKCHAIN SYSTEM DETERMINED BY THE COMPANY TO BE CANONICAL FOLLOWING A CONTENTIOUS HARDFORK ITSELF SUBSEQUENTLY UNDERGOES ITS CONTENTIOUS HARDFORK, THIS RESTRICTIVE LEGEND SHALL LIKEWISE APPLY TO SUCH CONTENTIOUS HARFORK, MUTATIS MUTANDIS. ";
-
 
         vm.stopPrank();
     }
@@ -232,22 +235,6 @@ contract CyberCorpTest is Test {
             partyValues[0],
             testPrivateKey
         );
-
-        /*1. investment advisor certificate custody legend
-
-THE SAFE CERTIFICATE TOKEN MAY NOT BE USED TO EFFECT A TRANSFER OR TO OTHERWISE FACILITATE A CHANGE IN BENEFICIAL OWNERSHIP OF THIS SAFE WITHOUT THE PRIOR CONSENT OF THE COMPANY. 
-
-2. restricted security legend
-
-THIS SAFE, THE SAFE CERTIFICATE TOKEN, AND ANY SECURITIES ISSUABLE PURSUANT HERETO OR THERETO ARE “RESTRICTED SECURITIES” AS DEFINED IN SEC RULE 144. 
-
-3. unregistered security legend
-
-THIS SAFE, THE SAFE CERTIFICATE TOKEN AND ANY SECURITIES ISSUABLE PURSUANT HERETO OR THERETO HAVE NOT BEEN REGISTERED UNDER THE SECURITIES ACT OF 1933, AS AMENDED (THE “SECURITIES ACT”), OR UNDER THE SECURITIES LAWS OF CERTAIN STATES. THESE SECURITIES MAY NOT BE OFFERED, SOLD OR OTHERWISE TRANSFERRED, PLEDGED OR HYPOTHECATED EXCEPT AS PERMITTED IN THIS SAFE AND UNDER THE SECURITIES ACT AND APPLICABLE STATE SECURITIES LAWS PURSUANT TO AN EFFECTIVE REGISTRATION STATEMENT OR AN EXEMPTION THEREFROM.  
-
-4. hardfork legend
-
-IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS ORIGINALLY ISSUED UNDERGOES A “CONTENTIOUS HARDFORK” (AS COMMONLY UNDERSTOOD IN THE BLOCKCHAIN INDUSTRY), NO COPY OF THE SAFE CERTIFICATE TOKEN MAY BE OFFERED, SOLD, OR OTHERWISE TRANSFERRED, PLEDGED, OR HYPOTHECATED UNTIL THE COMPANY HAS DETERMINED, IN ITS SOLE AND ABSOLUTE DISCRETION, WHICH  BLOCKCHAIN SYSTEM (AND WHICH SAFE CERTIFICATE TOKENS) TO TREAT AS CANONICAL, AND THEN ONLY THE SAFE CERTIFICATE TOKEN THUS DETERMINED BY THE COMPANY TO BE CANONICAL MAY BE OFFERED, SOLD, OR OTHERWISE TRANSFERRED, PLEDGED, OR HYPOTHECATED (TO THE EXTENT OTHERWISE PERMITTED).  IN THE EVENT THAT THE BLOCKCHAIN SYSTEM DETERMINED BY THE COMPANY TO BE CANONICAL FOLLOWING A CONTENTIOUS HARDFORK ITSELF SUBSEQUENTLY UNDERGOES ITS CONTENTIOUS HARDFORK, THIS RESTRICTIVE LEGEND SHALL LIKEWISE APPLY TO SUCH CONTENTIOUS HARFORK, MUTATIS MUTANDIS.*/
 
 
         vm.startPrank(testAddress);
@@ -2217,11 +2204,23 @@ legend,
         // Deploy initial implementation
         CyberCertPrinter implementationV1 = new CyberCertPrinter();
         
-        // Deploy beacon with testAddress as owner
+        // Deploy beacon with IssuanceManager as owner
         UpgradeableBeacon beacon = new UpgradeableBeacon(
             address(implementationV1),
-            testAddress // Set testAddress as owner
+            address(this) // Set test contract as owner temporarily
         );
+        
+        // Deploy IssuanceManager
+        IssuanceManager issuanceManager = new IssuanceManager();
+        issuanceManager.initialize(
+            address(auth),
+            address(0), // CORP address not needed for this test
+            address(implementationV1),
+            address(0) // uriBuilder not needed for this test
+        );
+
+        // Transfer beacon ownership to IssuanceManager
+        beacon.transferOwnership(address(issuanceManager));
         
         // Deploy proxy
         bytes memory bytecode = abi.encodePacked(
@@ -2242,7 +2241,7 @@ legend,
             "Test Printer",
             "TEST",
             "ipfs://test",
-            address(0), // issuanceManager not needed for this test
+            address(issuanceManager),
             SecurityClass.CommonStock,
             SecuritySeries.SeriesA
         );
@@ -2253,26 +2252,20 @@ legend,
         // Deploy new implementation
         CyberCertPrinter implementationV2 = new CyberCertPrinter();
         
-        // Initialize V2 implementation
-        implementationV2.initialize(
-            defaultLegend,
-            "Test Printer",
-            "TEST",
-            "ipfs://test",
-            address(0), // issuanceManager not needed for this test
-            SecurityClass.CommonStock,
-            SecuritySeries.SeriesA
-        );
+        // Grant upgrader role to test address
+        //auth.updateRole(testAddress, auth.UPGRADER_ROLE());
+        vm.prank(auth.UPGRADER_ADDRESS());
         
-        // Upgrade beacon (must be called by owner)
-        vm.prank(testAddress);
-        beacon.upgradeTo(address(implementationV2));
+        // Upgrade implementation through IssuanceManager
+
+        issuanceManager.upgradeImplementation(address(implementationV2));
         
         // Verify proxy still works with new implementation
         assertEq(printer.certificateUri(), "ipfs://test");
         
         // Verify upgrade was successful by checking beacon implementation
-        assertEq(beacon.implementation(), address(implementationV2));
+        assertEq(IssuanceManager(address(issuanceManager)).getBeaconImplementation(), address(implementationV2));
+        vm.stopPrank();
     }
 
     //create test to print certificateuri
@@ -2313,7 +2306,7 @@ legend,
         parties[0] = testAddress;
         parties[1] = address(0);
         uint256 _paymentAmount = 100000;
-        string[] memory partyFields = new string[](3);
+        string[] memory partyFields = new string[](5);
         partyFields[0] = "Name";
         partyFields[1] = "EVMAddress";
         partyFields[2] = "contactDetails";
@@ -2330,10 +2323,12 @@ legend,
         globalValues[6] = "Deleware";
 
         string[][] memory partyValues = new string[][](1);
-        partyValues[0] = new string[](3);
+        partyValues[0] = new string[](5);
         partyValues[0][0] = "Gabe";
         partyValues[0][1] = "0xDEADBABE12345678909876543210866666666666";
         partyValues[0][2] = "@Gabe";
+        partyValues[0][3] = "Limited Liability Company";
+        partyValues[0][4] = "Deleware";
 
         bytes32 contractId = keccak256(
             abi.encode(bytes32(uint256(2)), block.timestamp, globalValues, parties)
@@ -2387,11 +2382,12 @@ legend,
 
         uint256 newPartyPk = 80085;
         address newPartyAddr = vm.addr(newPartyPk);
-        string[] memory partyValuesB = new string[](3);
+        string[] memory partyValuesB = new string[](5);
         partyValuesB[0] = "Mr. Prepop";
         partyValuesB[1] = "0xC0FFEEBABE12345678909876543210866666666666";
         partyValuesB[2] = "@0xPrepop";
-
+        partyValuesB[3] = "Limited Liability Company";
+        partyValuesB[4] = "Deleware";
 
         vm.startPrank(newPartyAddr);
         bytes memory newPartySignature = _signAgreementTypedData(

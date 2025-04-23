@@ -857,7 +857,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     function _authorizeUpgrade(
         address newImplementation
-    ) internal virtual override onlyOwner {}
+    ) internal virtual override onlyUpgrader {}
 
     function _verifyVoidSignature(
         address signer,

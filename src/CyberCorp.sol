@@ -63,7 +63,8 @@ contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
     CompanyOfficer[] public companyOfficers;
 
     event CyberCORPDetailsUpdated(string cyberCORPName, string cyberCORPType, string cyberCORPJurisdiction, string cyberCORPContactDetails, string defaultDisputeResolution, string defaultLegend);
-
+    event OfficerAdded(address indexed officer, uint256 index);
+    event OfficerRemoved(address indexed officer, uint256 index);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -123,5 +124,30 @@ contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
         return (AUTH.userRoles(_address) >= AUTH.OWNER_ROLE());
     }
 
-    function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
+    function addOfficer(CompanyOfficer memory _officer) external onlyOwner() {
+        companyOfficers.push(_officer);
+        AUTH.updateRole(_officer.eoa, 200);
+        emit OfficerAdded(_officer.eoa, companyOfficers.length - 1);
+    }
+
+    function removeOfficer(address _address) external onlyOwner() {
+        AUTH.updateRole(_address, 0);
+        for (uint256 i = 0; i < companyOfficers.length; i++) {
+            if (companyOfficers[i].eoa == _address) {
+                companyOfficers[i] = companyOfficers[companyOfficers.length - 1];
+                companyOfficers.pop();
+                emit OfficerRemoved(_address, i);
+                break;
+            }
+        }
+    }
+
+    function removeOfficerAt(uint256 _index) external onlyOwner() {
+        AUTH.updateRole(companyOfficers[_index].eoa, 0);
+        companyOfficers[_index] = companyOfficers[companyOfficers.length - 1];
+        companyOfficers.pop();
+        emit OfficerRemoved(companyOfficers[_index].eoa, _index);
+    }
+
+    function _authorizeUpgrade(address newImplementation) internal virtual override onlyUpgrader {}
 }

@@ -163,7 +163,7 @@ contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
         certificate.setGlobalTransferable(transferable);
     }
 
-    function upgradeImplementation(address _newImplementation) external onlyAdmin {
+    function upgradeImplementation(address _newImplementation) external onlyUpgrader {
         IssuanceManagerStorage.updateBeaconImplementation(_newImplementation);
     }
 
@@ -240,5 +240,5 @@ contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
     /// @notice Function that authorizes an upgrade to a new implementation
     /// @dev Only callable by owner due to onlyOwner modifier inherited from BorgAuthACL
     /// @param newImplementation Address of the new implementation contract
-    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+    function _authorizeUpgrade(address newImplementation) internal override onlyUpgrader {}
 }

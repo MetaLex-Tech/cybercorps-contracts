@@ -66,7 +66,7 @@ contract CyberCorpFactory {
     address public cyberAgreementFactory;
     address public dealManagerFactory;
     address public uriBuilder;
-    address public stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;//base main net 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    address public stable;// = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;//base main net 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
 
     event CyberCorpDeployed(
         address indexed cyberCorp,
@@ -83,13 +83,14 @@ contract CyberCorpFactory {
         bytes32 salt
     );
 
-    constructor(address _registryAddress, address _cyberCertPrinterImplementation, address _issuanceManagerFactory, address _cyberCorpSingleFactory, address _dealManagerFactory, address _uriBuilder) {
+    constructor(address _registryAddress, address _cyberCertPrinterImplementation, address _issuanceManagerFactory, address _cyberCorpSingleFactory, address _dealManagerFactory, address _uriBuilder, address _payment) {
         registryAddress = _registryAddress;
         cyberCertPrinterImplementation = _cyberCertPrinterImplementation;
         issuanceManagerFactory = _issuanceManagerFactory;
         cyberCorpSingleFactory = _cyberCorpSingleFactory;
         dealManagerFactory = _dealManagerFactory;
         uriBuilder = _uriBuilder;
+        stable = _payment;
     }
 
     function deployCyberCorp(
@@ -116,7 +117,7 @@ contract CyberCorpFactory {
         issuanceManagerAddress = IIssuanceManagerFactory(issuanceManagerFactory).deployIssuanceManager(salt);
 
         cyberCorpAddress = ICyberCorpSingleFactory(cyberCorpSingleFactory).deployCyberCorpSingle(salt, authAddress, companyName, companyJurisdiction, companyContactDetails, defaultDisputeResolution, defaultLegend, issuanceManagerAddress, _companyPayable, _officer);
-
+        BorgAuth(authAddress).updateRole(cyberCorpAddress, 200);
         //deploy deal manager
         dealManagerAddress = IDealManagerFactory(dealManagerFactory).deployDealManager(salt);
         ICyberCorp(cyberCorpAddress).setDealManager(dealManagerAddress);
