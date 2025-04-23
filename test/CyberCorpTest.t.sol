@@ -140,17 +140,19 @@ contract CyberCorpTest is Test {
             partyFields
         );
 
-        string[] memory globalFieldsSafe = new string[](5);
+        string[] memory globalFieldsSafe = new string[](7);
         globalFieldsSafe[0] = "Investment Amount";
         globalFieldsSafe[1] = "Post-Money Valuation Cap";
         globalFieldsSafe[2] = "Expiration Time";
         globalFieldsSafe[3] = "Governing Jurisdiction";
         globalFieldsSafe[4] = "Dispute Resolution";
+        globalFieldsSafe[5] = "investorType";
+        globalFieldsSafe[6] = "investorJurisdiction";
 
         string[] memory partyFieldsSafe = new string[](3);
         partyFieldsSafe[0] = "Name";
-        partyFieldsSafe[1] = "EVM Address";
-        partyFieldsSafe[2] = "Contact";
+        partyFieldsSafe[1] = "EVMAddress";
+        partyFieldsSafe[2] = "contactDetails";
 
         registry.createTemplate(
             bytes32(uint256(2)),
@@ -2297,12 +2299,14 @@ legend,
         });
 
         
-        string[] memory globalFields = new string[](5);
+        string[] memory globalFields = new string[](7);
         globalFields[0] = "Investment Amount";
         globalFields[1] = "Post-Money Valuation Cap";
         globalFields[2] = "Expiration Time";
         globalFields[3] = "Governing Jurisdiction";
         globalFields[4] = "Dispute Resolution";
+        globalFields[5] = "investorType";
+        globalFields[6] = "investorJurisdiction";
 
 
         address[] memory parties = new address[](2);
@@ -2311,15 +2315,19 @@ legend,
         uint256 _paymentAmount = 100000;
         string[] memory partyFields = new string[](3);
         partyFields[0] = "Name";
-        partyFields[1] = "EVM Address";
-        partyFields[2] = "Contact";
+        partyFields[1] = "EVMAddress";
+        partyFields[2] = "contactDetails";
+        partyFields[3] = "type";
+        partyFields[4] = "jurisdiction";
 
-        string[] memory globalValues = new string[](5);
+        string[] memory globalValues = new string[](7);
         globalValues[0] =  "100000";
         globalValues[1] = "100000000";
         globalValues[2] = "12/1/2025";
         globalValues[3] = "Deleware";
         globalValues[4] = "Binding Arbitration";
+        globalValues[5] = "Limited Liability Company";
+        globalValues[6] = "Deleware";
 
         string[][] memory partyValues = new string[][](1);
         partyValues[0] = new string[](3);
@@ -2381,7 +2389,7 @@ legend,
         address newPartyAddr = vm.addr(newPartyPk);
         string[] memory partyValuesB = new string[](3);
         partyValuesB[0] = "Mr. Prepop";
-        partyValuesB[1] = "0xDEADBABE12345678909876543210866666666666";
+        partyValuesB[1] = "0xC0FFEEBABE12345678909876543210866666666666";
         partyValuesB[2] = "@0xPrepop";
 
 

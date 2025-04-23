@@ -42,6 +42,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "./CyberCorpConstants.sol";
+import "./interfaces/ICyberAgreementRegistry.sol";
 
 contract CertificateUriBuilder {
     // Helper function to convert SecurityClass enum to string
@@ -184,11 +185,11 @@ struct CertificateDetails {
         CertificateDetails memory details,
         Endorsement[] memory endorsements,
         OwnerDetails memory owner,
-        string[] memory globalFields,
-        string[] memory globalValues,
+        address registry,
+        bytes32 agreementId,
         uint256 tokenId,
         address contractAddress
-    ) public pure returns (string memory) {
+    ) public view returns (string memory) {
         // Start building the JSON string with ERC-721 metadata standard format
         string memory json = string(abi.encodePacked(
             '{"title": "MetaLeX Tokenized Certificate",',
@@ -205,7 +206,7 @@ struct CertificateDetails {
             '", "securityType": "', securityClassToString(securityType),
             '", "securitySeries": "', securitySeriesToString(securitySeries),
             '", "certificateUri": "', certificateUri,
-            '", "restrictiveLegends": ', arrayToJsonString(certLegend)
+            '"'
         );
 
         // Add certificate details
@@ -233,13 +234,51 @@ struct CertificateDetails {
                 '"');
 
             // Add purchaseAgreementDetails for the first endorsement only
-            if (i == 0 && globalFields.length > 0) {
+            if (i == 0 && registry != address(0) && agreementId != bytes32(0)) {
                 json = string.concat(json, ', "purchaseAgreementDetails": {');
+                
+                // Get agreement details from registry
+                (
+                    ,  // bytes32 templateId
+                    ,  // string memory legalContractUri
+                    string[] memory globalFields,  // string[] memory globalFields
+                    string[] memory partyFields,
+                    string[] memory globalValues,  // string[] memory globalValues
+                    ,  // address[] memory parties
+                    string[][] memory partyValues,  // string[][] memory partyValues
+                    ,  // uint256[] memory signedAt
+                    ,  // uint256 numSignatures
+                    ,
+                    // bool isComplete
+                ) = ICyberAgreementRegistry(registry).getContractDetails(agreementId);
+
+                // Add global fields
                 for (uint256 j = 0; j < globalFields.length; j++) {
                     if (j > 0) json = string.concat(json, ',');
                     json = string.concat(json, '"', globalFields[j], '": "', 
                         j < globalValues.length ? globalValues[j] : "", '"');
                 }
+
+                // Add company details if party values exist at index 0
+                if (partyValues.length > 0 && partyValues[0].length > 0) {
+                    json = string.concat(json, ', "companyDetails": {');
+                    for (uint256 j = 0; j < partyFields.length && j < partyValues[0].length; j++) {
+                        if (j > 0) json = string.concat(json, ',');
+                        json = string.concat(json, '"', partyFields[j], '": "', partyValues[0][j], '"');
+                    }
+                    json = string.concat(json, '}');
+                }
+
+                // Add investor details if party values exist at index 1
+                if (partyValues.length > 1 && partyValues[1].length > 0) {
+                    json = string.concat(json, ', "investorDetails": {');
+                    for (uint256 j = 0; j < partyFields.length && j < partyValues[1].length; j++) {
+                        if (j > 0) json = string.concat(json, ',');
+                        json = string.concat(json, '"', partyFields[j], '": "', partyValues[1][j], '"');
+                    }
+                    json = string.concat(json, '}');
+                }
+
                 // Add the digital signature from the first endorsement
                 if (endorsements[0].signatureHash.length > 0) {
                     json = string.concat(json, 
@@ -262,6 +301,9 @@ struct CertificateDetails {
             '", "ownerAddress": "', addressToString(owner.ownerAddress),
             '"}'
         );
+
+        // Add restrictive legends at the end
+        json = string.concat(json, ', "restrictiveLegends": ', arrayToJsonString(certLegend));
 
         // Close both the properties object and the main JSON object
         json = string.concat(json, '}}');

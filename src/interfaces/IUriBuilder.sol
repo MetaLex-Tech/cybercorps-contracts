@@ -46,19 +46,19 @@ import {CertificateDetails, Endorsement, OwnerDetails} from "../storage/CyberCer
 
 interface IUriBuilder {
     function buildCertificateUri(
-        string memory companyName,
-        string memory companyType,
-        string memory companyJurisdiction,
-        string memory companyContactDetails,
-        SecurityClass securityClass,
+        string memory cyberCORPName,
+        string memory cyberCORPType,
+        string memory cyberCORPJurisdiction,
+        string memory cyberCORPContactDetails,
+        SecurityClass securityType,
         SecuritySeries securitySeries,
         string memory certificateUri,
         string[] memory certLegend,
         CertificateDetails memory details,
         Endorsement[] memory endorsements,
         OwnerDetails memory owner,
-        string[] memory globalFields,
-        string[] memory globalValues,
+        address registry,
+        bytes32 agreementId,
         uint256 tokenId,
         address contractAddress
     ) external view returns (string memory);

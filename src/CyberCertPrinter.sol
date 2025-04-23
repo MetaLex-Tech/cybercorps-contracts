@@ -310,31 +310,13 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         string[] memory certLegend = s.certLegend[tokenId];
         ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
 
-        // Convert storage endorsements to memory array for the builder
-        string[] memory globalFields;
-        string[] memory globalValues;
-
-        // If there are endorsements, get the global fields and values from the agreement registry
+        // Get registry and agreementId from first endorsement if it exists
+        address registry = address(0);
+        bytes32 agreementId = bytes32(0);
         if (s.endorsements[tokenId].length > 0) {
             Endorsement memory firstEndorsement = s.endorsements[tokenId][0];
-            if (firstEndorsement.registry != address(0) && firstEndorsement.agreementId != bytes32(0)) {
-                ICyberAgreementRegistry registry = ICyberAgreementRegistry(firstEndorsement.registry);
-                (
-                    ,  // bytes32 templateId
-                    ,  // string memory legalContractUri
-                    globalFields,  // string[] memory globalFields
-                    ,  // string[] memory partyFields
-                    globalValues,  // string[] memory globalValues
-                    ,  // address[] memory parties
-                    ,  // string[][] memory partyValues
-                    ,  // uint256[] memory signedAt
-                    ,  // uint256 numSignatures
-                    ,  // bool isComplete
-                ) = registry.getContractDetails(firstEndorsement.agreementId);
-            } else {
-                globalFields = new string[](0);
-                globalValues = new string[](0);
-            }
+            registry = firstEndorsement.registry;
+            agreementId = firstEndorsement.agreementId;
         }
 
         return IUriBuilder(IIssuanceManager(s.issuanceManager).uriBuilder()).buildCertificateUri(
@@ -349,8 +331,8 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
             s.certificateDetails[tokenId],
             s.endorsements[tokenId],
             s.owners[tokenId],
-            globalFields,
-            globalValues,
+            registry,
+            agreementId,
             tokenId,
             address(this)
         );
