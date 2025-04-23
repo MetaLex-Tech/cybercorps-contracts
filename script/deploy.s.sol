@@ -21,10 +21,14 @@ import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 
 contract BaseScript is Script {
      function run() public {
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorp"));
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpCreationTest"));
         address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         vm.startBroadcast(deployerPrivateKey);
+        address stableMainNetEth = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+        address stableArbitrum = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
+        address stableBase = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+
          address stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;// 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;//0x036CbD53842c5426634e7929541eC2318f3dCF7e; //sepolia base
          address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
         //use salt to deploy BorgAuth
@@ -40,23 +44,28 @@ contract BaseScript is Script {
         address dealManagerFactory = address(new DealManagerFactory{salt: salt}());
         address registry = address(new CyberAgreementRegistry{salt: salt}());
         CyberAgreementRegistry(registry).initialize(address(auth));
-       /* string[] memory globalFieldsSafe = new string[](5);
-        globalFieldsSafe[0] = "Purchase Amount";
-        globalFieldsSafe[1] = "Post-Money Valuation Cap";
-        globalFieldsSafe[2] = "Expiration Time";
-        globalFieldsSafe[3] = "Governing Jurisdiction";
-        globalFieldsSafe[4] = "Dispute Resolution";
 
-        string[] memory partyFieldsSafe = new string[](3);
-        partyFieldsSafe[0] = "Name";
-        partyFieldsSafe[1] = "EVM Address";
-        partyFieldsSafe[2] = "Contact";
-        
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "https://ipfs.io/ipfs/bafybeidyuiymbeen46ggt6foln6yelfi5q4qu2diolhcdk324befwg2f4u", globalFieldsSafe, partyFieldsSafe);*/
         address uriBuilder = address(new CertificateUriBuilder{salt: salt}());
         CyberCorpFactory cyberCorpFactory = new CyberCorpFactory{salt: salt}(address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder);
         cyberCorpFactory.initialize(address(auth));
         cyberCorpFactory.setStable(stable);
+
+        string[] memory globalFieldsSafe = new string[](5);
+        globalFieldsSafe[0] = "purchaseAmount";
+        globalFieldsSafe[1] = "postMoneyValuationCap";
+        globalFieldsSafe[2] = "expirationTime";
+        globalFieldsSafe[3] = "governingJurisdiction";
+        globalFieldsSafe[4] = "disputeResolution";
+
+        string[] memory partyFieldsSafe = new string[](5);
+        partyFieldsSafe[0] = "name";
+        partyFieldsSafe[1] = "evmAddress";
+        partyFieldsSafe[2] = "contactDetails";
+        partyFieldsSafe[3] = "investorType";
+        partyFieldsSafe[4] = "investorJurisdiction";
+
+      
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "https://ipfs.io/ipfs/bafybeidyuiymbeen46ggt61foln6yelfi5q4qu2diolhcdk324befwg2f4u", globalFieldsSafe, partyFieldsSafe);
 
         auth.updateRole(address(multisig), 200);
         auth.zeroOwner();

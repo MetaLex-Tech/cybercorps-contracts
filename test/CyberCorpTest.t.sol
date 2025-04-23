@@ -1,32 +1,32 @@
-/*    .o.                                                                                         
-     .888.                                                                                        
-    .8"888.                                                                                       
-   .8' `888.                                                                                      
-  .88ooo8888.                                                                                     
- .8'     `888.                                                                                    
-o88o     o8888o                                                                                   
-                                                                                                  
-                                                                                                  
-                                                                                                  
-ooo        ooooo               .             oooo                                                 
-`88.       .888'             .o8             `888                                                 
- 888b     d'888   .ooooo.  .o888oo  .oooo.    888   .ooooo.  oooo    ooo                          
- 8 Y88. .P  888  d88' `88b   888   `P  )88b   888  d88' `88b  `88b..8P'                           
- 8  `888'   888  888ooo888   888    .oP"888   888  888ooo888    Y888'                             
- 8    Y     888  888    .o   888 . d8(  888   888  888    .o  .o8"'88b                            
-o8o        o888o `Y8bod8P'   "888" `Y888""8o o888o `Y8bod8P' o88'   888o                          
-                                                                                                  
-                                                                                                  
-                                                                                                  
-  .oooooo.                .o8                            .oooooo.                                 
- d8P'  `Y8b              "888                           d8P'  `Y8b                                
-888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.  
-888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b 
-888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888 
-`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 
+/*    .o.                                                                                             
+     .888.                                                                                            
+    .8"888.                                                                                           
+   .8' `888.                                                                                          
+  .88ooo8888.                                                                                         
+ .8'     `888.                                                                                        
+o88o     o8888o                                                                                       
+                                                                                                      
+                                                                                                      
+                                                                                                      
+ooo        ooooo               .             ooooo                  ooooooo  ooooo                    
+`88.       .888'             .o8             `888'                   `8888    d8'                     
+ 888b     d'888   .ooooo.  .o888oo  .oooo.    888          .ooooo.     Y888..8P                       
+ 8 Y88. .P  888  d88' `88b   888   `P  )88b   888         d88' `88b     `8888'                        
+ 8  `888'   888  888ooo888   888    .oP"888   888         888ooo888    .8PY888.                       
+ 8    Y     888  888    .o   888 . d8(  888   888       o 888    .o   d8'  `888b                      
+o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o88888o                    
+                                                                                                      
+                                                                                                      
+                                                                                                      
+  .oooooo.                .o8                            .oooooo.                                     
+ d8P'  `Y8b              "888                           d8P'  `Y8b                                    
+888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.      
+888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b     
+888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888     
 `88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
- `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P
-             `Y8P'                                                                     o888o  
+ `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P 
+             .o..P'                                                                     888           
+             `Y8P'                                                                     o888o          
 _______________________________________________________________________________________________________
 
 All software, documentation and other files and information in this repository (collectively, the "Software")
@@ -43,7 +43,7 @@ pragma solidity ^0.8.18;
 
 import {Test, console} from "forge-std/Test.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {CyberCertPrinter, Endorsement} from "../src/CyberCertPrinter.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory, IssuanceManager} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
@@ -2288,7 +2288,7 @@ legend,
 
     //create test to print certificateuri
     function testPrintCertificateUri() public {
- vm.startPrank(testAddress);
+        vm.startPrank(testAddress);
         CyberCorpFactory cyberCorpFactoryLive = CyberCorpFactory(
             0x2aDA6E66a92CbF283B9F2f4f095Fe705faD357B8
         );
@@ -2309,7 +2309,6 @@ legend,
             title: "CEO"
         });
 
-        
         string[] memory globalFields = new string[](7);
         globalFields[0] = "Investment Amount";
         globalFields[1] = "Post-Money Valuation Cap";
@@ -2318,7 +2317,6 @@ legend,
         globalFields[4] = "Dispute Resolution";
         globalFields[5] = "investorType";
         globalFields[6] = "investorJurisdiction";
-
 
         address[] memory parties = new address[](2);
         parties[0] = testAddress;
@@ -2374,7 +2372,7 @@ legend,
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
                 block.timestamp,
                 "CyberCorp",
-            "Limited Liability Company",
+                "Limited Liability Company",
                 "Juris",
                 "Contact Details",
                 "Dispute Res",
@@ -2443,6 +2441,40 @@ legend,
 
         string memory certificateUri = CyberCertPrinter(cyberCertPrinterAddr).tokenURI(0);
         console.log(certificateUri);
+
+        // Create a new recipient address
+        address newRecipient = vm.addr(12345);
+        
+        // Try to transfer without making transferable and without endorsement - should revert
+        vm.startPrank(newPartyAddr);
+        vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
+        CyberCertPrinter(cyberCertPrinterAddr).transferFrom(newPartyAddr, newRecipient, 0);
+        vm.stopPrank();
+
+        // Make the certificate transferable
+        vm.startPrank(issuanceManager);
+        CyberCertPrinter(cyberCertPrinterAddr).setGlobalTransferable(true);
+        vm.stopPrank();
+
+        // Create and add endorsement
+        vm.startPrank(newPartyAddr);
+        Endorsement memory endorsement = Endorsement({
+            endorser: newPartyAddr,
+            timestamp: block.timestamp,
+            signatureHash: bytes("test-signature"),
+            endorsee: newRecipient,
+            agreementId: bytes32(0),
+            registry: address(0),
+            endorseeName: "New Owner"
+        });
+        CyberCertPrinter(cyberCertPrinterAddr).addEndorsement(0, endorsement);
+
+        // Now transfer should succeed
+        CyberCertPrinter(cyberCertPrinterAddr).transferFrom(newPartyAddr, newRecipient, 0);
+        
+        // Verify the transfer was successful
+        assertEq(CyberCertPrinter(cyberCertPrinterAddr).ownerOf(0), newRecipient);
+        vm.stopPrank();
     }
     
 }

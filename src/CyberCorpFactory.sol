@@ -1,32 +1,32 @@
-/*    .o.                                                                                         
-     .888.                                                                                        
-    .8"888.                                                                                       
-   .8' `888.                                                                                      
-  .88ooo8888.                                                                                     
- .8'     `888.                                                                                    
-o88o     o8888o                                                                                   
-                                                                                                  
-                                                                                                  
-                                                                                                  
-ooo        ooooo               .             oooo                                                 
-`88.       .888'             .o8             `888                                                 
- 888b     d'888   .ooooo.  .o888oo  .oooo.    888   .ooooo.  oooo    ooo                          
- 8 Y88. .P  888  d88' `88b   888   `P  )88b   888  d88' `88b  `88b..8P'                           
- 8  `888'   888  888ooo888   888    .oP"888   888  888ooo888    Y888'                             
- 8    Y     888  888    .o   888 . d8(  888   888  888    .o  .o8"'88b                            
-o8o        o888o `Y8bod8P'   "888" `Y888""8o o888o `Y8bod8P' o88'   888o                          
-                                                                                                  
-                                                                                                  
-                                                                                                  
-  .oooooo.                .o8                            .oooooo.                                 
- d8P'  `Y8b              "888                           d8P'  `Y8b                                
-888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.  
-888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b 
-888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888 
-`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 
+/*    .o.                                                                                             
+     .888.                                                                                            
+    .8"888.                                                                                           
+   .8' `888.                                                                                          
+  .88ooo8888.                                                                                         
+ .8'     `888.                                                                                        
+o88o     o8888o                                                                                       
+                                                                                                      
+                                                                                                      
+                                                                                                      
+ooo        ooooo               .             ooooo                  ooooooo  ooooo                    
+`88.       .888'             .o8             `888'                   `8888    d8'                     
+ 888b     d'888   .ooooo.  .o888oo  .oooo.    888          .ooooo.     Y888..8P                       
+ 8 Y88. .P  888  d88' `88b   888   `P  )88b   888         d88' `88b     `8888'                        
+ 8  `888'   888  888ooo888   888    .oP"888   888         888ooo888    .8PY888.                       
+ 8    Y     888  888    .o   888 . d8(  888   888       o 888    .o   d8'  `888b                      
+o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o88888o                    
+                                                                                                      
+                                                                                                      
+                                                                                                      
+  .oooooo.                .o8                            .oooooo.                                     
+ d8P'  `Y8b              "888                           d8P'  `Y8b                                    
+888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.      
+888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b     
+888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888     
 `88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
- `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P
-             `Y8P'                                                                     o888o  
+ `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P 
+             .o..P'                                                                     888           
+             `Y8P'                                                                     o888o          
 _______________________________________________________________________________________________________
 
 All software, documentation and other files and information in this repository (collectively, the "Software")
@@ -86,6 +86,27 @@ contract CyberCorpFactory is BorgAuthACL {
         address indexed agreement,
         address indexed lexscrow,
         bytes32 salt
+    );
+
+    event DealManagerFactoryUpdated(
+        address indexed dealManagerFactory,
+        address oldDealFactory
+    );
+
+    //create an event when IssuanceManagerFactory is updated
+    event IssuanceManagerFactoryUpdated(
+        address indexed issuanceManagerFactory,
+        address oldIssuanceFactory
+    );
+
+    event CyberCorpSingleFactoryUpdated(
+        address indexed cyberCorpSingleFactory,
+        address oldCyberCorpFactory
+    );
+
+    event CyberAgreementFactoryUpdated(
+        address indexed cyberAgreementFactory,
+        address oldCyberAgreementFactory
     );
 
     constructor(address _registryAddress, address _cyberCertPrinterImplementation, address _issuanceManagerFactory, address _cyberCorpSingleFactory, address _dealManagerFactory, address _uriBuilder) {
@@ -231,4 +252,29 @@ contract CyberCorpFactory is BorgAuthACL {
     function setStable(address _stable) external onlyOwner {
         stable = _stable;
     }
+
+    function setIssuanceManagerFactory(address _issuanceManagerFactory) external onlyOwner {
+        address oldIssuanceFactory = issuanceManagerFactory;
+        issuanceManagerFactory = _issuanceManagerFactory;
+        emit IssuanceManagerFactoryUpdated(issuanceManagerFactory, oldIssuanceFactory);
+    }
+
+    function setCyberCorpSingleFactory(address _cyberCorpSingleFactory) external onlyOwner {
+        address oldCyberCorpFactory = cyberCorpSingleFactory;
+        cyberCorpSingleFactory = _cyberCorpSingleFactory;
+        emit CyberCorpSingleFactoryUpdated(cyberCorpSingleFactory, oldCyberCorpFactory);
+    }
+
+    function setCyberAgreementFactory(address _cyberAgreementFactory) external onlyOwner {
+        address oldCyberAgreementFactory = cyberAgreementFactory;
+        cyberAgreementFactory = _cyberAgreementFactory;
+        emit CyberAgreementFactoryUpdated(cyberAgreementFactory, oldCyberAgreementFactory);
+    }
+
+    function setDealManagerFactory(address _dealManagerFactory) external onlyOwner {
+        address oldDealFactory = dealManagerFactory;
+        dealManagerFactory = _dealManagerFactory;
+        emit DealManagerFactoryUpdated(dealManagerFactory, oldDealFactory);
+    }
+    
 }

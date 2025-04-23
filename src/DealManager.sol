@@ -1,32 +1,32 @@
-/*    .o.                                                                                         
-     .888.                                                                                        
-    .8"888.                                                                                       
-   .8' `888.                                                                                      
-  .88ooo8888.                                                                                     
- .8'     `888.                                                                                    
-o88o     o8888o                                                                                   
-                                                                                                  
-                                                                                                  
-                                                                                                  
-ooo        ooooo               .             oooo                                                 
-`88.       .888'             .o8             `888                                                 
- 888b     d'888   .ooooo.  .o888oo  .oooo.    888   .ooooo.  oooo    ooo                          
- 8 Y88. .P  888  d88' `88b   888   `P  )88b   888  d88' `88b  `88b..8P'                           
- 8  `888'   888  888ooo888   888    .oP"888   888  888ooo888    Y888'                             
- 8    Y     888  888    .o   888 . d8(  888   888  888    .o  .o8"'88b                            
-o8o        o888o `Y8bod8P'   "888" `Y888""8o o888o `Y8bod8P' o88'   888o                          
-                                                                                                  
-                                                                                                  
-                                                                                                  
-  .oooooo.                .o8                            .oooooo.                                 
- d8P'  `Y8b              "888                           d8P'  `Y8b                                
-888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.  
-888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b 
-888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888 
-`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 
+/*    .o.                                                                                             
+     .888.                                                                                            
+    .8"888.                                                                                           
+   .8' `888.                                                                                          
+  .88ooo8888.                                                                                         
+ .8'     `888.                                                                                        
+o88o     o8888o                                                                                       
+                                                                                                      
+                                                                                                      
+                                                                                                      
+ooo        ooooo               .             ooooo                  ooooooo  ooooo                    
+`88.       .888'             .o8             `888'                   `8888    d8'                     
+ 888b     d'888   .ooooo.  .o888oo  .oooo.    888          .ooooo.     Y888..8P                       
+ 8 Y88. .P  888  d88' `88b   888   `P  )88b   888         d88' `88b     `8888'                        
+ 8  `888'   888  888ooo888   888    .oP"888   888         888ooo888    .8PY888.                       
+ 8    Y     888  888    .o   888 . d8(  888   888       o 888    .o   d8'  `888b                      
+o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o88888o                    
+                                                                                                      
+                                                                                                      
+                                                                                                      
+  .oooooo.                .o8                            .oooooo.                                     
+ d8P'  `Y8b              "888                           d8P'  `Y8b                                    
+888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.      
+888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b     
+888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888     
 `88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
- `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P
-             `Y8P'                                                                     o888o  
+ `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P 
+             .o..P'                                                                     888           
+             `Y8P'                                                                     o888o          
 _______________________________________________________________________________________________________
 
 All software, documentation and other files and information in this repository (collectively, the "Software")
@@ -49,6 +49,9 @@ import "./libs/auth.sol";
 import "./storage/DealManagerStorage.sol";
 import "./storage/BorgAuthStorage.sol";
 
+/// @title DealManager
+/// @notice Manages the lifecycle of deals between parties, including creation, signing, payment, and finalization for a CyberCorp
+/// @dev Implements UUPS upgradeable pattern and integrates with BorgAuth for access control
 contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLite {
     using DealManagerStorage for DealManagerStorage.DealManagerData;
 
@@ -62,6 +65,18 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     error ConditionAlreadyExists();
     error ConditionDoesNotExist();
 
+    /// @notice Emitted when a new deal is proposed
+    /// @param agreementId Unique identifier for the agreement
+    /// @param certAddress Address of the certificate contract
+    /// @param certId ID of the certificate
+    /// @param paymentToken Address of the token used for payment
+    /// @param paymentAmount Amount to be paid
+    /// @param templateId ID of the template used for the agreement
+    /// @param corp Address of the CyberCorp
+    /// @param dealRegistry Address of the CyberAgreementRegistry
+    /// @param parties Array of party addresses involved in the deal
+    /// @param conditions Array of condition contract addresses
+    /// @param hasSecret Whether the deal requires a secret for finalization
     event DealProposed(
         bytes32 indexed agreementId,
         address indexed certAddress,
@@ -84,12 +99,19 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         bool fillUnallocated
     );
 
+    /// @notice Maps agreement IDs to arrays of counter party values for closed deals.
     mapping(bytes32 => string[]) public counterPartyValues;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
     }
 
+    /// @notice Initializes the DealManager contract
+    /// @dev Sets up the contract with required addresses and initializes parent contracts
+    /// @param _auth Address of the BorgAuth contract
+    /// @param _corp Address of the CyberCorp
+    /// @param _dealRegistry Address of the CyberAgreementRegistry
+    /// @param _issuanceManager Address of the CyberCorp's issuance manager
     function initialize(address _auth, address _corp, address _dealRegistry, address _issuanceManager) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
@@ -107,6 +129,22 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         __LexScroWLite_init(_corp, _dealRegistry);
     }
 
+    /// @notice Proposes a new deal
+    /// @dev Creates a new agreement and certificate for the deal
+    /// @param _certPrinterAddress Address of the certificate NFT contract
+    /// @param _paymentToken Address of the token used for payment
+    /// @param _paymentAmount Amount to be paid
+    /// @param _templateId ID of the agreement template to use
+    /// @param _salt Random value for unique agreement ID generation
+    /// @param _globalValues Array of global values for the agreement, must match the template
+    /// @param _parties Array of party addresses
+    /// @param _certDetails Details of the certificate to be created
+    /// @param _partyValues Array of party-specific values, must match the template
+    /// @param conditions Array of condition contract addresses
+    /// @param secretHash Hash of the secret required for finalization (if any)
+    /// @param expiry Timestamp when the deal expires
+    /// @return agreementId Unique identifier for the agreement
+    /// @return certId ID of the created certificate
     function proposeDeal(
         address _certPrinterAddress, 
         address _paymentToken, 
@@ -163,6 +201,24 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         );
     }
 
+    /// @notice Proposes and signs a deal in one transaction
+    /// @dev Combines deal proposal and initial signature
+    /// @param _certPrinterAddress Address of the certificate NFT contract
+    /// @param _paymentToken Address of the token used for payment
+    /// @param _paymentAmount Amount to be paid
+    /// @param _templateId ID of the agreement template to use
+    /// @param _salt Random value for unique agreement ID generation
+    /// @param _globalValues Array of global values for the agreement, must match the template
+    /// @param _parties Array of party addresses
+    /// @param _certDetails Details of the certificate to be created
+    /// @param proposer Address of the deal proposer
+    /// @param signature Signature of the proposer
+    /// @param _partyValues Array of party-specific values, must match the template
+    /// @param conditions Array of condition contract addresses
+    /// @param secretHash Hash of the secret required for finalization (if any)
+    /// @param expiry Timestamp when the deal expires
+    /// @return agreementId Unique identifier for the agreement
+    /// @return certId ID of the created certificate
     function proposeAndSignDeal(
         address _certPrinterAddress, 
         address _paymentToken, 
@@ -194,6 +250,15 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractFor(proposer, agreementId, _partyValues[0], signature, false, "");
     }
 
+    /// @notice Signs a deal and processes payment
+    /// @dev Validates signature and processes payment for the deal
+    /// @param signer Address of the signer
+    /// @param agreementId Unique identifier for the agreement
+    /// @param signature Digital Signature hash of the signer
+    /// @param partyValues Array of party-specific values, must match the template
+    /// @param _fillUnallocated Whether to fill unallocated slots
+    /// @param name Name of the signer
+    /// @param secret Secret required for finalization (if any)
     function signDealAndPay(
         address signer,
         bytes32 agreementId,
@@ -222,6 +287,15 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         handleCounterPartyPayment(agreementId);
     }
 
+    /// @notice Signs and finalizes a deal in one transaction
+    /// @dev Combines signing, payment, and finalization steps
+    /// @param signer Address of the signer
+    /// @param agreementId Unique identifier for the agreement
+    /// @param partyValues Array of party-specific values, must match the template
+    /// @param signature Digital Signature hash of the signer   
+    /// @param _fillUnallocated Whether to fill unallocated slots
+    /// @param name Name of the signer
+    /// @param secret Secret required for finalization (if any)
     function signAndFinalizeDeal(
         address signer,
         bytes32 agreementId,
@@ -253,6 +327,9 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         finalizeDeal(agreementId);
     }
 
+    /// @notice Finalizes a deal
+    /// @dev Checks signatures, conditions and finalizes the agreement
+    /// @param agreementId Unique identifier for the agreement
     function finalizeDeal(bytes32 agreementId) public {
         if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId)) revert DealVoided();
         if(LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PAID) revert DealNotPaid();
@@ -271,6 +348,11 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         );
     }
 
+    /// @notice Voids an expired deal
+    /// @dev Voids the certificate and agreement for an expired deal
+    /// @param agreementId Unique identifier for the agreement
+    /// @param signer Address of the signer
+    /// @param signature Signature of the signer
     function voidExpiredDeal(bytes32 agreementId, address signer, bytes memory signature) public {
         Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
         for(uint256 i = 0; i < deal.corpAssets.length; i++) {
@@ -285,6 +367,11 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
     }
 
+    /// @notice Revokes a pending deal
+    /// @dev Can only be called for deals in pending status
+    /// @param agreementId Unique identifier for the agreement
+    /// @param signer Address of the signer
+    /// @param signature Signature of the signer
     function revokeDeal(bytes32 agreementId, address signer, bytes memory signature) public {
         if(LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PENDING) 
             ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
@@ -292,12 +379,21 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
             revert DealNotPending();
     }
 
+    /// @notice Signs to void a deal
+    /// @dev If the deal is paid, initiates refund process
+    /// @param agreementId Unique identifier for the agreement
+    /// @param signer Address of the signer
+    /// @param signature Signature of the signer
     function signToVoid(bytes32 agreementId, address signer, bytes memory signature) public {
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
         if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId) && LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PAID)
             voidAndRefund(agreementId);
     }
 
+    /// @notice Adds a condition to a deal
+    /// @dev Can only be called by owner for pending deals
+    /// @param agreementId Unique identifier for the agreement
+    /// @param condition Address of the condition contract to add
     function addCondition(bytes32 agreementId, address condition) public onlyOwner {
         //make sure the contract is still pending
         if(LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PENDING) revert DealNotPending();
@@ -309,6 +405,10 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         LexScrowStorage.addConditionToEscrow(agreementId, ICondition(condition));
     }
 
+    /// @notice Removes a condition from a deal
+    /// @dev Can only be called by owner for pending deals
+    /// @param agreementId Unique identifier for the agreement
+    /// @param index Index of the condition to remove
     function removeConditionAt(bytes32 agreementId, uint256 index) public onlyOwner {
         //make sure the contract is still pending
         if(LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PENDING) revert DealNotPending();
@@ -319,25 +419,41 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         LexScrowStorage.removeConditionFromEscrow(agreementId, index);
     }
 
+    /// @notice Sets the deal registry address
+    /// @dev Can only be called by owner
+    /// @param _dealRegistry New deal registry address
     function setDealRegistry(address _dealRegistry) public onlyOwner {
         LexScrowStorage.setDealRegistry(_dealRegistry);
     }
 
+    /// @notice Sets the corporation address
+    /// @dev Can only be called by owner
+    /// @param _corp New corporation address
     function setCorp(address _corp) public onlyOwner {
         LexScrowStorage.setCorp(_corp);
     }
 
+    /// @notice Sets the issuance manager address
+    /// @dev Can only be called by owner
+    /// @param _issuanceManager New issuance manager address
     function setIssuanceManager(address _issuanceManager) public onlyOwner {
         DealManagerStorage.setIssuanceManager(_issuanceManager);
     }
 
+    /// @notice Authorizes an upgrade to a new implementation
+    /// @dev Can only be called by addresses with the upgrader role
+    /// @param newImplementation Address of the new implementation
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyUpgrader {}
 
-    // Remove the public state variables since we're using the storage library
+    /// @notice Gets the current issuance manager
+    /// @return IIssuanceManager The current issuance manager contract
     function issuanceManager() public view returns (IIssuanceManager) {
         return DealManagerStorage.getIssuanceManager();
     }
 
+    /// @notice Gets the counter party values for an agreement
+    /// @param agreementId Unique identifier for the agreement
+    /// @return string[] Array of counter party values
     function getCounterPartyValues(bytes32 agreementId) public view returns (string[] memory) {
         return DealManagerStorage.getCounterPartyValues(agreementId);
     }
