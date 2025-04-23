@@ -52,7 +52,7 @@ contract BaseScript is Script {
         partyFieldsSafe[1] = "EVM Address";
         partyFieldsSafe[2] = "Contact";
         
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "ipfs.io/ipfs/[cid]", globalFieldsSafe, partyFieldsSafe);*/
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "https://ipfs.io/ipfs/bafybeidyuiymbeen46ggt6foln6yelfi5q4qu2diolhcdk324befwg2f4u", globalFieldsSafe, partyFieldsSafe);*/
         address uriBuilder = address(new CertificateUriBuilder{salt: salt}());
         CyberCorpFactory cyberCorpFactory = new CyberCorpFactory{salt: salt}(address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder);
         cyberCorpFactory.initialize(address(auth));
