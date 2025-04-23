@@ -26,7 +26,7 @@ contract BaseScript is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         vm.startBroadcast(deployerPrivateKey);
 
-        address registry = CyberAgreementRegistry(0x5c3a3f82Dd9713b25656176053e38Af140804bd6);
+        address registry = address(CyberAgreementRegistry(0x5c3a3f82Dd9713b25656176053e38Af140804bd6));
 
         string[] memory globalFieldsSafe = new string[](5);
         globalFieldsSafe[0] = "Purchase Amount";

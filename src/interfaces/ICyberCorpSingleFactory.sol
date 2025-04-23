@@ -48,6 +48,7 @@ interface ICyberCorpSingleFactory {
         bytes32 salt,
         address authAddress,
         string memory companyName,
+        string memory companyType,
         string memory companyJurisdiction,
         string memory companyContactDetails,
         string memory defaultDisputeResolution,

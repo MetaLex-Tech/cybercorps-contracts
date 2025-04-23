@@ -73,6 +73,7 @@ contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
     function initialize(
         address _auth,
         string memory _cyberCORPName,
+        string memory _cyberCORPType,
         string memory _cyberCORPJurisdiction,
         string memory _cyberCORPContactDetails,
         string memory _defaultDisputeResolution,
@@ -85,6 +86,7 @@ contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
         __BorgAuthACL_init(_auth);
         
         cyberCORPName = _cyberCORPName;
+        cyberCORPType = _cyberCORPType;
         cyberCORPJurisdiction = _cyberCORPJurisdiction;
         cyberCORPContactDetails = _cyberCORPContactDetails;
         defaultDisputeResolution = _defaultDisputeResolution;

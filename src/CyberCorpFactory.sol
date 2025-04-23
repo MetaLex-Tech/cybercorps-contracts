@@ -104,6 +104,7 @@ contract CyberCorpFactory is BorgAuthACL {
     function deployCyberCorp(
         bytes32 salt,
         string memory companyName,
+        string memory companyType,
         string memory companyJurisdiction,
         string memory companyContactDetails,
         string memory defaultDisputeResolution,
@@ -124,7 +125,7 @@ contract CyberCorpFactory is BorgAuthACL {
 
         issuanceManagerAddress = IIssuanceManagerFactory(issuanceManagerFactory).deployIssuanceManager(salt);
 
-        cyberCorpAddress = ICyberCorpSingleFactory(cyberCorpSingleFactory).deployCyberCorpSingle(salt, authAddress, companyName, companyJurisdiction, companyContactDetails, defaultDisputeResolution, defaultLegend, issuanceManagerAddress, _companyPayable, _officer);
+        cyberCorpAddress = ICyberCorpSingleFactory(cyberCorpSingleFactory).deployCyberCorpSingle(salt, authAddress, companyName, companyType, companyJurisdiction, companyContactDetails, defaultDisputeResolution, defaultLegend, issuanceManagerAddress, _companyPayable, _officer);
         BorgAuth(authAddress).updateRole(cyberCorpAddress, 200);
         //deploy deal manager
         dealManagerAddress = IDealManagerFactory(dealManagerFactory).deployDealManager(salt);
@@ -154,6 +155,7 @@ contract CyberCorpFactory is BorgAuthACL {
     function deployCyberCorpAndCreateOffer(
         uint256 salt,
         string memory companyName,
+        string memory companyType,
         string memory companyJurisdiction,
         string memory companyContactDetails,
         string memory defaultDisputeResolution,
@@ -186,6 +188,7 @@ contract CyberCorpFactory is BorgAuthACL {
         (cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress) = deployCyberCorp(
             corpSalt,
             companyName,
+            companyType,
             companyJurisdiction,
             companyContactDetails,
             defaultDisputeResolution,

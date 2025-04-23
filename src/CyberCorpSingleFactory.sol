@@ -53,6 +53,7 @@ contract CyberCorpSingleFactory {
         bytes32 salt,
         address authAddress,
         string memory companyName,
+        string memory companyType,
         string memory companyJurisdiction,
         string memory companyContactDetails,
         string memory defaultDisputeResolution,
@@ -67,7 +68,7 @@ contract CyberCorpSingleFactory {
         );
         bytes32 cyberCorpSalt = keccak256(abi.encodePacked("cyberCorp", salt));
         cyberCorpAddress = Create2.deploy(0, cyberCorpSalt, cyberCorpBytecode);
-        CyberCorp(cyberCorpAddress).initialize(authAddress, companyName, companyJurisdiction, companyContactDetails, defaultDisputeResolution, defaultLegend, issuanceManager, _companyPayable, _officer);
+        CyberCorp(cyberCorpAddress).initialize(authAddress, companyName, companyType, companyJurisdiction, companyContactDetails, defaultDisputeResolution, defaultLegend, issuanceManager, _companyPayable, _officer);
     }
 
 }
