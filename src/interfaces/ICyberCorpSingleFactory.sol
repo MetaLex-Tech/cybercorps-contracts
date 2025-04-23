@@ -52,12 +52,8 @@ interface ICyberCorpSingleFactory {
         string memory companyJurisdiction,
         string memory companyContactDetails,
         string memory defaultDisputeResolution,
-        string memory defaultLegend,
         address issuanceManager,
         address _companyPayable,
         CompanyOfficer memory _officer
     ) external returns (address cyberCorpAddress);
-}   
-
-
-
+}

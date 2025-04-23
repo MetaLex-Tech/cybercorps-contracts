@@ -74,7 +74,11 @@ contract CyberCorpFactory is BorgAuthACL {
         address indexed auth,
         address indexed issuanceManager,
         address dealManager,
-        string companyName
+        string cyberCORPName,
+        string cyberCORPType,
+        string cyberCORPContactDetails,
+        string cyberCORPJurisdiction,
+        string defaultDisputeResolution
     );
 
     event AgreementDeployed(
@@ -108,7 +112,6 @@ contract CyberCorpFactory is BorgAuthACL {
         string memory companyJurisdiction,
         string memory companyContactDetails,
         string memory defaultDisputeResolution,
-        string memory defaultLegend,
         address _companyPayable,
         CompanyOfficer memory _officer
     ) public returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress) {
@@ -125,7 +128,7 @@ contract CyberCorpFactory is BorgAuthACL {
 
         issuanceManagerAddress = IIssuanceManagerFactory(issuanceManagerFactory).deployIssuanceManager(salt);
 
-        cyberCorpAddress = ICyberCorpSingleFactory(cyberCorpSingleFactory).deployCyberCorpSingle(salt, authAddress, companyName, companyType, companyJurisdiction, companyContactDetails, defaultDisputeResolution, defaultLegend, issuanceManagerAddress, _companyPayable, _officer);
+        cyberCorpAddress = ICyberCorpSingleFactory(cyberCorpSingleFactory).deployCyberCorpSingle(salt, authAddress, companyName, companyType, companyJurisdiction, companyContactDetails, defaultDisputeResolution, issuanceManagerAddress, _companyPayable, _officer);
         BorgAuth(authAddress).updateRole(cyberCorpAddress, 200);
         //deploy deal manager
         dealManagerAddress = IDealManagerFactory(dealManagerFactory).deployDealManager(salt);
@@ -148,7 +151,11 @@ contract CyberCorpFactory is BorgAuthACL {
             authAddress,
             issuanceManagerAddress,
             dealManagerAddress,
-            companyName
+            companyName,
+            companyType,
+            companyContactDetails,
+            companyJurisdiction,
+            defaultDisputeResolution
         );
     }
 
@@ -192,7 +199,6 @@ contract CyberCorpFactory is BorgAuthACL {
             companyJurisdiction,
             companyContactDetails,
             defaultDisputeResolution,
-            "",
             _companyPayable,
             _officer
         );

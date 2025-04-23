@@ -50,19 +50,18 @@ import "./interfaces/IIssuanceManager.sol";
 
 contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
     // cyberCORP details
-    string public cyberCORPName; //this should be the legal name of the entity, including any designation such as "Inc." or "LLC" etc. 
-    string public cyberCORPType; //this should be the legal entity type, for example, "corporation" or "limited liability company" 
+    string public cyberCORPName; //this should be the legal name of the entity, including any designation such as "Inc." or "LLC" etc.
+    string public cyberCORPType; //this should be the legal entity type, for example, "corporation" or "limited liability company"
     string public cyberCORPJurisdiction; //this should be the jurisdiction of incorporation of the entity, e.g. "Delaware"
-    string public cyberCORPContactDetails; 
+    string public cyberCORPContactDetails;
     string public defaultDisputeResolution;
     address public companyPayable;
-    string public defaultLegend; //default legend (relating to transferability restrictions etc.) for NFT certs 
     address public issuanceManager;
     address public dealManager;
     address public cyberCertPrinterImplementation;
     CompanyOfficer[] public companyOfficers;
 
-    event CyberCORPDetailsUpdated(string cyberCORPName, string cyberCORPType, string cyberCORPJurisdiction, string cyberCORPContactDetails, string defaultDisputeResolution, string defaultLegend);
+    event CyberCORPDetailsUpdated(string cyberCORPName, string cyberCORPType, string cyberCORPJurisdiction, string cyberCORPContactDetails, string defaultDisputeResolution);
     event OfficerAdded(address indexed officer, uint256 index);
     event OfficerRemoved(address indexed officer, uint256 index);
 
@@ -77,20 +76,18 @@ contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
         string memory _cyberCORPJurisdiction,
         string memory _cyberCORPContactDetails,
         string memory _defaultDisputeResolution,
-        string memory _defaultLegend,
         address _issuanceManager,
         address _companyPayable,
         CompanyOfficer memory _officer
     ) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
-        
+
         cyberCORPName = _cyberCORPName;
         cyberCORPType = _cyberCORPType;
         cyberCORPJurisdiction = _cyberCORPJurisdiction;
         cyberCORPContactDetails = _cyberCORPContactDetails;
         defaultDisputeResolution = _defaultDisputeResolution;
-        defaultLegend = _defaultLegend;
         issuanceManager = _issuanceManager;
         companyPayable = _companyPayable;
         companyOfficers.push(_officer);
@@ -101,17 +98,15 @@ contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
         string memory _cyberCORPType,
         string memory _cyberCORPJurisdiction,
         string memory _cyberCORPContactDetails,
-        string memory _defaultDisputeResolution,
-        string memory _defaultLegend
+        string memory _defaultDisputeResolution
     ) external onlyOwner() {
         cyberCORPName = _cyberCORPName;
         cyberCORPType = _cyberCORPType;
         cyberCORPJurisdiction = _cyberCORPJurisdiction;
         cyberCORPContactDetails = _cyberCORPContactDetails;
         defaultDisputeResolution = _defaultDisputeResolution;
-        defaultLegend = _defaultLegend;
 
-        emit CyberCORPDetailsUpdated(cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, defaultDisputeResolution, defaultLegend);
+        emit CyberCORPDetailsUpdated(cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, defaultDisputeResolution);
     }
 
     function setIssuanceManager(address _issuanceManager) external onlyOwner() {

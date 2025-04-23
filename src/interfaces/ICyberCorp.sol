@@ -47,7 +47,6 @@ interface ICyberCorp {
     function cyberCORPJurisdiction() external view returns (string memory);
     function cyberCORPContactDetails() external view returns (string memory);
     function defaultDisputeResolution() external view returns (string memory);
-    function defaultLegend() external view returns (string memory);
     function companyPayable() external view returns (address);
     function companyOfficers() external view returns (address[] memory);
     function cyberCORPType() external view returns (string memory);
