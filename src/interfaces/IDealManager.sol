@@ -130,6 +130,7 @@ interface IDealManager {
         address _auth,
         address _corp,
         address _dealRegistry,
-        address _issuanceManager
+        address _issuanceManager,
+        address _upgradeFactory 
     ) external;
 }

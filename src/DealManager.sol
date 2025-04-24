@@ -55,8 +55,6 @@ import "./storage/BorgAuthStorage.sol";
 contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLite {
     using DealManagerStorage for DealManagerStorage.DealManagerData;
 
-    IIssuanceManager public ISSUANCE_MANAGER;
-
     error ZeroAddress();
     error CounterPartyValueMismatch();
     error AgreementConditionsNotMet();
@@ -64,7 +62,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     error PartyValuesLengthMismatch();
     error ConditionAlreadyExists();
     error ConditionDoesNotExist();
-
+    error NotUpgradeFactory();
     /// @notice Emitted when a new deal is proposed
     /// @param agreementId Unique identifier for the agreement
     /// @param certAddress Address of the certificate contract
@@ -104,6 +102,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
+        _disableInitializers();
     }
 
     /// @notice Initializes the DealManager contract
@@ -112,7 +111,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     /// @param _corp Address of the CyberCorp
     /// @param _dealRegistry Address of the CyberAgreementRegistry
     /// @param _issuanceManager Address of the CyberCorp's issuance manager
-    function initialize(address _auth, address _corp, address _dealRegistry, address _issuanceManager) public initializer {
+    function initialize(address _auth, address _corp, address _dealRegistry, address _issuanceManager, address _upgradeFactory) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
         
@@ -127,6 +126,12 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
 
         // Initialize LexScroWLite without setting storage
         __LexScroWLite_init(_corp, _dealRegistry);
+        DealManagerStorage.setUpgradeFactory(_upgradeFactory);
+    }
+
+    modifier onlyUpgradeFactory() {
+        if (msg.sender != DealManagerStorage.getUpgradeFactory()) revert NotUpgradeFactory();
+        _;
     }
 
     /// @notice Proposes a new deal
@@ -443,7 +448,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     /// @notice Authorizes an upgrade to a new implementation
     /// @dev Can only be called by addresses with the upgrader role
     /// @param newImplementation Address of the new implementation
-    function _authorizeUpgrade(address newImplementation) internal virtual override onlyUpgrader {}
+    function _authorizeUpgrade(address newImplementation) internal virtual override onlyUpgradeFactory {}
 
     /// @notice Gets the current issuance manager
     /// @return IIssuanceManager The current issuance manager contract
@@ -457,4 +462,5 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     function getCounterPartyValues(bytes32 agreementId) public view returns (string[] memory) {
         return DealManagerStorage.getCounterPartyValues(agreementId);
     }
+
 }

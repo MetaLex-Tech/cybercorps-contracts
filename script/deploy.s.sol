@@ -8,7 +8,6 @@ import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
-import {CyberAgreementFactory} from "../src/CyberAgreementFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
@@ -18,36 +17,47 @@ import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {console} from "forge-std/console.sol";
 import "../src/CyberCorpConstants.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
+import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract BaseScript is Script {
      function run() public {
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpCreationTest"));
+
         address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         vm.startBroadcast(deployerPrivateKey);
+        
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpCreationTestA"));
         address stableMainNetEth = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
         address stableArbitrum = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
         address stableBase = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+        address stableBaseSepolia = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
 
-         address stable = stableBase;//0x036CbD53842c5426634e7929541eC2318f3dCF7e;// 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;//0x036CbD53842c5426634e7929541eC2318f3dCF7e; //sepolia base
+         address stable = stableBaseSepolia;//0x036CbD53842c5426634e7929541eC2318f3dCF7e;// 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;//0x036CbD53842c5426634e7929541eC2318f3dCF7e; //sepolia base
          address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
         //use salt to deploy BorgAuth
-        BorgAuth auth = new BorgAuth{salt: salt}();
-        auth.initialize();
-        address issuanceManagerFactory = address(new IssuanceManagerFactory{salt: salt}());
+        BorgAuth auth = new BorgAuth{salt: salt}(deployerAddress);
+
+        address issuanceManagerFactory = address(new IssuanceManagerFactory{salt: salt}(address(auth)));
+
         address cyberCertPrinterImplementation = address(new CyberCertPrinter{salt: salt}());
         CyberCertPrinter cyberCertPrinter = CyberCertPrinter(cyberCertPrinterImplementation);
+
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "";
-        cyberCertPrinter.initialize(defaultLegend, "", "", "ipfs.io/ipfs/[cid]", address(0), SecurityClass.SAFE, SecuritySeries.SeriesPreSeed);
-        address cyberCorpSingleFactory = address(new CyberCorpSingleFactory{salt: salt}());
-        address dealManagerFactory = address(new DealManagerFactory{salt: salt}());
-        address registry = address(new CyberAgreementRegistry{salt: salt}());
-        CyberAgreementRegistry(registry).initialize(address(auth));
+        //cyberCertPrinter.initialize(defaultLegend, "", "", "ipfs.io/ipfs/[cid]", address(0), SecurityClass.SAFE, SecuritySeries.SeriesPreSeed);
+
+        address cyberCorpSingleFactory = address(new CyberCorpSingleFactory{salt: salt}(address(auth)));
+
+        address dealManagerFactory = address(new DealManagerFactory{salt: salt}(address(auth)));
+
+       // address registry = address(new CyberAgreementRegistry{salt: salt}(address(auth)));
+                // Deploy CyberAgreementRegistry implementation and proxy
+        address registryImplementation = address(new CyberAgreementRegistry{salt: salt}());
+        bytes memory initData = abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth));
+        address registry = address(new ERC1967Proxy{salt: salt}(registryImplementation, initData));
 
         address uriBuilder = address(new CertificateUriBuilder{salt: salt}());
-        CyberCorpFactory cyberCorpFactory = new CyberCorpFactory{salt: salt}(address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder);
-        cyberCorpFactory.initialize(address(auth));
+        CyberCorpFactory cyberCorpFactory = new CyberCorpFactory{salt: salt}(address(auth), address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder);
         cyberCorpFactory.setStable(stable);
 
         string[] memory globalFieldsSafe = new string[](5);
@@ -64,7 +74,6 @@ contract BaseScript is Script {
         partyFieldsSafe[3] = "investorType";
         partyFieldsSafe[4] = "investorJurisdiction";
 
-      
         CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "https://ipfs.io/ipfs/bafybeieee4xjqpwcq5nowm4iqw6ik4wkwpz7uqohl3yamypwz54was2h64", globalFieldsSafe, partyFieldsSafe);
 
         auth.updateRole(address(multisig), 200);

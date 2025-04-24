@@ -39,10 +39,23 @@ distributed, transmitted, sublicensed, sold, or otherwise used in any form or by
 mechanical, including photocopying, recording, or by any information storage and retrieval system, 
 except with the express prior written permission of the copyright holder.*/
 
+import {CompanyOfficer} from "../CyberCorpConstants.sol";
+
 pragma solidity 0.8.28;
 
 interface ICyberCorp {
-    function initialize(address _issuanceManager, address _auth) external;
+    function initialize(
+        address _auth,
+        string memory _cyberCORPName,
+        string memory _cyberCORPType,
+        string memory _cyberCORPJurisdiction,
+        string memory _cyberCORPContactDetails,
+        string memory _defaultDisputeResolution,
+        address _issuanceManager,
+        address _companyPayable,
+        CompanyOfficer memory _officer,
+        address _upgradeFactory 
+    ) external;
     function cyberCORPName() external view returns (string memory);
     function cyberCORPJurisdiction() external view returns (string memory);
     function cyberCORPContactDetails() external view returns (string memory);

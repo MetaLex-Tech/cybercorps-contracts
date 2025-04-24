@@ -96,6 +96,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     }
 
     constructor()  {
+        _disableInitializers();
     }
 
     // Called by proxy on deployment (if needed)

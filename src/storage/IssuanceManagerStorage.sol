@@ -52,6 +52,7 @@ library IssuanceManagerStorage {
         UpgradeableBeacon CyberCertPrinterBeacon;
         address CORP;
         address uriBuilder;
+        address upgradeFactory;
         address[] printers;
     }
 
@@ -84,7 +85,6 @@ library IssuanceManagerStorage {
         return issuanceManagerStorage().printers[index];
     }
 
-
     function getPrintersCount() internal view returns (uint256) {
         return issuanceManagerStorage().printers.length;
     }
@@ -106,6 +106,14 @@ library IssuanceManagerStorage {
         require(_printer != address(0), "Zero address not allowed");
         IssuanceManagerData storage s = issuanceManagerStorage();
         s.printers.push(_printer);
+    }
+
+    function setUpgradeFactory(address _upgradeFactory) internal {
+        issuanceManagerStorage().upgradeFactory = _upgradeFactory;
+    }
+
+    function getUpgradeFactory() internal view returns (address) {
+        return issuanceManagerStorage().upgradeFactory;
     }
 
     function removePrinter(address _printer) internal {

@@ -56,12 +56,13 @@ import "./storage/IssuanceManagerStorage.sol";
 /// @dev Implements UUPS upgradeable pattern and BorgAuth access control
 contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
     using IssuanceManagerStorage for IssuanceManagerStorage.IssuanceManagerData;
-
+ 
     // IssuanceManager errors
     error CompanyDetailsNotSet();
     error SignatureURIRequired();
     error TokenProxyNotFound();
     error NotSAFEToken();
+    error NotUpgradeFactory();
     
     event CertPrinterCreated(address indexed certificate, address indexed corp, string[] ledger, string name, string ticker, SecurityClass securityType, SecuritySeries securitySeries, string certificateUri);
     event CertificateCreated(uint256 indexed tokenId, address indexed certificate, uint256 amount, uint256 cap, CertificateDetails details);
@@ -70,6 +71,7 @@ contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
+        _disableInitializers();
     }
 
     /// @notice Initializes the IssuanceManager contract
@@ -81,7 +83,8 @@ contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
         address _auth,
         address _CORP,
         address _CyberCertPrinterImplementation,
-        address _uriBuilder
+        address _uriBuilder,
+        address _upgradeFactory
     ) external initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
@@ -94,6 +97,12 @@ contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
             address(this)
         );
         IssuanceManagerStorage.setCyberCertPrinterBeacon(beacon);
+        IssuanceManagerStorage.setUpgradeFactory(_upgradeFactory);
+    }
+
+    modifier onlyUpgradeFactory() {
+        if (msg.sender != IssuanceManagerStorage.getUpgradeFactory()) revert NotUpgradeFactory();
+        _;
     }
     
     /// @notice Creates a new certificate printer contract
@@ -216,7 +225,7 @@ contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
     /// @notice Upgrades the implementation of the certificate printer
     /// @dev Only callable by upgrader role
     /// @param _newImplementation Address of the new implementation
-    function upgradeImplementation(address _newImplementation) external onlyUpgrader {
+    function upgradeBeaconImplementation(address _newImplementation) external onlyUpgradeFactory {
         IssuanceManagerStorage.updateBeaconImplementation(_newImplementation);
     }
 
@@ -338,5 +347,9 @@ contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
     /// @notice Authorizes an upgrade to a new implementation
     /// @dev Only callable by addresses with the upgrader role
     /// @param newImplementation Address of the new implementation
-    function _authorizeUpgrade(address newImplementation) internal override onlyUpgrader {}
+    function _authorizeUpgrade(address newImplementation) internal override onlyUpgradeFactory {}
+
+    function getUpgradeFactory() public view returns (address) {
+        return IssuanceManagerStorage.getUpgradeFactory();
+    }
 }

@@ -52,8 +52,6 @@ contract BorgAuth is Initializable {
     uint256 public constant OWNER_ROLE = 99;
     uint256 public constant ADMIN_ROLE = 98;
     uint256 public constant PRIVILEGED_ROLE = 97;
-    uint256 public constant UPGRADER_ROLE = 96;
-    address public constant UPGRADER_ADDRESS = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
     address public pendingOwner;
 
     //mappings and events
@@ -69,15 +67,14 @@ contract BorgAuth is Initializable {
     error BorgAuth_ZeroAddress();
 
     /// @notice Empty constructor for implementation contract
-    constructor() {
+    constructor(address owner) {
+        initialize(owner);
     }
 
     /// @notice Initializer replacing the constructor - sets the deployer/initializer as owner
     /// @dev Use this instead of constructor when deployed behind a proxy
-    function initialize() external initializer {
-        _updateRole(msg.sender, OWNER_ROLE);
-        if(UPGRADER_ADDRESS != msg.sender)
-            _updateRole(UPGRADER_ADDRESS, UPGRADER_ROLE);
+    function initialize(address _owner) public initializer {
+        _updateRole(_owner, OWNER_ROLE);
     }
 
     /// @notice update role for user
@@ -87,9 +84,7 @@ contract BorgAuth is Initializable {
         address user,
         uint256 role
     ) external {
-         if(role == UPGRADER_ROLE && msg.sender != address(this)) revert BorgAuth_SetAnotherOwner();
          onlyRole(OWNER_ROLE, msg.sender);
-         if(user == msg.sender && role < OWNER_ROLE) revert BorgAuth_SetAnotherOwner();
         _updateRole(user, role);
     }
     
@@ -204,11 +199,6 @@ abstract contract BorgAuthACL is Initializable {
 
     modifier onlyPriv() {
         AUTH.onlyRole(AUTH.PRIVILEGED_ROLE(), msg.sender);
-        _;
-    }
-
-    modifier onlyUpgrader() {
-        AUTH.matchRole(AUTH.UPGRADER_ROLE(), msg.sender);
         _;
     }
 

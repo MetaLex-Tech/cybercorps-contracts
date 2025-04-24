@@ -41,31 +41,68 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import "./DealManager.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
+import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
+import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "./DealManager.sol";
+import "./libs/auth.sol";
 
-contract DealManagerFactory {
+contract DealManagerFactory is BorgAuthACL {
     error InvalidSalt();
     error DeploymentFailed();
+    error ZeroAddress();
+    UpgradeableBeacon public beacon;
 
-    function deployDealManager(bytes32 salt) public returns (address) {
-        if (salt == bytes32(0)) revert InvalidSalt();
+    event DealManagerDeployed(address dealManager);
 
-        // Get the creation bytecode for DealManager
-        bytes memory bytecode = type(DealManager).creationCode;
-        
-        // Deploy using CREATE2
-        address dealManager = Create2.deploy(0, salt, bytecode);
-        
-        if(dealManager == address(0)) revert DeploymentFailed();
-        
-        return dealManager;
+    constructor(address _auth) {
+        // Deploy the implementation contract
+        beacon = new UpgradeableBeacon(address(new DealManager()), address(this));
+        initialize(_auth);
+    }
+    
+    function initialize(address _auth) public initializer {
+        // Initialize BorgAuthACL
+        __BorgAuthACL_init(_auth);
     }
 
-    // Helper function to compute the address before deployment
-    function computeDealManagerAddress(bytes32 salt) public view returns (address) {
-        bytes memory bytecode = type(DealManager).creationCode;
-        return Create2.computeAddress(salt, keccak256(bytecode));
+    function deployDealManager(bytes32 _salt) public returns (address) {
+        if (_salt == bytes32(0)) revert InvalidSalt();
+        
+        // Create proxy deployment bytecode
+        bytes memory proxyBytecode = _getBytecode();
+        
+        // Deploy using CREATE2
+        address dealManagerProxy = Create2.deploy(0, _salt, proxyBytecode);
+        
+        if(dealManagerProxy == address(0)) revert DeploymentFailed();
+        
+        emit DealManagerDeployed(dealManagerProxy);
+        return dealManagerProxy;
+    }
+
+    /// @notice Computes the deterministic address for a DealManagerBeaconProxy
+    /// @param _salt Salt used for CREATE2
+    /// @return computedAddress The precomputed address of the proxy
+    function computeDealManagerAddress(bytes32 _salt) external view returns (address) {
+        bytes memory proxyBytecode = _getBytecode();
+        return Create2.computeAddress(_salt, keccak256(proxyBytecode));
+    }
+
+    /// @notice Gets the bytecode for creating new DealManager proxies
+    /// @dev Internal function used by deployDealManager
+    /// @return bytecode The proxy contract creation bytecode
+    function _getBytecode() private view returns (bytes memory bytecode) {
+        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
+        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(beacon, ""));
+    }
+
+    function upgradeImplementation(address _newImplementation) external onlyAdmin {
+        UpgradeableBeacon(beacon).upgradeTo(_newImplementation);
+    }
+
+    function getBeaconImplementation() external view returns (address) {
+        return UpgradeableBeacon(beacon).implementation();
     }
 }
 

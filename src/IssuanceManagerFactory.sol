@@ -41,17 +41,80 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts/utils/Create2.sol";
 import "./IssuanceManager.sol";
+import "@openzeppelin/contracts/utils/Create2.sol";
+import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
+import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "./libs/auth.sol";
 
-contract IssuanceManagerFactory {
+contract IssuanceManagerFactory is BorgAuthACL {
+    error InvalidSalt();
+    error DeploymentFailed();
+    error ZeroAddress();
+    
+    UpgradeableBeacon public beacon;
 
-    constructor() {
+    event IssuanceManagerDeployed(address issuanceManager);
+
+    constructor(address _auth) {
+        // Deploy the implementation contract and beacon
+        beacon = new UpgradeableBeacon(address(new IssuanceManager()), address(this));
+        initialize(_auth);
     }
 
-    function deployIssuanceManager(bytes32 salt) public returns (address issuanceManagerAddress) {        // Deploy IssuanceManager with CREATE2
-        bytes memory issuanceManagerBytecode = type(IssuanceManager).creationCode;
-        bytes32 issuanceManagerSalt = keccak256(abi.encodePacked("issuanceManager", salt));
-        issuanceManagerAddress = Create2.deploy(0, issuanceManagerSalt, issuanceManagerBytecode);
+    function initialize(address _auth) public initializer {
+        // Initialize BorgAuthACL
+        __BorgAuthACL_init(_auth);
+    }
+
+    function deployIssuanceManager(bytes32 _salt) public returns (address) {
+        if (_salt == bytes32(0)) revert InvalidSalt();
+        
+        // Create proxy deployment bytecode
+        bytes memory proxyBytecode = _getBytecode();
+        
+        // Deploy using CREATE2
+        address issuanceManagerProxy = Create2.deploy(0, _salt, proxyBytecode);
+        
+        if(issuanceManagerProxy == address(0)) revert DeploymentFailed();
+        
+        emit IssuanceManagerDeployed(issuanceManagerProxy);
+        return issuanceManagerProxy;
+    }
+
+    /// @notice Computes the deterministic address for an IssuanceManagerBeaconProxy
+    /// @param _salt Salt used for CREATE2
+    /// @return computedAddress The precomputed address of the proxy
+    function computeIssuanceManagerAddress(bytes32 _salt) external view returns (address) {
+        bytes memory proxyBytecode = _getBytecode();
+        return Create2.computeAddress(_salt, keccak256(proxyBytecode));
+    }
+
+    /// @notice Gets the bytecode for creating new IssuanceManager proxies
+    /// @dev Internal function used by deployIssuanceManager
+    /// @return bytecode The proxy contract creation bytecode
+    function _getBytecode() private view returns (bytes memory bytecode) {
+        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
+        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(beacon, ""));
+    }
+
+    /// @notice Upgrades the implementation contract
+    /// @dev Only callable by addresses with the admin role
+    /// @param _newImplementation Address of the new implementation
+    function upgradeImplementation(address _newImplementation) external onlyOwner {
+        UpgradeableBeacon(beacon).upgradeTo(_newImplementation);
+    }
+
+    /// @notice Gets the current implementation address
+    /// @return The address of the current implementation contract
+    function getBeaconImplementation() external view returns (address) {
+        return UpgradeableBeacon(beacon).implementation();
+    }
+
+    /// @notice Upgrades the implementation of the certificate printer
+    /// @dev Only callable by upgrader role
+    /// @param _newImplementation Address of the new implementation
+    function upgradePrinterBeaconAt(address issuanceManager, address _newImplementation) external onlyOwner {
+        IssuanceManager(issuanceManager).upgradeBeaconImplementation(_newImplementation);
     }
 }

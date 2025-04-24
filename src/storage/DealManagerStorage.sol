@@ -55,6 +55,7 @@ library DealManagerStorage {
     struct DealManagerData {
         /// @notice Reference to the issuance manager contract
         IIssuanceManager issuanceManager;
+        address upgradeFactory;
         
         /// @notice Mapping from agreement IDs to their counter party values
         mapping(bytes32 => string[]) counterPartyValues;
@@ -98,5 +99,13 @@ library DealManagerStorage {
     /// @param _issuanceManager Address of the new issuance manager contract
     function setIssuanceManager(address _issuanceManager) internal {
         dealManagerStorage().issuanceManager = IIssuanceManager(_issuanceManager);
+    }
+
+    function setUpgradeFactory(address _upgradeFactory) internal {
+        dealManagerStorage().upgradeFactory = _upgradeFactory;
+    }
+
+    function getUpgradeFactory() external view returns (address) {
+        return dealManagerStorage().upgradeFactory;
     }
 } 

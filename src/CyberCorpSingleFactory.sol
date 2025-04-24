@@ -41,40 +41,73 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import "./CyberCorp.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
+import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
+import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "./CyberCorp.sol";
+import "./libs/auth.sol";   
 
-contract CyberCorpSingleFactory {
-    constructor() {}
+contract CyberCorpSingleFactory is BorgAuthACL {
+    error InvalidSalt();
+    error DeploymentFailed();
+    error ZeroAddress();
+    
+    UpgradeableBeacon public beacon;
 
-    function deployCyberCorpSingle(
-        bytes32 salt,
-        address authAddress,
-        string memory companyName,
-        string memory companyType,
-        string memory companyJurisdiction,
-        string memory companyContactDetails,
-        string memory defaultDisputeResolution,
-        address issuanceManager,
-        address _companyPayable,
-        CompanyOfficer memory _officer
-    ) public returns (address cyberCorpAddress) {
-        // Deploy CyberCorp with CREATE2
-        bytes memory cyberCorpBytecode = abi.encodePacked(
-            type(CyberCorp).creationCode
-        );
-        bytes32 cyberCorpSalt = keccak256(abi.encodePacked("cyberCorp", salt));
-        cyberCorpAddress = Create2.deploy(0, cyberCorpSalt, cyberCorpBytecode);
-        CyberCorp(cyberCorpAddress).initialize(
-            authAddress,
-            companyName,
-            companyType,
-            companyJurisdiction,
-            companyContactDetails,
-            defaultDisputeResolution,
-            issuanceManager,
-            _companyPayable,
-            _officer
-        );
+    event CyberCorpDeployed(address cyberCorp);
+
+    constructor(address _auth) {
+        // Deploy the implementation contract and beacon
+        beacon = new UpgradeableBeacon(address(new CyberCorp()), address(this));
+        initialize(_auth);
+    }
+
+    function initialize(address _auth) public initializer {
+        // Initialize BorgAuthACL
+        __BorgAuthACL_init(_auth);
+    }
+
+    function deployCyberCorpSingle(bytes32 _salt) public returns (address) {
+        if (_salt == bytes32(0)) revert InvalidSalt();
+        
+        // Create proxy deployment bytecode
+        bytes memory proxyBytecode = _getBytecode();
+        
+        // Deploy using CREATE2
+        address cyberCorpProxy = Create2.deploy(0, _salt, proxyBytecode);
+        
+        if(cyberCorpProxy == address(0)) revert DeploymentFailed();
+        
+        emit CyberCorpDeployed(cyberCorpProxy);
+        return cyberCorpProxy;
+    }
+
+    /// @notice Computes the deterministic address for a CyberCorpBeaconProxy
+    /// @param _salt Salt used for CREATE2
+    /// @return computedAddress The precomputed address of the proxy
+    function computeCyberCorpSingleAddress(bytes32 _salt) external view returns (address) {
+        bytes memory proxyBytecode = _getBytecode();
+        return Create2.computeAddress(_salt, keccak256(proxyBytecode));
+    }
+
+    /// @notice Gets the bytecode for creating new CyberCorp proxies
+    /// @dev Internal function used by deployCyberCorpSingle
+    /// @return bytecode The proxy contract creation bytecode
+    function _getBytecode() private view returns (bytes memory bytecode) {
+        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
+        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(beacon, ""));
+    }
+
+    /// @notice Upgrades the implementation contract
+    /// @dev Only callable by addresses with the admin role
+    /// @param _newImplementation Address of the new implementation
+    function upgradeImplementation(address _newImplementation) external onlyOwner {
+        UpgradeableBeacon(beacon).upgradeTo(_newImplementation);
+    }
+
+    /// @notice Gets the current implementation address
+    /// @return The address of the current implementation contract
+    function getBeaconImplementation() external view returns (address) {
+        return UpgradeableBeacon(beacon).implementation();
     }
 }

@@ -51,7 +51,6 @@ import "./interfaces/IDealManagerFactory.sol";
 import "./interfaces/IDealManager.sol";
 import "./interfaces/ICyberCorpSingleFactory.sol";
 import "./interfaces/ICyberCertPrinter.sol";
-import "./interfaces/ICyberAgreementFactory.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
 import "./CyberCorpConstants.sol";
 import "./libs/auth.sol";
@@ -109,21 +108,36 @@ contract CyberCorpFactory is BorgAuthACL {
         address oldCyberAgreementFactory
     );
 
-    constructor(address _registryAddress, address _cyberCertPrinterImplementation, address _issuanceManagerFactory, address _cyberCorpSingleFactory, address _dealManagerFactory, address _uriBuilder) {
+    constructor(
+        address _auth,
+        address _registryAddress,
+        address _cyberCertPrinterImplementation,
+        address _issuanceManagerFactory,
+        address _cyberCorpSingleFactory,
+        address _dealManagerFactory,
+        address _uriBuilder
+    ) {
+        initialize(_auth, _registryAddress, _cyberCertPrinterImplementation, _issuanceManagerFactory, _cyberCorpSingleFactory, _dealManagerFactory, _uriBuilder);
+    }
+
+    function initialize(
+        address _auth,
+        address _registryAddress,
+        address _cyberCertPrinterImplementation,
+        address _issuanceManagerFactory,
+        address _cyberCorpSingleFactory,
+        address _dealManagerFactory,
+        address _uriBuilder
+    ) public initializer {
+        // Initialize BorgAuthACL
+        __BorgAuthACL_init(_auth);
+
         registryAddress = _registryAddress;
         cyberCertPrinterImplementation = _cyberCertPrinterImplementation;
         issuanceManagerFactory = _issuanceManagerFactory;
         cyberCorpSingleFactory = _cyberCorpSingleFactory;
         dealManagerFactory = _dealManagerFactory;
         uriBuilder = _uriBuilder;
-
-    }
-
-    function initialize(
-        address _auth
-    ) external initializer {
-        // Initialize BorgAuthACL
-        __BorgAuthACL_init(_auth);
     }
 
     function deployCyberCorp(
@@ -138,18 +152,33 @@ contract CyberCorpFactory is BorgAuthACL {
     ) public returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress) {
         if (salt == bytes32(0)) revert InvalidSalt();
 
-        // Deploy BorgAuth with CREATE2
+        // Deploy BorgAuth with CREATE2 with new param address owner
         bytes memory authBytecode = type(BorgAuth).creationCode;
         bytes32 authSalt = keccak256(abi.encodePacked("auth", salt));
-        authAddress = Create2.deploy(0, authSalt, authBytecode);
+        authAddress = Create2.deploy(0, authSalt, abi.encodePacked(authBytecode, abi.encode(address(this))));
 
         // Initialize BorgAuth
-        BorgAuth(authAddress).initialize();
+       // BorgAuth(authAddress).initialize();
         BorgAuth(authAddress).updateRole(_officer.eoa, 200);
 
         issuanceManagerAddress = IIssuanceManagerFactory(issuanceManagerFactory).deployIssuanceManager(salt);
 
-        cyberCorpAddress = ICyberCorpSingleFactory(cyberCorpSingleFactory).deployCyberCorpSingle(salt, authAddress, companyName, companyType, companyJurisdiction, companyContactDetails, defaultDisputeResolution, issuanceManagerAddress, _companyPayable, _officer);
+        cyberCorpAddress = ICyberCorpSingleFactory(cyberCorpSingleFactory).deployCyberCorpSingle(salt);
+        
+        // Initialize CyberCorp
+       ICyberCorp(cyberCorpAddress).initialize(
+            authAddress,
+            companyName,
+            companyType,
+            companyJurisdiction,
+            companyContactDetails,
+            defaultDisputeResolution,
+            issuanceManagerAddress,
+            _companyPayable,
+            _officer,
+            cyberCorpSingleFactory
+        );
+        
         BorgAuth(authAddress).updateRole(cyberCorpAddress, 200);
         //deploy deal manager
         dealManagerAddress = IDealManagerFactory(dealManagerFactory).deployDealManager(salt);
@@ -159,11 +188,12 @@ contract CyberCorpFactory is BorgAuthACL {
             authAddress,
             cyberCorpAddress,
             cyberCertPrinterImplementation,
-            uriBuilder
+            uriBuilder,
+            issuanceManagerFactory
         );
 
         //update role for issuance manager
-        IDealManager(dealManagerAddress).initialize(authAddress, cyberCorpAddress, registryAddress, issuanceManagerAddress);
+        IDealManager(dealManagerAddress).initialize(authAddress, cyberCorpAddress, registryAddress, issuanceManagerAddress, dealManagerFactory);
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
 

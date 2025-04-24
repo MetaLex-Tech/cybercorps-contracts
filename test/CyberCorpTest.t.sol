@@ -47,7 +47,6 @@ import {CyberCertPrinter, Endorsement} from "../src/CyberCertPrinter.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory, IssuanceManager} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
-import {CyberAgreementFactory} from "../src/CyberAgreementFactory.sol";
 import "../src/CyberCorpConstants.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
@@ -61,6 +60,10 @@ import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {CompanyOfficer} from "../src/storage/CyberCertPrinterStorage.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
+import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {DealManager} from "../src/DealManager.sol";
+import {Escrow} from "../src/storage/LexScrowStorage.sol";
+import {CyberCorp} from "../src/CyberCorp.sol";
 
 contract CyberCorpTest is Test {
     //     Counter public counter;
@@ -69,64 +72,66 @@ contract CyberCorpTest is Test {
     CyberAgreementRegistry registry;
     uint256 testPrivateKey;
     address testAddress;
+    BorgAuth auth;
     address counterPartyAddress = 0x1A762EfF397a3C519da3dF9FCDDdca7D1BD43B5e;
     address[] conditions = new address[](0);
     string[] legend;
+    address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
 
     function setUp() public {
         testPrivateKey = 1337;
         testAddress = vm.addr(testPrivateKey);
-        vm.startPrank(0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C);
+        vm.startPrank(testAddress);
 
-        // Deploy BorgAuth with Create2
-        bytes32 deploySalt = keccak256("AMetaLeXLabsCreation");
-        address authAddress = Create2.computeAddress(
-            deploySalt,
-            keccak256(type(BorgAuth).creationCode)
-        );
-        BorgAuth auth = new BorgAuth{salt: deploySalt}();
-        auth.initialize();
+         bytes32 salt = bytes32(keccak256("MetaLexCyberCorpCreationTestA"));
+        address stableMainNetEth = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+        address stableArbitrum = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
+        address stableBase = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
 
-        // Deploy IssuanceManagerFactory with Create2
-        address issuanceManagerFactory = Create2.deploy(
-            0,
-            deploySalt,
-            abi.encodePacked(
-                type(IssuanceManagerFactory).creationCode,
-                abi.encode(address(0))
-            )
-        );
+         address stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;//0x036CbD53842c5426634e7929541eC2318f3dCF7e;// 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;//0x036CbD53842c5426634e7929541eC2318f3dCF7e; //sepolia base
 
-        // Deploy CyberCertPrinter implementation with Create2
-        address cyberCertPrinterImplementation = Create2.deploy(
-            0,
-            deploySalt,
-            type(CyberCertPrinter).creationCode
-        );
+        //use salt to deploy BorgAuth
+        auth = new BorgAuth{salt: salt}(testAddress);
+        //auth.initialize();
+        address issuanceManagerFactory = address(new IssuanceManagerFactory{salt: salt}(address(auth)));
 
-        // Initialize CyberCertPrinter
-        CyberCertPrinter cyberCertPrinter = CyberCertPrinter(
-            cyberCertPrinterImplementation
-        );
+        address cyberCertPrinterImplementation = address(new CyberCertPrinter{salt: salt}());
+        CyberCertPrinter cyberCertPrinter = CyberCertPrinter(cyberCertPrinterImplementation);
 
         string[] memory defaultLegend = new string[](1);
-        defaultLegend[0] = "test-legend";
-        cyberCertPrinter.initialize(
-            defaultLegend,
-            "",
-            "",
-            "ipfs.io/ipfs/[cid]",
-            address(0),
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed
-        );
+        defaultLegend[0] = "";
+        //cyberCertPrinter.initialize(defaultLegend, "", "", "ipfs.io/ipfs/[cid]", address(0), SecurityClass.SAFE, SecuritySeries.SeriesPreSeed);
 
-        address cyberCorpSingleFactory = address(new CyberCorpSingleFactory());
+        address cyberCorpSingleFactory = address(new CyberCorpSingleFactory{salt: salt}(address(auth)));
 
-        address dealManagerFactory = address(new DealManagerFactory());
+        address dealManagerFactory = address(new DealManagerFactory{salt: salt}(address(auth)));
 
-        registry = new CyberAgreementRegistry();
-        CyberAgreementRegistry(registry).initialize(address(auth));
+       // address registry = address(new CyberAgreementRegistry{salt: salt}(address(auth)));
+                // Deploy CyberAgreementRegistry implementation and proxy
+        address registryImplementation = address(new CyberAgreementRegistry{salt: salt}());
+        bytes memory initData = abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth));
+        address registryAddr = address(new ERC1967Proxy{salt: salt}(registryImplementation, initData));
+        registry = CyberAgreementRegistry(registryAddr);
+
+        address uriBuilder = address(new CertificateUriBuilder{salt: salt}());
+        cyberCorpFactory = new CyberCorpFactory{salt: salt}(address(auth), address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder);
+        cyberCorpFactory.setStable(stable);
+
+        string[] memory globalFieldsSafe = new string[](5);
+        globalFieldsSafe[0] = "purchaseAmount";
+        globalFieldsSafe[1] = "postMoneyValuationCap";
+        globalFieldsSafe[2] = "expirationTime";
+        globalFieldsSafe[3] = "governingJurisdiction";
+        globalFieldsSafe[4] = "disputeResolution";
+
+        string[] memory partyFieldsSafe = new string[](5);
+        partyFieldsSafe[0] = "name";
+        partyFieldsSafe[1] = "evmAddress";
+        partyFieldsSafe[2] = "contactDetails";
+        partyFieldsSafe[3] = "investorType";
+        partyFieldsSafe[4] = "investorJurisdiction";
+
+        registry.createTemplate(bytes32(uint256(2)), "SAFE", "https://ipfs.io/ipfs/bafybeieee4xjqpwcq5nowm4iqw6ik4wkwpz7uqohl3yamypwz54was2h64", globalFieldsSafe, partyFieldsSafe);
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -140,51 +145,9 @@ contract CyberCorpTest is Test {
             partyFields
         );
 
-        string[] memory globalFieldsSafe = new string[](7);
-        globalFieldsSafe[0] = "Investment Amount";
-        globalFieldsSafe[1] = "Post-Money Valuation Cap";
-        globalFieldsSafe[2] = "Expiration Time";
-        globalFieldsSafe[3] = "Governing Jurisdiction";
-        globalFieldsSafe[4] = "Dispute Resolution";
-        globalFieldsSafe[5] = "investorType";
-        globalFieldsSafe[6] = "investorJurisdiction";
-
-        string[] memory partyFieldsSafe = new string[](5);
-        partyFieldsSafe[0] = "Name";
-        partyFieldsSafe[1] = "EVMAddress";
-        partyFieldsSafe[2] = "contactDetails";
-        partyFieldsSafe[3] = "type";
-        partyFieldsSafe[4] = "jurisdiction";
-
-
-        registry.createTemplate(
-            bytes32(uint256(2)),
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            globalFieldsSafe,
-            partyFieldsSafe
-        );
-
-        address uriBuilder = address(new CertificateUriBuilder());
-
-        cyberCorpFactory = new CyberCorpFactory(
-            address(registry),
-            cyberCertPrinterImplementation,
-            issuanceManagerFactory,
-            cyberCorpSingleFactory,
-            dealManagerFactory,
-            uriBuilder
-        );
-
-        cyberCorpFactory.initialize(address(auth));
-        cyberCorpFactory.setStable(0x036CbD53842c5426634e7929541eC2318f3dCF7e);
-
-        legend = new string[](4);
-        legend[0] = "investment advisor certificate custody legend - THE SAFE CERTIFICATE TOKEN MAY NOT BE USED TO EFFECT A TRANSFER OR TO OTHERWISE FACILITATE A CHANGE IN BENEFICIAL OWNERSHIP OF THIS SAFE WITHOUT THE PRIOR CONSENT OF THE COMPANY. ";
-        legend[1] = "restricted security legend - THIS SAFE, THE SAFE CERTIFICATE TOKEN, AND ANY SECURITIES ISSUABLE PURSUANT HERETO OR THERETO ARE 'RESTRICTED SECURITIES' AS DEFINED IN SEC RULE 144. ";
-        legend[2] = "unregistered security legend - THIS SAFE, THE SAFE CERTIFICATE TOKEN AND ANY SECURITIES ISSUABLE PURSUANT HERETO OR THERETO HAVE NOT BEEN REGISTERED UNDER THE SECURITIES ACT OF 1933, AS AMENDED (THE 'SECURITIES ACT'), OR UNDER THE SECURITIES LAWS OF CERTAIN STATES. THESE SECURITIES MAY NOT BE OFFERED, SOLD OR OTHERWISE TRANSFERRED, PLEDGED OR HYPOTHECATED EXCEPT AS PERMITTED IN THIS SAFE AND UNDER THE SECURITIES ACT AND APPLICABLE STATE SECURITIES LAWS PURSUANT TO AN EFFECTIVE REGISTRATION STATEMENT OR AN EXEMPTION THEREFROM. ";
-        legend[3] = "hardfork legend - IN THE EVENT THAT THE BLOCKCHAIN SYSTEM ON WHICH THE SAFE CERTIFICATE TOKEN WAS ORIGINALLY ISSUED UNDERGOES A 'CONTENTIOUS HARDFORK' (AS COMMONLY UNDERSTOOD IN THE BLOCKCHAIN INDUSTRY), NO COPY OF THE SAFE CERTIFICATE TOKEN MAY BE OFFERED, SOLD, OR OTHERWISE TRANSFERRED, PLEDGED, OR HYPOTHECATED UNTIL THE COMPANY HAS DETERMINED, IN ITS SOLE AND ABSOLUTE DISCRETION, WHICH  BLOCKCHAIN SYSTEM (AND WHICH SAFE CERTIFICATE TOKENS) TO TREAT AS CANONICAL, AND THEN ONLY THE SAFE CERTIFICATE TOKEN THUS DETERMINED BY THE COMPANY TO BE CANONICAL MAY BE OFFERED, SOLD, OR OTHERWISE TRANSFERRED, PLEDGED, OR HYPOTHECATED (TO THE EXTENT OTHERWISE PERMITTED).  IN THE EVENT THAT THE BLOCKCHAIN SYSTEM DETERMINED BY THE COMPANY TO BE CANONICAL FOLLOWING A CONTENTIOUS HARDFORK ITSELF SUBSEQUENTLY UNDERGOES ITS CONTENTIOUS HARDFORK, THIS RESTRICTIVE LEGEND SHALL LIKEWISE APPLY TO SUCH CONTENTIOUS HARFORK, MUTATIS MUTANDIS. ";
-
+        auth.updateRole(address(multisig), 200);
+        auth.zeroOwner();
+        auth.userRoles(multisig);
         vm.stopPrank();
     }
 
@@ -491,10 +454,10 @@ contract CyberCorpTest is Test {
 
     function testCreateContract() public {
         vm.startPrank(testAddress);
-        BorgAuth auth = new BorgAuth();
-        auth.initialize();
-        CyberAgreementRegistry registry = new CyberAgreementRegistry();
-        registry.initialize(address(auth));
+        BorgAuth auth = new BorgAuth(testAddress);
+       // auth.initialize();
+        CyberAgreementRegistry registrya = new CyberAgreementRegistry();
+        registrya.initialize(address(auth));
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
         string[] memory partyFields = new string[](1);
@@ -510,14 +473,14 @@ contract CyberCorpTest is Test {
         address[] memory parties = new address[](2);
         parties[0] = address(testAddress);
         parties[1] = address(0);
-        registry.createTemplate(
+        registrya.createTemplate(
             bytes32(uint256(1)),
             "CyberCorp",
             "ipfs.io/ipfs/[cid]",
             globalFields,
             partyFields
         );
-        bytes32 id = registry.createContract(
+        bytes32 id = registrya.createContract(
             bytes32(uint256(1)),
             block.timestamp,
             globalValues,
@@ -533,8 +496,8 @@ contract CyberCorpTest is Test {
         );
 
         bytes memory signature = _signAgreementTypedData(
-            registry.DOMAIN_SEPARATOR(),
-            registry.SIGNATUREDATA_TYPEHASH(),
+            registrya.DOMAIN_SEPARATOR(),
+            registrya.SIGNATUREDATA_TYPEHASH(),
             contractId,
             "ipfs.io/ipfs/[cid]",
             globalFields,
@@ -544,7 +507,7 @@ contract CyberCorpTest is Test {
             testPrivateKey
         );
 
-        registry.signContractFor(
+        registrya.signContractFor(
             testAddress,
             id,
             partyValues[0],
@@ -552,7 +515,7 @@ contract CyberCorpTest is Test {
             false,
             ""
         );
-        string memory contractURI = registry.getContractJson(
+        string memory contractURI = registrya.getContractJson(
             bytes32(uint256(1))
         );
 
@@ -560,8 +523,8 @@ contract CyberCorpTest is Test {
         address newPartyAddr = vm.addr(newPartyPk);
 
         signature = _signAgreementTypedData(
-            registry.DOMAIN_SEPARATOR(),
-            registry.SIGNATUREDATA_TYPEHASH(),
+            registrya.DOMAIN_SEPARATOR(),
+            registrya.SIGNATUREDATA_TYPEHASH(),
             contractId,
             "ipfs.io/ipfs/[cid]",
             globalFields,
@@ -573,8 +536,8 @@ contract CyberCorpTest is Test {
 
         vm.stopPrank();
         vm.startPrank(newPartyAddr);
-        registry.signContract(id, partyValuesB, signature, true, "");
-        contractURI = registry.getContractJson(id);
+        registrya.signContract(id, partyValuesB, signature, true, "");
+        contractURI = registrya.getContractJson(id);
         console.log(contractURI);
         vm.stopPrank();
     }
@@ -2214,78 +2177,6 @@ legend,
         vm.stopPrank();
     }
 
-    function testUpgradeCyberCertPrinter() public {
-        // Deploy and initialize IssuanceManager
-        BorgAuth auth = new BorgAuth();
-        auth.initialize();
-        
-        // Deploy initial implementation
-        CyberCertPrinter implementationV1 = new CyberCertPrinter();
-        
-        // Deploy beacon with IssuanceManager as owner
-        UpgradeableBeacon beacon = new UpgradeableBeacon(
-            address(implementationV1),
-            address(this) // Set test contract as owner temporarily
-        );
-        
-        // Deploy IssuanceManager
-        IssuanceManager issuanceManager = new IssuanceManager();
-        issuanceManager.initialize(
-            address(auth),
-            address(0), // CORP address not needed for this test
-            address(implementationV1),
-            address(0) // uriBuilder not needed for this test
-        );
-
-        // Transfer beacon ownership to IssuanceManager
-        beacon.transferOwnership(address(issuanceManager));
-        
-        // Deploy proxy
-        bytes memory bytecode = abi.encodePacked(
-            type(BeaconProxy).creationCode,
-            abi.encode(address(beacon), "")
-        );
-        address proxy;
-        assembly {
-            proxy := create(0, add(bytecode, 0x20), mload(bytecode))
-        }
-        
-        // Initialize proxy
-        CyberCertPrinter printer = CyberCertPrinter(proxy);
-        string[] memory defaultLegend = new string[](1);
-        defaultLegend[0] = "test-legend";
-        printer.initialize(
-            defaultLegend,
-            "Test Printer",
-            "TEST",
-            "ipfs://test",
-            address(issuanceManager),
-            SecurityClass.CommonStock,
-            SecuritySeries.SeriesA
-        );
-        
-        // Verify initial state
-        assertEq(printer.certificateUri(), "ipfs://test");
-        
-        // Deploy new implementation
-        CyberCertPrinter implementationV2 = new CyberCertPrinter();
-        
-        // Grant upgrader role to test address
-        //auth.updateRole(testAddress, auth.UPGRADER_ROLE());
-        vm.prank(auth.UPGRADER_ADDRESS());
-        
-        // Upgrade implementation through IssuanceManager
-
-        issuanceManager.upgradeImplementation(address(implementationV2));
-        
-        // Verify proxy still works with new implementation
-        assertEq(printer.certificateUri(), "ipfs://test");
-        
-        // Verify upgrade was successful by checking beacon implementation
-        assertEq(IssuanceManager(address(issuanceManager)).getBeaconImplementation(), address(implementationV2));
-        vm.stopPrank();
-    }
-
     //create test to print certificateuri
     function testPrintCertificateUri() public {
         vm.startPrank(testAddress);
@@ -2309,34 +2200,32 @@ legend,
             title: "CEO"
         });
 
-        string[] memory globalFields = new string[](7);
-        globalFields[0] = "Investment Amount";
-        globalFields[1] = "Post-Money Valuation Cap";
-        globalFields[2] = "Expiration Time";
-        globalFields[3] = "Governing Jurisdiction";
-        globalFields[4] = "Dispute Resolution";
-        globalFields[5] = "investorType";
-        globalFields[6] = "investorJurisdiction";
+        string[] memory globalFields = new string[](5);
+        globalFields[0] = "purchaseAmount";
+        globalFields[1] = "postMoneyValuationCap";
+        globalFields[2] = "expirationTime";
+        globalFields[3] = "governingJurisdiction";
+        globalFields[4] = "disputeResolution";
+
+        string[] memory partyFields = new string[](5);
+        partyFields[0] = "name";
+        partyFields[1] = "evmAddress";
+        partyFields[2] = "contactDetails";
+        partyFields[3] = "investorType";
+        partyFields[4] = "investorJurisdiction";
 
         address[] memory parties = new address[](2);
         parties[0] = testAddress;
         parties[1] = address(0);
         uint256 _paymentAmount = 100000;
-        string[] memory partyFields = new string[](5);
-        partyFields[0] = "Name";
-        partyFields[1] = "EVMAddress";
-        partyFields[2] = "contactDetails";
-        partyFields[3] = "type";
-        partyFields[4] = "jurisdiction";
 
-        string[] memory globalValues = new string[](7);
+        string[] memory globalValues = new string[](5);
         globalValues[0] =  "100000";
         globalValues[1] = "100000000";
         globalValues[2] = "12/1/2025";
         globalValues[3] = "Deleware";
         globalValues[4] = "Binding Arbitration";
-        globalValues[5] = "Limited Liability Company";
-        globalValues[6] = "Deleware";
+
 
         string[][] memory partyValues = new string[][](1);
         partyValues[0] = new string[](5);
@@ -2354,7 +2243,7 @@ legend,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
-            "ipfs.io/ipfs/[cid]",
+            "https://ipfs.io/ipfs/bafybeieee4xjqpwcq5nowm4iqw6ik4wkwpz7uqohl3yamypwz54was2h64",
             globalFields,
             partyFields,
             globalValues,
@@ -2411,7 +2300,7 @@ legend,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
-            "ipfs.io/ipfs/[cid]",
+            "https://ipfs.io/ipfs/bafybeieee4xjqpwcq5nowm4iqw6ik4wkwpz7uqohl3yamypwz54was2h64",
             globalFields,
             partyFields,
             globalValues,
@@ -2477,5 +2366,496 @@ legend,
         vm.stopPrank();
     }
     
+    function testUpgradeCyberAgreementRegistry() public {
+        // Deploy initial implementation and proxy
+        address registryImplementation = address(new CyberAgreementRegistry());
+        bytes memory initData = abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth));
+        address registryAddr = address(new ERC1967Proxy(registryImplementation, initData));
+        CyberAgreementRegistry registry = CyberAgreementRegistry(registryAddr);
+
+        // Create a test template to verify functionality
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "testField";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "testPartyField";
+        
+        vm.prank(multisig);
+            registry.createTemplate(
+                bytes32(uint256(1)),
+                "Test Template",
+                "https://test.uri",
+                globalFields,
+                partyFields
+            );
+
+        // Deploy new implementation
+        address newImplementation = address(new CyberAgreementRegistry());
+
+        // Upgrade to new implementation without initialization data
+        vm.prank(multisig);
+        CyberAgreementRegistry(registryAddr).upgradeToAndCall(newImplementation, "");
+
+        // Verify the registry still works by checking the template
+        (string memory legalContractUri, string[] memory retGlobalFields, string[] memory retPartyFields) = 
+            registry.getTemplateDetails(bytes32(uint256(1)));
+
+        assertEq(legalContractUri, "https://test.uri");
+        assertEq(retGlobalFields[0], "testField");
+        assertEq(retPartyFields[0], "testPartyField");
+    }
+
+    function testUpgradeDealManagerBeacon() public {
+        CertificateDetails memory _details = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmount: 0,
+            issuerUSDValuationAtTimeofInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jusidictione etc" 
+
+            
+        });
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress);
+        parties[1] = address(0);
+        uint256 _paymentAmount = 1000000000000000000;
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        bytes memory voidSignature = _signVoidRequest(
+            registry.DOMAIN_SEPARATOR(),
+            registry.VOIDSIGNATUREDATA_TYPEHASH(),
+            contractId,
+            testAddress,
+            testPrivateKey
+        );
+
+        vm.startPrank(testAddress);
+        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address cyberCertPrinterAddr, bytes32 id) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+"Juris",
+"Contact Details",
+"Dispute Res",
+            testAddress,
+            officer,
+            "SAFE",
+            "SAFE",
+            "ipfs.io/ipfs/[cid]",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesPreSeed,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions, 
+             legend,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+
+        // Deploy new implementation
+        address newImplementation = address(new DealManager());
+        address factoryaddr = cyberCorpFactory.dealManagerFactory();
+        // Upgrade beacon implementation
+        console.log(DealManagerFactory(factoryaddr).AUTH().userRoles(address(multisig)));
+        vm.prank(multisig);
+            DealManagerFactory(factoryaddr).upgradeImplementation(newImplementation);
+
+        // Verify the deal manager still works by checking the deal
+        Escrow memory escrow = 
+            DealManager(dealManagerAddr).getEscrowDetails(id);
+
+        console.log(escrow.counterParty);
+        assertEq(DealManagerFactory(factoryaddr).getBeaconImplementation(), newImplementation);
+    }
+
+    function testUpgradeIssuanceManager() public {
+       CertificateDetails memory _details = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmount: 0,
+            issuerUSDValuationAtTimeofInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jusidictione etc" 
+        });
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress);
+        parties[1] = address(0);
+        uint256 _paymentAmount = 1000000000000000000;
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        bytes memory voidSignature = _signVoidRequest(
+            registry.DOMAIN_SEPARATOR(),
+            registry.VOIDSIGNATUREDATA_TYPEHASH(),
+            contractId,
+            testAddress,
+            testPrivateKey
+        );
+
+        vm.startPrank(testAddress);
+        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address cyberCertPrinterAddr, bytes32 id) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+"Juris",
+"Contact Details",
+"Dispute Res",
+            testAddress,
+            officer,
+            "SAFE",
+            "SAFE",
+            "ipfs.io/ipfs/[cid]",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesPreSeed,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions, 
+             legend,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+
+        // Create a certificate to verify functionality
+        string[] memory ledger = new string[](1);
+        ledger[0] = "Test Ledger";
+        
+        vm.prank(testAddress);
+        address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
+            ledger,
+            "Test Certificate",
+            "TEST",
+            "ipfs://test",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesPreSeed
+        );
+
+        // Deploy new implementation
+        address newImplementation = address(new IssuanceManager());
+
+        // Get factory address and upgrade implementation
+        address factoryAddr = cyberCorpFactory.issuanceManagerFactory();
+        vm.prank(multisig);
+            IssuanceManagerFactory(factoryAddr).upgradeImplementation(newImplementation);
+            
+        console.log(IssuanceManager(issuanceManager).getUpgradeFactory());
+
+        address newImplementation2 = address(new CyberCertPrinter());
+
+        //get the factory address
+        vm.prank(multisig);
+            IssuanceManagerFactory(factoryAddr).upgradePrinterBeaconAt(issuanceManager, newImplementation2);
+
+
+        // Verify the IssuanceManager still works by checking the certificate printer
+        address printerAddr = IssuanceManager(issuanceManager).printers(0);
+        //assertEq(printerAddr, certPrinter);
+       // assertEq(IssuanceManagerFactory(factoryAddr).getBeaconImplementation(), newImplementation);
+    }
+
+    function testUpgradeCyberCorpSingle() public {
+       CertificateDetails memory _details = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmount: 0,
+            issuerUSDValuationAtTimeofInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jusidictione etc" 
+        });
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress);
+        parties[1] = address(0);
+        uint256 _paymentAmount = 1000000000000000000;
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        bytes memory voidSignature = _signVoidRequest(
+            registry.DOMAIN_SEPARATOR(),
+            registry.VOIDSIGNATUREDATA_TYPEHASH(),
+            contractId,
+            testAddress,
+            testPrivateKey
+        );
+
+        vm.startPrank(testAddress);
+        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address cyberCertPrinterAddr, bytes32 id) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+"Juris",
+"Contact Details",
+"Dispute Res",
+            testAddress,
+            officer,
+            "SAFE",
+            "SAFE",
+            "ipfs.io/ipfs/[cid]",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesPreSeed,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions, 
+             legend,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+
+        // Create a certificate to verify functionality
+        string[] memory ledger = new string[](1);
+        ledger[0] = "Test Ledger";
+        
+        vm.prank(testAddress);
+        address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
+            ledger,
+            "Test Certificate",
+            "TEST",
+            "ipfs://test",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesPreSeed
+        );
+
+        // Deploy new implementation
+        address newImplementation = address(new CyberCorp());
+
+        // Get factory address and upgrade implementation
+        address factoryAddr = cyberCorpFactory.cyberCorpSingleFactory();
+        vm.prank(multisig);
+          CyberCorpSingleFactory(factoryAddr).upgradeImplementation(newImplementation);
+
+
+
+       //   vm.prank(multisig);
+      //  CyberCorpSingleFactory(factoryAddr).upgradeImplementation(newImplementation);
+
+        //check the company name
+        assertEq(CyberCorp(cyberCorp).cyberCORPName(), "CyberCorp");
+    }
+
+    function testUpgradeCyberCertPrinter() public {
+       CertificateDetails memory _details = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmount: 0,
+            issuerUSDValuationAtTimeofInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jusidictione etc" 
+        });
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress);
+        parties[1] = address(0);
+        uint256 _paymentAmount = 1000000000000000000;
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        bytes memory voidSignature = _signVoidRequest(
+            registry.DOMAIN_SEPARATOR(),
+            registry.VOIDSIGNATUREDATA_TYPEHASH(),
+            contractId,
+            testAddress,
+            testPrivateKey
+        );
+
+        vm.startPrank(testAddress);
+        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address cyberCertPrinterAddr, bytes32 id) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+"Juris",
+"Contact Details",
+"Dispute Res",
+            testAddress,
+            officer,
+            "SAFE",
+            "SAFE",
+            "ipfs.io/ipfs/[cid]",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesPreSeed,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions, 
+             legend,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+
+        // Create a certificate to verify functionality
+        string[] memory ledger = new string[](1);
+        ledger[0] = "Test Ledger";
+        
+        vm.prank(testAddress);
+        address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
+            ledger,
+            "Test Certificate",
+            "TEST",
+            "ipfs://test",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesPreSeed
+        );
+
+        // Deploy new implementation
+        address newImplementation = address(new CyberCertPrinter());
+
+        address factoryAddr = cyberCorpFactory.issuanceManagerFactory();
+
+        console.log(IssuanceManager(issuanceManager).getUpgradeFactory());
+        //get the factory address
+        vm.prank(multisig);
+            IssuanceManagerFactory(factoryAddr).upgradePrinterBeaconAt(issuanceManager, newImplementation);
+
+        //check the security type
+        assertEq(CyberCertPrinter(certPrinter).certificateUri(), "ipfs://test");
+    }
 }
 

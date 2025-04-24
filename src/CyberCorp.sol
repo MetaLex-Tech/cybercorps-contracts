@@ -71,29 +71,22 @@ contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
     address public dealManager;
     /// @notice Implementation address for the CyberCertPrinter contract
     address public cyberCertPrinterImplementation;
+
+    address public upgradeFactory;
     /// @notice Array of company officers with their roles and details
     CompanyOfficer[] public companyOfficers;
 
-    /// @notice Emitted when corporation details are updated
-    /// @param cyberCORPName Updated legal name
-    /// @param cyberCORPType Updated entity type
-    /// @param cyberCORPJurisdiction Updated jurisdiction
-    /// @param cyberCORPContactDetails Updated contact details
-    /// @param defaultDisputeResolution Updated dispute resolution mechanism
+
     event CyberCORPDetailsUpdated(string cyberCORPName, string cyberCORPType, string cyberCORPJurisdiction, string cyberCORPContactDetails, string defaultDisputeResolution);
-    
-    /// @notice Emitted when a new officer is added
-    /// @param officer Address of the new officer
-    /// @param index Position in the officers array
     event OfficerAdded(address indexed officer, uint256 index);
-    
-    /// @notice Emitted when an officer is removed
-    /// @param officer Address of the removed officer
-    /// @param index Position in the officers array where removal occurred
     event OfficerRemoved(address indexed officer, uint256 index);
+    event CompanyPayableUpdated(address indexed companyPayable, address indexed oldCompanyPayable);
+
+    error NotUpgradeFactory();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
+        _disableInitializers();
     }
 
     /// @notice Initializes the CyberCorp contract with essential details
@@ -115,7 +108,8 @@ contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
         string memory _defaultDisputeResolution,
         address _issuanceManager,
         address _companyPayable,
-        CompanyOfficer memory _officer
+        CompanyOfficer memory _officer,
+        address _upgradeFactory
     ) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
@@ -128,6 +122,12 @@ contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
         issuanceManager = _issuanceManager;
         companyPayable = _companyPayable;
         companyOfficers.push(_officer);
+        upgradeFactory = _upgradeFactory;
+    }
+
+    modifier onlyUpgradeFactory() {
+        if (msg.sender != upgradeFactory) revert NotUpgradeFactory();
+        _;
     }
 
     /// @notice Updates the corporation's basic details
@@ -208,8 +208,14 @@ contract CyberCorp is Initializable, UUPSUpgradeable, BorgAuthACL {
         emit OfficerRemoved(companyOfficers[_index].eoa, _index);
     }
 
+    function setCompanyPayable(address _companyPayable) external onlyOwner() {
+        address oldCompanyPayable = companyPayable;
+        companyPayable = _companyPayable;
+        emit CompanyPayableUpdated(companyPayable, oldCompanyPayable);
+    }
+
     /// @notice Authorizes an upgrade to a new implementation
     /// @dev Only callable by addresses with the upgrader role
     /// @param newImplementation Address of the new implementation
-    function _authorizeUpgrade(address newImplementation) internal virtual override onlyUpgrader {}
+    function _authorizeUpgrade(address newImplementation) internal virtual override onlyUpgradeFactory {}
 }
