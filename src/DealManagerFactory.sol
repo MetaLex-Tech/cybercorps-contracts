@@ -97,7 +97,7 @@ contract DealManagerFactory is BorgAuthACL {
         bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(beacon, ""));
     }
 
-    function upgradeImplementation(address _newImplementation) external onlyAdmin {
+    function upgradeImplementation(address _newImplementation) external onlyOwner {
         UpgradeableBeacon(beacon).upgradeTo(_newImplementation);
     }
 
