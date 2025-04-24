@@ -73,7 +73,7 @@ contract BaseScript is Script {
         partyFieldsSafe[3] = "investorType";
         partyFieldsSafe[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "https://ipfs.io/ipfs/bafybeieee4xjqpwcq5nowm4iqw6ik4wkwpz7uqohl3yamypwz54was2h64", globalFieldsSafe, partyFieldsSafe);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi", globalFieldsSafe, partyFieldsSafe);
 
         auth.updateRole(address(multisig), 200);
         auth.zeroOwner();

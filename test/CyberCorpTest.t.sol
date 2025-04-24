@@ -71,6 +71,7 @@ contract CyberCorpTest is Test {
 
     CyberCorpFactory cyberCorpFactory;
     CyberAgreementRegistry registry;
+    address raddress;
     uint256 testPrivateKey;
     address testAddress;
     BorgAuth auth;
@@ -80,11 +81,12 @@ contract CyberCorpTest is Test {
     address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
 
     function setUp() public {
-        testPrivateKey = 1337;
-        testAddress = vm.addr(testPrivateKey);
+        address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
+        testAddress = deployerAddress;
         vm.startPrank(testAddress);
 
-         bytes32 salt = bytes32(keccak256("MetaLexCyberCorpCreationTestA"));
+         bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunch"));
         address stableMainNetEth = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
         address stableArbitrum = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
         address stableBase = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
@@ -112,6 +114,7 @@ contract CyberCorpTest is Test {
         address registryImplementation = address(new CyberAgreementRegistry{salt: salt}());
         bytes memory initData = abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth));
         address registryAddr = address(new ERC1967Proxy{salt: salt}(registryImplementation, initData));
+        raddress = registryAddr;
         registry = CyberAgreementRegistry(registryAddr);
 
         address uriBuilder = address(new CertificateUriBuilder{salt: salt}());
@@ -2861,5 +2864,26 @@ legend,
         //check the security type
         assertEq(CyberCertPrinter(certPrinter).certificateUri(), "ipfs://test");
     }
+
+    function testUpdateCyberAgreementRegistry() public {
+
+    // First give the test contract the OWNER_ROLE (99)
+   
+
+    // Deploy new implementation
+    address newImplementation = address(new CyberAgreementRegistry());
+
+    // Get the current registry address from the factory
+    //address registryAddr = cyberCorpFactory.registryAddress();
+    console.log("raddress: ", raddress);
+    console.log("regaddr: ", address(registry));
+    // Upgrade the existing registry
+     vm.startPrank(multisig);
+    CyberAgreementRegistry(raddress).upgradeToAndCall(newImplementation, "");
+
+
+    }
+
+
 }
 
