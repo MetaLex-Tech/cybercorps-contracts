@@ -63,6 +63,8 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     error ConditionAlreadyExists();
     error ConditionDoesNotExist();
     error NotUpgradeFactory();
+    error DealNotExpired();
+    
     /// @notice Emitted when a new deal is proposed
     /// @param agreementId Unique identifier for the agreement
     /// @param certAddress Address of the certificate contract
@@ -360,6 +362,8 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     /// @param signature Signature of the signer
     function voidExpiredDeal(bytes32 agreementId, address signer, bytes memory signature) public {
         Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
+        if (block.timestamp <= deal.expiry) revert DealNotExpired();
+        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
         for(uint256 i = 0; i < deal.corpAssets.length; i++) {
             if(deal.corpAssets[i].tokenType == TokenType.ERC721) {
                 DealManagerStorage.getIssuanceManager().voidCertificate(
@@ -368,8 +372,10 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
                 );
             }
         }
-        voidEscrow(agreementId);
-        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
+        if(deal.status == EscrowStatus.PAID) 
+            voidAndRefund(agreementId);
+        else if(deal.status == EscrowStatus.PENDING)
+            voidEscrow(agreementId);
     }
 
     /// @notice Revokes a pending deal
