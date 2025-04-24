@@ -64,6 +64,7 @@ import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {DealManager} from "../src/DealManager.sol";
 import {Escrow} from "../src/storage/LexScrowStorage.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
+import {MockIssuanceManager} from "./mock/MockIssuanceManager.sol";
 
 contract CyberCorpTest is Test {
     //     Counter public counter;
@@ -2607,12 +2608,16 @@ legend,
         );
 
         // Deploy new implementation
-        address newImplementation = address(new IssuanceManager());
+        address newImplementation = address(new MockIssuanceManager());
 
         // Get factory address and upgrade implementation
         address factoryAddr = cyberCorpFactory.issuanceManagerFactory();
         vm.prank(multisig);
             IssuanceManagerFactory(factoryAddr).upgradeImplementation(newImplementation);
+
+        MockIssuanceManager(issuanceManager).shouldBeFalse();
+
+        MockIssuanceManager(issuanceManager).uriBuilder();
             
         console.log(IssuanceManager(issuanceManager).getUpgradeFactory());
 
@@ -2621,7 +2626,6 @@ legend,
         //get the factory address
         vm.prank(multisig);
             IssuanceManagerFactory(factoryAddr).upgradePrinterBeaconAt(issuanceManager, newImplementation2);
-
 
         // Verify the IssuanceManager still works by checking the certificate printer
         address printerAddr = IssuanceManager(issuanceManager).printers(0);
