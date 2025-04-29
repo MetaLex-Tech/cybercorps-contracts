@@ -219,23 +219,23 @@ contract CyberCorpFactory is BorgAuthACL {
         string memory defaultDisputeResolution,
         address _companyPayable,
         CompanyOfficer memory _officer,
-        string memory certName,
-        string memory certSymbol,
-        string memory certificateUri,
-        SecurityClass securityClass,
-        SecuritySeries securitySeries,
+        string[] memory certName,
+        string[] memory certSymbol,
+        string[] memory certificateUri,
+        SecurityClass[] memory securityClass,
+        SecuritySeries[] memory securitySeries,
         bytes32 _templateId,
         string[] memory _globalValues,
         address[] memory _parties,
         uint256 _paymentAmount,
         string[][] memory _partyValues,
         bytes memory signature,
-        CertificateDetails memory _details,
+        CertificateDetails[] memory _details,
         address[] memory conditions,
-        string[] memory _defaultLegend,
+        string[][] memory _defaultLegend,
         bytes32 secretHash,
         uint256 expiry
-    ) external returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress, address certPrinterAddress, bytes32 id) {
+    ) external returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress, address[] memory certPrinterAddress, bytes32 id, uint256[] memory certIds) {
 
         //create bytes32 salt
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
@@ -254,13 +254,16 @@ contract CyberCorpFactory is BorgAuthACL {
             _officer
         );
 
+        certPrinterAddress = new address[](_details.length);
         //string[] memory defaultLegend = new string[](0);
-        ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter(_defaultLegend, string.concat(companyName, " ", certName), certSymbol, certificateUri, securityClass, securitySeries));
-        certPrinterAddress = address(certPrinter);
+        for(uint256 i = 0; i < _details.length; i++) {
+            ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter(_defaultLegend[i], string.concat(companyName, " ", certName[i]), certSymbol[i], certificateUri[i], securityClass[i], securitySeries[i]));
+            certPrinterAddress[i] = address(certPrinter);
+        }
 
         // Create and sign deal
-        uint256 certId;
-        (id, certId) = IDealManager(dealManagerAddress).proposeAndSignDeal(
+        certIds = new uint256[](_details.length);
+        (id, certIds) = IDealManager(dealManagerAddress).proposeAndSignDeal(
             certPrinterAddress,
             stable,
             _paymentAmount,

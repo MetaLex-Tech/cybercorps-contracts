@@ -30,8 +30,9 @@ contract BaseScript is Script {
         address stableArbitrum = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
         address stableBase = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
         address stableBaseSepolia = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
+        address stableSepolia = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
 
-         address stable = stableBaseSepolia;//0x036CbD53842c5426634e7929541eC2318f3dCF7e;// 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;//0x036CbD53842c5426634e7929541eC2318f3dCF7e; //sepolia base
+         address stable = stableMainNetEth;//0x036CbD53842c5426634e7929541eC2318f3dCF7e;// 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;//0x036CbD53842c5426634e7929541eC2318f3dCF7e; //sepolia base
          address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
         //use salt to deploy BorgAuth
         BorgAuth auth = new BorgAuth{salt: salt}(deployerAddress);

@@ -106,7 +106,11 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
             escrow.counterParty,
             buyerName
         );
-        ICyberCertPrinter(escrow.corpAssets[0].tokenAddress).addEndorsement(escrow.corpAssets[0].tokenId, newEndorsement);
+        for(uint256 i = 0; i < escrow.corpAssets.length; i++) {
+            if(escrow.corpAssets[i].tokenType == TokenType.ERC721) {
+                ICyberCertPrinter(escrow.corpAssets[i].tokenAddress).addEndorsement(escrow.corpAssets[i].tokenId, newEndorsement);
+            }
+        }
     }
 
     function handleCounterPartyPayment(bytes32 agreementId) internal {

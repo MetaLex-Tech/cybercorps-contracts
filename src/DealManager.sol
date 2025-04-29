@@ -64,7 +64,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     error ConditionDoesNotExist();
     error NotUpgradeFactory();
     error DealNotExpired();
-    
+
     /// @notice Emitted when a new deal is proposed
     /// @param agreementId Unique identifier for the agreement
     /// @param certAddress Address of the certificate contract
@@ -79,8 +79,8 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     /// @param hasSecret Whether the deal requires a secret for finalization
     event DealProposed(
         bytes32 indexed agreementId,
-        address indexed certAddress,
-        uint256 indexed certId,
+        address[] indexed certAddress,
+        uint256[] indexed certId,
         address paymentToken,
         uint256 paymentAmount,
         bytes32 templateId,
@@ -151,27 +151,29 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     /// @param secretHash Hash of the secret required for finalization (if any)
     /// @param expiry Timestamp when the deal expires
     /// @return agreementId Unique identifier for the agreement
-    /// @return certId ID of the created certificate
+    /// @return certIds IDs of the created certificate
     function proposeDeal(
-        address _certPrinterAddress, 
+        address[] memory _certPrinterAddress, 
         address _paymentToken, 
         uint256 _paymentAmount, 
         bytes32 _templateId, 
         uint256 _salt,
         string[] memory _globalValues, 
         address[] memory _parties, 
-        CertificateDetails memory _certDetails,
+        CertificateDetails[] memory _certDetails,
         string[][] memory _partyValues,
         address[] memory conditions,
         bytes32 secretHash,
         uint256 expiry
-    ) public onlyOwner returns (bytes32 agreementId, uint256 certId) {
+    ) public onlyOwner returns (bytes32 agreementId, uint256[] memory certIds) {
         agreementId = ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).createContract(_templateId, _salt, _globalValues, _parties, _partyValues, secretHash, address(this), expiry);
-        
-        certId = DealManagerStorage.getIssuanceManager().createCert(_certPrinterAddress, address(this), _certDetails);
-
-        Token[] memory corpAssets = new Token[](1);
-        corpAssets[0] = Token(TokenType.ERC721, _certPrinterAddress, certId, 1);
+       
+        Token[] memory corpAssets = new Token[](_certDetails.length);
+        certIds = new uint256[](_certDetails.length);
+        for(uint256 i = 0; i < _certDetails.length; i++) {
+            certIds[i] = DealManagerStorage.getIssuanceManager().createCert(_certPrinterAddress[i], address(this), _certDetails[i]);
+            corpAssets[i] = Token(TokenType.ERC721, _certPrinterAddress[i], certIds[i], 1);
+        }
 
         Token[] memory buyerAssets = new Token[](1);
         buyerAssets[0] = Token(TokenType.ERC20, _paymentToken, 0, _paymentAmount);
@@ -196,7 +198,7 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         emit DealProposed(
             agreementId,
             _certPrinterAddress,
-            certId,
+            certIds,
             _paymentToken,
             _paymentAmount,
             _templateId,
@@ -225,25 +227,28 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     /// @param secretHash Hash of the secret required for finalization (if any)
     /// @param expiry Timestamp when the deal expires
     /// @return agreementId Unique identifier for the agreement
-    /// @return certId ID of the created certificate
+    /// @return certIds IDs of the created certificate
     function proposeAndSignDeal(
-        address _certPrinterAddress, 
+        address[] memory _certPrinterAddress, 
         address _paymentToken, 
         uint256 _paymentAmount, 
         bytes32 _templateId, 
         uint256 _salt,
         string[] memory _globalValues, 
         address[] memory _parties, 
-        CertificateDetails memory _certDetails,
+        CertificateDetails[] memory _certDetails,
         address proposer,
         bytes memory signature,
         string[][] memory _partyValues,
         address[] memory conditions,
         bytes32 secretHash,
         uint256 expiry
-    ) public returns (bytes32 agreementId, uint256 certId) {
+    ) public returns (bytes32 agreementId, uint256[] memory certIds) {
         if(_partyValues.length > _parties.length) revert PartyValuesLengthMismatch();
-        (agreementId, certId) = proposeDeal(_certPrinterAddress, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails, _partyValues, conditions, secretHash, expiry);
+        
+        certIds = new uint256[](_certDetails.length);
+
+        (agreementId, certIds) = proposeDeal(_certPrinterAddress, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails, _partyValues, conditions, secretHash, expiry);
         // NOTE: proposer is expected to be listed as a party in the parties array.
         
         // Update the escrow signature

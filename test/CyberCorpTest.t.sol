@@ -77,22 +77,39 @@ contract CyberCorpTest is Test {
     BorgAuth auth;
     address counterPartyAddress = 0x1A762EfF397a3C519da3dF9FCDDdca7D1BD43B5e;
     address[] conditions = new address[](0);
-    string[] legend;
+    string[][] legend = new string[][](0);
     address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
+    SecurityClass[] securityClasses;
+    SecuritySeries[] securitySerieses;
+
+    string[] certNames;
+    string[] certSymbols;
+    string[] certificateUris;
+    string[][] defaultLegends;
 
     function setUp() public {
-        address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
-        testAddress = deployerAddress;
+        testPrivateKey = 1337;
+        testAddress = vm.addr(testPrivateKey);
         vm.startPrank(testAddress);
 
+        securityClasses = new SecurityClass[](1);
+        securityClasses[0] = SecurityClass.SAFE;
+        securitySerieses = new SecuritySeries[](1);
+        securitySerieses[0] = SecuritySeries.SeriesPreSeed;
          bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunch"));
         address stableMainNetEth = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
         address stableArbitrum = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
         address stableBase = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
-
          address stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;//0x036CbD53842c5426634e7929541eC2318f3dCF7e;// 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;//0x036CbD53842c5426634e7929541eC2318f3dCF7e; //sepolia base
 
+
+        certNames = new string[](1);
+        certNames[0] = "Cert Name 1";
+        certSymbols = new string[](1);
+        certSymbols[0] = "Cert Symbol 1";
+        certificateUris = new string[](1);
+        certificateUris[0] = "ipfs.io/ipfs/[cid]";
+        
         //use salt to deploy BorgAuth
         auth = new BorgAuth{salt: salt}(testAddress);
         //auth.initialize();
@@ -101,9 +118,11 @@ contract CyberCorpTest is Test {
         address cyberCertPrinterImplementation = address(new CyberCertPrinter{salt: salt}());
         CyberCertPrinter cyberCertPrinter = CyberCertPrinter(cyberCertPrinterImplementation);
 
-        string[] memory defaultLegend = new string[](1);
-        defaultLegend[0] = "";
-        //cyberCertPrinter.initialize(defaultLegend, "", "", "ipfs.io/ipfs/[cid]", address(0), SecurityClass.SAFE, SecuritySeries.SeriesPreSeed);
+        defaultLegends = new string[][](1);
+        defaultLegends[0] = new string[](1);
+        defaultLegends[0][0] = "Legend 1";
+
+        //cyberCertPrinter.initialize(defaultdefaultLegends, "", "", "ipfs.io/ipfs/[cid]", address(0), securityClasses, SecuritySeries.SeriesPreSeed);
 
         address cyberCorpSingleFactory = address(new CyberCorpSingleFactory{salt: salt}(address(auth)));
 
@@ -156,16 +175,16 @@ contract CyberCorpTest is Test {
     }
 
     function testOffer() public {
-        CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
-
-            
         });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -205,6 +224,13 @@ contract CyberCorpTest is Test {
             testPrivateKey
         );
 
+        string[] memory certName = new string[](1);
+        certName[0] = "Cert Name 1";
+        string[] memory certSymbol = new string[](1);
+        certSymbol[0] = "Cert Symbol 1";
+        string[] memory certificateUri = new string[](1);
+        certificateUri[0] = "ipfs.io/ipfs/[cid]";
+        
 
         vm.startPrank(testAddress);
         cyberCorpFactory.deployCyberCorpAndCreateOffer(
@@ -216,11 +242,11 @@ contract CyberCorpTest is Test {
             "Dispute Res",
             testAddress,
             officer,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
+            certName,
+            certSymbol,
+            certificateUri,
+            securityClasses,
+            securitySerieses,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -229,7 +255,7 @@ contract CyberCorpTest is Test {
             signature,
             _details,
             conditions, 
-            legend,
+            defaultLegends,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -240,7 +266,8 @@ contract CyberCorpTest is Test {
         uint256 newPartyPk = 80085;
         address newPartyAddr = vm.addr(newPartyPk);
 
-        CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
@@ -248,6 +275,7 @@ contract CyberCorpTest is Test {
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
         });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -297,22 +325,23 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
-            address cyberCertPrinterAddr,
-            bytes32 id
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
             "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
             testAddress,
             officer,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
+            certNames,
+certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -321,7 +350,7 @@ contract CyberCorpTest is Test {
             signature,
             _details,
             conditions, 
-             legend,
+             defaultLegends,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -362,17 +391,181 @@ contract CyberCorpTest is Test {
 
     }
 
-    function testVoidCertificate() public {
-        CertificateDetails memory _details = CertificateDetails({
+    function testCreateClosedContractTWarrent() public {
+        uint256 newPartyPk = 80085;
+        address newPartyAddr = vm.addr(newPartyPk);
+
+        CertificateDetails[] memory _details = new CertificateDetails[](2);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
-
-            
         });
+        CertificateDetails memory _detailsB = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmount: 0,
+            issuerUSDValuationAtTimeofInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jusidictione etc" 
+        });
+
+        _details[0] = _detailsA;
+        _details[1] = _detailsB;
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        securityClasses = new SecurityClass[](2);
+        securityClasses[0] = SecurityClass.SAFE;
+        securityClasses[1] = SecurityClass.TokenWarrant;
+        securitySerieses = new SecuritySeries[](2);
+        securitySerieses[0] = SecuritySeries.SeriesPreSeed;
+        securitySerieses[1] = SecuritySeries.SeriesPreSeed;
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress);
+        parties[1] = address(newPartyAddr);
+        uint256 _paymentAmount = 1000000000000000000;
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+        partyValues[1] = new string[](1);
+        partyValues[1][0] = "Counter Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+
+        bytes memory signature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+        string[] memory certNames = new string[](2);
+        certNames[0] = "Safe";
+        certNames[1] = "Token Warrant";
+        string[] memory certSymbols = new string[](2);
+        certSymbols[0] = "SAFE";
+        certSymbols[1] = "TWARRENT";
+
+        string[] memory certificateUris = new string[](2);
+        certificateUris[0] = "ipfs.io/ipfs/[cid1]";
+        certificateUris[1] = "ipfs.io/ipfs/[cid2]";
+
+        string[][] memory defaultLegends = new string[][](2);
+        defaultLegends[0] = new string[](1);
+        defaultLegends[0][0] = "Legend 1";
+        defaultLegends[1] = new string[](1);
+        defaultLegends[1][0] = "Legend 2";
+
+        vm.startPrank(testAddress);
+         (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certNames,
+            certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions, 
+             defaultLegends,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+        IDealManager dealManager = IDealManager(dealManagerAddr);
+        vm.startPrank(newPartyAddr);
+         deal(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e,
+            newPartyAddr,
+            _paymentAmount
+        );
+        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(
+            address(dealManager),
+            _paymentAmount
+        );
+        bytes memory newPartySignature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[1],
+            newPartyPk
+        );
+        
+        dealManager.signAndFinalizeDeal(
+            newPartyAddr,
+            contractId,
+            partyValues[1],
+            newPartySignature,
+            true,
+            "Counter Party Name",
+            ""
+        );
+        vm.stopPrank();
+        console.log("tokens received:" );
+        string memory contractURI = CyberCertPrinter(cyberCertPrinterAddr[0]).tokenURI(certIds[0]);
+        console.log(contractURI);
+        string memory contractURI2= CyberCertPrinter(cyberCertPrinterAddr[1]).tokenURI(certIds[1]);
+        console.log(contractURI2);
+    }
+
+    function testVoidCertificate() public {
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmount: 0,
+            issuerUSDValuationAtTimeofInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jusidictione etc" 
+        });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -421,7 +614,7 @@ contract CyberCorpTest is Test {
         );
 
         vm.startPrank(testAddress);
-        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address cyberCertPrinterAddr, bytes32 id) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address[] memory cyberCertPrinterAddr, bytes32 id, uint256[] memory certIds) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
             "Limited Liability Company",
@@ -430,11 +623,11 @@ contract CyberCorpTest is Test {
 "Dispute Res",
             testAddress,
             officer,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
+            certNames,
+certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -443,7 +636,7 @@ contract CyberCorpTest is Test {
             signature,
             _details,
             conditions, 
-             legend,
+             defaultLegends,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -552,16 +745,16 @@ contract CyberCorpTest is Test {
             0x2aDA6E66a92CbF283B9F2f4f095Fe705faD357B8
         );
 
-        CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
-
-            
         });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -606,8 +799,9 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
-            address cyberCertPrinterAddr,
-            bytes32 id
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
                 block.timestamp,
                 "CyberCorp",
@@ -617,11 +811,11 @@ contract CyberCorpTest is Test {
 "Dispute Res",
                 testAddress,
                 officer,
-                "SAFE",
-                "SAFE",
-                "ipfs.io/ipfs/[cid]",
-                SecurityClass.SAFE,
-                SecuritySeries.SeriesPreSeed,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
                 bytes32(uint256(1)),
                 globalValues,
                 parties,
@@ -630,7 +824,7 @@ contract CyberCorpTest is Test {
                 proposerSignature,
                 _details,
                 conditions, 
-                 legend,
+                 defaultLegends,
                 bytes32(0),
                 block.timestamp + 1000000
             );
@@ -677,16 +871,16 @@ contract CyberCorpTest is Test {
 
     function testSecretHashFailure() public {
         vm.startPrank(testAddress);
-        CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
-
-            
         });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -734,8 +928,9 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
-            address cyberCertPrinterAddr,
-            bytes32 id
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
                 block.timestamp,
                 "CyberCorp",
@@ -745,11 +940,11 @@ contract CyberCorpTest is Test {
                 "Dispute Res",
                 testAddress,
                 officer,
-                "SAFE",
-                "SAFE",
-                "ipfs.io/ipfs/[cid]",
-                SecurityClass.SAFE,
-                SecuritySeries.SeriesPreSeed,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
                 bytes32(uint256(1)),
                 globalValues,
                 parties,
@@ -758,7 +953,7 @@ contract CyberCorpTest is Test {
                 proposerSignature,
                 _details,
                 conditions, 
-                 legend,
+                 defaultLegends,
                 secretHash,
                 block.timestamp + 1000000
             );
@@ -808,16 +1003,16 @@ contract CyberCorpTest is Test {
 
     function testSecretHashSuccess() public {
         vm.startPrank(testAddress);
-        CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
-
-            
         });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -865,8 +1060,9 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
-            address cyberCertPrinterAddr,
-            bytes32 id
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
                 block.timestamp,
                 "CyberCorp",
@@ -876,11 +1072,11 @@ contract CyberCorpTest is Test {
 "Dispute Res",
                 testAddress,
                 officer,
-                "SAFE",
-                "SAFE",
-                "ipfs.io/ipfs/[cid]",
-                SecurityClass.SAFE,
-                SecuritySeries.SeriesPreSeed,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
                 bytes32(uint256(1)),
                 globalValues,
                 parties,
@@ -889,7 +1085,7 @@ contract CyberCorpTest is Test {
                 proposerSignature,
                 _details,
                 conditions, 
-                 legend,
+                 defaultLegends,
                 secretHash,
                 block.timestamp + 1000000
             );
@@ -1014,16 +1210,16 @@ contract CyberCorpTest is Test {
 
     function testRevokeDealBeforePayment() public {
         vm.startPrank(testAddress);
-        CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
-
-            
         });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -1075,8 +1271,9 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
-            address cyberCertPrinterAddr,
-            bytes32 id
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
@@ -1086,11 +1283,11 @@ contract CyberCorpTest is Test {
 "Dispute Res",
             testAddress,
             officer,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
+            certNames,
+certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -1099,7 +1296,7 @@ contract CyberCorpTest is Test {
             signature,
             _details,
             conditions, 
-             legend,
+             defaultLegends,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1111,16 +1308,16 @@ contract CyberCorpTest is Test {
 
     function testRevokeDealAfterPayment() public {
         vm.startPrank(testAddress);
-        CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
-
-            
         });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -1164,8 +1361,9 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
-            address cyberCertPrinterAddr,
-            bytes32 id
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
@@ -1175,11 +1373,11 @@ contract CyberCorpTest is Test {
 "Dispute Res",
             testAddress,
             officer,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
+            certNames,
+certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -1188,7 +1386,7 @@ contract CyberCorpTest is Test {
             signature,
             _details,
             conditions, 
-legend,
+defaultLegends,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1233,16 +1431,16 @@ legend,
 
     function testSignToVoidAfterPayment() public {
         vm.startPrank(testAddress);
-        CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
-
-            
         });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -1294,8 +1492,9 @@ legend,
             address auth,
             address issuanceManager,
             address dealManagerAddr,
-            address cyberCertPrinterAddr,
-            bytes32 id
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
@@ -1305,11 +1504,11 @@ legend,
 "Dispute Res",
             testAddress,
             officer,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
+            certNames,
+certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -1318,7 +1517,7 @@ legend,
             signature,
             _details,
             conditions, 
-legend,
+defaultLegends,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1330,16 +1529,16 @@ legend,
 
     function testVoidExpiredDeal() public {
         vm.startPrank(testAddress);
-        CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
-
-            
         });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -1392,8 +1591,9 @@ legend,
             address auth,
             address issuanceManager,
             address dealManagerAddr,
-            address cyberCertPrinterAddr,
-            bytes32 id
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
@@ -1403,11 +1603,11 @@ legend,
 "Dispute Res",
             testAddress,
             officer,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
+            certNames,
+certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -1416,7 +1616,7 @@ legend,
             signature,
             _details,
             conditions, 
-legend,
+defaultLegends,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1431,16 +1631,16 @@ legend,
 
     function testFinalizeDealWithoutPayment() public {
         vm.startPrank(testAddress);
-        CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
-
-            
         });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -1484,8 +1684,9 @@ legend,
             address auth,
             address issuanceManager,
             address dealManagerAddr,
-            address cyberCertPrinterAddr,
-            bytes32 id
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
@@ -1495,11 +1696,11 @@ legend,
 "Dispute Res",
             testAddress,
             officer,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
+            certNames,
+certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -1508,7 +1709,7 @@ legend,
             signature,
             _details,
             conditions, 
-legend,
+defaultLegends,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1529,16 +1730,16 @@ legend,
 
     function testSignDealAndPay() public {
         vm.startPrank(testAddress);
-        CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
-
-            
         });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -1582,8 +1783,9 @@ legend,
             address auth,
             address issuanceManager,
             address dealManagerAddr,
-            address cyberCertPrinterAddr,
-            bytes32 id
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
@@ -1593,11 +1795,11 @@ legend,
 "Dispute Res",
             testAddress,
             officer,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
+            certNames,
+certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -1606,7 +1808,7 @@ legend,
             signature,
             _details,
             conditions, 
-legend,
+defaultLegends,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1653,16 +1855,16 @@ legend,
 
     function testFinalizeDealTwice() public {
         vm.startPrank(testAddress);
-        CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
-
-            
         });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -1706,8 +1908,9 @@ legend,
             address auth,
             address issuanceManager,
             address dealManagerAddr,
-            address cyberCertPrinterAddr,
-            bytes32 id
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
@@ -1717,11 +1920,11 @@ legend,
 "Dispute Res",
             testAddress,
             officer,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
+            certNames,
+certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -1730,7 +1933,7 @@ legend,
             signature,
             _details,
             conditions, 
-legend,
+defaultLegends,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1789,16 +1992,16 @@ legend,
 
     function testVoidDealAfterFinalization() public {
         vm.startPrank(testAddress);
-        CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
-
-            
         });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -1850,8 +2053,9 @@ legend,
             address auth,
             address issuanceManager,
             address dealManagerAddr,
-            address cyberCertPrinterAddr,
-            bytes32 id
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
@@ -1861,11 +2065,11 @@ legend,
 "Dispute Res",
             testAddress,
             officer,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
+            certNames,
+certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -1874,7 +2078,7 @@ legend,
             signature,
             _details,
             conditions, 
-legend,
+defaultLegends,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -1925,16 +2129,16 @@ legend,
 
     function testSignDealWithInvalidSecret() public {
         vm.startPrank(testAddress);
-        CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
-
-            
         });
+        _details[0] = _detailsA;
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -1980,8 +2184,9 @@ legend,
             address auth,
             address issuanceManager,
             address dealManagerAddr,
-            address cyberCertPrinterAddr,
-            bytes32 id
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
@@ -1991,11 +2196,11 @@ legend,
 "Dispute Res",
             testAddress,
             officer,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
+            certNames,
+certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -2004,7 +2209,7 @@ legend,
             signature,
             _details,
             conditions, 
-legend,
+defaultLegends,
             secretHash,
             block.timestamp + 1000000
         );
@@ -2053,16 +2258,16 @@ legend,
 
     function testSignDealWithExpiredContract() public {
         vm.startPrank(testAddress);
-        CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
-
-            
         });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -2107,8 +2312,9 @@ legend,
             address auth,
             address issuanceManager,
             address dealManagerAddr,
-            address cyberCertPrinterAddr,
-            bytes32 id
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
@@ -2118,11 +2324,11 @@ legend,
 "Dispute Res",
             testAddress,
             officer,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
+            certNames,
+certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -2131,7 +2337,7 @@ legend,
             signature,
             _details,
             conditions, 
-legend,
+defaultLegends,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -2188,7 +2394,8 @@ legend,
             0x2aDA6E66a92CbF283B9F2f4f095Fe705faD357B8
         );
 
-        CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "Gabe",
             signingOfficerTitle: "CEO",
             investmentAmount: 100000,
@@ -2196,7 +2403,7 @@ legend,
             unitsRepresented: 100000,
             legalDetails: "Legal Details" 
         });
-
+        _details[0] = _detailsA;
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
@@ -2260,8 +2467,9 @@ legend,
             address auth,
             address issuanceManager,
             address dealManagerAddr,
-            address cyberCertPrinterAddr,
-            bytes32 id
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
                 block.timestamp,
                 "CyberCorp",
@@ -2271,11 +2479,11 @@ legend,
                 "Dispute Res",
                 testAddress,
                 officer,
-                "SAFE",
-                "SAFE",
-                "ipfs.io/ipfs/[cid]",
-                SecurityClass.SAFE,
-                SecuritySeries.SeriesPreSeed,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
                 bytes32(uint256(2)),
                 globalValues,
                 parties,
@@ -2284,7 +2492,7 @@ legend,
                 proposerSignature,
                 _details,
                 conditions, 
-                legend,
+                defaultLegends,
                 bytes32(0),
                 block.timestamp + 1000000
             );
@@ -2331,8 +2539,8 @@ legend,
             ""
         );
         vm.stopPrank();
-
-        string memory certificateUri = CyberCertPrinter(cyberCertPrinterAddr).tokenURI(0);
+        console.log("printer addr length:", cyberCertPrinterAddr.length);
+        string memory certificateUri = CyberCertPrinter(cyberCertPrinterAddr[0]).tokenURI(0);
         console.log(certificateUri);
 
         // Create a new recipient address
@@ -2341,12 +2549,12 @@ legend,
         // Try to transfer without making transferable and without endorsement - should revert
         vm.startPrank(newPartyAddr);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(cyberCertPrinterAddr).transferFrom(newPartyAddr, newRecipient, 0);
+        CyberCertPrinter(cyberCertPrinterAddr[0]).transferFrom(newPartyAddr, newRecipient, 0);
         vm.stopPrank();
 
         // Make the certificate transferable
         vm.startPrank(issuanceManager);
-        CyberCertPrinter(cyberCertPrinterAddr).setGlobalTransferable(true);
+        CyberCertPrinter(cyberCertPrinterAddr[0]).setGlobalTransferable(true);
         vm.stopPrank();
 
         // Create and add endorsement
@@ -2360,13 +2568,13 @@ legend,
             registry: address(0),
             endorseeName: "New Owner"
         });
-        CyberCertPrinter(cyberCertPrinterAddr).addEndorsement(0, endorsement);
+        CyberCertPrinter(cyberCertPrinterAddr[0]).addEndorsement(0, endorsement);
 
         // Now transfer should succeed
-        CyberCertPrinter(cyberCertPrinterAddr).transferFrom(newPartyAddr, newRecipient, 0);
+        CyberCertPrinter(cyberCertPrinterAddr[0]).transferFrom(newPartyAddr, newRecipient, 0);
         
         // Verify the transfer was successful
-        assertEq(CyberCertPrinter(cyberCertPrinterAddr).ownerOf(0), newRecipient);
+        assertEq(CyberCertPrinter(cyberCertPrinterAddr[0]).ownerOf(0), newRecipient);
         vm.stopPrank();
     }
     
@@ -2409,16 +2617,17 @@ legend,
     }
 
     function testUpgradeDealManagerBeacon() public {
-        CertificateDetails memory _details = CertificateDetails({
+
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
-
-            
         });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -2467,7 +2676,7 @@ legend,
         );
 
         vm.startPrank(testAddress);
-        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address cyberCertPrinterAddr, bytes32 id) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address[] memory cyberCertPrinterAddr, bytes32 id, uint256[] memory certIds) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
             "Limited Liability Company",
@@ -2476,11 +2685,11 @@ legend,
 "Dispute Res",
             testAddress,
             officer,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
+            certNames,
+certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -2489,7 +2698,7 @@ legend,
             signature,
             _details,
             conditions, 
-             legend,
+             defaultLegends,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -2512,7 +2721,8 @@ legend,
     }
 
     function testUpgradeIssuanceManager() public {
-       CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+       CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
@@ -2520,6 +2730,7 @@ legend,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
         });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -2568,7 +2779,7 @@ legend,
         );
 
         vm.startPrank(testAddress);
-        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address cyberCertPrinterAddr, bytes32 id) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address[] memory cyberCertPrinterAddr, bytes32 id, uint256[] memory certIds) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
             "Limited Liability Company",
@@ -2577,11 +2788,11 @@ legend,
 "Dispute Res",
             testAddress,
             officer,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
+            certNames,
+certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -2590,7 +2801,7 @@ legend,
             signature,
             _details,
             conditions, 
-             legend,
+             defaultLegends,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -2637,7 +2848,8 @@ legend,
     }
 
     function testUpgradeCyberCorpSingle() public {
-       CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+       CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
@@ -2645,7 +2857,7 @@ legend,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
         });
-
+        _details[0] = _detailsA;
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
             name: "Test Officer",
@@ -2693,7 +2905,7 @@ legend,
         );
 
         vm.startPrank(testAddress);
-        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address cyberCertPrinterAddr, bytes32 id) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address[] memory cyberCertPrinterAddr, bytes32 id, uint256[] memory certIds) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
             "Limited Liability Company",
@@ -2702,11 +2914,11 @@ legend,
 "Dispute Res",
             testAddress,
             officer,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
+            certNames,
+certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -2715,7 +2927,7 @@ legend,
             signature,
             _details,
             conditions, 
-             legend,
+             defaultLegends,
             bytes32(0),
             block.timestamp + 1000000
         );
@@ -2753,7 +2965,8 @@ legend,
     }
 
     function testUpgradeCyberCertPrinter() public {
-       CertificateDetails memory _details = CertificateDetails({
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+       CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
@@ -2761,6 +2974,7 @@ legend,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc" 
         });
+        _details[0] = _detailsA;
 
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -2809,7 +3023,7 @@ legend,
         );
 
         vm.startPrank(testAddress);
-        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address cyberCertPrinterAddr, bytes32 id) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address[] memory cyberCertPrinterAddr, bytes32 id, uint256[] memory certIds) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
             "Limited Liability Company",
@@ -2818,11 +3032,11 @@ legend,
 "Dispute Res",
             testAddress,
             officer,
-            "SAFE",
-            "SAFE",
-            "ipfs.io/ipfs/[cid]",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed,
+            certNames,
+certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -2831,7 +3045,7 @@ legend,
             signature,
             _details,
             conditions, 
-             legend,
+             defaultLegends,
             bytes32(0),
             block.timestamp + 1000000
         );
