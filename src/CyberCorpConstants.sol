@@ -81,3 +81,29 @@ struct CompanyOfficer {
     string contact;
     string title;
 }
+
+enum ExercisePriceType {
+    perToken,
+    perWarrant
+}
+
+enum ConversionType {
+    equityProRataToCompanyReserveModel,
+    equityProRataToTokenSupplyModel 
+}
+
+enum LockupStartType {
+    timeOfTokenWarrant,
+    timeOfTGE,
+    arbitraryTime
+}
+
+enum LockupIntervalType {
+    byBlock,
+    monthly,
+    quarterly
+}
+
+
+
+

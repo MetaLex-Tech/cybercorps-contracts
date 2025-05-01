@@ -43,6 +43,7 @@ pragma solidity 0.8.28;
 
 import "./CyberCorpConstants.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
+import "./storage/extensions/ICertificateExtension.sol";
 
 contract CertificateUriBuilder {
     // Helper function to convert SecurityClass enum to string
@@ -188,7 +189,9 @@ struct CertificateDetails {
         address registry,
         bytes32 agreementId,
         uint256 tokenId,
-        address contractAddress
+        address contractAddress,
+        address extension,
+        bytes memory extensionData
     ) public view returns (string memory) {
         // Start building the JSON string with ERC-721 metadata standard format
         string memory json = string(abi.encodePacked(
@@ -219,6 +222,11 @@ struct CertificateDetails {
             '", "legalDetails": "', details.legalDetails,
             '"'
         );
+
+        //add extensionData
+        if (extension != address(0) && extensionData.length > 0) {
+            json = string.concat(json, ICertificateExtension(extension).getExtensionURI(extensionData));
+        }
 
         // Add endorsement history
         json = string.concat(json, ', "endorsementHistory": [');
