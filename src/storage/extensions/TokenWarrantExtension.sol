@@ -56,15 +56,15 @@ function lockupIntervalTypeToString(LockupIntervalType _type) pure returns (stri
 
 struct TokenWarrantData {
     ExercisePriceType exercisePriceType;
-    uint128 exercisePrice;
+    uint256 exercisePrice;
     ConversionType conversionType;
-    uint64 reservePercent;
-    uint64 networkPremiumMultiplier;
+    uint256 reservePercent;
+    uint256 networkPremiumMultiplier;
     LockupStartType lockupStartType;
-    uint64 lockupLength;
-    uint64 lockupCliffInMonths;
+    uint256 lockupLength;
+    uint256 lockupCliffInMonths;
     LockupIntervalType lockupIntervalType;
-    uint64 latestExpirationTime;
+    uint256 latestExpirationTime;
 }
 
 contract TokenWarrantExtension is ICertificateExtension {
@@ -89,7 +89,7 @@ contract TokenWarrantExtension is ICertificateExtension {
         TokenWarrantData memory decoded = abi.decode(data, (TokenWarrantData));
         
         string memory json = string(abi.encodePacked(
-            '{"warrantDetails": {',
+            ', "warrantDetails": {',
             '"exercisePriceType": "', exercisePriceTypeToString(decoded.exercisePriceType),
             '", "exercisePrice": "', uint256ToString(decoded.exercisePrice),
             '", "conversionType": "', conversionTypeToString(decoded.conversionType),
@@ -100,7 +100,7 @@ contract TokenWarrantExtension is ICertificateExtension {
             '", "lockupCliffInMonths": "', uint256ToString(decoded.lockupCliffInMonths),
             '", "lockupIntervalType": "', lockupIntervalTypeToString(decoded.lockupIntervalType),
             '", "latestExpirationTime": "', uint256ToString(decoded.latestExpirationTime),
-            '}}'
+            '"}'
         ));
         
         return json;

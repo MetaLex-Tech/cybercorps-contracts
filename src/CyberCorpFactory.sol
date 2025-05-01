@@ -234,7 +234,8 @@ contract CyberCorpFactory is BorgAuthACL {
         address[] memory conditions,
         string[][] memory _defaultLegend,
         bytes32 secretHash,
-        uint256 expiry
+        uint256 expiry,
+        address[] memory _extension
     ) external returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress, address[] memory certPrinterAddress, bytes32 id, uint256[] memory certIds) {
 
         //create bytes32 salt
@@ -257,7 +258,7 @@ contract CyberCorpFactory is BorgAuthACL {
         certPrinterAddress = new address[](_details.length);
         //string[] memory defaultLegend = new string[](0);
         for(uint256 i = 0; i < _details.length; i++) {
-            ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter(_defaultLegend[i], string.concat(companyName, " ", certName[i]), certSymbol[i], certificateUri[i], securityClass[i], securitySeries[i]));
+            ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter(_defaultLegend[i], string.concat(companyName, " ", certName[i]), certSymbol[i], certificateUri[i], securityClass[i], securitySeries[i], _extension[i]));
             certPrinterAddress[i] = address(certPrinter);
         }
 

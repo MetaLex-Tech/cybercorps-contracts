@@ -64,7 +64,7 @@ import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {DealManager} from "../src/DealManager.sol";
 import {Escrow} from "../src/storage/LexScrowStorage.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
-import {MockIssuanceManager} from "./mock/MockIssuanceManager.sol";
+import {TokenWarrantExtension, TokenWarrantData} from "../src/storage/extensions/TokenWarrantExtension.sol";
 
 contract CyberCorpTest is Test {
     //     Counter public counter;
@@ -86,6 +86,7 @@ contract CyberCorpTest is Test {
     string[] certSymbols;
     string[] certificateUris;
     string[][] defaultLegends;
+    address[] extensions;
 
     function setUp() public {
         testPrivateKey = 1337;
@@ -96,12 +97,14 @@ contract CyberCorpTest is Test {
         securityClasses[0] = SecurityClass.SAFE;
         securitySerieses = new SecuritySeries[](1);
         securitySerieses[0] = SecuritySeries.SeriesPreSeed;
-         bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunch"));
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunch"));
         address stableMainNetEth = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
         address stableArbitrum = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
         address stableBase = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
-         address stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;//0x036CbD53842c5426634e7929541eC2318f3dCF7e;// 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;//0x036CbD53842c5426634e7929541eC2318f3dCF7e; //sepolia base
+        address stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e; //0x036CbD53842c5426634e7929541eC2318f3dCF7e;// 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;//0x036CbD53842c5426634e7929541eC2318f3dCF7e; //sepolia base
 
+        extensions = new address[](1);
+        extensions[0] = address(0);
 
         certNames = new string[](1);
         certNames[0] = "Cert Name 1";
@@ -109,14 +112,20 @@ contract CyberCorpTest is Test {
         certSymbols[0] = "Cert Symbol 1";
         certificateUris = new string[](1);
         certificateUris[0] = "ipfs.io/ipfs/[cid]";
-        
+
         //use salt to deploy BorgAuth
         auth = new BorgAuth{salt: salt}(testAddress);
         //auth.initialize();
-        address issuanceManagerFactory = address(new IssuanceManagerFactory{salt: salt}(address(auth)));
+        address issuanceManagerFactory = address(
+            new IssuanceManagerFactory{salt: salt}(address(auth))
+        );
 
-        address cyberCertPrinterImplementation = address(new CyberCertPrinter{salt: salt}());
-        CyberCertPrinter cyberCertPrinter = CyberCertPrinter(cyberCertPrinterImplementation);
+        address cyberCertPrinterImplementation = address(
+            new CyberCertPrinter{salt: salt}()
+        );
+        CyberCertPrinter cyberCertPrinter = CyberCertPrinter(
+            cyberCertPrinterImplementation
+        );
 
         defaultLegends = new string[][](1);
         defaultLegends[0] = new string[](1);
@@ -124,20 +133,39 @@ contract CyberCorpTest is Test {
 
         //cyberCertPrinter.initialize(defaultdefaultLegends, "", "", "ipfs.io/ipfs/[cid]", address(0), securityClasses, SecuritySeries.SeriesPreSeed);
 
-        address cyberCorpSingleFactory = address(new CyberCorpSingleFactory{salt: salt}(address(auth)));
+        address cyberCorpSingleFactory = address(
+            new CyberCorpSingleFactory{salt: salt}(address(auth))
+        );
 
-        address dealManagerFactory = address(new DealManagerFactory{salt: salt}(address(auth)));
+        address dealManagerFactory = address(
+            new DealManagerFactory{salt: salt}(address(auth))
+        );
 
-       // address registry = address(new CyberAgreementRegistry{salt: salt}(address(auth)));
-                // Deploy CyberAgreementRegistry implementation and proxy
-        address registryImplementation = address(new CyberAgreementRegistry{salt: salt}());
-        bytes memory initData = abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth));
-        address registryAddr = address(new ERC1967Proxy{salt: salt}(registryImplementation, initData));
+        // address registry = address(new CyberAgreementRegistry{salt: salt}(address(auth)));
+        // Deploy CyberAgreementRegistry implementation and proxy
+        address registryImplementation = address(
+            new CyberAgreementRegistry{salt: salt}()
+        );
+        bytes memory initData = abi.encodeWithSelector(
+            CyberAgreementRegistry.initialize.selector,
+            address(auth)
+        );
+        address registryAddr = address(
+            new ERC1967Proxy{salt: salt}(registryImplementation, initData)
+        );
         raddress = registryAddr;
         registry = CyberAgreementRegistry(registryAddr);
 
         address uriBuilder = address(new CertificateUriBuilder{salt: salt}());
-        cyberCorpFactory = new CyberCorpFactory{salt: salt}(address(auth), address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder);
+        cyberCorpFactory = new CyberCorpFactory{salt: salt}(
+            address(auth),
+            address(registry),
+            cyberCertPrinterImplementation,
+            issuanceManagerFactory,
+            cyberCorpSingleFactory,
+            dealManagerFactory,
+            uriBuilder
+        );
         cyberCorpFactory.setStable(stable);
 
         string[] memory globalFieldsSafe = new string[](5);
@@ -154,7 +182,13 @@ contract CyberCorpTest is Test {
         partyFieldsSafe[3] = "investorType";
         partyFieldsSafe[4] = "investorJurisdiction";
 
-        registry.createTemplate(bytes32(uint256(2)), "SAFE", "https://ipfs.io/ipfs/bafybeieee4xjqpwcq5nowm4iqw6ik4wkwpz7uqohl3yamypwz54was2h64", globalFieldsSafe, partyFieldsSafe);
+        registry.createTemplate(
+            bytes32(uint256(2)),
+            "SAFE",
+            "https://ipfs.io/ipfs/bafybeieee4xjqpwcq5nowm4iqw6ik4wkwpz7uqohl3yamypwz54was2h64",
+            globalFieldsSafe,
+            partyFieldsSafe
+        );
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -182,7 +216,8 @@ contract CyberCorpTest is Test {
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -204,7 +239,12 @@ contract CyberCorpTest is Test {
         partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         string[] memory globalFields = new string[](1);
@@ -230,7 +270,6 @@ contract CyberCorpTest is Test {
         certSymbol[0] = "Cert Symbol 1";
         string[] memory certificateUri = new string[](1);
         certificateUri[0] = "ipfs.io/ipfs/[cid]";
-        
 
         vm.startPrank(testAddress);
         cyberCorpFactory.deployCyberCorpAndCreateOffer(
@@ -254,10 +293,11 @@ contract CyberCorpTest is Test {
             partyValues,
             signature,
             _details,
-            conditions, 
+            conditions,
             defaultLegends,
             bytes32(0),
-            block.timestamp + 1000000
+            block.timestamp + 1000000,
+            extensions
         );
         vm.stopPrank();
     }
@@ -273,7 +313,8 @@ contract CyberCorpTest is Test {
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -297,14 +338,18 @@ contract CyberCorpTest is Test {
         partyValues[1][0] = "Counter Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
-
 
         bytes memory signature = _signAgreementTypedData(
             registry.DOMAIN_SEPARATOR(),
@@ -318,9 +363,8 @@ contract CyberCorpTest is Test {
             testPrivateKey
         );
 
-
         vm.startPrank(testAddress);
-         (
+        (
             address cyberCorp,
             address auth,
             address issuanceManager,
@@ -329,35 +373,36 @@ contract CyberCorpTest is Test {
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            "Limited Liability Company",
-            "Juris",
-            "Contact Details",
-            "Dispute Res",
-            testAddress,
-            officer,
-            certNames,
-certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            signature,
-            _details,
-            conditions, 
-             defaultLegends,
-            bytes32(0),
-            block.timestamp + 1000000
-        );
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                signature,
+                _details,
+                conditions,
+                defaultLegends,
+                bytes32(0),
+                block.timestamp + 1000000,
+                extensions
+            );
         vm.stopPrank();
         IDealManager dealManager = IDealManager(dealManagerAddr);
         vm.startPrank(newPartyAddr);
-         deal(
+        deal(
             0x036CbD53842c5426634e7929541eC2318f3dCF7e,
             newPartyAddr,
             _paymentAmount
@@ -377,7 +422,7 @@ certSymbols,
             partyValues[1],
             newPartyPk
         );
-        
+
         dealManager.signAndFinalizeDeal(
             newPartyAddr,
             contractId,
@@ -388,7 +433,6 @@ certSymbols,
             ""
         );
         vm.stopPrank();
-
     }
 
     function testCreateClosedContractTWarrent() public {
@@ -402,7 +446,8 @@ certSymbols,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         CertificateDetails memory _detailsB = CertificateDetails({
             signingOfficerName: "",
@@ -410,7 +455,8 @@ certSymbols,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
 
         _details[0] = _detailsA;
@@ -442,14 +488,18 @@ certSymbols,
         partyValues[1][0] = "Counter Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
-
 
         bytes memory signature = _signAgreementTypedData(
             registry.DOMAIN_SEPARATOR(),
@@ -480,7 +530,7 @@ certSymbols,
         defaultLegends[1][0] = "Legend 2";
 
         vm.startPrank(testAddress);
-         (
+        (
             address cyberCorp,
             address auth,
             address issuanceManager,
@@ -489,35 +539,36 @@ certSymbols,
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            "Limited Liability Company",
-            "Juris",
-            "Contact Details",
-            "Dispute Res",
-            testAddress,
-            officer,
-            certNames,
-            certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            signature,
-            _details,
-            conditions, 
-             defaultLegends,
-            bytes32(0),
-            block.timestamp + 1000000
-        );
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                signature,
+                _details,
+                conditions,
+                defaultLegends,
+                bytes32(0),
+                block.timestamp + 1000000,
+                extensions
+            );
         vm.stopPrank();
         IDealManager dealManager = IDealManager(dealManagerAddr);
         vm.startPrank(newPartyAddr);
-         deal(
+        deal(
             0x036CbD53842c5426634e7929541eC2318f3dCF7e,
             newPartyAddr,
             _paymentAmount
@@ -537,7 +588,7 @@ certSymbols,
             partyValues[1],
             newPartyPk
         );
-        
+
         dealManager.signAndFinalizeDeal(
             newPartyAddr,
             contractId,
@@ -548,10 +599,12 @@ certSymbols,
             ""
         );
         vm.stopPrank();
-        console.log("tokens received:" );
-        string memory contractURI = CyberCertPrinter(cyberCertPrinterAddr[0]).tokenURI(certIds[0]);
+        console.log("tokens received:");
+        string memory contractURI = CyberCertPrinter(cyberCertPrinterAddr[0])
+            .tokenURI(certIds[0]);
         console.log(contractURI);
-        string memory contractURI2= CyberCertPrinter(cyberCertPrinterAddr[1]).tokenURI(certIds[1]);
+        string memory contractURI2 = CyberCertPrinter(cyberCertPrinterAddr[1])
+            .tokenURI(certIds[1]);
         console.log(contractURI2);
     }
 
@@ -563,7 +616,8 @@ certSymbols,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -585,7 +639,12 @@ certSymbols,
         partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         string[] memory globalFields = new string[](1);
@@ -614,45 +673,58 @@ certSymbols,
         );
 
         vm.startPrank(testAddress);
-        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address[] memory cyberCertPrinterAddr, bytes32 id, uint256[] memory certIds) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
-            testAddress,
-            officer,
-            certNames,
-certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            signature,
-            _details,
-            conditions, 
-             defaultLegends,
-            bytes32(0),
-            block.timestamp + 1000000
-        );
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                signature,
+                _details,
+                conditions,
+                defaultLegends,
+                bytes32(0),
+                block.timestamp + 1000000,
+            extensions
+            );
         vm.stopPrank();
 
         //wait for 1000000 blocks
         vm.warp(block.timestamp + 1000001);
         vm.startPrank(testAddress);
-        IDealManager(dealManagerAddr).voidExpiredDeal(contractId, testAddress, voidSignature);
+        IDealManager(dealManagerAddr).voidExpiredDeal(
+            contractId,
+            testAddress,
+            voidSignature
+        );
         vm.stopPrank();
     }
 
     function testCreateContract() public {
         vm.startPrank(testAddress);
         BorgAuth auth = new BorgAuth(testAddress);
-       // auth.initialize();
+        // auth.initialize();
         CyberAgreementRegistry registrya = new CyberAgreementRegistry();
         registrya.initialize(address(auth));
         string[] memory globalFields = new string[](1);
@@ -689,7 +761,12 @@ certSymbols,
         );
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         bytes memory signature = _signAgreementTypedData(
@@ -752,7 +829,8 @@ certSymbols,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -774,7 +852,12 @@ certSymbols,
         partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         string[] memory globalFields = new string[](1);
@@ -805,10 +888,10 @@ certSymbols,
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
                 block.timestamp,
                 "CyberCorp",
-            "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
                 testAddress,
                 officer,
                 certNames,
@@ -823,10 +906,11 @@ certSymbols,
                 partyValues,
                 proposerSignature,
                 _details,
-                conditions, 
-                 defaultLegends,
+                conditions,
+                defaultLegends,
                 bytes32(0),
-                block.timestamp + 1000000
+                block.timestamp + 1000000,
+            extensions
             );
         vm.stopPrank();
 
@@ -878,7 +962,8 @@ certSymbols,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -903,7 +988,12 @@ certSymbols,
         bytes32 secretHash = keccak256(abi.encodePacked("passphrase"));
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         string[] memory globalFields = new string[](1);
@@ -934,7 +1024,7 @@ certSymbols,
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
                 block.timestamp,
                 "CyberCorp",
-            "Limited Liability Company",
+                "Limited Liability Company",
                 "Juris",
                 "Contact Details",
                 "Dispute Res",
@@ -952,10 +1042,11 @@ certSymbols,
                 partyValues,
                 proposerSignature,
                 _details,
-                conditions, 
-                 defaultLegends,
+                conditions,
+                defaultLegends,
                 secretHash,
-                block.timestamp + 1000000
+                block.timestamp + 1000000,
+            extensions
             );
         vm.stopPrank();
 
@@ -1010,7 +1101,8 @@ certSymbols,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -1035,7 +1127,12 @@ certSymbols,
         bytes32 secretHash = keccak256(abi.encode("passphrase"));
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         string[] memory globalFields = new string[](1);
@@ -1066,10 +1163,10 @@ certSymbols,
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
                 block.timestamp,
                 "CyberCorp",
-            "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
                 testAddress,
                 officer,
                 certNames,
@@ -1084,10 +1181,11 @@ certSymbols,
                 partyValues,
                 proposerSignature,
                 _details,
-                conditions, 
-                 defaultLegends,
+                conditions,
+                defaultLegends,
                 secretHash,
-                block.timestamp + 1000000
+                block.timestamp + 1000000,
+            extensions
             );
         vm.stopPrank();
 
@@ -1181,11 +1279,7 @@ certSymbols,
     ) internal pure returns (bytes memory signature) {
         // Create the message hash using the same approach as the contract
         bytes32 structHash = keccak256(
-            abi.encode(
-                _typeHash,
-                contractId,
-                party
-            )
+            abi.encode(_typeHash, contractId, party)
         );
 
         bytes32 digest = keccak256(
@@ -1217,7 +1311,8 @@ certSymbols,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -1243,7 +1338,12 @@ certSymbols,
         partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         bytes memory signature = _signAgreementTypedData(
@@ -1275,34 +1375,39 @@ certSymbols,
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
-            testAddress,
-            officer,
-            certNames,
-certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            signature,
-            _details,
-            conditions, 
-             defaultLegends,
-            bytes32(0),
-            block.timestamp + 1000000
-        );
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                signature,
+                _details,
+                conditions,
+                defaultLegends,
+                bytes32(0),
+                block.timestamp + 1000000,
+            extensions
+            );
 
         // Revoke deal before payment
-        IDealManager(dealManagerAddr).revokeDeal(id, testAddress, voidSignature);
+        IDealManager(dealManagerAddr).revokeDeal(
+            id,
+            testAddress,
+            voidSignature
+        );
         vm.stopPrank();
     }
 
@@ -1315,7 +1420,8 @@ certSymbols,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -1341,7 +1447,12 @@ certSymbols,
         partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         bytes memory signature = _signAgreementTypedData(
@@ -1365,31 +1476,32 @@ certSymbols,
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
-            testAddress,
-            officer,
-            certNames,
-certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            signature,
-            _details,
-            conditions, 
-defaultLegends,
-            bytes32(0),
-            block.timestamp + 1000000
-        );
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                signature,
+                _details,
+                conditions,
+                defaultLegends,
+                bytes32(0),
+                block.timestamp + 1000000,
+            extensions
+            );
 
         // have a buyer sign and pay
 
@@ -1410,7 +1522,7 @@ defaultLegends,
             partyValuesB,
             newPartyPk
         );
-         deal(
+        deal(
             0x036CbD53842c5426634e7929541eC2318f3dCF7e,
             newPartyAddr,
             _paymentAmount
@@ -1420,7 +1532,15 @@ defaultLegends,
             _paymentAmount
         );
 
-        IDealManager(dealManagerAddr).signDealAndPay(newPartyAddr, id, newPartySignature, partyValuesB, true, "John Doe", "passphrase");
+        IDealManager(dealManagerAddr).signDealAndPay(
+            newPartyAddr,
+            id,
+            newPartySignature,
+            partyValuesB,
+            true,
+            "John Doe",
+            "passphrase"
+        );
         vm.stopPrank();
 
         // Try to revoke after payment - should fail
@@ -1438,7 +1558,8 @@ defaultLegends,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -1464,7 +1585,12 @@ defaultLegends,
         partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         bytes memory signature = _signAgreementTypedData(
@@ -1496,34 +1622,39 @@ defaultLegends,
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
-            testAddress,
-            officer,
-            certNames,
-certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            signature,
-            _details,
-            conditions, 
-defaultLegends,
-            bytes32(0),
-            block.timestamp + 1000000
-        );
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                signature,
+                _details,
+                conditions,
+                defaultLegends,
+                bytes32(0),
+                block.timestamp + 1000000,
+            extensions
+            );
 
         // Sign to void after payment
-        IDealManager(dealManagerAddr).signToVoid(id, testAddress, voidSignature);
+        IDealManager(dealManagerAddr).signToVoid(
+            id,
+            testAddress,
+            voidSignature
+        );
         vm.stopPrank();
     }
 
@@ -1536,7 +1667,8 @@ defaultLegends,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -1560,10 +1692,14 @@ defaultLegends,
         string[][] memory partyValues = new string[][](1);
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
-        
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         bytes memory signature = _signAgreementTypedData(
@@ -1595,37 +1731,42 @@ defaultLegends,
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
-            testAddress,
-            officer,
-            certNames,
-certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            signature,
-            _details,
-            conditions, 
-defaultLegends,
-            bytes32(0),
-            block.timestamp + 1000000
-        );
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                signature,
+                _details,
+                conditions,
+                defaultLegends,
+                bytes32(0),
+                block.timestamp + 1000000,
+            extensions
+            );
 
         // Fast forward time to after expiry
         vm.warp(block.timestamp + 1000001);
 
         // Void expired deal
-        IDealManager(dealManagerAddr).voidExpiredDeal(id, testAddress, voidSignature);
+        IDealManager(dealManagerAddr).voidExpiredDeal(
+            id,
+            testAddress,
+            voidSignature
+        );
         vm.stopPrank();
     }
 
@@ -1638,7 +1779,8 @@ defaultLegends,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -1664,7 +1806,12 @@ defaultLegends,
         partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         bytes memory signature = _signAgreementTypedData(
@@ -1688,31 +1835,32 @@ defaultLegends,
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
-            testAddress,
-            officer,
-            certNames,
-certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            signature,
-            _details,
-            conditions, 
-defaultLegends,
-            bytes32(0),
-            block.timestamp + 1000000
-        );
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                signature,
+                _details,
+                conditions,
+                defaultLegends,
+                bytes32(0),
+                block.timestamp + 1000000,
+            extensions
+            );
 
         // Try to finalize without payment - should fail
         vm.expectRevert();
@@ -1737,7 +1885,8 @@ defaultLegends,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -1763,7 +1912,12 @@ defaultLegends,
         partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         bytes memory signature = _signAgreementTypedData(
@@ -1787,31 +1941,32 @@ defaultLegends,
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
-            testAddress,
-            officer,
-            certNames,
-certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            signature,
-            _details,
-            conditions, 
-defaultLegends,
-            bytes32(0),
-            block.timestamp + 1000000
-        );
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                signature,
+                _details,
+                conditions,
+                defaultLegends,
+                bytes32(0),
+                block.timestamp + 1000000,
+            extensions
+            );
 
         uint256 newPartyPk = 80085;
         address newPartyAddr = vm.addr(newPartyPk);
@@ -1862,7 +2017,8 @@ defaultLegends,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -1888,7 +2044,12 @@ defaultLegends,
         partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         bytes memory signature = _signAgreementTypedData(
@@ -1912,31 +2073,32 @@ defaultLegends,
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
-            testAddress,
-            officer,
-            certNames,
-certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            signature,
-            _details,
-            conditions, 
-defaultLegends,
-            bytes32(0),
-            block.timestamp + 1000000
-        );
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                signature,
+                _details,
+                conditions,
+                defaultLegends,
+                bytes32(0),
+                block.timestamp + 1000000,
+            extensions
+            );
 
         uint256 newPartyPk = 80085;
         address newPartyAddr = vm.addr(newPartyPk);
@@ -1999,7 +2161,8 @@ defaultLegends,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -2025,7 +2188,12 @@ defaultLegends,
         partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         bytes memory signature = _signAgreementTypedData(
@@ -2038,7 +2206,7 @@ defaultLegends,
             globalValues,
             partyValues[0],
             testPrivateKey
-        );  
+        );
 
         bytes memory voidSignature = _signVoidRequest(
             registry.DOMAIN_SEPARATOR(),
@@ -2057,31 +2225,32 @@ defaultLegends,
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
-            testAddress,
-            officer,
-            certNames,
-certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            signature,
-            _details,
-            conditions, 
-defaultLegends,
-            bytes32(0),
-            block.timestamp + 1000000
-        );
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                signature,
+                _details,
+                conditions,
+                defaultLegends,
+                bytes32(0),
+                block.timestamp + 1000000,
+            extensions
+            );
 
         uint256 newPartyPk = 80085;
         address newPartyAddr = vm.addr(newPartyPk);
@@ -2123,7 +2292,11 @@ defaultLegends,
 
         // Try to void after finalization - should fail
         vm.expectRevert();
-        IDealManager(dealManagerAddr).voidExpiredDeal(id, testAddress, voidSignature);
+        IDealManager(dealManagerAddr).voidExpiredDeal(
+            id,
+            testAddress,
+            voidSignature
+        );
         vm.stopPrank();
     }
 
@@ -2136,7 +2309,8 @@ defaultLegends,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -2164,7 +2338,12 @@ defaultLegends,
         bytes32 secretHash = keccak256(abi.encodePacked("passphrase"));
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         bytes memory signature = _signAgreementTypedData(
@@ -2188,31 +2367,32 @@ defaultLegends,
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
-            testAddress,
-            officer,
-            certNames,
-certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            signature,
-            _details,
-            conditions, 
-defaultLegends,
-            secretHash,
-            block.timestamp + 1000000
-        );
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                signature,
+                _details,
+                conditions,
+                defaultLegends,
+                secretHash,
+                block.timestamp + 1000000,
+            extensions
+            );
 
         uint256 newPartyPk = 80085;
         address newPartyAddr = vm.addr(newPartyPk);
@@ -2265,7 +2445,8 @@ defaultLegends,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -2292,7 +2473,12 @@ defaultLegends,
         partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         bytes memory signature = _signAgreementTypedData(
@@ -2316,31 +2502,32 @@ defaultLegends,
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
-            testAddress,
-            officer,
-            certNames,
-certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            signature,
-            _details,
-            conditions, 
-defaultLegends,
-            bytes32(0),
-            block.timestamp + 1000000
-        );
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                signature,
+                _details,
+                conditions,
+                defaultLegends,
+                bytes32(0),
+                block.timestamp + 1000000,
+            extensions
+            );
 
         // Fast forward time to after expiry
         vm.warp(block.timestamp + 1000001);
@@ -2401,7 +2588,8 @@ defaultLegends,
             investmentAmount: 100000,
             issuerUSDValuationAtTimeofInvestment: 100000000,
             unitsRepresented: 100000,
-            legalDetails: "Legal Details" 
+            legalDetails: "Legal Details",
+            extensionData: ""
         });
         _details[0] = _detailsA;
         CompanyOfficer memory officer = CompanyOfficer({
@@ -2431,12 +2619,11 @@ defaultLegends,
         uint256 _paymentAmount = 100000;
 
         string[] memory globalValues = new string[](5);
-        globalValues[0] =  "100000";
+        globalValues[0] = "100000";
         globalValues[1] = "100000000";
         globalValues[2] = "12/1/2025";
         globalValues[3] = "Deleware";
         globalValues[4] = "Binding Arbitration";
-
 
         string[][] memory partyValues = new string[][](1);
         partyValues[0] = new string[](5);
@@ -2447,7 +2634,12 @@ defaultLegends,
         partyValues[0][4] = "Deleware";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(2)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(2)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         bytes memory proposerSignature = _signAgreementTypedData(
@@ -2491,10 +2683,11 @@ defaultLegends,
                 partyValues,
                 proposerSignature,
                 _details,
-                conditions, 
+                conditions,
                 defaultLegends,
                 bytes32(0),
-                block.timestamp + 1000000
+                block.timestamp + 1000000,
+            extensions
             );
         vm.stopPrank();
 
@@ -2540,16 +2733,21 @@ defaultLegends,
         );
         vm.stopPrank();
         console.log("printer addr length:", cyberCertPrinterAddr.length);
-        string memory certificateUri = CyberCertPrinter(cyberCertPrinterAddr[0]).tokenURI(0);
+        string memory certificateUri = CyberCertPrinter(cyberCertPrinterAddr[0])
+            .tokenURI(0);
         console.log(certificateUri);
 
         // Create a new recipient address
         address newRecipient = vm.addr(12345);
-        
+
         // Try to transfer without making transferable and without endorsement - should revert
         vm.startPrank(newPartyAddr);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(cyberCertPrinterAddr[0]).transferFrom(newPartyAddr, newRecipient, 0);
+        CyberCertPrinter(cyberCertPrinterAddr[0]).transferFrom(
+            newPartyAddr,
+            newRecipient,
+            0
+        );
         vm.stopPrank();
 
         // Make the certificate transferable
@@ -2568,21 +2766,267 @@ defaultLegends,
             registry: address(0),
             endorseeName: "New Owner"
         });
-        CyberCertPrinter(cyberCertPrinterAddr[0]).addEndorsement(0, endorsement);
+        CyberCertPrinter(cyberCertPrinterAddr[0]).addEndorsement(
+            0,
+            endorsement
+        );
 
         // Now transfer should succeed
-        CyberCertPrinter(cyberCertPrinterAddr[0]).transferFrom(newPartyAddr, newRecipient, 0);
-        
+        CyberCertPrinter(cyberCertPrinterAddr[0]).transferFrom(
+            newPartyAddr,
+            newRecipient,
+            0
+        );
+
         // Verify the transfer was successful
-        assertEq(CyberCertPrinter(cyberCertPrinterAddr[0]).ownerOf(0), newRecipient);
+        assertEq(
+            CyberCertPrinter(cyberCertPrinterAddr[0]).ownerOf(0),
+            newRecipient
+        );
         vm.stopPrank();
     }
-    
+
+     function testPrintCertificateTokenWarrantUri() public {
+        vm.startPrank(testAddress);
+        CyberCorpFactory cyberCorpFactoryLive = CyberCorpFactory(
+            0x2aDA6E66a92CbF283B9F2f4f095Fe705faD357B8
+        );
+
+        address warrantExtension = address(new TokenWarrantExtension());
+
+         TokenWarrantData memory tokenWarrant = TokenWarrantData({
+            exercisePriceType: ExercisePriceType.perWarrant,
+            exercisePrice: 100000,
+            conversionType: ConversionType.equityProRataToCompanyReserveModel,
+            reservePercent: 100000,
+            networkPremiumMultiplier: 100000,
+            lockupStartType: LockupStartType.timeOfTokenWarrant,
+            lockupLength: 100000,
+            lockupCliffInMonths: 100000,
+            lockupIntervalType: LockupIntervalType.monthly,
+            latestExpirationTime: block.timestamp + 100000
+        });
+
+        bytes memory tokenWarrantData = abi.encode(tokenWarrant);
+
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "Gabe",
+            signingOfficerTitle: "CEO",
+            investmentAmount: 100000,
+            issuerUSDValuationAtTimeofInvestment: 100000000,
+            unitsRepresented: 100000,
+            legalDetails: "Legal Details",
+            extensionData: tokenWarrantData
+        });
+        _details[0] = _detailsA;
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalFields = new string[](5);
+        globalFields[0] = "purchaseAmount";
+        globalFields[1] = "postMoneyValuationCap";
+        globalFields[2] = "expirationTime";
+        globalFields[3] = "governingJurisdiction";
+        globalFields[4] = "disputeResolution";
+
+        string[] memory partyFields = new string[](5);
+        partyFields[0] = "name";
+        partyFields[1] = "evmAddress";
+        partyFields[2] = "contactDetails";
+        partyFields[3] = "investorType";
+        partyFields[4] = "investorJurisdiction";
+
+        address[] memory parties = new address[](2);
+        parties[0] = testAddress;
+        parties[1] = address(0);
+        uint256 _paymentAmount = 100000;
+
+        string[] memory globalValues = new string[](5);
+        globalValues[0] = "100000";
+        globalValues[1] = "100000000";
+        globalValues[2] = "12/1/2025";
+        globalValues[3] = "Deleware";
+        globalValues[4] = "Binding Arbitration";
+
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](5);
+        partyValues[0][0] = "Gabe";
+        partyValues[0][1] = "0xDEADBABE12345678909876543210866666666666";
+        partyValues[0][2] = "@Gabe";
+        partyValues[0][3] = "Limited Liability Company";
+        partyValues[0][4] = "Deleware";
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                bytes32(uint256(2)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        address[] memory extensions = new address[](1);
+        extensions[0] = warrantExtension;
+
+        bytes memory proposerSignature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "https://ipfs.io/ipfs/bafybeieee4xjqpwcq5nowm4iqw6ik4wkwpz7uqohl3yamypwz54was2h64",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(2)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                proposerSignature,
+                _details,
+                conditions,
+                defaultLegends,
+                bytes32(0),
+                block.timestamp + 1000000,
+            extensions
+            );
+        vm.stopPrank();
+
+        uint256 newPartyPk = 80085;
+        address newPartyAddr = vm.addr(newPartyPk);
+        string[] memory partyValuesB = new string[](5);
+        partyValuesB[0] = "Mr. Prepop";
+        partyValuesB[1] = "0xC0FFEEBABE12345678909876543210866666666666";
+        partyValuesB[2] = "@0xPrepop";
+        partyValuesB[3] = "Limited Liability Company";
+        partyValuesB[4] = "Deleware";
+
+        vm.startPrank(newPartyAddr);
+        bytes memory newPartySignature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "https://ipfs.io/ipfs/bafybeieee4xjqpwcq5nowm4iqw6ik4wkwpz7uqohl3yamypwz54was2h64",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValuesB,
+            newPartyPk
+        );
+        IDealManager dealManager = IDealManager(dealManagerAddr);
+        deal(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e,
+            newPartyAddr,
+            _paymentAmount
+        );
+        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(
+            address(dealManager),
+            _paymentAmount
+        );
+        dealManager.signAndFinalizeDeal(
+            newPartyAddr,
+            id,
+            partyValuesB,
+            newPartySignature,
+            true,
+            "John Doe",
+            ""
+        );
+        vm.stopPrank();
+        console.log("printer addr length:", cyberCertPrinterAddr.length);
+        string memory certificateUri = CyberCertPrinter(cyberCertPrinterAddr[0])
+            .tokenURI(0);
+        console.log(certificateUri);
+
+        // Create a new recipient address
+        address newRecipient = vm.addr(12345);
+
+        // Try to transfer without making transferable and without endorsement - should revert
+        vm.startPrank(newPartyAddr);
+        vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
+        CyberCertPrinter(cyberCertPrinterAddr[0]).transferFrom(
+            newPartyAddr,
+            newRecipient,
+            0
+        );
+        vm.stopPrank();
+
+        // Make the certificate transferable
+        vm.startPrank(issuanceManager);
+        CyberCertPrinter(cyberCertPrinterAddr[0]).setGlobalTransferable(true);
+        vm.stopPrank();
+
+        // Create and add endorsement
+        vm.startPrank(newPartyAddr);
+        Endorsement memory endorsement = Endorsement({
+            endorser: newPartyAddr,
+            timestamp: block.timestamp,
+            signatureHash: bytes("test-signature"),
+            endorsee: newRecipient,
+            agreementId: bytes32(0),
+            registry: address(0),
+            endorseeName: "New Owner"
+        });
+        CyberCertPrinter(cyberCertPrinterAddr[0]).addEndorsement(
+            0,
+            endorsement
+        );
+
+        // Now transfer should succeed
+        CyberCertPrinter(cyberCertPrinterAddr[0]).transferFrom(
+            newPartyAddr,
+            newRecipient,
+            0
+        );
+
+        // Verify the transfer was successful
+        assertEq(
+            CyberCertPrinter(cyberCertPrinterAddr[0]).ownerOf(0),
+            newRecipient
+        );
+        vm.stopPrank();
+    }
+
     function testUpgradeCyberAgreementRegistry() public {
         // Deploy initial implementation and proxy
         address registryImplementation = address(new CyberAgreementRegistry());
-        bytes memory initData = abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth));
-        address registryAddr = address(new ERC1967Proxy(registryImplementation, initData));
+        bytes memory initData = abi.encodeWithSelector(
+            CyberAgreementRegistry.initialize.selector,
+            address(auth)
+        );
+        address registryAddr = address(
+            new ERC1967Proxy(registryImplementation, initData)
+        );
         CyberAgreementRegistry registry = CyberAgreementRegistry(registryAddr);
 
         // Create a test template to verify functionality
@@ -2590,26 +3034,32 @@ defaultLegends,
         globalFields[0] = "testField";
         string[] memory partyFields = new string[](1);
         partyFields[0] = "testPartyField";
-        
+
         vm.prank(multisig);
-            registry.createTemplate(
-                bytes32(uint256(1)),
-                "Test Template",
-                "https://test.uri",
-                globalFields,
-                partyFields
-            );
+        registry.createTemplate(
+            bytes32(uint256(1)),
+            "Test Template",
+            "https://test.uri",
+            globalFields,
+            partyFields
+        );
 
         // Deploy new implementation
         address newImplementation = address(new CyberAgreementRegistry());
 
         // Upgrade to new implementation without initialization data
         vm.prank(multisig);
-        CyberAgreementRegistry(registryAddr).upgradeToAndCall(newImplementation, "");
+        CyberAgreementRegistry(registryAddr).upgradeToAndCall(
+            newImplementation,
+            ""
+        );
 
         // Verify the registry still works by checking the template
-        (string memory legalContractUri, string[] memory retGlobalFields, string[] memory retPartyFields) = 
-            registry.getTemplateDetails(bytes32(uint256(1)));
+        (
+            string memory legalContractUri,
+            string[] memory retGlobalFields,
+            string[] memory retPartyFields
+        ) = registry.getTemplateDetails(bytes32(uint256(1)));
 
         assertEq(legalContractUri, "https://test.uri");
         assertEq(retGlobalFields[0], "testField");
@@ -2617,7 +3067,6 @@ defaultLegends,
     }
 
     function testUpgradeDealManagerBeacon() public {
-
         CertificateDetails[] memory _details = new CertificateDetails[](1);
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
@@ -2625,7 +3074,8 @@ defaultLegends,
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -2647,7 +3097,12 @@ defaultLegends,
         partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         string[] memory globalFields = new string[](1);
@@ -2676,59 +3131,77 @@ defaultLegends,
         );
 
         vm.startPrank(testAddress);
-        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address[] memory cyberCertPrinterAddr, bytes32 id, uint256[] memory certIds) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
-            testAddress,
-            officer,
-            certNames,
-certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            signature,
-            _details,
-            conditions, 
-             defaultLegends,
-            bytes32(0),
-            block.timestamp + 1000000
-        );
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                signature,
+                _details,
+                conditions,
+                defaultLegends,
+                bytes32(0),
+                block.timestamp + 1000000,
+            extensions
+            );
         vm.stopPrank();
 
         // Deploy new implementation
         address newImplementation = address(new DealManager());
         address factoryaddr = cyberCorpFactory.dealManagerFactory();
         // Upgrade beacon implementation
-        console.log(DealManagerFactory(factoryaddr).AUTH().userRoles(address(multisig)));
+        console.log(
+            DealManagerFactory(factoryaddr).AUTH().userRoles(address(multisig))
+        );
         vm.prank(multisig);
-            DealManagerFactory(factoryaddr).upgradeImplementation(newImplementation);
+        DealManagerFactory(factoryaddr).upgradeImplementation(
+            newImplementation
+        );
 
         // Verify the deal manager still works by checking the deal
-        Escrow memory escrow = 
-            DealManager(dealManagerAddr).getEscrowDetails(id);
+        Escrow memory escrow = DealManager(dealManagerAddr).getEscrowDetails(
+            id
+        );
 
         console.log(escrow.counterParty);
-        assertEq(DealManagerFactory(factoryaddr).getBeaconImplementation(), newImplementation);
+        assertEq(
+            DealManagerFactory(factoryaddr).getBeaconImplementation(),
+            newImplementation
+        );
     }
 
-    function testUpgradeIssuanceManager() public {
+    /*function testUpgradeIssuanceManager() public {
         CertificateDetails[] memory _details = new CertificateDetails[](1);
-       CertificateDetails memory _detailsA = CertificateDetails({
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -2750,7 +3223,12 @@ certSymbols,
         partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         string[] memory globalFields = new string[](1);
@@ -2779,47 +3257,58 @@ certSymbols,
         );
 
         vm.startPrank(testAddress);
-        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address[] memory cyberCertPrinterAddr, bytes32 id, uint256[] memory certIds) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
-            testAddress,
-            officer,
-            certNames,
-certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            signature,
-            _details,
-            conditions, 
-             defaultLegends,
-            bytes32(0),
-            block.timestamp + 1000000
-        );
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                signature,
+                _details,
+                conditions,
+                defaultLegends,
+                bytes32(0),
+                block.timestamp + 1000000,
+            extensions
+            );
         vm.stopPrank();
 
         // Create a certificate to verify functionality
         string[] memory ledger = new string[](1);
         ledger[0] = "Test Ledger";
-        
+
         vm.prank(testAddress);
-        address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
-            ledger,
-            "Test Certificate",
-            "TEST",
-            "ipfs://test",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed
-        );
+        address certPrinter = IssuanceManager(issuanceManager)
+            .createCertPrinter(
+                ledger,
+                "Test Certificate",
+                "TEST",
+                "ipfs://test",
+                SecurityClass.SAFE,
+                SecuritySeries.SeriesPreSeed,
+                address(0)
+            );
 
         // Deploy new implementation
         address newImplementation = address(new MockIssuanceManager());
@@ -2827,35 +3316,41 @@ certSymbols,
         // Get factory address and upgrade implementation
         address factoryAddr = cyberCorpFactory.issuanceManagerFactory();
         vm.prank(multisig);
-            IssuanceManagerFactory(factoryAddr).upgradeImplementation(newImplementation);
+        IssuanceManagerFactory(factoryAddr).upgradeImplementation(
+            newImplementation
+        );
 
         MockIssuanceManager(issuanceManager).shouldBeFalse();
 
         MockIssuanceManager(issuanceManager).uriBuilder();
-            
+
         console.log(IssuanceManager(issuanceManager).getUpgradeFactory());
 
         address newImplementation2 = address(new CyberCertPrinter());
 
         //get the factory address
         vm.prank(multisig);
-            IssuanceManagerFactory(factoryAddr).upgradePrinterBeaconAt(issuanceManager, newImplementation2);
+        IssuanceManagerFactory(factoryAddr).upgradePrinterBeaconAt(
+            issuanceManager,
+            newImplementation2
+        );
 
         // Verify the IssuanceManager still works by checking the certificate printer
         address printerAddr = IssuanceManager(issuanceManager).printers(0);
         //assertEq(printerAddr, certPrinter);
-       // assertEq(IssuanceManagerFactory(factoryAddr).getBeaconImplementation(), newImplementation);
-    }
+        // assertEq(IssuanceManagerFactory(factoryAddr).getBeaconImplementation(), newImplementation);
+    }*/
 
     function testUpgradeCyberCorpSingle() public {
         CertificateDetails[] memory _details = new CertificateDetails[](1);
-       CertificateDetails memory _detailsA = CertificateDetails({
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
         CompanyOfficer memory officer = CompanyOfficer({
@@ -2876,7 +3371,12 @@ certSymbols,
         partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         string[] memory globalFields = new string[](1);
@@ -2905,47 +3405,58 @@ certSymbols,
         );
 
         vm.startPrank(testAddress);
-        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address[] memory cyberCertPrinterAddr, bytes32 id, uint256[] memory certIds) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
-            testAddress,
-            officer,
-            certNames,
-certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            signature,
-            _details,
-            conditions, 
-             defaultLegends,
-            bytes32(0),
-            block.timestamp + 1000000
-        );
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                signature,
+                _details,
+                conditions,
+                defaultLegends,
+                bytes32(0),
+                block.timestamp + 1000000,
+            extensions
+            );
         vm.stopPrank();
 
         // Create a certificate to verify functionality
         string[] memory ledger = new string[](1);
         ledger[0] = "Test Ledger";
-        
+
         vm.prank(testAddress);
-        address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
-            ledger,
-            "Test Certificate",
-            "TEST",
-            "ipfs://test",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed
-        );
+        address certPrinter = IssuanceManager(issuanceManager)
+            .createCertPrinter(
+                ledger,
+                "Test Certificate",
+                "TEST",
+                "ipfs://test",
+                SecurityClass.SAFE,
+                SecuritySeries.SeriesPreSeed,
+                address(0)
+            );
 
         // Deploy new implementation
         address newImplementation = address(new CyberCorp());
@@ -2953,12 +3464,12 @@ certSymbols,
         // Get factory address and upgrade implementation
         address factoryAddr = cyberCorpFactory.cyberCorpSingleFactory();
         vm.prank(multisig);
-          CyberCorpSingleFactory(factoryAddr).upgradeImplementation(newImplementation);
+        CyberCorpSingleFactory(factoryAddr).upgradeImplementation(
+            newImplementation
+        );
 
-
-
-       //   vm.prank(multisig);
-      //  CyberCorpSingleFactory(factoryAddr).upgradeImplementation(newImplementation);
+        //   vm.prank(multisig);
+        //  CyberCorpSingleFactory(factoryAddr).upgradeImplementation(newImplementation);
 
         //check the company name
         assertEq(CyberCorp(cyberCorp).cyberCORPName(), "CyberCorp");
@@ -2966,13 +3477,14 @@ certSymbols,
 
     function testUpgradeCyberCertPrinter() public {
         CertificateDetails[] memory _details = new CertificateDetails[](1);
-       CertificateDetails memory _detailsA = CertificateDetails({
+        CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc" 
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -2994,7 +3506,12 @@ certSymbols,
         partyValues[0][0] = "Party Value 1";
 
         bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
         );
 
         string[] memory globalFields = new string[](1);
@@ -3023,47 +3540,58 @@ certSymbols,
         );
 
         vm.startPrank(testAddress);
-        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address[] memory cyberCertPrinterAddr, bytes32 id, uint256[] memory certIds) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            block.timestamp,
-            "CyberCorp",
-            "Limited Liability Company",
-"Juris",
-"Contact Details",
-"Dispute Res",
-            testAddress,
-            officer,
-            certNames,
-certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
-            bytes32(uint256(1)),
-            globalValues,
-            parties,
-            _paymentAmount,
-            partyValues,
-            signature,
-            _details,
-            conditions, 
-             defaultLegends,
-            bytes32(0),
-            block.timestamp + 1000000
-        );
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certNames,
+                certSymbols,
+                certificateUris,
+                securityClasses,
+                securitySerieses,
+                bytes32(uint256(1)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                signature,
+                _details,
+                conditions,
+                defaultLegends,
+                bytes32(0),
+                block.timestamp + 1000000,
+            extensions
+            );
         vm.stopPrank();
 
         // Create a certificate to verify functionality
         string[] memory ledger = new string[](1);
         ledger[0] = "Test Ledger";
-        
+
         vm.prank(testAddress);
-        address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
-            ledger,
-            "Test Certificate",
-            "TEST",
-            "ipfs://test",
-            SecurityClass.SAFE,
-            SecuritySeries.SeriesPreSeed
-        );
+        address certPrinter = IssuanceManager(issuanceManager)
+            .createCertPrinter(
+                ledger,
+                "Test Certificate",
+                "TEST",
+                "ipfs://test",
+                SecurityClass.SAFE,
+                SecuritySeries.SeriesPreSeed,
+                address(0)
+            );
 
         // Deploy new implementation
         address newImplementation = address(new CyberCertPrinter());
@@ -3073,31 +3601,30 @@ certSymbols,
         console.log(IssuanceManager(issuanceManager).getUpgradeFactory());
         //get the factory address
         vm.prank(multisig);
-            IssuanceManagerFactory(factoryAddr).upgradePrinterBeaconAt(issuanceManager, newImplementation);
+        IssuanceManagerFactory(factoryAddr).upgradePrinterBeaconAt(
+            issuanceManager,
+            newImplementation
+        );
 
         //check the security type
         assertEq(CyberCertPrinter(certPrinter).certificateUri(), "ipfs://test");
     }
 
     function testUpdateCyberAgreementRegistry() public {
+        // First give the test contract the OWNER_ROLE (99)
 
-    // First give the test contract the OWNER_ROLE (99)
-   
+        // Deploy new implementation
+        address newImplementation = address(new CyberAgreementRegistry());
 
-    // Deploy new implementation
-    address newImplementation = address(new CyberAgreementRegistry());
-
-    // Get the current registry address from the factory
-    //address registryAddr = cyberCorpFactory.registryAddress();
-    console.log("raddress: ", raddress);
-    console.log("regaddr: ", address(registry));
-    // Upgrade the existing registry
-     vm.startPrank(multisig);
-    CyberAgreementRegistry(raddress).upgradeToAndCall(newImplementation, "");
-
-
+        // Get the current registry address from the factory
+        //address registryAddr = cyberCorpFactory.registryAddress();
+        console.log("raddress: ", raddress);
+        console.log("regaddr: ", address(registry));
+        // Upgrade the existing registry
+        vm.startPrank(multisig);
+        CyberAgreementRegistry(raddress).upgradeToAndCall(
+            newImplementation,
+            ""
+        );
     }
-
-
 }
-

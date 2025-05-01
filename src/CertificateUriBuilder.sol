@@ -157,6 +157,7 @@ struct CertificateDetails {
     uint256 issuerUSDValuationAtTimeofInvestment;
     uint256 unitsRepresented;
     string legalDetails;
+    bytes extensionData;
 }
 
     struct Endorsement {
@@ -190,8 +191,7 @@ struct CertificateDetails {
         bytes32 agreementId,
         uint256 tokenId,
         address contractAddress,
-        address extension,
-        bytes memory extensionData
+        address extension
     ) public view returns (string memory) {
         // Start building the JSON string with ERC-721 metadata standard format
         string memory json = string(abi.encodePacked(
@@ -224,8 +224,8 @@ struct CertificateDetails {
         );
 
         //add extensionData
-        if (extension != address(0) && extensionData.length > 0) {
-            json = string.concat(json, ICertificateExtension(extension).getExtensionURI(extensionData));
+        if (extension != address(0) && details.extensionData.length > 0) {
+            json = string.concat(json, ICertificateExtension(extension).getExtensionURI(details.extensionData));
         }
 
         // Add endorsement history

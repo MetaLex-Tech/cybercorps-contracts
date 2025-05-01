@@ -61,7 +61,6 @@ interface IUriBuilder {
         bytes32 agreementId,
         uint256 tokenId,
         address contractAddress,
-        address extension,
-        bytes memory extensionData
+        address extension
     ) external view returns (string memory);
 }

@@ -101,7 +101,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     }
 
     // Called by proxy on deployment (if needed)
-    function initialize(string[] memory _defaultLegend, string memory name, string memory ticker, string memory _certificateUri, address _issuanceManager, SecurityClass _securityType, SecuritySeries _securitySeries, ICertificateExtension _extension) external initializer {
+    function initialize(string[] memory _defaultLegend, string memory name, string memory ticker, string memory _certificateUri, address _issuanceManager, SecurityClass _securityType, SecuritySeries _securitySeries, address _extension) external initializer {
         __ERC721_init(name, ticker);
         __ERC721Enumerable_init_unchained();
         __UUPSUpgradeable_init();
@@ -140,14 +140,12 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     function safeMint(
         uint256 tokenId,
         address to,
-        CertificateDetails memory details,
-        bytes memory extensionData
+        CertificateDetails memory details
     ) external onlyIssuanceManager returns (uint256) {
 
         _safeMint(to, tokenId);
         CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId] = CyberCertPrinterStorage.cyberCertStorage().defaultLegend;
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
-        CyberCertPrinterStorage.cyberCertStorage().extensionData[tokenId] = extensionData;
         emit CyberCertPrinter_CertificateCreated(tokenId);
         return tokenId;
     }
@@ -156,13 +154,10 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     function safeMintAndAssign(
         address to, 
         uint256 tokenId,
-        CertificateDetails memory details,
-        bytes memory extensionData
+        CertificateDetails memory details
     ) external onlyIssuanceManager returns (uint256) {
         _safeMint(to, tokenId);
         CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId] = CyberCertPrinterStorage.cyberCertStorage().defaultLegend;
-        CyberCertPrinterStorage.cyberCertStorage().extensionData[tokenId] = extensionData;
-
         // Store agreement details
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
         string memory issuerName = IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName();
@@ -174,12 +169,10 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         address from,
         uint256 tokenId,
         address to,
-        CertificateDetails memory details,
-        bytes memory extensionData
+        CertificateDetails memory details
     ) external onlyIssuanceManager returns (uint256) {
         if(ownerOf(tokenId) != from) revert InvalidTokenId();
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
-        CyberCertPrinterStorage.cyberCertStorage().extensionData[tokenId] = extensionData;
         string memory issuerName = IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName();
        // _transfer(from, to, tokenId);
         return tokenId;
@@ -345,8 +338,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
             agreementId,
             tokenId,
             address(this),
-            address(s.extension),
-            s.extensionData[tokenId]
+            address(s.extension)
         );
     }
 
@@ -453,19 +445,16 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         return CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId].length;
     }
 
-    function getExtension(uint256 tokenId) external view returns (ICertificateExtension) {
+    function getExtension(uint256 tokenId) external view returns (address) {
         return CyberCertPrinterStorage.cyberCertStorage().extension;
     }
 
     function getExtensionData(uint256 tokenId) external view returns (bytes memory) {
-        return CyberCertPrinterStorage.cyberCertStorage().extensionData[tokenId];
+        return CyberCertPrinterStorage._getExtensionData(tokenId);
     }
 
-    function setExtension(uint256 tokenId, ICertificateExtension extension) external onlyIssuanceManager {
+    function setExtension(uint256 tokenId, address extension) external onlyIssuanceManager {
         CyberCertPrinterStorage.cyberCertStorage().extension = extension;
     }
 
-    function setExtensionData(uint256 tokenId, bytes memory data) external onlyIssuanceManager {
-        CyberCertPrinterStorage.cyberCertStorage().extensionData[tokenId] = data;
-    }
 }

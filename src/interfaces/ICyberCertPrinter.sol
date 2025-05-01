@@ -53,7 +53,7 @@ interface ICyberCertPrinter {
         address _issuanceManager,
         SecurityClass _securityType,
         SecuritySeries _securitySeries,
-        ICertificateExtension _extension
+        address _extension
     ) external;
     function updateIssuanceManager(address _issuanceManager) external;
     function updateDefaultLegend(string[] memory _ledger) external;

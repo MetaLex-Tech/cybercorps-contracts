@@ -52,6 +52,7 @@ struct CertificateDetails {
     uint256 issuerUSDValuationAtTimeofInvestment;
     uint256 unitsRepresented;
     string legalDetails;
+    bytes extensionData;
 }
 
 struct Endorsement {
@@ -84,8 +85,7 @@ library CyberCertPrinterStorage {
         // Restriction hooks
         mapping(uint256 => ITransferRestrictionHook) restrictionHooksById;
         ITransferRestrictionHook globalRestrictionHook;
-        ICertificateExtension extension;
-        mapping(uint256 => bytes) extensionData; // Stores bytes data per tokenId
+        address extension;
         // Contract configuration - making these public
         address issuanceManager;
         SecurityClass securityType;
@@ -170,20 +170,16 @@ library CyberCertPrinterStorage {
     }
 
     // Extension management
-    function setExtension(uint256 tokenId, ICertificateExtension extension) internal {
+    function setExtension(uint256 tokenId, address extension) internal {
         cyberCertStorage().extension = extension;
     }
 
-    function getExtension(uint256 tokenId) internal view returns (ICertificateExtension) {
+    function getExtension(uint256 tokenId) internal view returns (address) {
         return cyberCertStorage().extension;
     }
 
-    function getExtensionData(uint256 tokenId) internal view returns (bytes memory) {
-        return cyberCertStorage().extensionData[tokenId];
-    }
-
-    function setExtensionData(uint256 tokenId, bytes memory data) internal {
-        cyberCertStorage().extensionData[tokenId] = data;
+    function _getExtensionData(uint256 tokenId) internal view returns (bytes memory) {
+        return cyberCertStorage().certificateDetails[tokenId].extensionData;
     }
 
 } 
