@@ -82,24 +82,27 @@ struct CompanyOfficer {
     string title;
 }
 
-enum ExercisePriceType {
+enum ExercisePriceMethod {
     perToken,
     perWarrant
 }
 
 enum TokenCalculationMethod {
-    equityProRataToCompanyReserveModel,
-    equityProRataToTokenSupplyModel 
+    equityProRataToCompanyReserve,
+    equityProRataToTokenSupply 
 }
 
-enum LockupStartType {
-    timeOfTokenWarrant,
-    timeOfTGE,
-    arbitraryTime
+enum unlockStartTimeType {
+    toeknWarrentTime,
+    tgeTime,
+    setTime
 }
 
-enum LockupIntervalType {
+enum UnlockingIntervalType {
     byBlock,
+    seconds,
+    hourly,
+    daily,
     monthly,
     quarterly
 }

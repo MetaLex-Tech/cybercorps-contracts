@@ -2795,7 +2795,7 @@ contract CyberCorpTest is Test {
         address warrantExtension = address(new TokenWarrantExtension());
 
          TokenWarrantData memory tokenWarrant = TokenWarrantData({
-            exercisePriceMethod: ExercisePriceType.perWarrant,
+            exercisePriceMethod: ExercisePriceMethod.perWarrant,
             exercisePrice: 100000,
             unlockStartTimeType: LockupStartType.timeOfTokenWarrant,
             unlockStartTime: block.timestamp,

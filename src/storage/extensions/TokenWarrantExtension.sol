@@ -5,7 +5,7 @@ import "./ICertificateExtension.sol";
 import "../../CyberCorpConstants.sol";
 
 struct TokenWarrantData {
-    ExercisePriceType exercisePriceMethod;  // perToken or perWarrant
+    ExercisePriceMethod exercisePriceMethod;  // perToken or perWarrant
     uint256 exercisePrice;                   // 18 decimals
     LockupStartType unlockStartTimeType;     // enum of different types, can be tokenWarrantTime, tgeTime, or setTime
     uint256 unlockStartTime;                 // seconds (relative unless type is fixed)
@@ -42,7 +42,7 @@ contract TokenWarrantExtension is ICertificateExtension {
         
         string memory json = string(abi.encodePacked(
             ', "warrantDetails": {',
-            '"exercisePriceMethod": "', exercisePriceTypeToString(decoded.exercisePriceMethod),
+            '"exercisePriceMethod": "', ExercisePriceMethodToString(decoded.exercisePriceMethod),
             '", "exercisePrice": "', uint256ToString(decoded.exercisePrice),
             '", "unlockStartTimeType": "', lockupStartTypeToString(decoded.unlockStartTimeType),
             '", "unlockStartTime": "', uint256ToString(decoded.unlockStartTime),
@@ -84,9 +84,9 @@ contract TokenWarrantExtension is ICertificateExtension {
     }
 
     // Helper functions to convert enums to strings
-    function exercisePriceTypeToString(ExercisePriceType _type) internal pure returns (string memory) {
-        if (_type == ExercisePriceType.perWarrant) return "perWarrant";
-        if (_type == ExercisePriceType.perToken) return "perToken";
+    function ExercisePriceMethodToString(ExercisePriceMethod _type) internal pure returns (string memory) {
+        if (_type == ExercisePriceMethod.perWarrant) return "perWarrant";
+        if (_type == ExercisePriceMethod.perToken) return "perToken";
         return "Unknown";
     }
 

@@ -62,6 +62,34 @@ struct CertificateDetails {
 }
 ```
 
+```
+enum ExercisePriceMethod {
+    perToken,
+    perWarrant
+}
+
+enum TokenCalculationMethod {
+    equityProRataToCompanyReserve,
+    equityProRataToTokenSupply 
+}
+
+enum unlockStartTimeType {
+    toeknWarrentTime,
+    tgeTime,
+    setTime
+}
+
+enum UnlockingIntervalType {
+    byBlock,
+    seconds,
+    hourly,
+    daily,
+    monthly,
+    quarterly
+}
+
+```
+
 ## Potential wording for storing floating point as uints (suggested by AI)
 
 **"Value Representation"**: All fractional values are represented as unsigned integers (`uint`) by scaling the value up by a factor of \(10^18\), thereby preserving 18 decimal places of precision. The actual value is derived by dividing the stored integer by \(10^18\).
