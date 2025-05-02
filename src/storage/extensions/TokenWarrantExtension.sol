@@ -34,7 +34,7 @@ struct TokenWarrantData {
     uint256 exercisePrice;                   // 18 decimals
     UnlockStartTimeType unlockStartTimeType;     // enum of different types, can be tokenWarrantTime, tgeTime, or setTime
     uint256 unlockStartTime;                 // seconds (relative unless type is fixed)
-    uint256 lockupLength;
+    uint256 unlockingPeriod;
     uint256 latestExpirationTime; //latest time at which the Warrant can expire (cease to be exercisable)--denominated in seconds
     uint256 unlockingCliffPeriod; // seconds
     uint256 unlockingCliffPercentage; // what precision??
@@ -71,7 +71,7 @@ contract TokenWarrantExtension is ICertificateExtension {
             '", "exercisePrice": "', uint256ToString(decoded.exercisePrice),
             '", "unlockStartTimeType": "', UnlockStartTimeTypeToString(decoded.unlockStartTimeType),
             '", "unlockStartTime": "', uint256ToString(decoded.unlockStartTime),
-            '", "lockupLength": "', uint256ToString(decoded.lockupLength),
+            '", "unlockingPeriod": "', uint256ToString(decoded.lockupLength),
             '", "latestExpirationTime": "', uint256ToString(decoded.latestExpirationTime),
             '", "unlockingCliffPeriod": "', uint256ToString(decoded.unlockingCliffPeriod),
             '", "unlockingCliffPercentage": "', uint256ToString(decoded.unlockingCliffPercentage),
