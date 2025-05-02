@@ -22,12 +22,11 @@ legalURI:
 
 ## Certificate Extension
 
-name: TokenWarrentExtension
+name: TokenWarrantExtension
 ```solidity
 struct TokenWarrantData {
     ExercisePriceMethod exercisePriceMethod  // perToken or perWarrant
     uint256 exercisePrice;                   // 18 decimals
-    ConversionType conversionType;
     uint256 reservePercent;
     uint256 networkPremiumMultiplier;
     LockupStartType unlockStartTimeType;     // enum of different types, can be tokenWarrantTime, tgeTime, or setTime
