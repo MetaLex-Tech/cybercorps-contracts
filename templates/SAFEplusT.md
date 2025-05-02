@@ -58,6 +58,7 @@ struct CertificateDetails {
     uint256 issuerUSDValuationAtTimeofInvestment;
     uint256 unitsRepresented;
     string legalDetails;
+    bytes extensionData;
 }
 ```
 
