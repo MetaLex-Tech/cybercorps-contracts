@@ -2797,14 +2797,14 @@ contract CyberCorpTest is Test {
          TokenWarrantData memory tokenWarrant = TokenWarrantData({
             exercisePriceMethod: ExercisePriceMethod.perWarrant,
             exercisePrice: 100000,
-            unlockStartTimeType: LockupStartType.timeOfTokenWarrant,
+            unlockStartTimeType: UnlockStartTimeType.tokenWarrentTime,
             unlockStartTime: block.timestamp,
             lockupLength: 100000,
             latestExpirationTime: block.timestamp + 100000, 
             unlockingCliffPeriod: 100000,
             unlockingCliffPercentage: 100000,
-            unlockingIntervalType: LockupIntervalType.monthly,
-            tokenCalculationMethod: TokenCalculationMethod.equityProRataToTokenSupplyModel,
+            unlockingIntervalType: UnlockingIntervalType.monthly,
+            tokenCalculationMethod: TokenCalculationMethod.equityProRataToTokenSupply,
             minCompanyReserve: 0,
             tokenPremiumMultiplier: 0
         });

@@ -73,7 +73,7 @@ enum TokenCalculationMethod {
     equityProRataToTokenSupply 
 }
 
-enum unlockStartTimeType {
+enum UnlockStartTimeType {
     toeknWarrentTime,
     tgeTime,
     setTime
