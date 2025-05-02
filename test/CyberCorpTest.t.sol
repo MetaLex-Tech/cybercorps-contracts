@@ -3630,10 +3630,6 @@ contract CyberCorpTest is Test {
         console.log("regaddr: ", address(registry));
         // Upgrade the existing registry
 
-        
-         (string memory legalContractUriB, string memory titleB, string[] memory globalFieldsB, string[] memory signerFieldsB) = CyberAgreementRegistry(registry).getTemplateDetails(bytes32(uint256(1)));
-        console.log("legalContractUriB: ", legalContractUriB);
-        console.log("titleB: ", titleB);
 
         vm.startPrank(multisig);
         CyberAgreementRegistry(registry).upgradeToAndCall(
