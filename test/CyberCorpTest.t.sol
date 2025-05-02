@@ -435,7 +435,7 @@ contract CyberCorpTest is Test {
         vm.stopPrank();
     }
 
-    function testCreateClosedContractTWarrent() public {
+    function testCreateClosedContractTWarrant() public {
         uint256 newPartyPk = 80085;
         address newPartyAddr = vm.addr(newPartyPk);
 
@@ -528,6 +528,11 @@ contract CyberCorpTest is Test {
         defaultLegends[0][0] = "Legend 1";
         defaultLegends[1] = new string[](1);
         defaultLegends[1][0] = "Legend 2";
+
+        extensions = new address[](2);
+        extensions[0] = address(0);
+        extensions[1] = address(0);
+
 
         vm.startPrank(testAddress);
         (
@@ -2799,7 +2804,7 @@ contract CyberCorpTest is Test {
             exercisePrice: 100000,
             unlockStartTimeType: UnlockStartTimeType.tokenWarrentTime,
             unlockStartTime: block.timestamp,
-            lockupLength: 100000,
+            unlockingPeriod: 100000,
             latestExpirationTime: block.timestamp + 100000, 
             unlockingCliffPeriod: 100000,
             unlockingCliffPercentage: 100000,
@@ -3059,6 +3064,7 @@ contract CyberCorpTest is Test {
         // Verify the registry still works by checking the template
         (
             string memory legalContractUri,
+            string memory title,
             string[] memory retGlobalFields,
             string[] memory retPartyFields
         ) = registry.getTemplateDetails(bytes32(uint256(1)));
@@ -3614,7 +3620,7 @@ contract CyberCorpTest is Test {
 
     function testUpdateCyberAgreementRegistry() public {
         // First give the test contract the OWNER_ROLE (99)
-
+        address registry = 0x9d4EFe86964eb038848D7aD4d208AAdEA7282516;
         // Deploy new implementation
         address newImplementation = address(new CyberAgreementRegistry());
 
@@ -3623,10 +3629,24 @@ contract CyberCorpTest is Test {
         console.log("raddress: ", raddress);
         console.log("regaddr: ", address(registry));
         // Upgrade the existing registry
+
+        
+         (string memory legalContractUriB, string memory titleB, string[] memory globalFieldsB, string[] memory signerFieldsB) = CyberAgreementRegistry(registry).getTemplateDetails(bytes32(uint256(1)));
+        console.log("legalContractUriB: ", legalContractUriB);
+        console.log("titleB: ", titleB);
+
         vm.startPrank(multisig);
-        CyberAgreementRegistry(raddress).upgradeToAndCall(
+        CyberAgreementRegistry(registry).upgradeToAndCall(
             newImplementation,
             ""
         );
+        //get the template
+        (string memory template, string memory title) = CyberAgreementRegistry(registry).templates(bytes32(uint256(1)));
+        console.log("template: ", template);
+        console.log("title: ", title);
+
+        (string memory legalContractUri, string memory titleA, string[] memory globalFields, string[] memory signerFields) = CyberAgreementRegistry(registry).getTemplateDetails(bytes32(uint256(1)));
+        console.log("legalContractUri: ", legalContractUri);
+        console.log("title: ", titleA);
     }
 }

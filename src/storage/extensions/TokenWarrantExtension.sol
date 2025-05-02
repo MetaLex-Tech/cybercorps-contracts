@@ -71,7 +71,7 @@ contract TokenWarrantExtension is ICertificateExtension {
             '", "exercisePrice": "', uint256ToString(decoded.exercisePrice),
             '", "unlockStartTimeType": "', UnlockStartTimeTypeToString(decoded.unlockStartTimeType),
             '", "unlockStartTime": "', uint256ToString(decoded.unlockStartTime),
-            '", "unlockingPeriod": "', uint256ToString(decoded.lockupLength),
+            '", "unlockingPeriod": "', uint256ToString(decoded.unlockingPeriod),
             '", "latestExpirationTime": "', uint256ToString(decoded.latestExpirationTime),
             '", "unlockingCliffPeriod": "', uint256ToString(decoded.unlockingCliffPeriod),
             '", "unlockingCliffPercentage": "', uint256ToString(decoded.unlockingCliffPercentage),
