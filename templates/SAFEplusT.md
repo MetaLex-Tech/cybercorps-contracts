@@ -22,26 +22,29 @@ legalURI:
 
 ## Certificate Extension
 
-name: TokenWarrentExtension
+name: TokenWarrantExtension
 ```solidity
 struct TokenWarrantData {
-    ExercisePriceMethod exercisePriceMethod  // per token or per warrant
+    ExercisePriceMethod exercisePriceMethod  // perToken or perWarrant
     uint256 exercisePrice;                   // 18 decimals
-    ConversionType conversionType;
     uint256 reservePercent;
     uint256 networkPremiumMultiplier;
-    LockupStartType unlockStartTimeType;     // enum of different types
+    LockupStartType unlockStartTimeType;     // enum of different types, can be tokenWarrantTime, tgeTime, or setTime
     uint256 unlockStartTime;                 // seconds (relative unless type is fixed)
     uint256 lockupLength; // TODO: DO WE NEED THIS?
+    uint256 latestExpirationTime //latest time at which the Warrant can expire (cease to be exercisable)--denominated in seconds
+    
 
     //
     uint256 unlockingCliffPeriod; // seconds
     uint256 unlockingCliffPercentage; // what precision??
-    UnlockingIntervalType unlockingIntervalType; // block, second, daily, weekly, monthly
+    UnlockingIntervalType unlockingIntervalType; // blockly, seconds, daily, weekly, monthly
 
-    TokenCaclulationMethod tokenCalculationMethod;
-    // TODO: fields for token calc price
-    uint256 latestExpirationTime;            // Unix timesatamp (seconds)
+    TokenCalculationMethod tokenCalculationMethod; //equityProRataToTokenSupply or equityProRataToCompanyReserve
+    uint256 minCompanyReserve //minimum company reserve within an equityProRataToCompanyReserve method--set to 0 if there is no minimum
+    uint256 tokenPremiumMultiplier //multiplier of network valuation over company equity valuation, to be used within equityProRataToTokenSupply method (set to 0 if no premium)
+    
+  
 }
 ```
 
@@ -55,6 +58,7 @@ struct CertificateDetails {
     uint256 issuerUSDValuationAtTimeofInvestment;
     uint256 unitsRepresented;
     string legalDetails;
+    bytes extensionData;
 }
 ```
 
