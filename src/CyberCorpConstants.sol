@@ -87,7 +87,7 @@ enum ExercisePriceType {
     perWarrant
 }
 
-enum ConversionType {
+enum TokenCalculationMethod {
     equityProRataToCompanyReserveModel,
     equityProRataToTokenSupplyModel 
 }
@@ -103,6 +103,8 @@ enum LockupIntervalType {
     monthly,
     quarterly
 }
+
+
 
 
 

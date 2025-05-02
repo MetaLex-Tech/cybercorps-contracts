@@ -4,67 +4,19 @@ pragma solidity 0.8.28;
 import "./ICertificateExtension.sol";
 import "../../CyberCorpConstants.sol";
 
-// Helper function to convert uint256 to string
-function uint256ToString(uint256 _i) pure returns (string memory) {
-    if (_i == 0) {
-        return "0";
-    }
-    uint256 j = _i;
-    uint256 len;
-    while (j != 0) {
-        len++;
-        j /= 10;
-    }
-    bytes memory bstr = new bytes(len);
-    uint256 k = len;
-    while (_i != 0) {
-        k = k-1;
-        uint8 temp = uint8(48 + (_i % 10));
-        bytes1 b1 = bytes1(temp);
-        bstr[k] = b1;
-        _i /= 10;
-    }
-    return string(bstr);
-}
-
-// Helper functions to convert enums to strings
-function exercisePriceTypeToString(ExercisePriceType _type) pure returns (string memory) {
-    if (_type == ExercisePriceType.perWarrant) return "perWarrant";
-    if (_type == ExercisePriceType.perToken) return "perToken";
-    return "Unknown";
-}
-
-function conversionTypeToString(ConversionType _type) pure returns (string memory) {
-    if (_type == ConversionType.equityProRataToCompanyReserveModel) return "equityProRataToCompanyReserveModel";
-    if (_type == ConversionType.equityProRataToTokenSupplyModel) return "equityProRataToTokenSupplyModel";
-    return "Unknown";
-}
-
-function lockupStartTypeToString(LockupStartType _type) pure returns (string memory) {
-    if (_type == LockupStartType.timeOfTokenWarrant) return "timeOfTokenWarrant";
-    if (_type == LockupStartType.timeOfTGE) return "timeOfTGE";
-    if (_type == LockupStartType.arbitraryTime) return "arbitraryTime";
-    return "Unknown";
-}
-
-function lockupIntervalTypeToString(LockupIntervalType _type) pure returns (string memory) {
-    if (_type == LockupIntervalType.byBlock) return "byBlock";
-    if (_type == LockupIntervalType.monthly) return "monthly";
-    if (_type == LockupIntervalType.quarterly) return "quarterly";
-    return "Unknown";
-}
-
 struct TokenWarrantData {
-    ExercisePriceType exercisePriceType;
-    uint256 exercisePrice;
-    ConversionType conversionType;
-    uint256 reservePercent;
-    uint256 networkPremiumMultiplier;
-    LockupStartType lockupStartType;
+    ExercisePriceType exercisePriceMethod;  // perToken or perWarrant
+    uint256 exercisePrice;                   // 18 decimals
+    LockupStartType unlockStartTimeType;     // enum of different types, can be tokenWarrantTime, tgeTime, or setTime
+    uint256 unlockStartTime;                 // seconds (relative unless type is fixed)
     uint256 lockupLength;
-    uint256 lockupCliffInMonths;
-    LockupIntervalType lockupIntervalType;
-    uint256 latestExpirationTime;
+    uint256 latestExpirationTime; //latest time at which the Warrant can expire (cease to be exercisable)--denominated in seconds
+    uint256 unlockingCliffPeriod; // seconds
+    uint256 unlockingCliffPercentage; // what precision??
+    LockupIntervalType unlockingIntervalType; // blockly, seconds, daily, weekly, monthly
+    TokenCalculationMethod tokenCalculationMethod; //equityProRataToTokenSupply or equityProRataToCompanyReserve
+    uint256 minCompanyReserve; //minimum company reserve within an equityProRataToCompanyReserve method--set to 0 if there is no minimum
+    uint256 tokenPremiumMultiplier; //multiplier of network valuation over company equity valuation, to be used within equityProRataToTokenSupply method (set to 0 if no premium)
 }
 
 contract TokenWarrantExtension is ICertificateExtension {
@@ -90,19 +42,71 @@ contract TokenWarrantExtension is ICertificateExtension {
         
         string memory json = string(abi.encodePacked(
             ', "warrantDetails": {',
-            '"exercisePriceType": "', exercisePriceTypeToString(decoded.exercisePriceType),
+            '"exercisePriceMethod": "', exercisePriceTypeToString(decoded.exercisePriceMethod),
             '", "exercisePrice": "', uint256ToString(decoded.exercisePrice),
-            '", "conversionType": "', conversionTypeToString(decoded.conversionType),
-            '", "reservePercent": "', uint256ToString(decoded.reservePercent),
-            '", "networkPremiumMultiplier": "', uint256ToString(decoded.networkPremiumMultiplier),
-            '", "lockupStartType": "', lockupStartTypeToString(decoded.lockupStartType),
+            '", "unlockStartTimeType": "', lockupStartTypeToString(decoded.unlockStartTimeType),
+            '", "unlockStartTime": "', uint256ToString(decoded.unlockStartTime),
             '", "lockupLength": "', uint256ToString(decoded.lockupLength),
-            '", "lockupCliffInMonths": "', uint256ToString(decoded.lockupCliffInMonths),
-            '", "lockupIntervalType": "', lockupIntervalTypeToString(decoded.lockupIntervalType),
             '", "latestExpirationTime": "', uint256ToString(decoded.latestExpirationTime),
+            '", "unlockingCliffPeriod": "', uint256ToString(decoded.unlockingCliffPeriod),
+            '", "unlockingCliffPercentage": "', uint256ToString(decoded.unlockingCliffPercentage),
+            '", "unlockingIntervalType": "', lockupIntervalTypeToString(decoded.unlockingIntervalType),
+            '", "tokenCalculationMethod": "', conversionTypeToString(decoded.tokenCalculationMethod),
+            '", "minCompanyReserve": "', uint256ToString(decoded.minCompanyReserve),
+            '", "tokenPremiumMultiplier": "', uint256ToString(decoded.tokenPremiumMultiplier),
             '"}'
         ));
         
         return json;
+    }
+
+        // Helper function to convert uint256 to string
+    function uint256ToString(uint256 _i) internal pure returns (string memory) {
+        if (_i == 0) {
+            return "0";
+        }
+        uint256 j = _i;
+        uint256 len;
+        while (j != 0) {
+            len++;
+            j /= 10;
+        }
+        bytes memory bstr = new bytes(len);
+        uint256 k = len;
+        while (_i != 0) {
+            k = k-1;
+            uint8 temp = uint8(48 + (_i % 10));
+            bytes1 b1 = bytes1(temp);
+            bstr[k] = b1;
+            _i /= 10;
+        }
+        return string(bstr);
+    }
+
+    // Helper functions to convert enums to strings
+    function exercisePriceTypeToString(ExercisePriceType _type) internal pure returns (string memory) {
+        if (_type == ExercisePriceType.perWarrant) return "perWarrant";
+        if (_type == ExercisePriceType.perToken) return "perToken";
+        return "Unknown";
+    }
+
+    function conversionTypeToString(TokenCalculationMethod _type) internal pure returns (string memory) {
+        if (_type == TokenCalculationMethod.equityProRataToCompanyReserveModel) return "equityProRataToCompanyReserveModel";
+        if (_type == TokenCalculationMethod.equityProRataToTokenSupplyModel) return "equityProRataToTokenSupplyModel";
+        return "Unknown";
+    }
+
+    function lockupStartTypeToString(LockupStartType _type) internal pure returns (string memory) {
+        if (_type == LockupStartType.timeOfTokenWarrant) return "timeOfTokenWarrant";
+        if (_type == LockupStartType.timeOfTGE) return "timeOfTGE";
+        if (_type == LockupStartType.arbitraryTime) return "arbitraryTime";
+        return "Unknown";
+    }
+
+    function lockupIntervalTypeToString(LockupIntervalType _type) internal pure returns (string memory) {
+        if (_type == LockupIntervalType.byBlock) return "byBlock";
+        if (_type == LockupIntervalType.monthly) return "monthly";
+        if (_type == LockupIntervalType.quarterly) return "quarterly";
+        return "Unknown";
     }
 }

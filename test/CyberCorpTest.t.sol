@@ -2795,16 +2795,18 @@ contract CyberCorpTest is Test {
         address warrantExtension = address(new TokenWarrantExtension());
 
          TokenWarrantData memory tokenWarrant = TokenWarrantData({
-            exercisePriceType: ExercisePriceType.perWarrant,
+            exercisePriceMethod: ExercisePriceType.perWarrant,
             exercisePrice: 100000,
-            conversionType: ConversionType.equityProRataToCompanyReserveModel,
-            reservePercent: 100000,
-            networkPremiumMultiplier: 100000,
-            lockupStartType: LockupStartType.timeOfTokenWarrant,
+            unlockStartTimeType: LockupStartType.timeOfTokenWarrant,
+            unlockStartTime: block.timestamp,
             lockupLength: 100000,
-            lockupCliffInMonths: 100000,
-            lockupIntervalType: LockupIntervalType.monthly,
-            latestExpirationTime: block.timestamp + 100000
+            latestExpirationTime: block.timestamp + 100000, 
+            unlockingCliffPeriod: 100000,
+            unlockingCliffPercentage: 100000,
+            unlockingIntervalType: LockupIntervalType.monthly,
+            tokenCalculationMethod: TokenCalculationMethod.equityProRataToTokenSupplyModel,
+            minCompanyReserve: 0,
+            tokenPremiumMultiplier: 0
         });
 
         bytes memory tokenWarrantData = abi.encode(tokenWarrant);
