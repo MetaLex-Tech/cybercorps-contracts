@@ -45,7 +45,8 @@ classDiagram
             +upgradeTo()
         }
         class IssuanceManagerFactory {
-            +upgradeImplementation()
+            +upgradeImplementation() // Update IssuanceManager implementation
+            +upgradePrinterBeaconAt() // Update CyberCertPrinter implementation
         }
         
         class CertificateUriBuilder
@@ -77,7 +78,6 @@ classDiagram
         
         class IssuanceManagerProxy {
             <<BeaconProxy(IssuanceManagerBeacon)>>
-            +upgradeBeaconImplementation() // For CyberCertPrinterBeacon
         }
         
         class CyberCertPrinterBeacon {
@@ -112,6 +112,6 @@ classDiagram
     CyberCorpFactory <-- DealManagerProxy : created by
     
     CyberCertPrinter <-- CyberCertPrinterBeacon : implementation    
-    CyberCertPrinterBeacon <-- IssuanceManagerProxy : getCyberCertPrinterBeacon()
+    CyberCertPrinterBeacon <-- IssuanceManagerProxy : CyberCertPrinterBeacon()
     IssuanceManagerProxy <-- CyberCertPrinterProxy : created by    
 ```
