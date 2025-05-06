@@ -81,6 +81,7 @@ contract CyberCorpTest is Test {
     address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
     SecurityClass[] securityClasses;
     SecuritySeries[] securitySerieses;
+    CyberCorpFactory.CyberCertData[] certData;
 
     string[] certNames;
     string[] certSymbols;
@@ -92,6 +93,31 @@ contract CyberCorpTest is Test {
         testPrivateKey = 1337;
         testAddress = vm.addr(testPrivateKey);
         vm.startPrank(testAddress);
+
+        /*        string name;
+        string symbol;
+        string uri;
+        SecurityClass securityClass;
+        SecuritySeries securitySeries;
+        address extension;
+        CertificateDetails _details;
+        string[] defaultLegend;
+        address extensions;*/
+
+          string[] memory _dataDefaultString = new string[](1);
+            _dataDefaultString[0] = "Legend 1";
+
+        CyberCorpFactory.CyberCertData memory _certData = CyberCorpFactory.CyberCertData({
+            name: "Cert Name 1",
+            symbol: "Cert Symbol 1",
+            uri: "ipfs.io/ipfs/[cid]",
+            securityClass: SecurityClass.SAFE,
+            securitySeries: SecuritySeries.SeriesPreSeed,
+            extension: address(0),
+            defaultLegend: _dataDefaultString
+        });
+        certData = new CyberCorpFactory.CyberCertData[](1);
+        certData[0] = _certData;
 
         securityClasses = new SecurityClass[](1);
         securityClasses[0] = SecurityClass.SAFE;
@@ -281,11 +307,7 @@ contract CyberCorpTest is Test {
             "Dispute Res",
             testAddress,
             officer,
-            certName,
-            certSymbol,
-            certificateUri,
-            securityClasses,
-            securitySerieses,
+            certData,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -294,10 +316,8 @@ contract CyberCorpTest is Test {
             signature,
             _details,
             conditions,
-            defaultLegends,
             bytes32(0),
-            block.timestamp + 1000000,
-            extensions
+            block.timestamp + 1000000
         );
         vm.stopPrank();
     }
@@ -373,32 +393,26 @@ contract CyberCorpTest is Test {
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-                block.timestamp,
-                "CyberCorp",
-                "Limited Liability Company",
-                "Juris",
-                "Contact Details",
-                "Dispute Res",
-                testAddress,
-                officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
-                bytes32(uint256(1)),
-                globalValues,
-                parties,
-                _paymentAmount,
-                partyValues,
-                signature,
-                _details,
-                conditions,
-                defaultLegends,
-                bytes32(0),
-                block.timestamp + 1000000,
-                extensions
-            );
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
         vm.stopPrank();
         IDealManager dealManager = IDealManager(dealManagerAddr);
         vm.startPrank(newPartyAddr);
@@ -487,6 +501,10 @@ contract CyberCorpTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Counter Party Value 1";
 
+
+        
+        
+
         bytes32 contractId = keccak256(
             abi.encode(
                 bytes32(uint256(1)),
@@ -532,7 +550,26 @@ contract CyberCorpTest is Test {
         extensions = new address[](2);
         extensions[0] = address(0);
         extensions[1] = address(0);
+        CyberCorpFactory.CyberCertData[] memory certData = new CyberCorpFactory.CyberCertData[](2);
+        certData[0] = CyberCorpFactory.CyberCertData({
+            name: "SAFE",
+            symbol: "SAFE",
+            uri: "ipfs.io/ipfs/[cid]",
+            securityClass: SecurityClass.SAFE,
+            securitySeries: SecuritySeries.SeriesPreSeed,
+            extension: address(0),
+            defaultLegend: defaultLegends[0]
+        });
 
+        certData[1] = CyberCorpFactory.CyberCertData({
+            name: "Token Warrant",
+            symbol: "TWARRENT",
+            uri: "ipfs.io/ipfs/[cid]",
+            securityClass: SecurityClass.TokenWarrant,
+            securitySeries: SecuritySeries.SeriesPreSeed,
+            extension: address(0),
+            defaultLegend: defaultLegends[1]
+        });
 
         vm.startPrank(testAddress);
         (
@@ -543,33 +580,27 @@ contract CyberCorpTest is Test {
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
-        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-                block.timestamp,
-                "CyberCorp",
-                "Limited Liability Company",
-                "Juris",
-                "Contact Details",
-                "Dispute Res",
-                testAddress,
-                officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
-                bytes32(uint256(1)),
-                globalValues,
-                parties,
-                _paymentAmount,
-                partyValues,
-                signature,
-                _details,
-                conditions,
-                defaultLegends,
-                bytes32(0),
-                block.timestamp + 1000000,
-                extensions
-            );
+        ) =         cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
         vm.stopPrank();
         IDealManager dealManager = IDealManager(dealManagerAddr);
         vm.startPrank(newPartyAddr);
@@ -686,33 +717,27 @@ contract CyberCorpTest is Test {
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
-        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-                block.timestamp,
-                "CyberCorp",
-                "Limited Liability Company",
-                "Juris",
-                "Contact Details",
-                "Dispute Res",
-                testAddress,
-                officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
-                bytes32(uint256(1)),
-                globalValues,
-                parties,
-                _paymentAmount,
-                partyValues,
-                signature,
-                _details,
-                conditions,
-                defaultLegends,
-                bytes32(0),
-                block.timestamp + 1000000,
-            extensions
-            );
+        ) =         cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
         vm.stopPrank();
 
         //wait for 1000000 blocks
@@ -890,33 +915,27 @@ contract CyberCorpTest is Test {
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
-        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-                block.timestamp,
-                "CyberCorp",
-                "Limited Liability Company",
-                "Juris",
-                "Contact Details",
-                "Dispute Res",
-                testAddress,
-                officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
-                bytes32(uint256(1)),
-                globalValues,
-                parties,
-                _paymentAmount,
-                partyValues,
-                proposerSignature,
-                _details,
-                conditions,
-                defaultLegends,
-                bytes32(0),
-                block.timestamp + 1000000,
-            extensions
-            );
+        ) =         cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            proposerSignature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
         vm.stopPrank();
 
         uint256 newPartyPk = 80085;
@@ -1026,33 +1045,27 @@ contract CyberCorpTest is Test {
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
-        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-                block.timestamp,
-                "CyberCorp",
-                "Limited Liability Company",
-                "Juris",
-                "Contact Details",
-                "Dispute Res",
-                testAddress,
-                officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
-                bytes32(uint256(1)),
-                globalValues,
-                parties,
-                _paymentAmount,
-                partyValues,
-                proposerSignature,
-                _details,
-                conditions,
-                defaultLegends,
-                secretHash,
-                block.timestamp + 1000000,
-            extensions
-            );
+        ) =         cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            proposerSignature,
+            _details,
+            conditions,
+            secretHash,
+            block.timestamp + 1000000
+        );
         vm.stopPrank();
 
         uint256 newPartyPk = 80085;
@@ -1166,32 +1179,26 @@ contract CyberCorpTest is Test {
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-                block.timestamp,
-                "CyberCorp",
-                "Limited Liability Company",
-                "Juris",
-                "Contact Details",
-                "Dispute Res",
-                testAddress,
-                officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
-                bytes32(uint256(1)),
-                globalValues,
-                parties,
-                _paymentAmount,
-                partyValues,
-                proposerSignature,
-                _details,
-                conditions,
-                defaultLegends,
-                secretHash,
-                block.timestamp + 1000000,
-            extensions
-            );
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            proposerSignature,
+            _details,   
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
         vm.stopPrank();
 
         uint256 newPartyPk = 80085;
@@ -1380,32 +1387,26 @@ contract CyberCorpTest is Test {
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-                block.timestamp,
-                "CyberCorp",
-                "Limited Liability Company",
-                "Juris",
-                "Contact Details",
-                "Dispute Res",
-                testAddress,
-                officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
-                bytes32(uint256(1)),
-                globalValues,
-                parties,
-                _paymentAmount,
-                partyValues,
-                signature,
-                _details,
-                conditions,
-                defaultLegends,
-                bytes32(0),
-                block.timestamp + 1000000,
-            extensions
-            );
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
 
         // Revoke deal before payment
         IDealManager(dealManagerAddr).revokeDeal(
@@ -1481,32 +1482,26 @@ contract CyberCorpTest is Test {
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-                block.timestamp,
-                "CyberCorp",
-                "Limited Liability Company",
-                "Juris",
-                "Contact Details",
-                "Dispute Res",
-                testAddress,
-                officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
-                bytes32(uint256(1)),
-                globalValues,
-                parties,
-                _paymentAmount,
-                partyValues,
-                signature,
-                _details,
-                conditions,
-                defaultLegends,
-                bytes32(0),
-                block.timestamp + 1000000,
-            extensions
-            );
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
 
         // have a buyer sign and pay
 
@@ -1627,32 +1622,26 @@ contract CyberCorpTest is Test {
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-                block.timestamp,
-                "CyberCorp",
-                "Limited Liability Company",
-                "Juris",
-                "Contact Details",
-                "Dispute Res",
-                testAddress,
-                officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
-                bytes32(uint256(1)),
-                globalValues,
-                parties,
-                _paymentAmount,
-                partyValues,
-                signature,
-                _details,
-                conditions,
-                defaultLegends,
-                bytes32(0),
-                block.timestamp + 1000000,
-            extensions
-            );
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
 
         // Sign to void after payment
         IDealManager(dealManagerAddr).signToVoid(
@@ -1736,32 +1725,26 @@ contract CyberCorpTest is Test {
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-                block.timestamp,
-                "CyberCorp",
-                "Limited Liability Company",
-                "Juris",
-                "Contact Details",
-                "Dispute Res",
-                testAddress,
-                officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
-                bytes32(uint256(1)),
-                globalValues,
-                parties,
-                _paymentAmount,
-                partyValues,
-                signature,
-                _details,
-                conditions,
-                defaultLegends,
-                bytes32(0),
-                block.timestamp + 1000000,
-            extensions
-            );
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
 
         // Fast forward time to after expiry
         vm.warp(block.timestamp + 1000001);
@@ -1840,32 +1823,26 @@ contract CyberCorpTest is Test {
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-                block.timestamp,
-                "CyberCorp",
-                "Limited Liability Company",
-                "Juris",
-                "Contact Details",
-                "Dispute Res",
-                testAddress,
-                officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
-                bytes32(uint256(1)),
-                globalValues,
-                parties,
-                _paymentAmount,
-                partyValues,
-                signature,
-                _details,
-                conditions,
-                defaultLegends,
-                bytes32(0),
-                block.timestamp + 1000000,
-            extensions
-            );
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
 
         // Try to finalize without payment - should fail
         vm.expectRevert();
@@ -1946,32 +1923,26 @@ contract CyberCorpTest is Test {
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-                block.timestamp,
-                "CyberCorp",
-                "Limited Liability Company",
-                "Juris",
-                "Contact Details",
-                "Dispute Res",
-                testAddress,
-                officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
-                bytes32(uint256(1)),
-                globalValues,
-                parties,
-                _paymentAmount,
-                partyValues,
-                signature,
-                _details,
-                conditions,
-                defaultLegends,
-                bytes32(0),
-                block.timestamp + 1000000,
-            extensions
-            );
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
 
         uint256 newPartyPk = 80085;
         address newPartyAddr = vm.addr(newPartyPk);
@@ -2078,32 +2049,26 @@ contract CyberCorpTest is Test {
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-                block.timestamp,
-                "CyberCorp",
-                "Limited Liability Company",
-                "Juris",
-                "Contact Details",
-                "Dispute Res",
-                testAddress,
-                officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
-                bytes32(uint256(1)),
-                globalValues,
-                parties,
-                _paymentAmount,
-                partyValues,
-                signature,
-                _details,
-                conditions,
-                defaultLegends,
-                bytes32(0),
-                block.timestamp + 1000000,
-            extensions
-            );
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
 
         uint256 newPartyPk = 80085;
         address newPartyAddr = vm.addr(newPartyPk);
@@ -2230,32 +2195,26 @@ contract CyberCorpTest is Test {
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-                block.timestamp,
-                "CyberCorp",
-                "Limited Liability Company",
-                "Juris",
-                "Contact Details",
-                "Dispute Res",
-                testAddress,
-                officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
-                bytes32(uint256(1)),
-                globalValues,
-                parties,
-                _paymentAmount,
-                partyValues,
-                signature,
-                _details,
-                conditions,
-                defaultLegends,
-                bytes32(0),
-                block.timestamp + 1000000,
-            extensions
-            );
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
 
         uint256 newPartyPk = 80085;
         address newPartyAddr = vm.addr(newPartyPk);
@@ -2380,11 +2339,7 @@ contract CyberCorpTest is Test {
                 "Dispute Res",
                 testAddress,
                 officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
+                certData,
                 bytes32(uint256(1)),
                 globalValues,
                 parties,
@@ -2393,12 +2348,9 @@ contract CyberCorpTest is Test {
                 signature,
                 _details,
                 conditions,
-                defaultLegends,
                 secretHash,
-                block.timestamp + 1000000,
-            extensions
+                block.timestamp + 1000000
             );
-
         uint256 newPartyPk = 80085;
         address newPartyAddr = vm.addr(newPartyPk);
         string[] memory partyValuesB = new string[](1);
@@ -2507,32 +2459,26 @@ contract CyberCorpTest is Test {
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-                block.timestamp,
-                "CyberCorp",
-                "Limited Liability Company",
-                "Juris",
-                "Contact Details",
-                "Dispute Res",
-                testAddress,
-                officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
-                bytes32(uint256(1)),
-                globalValues,
-                parties,
-                _paymentAmount,
-                partyValues,
-                signature,
-                _details,
-                conditions,
-                defaultLegends,
-                bytes32(0),
-                block.timestamp + 1000000,
-            extensions
-            );
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
 
         // Fast forward time to after expiry
         vm.warp(block.timestamp + 1000001);
@@ -2676,11 +2622,7 @@ contract CyberCorpTest is Test {
                 "Dispute Res",
                 testAddress,
                 officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
+                certData,
                 bytes32(uint256(2)),
                 globalValues,
                 parties,
@@ -2689,10 +2631,8 @@ contract CyberCorpTest is Test {
                 proposerSignature,
                 _details,
                 conditions,
-                defaultLegends,
                 bytes32(0),
-                block.timestamp + 1000000,
-            extensions
+                block.timestamp + 1000000
             );
         vm.stopPrank();
 
@@ -2909,11 +2849,7 @@ contract CyberCorpTest is Test {
                 "Dispute Res",
                 testAddress,
                 officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
+                certData,
                 bytes32(uint256(2)),
                 globalValues,
                 parties,
@@ -2922,10 +2858,8 @@ contract CyberCorpTest is Test {
                 proposerSignature,
                 _details,
                 conditions,
-                defaultLegends,
                 bytes32(0),
-                block.timestamp + 1000000,
-            extensions
+                block.timestamp + 1000000
             );
         vm.stopPrank();
 
@@ -3156,11 +3090,7 @@ contract CyberCorpTest is Test {
                 "Dispute Res",
                 testAddress,
                 officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
+                certData,
                 bytes32(uint256(1)),
                 globalValues,
                 parties,
@@ -3169,10 +3099,8 @@ contract CyberCorpTest is Test {
                 signature,
                 _details,
                 conditions,
-                defaultLegends,
                 bytes32(0),
-                block.timestamp + 1000000,
-            extensions
+                block.timestamp + 1000000
             );
         vm.stopPrank();
 
@@ -3274,32 +3202,25 @@ contract CyberCorpTest is Test {
             bytes32 id,
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-                block.timestamp,
-                "CyberCorp",
-                "Limited Liability Company",
-                "Juris",
-                "Contact Details",
-                "Dispute Res",
-                testAddress,
-                officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
-                bytes32(uint256(1)),
-                globalValues,
-                parties,
-                _paymentAmount,
-                partyValues,
-                signature,
-                _details,
-                conditions,
-                defaultLegends,
-                bytes32(0),
-                block.timestamp + 1000000,
-            extensions
-            );
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
         vm.stopPrank();
 
         // Create a certificate to verify functionality
@@ -3430,11 +3351,7 @@ contract CyberCorpTest is Test {
                 "Dispute Res",
                 testAddress,
                 officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
+                certData,
                 bytes32(uint256(1)),
                 globalValues,
                 parties,
@@ -3443,10 +3360,8 @@ contract CyberCorpTest is Test {
                 signature,
                 _details,
                 conditions,
-                defaultLegends,
                 bytes32(0),
-                block.timestamp + 1000000,
-            extensions
+                block.timestamp + 1000000
             );
         vm.stopPrank();
 
@@ -3565,11 +3480,7 @@ contract CyberCorpTest is Test {
                 "Dispute Res",
                 testAddress,
                 officer,
-                certNames,
-                certSymbols,
-                certificateUris,
-                securityClasses,
-                securitySerieses,
+                certData,
                 bytes32(uint256(1)),
                 globalValues,
                 parties,
@@ -3578,10 +3489,8 @@ contract CyberCorpTest is Test {
                 signature,
                 _details,
                 conditions,
-                defaultLegends,
                 bytes32(0),
-                block.timestamp + 1000000,
-            extensions
+                block.timestamp + 1000000
             );
         vm.stopPrank();
 

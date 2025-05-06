@@ -79,7 +79,8 @@ contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
         address indexed certificate,
         uint256 amount,
         uint256 cap,
-        CertificateDetails details
+        CertificateDetails details, 
+        string tokenURI
     );
     event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
@@ -184,12 +185,14 @@ contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
         ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         uint256 tokenId = cert.totalSupply();
         uint256 id = cert.safeMint(tokenId, to, _details);
+        string memory tokenURI = cert.tokenURI(tokenId);
         emit CertificateCreated(
             tokenId,
             certAddress,
             _details.investmentAmount,
             _details.issuerUSDValuationAtTimeofInvestment,
-            _details
+            _details,
+            tokenURI
         );
         return id;
     }
@@ -231,12 +234,14 @@ contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
         tokenId = cert.totalSupply();
 
         cert.safeMintAndAssign(investor, tokenId, _details);
+        string memory tokenURI = cert.tokenURI(tokenId);
         emit CertificateCreated(
             tokenId,
             certAddress,
             _details.investmentAmount,
             _details.issuerUSDValuationAtTimeofInvestment,
-            _details
+            _details,
+            tokenURI
         );
         return tokenId;
     }
