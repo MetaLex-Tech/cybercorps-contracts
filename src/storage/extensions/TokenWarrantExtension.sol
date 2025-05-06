@@ -4,31 +4,6 @@ pragma solidity 0.8.28;
 import "./ICertificateExtension.sol";
 import "../../CyberCorpConstants.sol";
 
-/*enum ExercisePriceMethod {
-    perToken,
-    perWarrant
-}
-
-enum TokenCalculationMethod {
-    equityProRataToCompanyReserve,
-    equityProRataToTokenSupply 
-}
-
-enum unlockStartTimeType {
-    tokenWarrentTime,
-    tgeTime,
-    setTime
-}
-
-enum UnlockingIntervalType {
-    byBlock,
-    seconds,
-    hourly,
-    daily,
-    monthly,
-    quarterly
-}*/
-
 struct TokenWarrantData {
     ExercisePriceMethod exercisePriceMethod;  // perToken or perWarrant
     uint256 exercisePrice;                   // 18 decimals
@@ -56,6 +31,10 @@ contract TokenWarrantExtension is ICertificateExtension {
     function setExtensionData(uint256 tokenId, bytes memory data) external override {
         TokenWarrantData memory decoded = abi.decode(data, (TokenWarrantData));
         warrantData[tokenId] = decoded;
+    }
+
+    function returnWarrantData(bytes memory data) external view returns (TokenWarrantData memory) {
+        return abi.decode(data, (TokenWarrantData));
     }
 
     function supportsExtensionType(bytes32 extensionType) external pure override returns (bool) {
@@ -129,8 +108,8 @@ contract TokenWarrantExtension is ICertificateExtension {
     }
 
     function UnlockingIntervalTypeToString(UnlockingIntervalType _type) internal pure returns (string memory) {
-        if (_type == UnlockingIntervalType.byBlock) return "byBlock";
-        if (_type == UnlockingIntervalType.second) return "seconds";
+        if (_type == UnlockingIntervalType.blockly) return "blockly";
+        if (_type == UnlockingIntervalType.secondly) return "secondly";
         if (_type == UnlockingIntervalType.hourly) return "hourly";
         if (_type == UnlockingIntervalType.daily) return "daily";
         if (_type == UnlockingIntervalType.monthly) return "monthly";

@@ -99,12 +99,11 @@ enum UnlockStartTimeType {
 }
 
 enum UnlockingIntervalType {
-    byBlock,
-    second,
+    blockly,
+    secondly,
     hourly,
     daily,
-    monthly,
-    quarterly
+    monthly
 }
 
 
