@@ -261,6 +261,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         }
 
         for (uint256 i = 0; i < parties.length; i++) {
+            if (parties[i] == address(0)) {
+                continue; // it's possible to have multiple unknown parties
+            }
             for (uint256 j = i + 1; j < parties.length; j++) {
                 if (parties[i] == parties[j]) {
                     revert DuplicateParty();
