@@ -113,7 +113,10 @@ contract CyberCorpTest is Test {
         //use salt to deploy BorgAuth
         auth = new BorgAuth{salt: salt}(testAddress);
         //auth.initialize();
-        address issuanceManagerFactory = address(new IssuanceManagerFactory{salt: salt}(address(auth)));
+        address issuanceManagerFactory = address(new ERC1967Proxy{salt: salt}(
+            address(new IssuanceManagerFactory{salt: salt}()),
+            abi.encodeWithSelector(IssuanceManagerFactory.initialize.selector, address(auth))
+        ));
 
         address cyberCertPrinterImplementation = address(new CyberCertPrinter{salt: salt}());
         CyberCertPrinter cyberCertPrinter = CyberCertPrinter(cyberCertPrinterImplementation);
@@ -124,9 +127,15 @@ contract CyberCorpTest is Test {
 
         //cyberCertPrinter.initialize(defaultdefaultLegends, "", "", "ipfs.io/ipfs/[cid]", address(0), securityClasses, SecuritySeries.SeriesPreSeed);
 
-        address cyberCorpSingleFactory = address(new CyberCorpSingleFactory{salt: salt}(address(auth)));
+        address cyberCorpSingleFactory = address(new ERC1967Proxy{salt: salt}(
+            address(new CyberCorpSingleFactory{salt: salt}()),
+            abi.encodeWithSelector(CyberCorpSingleFactory.initialize.selector, address(auth))
+        ));
 
-        address dealManagerFactory = address(new DealManagerFactory{salt: salt}(address(auth)));
+        address dealManagerFactory = address(new ERC1967Proxy{salt: salt}(
+            address(new DealManagerFactory{salt: salt}()),
+            abi.encodeWithSelector(DealManagerFactory.initialize.selector, address(auth))
+        ));
 
        // address registry = address(new CyberAgreementRegistry{salt: salt}(address(auth)));
                 // Deploy CyberAgreementRegistry implementation and proxy
@@ -137,7 +146,10 @@ contract CyberCorpTest is Test {
         registry = CyberAgreementRegistry(registryAddr);
 
         address uriBuilder = address(new CertificateUriBuilder{salt: salt}());
-        cyberCorpFactory = new CyberCorpFactory{salt: salt}(address(auth), address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder);
+        cyberCorpFactory = CyberCorpFactory(address(new ERC1967Proxy{salt: salt}(
+            address(new CyberCorpFactory{salt: salt}()),
+            abi.encodeWithSelector(CyberCorpFactory.initialize.selector, address(auth), address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder)
+        )));
         cyberCorpFactory.setStable(stable);
 
         string[] memory globalFieldsSafe = new string[](5);

@@ -45,26 +45,28 @@ import "./IssuanceManager.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./libs/auth.sol";
 
-contract IssuanceManagerFactory is BorgAuthACL {
+contract IssuanceManagerFactory is UUPSUpgradeable, BorgAuthACL {
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
     
     UpgradeableBeacon public beacon;
 
+    // Upgrade notes: Reduced gap to account for new variables (50 - 2 = 48)
+    uint256[48] private __gap;
+
     event IssuanceManagerDeployed(address issuanceManager);
 
-    constructor(address _auth) {
-        // Deploy the implementation contract and beacon
-        beacon = new UpgradeableBeacon(address(new IssuanceManager()), address(this));
-        initialize(_auth);
-    }
-
     function initialize(address _auth) public initializer {
+        __UUPSUpgradeable_init();
         // Initialize BorgAuthACL
         __BorgAuthACL_init(_auth);
+
+        // Deploy the implementation contract and beacon
+        beacon = new UpgradeableBeacon(address(new IssuanceManager()), address(this));
     }
 
     function deployIssuanceManager(bytes32 _salt) public returns (address) {
@@ -117,4 +119,8 @@ contract IssuanceManagerFactory is BorgAuthACL {
     function upgradePrinterBeaconAt(address issuanceManager, address _newImplementation) external onlyOwner {
         IssuanceManager(issuanceManager).upgradeBeaconImplementation(_newImplementation);
     }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal virtual override onlyOwner {}
 }

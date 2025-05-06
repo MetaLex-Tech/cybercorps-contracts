@@ -44,26 +44,28 @@ pragma solidity 0.8.28;
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./DealManager.sol";
 import "./libs/auth.sol";
 
-contract DealManagerFactory is BorgAuthACL {
+contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
     UpgradeableBeacon public beacon;
 
+    // Upgrade notes: Reduced gap to account for new variables (50 - 2 = 48)
+    uint256[48] private __gap;
+
     event DealManagerDeployed(address dealManager);
 
-    constructor(address _auth) {
-        // Deploy the implementation contract
-        beacon = new UpgradeableBeacon(address(new DealManager()), address(this));
-        initialize(_auth);
-    }
-    
     function initialize(address _auth) public initializer {
+        __UUPSUpgradeable_init();
         // Initialize BorgAuthACL
         __BorgAuthACL_init(_auth);
+
+        // Deploy the implementation contract
+        beacon = new UpgradeableBeacon(address(new DealManager()), address(this));
     }
 
     function deployDealManager(bytes32 _salt) public returns (address) {
@@ -104,5 +106,9 @@ contract DealManagerFactory is BorgAuthACL {
     function getBeaconImplementation() external view returns (address) {
         return UpgradeableBeacon(beacon).implementation();
     }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal virtual override onlyOwner {}
 }
 

@@ -44,27 +44,29 @@ pragma solidity 0.8.28;
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./CyberCorp.sol";
 import "./libs/auth.sol";   
 
-contract CyberCorpSingleFactory is BorgAuthACL {
+contract CyberCorpSingleFactory is UUPSUpgradeable, BorgAuthACL {
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
     
     UpgradeableBeacon public beacon;
 
+    // Upgrade notes: Reduced gap to account for new variables (50 - 2 = 48)
+    uint256[48] private __gap;
+
     event CyberCorpDeployed(address cyberCorp);
 
-    constructor(address _auth) {
-        // Deploy the implementation contract and beacon
-        beacon = new UpgradeableBeacon(address(new CyberCorp()), address(this));
-        initialize(_auth);
-    }
-
     function initialize(address _auth) public initializer {
+        __UUPSUpgradeable_init();
         // Initialize BorgAuthACL
         __BorgAuthACL_init(_auth);
+
+        // Deploy the implementation contract and beacon
+        beacon = new UpgradeableBeacon(address(new CyberCorp()), address(this));
     }
 
     function deployCyberCorpSingle(bytes32 _salt) public returns (address) {
@@ -110,4 +112,8 @@ contract CyberCorpSingleFactory is BorgAuthACL {
     function getBeaconImplementation() external view returns (address) {
         return UpgradeableBeacon(beacon).implementation();
     }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal virtual override onlyOwner {}
 }
