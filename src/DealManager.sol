@@ -42,7 +42,6 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./libs/LexScroWLite.sol";
 import "./libs/auth.sol";
@@ -52,7 +51,7 @@ import "./storage/BorgAuthStorage.sol";
 /// @title DealManager
 /// @notice Manages the lifecycle of deals between parties, including creation, signing, payment, and finalization for a CyberCorp
 /// @dev Implements UUPS upgradeable pattern and integrates with BorgAuth for access control
-contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLite {
+contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
     using DealManagerStorage for DealManagerStorage.DealManagerData;
 
     error ZeroAddress();
@@ -114,7 +113,6 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     /// @param _dealRegistry Address of the CyberAgreementRegistry
     /// @param _issuanceManager Address of the CyberCorp's issuance manager
     function initialize(address _auth, address _corp, address _dealRegistry, address _issuanceManager, address _upgradeFactory) public initializer {
-        __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
         
         if (_corp == address(0)) revert ZeroAddress();
@@ -129,11 +127,6 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         // Initialize LexScroWLite without setting storage
         __LexScroWLite_init(_corp, _dealRegistry);
         DealManagerStorage.setUpgradeFactory(_upgradeFactory);
-    }
-
-    modifier onlyUpgradeFactory() {
-        if (msg.sender != DealManagerStorage.getUpgradeFactory()) revert NotUpgradeFactory();
-        _;
     }
 
     /// @notice Proposes a new deal
@@ -456,11 +449,6 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
         DealManagerStorage.setIssuanceManager(_issuanceManager);
     }
 
-    /// @notice Authorizes an upgrade to a new implementation
-    /// @dev Can only be called by addresses with the upgrader role
-    /// @param newImplementation Address of the new implementation
-    function _authorizeUpgrade(address newImplementation) internal virtual override onlyUpgradeFactory {}
-
     /// @notice Gets the current issuance manager
     /// @return IIssuanceManager The current issuance manager contract
     function issuanceManager() public view returns (IIssuanceManager) {
@@ -473,5 +461,4 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     function getCounterPartyValues(bytes32 agreementId) public view returns (string[] memory) {
         return DealManagerStorage.getCounterPartyValues(agreementId);
     }
-
 }

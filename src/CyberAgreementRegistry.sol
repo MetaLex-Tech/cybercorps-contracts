@@ -105,6 +105,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     // A mapping connecting an address to all the agreements they are a party to
     mapping(address => bytes32[]) public agreementsForParty;
 
+    // Upgrade notes: Reduced gap to account for new variables (50 - 9 = 41)
+    uint256[41] private __gap;
+
     event TemplateCreated(
         bytes32 indexed templateId,
         string indexed title,
@@ -548,6 +551,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         view
         returns (
             string memory legalContractUri,
+            string memory title,
             string[] memory globalFields,
             string[] memory signerFields
         )
@@ -558,6 +562,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         return (
             template.legalContractUri,
+            template.title,
             template.globalFields,
             template.partyFields
         );

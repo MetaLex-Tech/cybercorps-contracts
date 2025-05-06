@@ -41,106 +41,13 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import {Vm} from "forge-std/Test.sol";
 
-library IssuanceManagerStorage {
-    // Storage slot for our struct
-    bytes32 constant STORAGE_POSITION = keccak256("cybercorp.issuancemanager.storage.v1");
+library ERC1967ProxyLib {
 
-    // Main storage layout struct
-    struct IssuanceManagerData {
-        UpgradeableBeacon CyberCertPrinterBeacon;
-        address CORP;
-        address uriBuilder;
-        address upgradeFactory;
-        address[] printers;
-        mapping(address => bool) printerExists;
-        bool shouldBeFalse;
+    function getErc1967Implementation(address proxy, Vm vm) internal view returns (address) {
+        // Workaround since there is no public function to get the implementation address:
+        // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/acd4ff74de833399287ed6b31b4debf6b2b35527/contracts/proxy/ERC1967/ERC1967Proxy.sol#L35
+        return address(uint160(uint256(vm.load(proxy, 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc))));
     }
-
-    // Returns the storage layout
-    function issuanceManagerStorage() internal pure returns (IssuanceManagerData storage ds) {
-        bytes32 position = STORAGE_POSITION;
-        assembly {
-            ds.slot := position
-        }
-    }
-
-    // Getters
-    function getCORP() internal view returns (address) {
-        return issuanceManagerStorage().CORP;
-    }
-
-    function getUriBuilder() internal view returns (address) {
-        return issuanceManagerStorage().uriBuilder;
-    }
-
-    function getCyberCertPrinterBeacon() internal view returns (UpgradeableBeacon) {
-        return issuanceManagerStorage().CyberCertPrinterBeacon;
-    }
-
-    function getPrinters() internal view returns (address[] storage) {
-        return issuanceManagerStorage().printers;
-    }
-
-    function getPrinterAt(uint256 index) internal view returns (address) {
-        return issuanceManagerStorage().printers[index];
-    }
-
-    function getPrintersCount() internal view returns (uint256) {
-        return issuanceManagerStorage().printers.length;
-    }
-
-    // Setters
-    function setCORP(address _corp) internal {
-        issuanceManagerStorage().CORP = _corp;
-    }
-
-    function setUriBuilder(address _uriBuilder) internal {
-        issuanceManagerStorage().uriBuilder = _uriBuilder;
-    }
-
-    function setCyberCertPrinterBeacon(UpgradeableBeacon _beacon) internal {
-        issuanceManagerStorage().CyberCertPrinterBeacon = _beacon;
-    }
-
-    function addPrinter(address _printer) internal {
-        require(_printer != address(0), "Zero address not allowed");
-        IssuanceManagerData storage s = issuanceManagerStorage();
-        s.printers.push(_printer);
-    }
-
-    function setUpgradeFactory(address _upgradeFactory) internal {
-        issuanceManagerStorage().upgradeFactory = _upgradeFactory;
-    }
-
-    function getUpgradeFactory() internal view returns (address) {
-        return issuanceManagerStorage().upgradeFactory;
-    }
-
-    function removePrinter(address _printer) internal {
-        IssuanceManagerData storage s = issuanceManagerStorage();
-        
-        // Find and remove from array
-        uint256 length = s.printers.length;
-        for (uint256 i = 0; i < length; i++) {
-            if (s.printers[i] == _printer) {
-                // Move the last element to the position being deleted (unless we're deleting the last element)
-                if (i != length - 1) {
-                    s.printers[i] = s.printers[length - 1];
-                }
-                s.printers.pop();
-                break;
-            }
-        }
-    }
-
-    // Beacon upgrade function
-    function updateBeaconImplementation(address _newImplementation) internal {
-        issuanceManagerStorage().CyberCertPrinterBeacon.upgradeTo(_newImplementation);
-    }
-
-    function shouldBeFalse() internal view returns (bool) {
-        return issuanceManagerStorage().shouldBeFalse;
-    }
-} 
+}
