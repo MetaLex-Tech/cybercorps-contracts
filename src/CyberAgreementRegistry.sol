@@ -551,6 +551,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         view
         returns (
             string memory legalContractUri,
+            string memory title,
             string[] memory globalFields,
             string[] memory signerFields
         )
@@ -561,6 +562,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         return (
             template.legalContractUri,
+            template.title,
             template.globalFields,
             template.partyFields
         );
