@@ -2709,8 +2709,15 @@ certSymbols,
         address factoryaddr = cyberCorpFactory.dealManagerFactory();
         // Upgrade beacon implementation
         console.log(DealManagerFactory(factoryaddr).AUTH().userRoles(address(multisig)));
+
+        // Non-owner should not be able to upgrade it
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
+        DealManagerFactory(factoryaddr).upgradeImplementation(newImplementation);
+
+        // Owner should be able to upgrade it
         vm.prank(multisig);
-            DealManagerFactory(factoryaddr).upgradeImplementation(newImplementation);
+        DealManagerFactory(factoryaddr).upgradeImplementation(newImplementation);
+        assertEq(DealManagerFactory(factoryaddr).getBeaconImplementation(), newImplementation);
 
         // Verify the deal manager still works by checking the deal
         Escrow memory escrow = 
@@ -2823,11 +2830,16 @@ certSymbols,
 
         // Deploy new implementation
         address newImplementation = address(new MockIssuanceManager());
-
-        // Get factory address and upgrade implementation
         address factoryAddr = cyberCorpFactory.issuanceManagerFactory();
+
+        // Non-owner should not be able to upgrade it
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
+        IssuanceManagerFactory(factoryAddr).upgradeImplementation(newImplementation);
+
+        // Owner should be able to upgrade it
         vm.prank(multisig);
-            IssuanceManagerFactory(factoryAddr).upgradeImplementation(newImplementation);
+        IssuanceManagerFactory(factoryAddr).upgradeImplementation(newImplementation);
+        assertEq(IssuanceManagerFactory(factoryAddr).getBeaconImplementation(), newImplementation);
 
         MockIssuanceManager(issuanceManager).shouldBeFalse();
 
@@ -2949,16 +2961,16 @@ certSymbols,
 
         // Deploy new implementation
         address newImplementation = address(new CyberCorp());
-
-        // Get factory address and upgrade implementation
         address factoryAddr = cyberCorpFactory.cyberCorpSingleFactory();
+
+        // Non-owner should not be able to upgrade it
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
+        CyberCorpSingleFactory(factoryAddr).upgradeImplementation(newImplementation);
+
+        // Owner should be able to upgrade it
         vm.prank(multisig);
-          CyberCorpSingleFactory(factoryAddr).upgradeImplementation(newImplementation);
-
-
-
-       //   vm.prank(multisig);
-      //  CyberCorpSingleFactory(factoryAddr).upgradeImplementation(newImplementation);
+        CyberCorpSingleFactory(factoryAddr).upgradeImplementation(newImplementation);
+        assertEq(CyberCorpSingleFactory(factoryAddr).getBeaconImplementation(), newImplementation);
 
         //check the company name
         assertEq(CyberCorp(cyberCorp).cyberCORPName(), "CyberCorp");
@@ -3070,10 +3082,19 @@ certSymbols,
 
         address factoryAddr = cyberCorpFactory.issuanceManagerFactory();
 
+        // Only factory can call the Issuance Manager to upgrade its CyberCert Printer
+        vm.expectRevert(abi.encodeWithSelector(IssuanceManager.NotUpgradeFactory.selector));
+        IssuanceManager(issuanceManager).upgradeBeaconImplementation(newImplementation);
+
+        // Non-owner should not be able to upgrade it
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
+        IssuanceManagerFactory(factoryAddr).upgradePrinterBeaconAt(issuanceManager, newImplementation);
+
+        // Owner should be able to upgrade it
         console.log(IssuanceManager(issuanceManager).getUpgradeFactory());
-        //get the factory address
         vm.prank(multisig);
-            IssuanceManagerFactory(factoryAddr).upgradePrinterBeaconAt(issuanceManager, newImplementation);
+        IssuanceManagerFactory(factoryAddr).upgradePrinterBeaconAt(issuanceManager, newImplementation);
+        assertEq(IssuanceManager(issuanceManager).getBeaconImplementation(), newImplementation);
 
         //check the security type
         assertEq(CyberCertPrinter(certPrinter).certificateUri(), "ipfs://test");
@@ -3097,7 +3118,4 @@ certSymbols,
 
 
     }
-
-
 }
-
