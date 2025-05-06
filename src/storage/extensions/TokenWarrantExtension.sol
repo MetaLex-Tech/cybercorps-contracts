@@ -33,8 +33,12 @@ contract TokenWarrantExtension is ICertificateExtension {
         warrantData[tokenId] = decoded;
     }
 
-    function returnWarrantData(bytes memory data) external view returns (TokenWarrantData memory) {
+    function decodeExtensionData(bytes memory data) external view returns (TokenWarrantData memory) {
         return abi.decode(data, (TokenWarrantData));
+    }
+
+    function encodeExtensionData(TokenWarrantData memory data) external pure returns (bytes memory) {
+        return abi.encode(data);
     }
 
     function supportsExtensionType(bytes32 extensionType) external pure override returns (bool) {
