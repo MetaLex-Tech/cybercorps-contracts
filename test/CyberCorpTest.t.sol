@@ -3045,7 +3045,8 @@ contract CyberCorpTest is Test {
             investmentAmount: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
-            legalDetails: "Legal Details, jusidictione etc"
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
         });
         _details[0] = _detailsA;
 
@@ -3105,11 +3106,7 @@ contract CyberCorpTest is Test {
             "Dispute Res",
             testAddress,
             officer,
-            certNames,
-            certSymbols,
-            certificateUris,
-            securityClasses,
-            securitySerieses,
+            certData,
             bytes32(uint256(1)),
             globalValues,
             parties,
@@ -3118,7 +3115,6 @@ contract CyberCorpTest is Test {
             signature,
             _details,
             conditions,
-            defaultLegends,
             bytes32(0),
             block.timestamp + 1000000
         );

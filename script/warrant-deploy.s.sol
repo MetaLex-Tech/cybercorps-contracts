@@ -62,7 +62,10 @@ contract BaseScript is Script {
 
 
         address uriBuilder = address(new CertificateUriBuilder{salt: salt}());
-        CyberCorpFactory cyberCorpFactory = new CyberCorpFactory{salt: salt}(address(auth), address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder);
+        CyberCorpFactory cyberCorpFactory = CyberCorpFactory(address(new ERC1967Proxy{salt: salt}(
+           address(new CyberCorpFactory{salt: salt}()),
+           abi.encodeWithSelector(CyberCorpFactory.initialize.selector, address(auth), address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder)
+        )));
         cyberCorpFactory.setStable(stable);
 
 
