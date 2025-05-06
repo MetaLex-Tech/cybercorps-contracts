@@ -50,14 +50,22 @@ contract BaseScript is Script {
 
         address dealManagerFactory = address(new DealManagerFactory{salt: salt}(address(auth)));
 
-       // address registry = address(new CyberAgreementRegistry{salt: salt}(address(auth)));
-                // Deploy CyberAgreementRegistry implementation and proxy
-        address registryImplementation = address(new CyberAgreementRegistry{salt: salt}());
-        bytes memory initData = abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth));
-        address registry = address(new ERC1967Proxy{salt: salt}(registryImplementation, initData));
+        // Deploy upgradeable singletons
 
-        address uriBuilder = address(new CertificateUriBuilder{salt: salt}());
-        CyberCorpFactory cyberCorpFactory = new CyberCorpFactory{salt: salt}(address(auth), address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder);
+        address registry = address(new ERC1967Proxy{salt: salt}(
+           address(new CyberAgreementRegistry{salt: salt}()),
+           abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
+        ));
+
+        address uriBuilder = address(new ERC1967Proxy{salt: salt}(
+           address(new CertificateUriBuilder{salt: salt}()),
+           abi.encodeWithSelector(CertificateUriBuilder.initialize.selector, address(auth))
+        ));
+
+        CyberCorpFactory cyberCorpFactory = CyberCorpFactory(address(new ERC1967Proxy{salt: salt}(
+           address(new CyberCorpFactory{salt: salt}()),
+           abi.encodeWithSelector(CyberCorpFactory.initialize.selector, address(auth), address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder)
+        )));
         cyberCorpFactory.setStable(stable);
 
         string[] memory globalFieldsSafe = new string[](5);

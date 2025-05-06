@@ -41,10 +41,21 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./CyberCorpConstants.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
+import "./libs/auth.sol";
 
-contract CertificateUriBuilder {
+contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
+
+    // Upgrade notes: Reduced gap to account for new variables (50 - 1 = 49)
+    uint256[49] private __gap;
+
+    function initialize(address _auth) public initializer {
+        __UUPSUpgradeable_init();
+        __BorgAuthACL_init(_auth);
+    }
+
     // Helper function to convert SecurityClass enum to string
     function securityClassToString(SecurityClass _class) public pure returns (string memory) {
         if (_class == SecurityClass.SAFE) return "SAFE";
@@ -310,4 +321,8 @@ struct CertificateDetails {
 
         return json;
     }
-} 
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal virtual override onlyOwner {}
+}

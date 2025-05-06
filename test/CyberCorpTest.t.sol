@@ -65,13 +65,15 @@ import {DealManager} from "../src/DealManager.sol";
 import {Escrow} from "../src/storage/LexScrowStorage.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {MockIssuanceManager} from "./mock/MockIssuanceManager.sol";
+import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
 
 contract CyberCorpTest is Test {
+    using ERC1967ProxyLib for address;
+
     //     Counter public counter;
 
     CyberCorpFactory cyberCorpFactory;
     CyberAgreementRegistry registry;
-    address raddress;
     uint256 testPrivateKey;
     address testAddress;
     BorgAuth auth;
@@ -128,16 +130,22 @@ contract CyberCorpTest is Test {
 
         address dealManagerFactory = address(new DealManagerFactory{salt: salt}(address(auth)));
 
-       // address registry = address(new CyberAgreementRegistry{salt: salt}(address(auth)));
-                // Deploy CyberAgreementRegistry implementation and proxy
-        address registryImplementation = address(new CyberAgreementRegistry{salt: salt}());
-        bytes memory initData = abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth));
-        address registryAddr = address(new ERC1967Proxy{salt: salt}(registryImplementation, initData));
-        raddress = registryAddr;
-        registry = CyberAgreementRegistry(registryAddr);
+        // Deploy upgradeable singletons
 
-        address uriBuilder = address(new CertificateUriBuilder{salt: salt}());
-        cyberCorpFactory = new CyberCorpFactory{salt: salt}(address(auth), address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder);
+        registry = CyberAgreementRegistry(address(new ERC1967Proxy{salt: salt}(
+            address(new CyberAgreementRegistry{salt: salt}()),
+            abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
+        )));
+
+        address uriBuilder = address(new ERC1967Proxy{salt: salt}(
+            address(new CertificateUriBuilder{salt: salt}()),
+            abi.encodeWithSelector(CertificateUriBuilder.initialize.selector, address(auth))
+        ));
+        
+        cyberCorpFactory = CyberCorpFactory(address(new ERC1967Proxy{salt: salt}(
+            address(new CyberCorpFactory{salt: salt}()),
+            abi.encodeWithSelector(CyberCorpFactory.initialize.selector, address(auth), address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder)
+        )));
         cyberCorpFactory.setStable(stable);
 
         string[] memory globalFieldsSafe = new string[](5);
@@ -2604,8 +2612,15 @@ defaultLegends,
         address newImplementation = address(new CyberAgreementRegistry());
 
         // Upgrade to new implementation without initialization data
+
+        // Non-owner should not be able to upgrade it
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, auth.OWNER_ROLE(), address(this)));
+        CyberAgreementRegistry(registryAddr).upgradeToAndCall(newImplementation, "");
+
+        // Owner should be able to upgrade it
         vm.prank(multisig);
         CyberAgreementRegistry(registryAddr).upgradeToAndCall(newImplementation, "");
+        assertEq(registryAddr.getErc1967Implementation(vm), newImplementation);
 
         // Verify the registry still works by checking the template
         (string memory legalContractUri, string[] memory retGlobalFields, string[] memory retPartyFields) = 
@@ -2614,6 +2629,133 @@ defaultLegends,
         assertEq(legalContractUri, "https://test.uri");
         assertEq(retGlobalFields[0], "testField");
         assertEq(retPartyFields[0], "testPartyField");
+    }
+
+    function testUpgradeCyberCorpFactory() public {
+        // Deploy new implementation
+        address newImplementation = address(new CyberCorpFactory());
+
+        // Upgrade to new implementation without initialization data
+
+        // Non-owner should not be able to upgrade it
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, auth.OWNER_ROLE(), address(this)));
+        cyberCorpFactory.upgradeToAndCall(newImplementation, "");
+
+        // Owner should be able to upgrade it
+        vm.prank(multisig);
+        cyberCorpFactory.upgradeToAndCall(newImplementation, "");
+        assertEq(address(cyberCorpFactory).getErc1967Implementation(vm), newImplementation);
+
+        // Verify the factory still works by checking the dependencies and creating a new corp
+
+        assertEq(cyberCorpFactory.registryAddress(), address(registry));
+
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmount: 0,
+            issuerUSDValuationAtTimeofInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jusidictione etc"
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress);
+        parties[1] = address(0);
+        uint256 _paymentAmount = 1000000000000000000;
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        bytes memory voidSignature = _signVoidRequest(
+            registry.DOMAIN_SEPARATOR(),
+            registry.VOIDSIGNATUREDATA_TYPEHASH(),
+            contractId,
+            testAddress,
+            testPrivateKey
+        );
+
+        vm.startPrank(testAddress);
+        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address[] memory cyberCertPrinterAddr, bytes32 id, uint256[] memory certIds) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certNames,
+            certSymbols,
+            certificateUris,
+            securityClasses,
+            securitySerieses,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            defaultLegends,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+    }
+
+    function testUpgradeCertificateUriBuilder() public {
+        CertificateUriBuilder uriBuilder = CertificateUriBuilder(cyberCorpFactory.uriBuilder());
+
+        // Deploy new implementation
+        address newImplementation = address(new CertificateUriBuilder());
+
+        // Upgrade to new implementation without initialization data
+
+        // Non-owner should not be able to upgrade it
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, auth.OWNER_ROLE(), address(this)));
+        uriBuilder.upgradeToAndCall(newImplementation, "");
+
+        // Owner should be able to upgrade it
+        vm.prank(multisig);
+        uriBuilder.upgradeToAndCall(newImplementation, "");
+        assertEq(address(uriBuilder).getErc1967Implementation(vm), newImplementation);
+
+        // Verify the URI builder still works
+        assertEq(uriBuilder.securityClassToString(SecurityClass.SAFT), "SAFT");
     }
 
     function testUpgradeDealManagerBeacon() public {
@@ -3110,11 +3252,10 @@ certSymbols,
 
     // Get the current registry address from the factory
     //address registryAddr = cyberCorpFactory.registryAddress();
-    console.log("raddress: ", raddress);
     console.log("regaddr: ", address(registry));
     // Upgrade the existing registry
      vm.startPrank(multisig);
-    CyberAgreementRegistry(raddress).upgradeToAndCall(newImplementation, "");
+    registry.upgradeToAndCall(newImplementation, "");
 
 
     }
