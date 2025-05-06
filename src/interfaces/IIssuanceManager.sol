@@ -75,7 +75,8 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
         string memory _ticker,
         string memory _certificateUri,
         SecurityClass _securityClass,
-        SecuritySeries _securitySeries
+        SecuritySeries _securitySeries,
+        address _extension
     ) external returns (address);
 
     function createCert(

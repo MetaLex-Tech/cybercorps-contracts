@@ -55,16 +55,32 @@ import "./storage/IssuanceManagerStorage.sol";
 /// @dev Implements UUPS upgradeable pattern and BorgAuth access control
 contract IssuanceManager is Initializable, BorgAuthACL {
     using IssuanceManagerStorage for IssuanceManagerStorage.IssuanceManagerData;
- 
+
     // IssuanceManager errors
     error CompanyDetailsNotSet();
     error SignatureURIRequired();
     error TokenProxyNotFound();
     error NotSAFEToken();
     error NotUpgradeFactory();
-    
-    event CertPrinterCreated(address indexed certificate, address indexed corp, string[] ledger, string name, string ticker, SecurityClass securityType, SecuritySeries securitySeries, string certificateUri);
-    event CertificateCreated(uint256 indexed tokenId, address indexed certificate, uint256 amount, uint256 cap, CertificateDetails details);
+
+    event CertPrinterCreated(
+        address indexed certificate,
+        address indexed corp,
+        string[] ledger,
+        string name,
+        string ticker,
+        SecurityClass securityType,
+        SecuritySeries securitySeries,
+        string certificateUri
+    );
+    event CertificateCreated(
+        uint256 indexed tokenId,
+        address indexed certificate,
+        uint256 amount,
+        uint256 cap,
+        CertificateDetails details, 
+        string tokenURI
+    );
     event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
 
@@ -86,10 +102,10 @@ contract IssuanceManager is Initializable, BorgAuthACL {
         address _upgradeFactory
     ) external initializer {
         __BorgAuthACL_init(_auth);
-        
+
         IssuanceManagerStorage.setCORP(_CORP);
         IssuanceManagerStorage.setUriBuilder(_uriBuilder);
-        
+
         UpgradeableBeacon beacon = new UpgradeableBeacon(
             _CyberCertPrinterImplementation,
             address(this)
@@ -99,10 +115,11 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     }
 
     modifier onlyUpgradeFactory() {
-        if (msg.sender != IssuanceManagerStorage.getUpgradeFactory()) revert NotUpgradeFactory();
+        if (msg.sender != IssuanceManagerStorage.getUpgradeFactory())
+            revert NotUpgradeFactory();
         _;
     }
-    
+
     /// @notice Creates a new certificate printer contract
     /// @dev Only callable by owner
     /// @param _ledger Array of default restrictive ledgers for a certificate
@@ -112,12 +129,43 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     /// @param _securityType Type of security being represented
     /// @param _securitySeries Series of the security
     /// @return address Address of the new certificate printer contract
-    function createCertPrinter(string[] memory _ledger, string memory _name, string memory _ticker, string memory _certificateUri, SecurityClass _securityType, SecuritySeries _securitySeries) public onlyOwner returns (address) {
-        bytes32 salt = keccak256(abi.encodePacked(IssuanceManagerStorage.getPrinters().length, address(this)));
+    function createCertPrinter(
+        string[] memory _ledger,
+        string memory _name,
+        string memory _ticker,
+        string memory _certificateUri,
+        SecurityClass _securityType,
+        SecuritySeries _securitySeries,
+        address _extension
+    ) public onlyOwner returns (address) {
+        bytes32 salt = keccak256(
+            abi.encodePacked(
+                IssuanceManagerStorage.getPrinters().length,
+                address(this)
+            )
+        );
         address newCert = Create2.deploy(0, salt, _getBytecode());
         IssuanceManagerStorage.addPrinter(newCert);
-        ICyberCertPrinter(newCert).initialize(_ledger, _name, _ticker, _certificateUri, address(this), _securityType, _securitySeries);
-        emit CertPrinterCreated(newCert, IssuanceManagerStorage.getCORP(), _ledger, _name, _ticker, _securityType, _securitySeries, _certificateUri);
+        ICyberCertPrinter(newCert).initialize(
+            _ledger,
+            _name,
+            _ticker,
+            _certificateUri,
+            address(this),
+            _securityType,
+            _securitySeries,
+            _extension
+        );
+        emit CertPrinterCreated(
+            newCert,
+            IssuanceManagerStorage.getCORP(),
+            _ledger,
+            _name,
+            _ticker,
+            _securityType,
+            _securitySeries,
+            _certificateUri
+        );
         return newCert;
     }
 
@@ -127,11 +175,23 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     /// @param to Recipient of the certificate
     /// @param _details Certificate details
     /// @return uint256 ID of the new certificate
-    function createCert(address certAddress, address to, CertificateDetails memory _details) public onlyOwner returns (uint256) {
+    function createCert(
+        address certAddress,
+        address to,
+        CertificateDetails memory _details
+    ) public onlyOwner returns (uint256) {
         ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         uint256 tokenId = cert.totalSupply();
         uint256 id = cert.safeMint(tokenId, to, _details);
-        emit CertificateCreated(tokenId, certAddress, _details.investmentAmount, _details.issuerUSDValuationAtTimeofInvestment, _details);
+        string memory tokenURI = cert.tokenURI(tokenId);
+        emit CertificateCreated(
+            tokenId,
+            certAddress,
+            _details.investmentAmount,
+            _details.issuerUSDValuationAtTimeofInvestment,
+            _details,
+            tokenURI
+        );
         return id;
     }
 
@@ -142,7 +202,13 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     /// @param tokenId ID of the certificate
     /// @param investor New owner of the certificate
     /// @param _details Updated certificate details
-    function assignCert(address certAddress, address from, uint256 tokenId, address investor, CertificateDetails memory _details) public onlyOwner {
+    function assignCert(
+        address certAddress,
+        address from,
+        uint256 tokenId,
+        address investor,
+        CertificateDetails memory _details
+    ) public onlyOwner {
         ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         cert.assignCert(from, tokenId, investor, _details);
     }
@@ -158,27 +224,42 @@ contract IssuanceManager is Initializable, BorgAuthACL {
         address investor,
         CertificateDetails memory _details
     ) public onlyOwner returns (uint256 tokenId) {
-        if (bytes(ICyberCorp(IssuanceManagerStorage.getCORP()).cyberCORPName()).length == 0) revert CompanyDetailsNotSet();
+        if (
+            bytes(ICyberCorp(IssuanceManagerStorage.getCORP()).cyberCORPName())
+                .length == 0
+        ) revert CompanyDetailsNotSet();
         ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         tokenId = cert.totalSupply();
-    
+
         cert.safeMintAndAssign(investor, tokenId, _details);
-        emit CertificateCreated(tokenId, certAddress, _details.investmentAmount, _details.issuerUSDValuationAtTimeofInvestment, _details);
+        string memory tokenURI = cert.tokenURI(tokenId);
+        emit CertificateCreated(
+            tokenId,
+            certAddress,
+            _details.investmentAmount,
+            _details.issuerUSDValuationAtTimeofInvestment,
+            _details,
+            tokenURI
+        );
         return tokenId;
     }
-    
+
     /// @notice Adds an issuer's signature to a certificate
     /// @dev Only callable by admin, requires valid signature URI
     /// @param certAddress Address of the certificate printer contract
     /// @param tokenId ID of the certificate
     /// @param signatureURI URI containing the signature data
-    function signCertificate(address certAddress, uint256 tokenId, string calldata signatureURI) external onlyAdmin {
+    function signCertificate(
+        address certAddress,
+        uint256 tokenId,
+        string calldata signatureURI
+    ) external onlyAdmin {
         if (bytes(signatureURI).length == 0) revert SignatureURIRequired();
-        
+
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.addIssuerSignature(tokenId, signatureURI);
     }
-    
+
     /// @notice Adds an endorsement for secondary market transfer
     /// @dev Only callable by admin
     /// @param certAddress Address of the certificate printer contract
@@ -186,9 +267,23 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     /// @param endorser Address of the endorser
     /// @param signature Endorsement signature
     /// @param agreementId ID of the associated agreement
-    function endorseCertificate(address certAddress, uint256 tokenId, address endorser, bytes memory signature, bytes32 agreementId) external onlyAdmin {
+    function endorseCertificate(
+        address certAddress,
+        uint256 tokenId,
+        address endorser,
+        bytes memory signature,
+        bytes32 agreementId
+    ) external onlyAdmin {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
-        Endorsement memory newEndorsement = Endorsement(endorser, block.timestamp, signature, address(0), agreementId, address(0), "");
+        Endorsement memory newEndorsement = Endorsement(
+            endorser,
+            block.timestamp,
+            signature,
+            address(0),
+            agreementId,
+            address(0),
+            ""
+        );
         certificate.addEndorsement(tokenId, newEndorsement);
     }
 
@@ -197,7 +292,11 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     /// @param certAddress Address of the certificate printer contract
     /// @param tokenId ID of the certificate
     /// @param _details Updated certificate details
-    function updateCertificateDetails(address certAddress, uint256 tokenId, CertificateDetails memory _details) external onlyAdmin {
+    function updateCertificateDetails(
+        address certAddress,
+        uint256 tokenId,
+        CertificateDetails memory _details
+    ) external onlyAdmin {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.updateCertificateDetails(tokenId, _details);
     }
@@ -206,16 +305,22 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     /// @dev Only callable by admin
     /// @param certAddress Address of the certificate printer contract
     /// @param tokenId ID of the certificate to void
-    function voidCertificate(address certAddress, uint256 tokenId) external onlyAdmin {
+    function voidCertificate(
+        address certAddress,
+        uint256 tokenId
+    ) external onlyAdmin {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.voidCert(tokenId);
     }
-    
+
     /// @notice Sets the global transferability status for a certificate contract
     /// @dev Only callable by admin
     /// @param certAddress Address of the certificate printer contract
     /// @param transferable Whether certificates should be transferable
-    function setGlobalTransferable(address certAddress, bool transferable) external onlyAdmin {
+    function setGlobalTransferable(
+        address certAddress,
+        bool transferable
+    ) external onlyAdmin {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.setGlobalTransferable(transferable);
     }
@@ -223,14 +328,17 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     /// @notice Upgrades the implementation of the certificate printer
     /// @dev Only callable by upgrader role
     /// @param _newImplementation Address of the new implementation
-    function upgradeBeaconImplementation(address _newImplementation) external onlyUpgradeFactory {
+    function upgradeBeaconImplementation(
+        address _newImplementation
+    ) external onlyUpgradeFactory {
         IssuanceManagerStorage.updateBeaconImplementation(_newImplementation);
     }
 
     /// @notice Gets the current implementation address of the certificate printer
     /// @return address Current implementation address
     function getBeaconImplementation() external view returns (address) {
-        return IssuanceManagerStorage.getCyberCertPrinterBeacon().implementation();
+        return
+            IssuanceManagerStorage.getCyberCertPrinterBeacon().implementation();
     }
 
     /// @notice Gets the bytecode for creating new certificate printer proxies
@@ -238,7 +346,10 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     /// @return bytecode The proxy contract creation bytecode
     function _getBytecode() private view returns (bytes memory bytecode) {
         bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
-        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(IssuanceManagerStorage.getCyberCertPrinterBeacon(), ""));
+        bytecode = abi.encodePacked(
+            sourceCodeBytes,
+            abi.encode(IssuanceManagerStorage.getCyberCertPrinterBeacon(), "")
+        );
     }
 
     /// @notice Gets the company name from the CyberCorp contract
@@ -250,7 +361,9 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     /// @notice Gets the company jurisdiction from the CyberCorp contract
     /// @return string The company jurisdiction
     function companyJurisdiction() external view returns (string memory) {
-        return ICyberCorp(IssuanceManagerStorage.getCORP()).cyberCORPJurisdiction();
+        return
+            ICyberCorp(IssuanceManagerStorage.getCORP())
+                .cyberCORPJurisdiction();
     }
 
     /// @notice Gets the CyberCorp contract address
@@ -267,7 +380,11 @@ contract IssuanceManager is Initializable, BorgAuthACL {
 
     /// @notice Gets the certificate printer beacon contract
     /// @return UpgradeableBeacon The beacon contract
-    function CyberCertPrinterBeacon() external view returns (UpgradeableBeacon) {
+    function CyberCertPrinterBeacon()
+        external
+        view
+        returns (UpgradeableBeacon)
+    {
         return IssuanceManagerStorage.getCyberCertPrinterBeacon();
     }
 
@@ -290,7 +407,11 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     /// @param certAddress Address of the certificate printer contract
     /// @param _id ID of the certificate
     /// @param _hookAddress Address of the restriction hook contract
-    function setRestrictionHook(address certAddress, uint256 _id, address _hookAddress) external onlyAdmin {
+    function setRestrictionHook(
+        address certAddress,
+        uint256 _id,
+        address _hookAddress
+    ) external onlyAdmin {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.setRestrictionHook(_id, _hookAddress);
     }
@@ -299,7 +420,10 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     /// @dev Only callable by admin
     /// @param certAddress Address of the certificate printer contract
     /// @param hookAddress Address of the restriction hook contract
-    function setGlobalRestrictionHook(address certAddress, address hookAddress) external onlyAdmin {
+    function setGlobalRestrictionHook(
+        address certAddress,
+        address hookAddress
+    ) external onlyAdmin {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.setGlobalRestrictionHook(hookAddress);
     }
@@ -308,7 +432,10 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     /// @dev Only callable by admin
     /// @param certAddress Address of the certificate printer contract
     /// @param newLegend Text of the new legend
-    function addDefaultLegend(address certAddress, string memory newLegend) external onlyAdmin {
+    function addDefaultLegend(
+        address certAddress,
+        string memory newLegend
+    ) external onlyAdmin {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.addDefaultLegend(newLegend);
     }
@@ -317,7 +444,10 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     /// @dev Only callable by admin
     /// @param certAddress Address of the certificate printer contract
     /// @param index Index of the legend to remove
-    function removeDefaultLegendAt(address certAddress, uint256 index) external onlyAdmin {
+    function removeDefaultLegendAt(
+        address certAddress,
+        uint256 index
+    ) external onlyAdmin {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.removeDefaultLegendAt(index);
     }
@@ -327,7 +457,11 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     /// @param certAddress Address of the certificate printer contract
     /// @param tokenId ID of the certificate
     /// @param newLegend Text of the new legend
-    function addCertLegend(address certAddress, uint256 tokenId, string memory newLegend) external onlyAdmin {
+    function addCertLegend(
+        address certAddress,
+        uint256 tokenId,
+        string memory newLegend
+    ) external onlyAdmin {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.addCertLegend(tokenId, newLegend);
     }
@@ -337,7 +471,11 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     /// @param certAddress Address of the certificate printer contract
     /// @param tokenId ID of the certificate
     /// @param index Index of the legend to remove
-    function removeCertLegendAt(address certAddress, uint256 tokenId, uint256 index) external onlyAdmin {
+    function removeCertLegendAt(
+        address certAddress,
+        uint256 tokenId,
+        uint256 index
+    ) external onlyAdmin {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.removeCertLegendAt(tokenId, index);
     }
