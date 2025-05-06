@@ -3134,7 +3134,7 @@ contract CyberCorpTest is Test {
         );
     }
 
-    /*function testUpgradeIssuanceManager() public {
+    function testUpgradeIssuanceManager() public {
         CertificateDetails[] memory _details = new CertificateDetails[](1);
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
@@ -3223,6 +3223,7 @@ contract CyberCorpTest is Test {
             _paymentAmount,
             partyValues,
             signature,
+            _details,
             conditions,
             bytes32(0),
             block.timestamp + 1000000
@@ -3246,7 +3247,7 @@ contract CyberCorpTest is Test {
             );
 
         // Deploy new implementation
-        address newImplementation = address(new MockIssuanceManager());
+        address newImplementation = address(new IssuanceManager());
         address factoryAddr = cyberCorpFactory.issuanceManagerFactory();
 
         // Non-owner should not be able to upgrade it
@@ -3257,12 +3258,6 @@ contract CyberCorpTest is Test {
         vm.prank(multisig);
         IssuanceManagerFactory(factoryAddr).upgradeImplementation(newImplementation);
         assertEq(IssuanceManagerFactory(factoryAddr).getBeaconImplementation(), newImplementation);
-
-        MockIssuanceManager(issuanceManager).shouldBeFalse();
-
-        MockIssuanceManager(issuanceManager).uriBuilder();
-
-        console.log(IssuanceManager(issuanceManager).getUpgradeFactory());
 
         address newImplementation2 = address(new CyberCertPrinter());
 
@@ -3277,7 +3272,7 @@ contract CyberCorpTest is Test {
         address printerAddr = IssuanceManager(issuanceManager).printers(0);
         //assertEq(printerAddr, certPrinter);
         // assertEq(IssuanceManagerFactory(factoryAddr).getBeaconImplementation(), newImplementation);
-    }*/
+    }
 
     function testUpgradeCyberCorpSingle() public {
         CertificateDetails[] memory _details = new CertificateDetails[](1);
