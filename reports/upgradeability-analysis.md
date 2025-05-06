@@ -5,12 +5,7 @@ classDiagram
     direction LR
 
     namespace DeployedAtGenesis {
-        class CyberCorp {
-            %% TODO Is it necessary? 
-            %%   - Only its factory is authorized, and the factory does not implement logic to call `upgradeToAndCall()` anyways
-            %%   - It is an implementation behind a `UpgradableBeacon` anyways, it shouldn't matter if the implementation itself is immutable or not
-            <<UUPSUpgradeable>>
-        }
+        class CyberCorp
         class CyberCorpBeacon {
             <<UpgradeableBeacon>>
             +upgradeTo()
@@ -18,14 +13,16 @@ classDiagram
         class CyberCorpSingleFactory {
             +upgradeImplementation()
         }
-        class CyberCorpFactory
         
-        class DealManager {
-            %% TODO Is it necessary? 
-            %%   - Only its factory is authorized, and the factory does not implement logic to call `upgradeToAndCall()` anyways
-            %%   - It is an implementation behind a `UpgradableBeacon` anyways, it shouldn't matter if the implementation itself is immutable or not
+        class CyberCorpFactory {
             <<UUPSUpgradeable>>
+            +upgradeToAndCall()
         }
+        class CyberCorpFactoryProxy {
+            <<ERC1967Proxy>>
+        }
+        
+        class DealManager
         class DealManagerBeacon {
             <<UpgradeableBeacon>>
             +upgradeTo()
@@ -34,12 +31,7 @@ classDiagram
             +upgradeImplementation()
         }
         
-        class IssuanceManager {
-            %% TODO Is it necessary? 
-            %%   - Only its factory is authorized, and the factory does not implement logic to call `upgradeToAndCall()` anyways
-            %%   - It is an implementation behind a `UpgradableBeacon` anyways, it shouldn't matter if the implementation itself is immutable or not
-            <<UUPSUpgradeable>>
-        }
+        class IssuanceManager
         class IssuanceManagerBeacon {
             <<UpgradeableBeacon>>
             +upgradeTo()
@@ -49,7 +41,13 @@ classDiagram
             +upgradePrinterBeaconAt() // Update CyberCertPrinter implementation
         }
         
-        class CertificateUriBuilder
+        class CertificateUriBuilder {
+            <<UUPSUpgradeable>>
+            +upgradeToAndCall()
+        }
+        class CertificateUriBuilderProxy {
+            <<ERC1967Proxy>>
+        }
         
         class CyberAgreementRegistry {
             <<UUPSUpgradeable>>
@@ -59,12 +57,7 @@ classDiagram
             <<ERC1967Proxy>>
         }    
     
-        class CyberCertPrinter {
-            %% TODO Is it necessary? 
-            %%   - Only its factory is authorized, and the factory does not implement logic to call `upgradeToAndCall()` anyways
-            %%   - It is an implementation behind a `UpgradableBeacon` anyways, it shouldn't matter if the implementation itself is immutable or not
-            <<UUPSUpgradeable>>
-        } 
+        class CyberCertPrinter 
     }
     
     namespace DeployedAtCyberCorpCreation {
@@ -89,27 +82,30 @@ classDiagram
         }
     }
     
+    CyberCorpFactory <-- CyberCorpFactoryProxy : fallback to
+    
     CyberCorp <-- CyberCorpBeacon : implementation
     CyberCorpBeacon <-- CyberCorpSingleFactory : beacon
-    CyberCorpSingleFactory <-- CyberCorpFactory : depend on
+    CyberCorpSingleFactory <-- CyberCorpFactoryProxy : depend on
     
     DealManager <-- DealManagerBeacon : implemnetation
     DealManagerBeacon <-- DealManagerFactory : beacon
-    DealManagerFactory <-- CyberCorpFactory : depend on
+    DealManagerFactory <-- CyberCorpFactoryProxy : depend on
     
     IssuanceManager <-- IssuanceManagerBeacon : implementation
     IssuanceManagerBeacon <-- IssuanceManagerFactory : beacon
-    IssuanceManagerFactory <-- CyberCorpFactory : depend on
+    IssuanceManagerFactory <-- CyberCorpFactoryProxy : depend on
 
-    CertificateUriBuilder <-- CyberCorpFactory : depend on
+    CertificateUriBuilderProxy <-- CyberCorpFactoryProxy : depend on
+    CertificateUriBuilder <-- CertificateUriBuilderProxy : fallback to
     
     CyberAgreementRegistry <-- CyberAgreementRegistryProxy : fallback to
     
-    CyberAgreementRegistryProxy <-- CyberCorpFactory : depend on
+    CyberAgreementRegistryProxy <-- CyberCorpFactoryProxy : depend on
     
-    CyberCorpFactory <-- CyberCorpProxy : created by
-    CyberCorpFactory <-- IssuanceManagerProxy : created by        
-    CyberCorpFactory <-- DealManagerProxy : created by
+    CyberCorpFactoryProxy <-- CyberCorpProxy : created by
+    CyberCorpFactoryProxy <-- IssuanceManagerProxy : created by        
+    CyberCorpFactoryProxy <-- DealManagerProxy : created by
     
     CyberCertPrinter <-- CyberCertPrinterBeacon : implementation    
     CyberCertPrinterBeacon <-- IssuanceManagerProxy : CyberCertPrinterBeacon()
