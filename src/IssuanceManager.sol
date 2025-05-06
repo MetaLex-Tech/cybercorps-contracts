@@ -48,13 +48,12 @@ import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "./interfaces/ICyberCertPrinter.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./storage/IssuanceManagerStorage.sol";
 
 /// @title IssuanceManager
 /// @notice Manages the issuance and lifecycle of digital certificates representing securities and more
 /// @dev Implements UUPS upgradeable pattern and BorgAuth access control
-contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
+contract IssuanceManager is Initializable, BorgAuthACL {
     using IssuanceManagerStorage for IssuanceManagerStorage.IssuanceManagerData;
 
     // IssuanceManager errors
@@ -102,7 +101,6 @@ contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
         address _uriBuilder,
         address _upgradeFactory
     ) external initializer {
-        __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
 
         IssuanceManagerStorage.setCORP(_CORP);
@@ -481,13 +479,6 @@ contract IssuanceManager is Initializable, UUPSUpgradeable, BorgAuthACL {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.removeCertLegendAt(tokenId, index);
     }
-
-    /// @notice Authorizes an upgrade to a new implementation
-    /// @dev Only callable by addresses with the upgrader role
-    /// @param newImplementation Address of the new implementation
-    function _authorizeUpgrade(
-        address newImplementation
-    ) internal override onlyUpgradeFactory {}
 
     function getUpgradeFactory() public view returns (address) {
         return IssuanceManagerStorage.getUpgradeFactory();

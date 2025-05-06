@@ -3108,13 +3108,19 @@ contract CyberCorpTest is Test {
         address newImplementation = address(new DealManager());
         address factoryaddr = cyberCorpFactory.dealManagerFactory();
         // Upgrade beacon implementation
+        console.log(DealManagerFactory(factoryaddr).AUTH().userRoles(address(multisig)));
+
+        // Non-owner should not be able to upgrade it
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
+        DealManagerFactory(factoryaddr).upgradeImplementation(newImplementation);
+
+        // Owner should be able to upgrade it
         console.log(
             DealManagerFactory(factoryaddr).AUTH().userRoles(address(multisig))
         );
         vm.prank(multisig);
-        DealManagerFactory(factoryaddr).upgradeImplementation(
-            newImplementation
-        );
+        DealManagerFactory(factoryaddr).upgradeImplementation(newImplementation);
+        assertEq(DealManagerFactory(factoryaddr).getBeaconImplementation(), newImplementation);
 
         // Verify the deal manager still works by checking the deal
         Escrow memory escrow = DealManager(dealManagerAddr).getEscrowDetails(
@@ -3128,7 +3134,7 @@ contract CyberCorpTest is Test {
         );
     }
 
-    /*function testUpgradeIssuanceManager() public {
+    function testUpgradeIssuanceManager() public {
         CertificateDetails[] memory _details = new CertificateDetails[](1);
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
@@ -3217,6 +3223,7 @@ contract CyberCorpTest is Test {
             _paymentAmount,
             partyValues,
             signature,
+            _details,
             conditions,
             bytes32(0),
             block.timestamp + 1000000
@@ -3240,20 +3247,17 @@ contract CyberCorpTest is Test {
             );
 
         // Deploy new implementation
-        address newImplementation = address(new MockIssuanceManager());
-
-        // Get factory address and upgrade implementation
+        address newImplementation = address(new IssuanceManager());
         address factoryAddr = cyberCorpFactory.issuanceManagerFactory();
+
+        // Non-owner should not be able to upgrade it
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
+        IssuanceManagerFactory(factoryAddr).upgradeImplementation(newImplementation);
+
+        // Owner should be able to upgrade it
         vm.prank(multisig);
-        IssuanceManagerFactory(factoryAddr).upgradeImplementation(
-            newImplementation
-        );
-
-        MockIssuanceManager(issuanceManager).shouldBeFalse();
-
-        MockIssuanceManager(issuanceManager).uriBuilder();
-
-        console.log(IssuanceManager(issuanceManager).getUpgradeFactory());
+        IssuanceManagerFactory(factoryAddr).upgradeImplementation(newImplementation);
+        assertEq(IssuanceManagerFactory(factoryAddr).getBeaconImplementation(), newImplementation);
 
         address newImplementation2 = address(new CyberCertPrinter());
 
@@ -3268,7 +3272,7 @@ contract CyberCorpTest is Test {
         address printerAddr = IssuanceManager(issuanceManager).printers(0);
         //assertEq(printerAddr, certPrinter);
         // assertEq(IssuanceManagerFactory(factoryAddr).getBeaconImplementation(), newImplementation);
-    }*/
+    }
 
     function testUpgradeCyberCorpSingle() public {
         CertificateDetails[] memory _details = new CertificateDetails[](1);
@@ -3383,16 +3387,16 @@ contract CyberCorpTest is Test {
 
         // Deploy new implementation
         address newImplementation = address(new CyberCorp());
-
-        // Get factory address and upgrade implementation
         address factoryAddr = cyberCorpFactory.cyberCorpSingleFactory();
-        vm.prank(multisig);
-        CyberCorpSingleFactory(factoryAddr).upgradeImplementation(
-            newImplementation
-        );
 
-        //   vm.prank(multisig);
-        //  CyberCorpSingleFactory(factoryAddr).upgradeImplementation(newImplementation);
+        // Non-owner should not be able to upgrade it
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
+        CyberCorpSingleFactory(factoryAddr).upgradeImplementation(newImplementation);
+
+        // Owner should be able to upgrade it
+        vm.prank(multisig);
+        CyberCorpSingleFactory(factoryAddr).upgradeImplementation(newImplementation);
+        assertEq(CyberCorpSingleFactory(factoryAddr).getBeaconImplementation(), newImplementation);
 
         //check the company name
         assertEq(CyberCorp(cyberCorp).cyberCORPName(), "CyberCorp");
@@ -3515,13 +3519,19 @@ contract CyberCorpTest is Test {
 
         address factoryAddr = cyberCorpFactory.issuanceManagerFactory();
 
+        // Only factory can call the Issuance Manager to upgrade its CyberCert Printer
+        vm.expectRevert(abi.encodeWithSelector(IssuanceManager.NotUpgradeFactory.selector));
+        IssuanceManager(issuanceManager).upgradeBeaconImplementation(newImplementation);
+
+        // Non-owner should not be able to upgrade it
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
+        IssuanceManagerFactory(factoryAddr).upgradePrinterBeaconAt(issuanceManager, newImplementation);
+
+        // Owner should be able to upgrade it
         console.log(IssuanceManager(issuanceManager).getUpgradeFactory());
-        //get the factory address
         vm.prank(multisig);
-        IssuanceManagerFactory(factoryAddr).upgradePrinterBeaconAt(
-            issuanceManager,
-            newImplementation
-        );
+        IssuanceManagerFactory(factoryAddr).upgradePrinterBeaconAt(issuanceManager, newImplementation);
+        assertEq(IssuanceManager(issuanceManager).getBeaconImplementation(), newImplementation);
 
         //check the security type
         assertEq(CyberCertPrinter(certPrinter).certificateUri(), "ipfs://test");
