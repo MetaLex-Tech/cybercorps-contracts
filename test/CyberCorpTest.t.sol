@@ -3697,4 +3697,31 @@ contract CyberCorpTest is Test {
         console.log("legalContractUri: ", legalContractUri);
         console.log("title: ", titleA);
     }
+
+    function testCyberCorpFactoryModuleSetters() public {
+        // Non-owner should be prohibited from using setter
+
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
+        cyberCorpFactory.setCyberCorpSingleFactory(address(1));
+
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
+        cyberCorpFactory.setDealManagerFactory(address(2));
+
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
+        cyberCorpFactory.setIssuanceManagerFactory(address(3));
+
+        // Owner should be able to use setter
+        vm.startPrank(multisig);
+
+        cyberCorpFactory.setCyberCorpSingleFactory(address(1));
+        assertEq(cyberCorpFactory.cyberCorpSingleFactory(), address(1), "Unexpected new cyberCorpSingleFactory");
+
+        cyberCorpFactory.setDealManagerFactory(address(2));
+        assertEq(cyberCorpFactory.dealManagerFactory(), address(2), "Unexpected new dealManagerFactory");
+
+        cyberCorpFactory.setIssuanceManagerFactory(address(3));
+        assertEq(cyberCorpFactory.issuanceManagerFactory(), address(3), "Unexpected new issuanceManagerFactory");
+
+        vm.stopPrank();
+    }
 }
