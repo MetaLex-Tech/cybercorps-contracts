@@ -45,6 +45,7 @@ import "./interfaces/IIssuanceManagerFactory.sol";
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./interfaces/ICyberCorp.sol";
 import "./interfaces/IDealManagerFactory.sol";
@@ -55,9 +56,7 @@ import "./interfaces/ICyberAgreementRegistry.sol";
 import "./CyberCorpConstants.sol";
 import "./libs/auth.sol";
 
-
-
-contract CyberCorpFactory is BorgAuthACL {
+contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     error InvalidSalt();
     error DeploymentFailed();
 
@@ -69,6 +68,9 @@ contract CyberCorpFactory is BorgAuthACL {
     address public dealManagerFactory;
     address public uriBuilder;
     address public stable; // = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;//base main net 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+
+    // Upgrade notes: Reduced gap to account for new variables (50 - 9 = 41)
+    uint256[41] private __gap;
 
     struct CyberCertData {
         string name;
@@ -121,26 +123,6 @@ contract CyberCorpFactory is BorgAuthACL {
         address oldCyberAgreementFactory
     );
 
-    constructor(
-        address _auth,
-        address _registryAddress,
-        address _cyberCertPrinterImplementation,
-        address _issuanceManagerFactory,
-        address _cyberCorpSingleFactory,
-        address _dealManagerFactory,
-        address _uriBuilder
-    ) {
-        initialize(
-            _auth,
-            _registryAddress,
-            _cyberCertPrinterImplementation,
-            _issuanceManagerFactory,
-            _cyberCorpSingleFactory,
-            _dealManagerFactory,
-            _uriBuilder
-        );
-    }
-
     function initialize(
         address _auth,
         address _registryAddress,
@@ -150,6 +132,7 @@ contract CyberCorpFactory is BorgAuthACL {
         address _dealManagerFactory,
         address _uriBuilder
     ) public initializer {
+        __UUPSUpgradeable_init();
         // Initialize BorgAuthACL
         __BorgAuthACL_init(_auth);
 
@@ -323,7 +306,7 @@ contract CyberCorpFactory is BorgAuthACL {
             );
             certPrinterAddress[i] = address(certPrinter);
         }
-        
+
         // Create and sign deal
         certIds = new uint256[](_certData.length);
         (id, certIds) = IDealManager(dealManagerAddress).proposeAndSignDeal(
@@ -388,4 +371,8 @@ contract CyberCorpFactory is BorgAuthACL {
         dealManagerFactory = _dealManagerFactory;
         emit DealManagerFactoryUpdated(dealManagerFactory, oldDealFactory);
     }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal virtual override onlyOwner {}
 }
