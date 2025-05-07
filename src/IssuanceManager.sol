@@ -187,7 +187,7 @@ contract IssuanceManager is Initializable, BorgAuthACL {
         emit CertificateCreated(
             tokenId,
             certAddress,
-            _details.investmentAmount,
+            _details.investmentAmountUSD,
             _details.issuerUSDValuationAtTimeofInvestment,
             _details,
             tokenURI
@@ -236,7 +236,7 @@ contract IssuanceManager is Initializable, BorgAuthACL {
         emit CertificateCreated(
             tokenId,
             certAddress,
-            _details.investmentAmount,
+            _details.investmentAmountUSD,
             _details.issuerUSDValuationAtTimeofInvestment,
             _details,
             tokenURI

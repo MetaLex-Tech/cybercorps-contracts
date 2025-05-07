@@ -107,7 +107,9 @@ contract BaseScript is Script {
         CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(3)), "SAFE+T", "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi", globalFieldsSafe, partyFieldsSafe);
 
         auth.updateRole(address(multisig), 200);
-        //auth.zeroOwner();
+
+        if(stable != stableBaseSepolia && stable != stableSepolia) 
+            auth.zeroOwner();
 
         console.log("auth: ", address(auth));
         console.log("issuanceManagerFactory: ", address(issuanceManagerFactory));

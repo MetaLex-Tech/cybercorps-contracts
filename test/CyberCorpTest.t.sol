@@ -84,7 +84,7 @@ contract CyberCorpTest is Test {
     SecurityClass[] securityClasses;
     SecuritySeries[] securitySerieses;
     CyberCorpFactory.CyberCertData[] certData;
-
+    TokenWarrantExtension warrantExtension;
     string[] certNames;
     string[] certSymbols;
     string[] certificateUris;
@@ -247,7 +247,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -338,7 +338,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -465,7 +465,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -474,7 +474,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsB = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -653,7 +653,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -860,7 +860,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -987,7 +987,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -1120,7 +1120,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -1324,7 +1324,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -1427,7 +1427,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -1559,7 +1559,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -1662,7 +1662,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -1768,7 +1768,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -1868,7 +1868,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -1994,7 +1994,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -2132,7 +2132,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -2274,7 +2274,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -2403,7 +2403,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -2540,7 +2540,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "Gabe",
             signingOfficerTitle: "CEO",
-            investmentAmount: 100000,
+            investmentAmountUSD: 100000,
             issuerUSDValuationAtTimeofInvestment: 100000000,
             unitsRepresented: 100000,
             legalDetails: "Legal Details",
@@ -2767,7 +2767,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "Gabe",
             signingOfficerTitle: "CEO",
-            investmentAmount: 100000,
+            investmentAmountUSD: 100000,
             issuerUSDValuationAtTimeofInvestment: 100000000,
             unitsRepresented: 100000,
             legalDetails: "Legal Details",
@@ -3045,7 +3045,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -3150,7 +3150,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -3276,7 +3276,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -3416,7 +3416,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -3544,7 +3544,7 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
-            investmentAmount: 0,
+            investmentAmountUSD: 0,
             issuerUSDValuationAtTimeofInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
@@ -3726,5 +3726,30 @@ contract CyberCorpTest is Test {
         assertEq(cyberCorpFactory.issuanceManagerFactory(), address(3), "Unexpected new issuanceManagerFactory");
 
         vm.stopPrank();
+    }
+
+    function testUpgradeWarrantExtension() public {
+
+        bytes32 salt = bytes32(keccak256("WarrantTest"));
+        address warrantExtension = address(new ERC1967Proxy{salt: salt}(
+           address(new TokenWarrantExtension{salt: salt}()),
+           abi.encodeWithSelector(TokenWarrantExtension.initialize.selector, address(auth))
+        ));
+        //deploy new implementation
+        address newImplementation = address(new TokenWarrantExtension());
+
+        //should fail for non-admin
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
+        TokenWarrantExtension(warrantExtension).upgradeToAndCall(newImplementation, "");
+
+        //upgrade the extension
+        vm.startPrank(multisig);
+        TokenWarrantExtension(warrantExtension).upgradeToAndCall(newImplementation, "");
+        vm.stopPrank();
+        
+    }
+
+    function precisionTest() public {
+
     }
 }

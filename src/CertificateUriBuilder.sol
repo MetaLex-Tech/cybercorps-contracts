@@ -164,7 +164,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
 struct CertificateDetails {
     string signingOfficerName;
     string signingOfficerTitle;
-    uint256 investmentAmount;
+    uint256 investmentAmountUSD;
     uint256 issuerUSDValuationAtTimeofInvestment;
     uint256 unitsRepresented;
     string legalDetails;
@@ -227,7 +227,7 @@ struct CertificateDetails {
         json = string.concat(json, 
             ', "signingOfficerName": "', details.signingOfficerName,
             '", "signingOfficerTitle": "', details.signingOfficerTitle,
-            '", "investmentAmount": "', uint256ToString(details.investmentAmount),
+            '", "investmentAmountUSD": "', uint256ToString(details.investmentAmountUSD),
             '", "issuerUSDValuationAtTimeofInvestment": "', uint256ToString(details.issuerUSDValuationAtTimeofInvestment),
             '", "unitsRepresented": "', uint256ToString(details.unitsRepresented),
             '", "legalDetails": "', details.legalDetails,

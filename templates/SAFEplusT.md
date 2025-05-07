@@ -46,7 +46,7 @@ struct TokenWarrantData {
 struct CertificateDetails {
     string signingOfficerName;
     string signingOfficerTitle;
-    uint256 investmentAmount;
+    uint256 investmentAmountUSD;
     uint256 issuerUSDValuationAtTimeofInvestment;
     uint256 unitsRepresented;
     string legalDetails;
