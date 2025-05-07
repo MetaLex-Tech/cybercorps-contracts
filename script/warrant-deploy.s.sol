@@ -26,7 +26,7 @@ contract BaseScript is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         vm.startBroadcast(deployerPrivateKey);
         
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpWarrantTest4"));
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpWarrantLaunch2"));
         address stableMainNetEth = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
         address stableArbitrum = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
         address stableBase = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
@@ -77,24 +77,41 @@ contract BaseScript is Script {
         cyberCorpFactory.setStable(stable);
 
 
-        string[] memory globalFieldsSafe = new string[](17);
+        string[] memory globalFieldsSafeT = new string[](17);
+        globalFieldsSafeT[0] = "purchaseAmount";
+        globalFieldsSafeT[1] = "postMoneyValuationCap";
+        globalFieldsSafeT[2] = "expirationTime";
+        globalFieldsSafeT[3] = "governingJurisdiction";
+        globalFieldsSafeT[4] = "disputeResolution";
+        globalFieldsSafeT[5] = "exercisePriceMethod";
+        globalFieldsSafeT[6] = "exercisePrice";
+        globalFieldsSafeT[7] = "unlockStartTimeType";
+        globalFieldsSafeT[8] = "unlockStartTime";
+        globalFieldsSafeT[9] = "unlockingPeriod";
+        globalFieldsSafeT[10] = "latestExpirationTime";
+        globalFieldsSafeT[11] = "unlockingCliffPeriod";
+        globalFieldsSafeT[12] = "unlockingCliffPercentage";
+        globalFieldsSafeT[13] = "unlockingIntervalType";
+        globalFieldsSafeT[14] = "tokenCalculationMethod";
+        globalFieldsSafeT[15] = "minCompanyReserve";
+        globalFieldsSafeT[16] = "tokenPremiumMultiplier";
+
+
+        string[] memory partyFieldsSafeT = new string[](5);
+        partyFieldsSafeT[0] = "name";
+        partyFieldsSafeT[1] = "evmAddress";
+        partyFieldsSafeT[2] = "contactDetails";
+        partyFieldsSafeT[3] = "investorType";
+        partyFieldsSafeT[4] = "investorJurisdiction";
+
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(3)), "SAFE+T", "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi", globalFieldsSafeT, partyFieldsSafeT);
+
+        string[] memory globalFieldsSafe = new string[](5);
         globalFieldsSafe[0] = "purchaseAmount";
         globalFieldsSafe[1] = "postMoneyValuationCap";
         globalFieldsSafe[2] = "expirationTime";
         globalFieldsSafe[3] = "governingJurisdiction";
         globalFieldsSafe[4] = "disputeResolution";
-        globalFieldsSafe[5] = "exercisePriceMethod";
-        globalFieldsSafe[6] = "exercisePrice";
-        globalFieldsSafe[7] = "unlockStartTimeType";
-        globalFieldsSafe[8] = "unlockStartTime";
-        globalFieldsSafe[9] = "unlockingPeriod";
-        globalFieldsSafe[10] = "latestExpirationTime";
-        globalFieldsSafe[11] = "unlockingCliffPeriod";
-        globalFieldsSafe[12] = "unlockingCliffPercentage";
-        globalFieldsSafe[13] = "unlockingIntervalType";
-        globalFieldsSafe[14] = "tokenCalculationMethod";
-        globalFieldsSafe[15] = "minCompanyReserve";
-        globalFieldsSafe[16] = "tokenPremiumMultiplier";
 
 
         string[] memory partyFieldsSafe = new string[](5);
@@ -104,7 +121,7 @@ contract BaseScript is Script {
         partyFieldsSafe[3] = "investorType";
         partyFieldsSafe[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(3)), "SAFE+T", "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi", globalFieldsSafe, partyFieldsSafe);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(2)), "SAFE", "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi", globalFieldsSafe, partyFieldsSafe);
 
         auth.updateRole(address(multisig), 200);
 
