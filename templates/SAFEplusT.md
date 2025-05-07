@@ -6,18 +6,65 @@ legalURI:
 
 ## Global Fields
 
+/*      string[] memory globalFieldsSafe = new string[](17);
+        globalFieldsSafe[0] = "purchaseAmount";
+        globalFieldsSafe[1] = "postMoneyValuationCap";
+        globalFieldsSafe[2] = "expirationTime";
+        globalFieldsSafe[3] = "governingJurisdiction";
+        globalFieldsSafe[4] = "disputeResolution";
+        globalFieldsSafe[5] = "exercisePriceMethod";
+        globalFieldsSafe[6] = "exercisePrice";
+        globalFieldsSafe[7] = "unlockStartTimeType";
+        globalFieldsSafe[8] = "unlockStartTime";
+        globalFieldsSafe[9] = "unlockingPeriod";
+        globalFieldsSafe[10] = "latestExpirationTime";
+        globalFieldsSafe[11] = "unlockingCliffPeriod";
+        globalFieldsSafe[12] = "unlockingCliffPercentage";
+        globalFieldsSafe[13] = "unlockingIntervalType";
+        globalFieldsSafe[14] = "tokenCalculationMethod";
+        globalFieldsSafe[15] = "minCompanyReserve";
+        globalFieldsSafe[16] = "tokenPremiumMultiplier";
+
+
+        string[] memory partyFieldsSafe = new string[](5);
+        partyFieldsSafe[0] = "name";
+        partyFieldsSafe[1] = "evmAddress";
+        partyFieldsSafe[2] = "contactDetails";
+        partyFieldsSafe[3] = "investorType";
+        partyFieldsSafe[4] = "investorJurisdiction";
+
 | **globalFieldName** | **description**                    |
 |:--------------------|:-----------------------------------|
-| exercisePrice       | e.g. "1000.00"                     |
-| exercisePrice       | e.g. "1000.00"                     |
+| purchaseAmount       |       e.g. "1000.00"              |
+| postMoneyValuationCap       |          |
+| expirationTime       |         |
+| governingJurisdiction       |          |
+| disputeResolution       |         |
+| exercisePriceMethod       |           |
+| exercisePrice       |          |
+| unlockStartTimeType       |           |
+| unlockStartTime       |           |
+| unlockingPeriod       |           |
+| latestExpirationTime       |          |
+| unlockingCliffPeriod       |           |
+| unlockingCliffPercentage       |         |
+| unlockingIntervalType       |           |
+| tokenCalculationMethod       |          |
+| minCompanyReserve       |           |
+| tokenPremiumMultiplier       |          |
+
 
 
 ## Party Fields
 
 | **partyFieldName** | **description**                         |
 |:-------------------|:----------------------------------------|
-| investorType       | Name of the individual or organization  |
-| investorName       | Name of the individual or organization  |
+| name       | Name of the individual or organization  |
+| evmAddress       |   |
+| contactDetails       |   |
+| investorType       |   |
+| investorJurisdiction       |   |
+
 
 
 ## Certificate Extension
@@ -66,18 +113,17 @@ enum TokenCalculationMethod {
 }
 
 enum UnlockStartTimeType {
-    toeknWarrentTime,
+    tokenWarrentTime,
     tgeTime,
     setTime
 }
 
 enum UnlockingIntervalType {
-    byBlock,
-    seconds,
+    blockly,
+    secondly,
     hourly,
     daily,
-    monthly,
-    quarterly
+    monthly
 }
 
 ```
