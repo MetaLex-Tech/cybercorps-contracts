@@ -2740,8 +2740,11 @@ contract CyberCorpTest is Test {
         CyberCorpFactory cyberCorpFactoryLive = CyberCorpFactory(
             0x2aDA6E66a92CbF283B9F2f4f095Fe705faD357B8
         );
-
-        address warrantExtension = address(new TokenWarrantExtension());
+        bytes32 salt = bytes32(keccak256("TestWarrant"));
+        address warrantExtension = address(new ERC1967Proxy{salt: salt}(
+           address(new TokenWarrantExtension{salt: salt}()),
+           abi.encodeWithSelector(TokenWarrantExtension.initialize.selector, address(auth))
+        ));
 
          TokenWarrantData memory tokenWarrant = TokenWarrantData({
             exercisePriceMethod: ExercisePriceMethod.perWarrant,
