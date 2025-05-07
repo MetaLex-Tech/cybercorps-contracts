@@ -74,7 +74,6 @@ contract BaseScript is Script {
            abi.encodeWithSelector(CyberCorpFactory.initialize.selector, address(auth), address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder)
         )));
         cyberCorpFactory.setStable(stable);
-        cyberCorpFactory.setStable(stable);
 
 
         string[] memory globalFieldsSafeT = new string[](17);
