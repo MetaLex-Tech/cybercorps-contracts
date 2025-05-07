@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Proprietary
 pragma solidity 0.8.28;
 
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./ICertificateExtension.sol";
 import "../../CyberCorpConstants.sol";
+import "../../libs/auth.sol";
 
 struct TokenWarrantData {
     ExercisePriceMethod exercisePriceMethod;  // perToken or perWarrant
@@ -19,18 +21,15 @@ struct TokenWarrantData {
     uint256 tokenPremiumMultiplier; //multiplier of network valuation over company equity valuation, to be used within equityProRataToTokenSupply method (set to 0 if no premium)
 }
 
-contract TokenWarrantExtension is ICertificateExtension {
+contract TokenWarrantExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     bytes32 public constant EXTENSION_TYPE = keccak256("TOKEN_WARRANT");
 
-    mapping(uint256 => TokenWarrantData) private warrantData;
+    //ofset to leave for future upgrades
+    uint256[30] private __gap;
 
-    function getExtensionData(uint256 tokenId) external view override returns (bytes memory) {
-        return abi.encode(warrantData[tokenId]);
-    }
-
-    function setExtensionData(uint256 tokenId, bytes memory data) external override {
-        TokenWarrantData memory decoded = abi.decode(data, (TokenWarrantData));
-        warrantData[tokenId] = decoded;
+    function initialize(address _auth) external initializer {
+        __UUPSUpgradeable_init();
+        __BorgAuthACL_init(_auth);
     }
 
     function decodeExtensionData(bytes memory data) external view returns (TokenWarrantData memory) {
@@ -119,4 +118,8 @@ contract TokenWarrantExtension is ICertificateExtension {
         if (_type == UnlockingIntervalType.monthly) return "monthly";
         return "Unknown";
     }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal virtual override onlyOwner {}
 }

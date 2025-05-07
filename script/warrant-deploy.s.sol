@@ -26,7 +26,7 @@ contract BaseScript is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         vm.startBroadcast(deployerPrivateKey);
         
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpWarrantTest3"));
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpWarrantTest4"));
         address stableMainNetEth = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
         address stableArbitrum = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
         address stableBase = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
@@ -52,20 +52,28 @@ contract BaseScript is Script {
 
         address dealManagerFactory = address(new DealManagerFactory{salt: salt}(address(auth)));
 
-       // address registry = address(new CyberAgreementRegistry{salt: salt}(address(auth)));
-                // Deploy CyberAgreementRegistry implementation and proxy
-        address registryImplementation = address(new CyberAgreementRegistry{salt: salt}());
-        bytes memory initData = abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth));
-        address registry = address(new ERC1967Proxy{salt: salt}(registryImplementation, initData));
+        //address tokenWarrantExtension = address(new TokenWarrantExtension{salt: salt}());
 
-        address tokenWarrantExtension = address(new TokenWarrantExtension{salt: salt}());
+        address registry = address(new ERC1967Proxy{salt: salt}(
+           address(new CyberAgreementRegistry{salt: salt}()),
+           abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
+        ));
 
+        address tokenWarrantExtension = address(new ERC1967Proxy{salt: salt}(
+           address(new TokenWarrantExtension{salt: salt}()),
+           abi.encodeWithSelector(TokenWarrantExtension.initialize.selector, address(auth))
+        ));
 
-        address uriBuilder = address(new CertificateUriBuilder{salt: salt}());
+        address uriBuilder = address(new ERC1967Proxy{salt: salt}(
+           address(new CertificateUriBuilder{salt: salt}()),
+           abi.encodeWithSelector(CertificateUriBuilder.initialize.selector, address(auth))
+        ));
+
         CyberCorpFactory cyberCorpFactory = CyberCorpFactory(address(new ERC1967Proxy{salt: salt}(
            address(new CyberCorpFactory{salt: salt}()),
            abi.encodeWithSelector(CyberCorpFactory.initialize.selector, address(auth), address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder)
         )));
+        cyberCorpFactory.setStable(stable);
         cyberCorpFactory.setStable(stable);
 
 

@@ -202,7 +202,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         _transfer(from, to, tokenId);
     }
     
-    // Update agreement details (for admin purposes)
+    // Update agreement details
     function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external onlyIssuanceManager {
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
     }
