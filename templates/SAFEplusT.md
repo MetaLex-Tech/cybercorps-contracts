@@ -10,23 +10,23 @@ tokenWarrantURI:https://ipfs.io/ipfs/bafybeia2kruqmomqbyw37oi5mbodzrfsnk2b3x2d46
 
 | **globalFieldName** | **description**                    |
 |:--------------------|:-----------------------------------|
-| purchaseAmount       |       e.g. "1000.00"              |
+| purchaseAmount      |       e.g. "1000.00"              |
 | postMoneyValuationCap       |          |
-| expirationTime       |         |
+| expirationTime      |         |
 | governingJurisdiction       |          |
-| disputeResolution       |         |
-| exercisePriceMethod       |           |
-| exercisePrice       |          |
-| unlockStartTimeType       |           |
-| unlockStartTime       |           |
-| unlockingPeriod       |           |
-| latestExpirationTime       |          |
-| unlockingCliffPeriod       |           |
-| unlockingCliffPercentage       |         |
-| unlockingIntervalType       |           |
-| tokenCalculationMethod       |          |
-| minCompanyReserve       |           |
-| tokenPremiumMultiplier       |          |
+| disputeResolution   |         |
+| exercisePriceMethod | "perToken" or "perWarrant"  |
+| exercisePrice       | price, e.g. "1000.00"  |
+| unlockStartTimeType |"tokenWarrantTime" \|"tgeTime" \| "setTime"        |
+| unlockStartTime       | only set if using `setTime` for `unlockStartTimeType` |
+| unlockingPeriod       | Duration in `unlockingInvervalType` units  |
+| latestExpirationTime       | Unix timestamp. Will not be prompted for in UI, will be 10 yrs from deal date   |
+| unlockingCliffPeriod       | Duration in `unlockingIntervalType`, first tokens unlocked at `unlockingStartTime` + `unlockingCliffPeriod`  |
+| unlockingCliffPercentage       | e.g. "10.5%" |
+| unlockingIntervalType       |  "secondly", "hourly", "daily", "monthly", "blockly". Note that this affects both `unlockingPeriod` and `unlockingCliffPeriod`   |
+| tokenCalculationMethod       |  `equityProRataToTokenSupply` or `equityProRataToCompanyReserve`        |
+| minCompanyReserve       | This is a number of tokens   |
+| tokenPremiumMultiplier  | A number. If SAFE is worth 30% of company fully diluted equity, and premium multiplier is 2, the investor can buy 15% of total supply.       |
 
 
 
