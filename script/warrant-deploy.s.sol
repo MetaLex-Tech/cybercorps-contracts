@@ -26,7 +26,7 @@ contract BaseScript is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         vm.startBroadcast(deployerPrivateKey);
         
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpWarrantLaunch2"));
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpWarrantTest5"));
         address stableMainNetEth = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
         address stableArbitrum = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
         address stableBase = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
@@ -103,7 +103,7 @@ contract BaseScript is Script {
         partyFieldsSafeT[3] = "investorType";
         partyFieldsSafeT[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(3)), "SAFE+T", "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi", globalFieldsSafeT, partyFieldsSafeT);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(2)), "SAFE+T", "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi", globalFieldsSafeT, partyFieldsSafeT);
 
         string[] memory globalFieldsSafe = new string[](5);
         globalFieldsSafe[0] = "purchaseAmount";
@@ -120,7 +120,7 @@ contract BaseScript is Script {
         partyFieldsSafe[3] = "investorType";
         partyFieldsSafe[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(2)), "SAFE", "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi", globalFieldsSafe, partyFieldsSafe);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi", globalFieldsSafe, partyFieldsSafe);
 
         auth.updateRole(address(multisig), 200);
 
