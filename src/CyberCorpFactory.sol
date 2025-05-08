@@ -296,7 +296,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             ICyberCertPrinter certPrinter = ICyberCertPrinter(
                 IIssuanceManager(issuanceManagerAddress).createCertPrinter(
                     _certData[i].defaultLegend,
-                    _certData[i].name,
+                    string.concat(companyName, " ", _certData[i].name),
                     _certData[i].symbol,
                     _certData[i].uri,
                     _certData[i].securityClass,
