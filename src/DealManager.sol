@@ -78,8 +78,8 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
     /// @param hasSecret Whether the deal requires a secret for finalization
     event DealProposed(
         bytes32 indexed agreementId,
-        address[] indexed certAddress,
-        uint256[] indexed certId,
+        address[] certAddress,
+        uint256[] certId,
         address paymentToken,
         uint256 paymentAmount,
         bytes32 templateId,
