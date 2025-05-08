@@ -165,7 +165,7 @@ struct CertificateDetails {
     string signingOfficerName;
     string signingOfficerTitle;
     uint256 investmentAmountUSD;
-    uint256 issuerUSDValuationAtTimeofInvestment;
+    uint256 issuerUSDValuationAtTimeOfInvestment;
     uint256 unitsRepresented;
     string legalDetails;
     bytes extensionData;
@@ -186,61 +186,25 @@ struct CertificateDetails {
         address ownerAddress;
     }
 
-    function buildCertificateUri(
-        string memory cyberCORPName,
-        string memory cyberCORPType,
-        string memory cyberCORPJurisdiction,
-        string memory cyberCORPContactDetails,
-        SecurityClass securityType,
-        SecuritySeries securitySeries,
-        string memory certificateUri,
-        string[] memory certLegend,
-        CertificateDetails memory details,
-        Endorsement[] memory endorsements,
+    function buildAttributes(
         OwnerDetails memory owner,
-        address registry,
-        bytes32 agreementId,
-        uint256 tokenId,
-        address contractAddress,
-        address extension
-    ) public view returns (string memory) {
-        // Start building the JSON string with ERC-721 metadata standard format
-        string memory json = string(abi.encodePacked(
-            '{"title": "MetaLeX Tokenized Certificate",',
-            '"type": "', securityClassToString(securityType),
-            '", "image": "", "properties": {'
+        CertificateDetails memory details
+    ) internal pure returns (string memory) {
+        return string(abi.encodePacked(
+            '{"trait_type": "CurrentOwner", "value": "', addressToString(owner.ownerAddress),
+            '"}, {"trait_type": "investmentAmount", "value": "', uint256ToString(details.investmentAmountUSD),
+            '"}, {"trait_type": "unitsRepresented", "value": "', uint256ToString(details.unitsRepresented),
+            '"}, {"trait_type": "issuerUSDValuationAtTimeOfInvestment", "value": "', uint256ToString(details.issuerUSDValuationAtTimeOfInvestment),
+            '"}'
         ));
+    }
 
-        // Add all existing properties under the properties object
-        json = string.concat(json,
-            '"cyberCORPName": "', cyberCORPName,
-            '", "cyberCORPType": "', cyberCORPType,
-            '", "cyberCORPJurisdiction": "', cyberCORPJurisdiction,
-            '", "cyberCORPContactDetails": "', cyberCORPContactDetails,
-            '", "securityType": "', securityClassToString(securityType),
-            '", "securitySeries": "', securitySeriesToString(securitySeries),
-            '", "certificateUri": "', certificateUri,
-            '"'
-        );
-
-        // Add certificate details
-        json = string.concat(json, 
-            ', "signingOfficerName": "', details.signingOfficerName,
-            '", "signingOfficerTitle": "', details.signingOfficerTitle,
-            '", "investmentAmountUSD": "', uint256ToString(details.investmentAmountUSD),
-            '", "issuerUSDValuationAtTimeofInvestment": "', uint256ToString(details.issuerUSDValuationAtTimeofInvestment),
-            '", "unitsRepresented": "', uint256ToString(details.unitsRepresented),
-            '", "legalDetails": "', details.legalDetails,
-            '"'
-        );
-
-        //add extensionData
-        if (extension != address(0) && details.extensionData.length > 0) {
-            json = string.concat(json, ICertificateExtension(extension).getExtensionURI(details.extensionData));
-        }
-
-        // Add endorsement history
-        json = string.concat(json, ', "endorsementHistory": [');
+    function buildEndorsementHistory(
+        Endorsement[] memory endorsements,
+        address registry,
+        bytes32 agreementId
+    ) internal view returns (string memory) {
+        string memory json = '[';
         for (uint256 i = 0; i < endorsements.length; i++) {
             if (i > 0) json = string.concat(json, ',');
             json = string.concat(json, '{',
@@ -311,7 +275,67 @@ struct CertificateDetails {
 
             json = string.concat(json, '}');
         }
-        json = string.concat(json, ']');
+        return string.concat(json, ']');
+    }
+
+    function buildCertificateUri(
+        string memory cyberCORPName,
+        string memory cyberCORPType,
+        string memory cyberCORPJurisdiction,
+        string memory cyberCORPContactDetails,
+        SecurityClass securityType,
+        SecuritySeries securitySeries,
+        string memory certificateUri,
+        string[] memory certLegend,
+        CertificateDetails memory details,
+        Endorsement[] memory endorsements,
+        OwnerDetails memory owner,
+        address registry,
+        bytes32 agreementId,
+        uint256 tokenId,
+        address contractAddress,
+        address extension
+    ) public view returns (string memory) {
+        // Start building the JSON string with ERC-721 metadata standard format
+        string memory json = string(abi.encodePacked(
+            '{"title": "MetaLeX Tokenized Certificate",',
+            '"type": "', securityClassToString(securityType),
+            '", "image": "https://cybercerts.metalex.tech/', uint256ToString(block.chainid), '/', addressToString(contractAddress), '/', uint256ToString(tokenId), '",',
+            '"attributes": [', buildAttributes(owner, details),
+            '],'
+        ));
+
+        // Add all existing properties at root level
+        json = string.concat(
+            json,
+            '"cyberCORPName": "', cyberCORPName,
+            '", "cyberCORPType": "', cyberCORPType,
+            '", "cyberCORPJurisdiction": "', cyberCORPJurisdiction,
+            '", "cyberCORPContactDetails": "', cyberCORPContactDetails,
+            '", "securityType": "', securityClassToString(securityType),
+            '", "securitySeries": "', securitySeriesToString(securitySeries),
+            '", "certificateUri": "', certificateUri,
+            '"'
+        );
+
+        // Add certificate details
+        json = string.concat(json, 
+            ', "signingOfficerName": "', details.signingOfficerName,
+            '", "signingOfficerTitle": "', details.signingOfficerTitle,
+            '", "investmentAmountUSD": "', uint256ToString(details.investmentAmountUSD),
+            '", "issuerUSDValuationAtTimeOfInvestment": "', uint256ToString(details.issuerUSDValuationAtTimeOfInvestment),
+            '", "unitsRepresented": "', uint256ToString(details.unitsRepresented),
+            '", "legalDetails": "', details.legalDetails,
+            '"'
+        );
+
+        //add extensionData
+        if (extension != address(0) && details.extensionData.length > 0) {
+            json = string.concat(json, ICertificateExtension(extension).getExtensionURI(details.extensionData));
+        }
+
+        // Add endorsement history
+        json = string.concat(json, ', "endorsementHistory": ', buildEndorsementHistory(endorsements, registry, agreementId));
 
         // Add current owner details
         json = string.concat(json, 
@@ -324,13 +348,76 @@ struct CertificateDetails {
         // Add restrictive legends at the end
         json = string.concat(json, ', "restrictiveLegends": ', arrayToJsonString(certLegend));
 
-        // Close both the properties object and the main JSON object
-        json = string.concat(json, '}}');
-
+        // Close the main JSON object
+        json = string.concat(json, '}');
+        json = Base64.encode(bytes(string(json)));
+        json = string(abi.encodePacked('data:application/json;base64,', json));
         return json;
     }
 
     function _authorizeUpgrade(
         address newImplementation
     ) internal virtual override onlyOwner {}
+}
+
+
+/// [MIT License]
+/// @title Base64
+/// @notice Provides a function for encoding some bytes in base64
+/// @author Brecht Devos <brecht@loopring.org>
+library Base64 {
+    bytes internal constant TABLE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    /// @notice Encodes some bytes to the base64 representation
+    function encode(bytes memory data) internal pure returns (string memory) {
+        uint256 len = data.length;
+        if (len == 0) return "";
+
+        // multiply by 4/3 rounded up
+        uint256 encodedLen = 4 * ((len + 2) / 3);
+
+        // Add some extra buffer at the end
+        bytes memory result = new bytes(encodedLen + 32);
+
+        bytes memory table = TABLE;
+
+        assembly {
+            let tablePtr := add(table, 1)
+            let resultPtr := add(result, 32)
+
+            for {
+                let i := 0
+            } lt(i, len) {
+
+            } {
+                i := add(i, 3)
+                let input := and(mload(add(data, i)), 0xffffff)
+
+                let out := mload(add(tablePtr, and(shr(18, input), 0x3F)))
+                out := shl(8, out)
+                out := add(out, and(mload(add(tablePtr, and(shr(12, input), 0x3F))), 0xFF))
+                out := shl(8, out)
+                out := add(out, and(mload(add(tablePtr, and(shr(6, input), 0x3F))), 0xFF))
+                out := shl(8, out)
+                out := add(out, and(mload(add(tablePtr, and(input, 0x3F))), 0xFF))
+                out := shl(224, out)
+
+                mstore(resultPtr, out)
+
+                resultPtr := add(resultPtr, 4)
+            }
+
+            switch mod(len, 3)
+            case 1 {
+                mstore(sub(resultPtr, 2), shl(240, 0x3d3d))
+            }
+            case 2 {
+                mstore(sub(resultPtr, 1), shl(248, 0x3d))
+            }
+
+            mstore(result, encodedLen)
+        }
+
+        return string(result);
+    }
 }

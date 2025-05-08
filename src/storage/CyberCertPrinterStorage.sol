@@ -49,7 +49,7 @@ struct CertificateDetails {
     string signingOfficerName;
     string signingOfficerTitle;
     uint256 investmentAmountUSD;
-    uint256 issuerUSDValuationAtTimeofInvestment;
+    uint256 issuerUSDValuationAtTimeOfInvestment;
     uint256 unitsRepresented;
     string legalDetails;
     bytes extensionData;

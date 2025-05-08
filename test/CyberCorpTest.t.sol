@@ -248,7 +248,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -339,7 +339,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -466,7 +466,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -475,7 +475,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -654,7 +654,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -861,7 +861,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -988,7 +988,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -1121,7 +1121,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -1325,7 +1325,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -1428,7 +1428,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -1560,7 +1560,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -1663,7 +1663,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -1769,7 +1769,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -1869,7 +1869,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -1995,7 +1995,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -2133,7 +2133,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -2275,7 +2275,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -2404,7 +2404,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -2541,7 +2541,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "Gabe",
             signingOfficerTitle: "CEO",
             investmentAmountUSD: 100000,
-            issuerUSDValuationAtTimeofInvestment: 100000000,
+            issuerUSDValuationAtTimeOfInvestment: 100000000,
             unitsRepresented: 100000,
             legalDetails: "Legal Details",
             extensionData: ""
@@ -2768,7 +2768,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "Gabe",
             signingOfficerTitle: "CEO",
             investmentAmountUSD: 100000,
-            issuerUSDValuationAtTimeofInvestment: 100000000,
+            issuerUSDValuationAtTimeOfInvestment: 100000000,
             unitsRepresented: 100000,
             legalDetails: "Legal Details",
             extensionData: tokenWarrantData
@@ -3046,7 +3046,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -3151,7 +3151,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -3277,7 +3277,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -3417,7 +3417,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
@@ -3545,7 +3545,7 @@ contract CyberCorpTest is Test {
             signingOfficerName: "",
             signingOfficerTitle: "",
             investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeofInvestment: 10000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
