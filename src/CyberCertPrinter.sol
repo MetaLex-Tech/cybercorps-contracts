@@ -340,6 +340,43 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         );
     }
 
+    // URI storage functionality
+    function tokenURIJson(uint256 tokenId) public view virtual returns (string memory) {
+        if (!_exists(tokenId)) revert URIQueryForNonexistentToken();
+
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        string[] memory certLegend = s.certLegend[tokenId];
+        ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
+
+        // Get registry and agreementId from first endorsement if it exists
+        address registry = address(0);
+        bytes32 agreementId = bytes32(0);
+        if (s.endorsements[tokenId].length > 0) {
+            Endorsement memory firstEndorsement = s.endorsements[tokenId][0];
+            registry = firstEndorsement.registry;
+            agreementId = firstEndorsement.agreementId;
+        }
+
+    return IUriBuilder(IIssuanceManager(s.issuanceManager).uriBuilder()).buildCertificateUriNotEncoded(   
+            corp.cyberCORPName(),
+            corp.cyberCORPType(),
+            corp.cyberCORPJurisdiction(),
+            corp.cyberCORPContactDetails(),
+            s.securityType,
+            s.securitySeries,
+            s.certificateUri,
+            certLegend,
+            s.certificateDetails[tokenId],
+            s.endorsements[tokenId],
+            s.owners[tokenId],
+            registry,
+            agreementId,
+            tokenId,
+            address(this),
+            address(s.extension)
+        );
+    }
+
     // Public getters that directly access storage
     function defaultLegend() public view returns (string[] memory) {
         return CyberCertPrinterStorage.cyberCertStorage().defaultLegend;

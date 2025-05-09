@@ -300,7 +300,7 @@ struct CertificateDetails {
         string memory json = string(abi.encodePacked(
             '{"title": "MetaLeX Tokenized Certificate",',
             '"type": "', securityClassToString(securityType),
-            '", "image": "https://cybercerts.metalex.tech/', uint256ToString(block.chainid), '/', addressToString(contractAddress), '/', uint256ToString(tokenId), '",',
+            '", "image": "https://cybercorps.metalex.tech/certs/', uint256ToString(block.chainid), '/', addressToString(contractAddress), '/', uint256ToString(tokenId), '",',
             '"attributes": [', buildAttributes(owner, details),
             '],'
         ));
@@ -352,6 +352,83 @@ struct CertificateDetails {
         json = string.concat(json, '}');
         json = Base64.encode(bytes(string(json)));
         json = string(abi.encodePacked('data:application/json;base64,', json));
+        return json;
+    }
+
+        function buildCertificateUriNotEncoded(
+        string memory cyberCORPName,
+        string memory cyberCORPType,
+        string memory cyberCORPJurisdiction,
+        string memory cyberCORPContactDetails,
+        SecurityClass securityType,
+        SecuritySeries securitySeries,
+        string memory certificateUri,
+        string[] memory certLegend,
+        CertificateDetails memory details,
+        Endorsement[] memory endorsements,
+        OwnerDetails memory owner,
+        address registry,
+        bytes32 agreementId,
+        uint256 tokenId,
+        address contractAddress,
+        address extension
+    ) public view returns (string memory) {
+        // Start building the JSON string with ERC-721 metadata standard format
+        string memory json = string(abi.encodePacked(
+            '{"title": "MetaLeX Tokenized Certificate",',
+            '"type": "', securityClassToString(securityType),
+            '", "image": "https://cybercorps.metalex.tech/certs/', uint256ToString(block.chainid), '/', addressToString(contractAddress), '/', uint256ToString(tokenId), '",',
+            '"attributes": [', buildAttributes(owner, details),
+            '],'
+        ));
+
+        // Add all existing properties at root level
+        json = string.concat(
+            json,
+            '"cyberCORPName": "', cyberCORPName,
+            '", "cyberCORPType": "', cyberCORPType,
+            '", "cyberCORPJurisdiction": "', cyberCORPJurisdiction,
+            '", "cyberCORPContactDetails": "', cyberCORPContactDetails,
+            '", "securityType": "', securityClassToString(securityType),
+            '", "securitySeries": "', securitySeriesToString(securitySeries),
+            '", "certificateUri": "', certificateUri,
+            '"'
+        );
+
+        // Add certificate details
+        json = string.concat(json, 
+            ', "signingOfficerName": "', details.signingOfficerName,
+            '", "signingOfficerTitle": "', details.signingOfficerTitle,
+            '", "investmentAmountUSD": "', uint256ToString(details.investmentAmountUSD),
+            '", "issuerUSDValuationAtTimeOfInvestment": "', uint256ToString(details.issuerUSDValuationAtTimeOfInvestment),
+            '", "unitsRepresented": "', uint256ToString(details.unitsRepresented),
+            '", "legalDetails": "', details.legalDetails,
+            '"'
+        );
+
+        //add extensionData
+        if (extension != address(0) && details.extensionData.length > 0) {
+            json = string.concat(json, ICertificateExtension(extension).getExtensionURI(details.extensionData));
+        }
+
+        // Add endorsement history
+        json = string.concat(json, ', "endorsementHistory": ', buildEndorsementHistory(endorsements, registry, agreementId));
+
+        // Add current owner details
+        json = string.concat(json, 
+            ', "currentOwner": {',
+            '"name": "', owner.name,
+            '", "ownerAddress": "', addressToString(owner.ownerAddress),
+            '"}'
+        );
+
+        // Add restrictive legends at the end
+        json = string.concat(json, ', "restrictiveLegends": ', arrayToJsonString(certLegend));
+
+        // Close the main JSON object
+        json = string.concat(json, '}');
+        //json = Base64.encode(bytes(string(json)));
+        //json = string(abi.encodePacked('data:application/json;base64,', json));
         return json;
     }
 

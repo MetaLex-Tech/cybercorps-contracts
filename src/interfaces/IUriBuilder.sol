@@ -63,4 +63,23 @@ interface IUriBuilder {
         address contractAddress,
         address extension
     ) external view returns (string memory);
+
+    function buildCertificateUriNotEncoded(
+        string memory cyberCORPName,
+        string memory cyberCORPType,
+        string memory cyberCORPJurisdiction,
+        string memory cyberCORPContactDetails,
+        SecurityClass securityType,
+        SecuritySeries securitySeries,
+        string memory certificateUri,
+        string[] memory certLegend,
+        CertificateDetails memory details,
+        Endorsement[] memory endorsements,
+        OwnerDetails memory owner,
+        address registry,
+        bytes32 agreementId,
+        uint256 tokenId,
+        address contractAddress,
+        address extension
+    ) external view returns (string memory);
 }

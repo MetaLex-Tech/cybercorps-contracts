@@ -26,7 +26,7 @@ contract BaseScript is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         vm.startBroadcast(deployerPrivateKey);
         
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpWarrantTest5"));
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.2"));
         address stableMainNetEth = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
         address stableArbitrum = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
         address stableBase = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
@@ -50,6 +50,14 @@ contract BaseScript is Script {
         } else {
             revert("Unsupported chain ID"); // Handle unsupported chains
         }
+        /*update the implementation of 0x9b2Ba7069555Dc01b57a04212bE46c2D5d611480 to the latest agreement registry
+        address agreementRegistryImplementation = 0xeE244A549838BE9c234BFF0F8B5A947a328A882c;
+
+         //new implementation
+        address newAgreementRegistry = address(new CyberAgreementRegistry());
+        CyberAgreementRegistry(agreementRegistryImplementation).upgradeToAndCall(newAgreementRegistry, "");
+        
+        return;*/
 
         address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
         //use salt to deploy BorgAuth
@@ -119,7 +127,7 @@ contract BaseScript is Script {
         partyFieldsSafeT[3] = "investorType";
         partyFieldsSafeT[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(2)), "SAFE+T", "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi", globalFieldsSafeT, partyFieldsSafeT);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(2)), "SAFE+T", "https://ipfs.io/ipfs/bafybeig6hszt562xsvcyumiph4kz5u5stgecpusbjw6hiycgxth42afezq", globalFieldsSafeT, partyFieldsSafeT);
 
         string[] memory globalFieldsSafe = new string[](5);
         globalFieldsSafe[0] = "purchaseAmount";
@@ -136,7 +144,7 @@ contract BaseScript is Script {
         partyFieldsSafe[3] = "investorType";
         partyFieldsSafe[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi", globalFieldsSafe, partyFieldsSafe);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "https://ipfs.io/ipfs/bafybeig6hszt562xsvcyumiph4kz5u5stgecpusbjw6hiycgxth42afezq", globalFieldsSafe, partyFieldsSafe);
 
         auth.updateRole(address(multisig), 200);
 

@@ -755,6 +755,7 @@ contract CyberCorpTest is Test {
         vm.stopPrank();
     }
 
+
     function testCreateContract() public {
         vm.startPrank(testAddress);
         BorgAuth auth = new BorgAuth(testAddress);
@@ -848,6 +849,10 @@ contract CyberCorpTest is Test {
         contractURI = registrya.getContractJson(id);
         console.log(contractURI);
         vm.stopPrank();
+
+        //print cyberagreementcontract details
+        string memory contractDetails = registrya.getContractJson(id);
+        console.log(contractDetails);
     }
 
     function testNet() public {
@@ -2685,6 +2690,10 @@ contract CyberCorpTest is Test {
         string memory certificateUri = CyberCertPrinter(cyberCertPrinterAddr[0])
             .tokenURI(0);
         console.log(certificateUri);
+
+        string memory certificateUriJson = CyberCertPrinter(cyberCertPrinterAddr[0])
+            .tokenURIJson(0);
+        console.log(certificateUriJson);
 
         // Create a new recipient address
         address newRecipient = vm.addr(12345);
