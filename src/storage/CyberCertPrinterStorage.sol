@@ -26,7 +26,7 @@ o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o8888
 `88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
  `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P 
              .o..P'                                                                     888           
-             `Y8P'                                                                     o888o          
+             `Y8P'                                                                     o888o           
 _______________________________________________________________________________________________________
 
 All software, documentation and other files and information in this repository (collectively, the "Software")
@@ -43,14 +43,16 @@ pragma solidity 0.8.28;
 
 import "../CyberCorpConstants.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
+import "./extensions/ICertificateExtension.sol";
 
 struct CertificateDetails {
     string signingOfficerName;
     string signingOfficerTitle;
-    uint256 investmentAmount;
-    uint256 issuerUSDValuationAtTimeofInvestment;
+    uint256 investmentAmountUSD;
+    uint256 issuerUSDValuationAtTimeOfInvestment;
     uint256 unitsRepresented;
     string legalDetails;
+    bytes extensionData;
 }
 
 struct Endorsement {
@@ -83,7 +85,7 @@ library CyberCertPrinterStorage {
         // Restriction hooks
         mapping(uint256 => ITransferRestrictionHook) restrictionHooksById;
         ITransferRestrictionHook globalRestrictionHook;
-        
+        address extension;
         // Contract configuration - making these public
         address issuanceManager;
         SecurityClass securityType;
@@ -92,6 +94,7 @@ library CyberCertPrinterStorage {
         string[] defaultLegend;
         bool transferable;
         bool endorsementRequired;
+        
     }
 
     // Returns the storage layout
@@ -165,4 +168,18 @@ library CyberCertPrinterStorage {
     function setDefaultLegend(string[] memory _defaultLegend) internal {
         cyberCertStorage().defaultLegend = _defaultLegend;
     }
+
+    // Extension management
+    function setExtension(uint256 tokenId, address extension) internal {
+        cyberCertStorage().extension = extension;
+    }
+
+    function getExtension(uint256 tokenId) internal view returns (address) {
+        return cyberCertStorage().extension;
+    }
+
+    function _getExtensionData(uint256 tokenId) internal view returns (bytes memory) {
+        return cyberCertStorage().certificateDetails[tokenId].extensionData;
+    }
+
 } 

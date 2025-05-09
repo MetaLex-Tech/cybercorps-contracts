@@ -26,7 +26,7 @@ o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o8888
 `88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
  `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P 
              .o..P'                                                                     888           
-             `Y8P'                                                                     o888o          
+             `Y8P'                                                                     o888o           
 _______________________________________________________________________________________________________
 
 All software, documentation and other files and information in this repository (collectively, the "Software")
@@ -41,84 +41,7 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import "./IIssuanceManager.sol";
-import "../CyberCorpConstants.sol";
-
-interface ICyberCertPrinter {
-    function initialize(
-        string[] memory defaultLegend,
-        string memory name,
-        string memory ticker,
-        string memory _certificateUri,
-        address _issuanceManager,
-        SecurityClass _securityType,
-        SecuritySeries _securitySeries,
-        address _extension
-    ) external;
-    function updateIssuanceManager(address _issuanceManager) external;
-    function updateDefaultLegend(string[] memory _ledger) external;
-    function defaultLegend() external view returns (string[] memory);
-    function setRestrictionHook(uint256 _id, address _hookAddress) external;
-    function setGlobalRestrictionHook(address hookAddress) external;
-    function safeMint(
-        uint256 tokenId,
-        address to,
-        CertificateDetails memory details
-    ) external returns (uint256);
-    function setGlobalTransferable(bool _transferable) external;
-    function safeMintAndAssign(
-        address to,
-        uint256 tokenId,
-        CertificateDetails memory details
-    ) external returns (uint256);
-    function assignCert(
-        address from,
-        uint256 tokenId,
-        address to,
-        CertificateDetails memory details
-    ) external returns (uint256);
-    function addIssuerSignature(
-        uint256 tokenId,
-        string calldata signatureURI
-    ) external;
-    function addEndorsement(
-        uint256 tokenId,
-        Endorsement memory newEndorsement
-    ) external;
-    function endorseAndTransfer(
-        uint256 tokenId,
-        Endorsement memory newEndorsement,
-        address from,
-        address to
-    ) external;
-    function updateCertificateDetails(
-        uint256 tokenId,
-        CertificateDetails calldata details
-    ) external;
-    function burn(uint256 tokenId) external;
-    function voidCert(uint256 tokenId) external;
-    function getCertificateDetails(
-        uint256 tokenId
-    ) external view returns (CertificateDetails memory);
-    function addCertLegend(uint256 tokenId, string memory newLegend) external;
-    function removeCertLegendAt(uint256 tokenId, uint256 index) external;
-    function addDefaultLegend(string memory newLegend) external;
-    function removeDefaultLegendAt(uint256 index) external;
-    function getEndorsementHistory(
-        uint256 tokenId,
-        uint256 index
-    )
-        external
-        view
-        returns (
-            address endorser,
-            string memory endorseeName,
-            address registry,
-            bytes32 agreementId,
-            uint256 timestamp,
-            bytes memory signatureHash,
-            address endorsee
-        );
-    function tokenURI(uint256 tokenId) external view returns (string memory);
-    function totalSupply() external view returns (uint256);
+interface ICertificateExtension {
+    function supportsExtensionType(bytes32 extensionType) external pure returns (bool);
+    function getExtensionURI(bytes memory data) external view returns (string memory);
 }

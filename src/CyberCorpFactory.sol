@@ -45,6 +45,7 @@ import "./interfaces/IIssuanceManagerFactory.sol";
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./interfaces/ICyberCorp.sol";
 import "./interfaces/IDealManagerFactory.sol";
@@ -55,7 +56,7 @@ import "./interfaces/ICyberAgreementRegistry.sol";
 import "./CyberCorpConstants.sol";
 import "./libs/auth.sol";
 
-contract CyberCorpFactory is BorgAuthACL {
+contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     error InvalidSalt();
     error DeploymentFailed();
 
@@ -66,7 +67,20 @@ contract CyberCorpFactory is BorgAuthACL {
     address public cyberAgreementFactory;
     address public dealManagerFactory;
     address public uriBuilder;
-    address public stable;// = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;//base main net 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    address public stable; // = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;//base main net 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+
+    // Upgrade notes: Reduced gap to account for new variables (50 - 9 = 41)
+    uint256[41] private __gap;
+
+    struct CyberCertData {
+        string name;
+        string symbol;
+        string uri;
+        SecurityClass securityClass;
+        SecuritySeries securitySeries;
+        address extension;
+        string[] defaultLegend;
+    }
 
     event CyberCorpDeployed(
         address indexed cyberCorp,
@@ -77,7 +91,8 @@ contract CyberCorpFactory is BorgAuthACL {
         string cyberCORPType,
         string cyberCORPContactDetails,
         string cyberCORPJurisdiction,
-        string defaultDisputeResolution
+        string defaultDisputeResolution,
+        address _companyPayable
     );
 
     event AgreementDeployed(
@@ -108,18 +123,6 @@ contract CyberCorpFactory is BorgAuthACL {
         address oldCyberAgreementFactory
     );
 
-    constructor(
-        address _auth,
-        address _registryAddress,
-        address _cyberCertPrinterImplementation,
-        address _issuanceManagerFactory,
-        address _cyberCorpSingleFactory,
-        address _dealManagerFactory,
-        address _uriBuilder
-    ) {
-        initialize(_auth, _registryAddress, _cyberCertPrinterImplementation, _issuanceManagerFactory, _cyberCorpSingleFactory, _dealManagerFactory, _uriBuilder);
-    }
-
     function initialize(
         address _auth,
         address _registryAddress,
@@ -129,6 +132,7 @@ contract CyberCorpFactory is BorgAuthACL {
         address _dealManagerFactory,
         address _uriBuilder
     ) public initializer {
+        __UUPSUpgradeable_init();
         // Initialize BorgAuthACL
         __BorgAuthACL_init(_auth);
 
@@ -149,24 +153,38 @@ contract CyberCorpFactory is BorgAuthACL {
         string memory defaultDisputeResolution,
         address _companyPayable,
         CompanyOfficer memory _officer
-    ) public returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress) {
+    )
+        public
+        returns (
+            address cyberCorpAddress,
+            address authAddress,
+            address issuanceManagerAddress,
+            address dealManagerAddress
+        )
+    {
         if (salt == bytes32(0)) revert InvalidSalt();
 
         // Deploy BorgAuth with CREATE2 with new param address owner
         bytes memory authBytecode = type(BorgAuth).creationCode;
         bytes32 authSalt = keccak256(abi.encodePacked("auth", salt));
-        authAddress = Create2.deploy(0, authSalt, abi.encodePacked(authBytecode, abi.encode(address(this))));
+        authAddress = Create2.deploy(
+            0,
+            authSalt,
+            abi.encodePacked(authBytecode, abi.encode(address(this)))
+        );
 
         // Initialize BorgAuth
-       // BorgAuth(authAddress).initialize();
+        // BorgAuth(authAddress).initialize();
         BorgAuth(authAddress).updateRole(_officer.eoa, 200);
 
-        issuanceManagerAddress = IIssuanceManagerFactory(issuanceManagerFactory).deployIssuanceManager(salt);
+        issuanceManagerAddress = IIssuanceManagerFactory(issuanceManagerFactory)
+            .deployIssuanceManager(salt);
 
-        cyberCorpAddress = ICyberCorpSingleFactory(cyberCorpSingleFactory).deployCyberCorpSingle(salt);
-        
+        cyberCorpAddress = ICyberCorpSingleFactory(cyberCorpSingleFactory)
+            .deployCyberCorpSingle(salt);
+
         // Initialize CyberCorp
-       ICyberCorp(cyberCorpAddress).initialize(
+        ICyberCorp(cyberCorpAddress).initialize(
             authAddress,
             companyName,
             companyType,
@@ -178,10 +196,11 @@ contract CyberCorpFactory is BorgAuthACL {
             _officer,
             cyberCorpSingleFactory
         );
-        
+
         BorgAuth(authAddress).updateRole(cyberCorpAddress, 200);
         //deploy deal manager
-        dealManagerAddress = IDealManagerFactory(dealManagerFactory).deployDealManager(salt);
+        dealManagerAddress = IDealManagerFactory(dealManagerFactory)
+            .deployDealManager(salt);
         ICyberCorp(cyberCorpAddress).setDealManager(dealManagerAddress);
         // Initialize IssuanceManager
         IIssuanceManager(issuanceManagerAddress).initialize(
@@ -193,7 +212,13 @@ contract CyberCorpFactory is BorgAuthACL {
         );
 
         //update role for issuance manager
-        IDealManager(dealManagerAddress).initialize(authAddress, cyberCorpAddress, registryAddress, issuanceManagerAddress, dealManagerFactory);
+        IDealManager(dealManagerAddress).initialize(
+            authAddress,
+            cyberCorpAddress,
+            registryAddress,
+            issuanceManagerAddress,
+            dealManagerFactory
+        );
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
 
@@ -206,7 +231,8 @@ contract CyberCorpFactory is BorgAuthACL {
             companyType,
             companyContactDetails,
             companyJurisdiction,
-            defaultDisputeResolution
+            defaultDisputeResolution,
+            _companyPayable
         );
     }
 
@@ -219,11 +245,7 @@ contract CyberCorpFactory is BorgAuthACL {
         string memory defaultDisputeResolution,
         address _companyPayable,
         CompanyOfficer memory _officer,
-        string[] memory certName,
-        string[] memory certSymbol,
-        string[] memory certificateUri,
-        SecurityClass[] memory securityClass,
-        SecuritySeries[] memory securitySeries,
+        CyberCertData[] memory _certData,
         bytes32 _templateId,
         string[] memory _globalValues,
         address[] memory _parties,
@@ -232,18 +254,32 @@ contract CyberCorpFactory is BorgAuthACL {
         bytes memory signature,
         CertificateDetails[] memory _details,
         address[] memory conditions,
-        string[][] memory _defaultLegend,
         bytes32 secretHash,
         uint256 expiry
-    ) external returns (address cyberCorpAddress, address authAddress, address issuanceManagerAddress, address dealManagerAddress, address[] memory certPrinterAddress, bytes32 id, uint256[] memory certIds) {
-
+    )
+        external
+        returns (
+            address cyberCorpAddress,
+            address authAddress,
+            address issuanceManagerAddress,
+            address dealManagerAddress,
+            address[] memory certPrinterAddress,
+            bytes32 id,
+            uint256[] memory certIds
+        )
+    {
         //create bytes32 salt
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
 
         //set this officer's eoa to the sender
         _officer.eoa = msg.sender;
 
-        (cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress) = deployCyberCorp(
+        (
+            cyberCorpAddress,
+            authAddress,
+            issuanceManagerAddress,
+            dealManagerAddress
+        ) = deployCyberCorp(
             corpSalt,
             companyName,
             companyType,
@@ -254,15 +290,25 @@ contract CyberCorpFactory is BorgAuthACL {
             _officer
         );
 
-        certPrinterAddress = new address[](_details.length);
+        certPrinterAddress = new address[](_certData.length);
         //string[] memory defaultLegend = new string[](0);
-        for(uint256 i = 0; i < _details.length; i++) {
-            ICyberCertPrinter certPrinter = ICyberCertPrinter(IIssuanceManager(issuanceManagerAddress).createCertPrinter(_defaultLegend[i], string.concat(companyName, " ", certName[i]), certSymbol[i], certificateUri[i], securityClass[i], securitySeries[i]));
+        for (uint256 i = 0; i < _certData.length; i++) {
+            ICyberCertPrinter certPrinter = ICyberCertPrinter(
+                IIssuanceManager(issuanceManagerAddress).createCertPrinter(
+                    _certData[i].defaultLegend,
+                    string.concat(companyName, " ", _certData[i].name),
+                    _certData[i].symbol,
+                    _certData[i].uri,
+                    _certData[i].securityClass,
+                    _certData[i].securitySeries,
+                    _certData[i].extension
+                )
+            );
             certPrinterAddress[i] = address(certPrinter);
         }
 
         // Create and sign deal
-        certIds = new uint256[](_details.length);
+        certIds = new uint256[](_certData.length);
         (id, certIds) = IDealManager(dealManagerAddress).proposeAndSignDeal(
             certPrinterAddress,
             stable,
@@ -279,35 +325,54 @@ contract CyberCorpFactory is BorgAuthACL {
             secretHash,
             expiry
         );
-
     }
 
     function setStable(address _stable) external onlyOwner {
         stable = _stable;
     }
 
-    function setIssuanceManagerFactory(address _issuanceManagerFactory) external onlyOwner {
+    function setIssuanceManagerFactory(
+        address _issuanceManagerFactory
+    ) external onlyOwner {
         address oldIssuanceFactory = issuanceManagerFactory;
         issuanceManagerFactory = _issuanceManagerFactory;
-        emit IssuanceManagerFactoryUpdated(issuanceManagerFactory, oldIssuanceFactory);
+        emit IssuanceManagerFactoryUpdated(
+            issuanceManagerFactory,
+            oldIssuanceFactory
+        );
     }
 
-    function setCyberCorpSingleFactory(address _cyberCorpSingleFactory) external onlyOwner {
+    function setCyberCorpSingleFactory(
+        address _cyberCorpSingleFactory
+    ) external onlyOwner {
         address oldCyberCorpFactory = cyberCorpSingleFactory;
         cyberCorpSingleFactory = _cyberCorpSingleFactory;
-        emit CyberCorpSingleFactoryUpdated(cyberCorpSingleFactory, oldCyberCorpFactory);
+        emit CyberCorpSingleFactoryUpdated(
+            cyberCorpSingleFactory,
+            oldCyberCorpFactory
+        );
     }
 
-    function setCyberAgreementFactory(address _cyberAgreementFactory) external onlyOwner {
+    function setCyberAgreementFactory(
+        address _cyberAgreementFactory
+    ) external onlyOwner {
         address oldCyberAgreementFactory = cyberAgreementFactory;
         cyberAgreementFactory = _cyberAgreementFactory;
-        emit CyberAgreementFactoryUpdated(cyberAgreementFactory, oldCyberAgreementFactory);
+        emit CyberAgreementFactoryUpdated(
+            cyberAgreementFactory,
+            oldCyberAgreementFactory
+        );
     }
 
-    function setDealManagerFactory(address _dealManagerFactory) external onlyOwner {
+    function setDealManagerFactory(
+        address _dealManagerFactory
+    ) external onlyOwner {
         address oldDealFactory = dealManagerFactory;
         dealManagerFactory = _dealManagerFactory;
         emit DealManagerFactoryUpdated(dealManagerFactory, oldDealFactory);
     }
-    
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal virtual override onlyOwner {}
 }
