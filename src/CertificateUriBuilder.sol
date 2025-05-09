@@ -300,8 +300,15 @@ struct CertificateDetails {
         string memory json = string(abi.encodePacked(
             '{"title": "MetaLeX Tokenized Certificate",',
             '"type": "', securityClassToString(securityType),
-            '", "image": "https://cybercerts.metalex.tech/', uint256ToString(block.chainid), '/', addressToString(contractAddress), '/', uint256ToString(tokenId), '",',
-            '"attributes": [', buildAttributes(owner, details),
+            '", "image": "', buildCertificateImage(
+                cyberCORPName,
+                securityClassToString(securityType),
+                owner.name,
+                uint256ToString(details.investmentAmountUSD),
+                uint256ToString(details.issuerUSDValuationAtTimeOfInvestment),
+                certificateUri
+            ),
+            '", "attributes": [', buildAttributes(owner, details),
             '],'
         ));
 
@@ -353,6 +360,56 @@ struct CertificateDetails {
         json = Base64.encode(bytes(string(json)));
         json = string(abi.encodePacked('data:application/json;base64,', json));
         return json;
+    }
+
+    function buildCertificateImage(
+        string memory companyName,
+        string memory securityType,
+        string memory investorName,
+        string memory investmentAmount,
+        string memory companyValuation,
+        string memory certificateUri
+    ) public pure returns (string memory) {
+        string memory svg = string(abi.encodePacked(
+            '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xhtml="http://www.w3.org/1999/xhtml" version="1.1" width="600" height="500">',
+            '<rect width="100%" height="100%" fill="#191a18"/>',
+            '<svg x="240" y="280" width="104" height="276" viewBox="0 0 574 276" fill="none" xmlns="http://www.w3.org/2000/svg">',
+            '<path opacity=".2" d="M276.107 0C272.902 0 269.767 0.940887 267.092 2.70596L7.35497 174.071C2.76314 177.101 0 182.234 0 187.735V259.581C0 268.622 7.3291 275.951 16.37 275.951H53.9509C57.1472 275.951 60.2736 275.016 62.9443 273.26L286.745 126.113C291.35 123.086 294.122 117.945 294.122 112.435V16.37C294.122 7.32911 286.793 0 277.752 0H276.107Z" fill="#DAFF00"/>',
+            '<path opacity=".2" d="M513.301 0.00178097C510.096 0.00178097 506.962 0.942667 504.286 2.70774L244.549 174.073C239.958 177.102 237.194 182.236 237.194 187.737V259.583C237.194 268.624 244.524 275.953 253.564 275.953H291.145C294.342 275.953 297.468 275.018 300.139 273.262L523.94 126.115C528.544 123.087 531.316 117.947 531.316 112.436V16.3718C531.316 7.33089 523.987 0.00178097 514.946 0.00178097H513.301Z" fill="#DAFF00"/>',
+            '<path opacity=".2" d="M573.382 156.377C573.382 146.485 562.335 140.604 554.128 146.128L448.154 216.923C444.118 219.64 441.698 224.186 441.698 229.052V261.332C441.698 269.407 448.244 275.953 456.318 275.953H558.762C566.836 275.953 573.382 269.407 573.382 261.332V156.377Z" fill="#DAFF00"/>',
+            '</svg>',
+            '<text x="200" y="126" font-family="serif" font-size="30" fill="#daff00">', companyName, '</text>',
+            '<text x="285" y="156" font-family="serif" font-size="13" fill="#f2f2f2">', securityType, '</text>',
+            '<text x="198" y="176" font-family="serif" font-size="13" fill="#f2f2f2">(Simple Agreement for Future Equity)</text>',
+            '<defs>',
+            '<radialGradient id="grad1" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">',
+            '<stop offset="0%" style="stop-color:#daff00; stop-opacity:.07" />',
+            '<stop offset="100%" style="stop-color:#191a18; stop-opacity:.07" />',
+            '</radialGradient>',
+            '</defs>',
+            '<rect width="100%" height="100%" fill="url(#grad1)" />',
+            '<text x="175" y="480" font-family="serif" font-size="10" fill="#a6a6a6">SEE RESTRICTIVE LEGENDS IN CERTIFICATE DATA</text>',
+            '<text x="50" y="220" font-family="serif" font-size="12" fill="#f2f2f2">THIS CERTIFIES THAT</text>',
+            '<text x="180" y="220" font-family="serif" font-size="12" fill="#daff00">', investorName, '</text>',
+            '<text x="310" y="220" font-family="serif" font-size="12" fill="#f2f2f2">is the owner of the</text>',
+            '<text x="413" y="220" font-family="serif" font-size="12" fill="#daff00">', securityType, '</text>',
+            '<text x="50" y="240" font-family="serif" font-size="12" fill="#f2f2f2">issued by</text>',
+            '<text x="115" y="240" font-family="serif" font-size="12" fill="#daff00">', companyName, '</text>',
+            '<text x="260" y="240" font-family="serif" font-size="12" fill="#f2f2f2">(the "Company") in exchange for</text>',
+            '<text x="437" y="240" font-family="serif" font-size="12" fill="#daff00">', investmentAmount, '</text>',
+            '<text x="50" y="260" font-family="serif" font-size="12" fill="#f2f2f2">at a Company valuation of</text>',
+            '<text x="193" y="260" font-family="serif" font-size="12" fill="#daff00">', companyValuation, '</text>',
+            '<text x="270" y="260" font-family="serif" font-size="12" fill="#f2f2f2">and represented by a certain Non-Fungible Tokenized</text>',
+            '<text x="50" y="280" font-family="serif" font-size="12" fill="#f2f2f2">Certificate as further set forth at:</text>',
+            '<text x="50" y="305" font-family="serif" font-size="12" fill="#daff00">', certificateUri, '</text>',
+            '</svg>'
+        ));
+
+        // Encode the SVG as base64
+        string memory base64Svg = Base64.encode(bytes(svg));
+        
+        // Return the complete data URI
+        return string(abi.encodePacked('data:image/svg+xml;base64,', base64Svg));
     }
 
     function _authorizeUpgrade(
