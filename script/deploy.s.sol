@@ -19,45 +19,96 @@ import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract BaseScript is Script {
-     function run() public {
+    mapping(uint256 => address) private stableAddresses;
 
+    function run() public {
         address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         vm.startBroadcast(deployerPrivateKey);
-        
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunch"));
-        address stableMainNetEth = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-        address stableArbitrum = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
-        address stableBase = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
-        address stableBaseSepolia = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
-        address stableSepolia = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
 
-         address stable = stableMainNetEth;//0x036CbD53842c5426634e7929541eC2318f3dCF7e;// 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;//0x036CbD53842c5426634e7929541eC2318f3dCF7e; //sepolia base
-         address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunch"));
+        uint256 currentChainId = block.chainid;
+        address stable;
+
+        if (currentChainId == 1) {
+            stable = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // Mainnet
+        } else if (currentChainId == 42161) {
+            stable = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831; // Arbitrum
+        } else if (currentChainId == 8453) {
+            stable = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913; // Base
+        } else if (currentChainId == 84532) {
+            stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e; // Base Sepolia
+        } else if (currentChainId == 11155111) {
+            stable = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238; // Sepolia
+        } else {
+            revert("Unsupported chain ID"); // Handle unsupported chains
+        }
+        address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
         //use salt to deploy BorgAuth
         BorgAuth auth = new BorgAuth{salt: salt}(deployerAddress);
 
-        address issuanceManagerFactory = address(new IssuanceManagerFactory{salt: salt}(address(auth)));
+        address issuanceManagerFactory = address(
+            new IssuanceManagerFactory{salt: salt}(address(auth))
+        );
 
-        address cyberCertPrinterImplementation = address(new CyberCertPrinter{salt: salt}());
-        CyberCertPrinter cyberCertPrinter = CyberCertPrinter(cyberCertPrinterImplementation);
+        address cyberCertPrinterImplementation = address(
+            new CyberCertPrinter{salt: salt}()
+        );
+        CyberCertPrinter cyberCertPrinter = CyberCertPrinter(
+            cyberCertPrinterImplementation
+        );
 
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "";
         //cyberCertPrinter.initialize(defaultLegend, "", "", "ipfs.io/ipfs/[cid]", address(0), SecurityClass.SAFE, SecuritySeries.SeriesPreSeed);
 
-        address cyberCorpSingleFactory = address(new CyberCorpSingleFactory{salt: salt}(address(auth)));
+        address cyberCorpSingleFactory = address(
+            new CyberCorpSingleFactory{salt: salt}(address(auth))
+        );
 
-        address dealManagerFactory = address(new DealManagerFactory{salt: salt}(address(auth)));
+        address dealManagerFactory = address(
+            new DealManagerFactory{salt: salt}(address(auth))
+        );
 
-       // address registry = address(new CyberAgreementRegistry{salt: salt}(address(auth)));
-                // Deploy CyberAgreementRegistry implementation and proxy
-        address registryImplementation = address(new CyberAgreementRegistry{salt: salt}());
-        bytes memory initData = abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth));
-        address registry = address(new ERC1967Proxy{salt: salt}(registryImplementation, initData));
+        // Deploy upgradeable singletons
 
-        address uriBuilder = address(new CertificateUriBuilder{salt: salt}());
-        CyberCorpFactory cyberCorpFactory = new CyberCorpFactory{salt: salt}(address(auth), address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder);
+        address registry = address(
+            new ERC1967Proxy{salt: salt}(
+                address(new CyberAgreementRegistry{salt: salt}()),
+                abi.encodeWithSelector(
+                    CyberAgreementRegistry.initialize.selector,
+                    address(auth)
+                )
+            )
+        );
+
+        address uriBuilder = address(
+            new ERC1967Proxy{salt: salt}(
+                address(new CertificateUriBuilder{salt: salt}()),
+                abi.encodeWithSelector(
+                    CertificateUriBuilder.initialize.selector,
+                    address(auth)
+                )
+            )
+        );
+
+        CyberCorpFactory cyberCorpFactory = CyberCorpFactory(
+            address(
+                new ERC1967Proxy{salt: salt}(
+                    address(new CyberCorpFactory{salt: salt}()),
+                    abi.encodeWithSelector(
+                        CyberCorpFactory.initialize.selector,
+                        address(auth),
+                        address(registry),
+                        cyberCertPrinterImplementation,
+                        issuanceManagerFactory,
+                        cyberCorpSingleFactory,
+                        dealManagerFactory,
+                        uriBuilder
+                    )
+                )
+            )
+        );
         cyberCorpFactory.setStable(stable);
 
         string[] memory globalFieldsSafe = new string[](5);
@@ -74,19 +125,33 @@ contract BaseScript is Script {
         partyFieldsSafe[3] = "investorType";
         partyFieldsSafe[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(1)), "SAFE", "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi", globalFieldsSafe, partyFieldsSafe);
+        CyberAgreementRegistry(registry).createTemplate(
+            bytes32(uint256(1)),
+            "SAFE",
+            "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi",
+            globalFieldsSafe,
+            partyFieldsSafe
+        );
 
         auth.updateRole(address(multisig), 200);
         auth.zeroOwner();
 
         console.log("auth: ", address(auth));
-        console.log("issuanceManagerFactory: ", address(issuanceManagerFactory));
-        console.log("cyberCorpSingleFactory: ", address(cyberCorpSingleFactory));
+        console.log(
+            "issuanceManagerFactory: ",
+            address(issuanceManagerFactory)
+        );
+        console.log(
+            "cyberCorpSingleFactory: ",
+            address(cyberCorpSingleFactory)
+        );
         console.log("dealManagerFactory: ", address(dealManagerFactory));
         console.log("uriBuilder: ", address(uriBuilder));
-        console.log("cyberCertPrinterImplementation: ", address(cyberCertPrinterImplementation));
+        console.log(
+            "cyberCertPrinterImplementation: ",
+            address(cyberCertPrinterImplementation)
+        );
         console.log("CyberAgreementRegistry: ", address(registry));
         console.log("CyberCorpFactory: ", address(cyberCorpFactory));
-        
-     }
+    }
 }

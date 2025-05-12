@@ -105,6 +105,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     // A mapping connecting an address to all the agreements they are a party to
     mapping(address => bytes32[]) public agreementsForParty;
 
+    // Upgrade notes: Reduced gap to account for new variables (50 - 9 = 41)
+    uint256[41] private __gap;
+
     event TemplateCreated(
         bytes32 indexed templateId,
         string indexed title,
@@ -548,6 +551,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         view
         returns (
             string memory legalContractUri,
+            string memory title,
             string[] memory globalFields,
             string[] memory signerFields
         )
@@ -558,6 +562,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         return (
             template.legalContractUri,
+            template.title,
             template.globalFields,
             template.partyFields
         );
@@ -792,20 +797,23 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         return keccak256(abi.encodePacked(hashes));
     }
 
-    // Helper function to convert bytes32 to string
-    function _bytes32ToString(
-        bytes32 _bytes32
-    ) internal pure returns (string memory) {
-        bytes memory bytesArray = new bytes(64);
-        for (uint256 i = 0; i < 32; i++) {
-            uint8 b = uint8(uint8(bytes1(bytes32(_bytes32) >> (8 * (31 - i)))));
-            bytesArray[i * 2] = bytes1(uint8(b / 16 + (b / 16 < 10 ? 48 : 87)));
-            bytesArray[i * 2 + 1] = bytes1(
-                uint8((b % 16) + (b % 16 < 10 ? 48 : 87))
-            );
-        }
-        return string(bytesArray);
+// Helper function to convert bytes32 to string
+function _bytes32ToString(bytes32 _bytes32) public pure returns (string memory) {
+    bytes memory bytesArray = new bytes(66); // 0x prefix + 64 hex chars
+    bytesArray[0] = "0";
+    bytesArray[1] = "x";
+
+    for (uint256 i = 0; i < 32; i++) {
+        uint8 byteValue = uint8(_bytes32[i]);
+        // High nibble (first hex char)
+        uint8 highNibble = (byteValue >> 4) & 0x0F;
+        bytesArray[2 + i * 2] = bytes1(highNibble < 10 ? 48 + highNibble : 87 + highNibble);
+        // Low nibble (second hex char)
+        uint8 lowNibble = byteValue & 0x0F;
+        bytesArray[3 + i * 2] = bytes1(lowNibble < 10 ? 48 + lowNibble : 87 + lowNibble);
     }
+    return string(bytesArray);
+}
 
     // Helper function to convert address to string
     function _addressToString(
