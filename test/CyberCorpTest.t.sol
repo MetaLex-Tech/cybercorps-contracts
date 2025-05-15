@@ -2848,6 +2848,7 @@ contract CyberCorpTest is Test {
             testPrivateKey
         );
 
+        certData[0].extension = warrantExtension;
         (
             address cyberCorp,
             address auth,
