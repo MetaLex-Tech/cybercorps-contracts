@@ -12,6 +12,7 @@ safteURI:
 |:--------------------|:-----------------------------------|
 | purchaseAmount      |       e.g. "1000.00"              |
 | postMoneyValuationCap       |          |
+| expirationTime      |         |
 | governingJurisdiction       |          |
 | disputeResolution   |         |
 | unlockStartTimeType |"tokenWarrantTime" \|"tgeTime" \| "setTime"        |
