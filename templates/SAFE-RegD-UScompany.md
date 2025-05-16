@@ -11,7 +11,6 @@ safeURI:https://ipfs.io/ipfs/bafybeiacwnkl4oai7ncsomqniu5jwoc3soibnwocrrt2jm2fhp
 |:--------------------|:-----------------------------------|
 | purchaseAmount       |       e.g. "1000.00"              |
 | postMoneyValuationCap       |          |
-| expirationTime       |         |
 | governingJurisdiction       |          |
 | disputeResolution       |         |
 
