@@ -131,7 +131,7 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
 
     /// @notice Proposes a new deal
     /// @dev Creates a new agreement and certificate for the deal
-    /// @param _certPrinterAddress Address of the certificate NFT contract
+    /// @param _certPrinterAddress Array of certificate printer addresses
     /// @param _paymentToken Address of the token used for payment
     /// @param _paymentAmount Amount to be paid
     /// @param _templateId ID of the agreement template to use
@@ -205,7 +205,7 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
 
     /// @notice Proposes and signs a deal in one transaction
     /// @dev Combines deal proposal and initial signature
-    /// @param _certPrinterAddress Address of the certificate NFT contract
+    /// @param _certPrinterAddress Array of certificate printer addresses
     /// @param _paymentToken Address of the token used for payment
     /// @param _paymentAmount Amount to be paid
     /// @param _templateId ID of the agreement template to use
