@@ -3755,7 +3755,52 @@ contract CyberCorpTest is Test {
         vm.startPrank(multisig);
         TokenWarrantExtension(warrantExtension).upgradeToAndCall(newImplementation, "");
         vm.stopPrank();
-        
+
+    }
+
+    function testRemoveOfficerAt() public {
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorpAddr,
+            address authAddr,
+            address issuanceManager,
+            address dealManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("OfficerRemoval"),
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer
+        );
+        CyberCorp cyberCorp = CyberCorp(cyberCorpAddr);
+
+        CompanyOfficer memory officer2 = CompanyOfficer({
+            eoa: address(0xBEEF),
+            name: "Second Officer",
+            contact: "second@example.com",
+            title: "CTO"
+        });
+        cyberCorp.addOfficer(officer2);
+
+        vm.expectEmit(true, true, true, true);
+        emit CyberCorp.OfficerRemoved(officer2.eoa, 1);
+        cyberCorp.removeOfficerAt(1);
+
+        BorgAuth corpAuth = BorgAuth(cyberCorp.AUTH());
+        assertEq(corpAuth.userRoles(officer2.eoa), 0);
+        vm.expectRevert();
+        cyberCorp.companyOfficers(1);
+        vm.stopPrank();
     }
 
     function precisionTest() public {
