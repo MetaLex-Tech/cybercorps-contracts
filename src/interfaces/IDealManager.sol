@@ -70,7 +70,7 @@ interface IDealManager {
         CertificateDetails[] memory _certDetails,
         address proposer,
         bytes memory signature,
-        string[][] memory paryValues,
+        string[][] memory partyValues,
         address[] memory conditions,
         bytes32 secretHash,
         uint256 expiry
