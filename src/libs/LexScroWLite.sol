@@ -42,6 +42,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -55,6 +56,7 @@ import {LexScrowStorage, Escrow, Token, TokenType, EscrowStatus} from "../storag
 
 abstract contract LexScroWLite is Initializable, ReentrancyGuard {
     using LexScrowStorage for LexScrowStorage.LexScrowData;
+    using SafeERC20 for IERC20;
 
     error DealExpired();
     error EscrowNotPending();
@@ -120,7 +122,7 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
 
         for(uint256 i = 0; i < escrow.buyerAssets.length; i++) {
             if(escrow.buyerAssets[i].tokenType == TokenType.ERC20) {
-                IERC20(escrow.buyerAssets[i].tokenAddress).transferFrom(escrow.counterParty, address(this), escrow.buyerAssets[i].amount);
+                IERC20(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(escrow.counterParty, address(this), escrow.buyerAssets[i].amount);
             }
             else if(escrow.buyerAssets[i].tokenType == TokenType.ERC721) {
                 IERC721(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(escrow.counterParty, address(this), escrow.buyerAssets[i].tokenId);
@@ -142,7 +144,7 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
         // Refund buyer assets first
         for(uint256 i = 0; i < escrow.buyerAssets.length; i++) {
             if(escrow.buyerAssets[i].tokenType == TokenType.ERC20) {
-                IERC20(escrow.buyerAssets[i].tokenAddress).transfer(escrow.counterParty, escrow.buyerAssets[i].amount);
+                IERC20(escrow.buyerAssets[i].tokenAddress).safeTransfer(escrow.counterParty, escrow.buyerAssets[i].amount);
             }
             else if(escrow.buyerAssets[i].tokenType == TokenType.ERC721) {
                 IERC721(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), escrow.counterParty, escrow.buyerAssets[i].tokenId);
@@ -169,7 +171,7 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
         // Transfer buyer assets to company
         for(uint256 i = 0; i < escrow.buyerAssets.length; i++) {
             if(escrow.buyerAssets[i].tokenType == TokenType.ERC20) {
-                IERC20(escrow.buyerAssets[i].tokenAddress).transfer(ICyberCorp(LexScrowStorage.getCorp()).companyPayable(), escrow.buyerAssets[i].amount);
+                IERC20(escrow.buyerAssets[i].tokenAddress).safeTransfer(ICyberCorp(LexScrowStorage.getCorp()).companyPayable(), escrow.buyerAssets[i].amount);
             }
             else if(escrow.buyerAssets[i].tokenType == TokenType.ERC721) {
                 IERC721(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), ICyberCorp(LexScrowStorage.getCorp()).companyPayable(), escrow.buyerAssets[i].tokenId);
@@ -182,7 +184,7 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
         // Transfer corp assets to counter party
         for(uint256 i = 0; i < escrow.corpAssets.length; i++) {
             if(escrow.corpAssets[i].tokenType == TokenType.ERC20) {
-                IERC20(escrow.corpAssets[i].tokenAddress).transfer(escrow.counterParty, escrow.corpAssets[i].amount);
+                IERC20(escrow.corpAssets[i].tokenAddress).safeTransfer(escrow.counterParty, escrow.corpAssets[i].amount);
             }
             else if(escrow.corpAssets[i].tokenType == TokenType.ERC721) {
                 IERC721(escrow.corpAssets[i].tokenAddress).safeTransferFrom(address(this), escrow.counterParty, escrow.corpAssets[i].tokenId);
