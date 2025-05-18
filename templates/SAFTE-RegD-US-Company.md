@@ -77,7 +77,7 @@ enum TokenCalculationMethod {
 }
 
 enum UnlockStartTimeType {
-    tokenWarrentTime,
+    tokenWarrantTime,
     tgeTime,
     setTime
 }

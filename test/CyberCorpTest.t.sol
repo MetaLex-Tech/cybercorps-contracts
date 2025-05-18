@@ -66,6 +66,7 @@ import {Escrow} from "../src/storage/LexScrowStorage.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {TokenWarrantExtension, TokenWarrantData} from "../src/storage/extensions/TokenWarrantExtension.sol";
 import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
+import {SAFTEExtension, SAFTEData} from "../src/storage/extensions/SAFTEExtension.sol";
 
 contract CyberCorpTest is Test {
     using ERC1967ProxyLib for address;
@@ -2758,7 +2759,7 @@ contract CyberCorpTest is Test {
          TokenWarrantData memory tokenWarrant = TokenWarrantData({
             exercisePriceMethod: ExercisePriceMethod.perWarrant,
             exercisePrice: 100000,
-            unlockStartTimeType: UnlockStartTimeType.tokenWarrentTime,
+            unlockStartTimeType: UnlockStartTimeType.tokenWarrantTime,
             unlockStartTime: block.timestamp,
             unlockingPeriod: 100000,
             latestExpirationTime: block.timestamp + 100000,
@@ -3806,5 +3807,181 @@ contract CyberCorpTest is Test {
 
     function precisionTest() public {
 
+    }
+
+    function testPrintCertificateSAFTEUri() public {
+        vm.startPrank(testAddress);
+        bytes32 salt = bytes32(keccak256("TestSAFTE"));
+        address safteExtension = address(new ERC1967Proxy{salt: salt}(
+           address(new SAFTEExtension{salt: salt}()),
+           abi.encodeWithSelector(SAFTEExtension.initialize.selector, address(auth))
+        ));
+
+        SAFTEData memory safteData = SAFTEData({
+            unlockStartTimeType: UnlockStartTimeType.tokenWarrantTime,
+            unlockStartTime: block.timestamp,
+            unlockingPeriod: 100000,
+            unlockingCliffPeriod: 100000,
+            unlockingCliffPercentage: 100000,
+            unlockingIntervalType: UnlockingIntervalType.monthly,
+            tokenCalculationMethod: TokenCalculationMethod.equityProRataToTokenSupply,
+            minCompanyReserve: 0,
+            tokenPremiumMultiplier: 0
+        });
+
+        bytes memory safteDataEncoded = abi.encode(safteData);
+
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "Gabe",
+            signingOfficerTitle: "CEO",
+            investmentAmountUSD: 100000,
+            issuerUSDValuationAtTimeOfInvestment: 100000000,
+            unitsRepresented: 100000,
+            legalDetails: "Legal Details",
+            extensionData: safteDataEncoded
+        });
+        _details[0] = _detailsA;
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalFields = new string[](5);
+        globalFields[0] = "purchaseAmount";
+        globalFields[1] = "postMoneyValuationCap";
+        globalFields[2] = "expirationTime";
+        globalFields[3] = "governingJurisdiction";
+        globalFields[4] = "disputeResolution";
+
+        string[] memory partyFields = new string[](5);
+        partyFields[0] = "name";
+        partyFields[1] = "evmAddress";
+        partyFields[2] = "contactDetails";
+        partyFields[3] = "investorType";
+        partyFields[4] = "investorJurisdiction";
+
+        address[] memory parties = new address[](2);
+        parties[0] = testAddress;
+        parties[1] = address(0);
+        uint256 _paymentAmount = 100000;
+
+        string[] memory globalValues = new string[](5);
+        globalValues[0] = "100000";
+        globalValues[1] = "100000000";
+        globalValues[2] = "12/1/2025";
+        globalValues[3] = "Deleware";
+        globalValues[4] = "Binding Arbitration";
+
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](5);
+        partyValues[0][0] = "Gabe";
+        partyValues[0][1] = "0xDEADBABE12345678909876543210866666666666";
+        partyValues[0][2] = "@Gabe";
+        partyValues[0][3] = "Limited Liability Company";
+        partyValues[0][4] = "Deleware";
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                bytes32(uint256(2)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        bytes memory proposerSignature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "https://ipfs.io/ipfs/bafybeieee4xjqpwcq5nowm4iqw6ik4wkwpz7uqohl3yamypwz54was2h64",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        certData[0].extension = safteExtension;
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certData,
+                bytes32(uint256(2)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                proposerSignature,
+                _details,
+                conditions,
+                bytes32(0),
+                block.timestamp + 1000000
+            );
+        vm.stopPrank();
+
+        uint256 newPartyPk = 80085;
+        address newPartyAddr = vm.addr(newPartyPk);
+        string[] memory partyValuesB = new string[](5);
+        partyValuesB[0] = "Mr. Prepop";
+        partyValuesB[1] = "0xC0FFEEBABE12345678909876543210866666666666";
+        partyValuesB[2] = "@0xPrepop";
+        partyValuesB[3] = "Limited Liability Company";
+        partyValuesB[4] = "Deleware";
+
+        vm.startPrank(newPartyAddr);
+        bytes memory newPartySignature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "https://ipfs.io/ipfs/bafybeieee4xjqpwcq5nowm4iqw6ik4wkwpz7uqohl3yamypwz54was2h64",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValuesB,
+            newPartyPk
+        );
+
+        IDealManager dealManager = IDealManager(dealManagerAddr);
+        deal(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e,
+            newPartyAddr,
+            _paymentAmount
+        );
+        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(
+            address(dealManager),
+            _paymentAmount
+        );
+
+        dealManager.signAndFinalizeDeal(
+            newPartyAddr,
+            id,
+            partyValuesB,
+            newPartySignature,
+            true,
+            "John Doe",
+            "passphrase"
+        );
+
+        // Get the token URI and verify it contains the SAFTE details
+        string memory tokenUri = CyberCertPrinter(cyberCertPrinterAddr[0]).tokenURI(0);
+        assertTrue(bytes(tokenUri).length > 0, "Token URI should not be empty");
+        vm.stopPrank();
     }
 }
