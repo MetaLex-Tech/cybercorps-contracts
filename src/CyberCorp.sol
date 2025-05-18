@@ -193,10 +193,12 @@ contract CyberCorp is Initializable, BorgAuthACL {
     /// @dev Only callable by owner, revokes officer role
     /// @param _index Index of the officer to remove
     function removeOfficerAt(uint256 _index) external onlyOwner() {
-        AUTH.updateRole(companyOfficers[_index].eoa, 0);
+        require(_index < companyOfficers.length, "Index out of bounds");
+        address officerEOA = companyOfficers[_index].eoa;
+        AUTH.updateRole(officerEOA, 0);
         companyOfficers[_index] = companyOfficers[companyOfficers.length - 1];
         companyOfficers.pop();
-        emit OfficerRemoved(companyOfficers[_index].eoa, _index);
+        emit OfficerRemoved(officerEOA, _index);
     }
 
     function setCompanyPayable(address _companyPayable) external onlyOwner() {
