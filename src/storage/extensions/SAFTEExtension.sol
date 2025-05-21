@@ -126,13 +126,13 @@ contract SAFTEExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     }
 
     function conversionTypeToString(TokenCalculationMethod _type) internal pure returns (string memory) {
-        if (_type == TokenCalculationMethod.equityProRataToCompanyReserve) return "equityProRataToCompanyReserve";
+        if (_type == TokenCalculationMethod.equityProRataToCompanyReserve) return "safteFixedEquityProRataToCompanyReserve";
         if (_type == TokenCalculationMethod.equityProRataToTokenSupply) return "equityProRataToTokenSupply";
         return "Unknown";
     }
 
     function UnlockStartTimeTypeToString(UnlockStartTimeType _type) internal pure returns (string memory) {
-        if (_type == UnlockStartTimeType.tokenWarrantTime) return "tokenWarrantTime";
+        if (_type == UnlockStartTimeType.tokenWarrantTime) return "agreementDateTime";
         if (_type == UnlockStartTimeType.tgeTime) return "tgeTime";
         if (_type == UnlockStartTimeType.setTime) return "setTime";
         return "Unknown";

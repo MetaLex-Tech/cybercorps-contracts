@@ -3811,12 +3811,15 @@ contract CyberCorpTest is Test {
 
     function testPrintCertificateSAFTEUri() public {
         vm.startPrank(testAddress);
+        bytes32 check = bytes32(bytes("nuvolari_safet"));
+      //  console.log(check);
         bytes32 salt = bytes32(keccak256("TestSAFTE"));
+        console.logBytes32(check);
         address safteExtension = address(new ERC1967Proxy{salt: salt}(
            address(new SAFTEExtension{salt: salt}()),
            abi.encodeWithSelector(SAFTEExtension.initialize.selector, address(auth))
         ));
-
+        
         SAFTEData memory safteData = SAFTEData({
             unlockStartTimeType: UnlockStartTimeType.tokenWarrantTime,
             unlockStartTime: block.timestamp,
@@ -3982,6 +3985,7 @@ contract CyberCorpTest is Test {
         // Get the token URI and verify it contains the SAFTE details
         string memory tokenUri = CyberCertPrinter(cyberCertPrinterAddr[0]).tokenURI(0);
         assertTrue(bytes(tokenUri).length > 0, "Token URI should not be empty");
+        console.log("tokenUri: ", tokenUri);
         vm.stopPrank();
     }
 }
