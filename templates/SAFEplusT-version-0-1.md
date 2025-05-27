@@ -1,23 +1,34 @@
 # Data Overview
 
-id: bytes32(uint256(10))
+id: bytes32(uint256(2))
 
 legalURI:
-safeURI: IPFS://bafybeic242ypthamyr3kxnwk4x7sxj7s6svck4xfu3dzgttvic73lihy6m
-
-combined doc: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeic242ypthamyr3kxnwk4x7sxj7s6svck4xfu3dzgttvic73lihy6m
-
-SAFE alone: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeigzzz3kl2k4mpdkbq5dikrwgixh5cqr4r2ihayjb3v32swxc4e5hu
+safeURI:https://ipfs.io/ipfs/bafybeiacwnkl4oai7ncsomqniu5jwoc3soibnwocrrt2jm2fhpz6c2cczm
+tokenWarrantURI:https://ipfs.io/ipfs/bafybeia2kruqmomqbyw37oi5mbodzrfsnk2b3x2d46k2e224u6oinrpudi
 
 ## Global Fields
 
 | **globalFieldName** | **description**                    |
 |:--------------------|:-----------------------------------|
-| purchaseAmount       |       e.g. "1000.00"              |
+| purchaseAmount      |       e.g. "1000.00"              |
 | postMoneyValuationCap       |          |
-| expirationTime       |         |
+| expirationTime      |         |
 | governingJurisdiction       |          |
-| disputeResolution       |         |
+| disputeResolution   |         |
+| exercisePriceMethod | "perToken" or "perWarrant"  |
+| exercisePrice       | price, e.g. "1000.00"  |
+| unlockStartTimeType |"tokenWarrantTime" \|"tgeTime" \| "setTime"        |
+| unlockStartTime       | only set if using `setTime` for `unlockStartTimeType` |
+| unlockingPeriod       | Duration in `unlockingInvervalType` units  |
+| latestExpirationTime       | Unix timestamp. Will not be prompted for in UI, will be 10 yrs from deal date   |
+| unlockingCliffPeriod       | Duration in `unlockingIntervalType`, first tokens unlocked at `unlockingStartTime` + `unlockingCliffPeriod`  |
+| unlockingCliffPercentage       | e.g. "10.5%" |
+| unlockingIntervalType       |  "secondly", "hourly", "daily", "monthly", "blockly". Note that this affects both `unlockingPeriod` and `unlockingCliffPeriod`   |
+| tokenCalculationMethod       |  `equityProRataToTokenSupply` or `equityProRataToCompanyReserve`        |
+| minCompanyReserve       | This is a number of tokens   |
+| tokenPremiumMultiplier  | A number. If SAFE is worth 30% of company fully diluted equity, and premium multiplier is 2, the investor can buy 15% of total supply.       |
+
+
 
 ## Party Fields
 
@@ -30,9 +41,26 @@ SAFE alone: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeigzzz3kl
 | investorJurisdiction       |   |
 
 
+
 ## Certificate Extension
 
-none.
+name: TokenWarrantExtension
+```solidity
+struct TokenWarrantData {
+    ExercisePriceMethod exercisePriceMethod;  // perToken or perWarrant
+    uint256 exercisePrice;    // 18 decimals
+    UnlockStartTimeType unlockStartTimeType;    // enum of different types, can be tokenWarrantTime, tgeTime, or setTime
+    uint256 unlockStartTime;                
+    uint256 unlockingPeriod;
+    uint256 latestExpirationTime;
+    uint256 unlockingCliffPeriod;
+    uint256 unlockingCliffPercentage; 
+    UnlockingIntervalType unlockingIntervalType; // blockly, secondly, daily, weekly, monthly
+    TokenCalculationMethod tokenCalculationMethod; //equityProRataToTokenSupply or equityProRataToCompanyReserve
+    uint256 minCompanyReserve; //minimum company reserve within an equityProRataToCompanyReserve method--set to 0 if there is no minimum
+    uint256 tokenPremiumMultiplier; //multiplier of network valuation over company equity valuation, to be used within equityProRataToTokenSupply method (set to 0 if no premium)
+}
+```
 
 ## CertificateDetails Struct (for reference)
 
@@ -46,6 +74,33 @@ struct CertificateDetails {
     string legalDetails;
     bytes extensionData;
 }
+```
+
+```
+enum ExercisePriceMethod {
+    perToken,
+    perWarrant
+}
+
+enum TokenCalculationMethod {
+    equityProRataToCompanyReserve,
+    equityProRataToTokenSupply 
+}
+
+enum UnlockStartTimeType {
+    tokenWarrantTime,
+    tgeTime,
+    setTime
+}
+
+enum UnlockingIntervalType {
+    blockly,
+    secondly,
+    hourly,
+    daily,
+    monthly
+}
+
 ```
 
 Restrictive Legends:
