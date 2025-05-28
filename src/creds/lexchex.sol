@@ -65,8 +65,9 @@ interface IERC5484 {
 }
 
 contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, BorgAuthACL, IERC5484 {
+    using LeXcheXStorage for *;
 
-    BurnAuth BURNAUTH = BurnAuth.OwnerOnly;
+    BurnAuth constant BURNAUTH = BurnAuth.OwnerOnly;
 
     // Custom errors
     error LexChex_SoulBound();
@@ -76,18 +77,10 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, BorgAuthACL, IER
     error LexChex_OnlyIssuerOrOwnerCanBurn();
     error LexChex_TokenDoesNotExist();
 
-    struct accreditation {
-        string agreementId;
-        address registryAddress;
-        uint256 issuanceDate;
-        uint256 expiryDate;
-        string voided;
-        bytes signature;
-    }
-    
-    mapping(uint256 => accreditation) public accreditations;
-
-    string certificateUri;
+    //events
+    event issued(address indexed owner, uint256 indexed id, Accreditation acc);
+    event voided(address indexed owner, uint256 indexed id, string reason);
+    event Burned(address indexed owner, uint256 indexed id);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -96,10 +89,14 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, BorgAuthACL, IER
 
     function initialize(address _auth) public initializer {
         __BorgAuthACL_init(_auth);
+        __ERC721_init("LeXcheX", "LXC");
     }
 
-    function mint(address to, uint256 tokenId) public onlyAdmin {
+    function mint(address to, Accreditation memory acc) public onlyAdmin returns (uint256 tokenId) {
+        tokenId = LeXcheXStorage.incrementSupply();
         _mint(to, tokenId);
+        LeXcheXStorage.setAccreditation(tokenId, acc);
+        emit issued(msg.sender, tokenId, acc);
         emit Issued(address(0), to, tokenId, BURNAUTH);
     }
 
@@ -108,12 +105,43 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, BorgAuthACL, IER
         if(msg.sender != owner) {
             revert LexChex_OnlyOwnerCanBurn();
         }
-        
         _burn(tokenId);
+        LeXcheXStorage.deleteAccreditation(tokenId);
+        emit Burned(msg.sender, tokenId);
+    }
+     
+    function void(uint256 id, string memory reason) external onlyOwner {
+        Accreditation storage acc = LeXcheXStorage.getAccreditation(id);
+        //if acc.voided string is longer than 0
+        if(bytes(acc.voided).length > 0)
+        {
+            acc.voided = reason;
+        }
+        emit voided(msg.sender, id, reason);
     }
 
     function burnAuth(uint256 tokenId) external view override returns (BurnAuth) {
         return BURNAUTH;
+    }
+
+    function getPortfolioAt(uint256 tokenId) public view returns (string[] memory) {
+        Accreditation storage acc = LeXcheXStorage.getAccreditation(tokenId);
+        return acc.portfolio;
+    }
+    
+    //read to check if the token is valid or not
+    function isValid(uint256 tokenId) public view returns (bool) {
+        Accreditation storage acc = LeXcheXStorage.getAccreditation(tokenId);
+        if(acc.issuanceDate == 0) {
+            return false;
+        }
+        if(bytes(acc.voided).length > 0) {
+            return false;
+        }
+        if(block.timestamp > acc.expiryDate) {
+            return false;
+        }
+        return true;
     }
     
     /**
