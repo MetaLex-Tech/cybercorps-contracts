@@ -93,11 +93,12 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, BorgAuthACL, IER
     }
 
     function mint(address to, Accreditation memory acc) public onlyAdmin returns (uint256 tokenId) {
-        tokenId = LeXcheXStorage.incrementSupply();
+        tokenId = LeXcheXStorage.getSupply();
         _mint(to, tokenId);
         LeXcheXStorage.setAccreditation(tokenId, acc);
         emit issued(msg.sender, tokenId, acc);
         emit Issued(address(0), to, tokenId, BURNAUTH);
+        LeXcheXStorage.incrementSupply();
     }
 
     function burn(uint256 tokenId) public {
@@ -112,11 +113,7 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, BorgAuthACL, IER
      
     function void(uint256 id, string memory reason) external onlyOwner {
         Accreditation storage acc = LeXcheXStorage.getAccreditation(id);
-        //if acc.voided string is longer than 0
-        if(bytes(acc.voided).length > 0)
-        {
-            acc.voided = reason;
-        }
+        acc.voided = reason;
         emit voided(msg.sender, id, reason);
     }
 
@@ -142,6 +139,10 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, BorgAuthACL, IER
             return false;
         }
         return true;
+    }
+
+    function accreditations(uint256 tokenId) public view returns (Accreditation memory) {
+        return LeXcheXStorage.getAccreditation(tokenId);
     }
     
     /**
