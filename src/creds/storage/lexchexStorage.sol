@@ -51,7 +51,13 @@ library LeXcheXStorage {
         // Contract configuration
         address auth;
         bool initialized;
+
+        address dealRegistry;
+        address templateId;
+        address accountPayable;
     }
+
+
 
     // Returns the storage layout
     function lexchexStorage() internal pure returns (LeXcheXData storage s) {
@@ -98,6 +104,14 @@ library LeXcheXStorage {
         lexchexStorage().initialized = _initialized;
     }
 
+    function setDealRegistry(address _dealRegistry) internal {
+        lexchexStorage().dealRegistry = _dealRegistry;
+    }
+
+    function getDealRegistry() internal view returns (address) {
+        return lexchexStorage().dealRegistry;
+    }
+
     function isInitialized() internal view returns (bool) {
         return lexchexStorage().initialized;
     }
@@ -108,5 +122,21 @@ library LeXcheXStorage {
 
     function deleteAccreditation(uint256 tokenId) internal {
         delete lexchexStorage().accreditations[tokenId];
+    }
+
+    function setTemplateId(address _templateId) internal {
+        lexchexStorage().templateId = _templateId;
+    }
+
+    function getTemplateId() internal view returns (address) {
+        return lexchexStorage().templateId;
+    }
+
+    function setAccountPayable(address _accountPayable) internal {
+        lexchexStorage().accountPayable = _accountPayable;
+    }
+
+    function getAccountPayable() internal view returns (address) {
+        return lexchexStorage().accountPayable;
     }
 }

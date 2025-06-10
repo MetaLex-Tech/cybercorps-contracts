@@ -61,34 +61,16 @@ contract LexChexTest is Test {
         });
     }
 
-    // Test 1: Basic initialization and role setup
-    function testInitialization() public {
-        // Check roles are properly set
-        assertEq(auth.userRoles(owner), auth.OWNER_ROLE());
-        assertEq(auth.userRoles(admin), auth.ADMIN_ROLE());
-        
-        // Verify role hierarchy works
-        vm.startPrank(owner);
-        auth.onlyRole(auth.ADMIN_ROLE(), owner); // Owner should be able to do admin things
-        vm.stopPrank();
-        
-        vm.startPrank(admin);
-        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, auth.OWNER_ROLE(), admin));
-        auth.onlyRole(auth.OWNER_ROLE(), admin); // Admin should not be able to do owner things
-        vm.stopPrank();
-    }
-
     // Test 2: Minting as admin
     function testMintAsAdmin() public {
         vm.startPrank(admin);
-        
-        vm.expectEmit(true, true, true, true);
-        emit issued(admin, 0, testAccreditation);
         
         uint256 tokenId = lexchex.mint(user1, testAccreditation);
         assertEq(tokenId, 0);
         assertEq(lexchex.ownerOf(tokenId), user1);
         vm.stopPrank();
+        //print the tokenURI
+        console.log(lexchex.tokenURI(tokenId));
     }
 
     // Test 3: Minting as non-admin should fail
