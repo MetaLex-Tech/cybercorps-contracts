@@ -3811,10 +3811,20 @@ contract CyberCorpTest is Test {
 
     function testPrintCertificateSAFTEUri() public {
         vm.startPrank(testAddress);
-        bytes32 check = bytes32(bytes("nuvolari_safet"));
-      //  console.log(check);
-        bytes32 salt = bytes32(keccak256("TestSAFTE"));
+        //bytes32 check = bytes32(bytes("nuvolari_safet"));
+        bytes32 check = bytes32(uint256(10));
         console.logBytes32(check);
+        check = bytes32(uint256(11));
+        console.logBytes32(check);
+
+        check = bytes32(uint256(12));
+        console.logBytes32(check);
+
+        check = bytes32(uint256(13));
+        console.logBytes32(check);
+
+        bytes32 salt = bytes32(keccak256("TestSAFTE"));
+        
         address safteExtension = address(new ERC1967Proxy{salt: salt}(
            address(new SAFTEExtension{salt: salt}()),
            abi.encodeWithSelector(SAFTEExtension.initialize.selector, address(auth))
