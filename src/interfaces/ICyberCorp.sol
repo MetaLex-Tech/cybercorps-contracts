@@ -39,7 +39,7 @@ distributed, transmitted, sublicensed, sold, or otherwise used in any form or by
 mechanical, including photocopying, recording, or by any information storage and retrieval system, 
 except with the express prior written permission of the copyright holder.*/
 
-import {CompanyOfficer} from "../CyberCorpConstants.sol";
+import {CompanyOfficer, CompanyDirector, BoardInfo} from "../CyberCorpConstants.sol";
 
 pragma solidity 0.8.28;
 
@@ -62,6 +62,23 @@ interface ICyberCorp {
     function defaultDisputeResolution() external view returns (string memory);
     function companyPayable() external view returns (address);
     function companyOfficers() external view returns (address[] memory);
+    function companyDirectors(uint256)
+        external
+        view
+        returns (address eoa, string memory name, string memory contact, string memory title);
+    function boardInfo()
+        external
+        view
+        returns (uint256 seats, string memory votingRule, address chairman, address boardSafe);
+    function addDirector(CompanyDirector memory _director) external;
+    function removeDirector(address _address) external;
+    function removeDirectorAt(uint256 _index) external;
+    function setBoardInfo(
+        uint256 _seats,
+        string memory _votingRule,
+        address _chairman,
+        address _boardSafe
+    ) external;
     function cyberCORPType() external view returns (string memory);
     function dealManager() external view returns (address);
     function setDealManager(address _dealManager) external;

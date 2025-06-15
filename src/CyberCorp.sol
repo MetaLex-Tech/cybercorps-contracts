@@ -74,11 +74,18 @@ contract CyberCorp is Initializable, BorgAuthACL {
     address public upgradeFactory;
     /// @notice Array of company officers with their roles and details
     CompanyOfficer[] public companyOfficers;
+    /// @notice Array of company directors with their roles and details
+    CompanyDirector[] public companyDirectors;
+    /// @notice Board information for the corporation
+    BoardInfo public boardInfo;
 
 
     event CyberCORPDetailsUpdated(string cyberCORPName, string cyberCORPType, string cyberCORPJurisdiction, string cyberCORPContactDetails, string defaultDisputeResolution);
     event OfficerAdded(address indexed officer, uint256 index);
     event OfficerRemoved(address indexed officer, uint256 index);
+    event DirectorAdded(address indexed director, uint256 index);
+    event DirectorRemoved(address indexed director, uint256 index);
+    event BoardInfoUpdated(uint256 seats, string votingRule, address chairman, address boardSafe);
     event CompanyPayableUpdated(address indexed companyPayable, address indexed oldCompanyPayable);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -199,6 +206,62 @@ contract CyberCorp is Initializable, BorgAuthACL {
         companyOfficers[_index] = companyOfficers[companyOfficers.length - 1];
         companyOfficers.pop();
         emit OfficerRemoved(officerEOA, _index);
+    }
+
+    /// @notice Adds a new director to the board
+    /// @dev Only callable by owner, sets director role to 200
+    /// @param _director Director details including address and role
+    function addDirector(CompanyDirector memory _director) external onlyOwner() {
+        companyDirectors.push(_director);
+        AUTH.updateRole(_director.eoa, 200);
+        emit DirectorAdded(_director.eoa, companyDirectors.length - 1);
+    }
+
+    /// @notice Removes a director by their address
+    /// @dev Only callable by owner, revokes director role
+    /// @param _address Address of the director to remove
+    function removeDirector(address _address) external onlyOwner() {
+        AUTH.updateRole(_address, 0);
+        for (uint256 i = 0; i < companyDirectors.length; i++) {
+            if (companyDirectors[i].eoa == _address) {
+                companyDirectors[i] = companyDirectors[companyDirectors.length - 1];
+                companyDirectors.pop();
+                emit DirectorRemoved(_address, i);
+                break;
+            }
+        }
+    }
+
+    /// @notice Removes a director by index
+    /// @dev Only callable by owner, revokes director role
+    /// @param _index Index of the director to remove
+    function removeDirectorAt(uint256 _index) external onlyOwner() {
+        require(_index < companyDirectors.length, "Index out of bounds");
+        address directorEOA = companyDirectors[_index].eoa;
+        AUTH.updateRole(directorEOA, 0);
+        companyDirectors[_index] = companyDirectors[companyDirectors.length - 1];
+        companyDirectors.pop();
+        emit DirectorRemoved(directorEOA, _index);
+    }
+
+    /// @notice Sets board information
+    /// @param _seats Number of board seats
+    /// @param _votingRule Voting rule description
+    /// @param _chairman Address of the board chairman (0 if none)
+    /// @param _boardSafe Address of the gnosis safe used for votes
+    function setBoardInfo(
+        uint256 _seats,
+        string memory _votingRule,
+        address _chairman,
+        address _boardSafe
+    ) external onlyOwner() {
+        boardInfo = BoardInfo({
+            seats: _seats,
+            votingRule: _votingRule,
+            chairman: _chairman,
+            boardSafe: _boardSafe
+        });
+        emit BoardInfoUpdated(_seats, _votingRule, _chairman, _boardSafe);
     }
 
     function setCompanyPayable(address _companyPayable) external onlyOwner() {
