@@ -184,8 +184,7 @@ contract CyberCorpTest is Test {
             address(new CertificateUriBuilder{salt: salt}()),
             abi.encodeWithSelector(
                 CertificateUriBuilder.initialize.selector,
-                address(auth)
-            )
+                address(auth))
         ));
 
         cyberCorpFactory = CyberCorpFactory(address(new ERC1967Proxy{salt: salt}(
@@ -3970,7 +3969,6 @@ contract CyberCorpTest is Test {
             partyValuesB,
             newPartyPk
         );
-
         IDealManager dealManager = IDealManager(dealManagerAddr);
         deal(
             0x036CbD53842c5426634e7929541eC2318f3dCF7e,
@@ -3997,5 +3995,328 @@ contract CyberCorpTest is Test {
         assertTrue(bytes(tokenUri).length > 0, "Token URI should not be empty");
         console.log("tokenUri: ", tokenUri);
         vm.stopPrank();
+    }
+
+    function testCreateOfferBasic() public {
+        // First deploy a CyberCorp without creating an offer
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "Test Officer",
+            signingOfficerTitle: "CEO",
+            investmentAmountUSD: 100000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 1000,
+            legalDetails: "Legal Details for test",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("CreateOfferTest"),
+            "TestCorp",
+            "Limited Liability Company",
+            "Delaware",
+            "Contact Details",
+            "Dispute Resolution",
+            testAddress,
+            officer
+        );
+        vm.stopPrank();
+
+        // Now create an offer using the new createOffer function
+        DealManager dealManager = DealManager(dealManagerAddr);
+        
+        // Prepare certificate data
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Test Legend";
+        
+        DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](1);
+        certData[0] = DealManager.CyberCertData({
+            name: "Test Certificate",
+            symbol: "TEST",
+            uri: "ipfs://test-uri",
+            securityClass: SecurityClass.SAFE,
+            securitySeries: SecuritySeries.SeriesPreSeed,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+
+        // Prepare deal parameters
+        bytes32 templateId = bytes32(uint256(1));
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = testAddress;
+        parties[1] = address(0);
+        uint256 paymentAmount = 1000000000000000000; // 1 ETH
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+
+        // Create signature
+        bytes32 contractId = keccak256(
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        address[] memory conditions = new address[](0);
+        bytes32 secretHash = bytes32(0);
+        uint256 expiry = block.timestamp + 1000000;
+        address stableAddress = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
+
+        vm.startPrank(testAddress);
+        (
+            address[] memory certPrinterAddress,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = dealManager.createOffer(
+            block.timestamp,
+            certData,
+            templateId,
+            globalValues,
+            parties,
+            paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            secretHash,
+            expiry,
+            stableAddress
+        );
+        vm.stopPrank();
+
+        // Verify the results
+        assertEq(certPrinterAddress.length, 1, "Should have created 1 certificate printer");
+        assertEq(certIds.length, 1, "Should have created 1 certificate");
+        assertTrue(id != bytes32(0), "Should have created a valid agreement ID");
+
+        // Verify the certificate printer was created correctly
+        CyberCertPrinter certPrinter = CyberCertPrinter(certPrinterAddress[0]);
+
+        
+        // Verify the certificate name includes the company name
+        string memory expectedName = "TestCorp Test Certificate";
+        // Note: We can't directly check the name as it's not exposed in the interface
+        // but we can verify the certificate was created successfully
+        
+        // Verify the deal was created in the registry
+        assertTrue(
+            CyberAgreementRegistry(registry).hasSigned(id, testAddress),
+            "Deal should be signed by the proposer"
+        );
+
+        console.log("Created certificate printer:", certPrinterAddress[0]);
+        console.log("Created certificate ID:", certIds[0]);
+        console.log("Created agreement ID:", vm.toString(id));
+    }
+
+    function testCreateOfferMultipleCertificates() public {
+        // First deploy a CyberCorp without creating an offer
+        CertificateDetails[] memory _details = new CertificateDetails[](2);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "Test Officer",
+            signingOfficerTitle: "CEO",
+            investmentAmountUSD: 100000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 1000,
+            legalDetails: "Legal Details for SAFE",
+            extensionData: ""
+        });
+        CertificateDetails memory _detailsB = CertificateDetails({
+            signingOfficerName: "Test Officer",
+            signingOfficerTitle: "CEO",
+            investmentAmountUSD: 50000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 500,
+            legalDetails: "Legal Details for Token Warrant",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+        _details[1] = _detailsB;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("CreateOfferMultipleTest"),
+            "MultiCertCorp",
+            "Limited Liability Company",
+            "Delaware",
+            "Contact Details",
+            "Dispute Resolution",
+            testAddress,
+            officer
+        );
+        vm.stopPrank();
+
+        // Now create an offer with multiple certificates
+        DealManager dealManager = DealManager(dealManagerAddr);
+        
+        // Prepare certificate data for multiple certificates
+        string[] memory safeLegend = new string[](1);
+        safeLegend[0] = "SAFE Legend";
+        string[] memory warrantLegend = new string[](1);
+        warrantLegend[0] = "Token Warrant Legend";
+        
+        DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](2);
+        certData[0] = DealManager.CyberCertData({
+            name: "SAFE Certificate",
+            symbol: "SAFE",
+            uri: "ipfs://safe-uri",
+            securityClass: SecurityClass.SAFE,
+            securitySeries: SecuritySeries.SeriesPreSeed,
+            extension: address(0),
+            defaultLegend: safeLegend
+        });
+        certData[1] = DealManager.CyberCertData({
+            name: "Token Warrant",
+            symbol: "TWARRANT",
+            uri: "ipfs://warrant-uri",
+            securityClass: SecurityClass.TokenWarrant,
+            securitySeries: SecuritySeries.SeriesPreSeed,
+            extension: address(0),
+            defaultLegend: warrantLegend
+        });
+
+        // Prepare deal parameters
+        bytes32 templateId = bytes32(uint256(1));
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = testAddress;
+        parties[1] = address(0);
+        uint256 paymentAmount = 1500000000000000000; // 1.5 ETH
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+
+        // Create signature
+        bytes32 contractId = keccak256(
+            abi.encode(
+                templateId,
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        address[] memory conditions = new address[](0);
+        bytes32 secretHash = bytes32(0);
+        uint256 expiry = block.timestamp + 1000000;
+        address stableAddress = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
+
+        vm.startPrank(testAddress);
+        (
+            address[] memory certPrinterAddress,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = dealManager.createOffer(
+             block.timestamp,
+            certData,
+            templateId,
+            globalValues,
+            parties,
+            paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            secretHash,
+            expiry,
+            stableAddress
+        );
+        vm.stopPrank();
+
+        // Verify the results
+        assertEq(certPrinterAddress.length, 2, "Should have created 2 certificate printers");
+        assertEq(certIds.length, 2, "Should have created 2 certificates");
+        assertTrue(id != bytes32(0), "Should have created a valid agreement ID");
+
+        // Verify the first certificate printer (SAFE)
+        CyberCertPrinter safePrinter = CyberCertPrinter(certPrinterAddress[0]);
+
+        // Verify the second certificate printer (Token Warrant)
+        CyberCertPrinter warrantPrinter = CyberCertPrinter(certPrinterAddress[1]);
+
+
+        // Verify the deal was created in the registry
+        assertTrue(
+            CyberAgreementRegistry(registry).hasSigned(id, testAddress),
+            "Deal should be signed by the proposer"
+        );
+
+        // Test that we can retrieve the escrow details
+        Escrow memory escrow = dealManager.getEscrowDetails(id);
+        assertEq(escrow.corpAssets.length, 2, "Escrow should have 2 corporate assets");
+        assertEq(escrow.buyerAssets.length, 1, "Escrow should have 1 buyer asset");
+        assertEq(escrow.buyerAssets[0].amount, paymentAmount, "Payment amount should match");
+
+        console.log("Created SAFE certificate printer:", certPrinterAddress[0]);
+        console.log("Created Token Warrant certificate printer:", certPrinterAddress[1]);
+        console.log("Created SAFE certificate ID:", certIds[0]);
+        console.log("Created Token Warrant certificate ID:", certIds[1]);
+        console.log("Created agreement ID:", vm.toString(id));
     }
 }

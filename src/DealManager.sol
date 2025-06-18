@@ -47,12 +47,24 @@ import "./libs/LexScroWLite.sol";
 import "./libs/auth.sol";
 import "./storage/DealManagerStorage.sol";
 import "./storage/BorgAuthStorage.sol";
+import "./interfaces/ICyberCorp.sol";
 
 /// @title DealManager
 /// @notice Manages the lifecycle of deals between parties, including creation, signing, payment, and finalization for a CyberCorp
 /// @dev Implements UUPS upgradeable pattern and integrates with BorgAuth for access control
 contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
     using DealManagerStorage for DealManagerStorage.DealManagerData;
+
+    /// @notice Certificate data structure for creating new certificates
+    struct CyberCertData {
+        string name;
+        string symbol;
+        string uri;
+        SecurityClass securityClass;
+        SecuritySeries securitySeries;
+        address extension;
+        string[] defaultLegend;
+    }
 
     error ZeroAddress();
     error CounterPartyValueMismatch();
@@ -460,5 +472,100 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
     /// @return string[] Array of counter party values
     function getCounterPartyValues(bytes32 agreementId) public view returns (string[] memory) {
         return DealManagerStorage.getCounterPartyValues(agreementId);
+    }
+
+/*        uint256 salt,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        address _companyPayable,
+        CompanyOfficer memory _officer,
+        CyberCertData[] memory _certData,
+        bytes32 _templateId,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        uint256 _paymentAmount,
+        string[][] memory _partyValues,
+        bytes memory signature,
+        CertificateDetails[] memory _details,
+        address[] memory conditions,
+        bytes32 secretHash,
+        uint256 expiry*/
+    /// @notice Creates an offer for an existing CyberCorp
+    /// @dev Creates certificate printers and proposes a deal without deploying a new CyberCorp
+    /// @param _certData Array of certificate data structures
+    /// @param _templateId ID of the agreement template to use
+    /// @param _globalValues Array of global values for the agreement
+    /// @param _parties Array of party addresses
+    /// @param _paymentAmount Amount to be paid
+    /// @param _partyValues Array of party-specific values
+    /// @param signature Digital signature for the deal
+    /// @param _details Certificate details for each certificate
+    /// @param conditions Array of condition contract addresses
+    /// @param secretHash Hash of secret required for finalization
+    /// @param expiry Deal expiration timestamp
+    /// @param stableAddress Address of the stable token for payment
+    /// @param salt Salt value for unique agreement ID generation
+    /// @return certPrinterAddress Array of deployed certificate printer addresses
+    /// @return id Unique agreement ID
+    /// @return certIds Array of certificate IDs created
+    function createOffer(
+        uint256 salt,
+        CyberCertData[] memory _certData,
+        bytes32 _templateId,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        uint256 _paymentAmount,
+        string[][] memory _partyValues,
+        bytes memory signature,
+        CertificateDetails[] memory _details,
+        address[] memory conditions,
+        bytes32 secretHash,
+        uint256 expiry,
+        address stableAddress
+    ) external onlyOwner returns (
+        address[] memory certPrinterAddress,
+        bytes32 id,
+        uint256[] memory certIds
+    )  {
+        // Get company name from the parent CyberCorp
+        string memory companyName = ICyberCorp(LexScrowStorage.getCorp()).cyberCORPName();
+        
+        certPrinterAddress = new address[](_certData.length);
+        for (uint256 i = 0; i < _certData.length; i++) {
+            ICyberCertPrinter certPrinter = ICyberCertPrinter(
+                DealManagerStorage.getIssuanceManager().createCertPrinter(
+                    _certData[i].defaultLegend,
+                    string.concat(companyName, " ", _certData[i].name),
+                    _certData[i].symbol,
+                    _certData[i].uri,
+                    _certData[i].securityClass,
+                    _certData[i].securitySeries,
+                    _certData[i].extension
+                )
+            );
+            certPrinterAddress[i] = address(certPrinter);
+        }
+
+        // Create and sign deal
+        certIds = new uint256[](_certData.length);
+        (id, certIds) = proposeAndSignDeal(
+            certPrinterAddress,
+            stableAddress,
+            _paymentAmount,
+            _templateId,
+            salt,
+            _globalValues,
+            _parties,
+            _details,
+            msg.sender,
+            signature,
+            _partyValues,
+            conditions,
+            secretHash,
+            expiry
+        );
     }
 }
