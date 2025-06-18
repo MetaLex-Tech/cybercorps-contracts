@@ -13,7 +13,7 @@ Github: https://github.com/MetaLex-Tech/publicDocs/blob/main/cyberKs/cyberSAFT/M
 | protocolValuationCap       |          |
 | governingJurisdiction       |          |
 | disputeResolution   |         |
-| unlockStartTimeType |"tokenWarrantTime" \|"tgeTime" \| "setTime"        |
+| unlockStartTimeType |"agreementStartTime" \|"tgeTime" \| "setTime"        |
 | agreementExecutionTime       | only set if using `setTime` for `unlockStartTimeType` |
 | unlockingPeriod       | Duration in `unlockingInvervalType` units  |
 | unlockingCliffPeriod       | Duration in `unlockingIntervalType`, first tokens unlocked at `unlockingStartTime` + `unlockingCliffPeriod`  |
@@ -38,7 +38,7 @@ Github: https://github.com/MetaLex-Tech/publicDocs/blob/main/cyberKs/cyberSAFT/M
 name: TokenWarrantExtension
 ```solidity
 struct SAFTData {
-    UnlockStartTimeType unlockStartTimeType;    // enum of different types, can be tokenWarrantTime, tgeTime, or setTime
+    UnlockStartTimeType unlockStartTimeType;    // enum of different types, can be agreementStartTime, tgeTime, or setTime
     uint256 agreementExecutionTime;                
     uint256 unlockingPeriod;
     uint256 unlockingCliffPeriod;
