@@ -511,7 +511,7 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
     /// @return certPrinterAddress Array of deployed certificate printer addresses
     /// @return id Unique agreement ID
     /// @return certIds Array of certificate IDs created
-    function createOffer(
+    function proposeAndSignNewCertsDeal(
         uint256 salt,
         CyberCertData[] memory _certData,
         bytes32 _templateId,

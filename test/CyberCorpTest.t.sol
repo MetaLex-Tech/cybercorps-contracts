@@ -4103,7 +4103,7 @@ contract CyberCorpTest is Test {
             address[] memory certPrinterAddress,
             bytes32 id,
             uint256[] memory certIds
-        ) = dealManager.createOffer(
+        ) = dealManager.proposeAndSignNewCertsDeal(
             block.timestamp,
             certData,
             templateId,
@@ -4272,7 +4272,7 @@ contract CyberCorpTest is Test {
             address[] memory certPrinterAddress,
             bytes32 id,
             uint256[] memory certIds
-        ) = dealManager.createOffer(
+        ) = dealManager.proposeAndSignNewCertsDeal(
              block.timestamp,
             certData,
             templateId,
@@ -4318,5 +4318,167 @@ contract CyberCorpTest is Test {
         console.log("Created SAFE certificate ID:", certIds[0]);
         console.log("Created Token Warrant certificate ID:", certIds[1]);
         console.log("Created agreement ID:", vm.toString(id));
+    }
+
+    function testUpgradeDealManagerBeaconViaDeployedFactory() public {
+        // First deploy a CyberCorp which will create a DealManager
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "Test Officer",
+            signingOfficerTitle: "CEO",
+            investmentAmountUSD: 100000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 1000,
+            legalDetails: "Legal Details for test",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("DealManagerUpgradeTest"),
+            "TestCorp",
+            "Limited Liability Company",
+            "Delaware",
+            "Contact Details",
+            "Dispute Resolution",
+            testAddress,
+            officer
+        );
+        vm.stopPrank();
+
+        // Verify the DealManager was deployed
+        assertTrue(dealManagerAddr != address(0), "DealManager should be deployed");
+        console.log("Deployed DealManager at:", dealManagerAddr);
+
+        // Get the deployed DealManagerFactory address
+        address deployedFactoryAddr = 0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3;
+        DealManagerFactory deployedFactory = DealManagerFactory(deployedFactoryAddr);
+
+        // Get the current beacon implementation
+        address currentImplementation = deployedFactory.getBeaconImplementation();
+        console.log("Current beacon implementation:", currentImplementation);
+
+        // Deploy a new DealManager implementation using CREATE2
+        bytes32 implementationSalt = bytes32(keccak256("NewDealManagerImplementation"));
+        address newImplementation = address(new DealManager{salt: implementationSalt}());
+        console.log("New implementation deployed at:", newImplementation);
+
+        // Non-owner should not be able to upgrade it
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
+        deployedFactory.upgradeImplementation(newImplementation);
+
+        // Owner should be able to upgrade it
+        vm.prank(multisig);
+        deployedFactory.upgradeImplementation(newImplementation);
+
+        // Verify the upgrade was successful
+        address updatedImplementation = deployedFactory.getBeaconImplementation();
+        assertEq(updatedImplementation, newImplementation, "Beacon implementation should be updated");
+        console.log("Updated beacon implementation:", updatedImplementation);
+
+        // Verify the existing DealManager still works by checking its state
+        DealManager dealManager = DealManager(dealManagerAddr);
+        
+
+        // Create a simple deal to verify functionality still works
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Test Legend";
+        
+        DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](1);
+        certData[0] = DealManager.CyberCertData({
+            name: "Test Certificate",
+            symbol: "TEST",
+            uri: "ipfs://test-uri",
+            securityClass: SecurityClass.SAFE,
+            securitySeries: SecuritySeries.SeriesPreSeed,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+
+        bytes32 templateId = bytes32(uint256(1));
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = testAddress;
+        parties[1] = address(0);
+        uint256 paymentAmount = 1000000000000000000; // 1 ETH
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                templateId,
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = _signAgreementTypedData(
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        address[] memory conditions = new address[](0);
+        bytes32 secretHash = bytes32(0);
+        uint256 expiry = block.timestamp + 1000000;
+        address stableAddress = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
+
+        vm.startPrank(testAddress);
+        (
+            address[] memory certPrinterAddress,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = dealManager.proposeAndSignNewCertsDeal(
+            block.timestamp,
+            certData,
+            templateId,
+            globalValues,
+            parties,
+            paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            secretHash,
+            expiry,
+            stableAddress
+        );
+        vm.stopPrank();
+
+        // Verify the deal was created successfully after the upgrade
+        assertEq(certPrinterAddress.length, 1, "Should have created 1 certificate printer");
+        assertEq(certIds.length, 1, "Should have created 1 certificate");
+        assertTrue(id != bytes32(0), "Should have created a valid agreement ID");
+
+        console.log("Successfully created deal after upgrade with ID:", vm.toString(id));
+        console.log("Certificate printer created at:", certPrinterAddress[0]);
+        console.log("Certificate ID:", certIds[0]);
     }
 }
