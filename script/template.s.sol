@@ -93,7 +93,7 @@ contract BaseScript is Script {
         globalFieldsSafT[2] = "governingJurisdiction";
         globalFieldsSafT[3] = "disputeResolution";
         globalFieldsSafT[4] = "unlockStartTimeType";
-        globalFieldsSafT[5] = "agreementExecutionTime";
+        globalFieldsSafT[5] = "unlockStartTime";
         globalFieldsSafT[6] = "unlockingPeriod";
         globalFieldsSafT[7] = "unlockingCliffPeriod";
         globalFieldsSafT[8] = "unlockingCliffPercentage";
@@ -107,6 +107,6 @@ contract BaseScript is Script {
         partyFieldsSaft[3] = "investorType";
         partyFieldsSaft[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(24)), "MetaLeX cyberSAFT reg D v.1.0", "ipfs://bafybeif6fqgexescp4g2hbb6fjkk3ifrqpopc2lv2oue5tiq6h3t2pmgc4", globalFieldsSafT, partyFieldsSaft);
+        //CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(25)), "MetaLeX cyberSAFT reg D v.1.0", "ipfs://bafybeif6fqgexescp4g2hbb6fjkk3ifrqpopc2lv2oue5tiq6h3t2pmgc4", globalFieldsSafT, partyFieldsSaft);
      }
 }

@@ -47,8 +47,8 @@ import "../../CyberCorpConstants.sol";
 import "../../libs/auth.sol";
 
 struct SAFTData {
-    UnlockStartTimeType unlockStartTimeType;    // enum of different types, can be agreementDateTime, tgeTime, or setTime
-    uint256 agreementExecutionTime;                
+    UnlockStartTimeType unlockStartTimeType;    // enum of different types, can be agreementExecutionTime, tgeTime, or setTime
+    uint256 unlockStartTime;                
     uint256 unlockingPeriod; //in interval units
     uint256 unlockingCliffPeriod; // seconds
     uint256 unlockingCliffPercentage; 
@@ -85,7 +85,7 @@ contract SAFTExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         string memory json = string(abi.encodePacked(
             ', "SAFTDetails": {',
             '"unlockStartTimeType": "', UnlockStartTimeTypeToString(decoded.unlockStartTimeType),
-            '", "agreementExecutionTime": "', uint256ToString(decoded.agreementExecutionTime),
+            '", "unlockStartTime": "', uint256ToString(decoded.unlockStartTime),
             '", "unlockingPeriod": "', uint256ToString(decoded.unlockingPeriod),
             '", "unlockingCliffPeriod": "', uint256ToString(decoded.unlockingCliffPeriod),
             '", "unlockingCliffPercentage": "', uint256ToString(decoded.unlockingCliffPercentage),
@@ -120,7 +120,7 @@ contract SAFTExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     }
 
     function UnlockStartTimeTypeToString(UnlockStartTimeType _type) internal pure returns (string memory) {
-        if (_type == UnlockStartTimeType.tokenWarrantTime) return "agreementDateTime";
+        if (_type == UnlockStartTimeType.tokenWarrantTime) return "agreementExecutionTime";
         if (_type == UnlockStartTimeType.tgeTime) return "tgeTime";
         if (_type == UnlockStartTimeType.setTime) return "setTime";
         return "Unknown";
