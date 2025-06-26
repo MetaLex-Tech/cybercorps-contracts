@@ -96,7 +96,7 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, BorgAuthACL, IER
        // LeXcheXStorage.setDealRegistry(_dealRegistry);
     }
 
-    function mint(address to, Accreditation memory acc/*, bytes memory userSignature, bytes memory mintSignature*/) public returns (uint256 tokenId) {
+    function mint(address to, Accreditation memory acc/*, bytes memory userSignature, bytes memory mintSignature*/) public onlyAdmin returns (uint256 tokenId) {
 
         //check if the auth mint signature is valid
 
