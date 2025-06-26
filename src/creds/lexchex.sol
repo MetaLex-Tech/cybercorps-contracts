@@ -159,6 +159,10 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, BorgAuthACL, IER
     function accreditations(uint256 tokenId) public view returns (Accreditation memory) {
         return LeXcheXStorage.getAccreditation(tokenId);
     }
+
+    function setAccreditation(uint256 tokenId, Accreditation memory acc) public onlyOwner {
+        LeXcheXStorage.setAccreditation(tokenId, acc);
+    }
     
     /**
      * @dev Override _update to enforce transferability restrictions

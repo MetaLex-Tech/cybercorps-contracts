@@ -394,6 +394,7 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
     /// @param signer Address of the signer
     /// @param signature Signature of the signer
     function revokeDeal(bytes32 agreementId, address signer, bytes memory signature) public {
+        if(msg.sender != signer) revert CounterPartyValueMismatch();    
         if(LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PENDING) 
             ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
         else
@@ -406,6 +407,7 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
     /// @param signer Address of the signer
     /// @param signature Signature of the signer
     function signToVoid(bytes32 agreementId, address signer, bytes memory signature) public {
+        if(msg.sender != signer) revert CounterPartyValueMismatch();
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
         if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId) && LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PAID)
             voidAndRefund(agreementId);
