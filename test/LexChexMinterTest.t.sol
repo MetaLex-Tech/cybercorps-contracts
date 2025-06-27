@@ -101,7 +101,7 @@ contract LexChexMinterTest is Test {
             )
         ), "Unexpected DOMAIN_SEPARATOR");
         assertEq(lexchexMinter.AUTHORITY_TYPEHASH(), keccak256(
-            "AuthorityData(address owner,string name,string entityType,string jurisdiction,uint256 mintPrice,uint256 expiry)"
+            "AuthorityData(address owner,string name,string entityType,string jurisdiction,string contact,uint256 mintPrice,uint256 expiry)"
         ), "Unexpected AUTHORITY_TYPEHASH");
     }
 
@@ -185,6 +185,7 @@ contract LexChexMinterTest is Test {
                 name: request.name,
                 entityType: request.entityType,
                 jurisdiction: request.jurisdiction,
+                contact: request.contact,
                 mintPrice: request.mintPrice,
                 expiry: request.expiry
             }),

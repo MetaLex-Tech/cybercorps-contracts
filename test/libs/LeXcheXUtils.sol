@@ -64,6 +64,7 @@ library LeXcheXUtils {
                         keccak256(bytes(data.name)),
                         keccak256(bytes(data.entityType)),
                         keccak256(bytes(data.jurisdiction)),
+                        keccak256(bytes(data.contact)),
                         data.mintPrice,
                         data.expiry
                     )

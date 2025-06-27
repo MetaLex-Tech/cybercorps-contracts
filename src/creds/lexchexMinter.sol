@@ -53,7 +53,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
         string name;
         string entityType;
         string jurisdiction;
-        // TODO no contact?
+        string contact;
         uint256 mintPrice;
         uint256 expiry;
     }
@@ -90,7 +90,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
         );
 
         AUTHORITY_TYPEHASH = keccak256(
-            "AuthorityData(address owner,string name,string entityType,string jurisdiction,uint256 mintPrice,uint256 expiry)"
+            "AuthorityData(address owner,string name,string entityType,string jurisdiction,string contact,uint256 mintPrice,uint256 expiry)"
         );
     }
 
@@ -176,6 +176,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
             name: request.name,
             entityType: request.entityType,
             jurisdiction: request.jurisdiction,
+            contact: request.contact,
             mintPrice: request.mintPrice,
             expiry: request.expiry
         });
@@ -202,6 +203,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
                         keccak256(bytes(data.name)),
                         keccak256(bytes(data.entityType)),
                         keccak256(bytes(data.jurisdiction)),
+                        keccak256(bytes(data.contact)),
                         data.mintPrice,
                         data.expiry
                     )
