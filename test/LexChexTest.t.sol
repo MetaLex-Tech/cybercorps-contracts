@@ -65,6 +65,12 @@ contract LexChexTest is Test {
         });
     }
 
+    function test_RevertIf_initializeImplementation() public {
+        LeXcheX impl = new LeXcheX();
+        vm.expectRevert(abi.encodeWithSelector(Initializable.InvalidInitialization.selector));
+        impl.initialize(address(auth));
+    }
+
     // Test 2: Minting as admin
     function testMintAsAdmin() public {
         vm.startPrank(admin);

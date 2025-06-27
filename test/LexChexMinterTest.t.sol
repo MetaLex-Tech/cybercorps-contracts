@@ -8,6 +8,7 @@ import {LeXcheXUtils} from "./libs/LeXcheXUtils.sol";
 import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
 import {LeXcheX} from "../src/creds/lexchex.sol";
 import {Test, console} from "forge-std/Test.sol";
@@ -43,6 +44,19 @@ contract LexChexMinterTest is Test {
     CyberAgreementRegistry registry;
     LeXcheX public lexchex;
     LeXcheXMinter public lexchexMinter;
+
+    uint256 requestSalt = uint256(keccak256("LexChexMinterTestRequestSalt"));
+    bytes32 templateId = bytes32(uint256(1));
+    string[] globalFields = new string[](1);
+    string[] partyFields = new string[](1);
+    string[] globalValues = new string[](1);
+    address[] parties = new address[](1);
+    string[][] partyValues = new string[][](1);
+    bytes32 agreementId;
+    bytes agreementSignature;
+    string[] portfolio = new string[](2);
+    LeXcheXMinter.MintRequest request;
+    bytes authoritySignature;
 
     function setUp() public {
         bytes32 salt = bytes32(keccak256("LexChexMinterTest"));
@@ -80,6 +94,61 @@ contract LexChexMinterTest is Test {
         coreAuth.updateRole(admin, coreAuth.ADMIN_ROLE());
 
         vm.stopPrank();
+
+        //
+        // Prepare a valid request
+        //
+
+        // Prepare funds for agent
+        deal(address(paymentToken), agent, 10e6, true);
+        vm.prank(agent);
+        paymentToken.approve(address(lexchexMinter), 10e6);
+
+        // TODO Use more realistic values
+        string memory legalContractUri = "ipfs.io/ipfs/[cid]";
+        globalFields[0] = "Global Field 1";
+        partyFields[0] = "Party Field 1";
+
+        vm.prank(owner);
+        registry.createTemplate(
+            templateId,
+            "Test Template",
+            legalContractUri,
+            globalFields,
+            partyFields
+        );
+
+        globalValues[0] = "Global Value 1";
+
+        parties[0] = address(user1);
+
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+
+        agreementId = keccak256(
+            abi.encode(
+                templateId,
+                requestSalt,
+                globalValues,
+                parties
+            )
+        );
+
+        agreementSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            agreementId,
+            legalContractUri,
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            user1PrivateKey
+        );
+
+        portfolio[0] = "0x123...";
+        portfolio[1] = "bc1q...";
     }
 
     function testMetadata() public view {
@@ -105,67 +174,22 @@ contract LexChexMinterTest is Test {
         ), "Unexpected AUTHORITY_TYPEHASH");
     }
 
+    function test_RevertIf_initializeImplementation() public {
+        LeXcheXMinter impl = new LeXcheXMinter();
+        vm.expectRevert(abi.encodeWithSelector(Initializable.InvalidInitialization.selector));
+        impl.initialize(
+            address(coreAuth),
+            address(lexchex),
+            address(registry),
+            address(paymentToken),
+            treasury
+        );
+    }
+
     function testRequestMint() public {
-        uint256 salt = uint256(keccak256("testRequestMint"));
+        uint256 agentPaymentBalanceBefore = paymentToken.balanceOf(agent);
 
-        // Prepare funds for agent
-        deal(address(paymentToken), agent, 10e6, true);
-        vm.prank(agent);
-        paymentToken.approve(address(lexchexMinter), 10e6);
-
-        // TODO Use more realistic values
-        bytes32 templateId = bytes32(uint256(1));
-        string memory legalContractUri = "ipfs.io/ipfs/[cid]";
-        string[] memory globalFields = new string[](1);
-        globalFields[0] = "Global Field 1";
-        string[] memory partyFields = new string[](1);
-        partyFields[0] = "Party Field 1";
-
-        vm.prank(owner);
-        registry.createTemplate(
-            templateId,
-            "Test Template",
-            legalContractUri,
-            globalFields,
-            partyFields
-        );
-
-        string[] memory globalValues = new string[](1);
-        globalValues[0] = "Global Value 1";
-
-        address[] memory parties = new address[](1);
-        parties[0] = address(user1);
-
-        string[][] memory partyValues = new string[][](1);
-        partyValues[0] = new string[](1);
-        partyValues[0][0] = "Party Value 1";
-
-        bytes32 contractId = keccak256(
-            abi.encode(
-                templateId,
-                salt,
-                globalValues,
-                parties
-            )
-        );
-
-        bytes memory agreementSignature = CyberAgreementUtils.signAgreementTypedData(
-            vm,
-            registry.DOMAIN_SEPARATOR(),
-            registry.SIGNATUREDATA_TYPEHASH(),
-            contractId,
-            legalContractUri,
-            globalFields,
-            partyFields,
-            globalValues,
-            partyValues[0],
-            user1PrivateKey
-        );
-
-        string[] memory portfolio = new string[](2);
-        portfolio[0] = "0x123...";
-        portfolio[1] = "bc1q...";
-        LeXcheXMinter.MintRequest memory request = LeXcheXMinter.MintRequest({
+        request = LeXcheXMinter.MintRequest({
             owner: user1,
             name: "Test Entity",
             entityType: "LLC",
@@ -176,7 +200,7 @@ contract LexChexMinterTest is Test {
             expiry: block.timestamp + 1 days
         });
 
-        bytes memory authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
+        authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
             vm,
             lexchexMinter.DOMAIN_SEPARATOR(),
             lexchexMinter.AUTHORITY_TYPEHASH(),
@@ -194,14 +218,66 @@ contract LexChexMinterTest is Test {
 
         // Request should succeed
         vm.expectEmit(true, true, true, true);
-        emit LeXcheXMinter.MintRequested(user1, 10e6, contractId);
+        emit LeXcheXMinter.MintRequested(user1, 10e6, agreementId);
         vm.expectEmit(true, true, true, true);
-        emit LeXcheXMinter.MintCompleted(user1, 0, contractId);
+        emit LeXcheXMinter.MintCompleted(user1, 0, agreementId);
         vm.prank(agent);
         lexchexMinter.requestMint(
             request,
             templateId,
-            salt,
+            requestSalt,
+            globalValues,
+            parties,
+            partyValues,
+            agreementSignature,
+            authoritySignature
+        );
+        
+        assertEq(lexchex.balanceOf(user1), 1, "user1 should get one token");
+        assertEq(lexchex.ownerOf(0), user1, "token should be owned by user 1");
+        assertEq(agentPaymentBalanceBefore - paymentToken.balanceOf(agent), 10e6, "payment is not correct");
+    }
+
+    function testRequestMintFree() public {
+        uint256 agentPaymentBalanceBefore = paymentToken.balanceOf(agent);
+
+        request = LeXcheXMinter.MintRequest({
+            owner: user1,
+            name: "Test Entity",
+            entityType: "LLC",
+            jurisdiction: "Delaware",
+            contact: "test@test.com",
+            portfolio: portfolio,
+            mintPrice: 0, // free
+            expiry: block.timestamp + 1 days
+        });
+
+        authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
+            vm,
+            lexchexMinter.DOMAIN_SEPARATOR(),
+            lexchexMinter.AUTHORITY_TYPEHASH(),
+            LeXcheXMinter.AuthorityData({
+                owner: request.owner,
+                name: request.name,
+                entityType: request.entityType,
+                jurisdiction: request.jurisdiction,
+                contact: request.contact,
+                mintPrice: request.mintPrice,
+                expiry: request.expiry
+            }),
+            adminPrivateKey
+        );
+
+        // Request should succeed
+        vm.expectEmit(true, true, true, true);
+        emit LeXcheXMinter.MintRequested(user1, 0, agreementId);
+        vm.expectEmit(true, true, true, true);
+        emit LeXcheXMinter.MintCompleted(user1, 0, agreementId);
+        vm.prank(agent);
+        lexchexMinter.requestMint(
+            request,
+            templateId,
+            requestSalt,
             globalValues,
             parties,
             partyValues,
@@ -209,8 +285,53 @@ contract LexChexMinterTest is Test {
             authoritySignature
         );
 
-        assertEq(lexchex.balanceOf(user1), 1);
-        assertEq(lexchex.ownerOf(0), user1);
+        assertEq(lexchex.balanceOf(user1), 1, "user1 should get one token");
+        assertEq(lexchex.ownerOf(0), user1, "token should be owned by user 1");
+        assertEq(paymentToken.balanceOf(agent), agentPaymentBalanceBefore, "payment should be free");
+    }
+
+    function test_RevertIf_invalidAuthoritySignature() public {
+        request = LeXcheXMinter.MintRequest({
+            owner: user1,
+            name: "Test Entity",
+            entityType: "LLC",
+            jurisdiction: "Delaware",
+            contact: "test@test.com",
+            portfolio: portfolio,
+            mintPrice: 10e6,
+            expiry: block.timestamp + 1 days
+        });
+
+        // Create an invalid authority signature
+        authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
+            vm,
+            lexchexMinter.DOMAIN_SEPARATOR(),
+            lexchexMinter.AUTHORITY_TYPEHASH(),
+            LeXcheXMinter.AuthorityData({
+                owner: request.owner,
+                name: request.name,
+                entityType: request.entityType,
+                jurisdiction: request.jurisdiction,
+                contact: request.contact,
+                mintPrice: request.mintPrice,
+                expiry: request.expiry
+            }),
+            user1PrivateKey // Intentionally wrong private key
+        );
+
+        // Request should fail
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, coreAuth.ADMIN_ROLE(), user1));
+        vm.prank(agent);
+        lexchexMinter.requestMint(
+            request,
+            templateId,
+            requestSalt,
+            globalValues,
+            parties,
+            partyValues,
+            agreementSignature,
+            authoritySignature
+        );
     }
 
     function testSetLexchex() public {
