@@ -66,6 +66,7 @@ import {Escrow} from "../src/storage/LexScrowStorage.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {TokenWarrantExtension, TokenWarrantData} from "../src/storage/extensions/TokenWarrantExtension.sol";
 import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
+import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {SAFTEExtension, SAFTEData} from "../src/storage/extensions/SAFTEExtension.sol";
 
 contract CyberCorpTest is Test {
@@ -286,7 +287,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -379,7 +381,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -433,7 +436,8 @@ contract CyberCorpTest is Test {
             address(dealManager),
             _paymentAmount
         );
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -523,7 +527,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -617,7 +622,8 @@ contract CyberCorpTest is Test {
             address(dealManager),
             _paymentAmount
         );
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -692,7 +698,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -804,7 +811,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registrya.DOMAIN_SEPARATOR(),
             registrya.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -831,7 +839,8 @@ contract CyberCorpTest is Test {
         uint256 newPartyPk = 80085;
         address newPartyAddr = vm.addr(newPartyPk);
 
-        signature = _signAgreementTypedData(
+        signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registrya.DOMAIN_SEPARATOR(),
             registrya.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -904,7 +913,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory proposerSignature = _signAgreementTypedData(
+        bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -953,7 +963,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1034,7 +1045,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory proposerSignature = _signAgreementTypedData(
+        bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1083,7 +1095,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1167,7 +1180,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory proposerSignature = _signAgreementTypedData(
+        bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1216,7 +1230,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1251,46 +1266,6 @@ contract CyberCorpTest is Test {
         vm.stopPrank();
     }
 
-    function _signAgreementTypedData(
-        bytes32 _domainSeparator,
-        bytes32 _typeHash,
-        bytes32 contractId,
-        string memory contractUri,
-        string[] memory globalFields,
-        string[] memory partyFields,
-        string[] memory globalValues,
-        string[] memory partyValues,
-        uint256 privKey
-    ) internal pure returns (bytes memory signature) {
-        // Hash string arrays the same way as the contract
-        bytes32 contractUriHash = keccak256(bytes(contractUri));
-        bytes32 globalFieldsHash = _hashStringArray(globalFields);
-        bytes32 partyFieldsHash = _hashStringArray(partyFields);
-        bytes32 globalValuesHash = _hashStringArray(globalValues);
-        bytes32 partyValuesHash = _hashStringArray(partyValues);
-
-        // Create the message hash using the same approach as the contract
-        bytes32 structHash = keccak256(
-            abi.encode(
-                _typeHash,
-                contractId,
-                contractUriHash,
-                globalFieldsHash,
-                partyFieldsHash,
-                globalValuesHash,
-                partyValuesHash
-            )
-        );
-
-        bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", _domainSeparator, structHash)
-        );
-
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privKey, digest);
-        signature = abi.encodePacked(r, s, v);
-        return signature;
-    }
-
     function _signVoidRequest(
         bytes32 _domainSeparator,
         bytes32 _typeHash,
@@ -1310,17 +1285,6 @@ contract CyberCorpTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privKey, digest);
         signature = abi.encodePacked(r, s, v);
         return signature;
-    }
-
-    // Add this helper function to your test contract
-    function _hashStringArray(
-        string[] memory array
-    ) internal pure returns (bytes32) {
-        bytes32[] memory hashes = new bytes32[](array.length);
-        for (uint256 i = 0; i < array.length; i++) {
-            hashes[i] = keccak256(bytes(array[i]));
-        }
-        return keccak256(abi.encodePacked(hashes));
     }
 
     function testRevokeDealBeforePayment() public {
@@ -1367,7 +1331,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1470,7 +1435,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1520,7 +1486,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1602,7 +1569,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1705,7 +1673,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1811,7 +1780,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1911,7 +1881,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1959,7 +1930,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2037,7 +2009,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2085,7 +2058,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2175,7 +2149,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2231,7 +2206,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2319,7 +2295,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2366,7 +2343,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2447,7 +2425,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2498,7 +2477,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2602,7 +2582,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory proposerSignature = _signAgreementTypedData(
+        bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2655,7 +2636,8 @@ contract CyberCorpTest is Test {
         partyValuesB[4] = "Deleware";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2836,7 +2818,8 @@ contract CyberCorpTest is Test {
         address[] memory extensions = new address[](1);
         extensions[0] = warrantExtension;
 
-        bytes memory proposerSignature = _signAgreementTypedData(
+        bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2890,7 +2873,8 @@ contract CyberCorpTest is Test {
         partyValuesB[4] = "Deleware";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -3089,7 +3073,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -3199,7 +3184,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -3325,7 +3311,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -3464,7 +3451,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -3593,7 +3581,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -3823,12 +3812,12 @@ contract CyberCorpTest is Test {
         console.logBytes32(check);
 
         bytes32 salt = bytes32(keccak256("TestSAFTE"));
-        
+
         address safteExtension = address(new ERC1967Proxy{salt: salt}(
            address(new SAFTEExtension{salt: salt}()),
            abi.encodeWithSelector(SAFTEExtension.initialize.selector, address(auth))
         ));
-        
+
         SAFTEData memory safteData = SAFTEData({
             unlockStartTimeType: UnlockStartTimeType.tokenWarrantTime,
             unlockStartTime: block.timestamp,
@@ -3904,7 +3893,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory proposerSignature = _signAgreementTypedData(
+        bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -3958,7 +3948,8 @@ contract CyberCorpTest is Test {
         partyValuesB[4] = "Deleware";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -4038,11 +4029,11 @@ contract CyberCorpTest is Test {
 
         // Now create an offer using the new createOffer function
         DealManager dealManager = DealManager(dealManagerAddr);
-        
+
         // Prepare certificate data
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Test Legend";
-        
+
         DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](1);
         certData[0] = DealManager.CyberCertData({
             name: "Test Certificate",
@@ -4081,7 +4072,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -4128,12 +4120,12 @@ contract CyberCorpTest is Test {
         // Verify the certificate printer was created correctly
         CyberCertPrinter certPrinter = CyberCertPrinter(certPrinterAddress[0]);
 
-        
+
         // Verify the certificate name includes the company name
         string memory expectedName = "TestCorp Test Certificate";
         // Note: We can't directly check the name as it's not exposed in the interface
         // but we can verify the certificate was created successfully
-        
+
         // Verify the deal was created in the registry
         assertTrue(
             CyberAgreementRegistry(registry).hasSigned(id, testAddress),
@@ -4196,13 +4188,13 @@ contract CyberCorpTest is Test {
 
         // Now create an offer with multiple certificates
         DealManager dealManager = DealManager(dealManagerAddr);
-        
+
         // Prepare certificate data for multiple certificates
         string[] memory safeLegend = new string[](1);
         safeLegend[0] = "SAFE Legend";
         string[] memory warrantLegend = new string[](1);
         warrantLegend[0] = "Token Warrant Legend";
-        
+
         DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](2);
         certData[0] = DealManager.CyberCertData({
             name: "SAFE Certificate",
@@ -4250,7 +4242,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -4391,12 +4384,12 @@ contract CyberCorpTest is Test {
 
         // Verify the existing DealManager still works by checking its state
         DealManager dealManager = DealManager(dealManagerAddr);
-        
+
 
         // Create a simple deal to verify functionality still works
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Test Legend";
-        
+
         DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](1);
         certData[0] = DealManager.CyberCertData({
             name: "Test Certificate",
@@ -4433,7 +4426,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
