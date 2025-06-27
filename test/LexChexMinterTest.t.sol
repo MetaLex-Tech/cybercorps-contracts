@@ -5,6 +5,7 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {LeXcheXUtils} from "./libs/LeXcheXUtils.sol";
+import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
@@ -22,6 +23,8 @@ contract PaymentToken is ERC20 {
 }
 
 contract LexChexMinterTest is Test {
+    using ERC1967ProxyLib for address;
+
     uint256 adminPrivateKey = 1;
     address admin = vm.addr(adminPrivateKey);
     uint256 user1PrivateKey = 2;
@@ -29,8 +32,9 @@ contract LexChexMinterTest is Test {
     uint256 user2PrivateKey = 3;
     address user2 = vm.addr(user2PrivateKey);
 
-    address agent = address(1);
-    address treasury = address(2);
+    address owner = address(1);
+    address agent = address(2);
+    address treasury = address(3);
 
     ERC20 paymentToken = new PaymentToken(0);
 
@@ -43,10 +47,10 @@ contract LexChexMinterTest is Test {
     function setUp() public {
         bytes32 salt = bytes32(keccak256("LexChexMinterTest"));
 
-        vm.startPrank(admin);
+        vm.startPrank(owner);
 
-        coreAuth = new BorgAuth(admin);
-        lexchexAuth = new BorgAuth(admin);
+        coreAuth = new BorgAuth(owner);
+        lexchexAuth = new BorgAuth(owner);
 
         registry = CyberAgreementRegistry(address(new ERC1967Proxy{salt: salt}(
             address(new CyberAgreementRegistry{salt: salt}()),
@@ -72,6 +76,8 @@ contract LexChexMinterTest is Test {
 
         // Grant LeXcheXMinter admin access to LeXcheX
         lexchexAuth.updateRole(address(lexchexMinter), lexchexAuth.ADMIN_ROLE());
+        // Grant admin EOA access to minter
+        coreAuth.updateRole(admin, coreAuth.ADMIN_ROLE());
 
         vm.stopPrank();
     }
@@ -115,7 +121,7 @@ contract LexChexMinterTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        vm.prank(admin);
+        vm.prank(owner);
         registry.createTemplate(
             templateId,
             "Test Template",
@@ -208,51 +214,69 @@ contract LexChexMinterTest is Test {
 
     function testSetLexchex() public {
         // Non-owner should not be allowed
-        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, coreAuth.OWNER_ROLE(), user1));
-        vm.prank(user1);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, coreAuth.OWNER_ROLE(), admin));
+        vm.prank(admin);
         lexchexMinter.setLexchex(address(0x1));
 
         // Owner should be allowed
-        vm.prank(admin);
+        vm.prank(owner);
         lexchexMinter.setLexchex(address(0x1));
         assertEq(lexchexMinter.lexchex(), address(0x1), "lexchex should've been updated");
     }
 
     function testSetDealRegistry() public {
         // Non-owner should not be allowed
-        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, coreAuth.OWNER_ROLE(), user1));
-        vm.prank(user1);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, coreAuth.OWNER_ROLE(), admin));
+        vm.prank(admin);
         lexchexMinter.setDealRegistry(address(0x1));
 
         // Owner should be allowed
-        vm.prank(admin);
+        vm.prank(owner);
         lexchexMinter.setDealRegistry(address(0x1));
         assertEq(lexchexMinter.dealRegistry(), address(0x1), "dealRegistry should've been updated");
     }
 
     function testSetPaymentToken() public {
         // Non-owner should not be allowed
-        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, coreAuth.OWNER_ROLE(), user1));
-        vm.prank(user1);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, coreAuth.OWNER_ROLE(), admin));
+        vm.prank(admin);
         lexchexMinter.setPaymentToken(address(0x1));
 
         // Owner should be allowed
-        vm.prank(admin);
+        vm.prank(owner);
         lexchexMinter.setPaymentToken(address(0x1));
         assertEq(lexchexMinter.paymentToken(), address(0x1), "paymentToken should've been updated");
     }
 
     function testSetTreasury() public {
         // Non-owner should not be allowed
-        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, coreAuth.OWNER_ROLE(), user1));
-        vm.prank(user1);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, coreAuth.OWNER_ROLE(), admin));
+        vm.prank(admin);
         lexchexMinter.setTreasury(address(0x1));
 
         // Owner should be allowed
-        vm.prank(admin);
+        vm.prank(owner);
         lexchexMinter.setTreasury(address(0x1));
         assertEq(lexchexMinter.treasury(), address(0x1), "treasury should've been updated");
     }
 
-    // TODO test upgradeability
+    function testUpgradeLeXcheX() public {
+        // Deploy new implementation
+        address newImplementation = address(new LeXcheXMinter());
+
+        // Upgrade to new implementation without initialization data
+
+        // Non-owner should not be able to upgrade it
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, coreAuth.OWNER_ROLE(), admin));
+        vm.prank(admin);
+        lexchexMinter.upgradeToAndCall(newImplementation, "");
+
+        // Owner should be able to upgrade it
+        vm.prank(owner);
+        lexchexMinter.upgradeToAndCall(newImplementation, "");
+        assertEq(address(lexchexMinter).getErc1967Implementation(vm), newImplementation);
+
+        // Verify requestMint() should still work
+        testRequestMint();
+    }
 }

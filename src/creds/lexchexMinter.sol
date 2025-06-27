@@ -2,6 +2,7 @@
 pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../libs/auth.sol";
 import "./lexchex.sol";
@@ -9,7 +10,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-contract LeXcheXMinter is Initializable, BorgAuthACL {
+contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
     using ECDSA for bytes32;
     using SafeERC20 for IERC20;
 
@@ -225,4 +226,9 @@ contract LeXcheXMinter is Initializable, BorgAuthACL {
     function setTreasury(address _treasury) external onlyOwner {
         treasury = _treasury;
     }
+
+    /// @dev Only owner can upgrade it
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal virtual override onlyOwner {}
 }

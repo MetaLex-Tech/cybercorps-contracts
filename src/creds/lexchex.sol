@@ -42,6 +42,7 @@ pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./storage/lexchexStorage.sol";
 import "../libs/auth.sol";  
 import "../interfaces/ICyberAgreementRegistry.sol";
@@ -65,7 +66,7 @@ interface IERC5484 {
     function burnAuth(uint256 tokenId) external view returns (BurnAuth);
 }
 
-contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, BorgAuthACL, IERC5484 {
+contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable, BorgAuthACL, IERC5484 {
     using LeXcheXStorage for *;
     using Strings for uint256;
 
@@ -314,6 +315,11 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, BorgAuthACL, IER
         }
         return string(abi.encodePacked("0x", string(str)));
     }
+
+    /// @dev Only owner can upgrade it
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal virtual override onlyOwner {}
 }
 
 /// @title Base64

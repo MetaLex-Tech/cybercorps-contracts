@@ -6,8 +6,11 @@ import "../src/creds/lexchex.sol";
 import "../src/libs/auth.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
+import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
 
 contract LexChexTest is Test {
+    using ERC1967ProxyLib for address;
+
     LeXcheX public lexchex;
     LeXcheX public impl;
     BorgAuth public auth;
@@ -276,5 +279,30 @@ contract LexChexTest is Test {
         vm.stopPrank();
     }
 
-    // TODO test upgradeability
+    function testUpgradeLeXcheX() public {
+        // Mint a token to change the existing states
+        vm.prank(admin);
+        uint256 tokenId = lexchex.mint(user1, testAccreditation);
+        assertEq(lexchex.totalSupply(), 1, "There should be just one NFT minted");
+        assertEq(lexchex.ownerOf(tokenId), user1, "The token should be owned by user1");
+
+        // Deploy new implementation
+        address newImplementation = address(new LeXcheX());
+
+        // Upgrade to new implementation without initialization data
+
+        // Non-owner should not be able to upgrade it
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, auth.OWNER_ROLE(), admin));
+        vm.prank(admin);
+        lexchex.upgradeToAndCall(newImplementation, "");
+
+        // Owner should be able to upgrade it
+        vm.prank(owner);
+        lexchex.upgradeToAndCall(newImplementation, "");
+        assertEq(address(lexchex).getErc1967Implementation(vm), newImplementation);
+
+        // Verify the existing states
+        assertEq(lexchex.totalSupply(), 1, "Total supply should be the same after upgrade");
+        assertEq(lexchex.ownerOf(tokenId), user1, "Token ownership should be the same after upgrade");
+    }
 }
