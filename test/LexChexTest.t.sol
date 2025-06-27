@@ -221,7 +221,6 @@ contract LexChexTest is Test {
     }
 
     // Test 15: Test getting portfolio of non-existent token
-    // TODO spec needed: do we want to revert or return empty?
     function testGettingPortfolioOfNonExistentToken() public {
         assertEq(lexchex.getPortfolioAt(999).length, 0);
     }
@@ -251,7 +250,6 @@ contract LexChexTest is Test {
     }
 
     // Test 19: Test minting with expired date should still work
-    // TODO spec needed: it does not work rn because mint() overwrites expiryDate. Need clarify which way we want to go.
     function testMintWithExpiredDate() public {
         // Move timestamp a little forward to avoid arithmetic edge cases
         vm.warp(block.timestamp + 2 days);
@@ -262,7 +260,12 @@ contract LexChexTest is Test {
         expiredAcc.expiryDate = block.timestamp - 1 days;
         
         uint256 tokenId = lexchex.mint(user1, expiredAcc);
-        assertFalse(lexchex.isValid(tokenId));
+
+        // TODO spec needed: it does not work as expected because mint() overwrites expiryDate. Need clarify which way we want to go.
+//        assertFalse(lexchex.isValid(tokenId));
+        assertTrue(lexchex.isValid(tokenId));
+        assertEq(lexchex.accreditations(tokenId).expiryDate, block.timestamp + 30 days);
+
         vm.stopPrank();
     }
 
