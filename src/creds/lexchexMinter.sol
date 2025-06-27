@@ -52,6 +52,7 @@ contract LeXcheXMinter is Initializable, BorgAuthACL {
         string name;
         string entityType;
         string jurisdiction;
+        // TODO no contact?
         uint256 mintPrice;
         uint256 expiry;
     }
@@ -103,9 +104,7 @@ contract LeXcheXMinter is Initializable, BorgAuthACL {
         bytes memory authoritySignature    // Signature from authority for verification
     ) external returns (bytes32 agreementId, uint256 tokenId) {
         // 1. Verify authority signature is from an admin using EIP-712
-        if (!_verifyAuthoritySignature(request, authoritySignature)) {
-            revert InvalidSignature();
-        }
+        _verifyAuthoritySignature(request, authoritySignature);
 
         // 2. Handle payment using safeTransferFrom
         if (request.mintPrice > 0) {
@@ -169,7 +168,7 @@ contract LeXcheXMinter is Initializable, BorgAuthACL {
     function _verifyAuthoritySignature(
         MintRequest memory request,
         bytes memory signature
-    ) internal view returns (bool) {
+    ) internal view {
         // Create AuthorityData struct for signature verification
         AuthorityData memory data = AuthorityData({
             owner: request.owner,
@@ -186,8 +185,8 @@ contract LeXcheXMinter is Initializable, BorgAuthACL {
         // Recover the signer address
         address recoveredSigner = digest.recover(signature);
 
-        // Check if the recovered signer is an admin
-        return (BorgAuthACL(auth).userRoles(recoveredSigner) == BorgAuth(BorgAuthACL(auth).AUTH()).ADMIN_ROLE());
+        // Check if the recovered signer is at least an admin
+        BorgAuth(auth).onlyRole(BorgAuth(auth).ADMIN_ROLE(), recoveredSigner);
     }
 
     function _hashTypedDataV4(AuthorityData memory data) internal view returns (bytes32) {
