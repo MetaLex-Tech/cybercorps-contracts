@@ -11,7 +11,7 @@ safteURI:
 | **globalFieldName** | **description**                    |
 |:--------------------|:-----------------------------------|
 | purchaseAmount      |       e.g. "1000.00"              |
-| PostMoneyValuationCap  |     postmoney equity valuation of the company  |
+| postMoneyValuationCap  |     postmoney equity valuation of the company  |
 | protocolUSDValuationAtTimeofInvestment    |  valuation of the 'network' or 'protocol' (i.e., FDV of all tokens)  |
 | expirationTime      |    time at which offer to sign agreement (purchasing the SAFTE) expires     |
 | governingJurisdiction       |     jurisdiction of incorporation and also jurisdiction of governing law for the agreement     |
