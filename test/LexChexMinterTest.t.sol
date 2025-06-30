@@ -227,6 +227,7 @@ contract LexChexMinterTest is Test {
 
     function testRequestMint() public {
         uint256 agentPaymentBalanceBefore = paymentToken.balanceOf(agent);
+        uint256 treasuryPaymentBalanceBefore = paymentToken.balanceOf(treasury);
 
         request = LeXcheXMinter.MintRequest({
             owner: user1,
@@ -256,6 +257,10 @@ contract LexChexMinterTest is Test {
         );
 
         // Request should succeed
+
+        // Agreement should be fully signed
+        vm.expectEmit(true, true, true, true);
+        emit CyberAgreementRegistry.ContractFullySigned(agreementId, block.timestamp);
         vm.expectEmit(true, true, true, true);
         emit LeXcheXMinter.MintRequested(user1, 10e6, agreementId);
         vm.expectEmit(true, true, true, true);
@@ -274,11 +279,14 @@ contract LexChexMinterTest is Test {
         
         assertEq(lexchex.balanceOf(user1), 1, "user1 should get one token");
         assertEq(lexchex.ownerOf(0), user1, "token should be owned by user 1");
-        assertEq(agentPaymentBalanceBefore - paymentToken.balanceOf(agent), 10e6, "payment is not correct");
+        assertEq(lexchex.accreditations(0).agreementId, agreementId, "agreement ID should be set");
+        assertEq(agentPaymentBalanceBefore - paymentToken.balanceOf(agent), 10e6, "payment amount is not correct");
+        assertEq(paymentToken.balanceOf(treasury) - treasuryPaymentBalanceBefore, 10e6, "treasury received amount is not correct");
     }
 
     function testRequestMintFree() public {
         uint256 agentPaymentBalanceBefore = paymentToken.balanceOf(agent);
+        uint256 treasuryPaymentBalanceBefore = paymentToken.balanceOf(treasury);
 
         request = LeXcheXMinter.MintRequest({
             owner: user1,
@@ -308,6 +316,10 @@ contract LexChexMinterTest is Test {
         );
 
         // Request should succeed
+
+        // Agreement should be fully signed
+        vm.expectEmit(true, true, true, true);
+        emit CyberAgreementRegistry.ContractFullySigned(agreementId, block.timestamp);
         vm.expectEmit(true, true, true, true);
         emit LeXcheXMinter.MintRequested(user1, 0, agreementId);
         vm.expectEmit(true, true, true, true);
@@ -326,7 +338,9 @@ contract LexChexMinterTest is Test {
 
         assertEq(lexchex.balanceOf(user1), 1, "user1 should get one token");
         assertEq(lexchex.ownerOf(0), user1, "token should be owned by user 1");
+        assertEq(lexchex.accreditations(0).agreementId, agreementId, "agreement ID should be set");
         assertEq(paymentToken.balanceOf(agent), agentPaymentBalanceBefore, "payment should be free");
+        assertEq(paymentToken.balanceOf(treasury), treasuryPaymentBalanceBefore, "treasury should not receive payment");
     }
 
     function test_RevertIf_invalidAuthoritySignature() public {
