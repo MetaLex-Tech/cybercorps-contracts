@@ -215,9 +215,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
         bytes memory authoritySignature
     ) external returns (uint256 tokenId) {
         // 1. Verify authority signature is from an admin using EIP-712
-        if (!_verifyAuthoritySignature(request, authoritySignature)) {
-            revert InvalidSignature();
-        }
+        _verifyAuthoritySignature(request, authoritySignature);
 
         // get the accreditation
         Accreditation memory acc = LeXcheX(lexchex).accreditations(id);
