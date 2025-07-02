@@ -236,6 +236,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         // 3. Renew the agreement
         acc.expiryDate = request.expiry;
+        acc.issuanceDate = block.timestamp;
         acc.signature = authoritySignature;
 
         // 4. Mint LeXcheX
