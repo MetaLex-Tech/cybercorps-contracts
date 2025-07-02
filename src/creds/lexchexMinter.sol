@@ -1,7 +1,47 @@
-// SPDX-License-Identifier: UNLICENSED
+/*    .o.
+     .888.
+    .8"888.
+   .8' `888.
+  .88ooo8888.
+ .8'     `888.
+o88o     o8888o
+
+
+
+ooo        ooooo               .             ooooo                  ooooooo  ooooo
+`88.       .888'             .o8             `888'                   `8888    d8'
+ 888b     d'888   .ooooo.  .o888oo  .oooo.    888          .ooooo.     Y888..8P
+ 8 Y88. .P  888  d88' `88b   888   `P  )88b   888         d88' `88b     `8888'
+ 8  `888'   888  888ooo888   888    .oP"888   888         888ooo888    .8PY888.
+ 8    Y     888  888    .o   888 . d8(  888   888       o 888    .o   d8'  `888b
+o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o88888o
+
+
+
+  .oooooo.                .o8                            .oooooo.
+ d8P'  `Y8b              "888                           d8P'  `Y8b
+888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.
+888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b
+888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888
+`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o.
+ `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P
+             .o..P'                                                                     888
+             `Y8P'                                                                     o888o
+_______________________________________________________________________________________________________
+
+All software, documentation and other files and information in this repository (collectively, the "Software")
+are copyright MetaLeX Labs, Inc., a Delaware corporation.
+
+All rights reserved.
+
+The Software is proprietary and shall not, in part or in whole, be used, copied, modified, merged, published,
+distributed, transmitted, sublicensed, sold, or otherwise used in any form or by any means, electronic or
+mechanical, including photocopying, recording, or by any information storage and retrieval system,
+except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../libs/auth.sol";
 import "./lexchex.sol";
@@ -9,7 +49,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-contract LeXcheXMinter is Initializable, BorgAuthACL {
+contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
     using ECDSA for bytes32;
     using SafeERC20 for IERC20;
 
@@ -55,6 +95,7 @@ contract LeXcheXMinter is Initializable, BorgAuthACL {
         string name;
         string entityType;
         string jurisdiction;
+        string contact;
         uint256 mintPrice;
         uint256 expiry;
     }
@@ -91,7 +132,7 @@ contract LeXcheXMinter is Initializable, BorgAuthACL {
         );
 
         AUTHORITY_TYPEHASH = keccak256(
-            "AuthorityData(address owner,string name,string entityType,string jurisdiction,uint256 mintPrice,uint256 expiry)"
+            "AuthorityData(address owner,string name,string entityType,string jurisdiction,string contact,uint256 mintPrice,uint256 expiry)"
         );
     }
 
@@ -106,9 +147,7 @@ contract LeXcheXMinter is Initializable, BorgAuthACL {
         bytes memory authoritySignature    // Signature from authority for verification
     ) external returns (bytes32 agreementId, uint256 tokenId) {
         // 1. Verify authority signature is from an admin using EIP-712
-        if (!_verifyAuthoritySignature(request, authoritySignature)) {
-            revert InvalidSignature();
-        }
+        _verifyAuthoritySignature(request, authoritySignature);
 
         // 2. Handle payment using safeTransferFrom
         if (request.mintPrice > 0) {
@@ -211,13 +250,14 @@ contract LeXcheXMinter is Initializable, BorgAuthACL {
     function _verifyAuthoritySignature(
         MintRequest memory request,
         bytes memory signature
-    ) internal view returns (bool) {
+    ) internal view {
         // Create AuthorityData struct for signature verification
         AuthorityData memory data = AuthorityData({
             owner: request.owner,
             name: request.name,
             entityType: request.entityType,
             jurisdiction: request.jurisdiction,
+            contact: request.contact,
             mintPrice: request.mintPrice,
             expiry: request.expiry
         });
@@ -228,8 +268,8 @@ contract LeXcheXMinter is Initializable, BorgAuthACL {
         // Recover the signer address
         address recoveredSigner = digest.recover(signature);
 
-        // Check if the recovered signer is an admin
-        return (BorgAuthACL(auth).userRoles(recoveredSigner) == BorgAuth(BorgAuthACL(auth).AUTH()).ADMIN_ROLE());
+        // Check if the recovered signer is at least an admin
+        BorgAuth(auth).onlyRole(BorgAuth(auth).ADMIN_ROLE(), recoveredSigner);
     }
 
     function _hashTypedDataV4(AuthorityData memory data) internal view returns (bytes32) {
@@ -244,6 +284,7 @@ contract LeXcheXMinter is Initializable, BorgAuthACL {
                         keccak256(bytes(data.name)),
                         keccak256(bytes(data.entityType)),
                         keccak256(bytes(data.jurisdiction)),
+                        keccak256(bytes(data.contact)),
                         data.mintPrice,
                         data.expiry
                     )
@@ -268,4 +309,9 @@ contract LeXcheXMinter is Initializable, BorgAuthACL {
     function setTreasury(address _treasury) external onlyOwner {
         treasury = _treasury;
     }
+
+    /// @dev Only owner can upgrade it
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal virtual override onlyOwner {}
 }

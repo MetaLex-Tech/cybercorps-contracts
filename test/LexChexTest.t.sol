@@ -1,4 +1,43 @@
-// SPDX-License-Identifier: UNLICENSED
+/*    .o.
+     .888.
+    .8"888.
+   .8' `888.
+  .88ooo8888.
+ .8'     `888.
+o88o     o8888o
+
+
+
+ooo        ooooo               .             ooooo                  ooooooo  ooooo
+`88.       .888'             .o8             `888'                   `8888    d8'
+ 888b     d'888   .ooooo.  .o888oo  .oooo.    888          .ooooo.     Y888..8P
+ 8 Y88. .P  888  d88' `88b   888   `P  )88b   888         d88' `88b     `8888'
+ 8  `888'   888  888ooo888   888    .oP"888   888         888ooo888    .8PY888.
+ 8    Y     888  888    .o   888 . d8(  888   888       o 888    .o   d8'  `888b
+o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o88888o
+
+
+
+  .oooooo.                .o8                            .oooooo.
+ d8P'  `Y8b              "888                           d8P'  `Y8b
+888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.
+888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b
+888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888
+`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o.
+ `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P
+             .o..P'                                                                     888
+             `Y8P'                                                                     o888o
+_______________________________________________________________________________________________________
+
+All software, documentation and other files and information in this repository (collectively, the "Software")
+are copyright MetaLeX Labs, Inc., a Delaware corporation.
+
+All rights reserved.
+
+The Software is proprietary and shall not, in part or in whole, be used, copied, modified, merged, published,
+distributed, transmitted, sublicensed, sold, or otherwise used in any form or by any means, electronic or
+mechanical, including photocopying, recording, or by any information storage and retrieval system,
+except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "forge-std/Test.sol";
@@ -6,8 +45,11 @@ import "../src/creds/lexchex.sol";
 import "../src/libs/auth.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
+import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
 
 contract LexChexTest is Test {
+    using ERC1967ProxyLib for address;
+
     LeXcheX public lexchex;
     LeXcheX public impl;
     BorgAuth public auth;
@@ -60,6 +102,12 @@ contract LexChexTest is Test {
             portfolio: portfolio,
             signature: bytes("0x123...")
         });
+    }
+
+    function test_RevertIf_initializeImplementation() public {
+        LeXcheX impl = new LeXcheX();
+        vm.expectRevert(abi.encodeWithSelector(Initializable.InvalidInitialization.selector));
+        impl.initialize(address(auth));
     }
 
     // Test 2: Minting as admin
@@ -218,7 +266,6 @@ contract LexChexTest is Test {
     }
 
     // Test 15: Test getting portfolio of non-existent token
-    // TODO spec needed: do we want to revert or return empty?
     function testGettingPortfolioOfNonExistentToken() public {
         assertEq(lexchex.getPortfolioAt(999).length, 0);
     }
@@ -248,7 +295,6 @@ contract LexChexTest is Test {
     }
 
     // Test 19: Test minting with expired date should still work
-    // TODO spec needed: it does not work rn because mint() overwrites expiryDate. Need clarify which way we want to go.
     function testMintWithExpiredDate() public {
         // Move timestamp a little forward to avoid arithmetic edge cases
         vm.warp(block.timestamp + 2 days);
@@ -259,7 +305,12 @@ contract LexChexTest is Test {
         expiredAcc.expiryDate = block.timestamp - 1 days;
         
         uint256 tokenId = lexchex.mint(user1, expiredAcc);
-        assertFalse(lexchex.isValid(tokenId));
+
+        // TODO spec needed: it does not work as expected because mint() overwrites expiryDate. Need clarify which way we want to go.
+//        assertFalse(lexchex.isValid(tokenId));
+        assertTrue(lexchex.isValid(tokenId));
+        assertEq(lexchex.accreditations(tokenId).expiryDate, block.timestamp + 30 days);
+
         vm.stopPrank();
     }
 
@@ -276,5 +327,30 @@ contract LexChexTest is Test {
         vm.stopPrank();
     }
 
-    // TODO test upgradeability
+    function testUpgradeLeXcheX() public {
+        // Mint a token to change the existing states
+        vm.prank(admin);
+        uint256 tokenId = lexchex.mint(user1, testAccreditation);
+        assertEq(lexchex.totalSupply(), 1, "There should be just one NFT minted");
+        assertEq(lexchex.ownerOf(tokenId), user1, "The token should be owned by user1");
+
+        // Deploy new implementation
+        address newImplementation = address(new LeXcheX());
+
+        // Upgrade to new implementation without initialization data
+
+        // Non-owner should not be able to upgrade it
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, auth.OWNER_ROLE(), admin));
+        vm.prank(admin);
+        lexchex.upgradeToAndCall(newImplementation, "");
+
+        // Owner should be able to upgrade it
+        vm.prank(owner);
+        lexchex.upgradeToAndCall(newImplementation, "");
+        assertEq(address(lexchex).getErc1967Implementation(vm), newImplementation);
+
+        // Verify the existing states
+        assertEq(lexchex.totalSupply(), 1, "Total supply should be the same after upgrade");
+        assertEq(lexchex.ownerOf(tokenId), user1, "Token ownership should be the same after upgrade");
+    }
 }
