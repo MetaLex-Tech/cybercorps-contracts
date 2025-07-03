@@ -79,6 +79,9 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
     address public paymentToken;
     address public treasury;
 
+    // Upgrade notes: Reduced gap to account for new variables (50 - 8 - 1 = 41)
+    uint256[41] private __gap;
+
     struct MintRequest {
         address owner;
         string name;
