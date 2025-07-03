@@ -249,8 +249,8 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable,
                 timestampToDate(acc.expiryDate),
                 '</text>',
                 '<rect x="380" y="453" width="470px" height="5px" fill="#f2f2f2" opacity=".24"></rect>',
-                '<text x="310" y="570" font-family="Georgia" font-size="17" fill="#f2f2f2" opacity=".6">Non-transferable. Soul-bound. Verified on-chain.</text>',
-                '<text x="225" y="600" font-family="Georgia" font-size="15" fill="#f2f2f2" opacity=".24">',
+                '<text x="325" y="570" font-family="Georgia" font-size="17" fill="#f2f2f2" opacity=".6">Non-transferable. Soul-bound. Verified on-chain.</text>',
+                '<text x="210" y="600" font-family="Georgia" font-size="15" fill="#f2f2f2" opacity=".24">',
                 bytes32ToHexString(acc.agreementId),
                 '</text>'
             )
