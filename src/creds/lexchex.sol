@@ -91,23 +91,13 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable,
         _disableInitializers();
     }
 
-    function initialize(address _auth/*, address _dealRegistry*/) public initializer {
+    function initialize(address _auth) public initializer {
         __BorgAuthACL_init(_auth);
         __ERC721_init("LeXcheX", "LXC");
-       // LeXcheXStorage.setDealRegistry(_dealRegistry);
     }
 
-    function mint(address to, Accreditation memory acc/*, bytes memory userSignature, bytes memory mintSignature*/) public onlyAdmin returns (uint256 tokenId) {
+    function mint(address to, Accreditation memory acc) public onlyAdmin returns (uint256 tokenId) {
 
-        //check if the auth mint signature is valid
-
-        //accept the funds
-
-        //create and sign the agreement onchain
-        acc.expiryDate = block.timestamp + DURATION;
-      //  agreementId = ICyberAgreementRegistry(LeXcheXStorage.getDealRegistry()).createContract(_templateId, _salt, _globalValues, _parties, _partyValues, "", address(this), acc.expiryDate);
-      //  ICyberAgreementRegistry(LeXcheXStorage.getDealRegistry()).signContractFor(msg.sender, agreementId, userSignature);
-    
         //mint the token
         tokenId = LeXcheXStorage.getSupply();
         _mint(to, tokenId);
@@ -135,11 +125,6 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable,
 
     function burnAuth(uint256 tokenId) external view override returns (BurnAuth) {
         return BURNAUTH;
-    }
-
-    function getPortfolioAt(uint256 tokenId) public view returns (string[] memory) {
-        Accreditation storage acc = LeXcheXStorage.getAccreditation(tokenId);
-        return acc.portfolio;
     }
     
     //read to check if the token is valid or not

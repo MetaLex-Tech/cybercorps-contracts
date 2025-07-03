@@ -85,7 +85,6 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
         string entityType;
         string jurisdiction;
         string contact;
-        string[] portfolio;
         uint256 mintPrice;
         uint256 expiry;
     }
@@ -169,7 +168,6 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
             issuanceDate: block.timestamp,
             expiryDate: request.expiry,
             voided: "",
-            portfolio: request.portfolio,
             signature: authoritySignature  // Use authority signature here
         });
 
@@ -239,7 +237,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
         acc.issuanceDate = block.timestamp;
         acc.signature = authoritySignature;
 
-        // 4. Mint LeXcheX
+        // 4. Update LeXcheX
         LeXcheX(lexchex).setAccreditation(id, acc);
 
         emit RenewalRequested(request.owner, request.mintPrice, agreementId);

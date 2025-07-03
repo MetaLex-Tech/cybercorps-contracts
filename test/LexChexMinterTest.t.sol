@@ -235,7 +235,6 @@ contract LexChexMinterTest is Test {
             entityType: "LLC",
             jurisdiction: "Delaware",
             contact: "test@test.com",
-            portfolio: portfolio,
             mintPrice: 10e6,
             expiry: block.timestamp + 1 days
         });
@@ -294,7 +293,6 @@ contract LexChexMinterTest is Test {
             entityType: "LLC",
             jurisdiction: "Delaware",
             contact: "test@test.com",
-            portfolio: portfolio,
             mintPrice: 0, // free
             expiry: block.timestamp + 1 days
         });
@@ -350,7 +348,6 @@ contract LexChexMinterTest is Test {
             entityType: "LLC",
             jurisdiction: "Delaware",
             contact: "test@test.com",
-            portfolio: portfolio,
             mintPrice: 10e6,
             expiry: block.timestamp + 1 days
         });

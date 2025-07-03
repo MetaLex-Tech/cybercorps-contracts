@@ -33,7 +33,6 @@ struct Accreditation {
     uint256 issuanceDate;
     uint256 expiryDate;
     string voided;
-    string[] portfolio;
     bytes signature;
 }
 

@@ -83,11 +83,6 @@ contract LexChexTest is Test {
                 abi.encodeWithSelector(LeXcheX.initialize.selector, address(auth))
             ))
         );
-
-        // Setup test accreditation
-        string[] memory portfolio = new string[](2);
-        portfolio[0] = "0x123...";
-        portfolio[1] = "bc1q...";
         
         testAccreditation = Accreditation({
             agreementId: bytes32(uint256(1)),
@@ -99,7 +94,6 @@ contract LexChexTest is Test {
             issuanceDate: block.timestamp,
             expiryDate: block.timestamp + 365 days,
             voided: "",
-            portfolio: portfolio,
             signature: bytes("0x123...")
         });
     }
@@ -213,18 +207,6 @@ contract LexChexTest is Test {
         vm.stopPrank();
     }
 
-    // Test 10: Test portfolio retrieval
-    function testGetPortfolio() public {
-        vm.startPrank(admin);
-        uint256 tokenId = lexchex.mint(user1, testAccreditation);
-        
-        string[] memory portfolio = lexchex.getPortfolioAt(tokenId);
-        assertEq(portfolio.length, 2);
-        assertEq(portfolio[0], "0x123...");
-        assertEq(portfolio[1], "bc1q...");
-        vm.stopPrank();
-    }
-
     // Test 11: Test non-transferability (soulbound)
     function test_RevertWhen_TransferringToken() public {
         vm.startPrank(admin);
@@ -265,11 +247,6 @@ contract LexChexTest is Test {
         lexchex.burn(999);
     }
 
-    // Test 15: Test getting portfolio of non-existent token
-    function testGettingPortfolioOfNonExistentToken() public {
-        assertEq(lexchex.getPortfolioAt(999).length, 0);
-    }
-
     // Test 16: Test validity of non-existent token
     function testValidityNonExistentToken() public {
         assertFalse(lexchex.isValid(999));
@@ -281,18 +258,6 @@ contract LexChexTest is Test {
         lexchex.initialize(address(auth));
     }
 
-    // Test 18: Test minting with empty portfolio
-    function testMintEmptyPortfolio() public {
-        vm.startPrank(admin);
-        
-        Accreditation memory emptyPortfolioAcc = testAccreditation;
-        emptyPortfolioAcc.portfolio = new string[](0);
-        
-        uint256 tokenId = lexchex.mint(user1, emptyPortfolioAcc);
-        string[] memory portfolio = lexchex.getPortfolioAt(tokenId);
-        assertEq(portfolio.length, 0);
-        vm.stopPrank();
-    }
 
     // Test 19: Test minting with expired date should still work
     function testMintWithExpiredDate() public {
@@ -306,10 +271,8 @@ contract LexChexTest is Test {
         
         uint256 tokenId = lexchex.mint(user1, expiredAcc);
 
-        // TODO spec needed: it does not work as expected because mint() overwrites expiryDate. Need clarify which way we want to go.
-//        assertFalse(lexchex.isValid(tokenId));
-        assertTrue(lexchex.isValid(tokenId));
-        assertEq(lexchex.accreditations(tokenId).expiryDate, block.timestamp + 30 days);
+        assertFalse(lexchex.isValid(tokenId));
+        assertEq(lexchex.accreditations(tokenId).expiryDate, expiredAcc.expiryDate);
 
         vm.stopPrank();
     }
@@ -352,5 +315,65 @@ contract LexChexTest is Test {
         // Verify the existing states
         assertEq(lexchex.totalSupply(), 1, "Total supply should be the same after upgrade");
         assertEq(lexchex.ownerOf(tokenId), user1, "Token ownership should be the same after upgrade");
+    }
+
+    // Test 21: Mint 3, burn 2, then mint 2 more - print IDs
+    function testMintBurnMintAgain() public {
+        // Mint 3 NFTs
+        vm.startPrank(admin);
+        uint256 firstTokenId = lexchex.mint(user1, testAccreditation);
+        console.log("First NFT minted with ID:", firstTokenId);
+        
+        uint256 secondTokenId = lexchex.mint(user2, testAccreditation);
+        console.log("Second NFT minted with ID:", secondTokenId);
+        
+        uint256 thirdTokenId = lexchex.mint(user1, testAccreditation);
+        console.log("Third NFT minted with ID:", thirdTokenId);
+        vm.stopPrank();
+
+        // Verify initial state
+        assertEq(firstTokenId, 0, "First token ID should be 0");
+        assertEq(secondTokenId, 1, "Second token ID should be 1");
+        assertEq(thirdTokenId, 2, "Third token ID should be 2");
+        assertEq(lexchex.totalSupply(), 3, "Total supply should be 3 after minting 3");
+
+        // Burn 2 NFTs (first and third)
+        vm.startPrank(user1);
+        lexchex.burn(firstTokenId);
+        console.log("First NFT burned with ID:", firstTokenId);
+        
+        lexchex.burn(thirdTokenId);
+        console.log("Third NFT burned with ID:", thirdTokenId);
+        vm.stopPrank();
+
+        // Verify state after burning 2
+        assertEq(lexchex.totalSupply(), 1, "Total supply should be 1 after burning 2");
+        assertEq(lexchex.ownerOf(secondTokenId), user2, "Second token should still be owned by user2");
+
+        // Mint 2 more NFTs
+        vm.startPrank(admin);
+        uint256 fourthTokenId = lexchex.mint(user2, testAccreditation);
+        console.log("Fourth NFT minted with ID:", fourthTokenId);
+        
+        uint256 fifthTokenId = lexchex.mint(user1, testAccreditation);
+        console.log("Fifth NFT minted with ID:", fifthTokenId);
+        vm.stopPrank();
+
+        // Verify final state
+        assertEq(fourthTokenId, 3, "Fourth token ID should be 3");
+        assertEq(fifthTokenId, 4, "Fifth token ID should be 4");
+        assertEq(lexchex.totalSupply(), 3, "Total supply should be 3 at the end");
+        
+        // Verify ownership
+        assertEq(lexchex.ownerOf(secondTokenId), user2, "Second token should be owned by user2");
+        assertEq(lexchex.ownerOf(fourthTokenId), user2, "Fourth token should be owned by user2");
+        assertEq(lexchex.ownerOf(fifthTokenId), user1, "Fifth token should be owned by user1");
+
+        // Verify burned tokens are no longer accessible
+        vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, firstTokenId));
+        lexchex.ownerOf(firstTokenId);
+        
+        vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, thirdTokenId));
+        lexchex.ownerOf(thirdTokenId);
     }
 }
