@@ -376,4 +376,56 @@ contract LexChexTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, thirdTokenId));
         lexchex.ownerOf(thirdTokenId);
     }
+
+    function testSetAccreditation() public {
+        // Mint a token first
+        vm.prank(admin);
+        uint256 tokenId = lexchex.mint(user1, testAccreditation);
+        assertEq(tokenId, 0);
+
+        // Set new accreditation
+        vm.prank(owner);
+        lexchex.setAccreditation(
+            tokenId,
+            Accreditation({
+                agreementId: bytes32(uint256(2)),
+                registryAddress: address(0x5),
+                name: "New Test Entity",
+                entityType: "LLC",
+                jurisdiction: "Delaware",
+                contact: "new-test@test.com",
+                issuanceDate: block.timestamp,
+                expiryDate: block.timestamp + 365 days,
+                voided: "",
+                signature: bytes("0x123...")
+            })
+        );
+        assertEq(lexchex.accreditations(tokenId).agreementId, bytes32(uint256(2)), "Should have new accreditation");
+    }
+
+    function test_RevertWhen_SetAccreditationNonAdmin() public {
+        // Mint a token first
+        vm.prank(admin);
+        uint256 tokenId = lexchex.mint(user1, testAccreditation);
+        assertEq(tokenId, 0);
+
+        // Non-admin should not be able to set new accreditation
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, auth.OWNER_ROLE(), user1));
+        vm.prank(user1);
+        lexchex.setAccreditation(
+            tokenId,
+            Accreditation({
+                agreementId: bytes32(uint256(2)),
+                registryAddress: address(0x5),
+                name: "New Test Entity",
+                entityType: "LLC",
+                jurisdiction: "Delaware",
+                contact: "new-test@test.com",
+                issuanceDate: block.timestamp,
+                expiryDate: block.timestamp + 365 days,
+                voided: "",
+                signature: bytes("0x123...")
+            })
+        );
+    }
 }

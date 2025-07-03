@@ -73,6 +73,9 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable,
     BurnAuth constant BURNAUTH = BurnAuth.OwnerOnly;
     uint256 public constant DURATION = 30 days;
 
+    // Upgrade notes: Reduced gap to account for new variables (50 - 1 = 49)
+    uint256[49] private __gap;
+
     // Custom errors
     error LexChex_SoulBound();
     error LexChex_TokenCannotBeBurned();
@@ -169,14 +172,6 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable,
         return super._update(to, tokenId, auth);
     }
 
-    function setAccountPayable(address _accountPayable) public onlyOwner {
-        LeXcheXStorage.setAccountPayable(_accountPayable);
-    }
-
-    function setTemplateId(address _templateId) public onlyOwner {
-        LeXcheXStorage.setTemplateId(_templateId);
-    }
-    
     function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
        // _requireMinted(tokenId);
         
