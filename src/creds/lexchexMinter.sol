@@ -80,21 +80,23 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
     address public treasury;
 
     struct MintRequest {
+        uint256 uuid;
         address owner;
-        string name;
-        string entityType;
-        string jurisdiction;
-        string contact;
+        string investorName;
+        string investorType;
+        string investorJurisdiction;
+        string investorContact;
         uint256 mintPrice;
         uint256 expiry;
     }
 
     struct AuthorityData {
+        uint256 uuid;
         address owner;
-        string name;
-        string entityType;
-        string jurisdiction;
-        string contact;
+        string investorName;
+        string investorType;
+        string investorJurisdiction;
+        string investorContact;
         uint256 mintPrice;
         uint256 expiry;
     }
@@ -161,10 +163,10 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
         Accreditation memory acc = Accreditation({
             agreementId: bytes32(0), // Will be set after agreement creation
             registryAddress: dealRegistry,
-            name: request.name,
-            entityType: request.entityType,
-            jurisdiction: request.jurisdiction,
-            contact: request.contact,
+            investorName: request.investorName,
+            investorType: request.investorType,
+            investorJurisdiction: request.investorJurisdiction,
+            investorContact: request.investorContact,
             issuanceDate: block.timestamp,
             expiryDate: request.expiry,
             voided: "",
@@ -250,11 +252,12 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
     ) internal view {
         // Create AuthorityData struct for signature verification
         AuthorityData memory data = AuthorityData({
+            uuid: request.uuid,
             owner: request.owner,
-            name: request.name,
-            entityType: request.entityType,
-            jurisdiction: request.jurisdiction,
-            contact: request.contact,
+            investorName: request.investorName,
+            investorType: request.investorType,
+            investorJurisdiction: request.investorJurisdiction,
+            investorContact: request.investorContact,
             mintPrice: request.mintPrice,
             expiry: request.expiry
         });
@@ -278,10 +281,10 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
                     abi.encode(
                         AUTHORITY_TYPEHASH,
                         data.owner,
-                        keccak256(bytes(data.name)),
-                        keccak256(bytes(data.entityType)),
-                        keccak256(bytes(data.jurisdiction)),
-                        keccak256(bytes(data.contact)),
+                        keccak256(bytes(data.investorName)),
+                        keccak256(bytes(data.investorType)),
+                        keccak256(bytes(data.investorJurisdiction)),
+                        keccak256(bytes(data.investorContact)),
                         data.mintPrice,
                         data.expiry
                     )

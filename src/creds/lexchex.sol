@@ -196,9 +196,9 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable,
                             '"image": "data:image/svg+xml;base64,',
                             Base64.encode(bytes(image)),
                             '", "attributes": [',
-                            '{"trait_type": "Name", "value": "',acc.name,'"},',
-                            '{"trait_type": "Entity Type", "value": "',acc.entityType,'"},',
-                            '{"trait_type": "Jurisdiction", "value": "',acc.jurisdiction,'"},',
+                            '{"trait_type": "Name", "value": "',acc.investorName,'"},',
+                            '{"trait_type": "Entity Type", "value": "',acc.investorType,'"},',
+                            '{"trait_type": "Jurisdiction", "value": "',acc.investorJurisdiction,'"},',
                             '{"trait_type": "Status", "value": "',isValid(tokenId) ? "Valid" : "Invalid",'"}',
                             ']}'
                         )

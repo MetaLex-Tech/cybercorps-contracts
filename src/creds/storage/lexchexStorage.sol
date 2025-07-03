@@ -26,10 +26,10 @@ import "../../interfaces/ICyberAgreementRegistry.sol";
 struct Accreditation {
     bytes32 agreementId;
     address registryAddress;
-    string name;
-    string entityType;
-    string jurisdiction;
-    string contact;
+    string investorName;
+    string investorType;
+    string investorJurisdiction;
+    string investorContact;
     uint256 issuanceDate;
     uint256 expiryDate;
     string voided;

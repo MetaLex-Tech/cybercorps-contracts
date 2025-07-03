@@ -230,11 +230,12 @@ contract LexChexMinterTest is Test {
         uint256 treasuryPaymentBalanceBefore = paymentToken.balanceOf(treasury);
 
         request = LeXcheXMinter.MintRequest({
+            uuid: 1,
             owner: user1,
-            name: "Test Entity",
-            entityType: "LLC",
-            jurisdiction: "Delaware",
-            contact: "test@test.com",
+            investorName: "Test Entity",
+            investorType: "LLC",
+            investorJurisdiction: "Delaware",
+            investorContact: "test@test.com",
             mintPrice: 10e6,
             expiry: block.timestamp + 1 days
         });
@@ -244,11 +245,12 @@ contract LexChexMinterTest is Test {
             lexchexMinter.DOMAIN_SEPARATOR(),
             lexchexMinter.AUTHORITY_TYPEHASH(),
             LeXcheXMinter.AuthorityData({
+                uuid: request.uuid,
                 owner: request.owner,
-                name: request.name,
-                entityType: request.entityType,
-                jurisdiction: request.jurisdiction,
-                contact: request.contact,
+                investorName: request.investorName,
+                investorType: request.investorType,
+                investorJurisdiction: request.investorJurisdiction,
+                investorContact: request.investorContact,
                 mintPrice: request.mintPrice,
                 expiry: request.expiry
             }),
@@ -288,11 +290,12 @@ contract LexChexMinterTest is Test {
         uint256 treasuryPaymentBalanceBefore = paymentToken.balanceOf(treasury);
 
         request = LeXcheXMinter.MintRequest({
+            uuid: 1,
             owner: user1,
-            name: "Test Entity",
-            entityType: "LLC",
-            jurisdiction: "Delaware",
-            contact: "test@test.com",
+            investorName: "Test Entity",
+            investorType: "LLC",
+            investorJurisdiction: "Delaware",
+            investorContact: "test@test.com",
             mintPrice: 0, // free
             expiry: block.timestamp + 1 days
         });
@@ -302,11 +305,12 @@ contract LexChexMinterTest is Test {
             lexchexMinter.DOMAIN_SEPARATOR(),
             lexchexMinter.AUTHORITY_TYPEHASH(),
             LeXcheXMinter.AuthorityData({
+                uuid: request.uuid,
                 owner: request.owner,
-                name: request.name,
-                entityType: request.entityType,
-                jurisdiction: request.jurisdiction,
-                contact: request.contact,
+                investorName: request.investorName,
+                investorType: request.investorType,
+                investorJurisdiction: request.investorJurisdiction,
+                investorContact: request.investorContact,
                 mintPrice: request.mintPrice,
                 expiry: request.expiry
             }),
@@ -343,11 +347,12 @@ contract LexChexMinterTest is Test {
 
     function test_RevertIf_invalidAuthoritySignature() public {
         request = LeXcheXMinter.MintRequest({
+            uuid: 1,
             owner: user1,
-            name: "Test Entity",
-            entityType: "LLC",
-            jurisdiction: "Delaware",
-            contact: "test@test.com",
+            investorName: "Test Entity",
+            investorType: "LLC",
+            investorJurisdiction: "Delaware",
+            investorContact: "test@test.com",
             mintPrice: 10e6,
             expiry: block.timestamp + 1 days
         });
@@ -358,11 +363,12 @@ contract LexChexMinterTest is Test {
             lexchexMinter.DOMAIN_SEPARATOR(),
             lexchexMinter.AUTHORITY_TYPEHASH(),
             LeXcheXMinter.AuthorityData({
+                uuid: request.uuid,
                 owner: request.owner,
-                name: request.name,
-                entityType: request.entityType,
-                jurisdiction: request.jurisdiction,
-                contact: request.contact,
+                investorName: request.investorName,
+                investorType: request.investorType,
+                investorJurisdiction: request.investorJurisdiction,
+                investorContact: request.investorContact,
                 mintPrice: request.mintPrice,
                 expiry: request.expiry
             }),

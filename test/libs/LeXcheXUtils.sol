@@ -61,10 +61,10 @@ library LeXcheXUtils {
                     abi.encode(
                         _typeHash,
                         data.owner,
-                        keccak256(bytes(data.name)),
-                        keccak256(bytes(data.entityType)),
-                        keccak256(bytes(data.jurisdiction)),
-                        keccak256(bytes(data.contact)),
+                        keccak256(bytes(data.investorName)),
+                        keccak256(bytes(data.investorType)),
+                        keccak256(bytes(data.investorJurisdiction)),
+                        keccak256(bytes(data.investorContact)),
                         data.mintPrice,
                         data.expiry
                     )
