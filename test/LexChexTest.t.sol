@@ -410,7 +410,7 @@ contract LexChexTest is Test {
         assertEq(tokenId, 0);
 
         // Non-admin should not be able to set new accreditation
-        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, auth.OWNER_ROLE(), user1));
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, auth.ADMIN_ROLE(), user1));
         vm.prank(user1);
         lexchex.setAccreditation(
             tokenId,

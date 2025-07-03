@@ -85,6 +85,7 @@ contract LexChexMinterTest is Test {
 
     uint256 requestSalt = uint256(keccak256("LexChexMinterTestRequestSalt"));
     bytes32 templateId = bytes32(uint256(1));
+    string legalContractUri;
     string[] globalFields = new string[](1);
     string[] partyFields = new string[](1);
     string[] globalValues = new string[](1);
@@ -133,16 +134,16 @@ contract LexChexMinterTest is Test {
         vm.stopPrank();
 
         //
-        // Prepare a valid request
+        // Prepare a valid agreement
         //
 
         // Prepare funds for agent
-        deal(address(paymentToken), agent, 10e6, true);
+        deal(address(paymentToken), agent, 20e6, true);
         vm.prank(agent);
-        paymentToken.approve(address(lexchexMinter), 10e6);
+        paymentToken.approve(address(lexchexMinter), 20e6);
 
         // TODO Use more realistic values
-        string memory legalContractUri = "ipfs.io/ipfs/[cid]";
+        legalContractUri = "ipfs.io/ipfs/[cid]";
         globalFields[0] = "Global Field 1";
         partyFields[0] = "Party Field 1";
 
@@ -265,7 +266,7 @@ contract LexChexMinterTest is Test {
         vm.expectEmit(true, true, true, true);
         emit LeXcheXMinter.MintCompleted(user1, 0, agreementId);
         vm.prank(agent);
-        lexchexMinter.requestMint(
+        (bytes32 retAgreementId, uint256 retTokenId) = lexchexMinter.requestMint(
             request,
             templateId,
             requestSalt,
@@ -275,7 +276,9 @@ contract LexChexMinterTest is Test {
             agreementSignature,
             authoritySignature
         );
-        
+
+        assertEq(retAgreementId, agreementId, "Unexpected agreement ID");
+        assertEq(retTokenId, 0, "Unexpected token ID");
         assertEq(lexchex.balanceOf(user1), 1, "user1 should get one token");
         assertEq(lexchex.ownerOf(0), user1, "token should be owned by user 1");
         assertEq(lexchex.accreditations(0).agreementId, agreementId, "agreement ID should be set");
@@ -343,7 +346,7 @@ contract LexChexMinterTest is Test {
         assertEq(paymentToken.balanceOf(treasury), treasuryPaymentBalanceBefore, "treasury should not receive payment");
     }
 
-    function test_RevertIf_invalidAuthoritySignature() public {
+    function test_RevertIf_RequestMintInvalidAuthoritySignature() public {
         request = LeXcheXMinter.MintRequest({
             uuid: 1,
             owner: user1,
@@ -384,6 +387,300 @@ contract LexChexMinterTest is Test {
             parties,
             partyValues,
             agreementSignature,
+            authoritySignature
+        );
+    }
+
+    function test_RevertIf_RequestMintInvalidAgreementSignature() public {
+        request = LeXcheXMinter.MintRequest({
+            uuid: 1,
+            owner: user1,
+            investorName: "Test Entity",
+            investorType: "LLC",
+            investorJurisdiction: "Delaware",
+            investorContact: "test@test.com",
+            mintPrice: 10e6,
+            expiry: block.timestamp + 1 days
+        });
+
+        authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
+            vm,
+            lexchexMinter.DOMAIN_SEPARATOR(),
+            lexchexMinter.AUTHORITY_TYPEHASH(),
+            LeXcheXMinter.AuthorityData({
+                uuid: request.uuid,
+                owner: request.owner,
+                investorName: request.investorName,
+                investorType: request.investorType,
+                investorJurisdiction: request.investorJurisdiction,
+                investorContact: request.investorContact,
+                mintPrice: request.mintPrice,
+                expiry: request.expiry
+            }),
+            authorityPrivateKey
+        );
+
+        // Create an invalid agreement signature
+        agreementSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            agreementId,
+            legalContractUri,
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            user2PrivateKey // Intentionally wrong private key
+        );
+
+        // Request should fail
+        vm.expectRevert(abi.encodeWithSelector(CyberAgreementRegistry.SignatureVerificationFailed.selector));
+        vm.prank(agent);
+        lexchexMinter.requestMint(
+            request,
+            templateId,
+            requestSalt,
+            globalValues,
+            parties,
+            partyValues,
+            agreementSignature,
+            authoritySignature
+        );
+    }
+
+    function testRequestRenewal() public {
+        // Mint a token first
+        testRequestMint();
+
+        uint256 agentPaymentBalanceBefore = paymentToken.balanceOf(agent);
+        uint256 treasuryPaymentBalanceBefore = paymentToken.balanceOf(treasury);
+
+        request = LeXcheXMinter.MintRequest({
+            uuid: 2,
+            owner: user1,
+            investorName: "Test Entity",
+            investorType: "LLC",
+            investorJurisdiction: "Delaware",
+            investorContact: "test@test.com",
+            mintPrice: 10e6,
+            expiry: block.timestamp + 1 days
+        });
+        authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
+            vm,
+            lexchexMinter.DOMAIN_SEPARATOR(),
+            lexchexMinter.AUTHORITY_TYPEHASH(),
+            LeXcheXMinter.AuthorityData({
+                uuid: request.uuid,
+                owner: request.owner,
+                investorName: request.investorName,
+                investorType: request.investorType,
+                investorJurisdiction: request.investorJurisdiction,
+                investorContact: request.investorContact,
+                mintPrice: request.mintPrice,
+                expiry: request.expiry
+            }),
+            authorityPrivateKey
+        );
+        // Request should succeed
+        vm.expectEmit(true, true, true, true);
+        emit LeXcheXMinter.RenewalRequested(user1, 10e6, agreementId);
+        vm.expectEmit(true, true, true, true);
+        emit LeXcheXMinter.RenewalCompleted(user1, 0, agreementId);
+        vm.prank(agent);
+        lexchexMinter.requestRenewal(
+            request,
+            0,
+            authoritySignature
+        );
+
+        assertEq(lexchex.balanceOf(user1), 1, "user1 should still have one token");
+        assertEq(lexchex.ownerOf(0), user1, "token should be owned by user 1");
+        assertEq(lexchex.accreditations(0).agreementId, agreementId, "agreement ID should be the same");
+        assertEq(agentPaymentBalanceBefore - paymentToken.balanceOf(agent), 10e6, "payment amount is not correct");
+        assertEq(paymentToken.balanceOf(treasury) - treasuryPaymentBalanceBefore, 10e6, "treasury received amount is not correct");
+    }
+
+    function testRequestRenewalExpiredToken() public {
+        // Mint a token first
+        testRequestMint();
+
+        // Wait until it expires
+        vm.warp(lexchex.accreditations(0).expiryDate + 1);
+        assertFalse(lexchex.isValid(0));
+
+        uint256 agentPaymentBalanceBefore = paymentToken.balanceOf(agent);
+        uint256 treasuryPaymentBalanceBefore = paymentToken.balanceOf(treasury);
+
+        request = LeXcheXMinter.MintRequest({
+            uuid: 2,
+            owner: user1,
+            investorName: "Test Entity",
+            investorType: "LLC",
+            investorJurisdiction: "Delaware",
+            investorContact: "test@test.com",
+            mintPrice: 10e6,
+            expiry: block.timestamp + 1 days
+        });
+        authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
+            vm,
+            lexchexMinter.DOMAIN_SEPARATOR(),
+            lexchexMinter.AUTHORITY_TYPEHASH(),
+            LeXcheXMinter.AuthorityData({
+                uuid: request.uuid,
+                owner: request.owner,
+                investorName: request.investorName,
+                investorType: request.investorType,
+                investorJurisdiction: request.investorJurisdiction,
+                investorContact: request.investorContact,
+                mintPrice: request.mintPrice,
+                expiry: request.expiry
+            }),
+            authorityPrivateKey
+        );
+
+        // Request should succeed
+        vm.expectEmit(true, true, true, true);
+        emit LeXcheXMinter.RenewalRequested(user1, 10e6, agreementId);
+        vm.expectEmit(true, true, true, true);
+        emit LeXcheXMinter.RenewalCompleted(user1, 0, agreementId);
+        vm.prank(agent);
+        lexchexMinter.requestRenewal(
+            request,
+            0,
+            authoritySignature
+        );
+
+        assertEq(lexchex.balanceOf(user1), 1, "user1 should still have one token");
+        assertEq(lexchex.ownerOf(0), user1, "token should be owned by user 1");
+        assertEq(lexchex.accreditations(0).agreementId, agreementId, "agreement ID should be the same");
+        assertEq(lexchex.accreditations(0).expiryDate, block.timestamp + 1 days, "should have a new expiry");
+        assertEq(agentPaymentBalanceBefore - paymentToken.balanceOf(agent), 10e6, "payment amount is not correct");
+        assertEq(paymentToken.balanceOf(treasury) - treasuryPaymentBalanceBefore, 10e6, "treasury received amount is not correct");
+    }
+
+    function test_RevertIf_RequestRenewalInvalidAuthoritySignature() public {
+        // Mint a token first
+        testRequestMint();
+
+        request = LeXcheXMinter.MintRequest({
+            uuid: 2,
+            owner: user1,
+            investorName: "Test Entity",
+            investorType: "LLC",
+            investorJurisdiction: "Delaware",
+            investorContact: "test@test.com",
+            mintPrice: 10e6,
+            expiry: block.timestamp + 1 days
+        });
+
+        // Create an invalid authority signature
+        authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
+            vm,
+            lexchexMinter.DOMAIN_SEPARATOR(),
+            lexchexMinter.AUTHORITY_TYPEHASH(),
+            LeXcheXMinter.AuthorityData({
+                uuid: request.uuid,
+                owner: request.owner,
+                investorName: request.investorName,
+                investorType: request.investorType,
+                investorJurisdiction: request.investorJurisdiction,
+                investorContact: request.investorContact,
+                mintPrice: request.mintPrice,
+                expiry: request.expiry
+            }),
+            user1PrivateKey // Intentionally wrong private key
+        );
+
+        // Request should fail
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, coreAuth.ADMIN_ROLE(), user1));
+        vm.prank(agent);
+        lexchexMinter.requestRenewal(
+            request,
+            0,
+            authoritySignature
+        );
+    }
+
+    function test_RevertIf_RequestRenewalAccreditationNotExist() public {
+        // Note we did not mint the token first
+
+        request = LeXcheXMinter.MintRequest({
+            uuid: 2,
+            owner: user1,
+            investorName: "Test Entity",
+            investorType: "LLC",
+            investorJurisdiction: "Delaware",
+            investorContact: "test@test.com",
+            mintPrice: 10e6,
+            expiry: block.timestamp + 1 days
+        });
+        authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
+            vm,
+            lexchexMinter.DOMAIN_SEPARATOR(),
+            lexchexMinter.AUTHORITY_TYPEHASH(),
+            LeXcheXMinter.AuthorityData({
+                uuid: request.uuid,
+                owner: request.owner,
+                investorName: request.investorName,
+                investorType: request.investorType,
+                investorJurisdiction: request.investorJurisdiction,
+                investorContact: request.investorContact,
+                mintPrice: request.mintPrice,
+                expiry: request.expiry
+            }),
+            authorityPrivateKey
+        );
+
+        // Request should fail due to token not exist
+        vm.expectRevert(abi.encodeWithSelector(LeXcheXMinter.AccreditationNotExist.selector));
+        vm.prank(agent);
+        lexchexMinter.requestRenewal(
+            request,
+            0,
+            authoritySignature
+        );
+    }
+
+    function test_RevertIf_RequestRenewalAccreditationVoided() public {
+        // Mint a token first, then void it
+        testRequestMint();
+        vm.prank(owner);
+        lexchex.void(0, "test");
+
+        request = LeXcheXMinter.MintRequest({
+            uuid: 2,
+            owner: user1,
+            investorName: "Test Entity",
+            investorType: "LLC",
+            investorJurisdiction: "Delaware",
+            investorContact: "test@test.com",
+            mintPrice: 10e6,
+            expiry: block.timestamp + 1 days
+        });
+        authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
+            vm,
+            lexchexMinter.DOMAIN_SEPARATOR(),
+            lexchexMinter.AUTHORITY_TYPEHASH(),
+            LeXcheXMinter.AuthorityData({
+                uuid: request.uuid,
+                owner: request.owner,
+                investorName: request.investorName,
+                investorType: request.investorType,
+                investorJurisdiction: request.investorJurisdiction,
+                investorContact: request.investorContact,
+                mintPrice: request.mintPrice,
+                expiry: request.expiry
+            }),
+            authorityPrivateKey
+        );
+
+        // Request should fail due to voided token
+        vm.expectRevert(abi.encodeWithSelector(LeXcheXMinter.AccreditationVoided.selector));
+        vm.prank(agent);
+        lexchexMinter.requestRenewal(
+            request,
+            0,
             authoritySignature
         );
     }

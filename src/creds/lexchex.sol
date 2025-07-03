@@ -149,7 +149,7 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable,
         return LeXcheXStorage.getAccreditation(tokenId);
     }
 
-    function setAccreditation(uint256 tokenId, Accreditation memory acc) public onlyOwner {
+    function setAccreditation(uint256 tokenId, Accreditation memory acc) public onlyAdmin {
         LeXcheXStorage.setAccreditation(tokenId, acc);
     }
     

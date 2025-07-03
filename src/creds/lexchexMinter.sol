@@ -65,7 +65,8 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
     error PaymentFailed();
     error InvalidPaymentAmount();
     error MintFailed();
-    error AgreementVoided();
+    error AccreditationNotExist();
+    error AccreditationVoided();
 
     // Events
     event MintRequested(address indexed requester, uint256 mintPrice, bytes32 agreementId);
@@ -213,20 +214,26 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     function requestRenewal(
         MintRequest calldata request,
-        bytes32 agreementId,
-        uint256 id,
+        uint256 tokenId,
         bytes memory authoritySignature
-    ) external returns (uint256 tokenId) {
+    ) external {
         // 1. Verify authority signature is from an admin using EIP-712
         _verifyAuthoritySignature(request, authoritySignature);
 
         // get the accreditation
-        Accreditation memory acc = LeXcheX(lexchex).accreditations(id);
+        Accreditation memory acc = LeXcheX(lexchex).accreditations(tokenId);
 
-        //check that the agreement has not been voided
-        if(bytes(acc.voided).length > 0) {
-            revert AgreementVoided();
+        // Check that the accreditation exists
+        if(acc.issuanceDate == 0) {
+            revert AccreditationNotExist();
         }
+
+        // Check that the accreditation has not been voided
+        if(bytes(acc.voided).length > 0) {
+            revert AccreditationVoided();
+        }
+
+        // Note an expired token could still be renewed
 
         // 2. Handle payment using safeTransferFrom
         if (request.mintPrice > 0) {
@@ -243,10 +250,10 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
         acc.signature = authoritySignature;
 
         // 4. Update LeXcheX
-        LeXcheX(lexchex).setAccreditation(id, acc);
+        LeXcheX(lexchex).setAccreditation(tokenId, acc);
 
-        emit RenewalRequested(request.owner, request.mintPrice, agreementId);
-        emit RenewalCompleted(request.owner, tokenId, agreementId);
+        emit RenewalRequested(request.owner, request.mintPrice, acc.agreementId);
+        emit RenewalCompleted(request.owner, tokenId, acc.agreementId);
     }
 
     function _verifyAuthoritySignature(
