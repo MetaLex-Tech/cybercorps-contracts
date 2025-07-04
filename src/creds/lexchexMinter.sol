@@ -225,7 +225,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         // Check that the accreditation exists
         if(acc.issuanceDate == 0) {
-            revert AccreditationNotExist();
+            revert AccreditationDoesNotExist();
         }
 
         // Check that the accreditation has not been voided
