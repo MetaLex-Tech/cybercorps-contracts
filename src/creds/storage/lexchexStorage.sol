@@ -34,6 +34,7 @@ struct Accreditation {
     uint256 expiryDate;
     string voided;
     bytes signature;
+    uint256 uuid;
 }
 
 library LeXcheXStorage {

@@ -174,7 +174,8 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
             issuanceDate: block.timestamp,
             expiryDate: request.expiry,
             voided: "",
-            signature: authoritySignature  // Use authority signature here
+            signature: authoritySignature,  // Use authority signature here
+            uuid: request.uuid
         });
 
         // 4. Create and sign agreement

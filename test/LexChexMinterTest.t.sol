@@ -633,7 +633,7 @@ contract LexChexMinterTest is Test {
         );
 
         // Request should fail due to token not exist
-        vm.expectRevert(abi.encodeWithSelector(LeXcheXMinter.AccreditationNotExist.selector));
+        vm.expectRevert(abi.encodeWithSelector(LeXcheXMinter.AccreditationDoesNotExist.selector));
         vm.prank(agent);
         lexchexMinter.requestRenewal(
             request,

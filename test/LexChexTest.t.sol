@@ -94,7 +94,8 @@ contract LexChexTest is Test {
             issuanceDate: block.timestamp,
             expiryDate: block.timestamp + 365 days,
             voided: "",
-            signature: bytes("0x123...")
+            signature: bytes("0x123..."),
+            uuid: 1
         });
     }
 
@@ -397,7 +398,8 @@ contract LexChexTest is Test {
                 issuanceDate: block.timestamp,
                 expiryDate: block.timestamp + 365 days,
                 voided: "",
-                signature: bytes("0x123...")
+                signature: bytes("0x123..."),
+                uuid: 1
             })
         );
         assertEq(lexchex.accreditations(tokenId).agreementId, bytes32(uint256(2)), "Should have new accreditation");
@@ -424,7 +426,8 @@ contract LexChexTest is Test {
                 issuanceDate: block.timestamp,
                 expiryDate: block.timestamp + 365 days,
                 voided: "",
-                signature: bytes("0x123...")
+                signature: bytes("0x123..."),
+                uuid: 1
             })
         );
     }
