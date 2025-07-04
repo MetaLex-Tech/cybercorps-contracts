@@ -65,7 +65,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
     error PaymentFailed();
     error InvalidPaymentAmount();
     error MintFailed();
-    error AccreditationNotExist();
+    error AccreditationDoesNotExist();
     error AccreditationVoided();
 
     // Events
