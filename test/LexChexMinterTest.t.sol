@@ -53,12 +53,15 @@ import {LeXcheX} from "../src/creds/lexchex.sol";
 import {Test, console} from "forge-std/Test.sol";
 
 contract PaymentToken is ERC20 {
-    constructor(uint256 initialSupply) ERC20("Payment Token", "TestUSDC") {
+    uint8 _decimals;
+
+    constructor(uint256 initialSupply, uint8 __decimals) ERC20("Payment Token", "TestUSDC") {
+        _decimals = __decimals;
         _mint(msg.sender, initialSupply);
     }
 
-    function decimals() public pure override returns (uint8) {
-        return 6;
+    function decimals() public view override returns (uint8) {
+        return _decimals;
     }
 }
 
@@ -76,7 +79,8 @@ contract LexChexMinterTest is Test {
     address agent = address(2);
     address treasury = address(3);
 
-    ERC20 paymentToken = new PaymentToken(0);
+    ERC20 paymentToken = new PaymentToken(0, 6);
+    ERC20 paymentToken2 = new PaymentToken(0, 18);
 
     BorgAuth coreAuth;
     CyberAgreementRegistry registry;
@@ -717,8 +721,59 @@ contract LexChexMinterTest is Test {
 
         // Owner should be allowed
         vm.prank(owner);
-        lexchexMinter.setPaymentToken(address(0x1));
-        assertEq(lexchexMinter.paymentToken(), address(0x1), "paymentToken should've been updated");
+        lexchexMinter.setPaymentToken(address(paymentToken2));
+        assertEq(lexchexMinter.paymentToken(), address(paymentToken2), "paymentToken should've been updated");
+
+        // Next minting should use the new payment token
+
+        // Prepare funds for agent
+        deal(address(paymentToken2), agent, 10e18, true);
+        vm.prank(agent);
+        paymentToken2.approve(address(lexchexMinter), 10e18);
+
+        // Request mint
+        uint256 agentPaymentBalanceBefore = paymentToken2.balanceOf(agent);
+        uint256 treasuryPaymentBalanceBefore = paymentToken2.balanceOf(treasury);
+
+        request = LeXcheXMinter.MintRequest({
+            uuid: 1,
+            owner: user1,
+            investorName: "Test Entity",
+            investorType: "LLC",
+            investorJurisdiction: "Delaware",
+            investorContact: "test@test.com",
+            mintPrice: 10e18,
+            expiry: block.timestamp + 1 days
+        });
+        authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
+            vm,
+            lexchexMinter.DOMAIN_SEPARATOR(),
+            lexchexMinter.AUTHORITY_TYPEHASH(),
+            LeXcheXMinter.AuthorityData({
+                uuid: request.uuid,
+                owner: request.owner,
+                investorName: request.investorName,
+                investorType: request.investorType,
+                investorJurisdiction: request.investorJurisdiction,
+                investorContact: request.investorContact,
+                mintPrice: request.mintPrice,
+                expiry: request.expiry
+            }),
+            authorityPrivateKey
+        );
+        vm.prank(agent);
+        lexchexMinter.requestMint(
+            request,
+            templateId,
+            requestSalt,
+            globalValues,
+            parties,
+            partyValues,
+            agreementSignature,
+            authoritySignature
+        );
+        assertEq(agentPaymentBalanceBefore - paymentToken2.balanceOf(agent), 10e18, "payment amount is not correct");
+        assertEq(paymentToken2.balanceOf(treasury) - treasuryPaymentBalanceBefore, 10e18, "treasury received amount is not correct");
     }
 
     function testSetTreasury() public {
