@@ -64,6 +64,7 @@ contract LexChexTest is Test {
     event LexChex_Issued(address indexed owner, uint256 indexed id, Accreditation acc);
     event LexChex_Voided(address indexed owner, uint256 indexed id, string reason);
     event LexChex_Burned(address indexed owner, uint256 indexed id);
+    event LexChex_AccreditationSet(address indexed owner, uint256 indexed id, Accreditation acc);
 
     function setUp() public {
         // Setup roles - owner needs to be set in constructor
@@ -108,7 +109,9 @@ contract LexChexTest is Test {
     // Test 2: Minting as admin
     function testMintAsAdmin() public {
         vm.startPrank(admin);
-        
+
+        vm.expectEmit(true, true, true, true);
+        emit LexChex_Issued(admin, 0, testAccreditation);
         uint256 tokenId = lexchex.mint(user1, testAccreditation);
         assertEq(tokenId, 0);
         assertEq(lexchex.ownerOf(tokenId), user1);
@@ -131,6 +134,8 @@ contract LexChexTest is Test {
         uint256 tokenId = lexchex.mint(user1, testAccreditation);
         vm.stopPrank();
 
+        vm.expectEmit(true, true, true, true);
+        emit LexChex_Burned(user1, tokenId);
         vm.startPrank(user1);
         lexchex.burn(tokenId);
         vm.stopPrank();
@@ -385,22 +390,25 @@ contract LexChexTest is Test {
         assertEq(tokenId, 0);
 
         // Set new accreditation
+        Accreditation memory newAccreditation = Accreditation({
+            agreementId: bytes32(uint256(2)),
+            registryAddress: address(0x5),
+            investorName: "New Test Entity",
+            investorType: "LLC",
+            investorJurisdiction: "Delaware",
+            investorContact: "new-test@test.com",
+            issuanceDate: block.timestamp,
+            expiryDate: block.timestamp + 365 days,
+            voided: "",
+            signature: bytes("0x123..."),
+            uuid: 1
+        });
+        vm.expectEmit(true, true, true, true);
+        emit LexChex_AccreditationSet(owner, tokenId, newAccreditation);
         vm.prank(owner);
         lexchex.setAccreditation(
             tokenId,
-            Accreditation({
-                agreementId: bytes32(uint256(2)),
-                registryAddress: address(0x5),
-                investorName: "New Test Entity",
-                investorType: "LLC",
-                investorJurisdiction: "Delaware",
-                investorContact: "new-test@test.com",
-                issuanceDate: block.timestamp,
-                expiryDate: block.timestamp + 365 days,
-                voided: "",
-                signature: bytes("0x123..."),
-                uuid: 1
-            })
+            newAccreditation
         );
         assertEq(lexchex.accreditations(tokenId).agreementId, bytes32(uint256(2)), "Should have new accreditation");
     }

@@ -88,6 +88,7 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable,
     event LexChex_Issued(address indexed owner, uint256 indexed id, Accreditation acc);
     event LexChex_Voided(address indexed owner, uint256 indexed id, string reason);
     event LexChex_Burned(address indexed owner, uint256 indexed id);
+    event LexChex_AccreditationSet(address indexed owner, uint256 indexed id, Accreditation acc);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -151,6 +152,7 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable,
 
     function setAccreditation(uint256 tokenId, Accreditation memory acc) public onlyAdmin {
         LeXcheXStorage.setAccreditation(tokenId, acc);
+        emit LexChex_AccreditationSet(msg.sender, tokenId, acc);
     }
     
     /**
