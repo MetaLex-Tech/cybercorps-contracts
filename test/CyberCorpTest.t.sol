@@ -5208,4 +5208,372 @@ contract CyberCorpTest is Test {
         console.log("Deal ID:", vm.toString(dealId));
         console.log("Investor LexChex token:", tokenId);
     }
+
+    function testDelegateSigningDeal() public {
+        // Create three parties:
+        // 1. testAddress - the company/proposer
+        // 2. principalAddr - the investor who will delegate
+        // 3. delegateAddr - the delegate who will sign and pay on behalf of principal
+
+        uint256 principalPk = 11111;
+        address principalAddr = vm.addr(principalPk);
+        
+        uint256 delegatePk = 22222;
+        address delegateAddr = vm.addr(delegatePk);
+
+        // Setup: Principal sets delegate
+        vm.startPrank(principalAddr);
+        registry.setDelegation(delegateAddr, 0); // No expiry (0 means permanent)
+        vm.stopPrank();
+
+        // Verify delegation is set
+        (address retrievedDelegate, uint256 expiry) = registry.getDelegation(principalAddr);
+        assertEq(retrievedDelegate, delegateAddr, "Delegate should be set correctly");
+        assertEq(expiry, 0, "Expiry should be 0 (no expiry)");
+        assertTrue(registry.isValidDelegate(principalAddr, delegateAddr), "Delegate should be valid");
+
+        // Create a deal with the principal as a party
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "Test Officer",
+            signingOfficerTitle: "CEO",
+            investmentAmountUSD: 100000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 1000,
+            legalDetails: "Legal Details for delegation test",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Delegation Test Deal";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress); // Company
+        parties[1] = address(principalAddr); // Principal (who has delegated)
+        uint256 _paymentAmount = 1000000000000000000; // 1 ETH
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Company Party Value";
+        partyValues[1] = new string[](1);
+        partyValues[1][0] = "Principal Party Value";
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        // Company signs the deal first
+        bytes memory companySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        // Create the deal
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "DelegationTestCorp",
+            "Limited Liability Company",
+            "Delaware",
+            "Contact Details",
+            "Dispute Resolution",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            companySignature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+
+        // Verify the deal was created but not yet complete
+        assertFalse(registry.hasSigned(id, principalAddr), "Principal should not have signed yet");
+        assertTrue(registry.hasSigned(id, testAddress), "Company should have signed");
+
+        // Now the delegate signs and pays on behalf of the principal
+        // Create signature - delegate signs with their private key but for the principal
+        vm.startPrank(delegateAddr);
+        bytes memory delegateSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[1], // Principal's party values
+            delegatePk // Delegate's private key
+        );
+        vm.stopPrank();
+        IDealManager dealManager = IDealManager(dealManagerAddr);
+        
+        // Give the delegate funds to pay on behalf of the principal
+        vm.startPrank(principalAddr);
+        deal(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e,
+            principalAddr,
+            _paymentAmount
+        );
+        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(
+            address(dealManager),
+            _paymentAmount
+        );
+
+        // The delegate signs the deal FOR the principal using signContractFor
+        // This is different from signAndFinalizeDeal - it's signing on behalf of another party
+        registry.signContractFor(
+            principalAddr, // The principal (signer)
+            contractId, // The contract ID (same as the deal ID)
+            partyValues[1], // The principal's party values
+            delegateSignature, // Delegate's signature
+            false, // Not filling unallocated
+            "" // No secret
+        );
+
+        // Now finalize the deal by making the payment
+        dealManager.signAndFinalizeDeal(
+            principalAddr, // Principal address (who the deal is for)
+            contractId,
+            partyValues[1],
+            delegateSignature,
+            true, // Finalize payment
+            "Principal via Delegate",
+            ""
+        );
+        vm.stopPrank();
+
+        // Verify the deal is now complete
+        assertTrue(registry.hasSigned(id, principalAddr), "Principal should now have signed (via delegate)");
+        assertTrue(registry.hasSigned(id, testAddress), "Company should have signed");
+
+        // Verify the certificate was issued to the principal (not the delegate)
+        CyberCertPrinter certPrinter = CyberCertPrinter(cyberCertPrinterAddr[0]);
+        assertEq(certPrinter.ownerOf(certIds[0]), principalAddr, "Certificate should be owned by principal");
+
+        console.log("Delegation test completed successfully!");
+        console.log("Principal:", principalAddr);
+        console.log("Delegate:", delegateAddr);
+        console.log("Certificate owner:", certPrinter.ownerOf(certIds[0]));
+        console.log("Deal ID:", vm.toString(id));
+        console.log("Contract ID:", vm.toString(contractId));
+    }
+
+    function testDelegateSigningWithExpiry() public {
+        uint256 principalPk = 33333;
+        address principalAddr = vm.addr(principalPk);
+        
+        uint256 delegatePk = 44444;
+        address delegateAddr = vm.addr(delegatePk);
+
+        // Setup: Principal sets delegate with expiry
+        uint256 delegationExpiry = block.timestamp + 1000; // Expires in 1000 seconds
+        vm.startPrank(principalAddr);
+        registry.setDelegation(delegateAddr, delegationExpiry);
+        vm.stopPrank();
+
+        // Verify delegation is set and valid
+        assertTrue(registry.isValidDelegate(principalAddr, delegateAddr), "Delegate should be valid");
+        (address retrievedDelegate, uint256 expiry) = registry.getDelegation(principalAddr);
+        assertEq(retrievedDelegate, delegateAddr, "Delegate should be set correctly");
+        assertEq(expiry, delegationExpiry, "Expiry should match");
+
+        // Create a simple deal
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "Test Officer",
+            signingOfficerTitle: "CEO",
+            investmentAmountUSD: 100000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 1000,
+            legalDetails: "Legal Details for expiry test",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Delegation Expiry Test Deal";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress);
+        parties[1] = address(principalAddr);
+        uint256 _paymentAmount = 1000000000000000000;
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Company Party Value";
+        partyValues[1] = new string[](1);
+        partyValues[1][0] = "Principal Party Value";
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory companySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "DelegationExpiryCorp",
+            "Limited Liability Company",
+            "Delaware",
+            "Contact Details",
+            "Dispute Resolution",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            companySignature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 2000000 // Long expiry for the deal
+        );
+        vm.stopPrank();
+
+        // Fast forward past the delegation expiry
+        vm.warp(block.timestamp + 1001);
+
+        // Verify delegation is now expired
+        assertFalse(registry.isValidDelegate(principalAddr, delegateAddr), "Delegate should be expired");
+
+        // Create delegate signature
+        bytes memory delegateSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[1],
+            delegatePk
+        );
+
+        // Try to sign with expired delegation - should fail
+        vm.startPrank(delegateAddr);
+        vm.expectRevert(); // Should revert due to expired delegation
+        registry.signContractFor(
+            principalAddr,
+            contractId,
+            partyValues[1],
+            delegateSignature,
+            false,
+            ""
+        );
+        vm.stopPrank();
+
+        console.log("Delegation expiry test completed successfully!");
+        console.log("Delegation expired after:", delegationExpiry);
+        console.log("Current time:", block.timestamp);
+    }
+
+    function testRevokeDelegation() public {
+        uint256 principalPk = 55555;
+        address principalAddr = vm.addr(principalPk);
+        
+        uint256 delegatePk = 66666;
+        address delegateAddr = vm.addr(delegatePk);
+
+        // Setup: Principal sets delegate
+        vm.startPrank(principalAddr);
+        registry.setDelegation(delegateAddr, 0); // No expiry
+        vm.stopPrank();
+
+        // Verify delegation is set
+        assertTrue(registry.isValidDelegate(principalAddr, delegateAddr), "Delegate should be valid");
+
+        // Principal revokes delegation
+        vm.startPrank(principalAddr);
+        registry.revokeDelegation();
+        vm.stopPrank();
+
+        // Verify delegation is revoked
+        assertFalse(registry.isValidDelegate(principalAddr, delegateAddr), "Delegate should be revoked");
+        (address retrievedDelegate, uint256 expiry) = registry.getDelegation(principalAddr);
+        assertEq(retrievedDelegate, address(0), "Delegate should be cleared");
+        assertEq(expiry, 0, "Expiry should be cleared");
+
+        console.log("Delegation revocation test completed successfully!");
+        console.log("Principal:", principalAddr);
+        console.log("Delegate:", delegateAddr);
+    }
 }
