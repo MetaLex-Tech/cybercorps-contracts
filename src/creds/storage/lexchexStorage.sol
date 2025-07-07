@@ -24,6 +24,7 @@ pragma solidity 0.8.28;
 import "../../interfaces/ICyberAgreementRegistry.sol";
 
 struct Accreditation {
+    uint256 uuid;
     bytes32 agreementId;
     address registryAddress;
     string investorName;
@@ -34,7 +35,6 @@ struct Accreditation {
     uint256 expiryDate;
     string voided;
     bytes signature;
-    uint256 uuid;
 }
 
 library LeXcheXStorage {

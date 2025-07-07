@@ -125,7 +125,6 @@ contract LexChexMinterTest is Test {
                 address(coreAuth),
                 address(lexchex),
                 address(registry),
-                address(paymentToken),
                 treasury
             )
         )));
@@ -197,7 +196,6 @@ contract LexChexMinterTest is Test {
         assertEq(lexchexMinter.auth(), address(coreAuth), "Unexpected auth");
         assertEq(lexchexMinter.lexchex(), address(lexchex), "Unexpected lexchex");
         assertEq(lexchexMinter.dealRegistry(), address(registry), "Unexpected dealRegistry");
-        assertEq(lexchexMinter.paymentToken(), address(paymentToken), "Unexpected paymentToken");
         assertEq(lexchexMinter.treasury(), address(treasury), "Unexpected treasury");
         assertEq(lexchexMinter.version(), "1", "Unexpected version");
         assertEq(lexchexMinter.DOMAIN_SEPARATOR(), keccak256(
@@ -212,7 +210,7 @@ contract LexChexMinterTest is Test {
             )
         ), "Unexpected DOMAIN_SEPARATOR");
         assertEq(lexchexMinter.AUTHORITY_TYPEHASH(), keccak256(
-            "AuthorityData(address owner,string name,string entityType,string jurisdiction,string contact,uint256 mintPrice,uint256 expiry)"
+            "AuthorityData(uint256 uuid,address owner,string investorName,string investorType,string investorJurisdiction,string investorContact,uint256 mintPrice,uint256 expiry,address paymentToken)"
         ), "Unexpected AUTHORITY_TYPEHASH");
     }
 
@@ -223,7 +221,6 @@ contract LexChexMinterTest is Test {
             address(coreAuth),
             address(lexchex),
             address(registry),
-            address(paymentToken),
             treasury
         );
     }
@@ -240,7 +237,8 @@ contract LexChexMinterTest is Test {
             investorJurisdiction: "Delaware",
             investorContact: "test@test.com",
             mintPrice: 10e6,
-            expiry: block.timestamp + 1 days
+            expiry: block.timestamp + 1 days,
+            paymentToken: address(paymentToken)
         });
 
         authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
@@ -255,7 +253,8 @@ contract LexChexMinterTest is Test {
                 investorJurisdiction: request.investorJurisdiction,
                 investorContact: request.investorContact,
                 mintPrice: request.mintPrice,
-                expiry: request.expiry
+                expiry: request.expiry,
+                paymentToken: request.paymentToken
             }),
             authorityPrivateKey
         );
@@ -302,7 +301,8 @@ contract LexChexMinterTest is Test {
             investorJurisdiction: "Delaware",
             investorContact: "test@test.com",
             mintPrice: 0, // free
-            expiry: block.timestamp + 1 days
+            expiry: block.timestamp + 1 days,
+            paymentToken: address(paymentToken)
         });
 
         authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
@@ -317,7 +317,8 @@ contract LexChexMinterTest is Test {
                 investorJurisdiction: request.investorJurisdiction,
                 investorContact: request.investorContact,
                 mintPrice: request.mintPrice,
-                expiry: request.expiry
+                expiry: request.expiry,
+                paymentToken: request.paymentToken
             }),
             authorityPrivateKey
         );
@@ -359,7 +360,8 @@ contract LexChexMinterTest is Test {
             investorJurisdiction: "Delaware",
             investorContact: "test@test.com",
             mintPrice: 10e6,
-            expiry: block.timestamp + 1 days
+            expiry: block.timestamp + 1 days,
+            paymentToken: address(paymentToken)
         });
 
         // Create an invalid authority signature
@@ -375,7 +377,8 @@ contract LexChexMinterTest is Test {
                 investorJurisdiction: request.investorJurisdiction,
                 investorContact: request.investorContact,
                 mintPrice: request.mintPrice,
-                expiry: request.expiry
+                expiry: request.expiry,
+                paymentToken: request.paymentToken
             }),
             user1PrivateKey // Intentionally wrong private key
         );
@@ -404,7 +407,8 @@ contract LexChexMinterTest is Test {
             investorJurisdiction: "Delaware",
             investorContact: "test@test.com",
             mintPrice: 10e6,
-            expiry: block.timestamp + 1 days
+            expiry: block.timestamp + 1 days,
+            paymentToken: address(paymentToken)
         });
 
         authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
@@ -419,7 +423,8 @@ contract LexChexMinterTest is Test {
                 investorJurisdiction: request.investorJurisdiction,
                 investorContact: request.investorContact,
                 mintPrice: request.mintPrice,
-                expiry: request.expiry
+                expiry: request.expiry,
+                paymentToken: request.paymentToken
             }),
             authorityPrivateKey
         );
@@ -468,7 +473,8 @@ contract LexChexMinterTest is Test {
             investorJurisdiction: "Delaware",
             investorContact: "test@test.com",
             mintPrice: 10e6,
-            expiry: block.timestamp + 1 days
+            expiry: block.timestamp + 1 days,
+            paymentToken: address(paymentToken)
         });
         authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
             vm,
@@ -482,7 +488,8 @@ contract LexChexMinterTest is Test {
                 investorJurisdiction: request.investorJurisdiction,
                 investorContact: request.investorContact,
                 mintPrice: request.mintPrice,
-                expiry: request.expiry
+                expiry: request.expiry,
+                paymentToken: request.paymentToken
             }),
             authorityPrivateKey
         );
@@ -524,7 +531,8 @@ contract LexChexMinterTest is Test {
             investorJurisdiction: "Delaware",
             investorContact: "test@test.com",
             mintPrice: 10e6,
-            expiry: block.timestamp + 1 days
+            expiry: block.timestamp + 1 days,
+            paymentToken: address(paymentToken)
         });
         authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
             vm,
@@ -538,7 +546,8 @@ contract LexChexMinterTest is Test {
                 investorJurisdiction: request.investorJurisdiction,
                 investorContact: request.investorContact,
                 mintPrice: request.mintPrice,
-                expiry: request.expiry
+                expiry: request.expiry,
+                paymentToken: request.paymentToken
             }),
             authorityPrivateKey
         );
@@ -575,7 +584,8 @@ contract LexChexMinterTest is Test {
             investorJurisdiction: "Delaware",
             investorContact: "test@test.com",
             mintPrice: 10e6,
-            expiry: block.timestamp + 1 days
+            expiry: block.timestamp + 1 days,
+            paymentToken: address(paymentToken)
         });
 
         // Create an invalid authority signature
@@ -591,7 +601,8 @@ contract LexChexMinterTest is Test {
                 investorJurisdiction: request.investorJurisdiction,
                 investorContact: request.investorContact,
                 mintPrice: request.mintPrice,
-                expiry: request.expiry
+                expiry: request.expiry,
+                paymentToken: request.paymentToken
             }),
             user1PrivateKey // Intentionally wrong private key
         );
@@ -617,7 +628,8 @@ contract LexChexMinterTest is Test {
             investorJurisdiction: "Delaware",
             investorContact: "test@test.com",
             mintPrice: 10e6,
-            expiry: block.timestamp + 1 days
+            expiry: block.timestamp + 1 days,
+            paymentToken: address(paymentToken)
         });
         authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
             vm,
@@ -631,7 +643,8 @@ contract LexChexMinterTest is Test {
                 investorJurisdiction: request.investorJurisdiction,
                 investorContact: request.investorContact,
                 mintPrice: request.mintPrice,
-                expiry: request.expiry
+                expiry: request.expiry,
+                paymentToken: request.paymentToken
             }),
             authorityPrivateKey
         );
@@ -660,7 +673,8 @@ contract LexChexMinterTest is Test {
             investorJurisdiction: "Delaware",
             investorContact: "test@test.com",
             mintPrice: 10e6,
-            expiry: block.timestamp + 1 days
+            expiry: block.timestamp + 1 days,
+            paymentToken: address(paymentToken)
         });
         authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
             vm,
@@ -674,7 +688,8 @@ contract LexChexMinterTest is Test {
                 investorJurisdiction: request.investorJurisdiction,
                 investorContact: request.investorContact,
                 mintPrice: request.mintPrice,
-                expiry: request.expiry
+                expiry: request.expiry,
+                paymentToken: request.paymentToken
             }),
             authorityPrivateKey
         );
@@ -713,68 +728,6 @@ contract LexChexMinterTest is Test {
         assertEq(lexchexMinter.dealRegistry(), address(0x1), "dealRegistry should've been updated");
     }
 
-    function testSetPaymentToken() public {
-        // Non-owner should not be allowed
-        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, coreAuth.OWNER_ROLE(), authority));
-        vm.prank(authority);
-        lexchexMinter.setPaymentToken(address(0x1));
-
-        // Owner should be allowed
-        vm.prank(owner);
-        lexchexMinter.setPaymentToken(address(paymentToken2));
-        assertEq(lexchexMinter.paymentToken(), address(paymentToken2), "paymentToken should've been updated");
-
-        // Next minting should use the new payment token
-
-        // Prepare funds for agent
-        deal(address(paymentToken2), agent, 10e18, true);
-        vm.prank(agent);
-        paymentToken2.approve(address(lexchexMinter), 10e18);
-
-        // Request mint
-        uint256 agentPaymentBalanceBefore = paymentToken2.balanceOf(agent);
-        uint256 treasuryPaymentBalanceBefore = paymentToken2.balanceOf(treasury);
-
-        request = LeXcheXMinter.MintRequest({
-            uuid: 1,
-            owner: user1,
-            investorName: "Test Entity",
-            investorType: "LLC",
-            investorJurisdiction: "Delaware",
-            investorContact: "test@test.com",
-            mintPrice: 10e18,
-            expiry: block.timestamp + 1 days
-        });
-        authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
-            vm,
-            lexchexMinter.DOMAIN_SEPARATOR(),
-            lexchexMinter.AUTHORITY_TYPEHASH(),
-            LeXcheXMinter.AuthorityData({
-                uuid: request.uuid,
-                owner: request.owner,
-                investorName: request.investorName,
-                investorType: request.investorType,
-                investorJurisdiction: request.investorJurisdiction,
-                investorContact: request.investorContact,
-                mintPrice: request.mintPrice,
-                expiry: request.expiry
-            }),
-            authorityPrivateKey
-        );
-        vm.prank(agent);
-        lexchexMinter.requestMint(
-            request,
-            templateId,
-            requestSalt,
-            globalValues,
-            parties,
-            partyValues,
-            agreementSignature,
-            authoritySignature
-        );
-        assertEq(agentPaymentBalanceBefore - paymentToken2.balanceOf(agent), 10e18, "payment amount is not correct");
-        assertEq(paymentToken2.balanceOf(treasury) - treasuryPaymentBalanceBefore, 10e18, "treasury received amount is not correct");
-    }
 
     function testSetTreasury() public {
         // Non-owner should not be allowed

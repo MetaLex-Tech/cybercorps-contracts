@@ -77,11 +77,10 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
     // State variables
     address public lexchex;
     address public dealRegistry;
-    address public paymentToken;
     address public treasury;
 
-    // Upgrade notes: Reduced gap to account for new variables (50 - 8 - 1 = 41)
-    uint256[41] private __gap;
+    // Upgrade notes: Reduced gap to account for new variables (50 - 7 - 1 = 42)
+    uint256[42] private __gap;
 
     struct MintRequest {
         uint256 uuid;
@@ -92,6 +91,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
         string investorContact;
         uint256 mintPrice;
         uint256 expiry;
+        address paymentToken;
     }
 
     struct AuthorityData {
@@ -103,6 +103,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
         string investorContact;
         uint256 mintPrice;
         uint256 expiry;
+        address paymentToken;
     }
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -114,13 +115,11 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
         address _auth,
         address _lexchex,
         address _dealRegistry,
-        address _paymentToken,
         address _treasury
     ) public initializer {
         __BorgAuthACL_init(_auth);
         lexchex = _lexchex;
         dealRegistry = _dealRegistry;
-        paymentToken = _paymentToken;
         treasury = _treasury;
         auth = _auth;
         version = "1";
@@ -137,7 +136,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
         );
 
         AUTHORITY_TYPEHASH = keccak256(
-            "AuthorityData(address owner,string name,string entityType,string jurisdiction,string contact,uint256 mintPrice,uint256 expiry)"
+            "AuthorityData(uint256 uuid,address owner,string investorName,string investorType,string investorJurisdiction,string investorContact,uint256 mintPrice,uint256 expiry,address paymentToken)"
         );
     }
 
@@ -156,7 +155,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         // 2. Handle payment using safeTransferFrom
         if (request.mintPrice > 0) {
-            IERC20(paymentToken).safeTransferFrom(
+            IERC20(request.paymentToken).safeTransferFrom(
                 msg.sender,
                 treasury,
                 request.mintPrice
@@ -238,7 +237,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         // 2. Handle payment using safeTransferFrom
         if (request.mintPrice > 0) {
-            IERC20(paymentToken).safeTransferFrom(
+            IERC20(request.paymentToken).safeTransferFrom(
                 msg.sender,
                 treasury,
                 request.mintPrice
@@ -270,7 +269,8 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
             investorJurisdiction: request.investorJurisdiction,
             investorContact: request.investorContact,
             mintPrice: request.mintPrice,
-            expiry: request.expiry
+            expiry: request.expiry,
+            paymentToken: request.paymentToken
         });
 
         // Hash the data according to EIP-712
@@ -291,13 +291,15 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
                 keccak256(
                     abi.encode(
                         AUTHORITY_TYPEHASH,
+                        data.uuid,
                         data.owner,
                         keccak256(bytes(data.investorName)),
                         keccak256(bytes(data.investorType)),
                         keccak256(bytes(data.investorJurisdiction)),
                         keccak256(bytes(data.investorContact)),
                         data.mintPrice,
-                        data.expiry
+                        data.expiry,
+                        data.paymentToken
                     )
                 )
             )
@@ -311,10 +313,6 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     function setDealRegistry(address _dealRegistry) external onlyOwner {
         dealRegistry = _dealRegistry;
-    }
-
-    function setPaymentToken(address _paymentToken) external onlyOwner {
-        paymentToken = _paymentToken;
     }
 
     function setTreasury(address _treasury) external onlyOwner {

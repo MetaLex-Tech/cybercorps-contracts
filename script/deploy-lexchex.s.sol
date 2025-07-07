@@ -24,8 +24,8 @@ import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
 
 contract BaseScript is Script {
      function run() public {
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.2"));
-        bytes32 secondSalt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.2.2"));
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.3"));
+        bytes32 secondSalt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.2.3"));
         address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         address testAdmin = 0x42069BaBe92462393FaFdc653A88F958B64EC9A3;
@@ -65,7 +65,6 @@ contract BaseScript is Script {
                 address(lexchexAuth),
                 address(lexchex),
                 address(registry),
-                stable,
                 multisig
             )
         )));

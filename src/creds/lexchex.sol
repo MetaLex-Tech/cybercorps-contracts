@@ -154,6 +154,55 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable,
     }
     
     /**
+     * @dev Get all token IDs owned by a specific address
+     * @param owner The address to query
+     * @return tokenIds Array of token IDs owned by the address
+     */
+    function getTokenIdsByOwner(address owner) public view returns (uint256[] memory) {
+        uint256 balance = balanceOf(owner);
+        uint256[] memory tokenIds = new uint256[](balance);
+        
+        for (uint256 i = 0; i < balance; i++) {
+            tokenIds[i] = tokenOfOwnerByIndex(owner, i);
+        }
+        
+        return tokenIds;
+    }
+    
+    /**
+     * @dev Get the first token ID owned by an address (for single token scenarios)
+     * @param owner The address to query
+     * @return tokenId The first token ID owned by the address (reverts if no tokens)
+     */
+    function getAccreditationByOwner(address owner) public view returns (uint256) {
+        uint256 balance = balanceOf(owner);
+        require(balance > 0, "No tokens owned by this address");
+        return tokenOfOwnerByIndex(owner, 0);
+    }
+    
+    /**
+     * @dev Get accreditation data for a token ID
+     * @param tokenId The token ID to query
+     * @return acc The accreditation data
+     */
+    function getAccreditation(uint256 tokenId) public view returns (Accreditation memory) {
+        return LeXcheXStorage.getAccreditation(tokenId);
+    }
+    
+    /**
+     * @dev Check if a token is valid by owner address
+     * @param owner The owner address to check
+     * @return valid True if the owner has at least one valid token
+     */
+    function isValid(address owner) public view returns (bool) {
+        uint256 balance = balanceOf(owner);
+        if (balance == 0) return false;
+        
+        uint256 tokenId = tokenOfOwnerByIndex(owner, 0);
+        return isValid(tokenId);
+    }
+
+    /**
      * @dev Override _update to enforce transferability restrictions
      * This function is called for all token transfers, mints, and burns
      */

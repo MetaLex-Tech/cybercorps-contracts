@@ -60,13 +60,15 @@ library LeXcheXUtils {
                 keccak256(
                     abi.encode(
                         _typeHash,
+                        data.uuid,
                         data.owner,
                         keccak256(bytes(data.investorName)),
                         keccak256(bytes(data.investorType)),
                         keccak256(bytes(data.investorJurisdiction)),
                         keccak256(bytes(data.investorContact)),
                         data.mintPrice,
-                        data.expiry
+                        data.expiry,
+                        data.paymentToken
                     )
                 )
             )
