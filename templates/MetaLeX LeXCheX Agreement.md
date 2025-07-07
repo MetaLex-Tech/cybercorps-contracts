@@ -3,7 +3,7 @@
 id: bytes32(uint256(100))
 
 legalURI:
-safeURI: IFPS://bafybeieoahzrvqk3vggrv6zyljlgkrqn2ls5wgpbgp4w4ylenr2r2ftugm
+safeURI: 
 
 ## Global Fields
 
@@ -13,12 +13,11 @@ safeURI: IFPS://bafybeieoahzrvqk3vggrv6zyljlgkrqn2ls5wgpbgp4w4ylenr2r2ftugm
 
 
 
-
 ## Party Fields
 
 | **partyFieldName** | **description**                         |
 |:-------------------|:----------------------------------------|
-| investorName | |
+|investorName | |
 |investorType | | 
 |investorJurisdiction | |
 |investorContact | |
