@@ -728,6 +728,58 @@ contract LexChexMinterTest is Test {
         assertEq(lexchexMinter.dealRegistry(), address(0x1), "dealRegistry should've been updated");
     }
 
+    function testAnotherPaymentToken() public {
+        // Prepare funds for agent
+        deal(address(paymentToken2), agent, 10e18, true);
+        vm.prank(agent);
+        paymentToken2.approve(address(lexchexMinter), 10e18);
+
+        // Request mint
+        uint256 agentPaymentBalanceBefore = paymentToken2.balanceOf(agent);
+        uint256 treasuryPaymentBalanceBefore = paymentToken2.balanceOf(treasury);
+
+        request = LeXcheXMinter.MintRequest({
+            uuid: 1,
+            owner: user1,
+            investorName: "Test Entity",
+            investorType: "LLC",
+            investorJurisdiction: "Delaware",
+            investorContact: "test@test.com",
+            mintPrice: 10e18,
+            expiry: block.timestamp + 1 days,
+            paymentToken: address(paymentToken2)
+        });
+        authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
+            vm,
+            lexchexMinter.DOMAIN_SEPARATOR(),
+            lexchexMinter.AUTHORITY_TYPEHASH(),
+            LeXcheXMinter.AuthorityData({
+                uuid: request.uuid,
+                owner: request.owner,
+                investorName: request.investorName,
+                investorType: request.investorType,
+                investorJurisdiction: request.investorJurisdiction,
+                investorContact: request.investorContact,
+                mintPrice: request.mintPrice,
+                expiry: request.expiry,
+                paymentToken: address(paymentToken2)
+            }),
+            authorityPrivateKey
+        );
+        vm.prank(agent);
+        lexchexMinter.requestMint(
+            request,
+            templateId,
+            requestSalt,
+            globalValues,
+            parties,
+            partyValues,
+            agreementSignature,
+            authoritySignature
+        );
+        assertEq(agentPaymentBalanceBefore - paymentToken2.balanceOf(agent), 10e18, "payment amount is not correct");
+        assertEq(paymentToken2.balanceOf(treasury) - treasuryPaymentBalanceBefore, 10e18, "treasury received amount is not correct");
+    }
 
     function testSetTreasury() public {
         // Non-owner should not be allowed
