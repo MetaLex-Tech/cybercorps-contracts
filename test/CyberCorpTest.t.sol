@@ -68,6 +68,11 @@ import {TokenWarrantExtension, TokenWarrantData} from "../src/storage/extensions
 import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {SAFTEExtension, SAFTEData} from "../src/storage/extensions/SAFTEExtension.sol";
+import {LeXcheX} from "../src/creds/lexchex.sol";
+import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
+import {LexChexCondition} from "../src/libs/conditions/lexchexCondition.sol";
+import {LeXcheXUtils} from "./libs/LeXcheXUtils.sol";
+import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
 
 contract CyberCorpTest is Test {
     using ERC1967ProxyLib for address;
@@ -92,6 +97,9 @@ contract CyberCorpTest is Test {
     string[] certificateUris;
     string[][] defaultLegends;
     address[] extensions;
+    LeXcheX lexchex;
+    LeXcheXMinter lexchexMinter;
+    LexChexCondition lexchexCondition;
 
     function setUp() public {
         testPrivateKey = 1337;
@@ -237,7 +245,30 @@ contract CyberCorpTest is Test {
             partyFields
         );
 
+        // Deploy LexChex contracts
+        lexchex = LeXcheX(address(new ERC1967Proxy{salt: salt}(
+            address(new LeXcheX{salt: salt}()),
+            abi.encodeWithSelector(
+                LeXcheX.initialize.selector,
+                address(auth)
+            )
+        )));
+
+        lexchexMinter = LeXcheXMinter(address(new ERC1967Proxy{salt: salt}(
+            address(new LeXcheXMinter{salt: salt}()),
+            abi.encodeWithSelector(
+                LeXcheXMinter.initialize.selector,
+                address(auth),
+                address(lexchex),
+                address(registry),
+                multisig // treasury
+            )
+        )));
+
+        lexchexCondition = new LexChexCondition{salt: salt}(address(lexchex));
+
         auth.updateRole(address(multisig), 200);
+        auth.updateRole(address(lexchexMinter), 98);
         auth.zeroOwner();
         auth.userRoles(multisig);
         vm.stopPrank();
@@ -4474,5 +4505,707 @@ contract CyberCorpTest is Test {
         console.log("Successfully created deal after upgrade with ID:", vm.toString(id));
         console.log("Certificate printer created at:", certPrinterAddress[0]);
         console.log("Certificate ID:", certIds[0]);
+    }
+
+    // Helper function to mint a LexChex token for testing
+    function _mintLexChexToken(address owner, uint256 uuid) internal returns (uint256 tokenId) {
+        Accreditation memory acc = Accreditation({
+            uuid: uuid,
+            agreementId: bytes32(uint256(123)),
+            registryAddress: address(registry),
+            investorName: "Test Investor",
+            investorType: "Individual",
+            investorJurisdiction: "Delaware",
+            investorContact: "test@investor.com",
+            issuanceDate: block.timestamp,
+            expiryDate: block.timestamp + 365 days,
+            voided: "",
+            signature: bytes("test-signature")
+        });
+
+        vm.prank(multisig); // Admin can mint
+        tokenId = lexchex.mint(owner, acc);
+    }
+
+    function testLexChexConditionWithValidToken() public {
+        uint256 newPartyPk = 80085;
+        address newPartyAddr = vm.addr(newPartyPk);
+        vm.prank(multisig);
+        auth.updateRole(address(testAddress), 98); // Give testAddress ADMIN_ROLE for testing
+        // First mint a LexChex token for the counterparty
+        uint256 tokenId = _mintLexChexToken(newPartyAddr, 1);
+
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jurisdiction etc",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress);
+        parties[1] = address(newPartyAddr); // Set counterparty to the LexChex token holder
+        uint256 _paymentAmount = 1000000000000000000;
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+        partyValues[1] = new string[](1);
+        partyValues[1][0] = "Counter Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        // Add LexChex condition to the deal
+        address[] memory conditions = new address[](1);
+        conditions[0] = address(lexchexCondition);
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions, // Include LexChex condition
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+
+        IDealManager dealManager = IDealManager(dealManagerAddr);
+        vm.startPrank(newPartyAddr);
+        deal(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e,
+            newPartyAddr,
+            _paymentAmount
+        );
+        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(
+            address(dealManager),
+            _paymentAmount
+        );
+
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[1],
+            newPartyPk
+        );
+
+        // This should succeed because the counterparty has a valid LexChex token
+        dealManager.signAndFinalizeDeal(
+            newPartyAddr,
+            contractId,
+            partyValues[1],
+            newPartySignature,
+            true,
+            "Counter Party Name",
+            ""
+        );
+        vm.stopPrank();
+
+        console.log("Deal finalized successfully with LexChex condition");
+        console.log("LexChex token ID:", tokenId);
+        console.log("Token owner:", lexchex.ownerOf(tokenId));
+    }
+
+    function testLexChexConditionWithInvalidToken() public {
+        uint256 newPartyPk = 80085;
+        address newPartyAddr = vm.addr(newPartyPk);
+
+        // Mint a LexChex token but void it
+        uint256 tokenId = _mintLexChexToken(newPartyAddr, 2);
+        
+        // Void the token
+        vm.prank(multisig);
+        lexchex.void(tokenId, "Token voided for testing");
+
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jurisdiction etc",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress);
+        parties[1] = address(newPartyAddr); // Set counterparty to the LexChex token holder
+        uint256 _paymentAmount = 1000000000000000000;
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+        partyValues[1] = new string[](1);
+        partyValues[1][0] = "Counter Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        // Add LexChex condition to the deal
+        address[] memory conditions = new address[](1);
+        conditions[0] = address(lexchexCondition);
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions, // Include LexChex condition
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+
+        IDealManager dealManager = IDealManager(dealManagerAddr);
+        vm.startPrank(newPartyAddr);
+        deal(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e,
+            newPartyAddr,
+            _paymentAmount
+        );
+        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(
+            address(dealManager),
+            _paymentAmount
+        );
+
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[1],
+            newPartyPk
+        );
+
+        // This should fail because the counterparty has an invalid (voided) LexChex token
+        vm.expectRevert(); // Expect revert due to condition not being met
+        dealManager.signAndFinalizeDeal(
+            newPartyAddr,
+            contractId,
+            partyValues[1],
+            newPartySignature,
+            true,
+            "Counter Party Name",
+            ""
+        );
+        vm.stopPrank();
+
+        console.log("Deal correctly failed with invalid LexChex token");
+        console.log("LexChex token ID:", tokenId);
+        console.log("Token is voided:", bytes(lexchex.accreditations(tokenId).voided).length > 0);
+    }
+
+    function testLexChexConditionWithNoToken() public {
+        uint256 newPartyPk = 80085;
+        address newPartyAddr = vm.addr(newPartyPk);
+
+        // Don't mint any LexChex token for the counterparty
+
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jurisdiction etc",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress);
+        parties[1] = address(newPartyAddr); // Set counterparty without LexChex token
+        uint256 _paymentAmount = 1000000000000000000;
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+        partyValues[1] = new string[](1);
+        partyValues[1][0] = "Counter Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        // Add LexChex condition to the deal
+        address[] memory conditions = new address[](1);
+        conditions[0] = address(lexchexCondition);
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions, // Include LexChex condition
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+
+        IDealManager dealManager = IDealManager(dealManagerAddr);
+        vm.startPrank(newPartyAddr);
+        deal(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e,
+            newPartyAddr,
+            _paymentAmount
+        );
+        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(
+            address(dealManager),
+            _paymentAmount
+        );
+
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[1],
+            newPartyPk
+        );
+
+        // This should fail because the counterparty has no LexChex token
+        vm.expectRevert(); // Expect revert due to condition not being met
+        dealManager.signAndFinalizeDeal(
+            newPartyAddr,
+            contractId,
+            partyValues[1],
+            newPartySignature,
+            true,
+            "Counter Party Name",
+            ""
+        );
+        vm.stopPrank();
+
+        console.log("Deal correctly failed with no LexChex token");
+        console.log("Counterparty token balance:", lexchex.balanceOf(newPartyAddr));
+    }
+
+    function testLexChexMinterIntegration() public {
+        uint256 investorPk = 12345;
+        address investorAddr = vm.addr(investorPk);
+
+        vm.startPrank(multisig);
+        auth.updateRole(address(testAddress), 98); // Give testAddress ADMIN_ROLE for testing
+        vm.stopPrank();
+
+        // Prepare mint request
+        LeXcheXMinter.MintRequest memory request = LeXcheXMinter.MintRequest({
+            uuid: 1,
+            owner: investorAddr,
+            investorName: "John Investor",
+            investorType: "Individual",
+            investorJurisdiction: "Delaware",
+            investorContact: "john@investor.com",
+            mintPrice: 1000000, // 1 USDC (6 decimals)
+            expiry: block.timestamp + 365 days,
+            paymentToken: 0x036CbD53842c5426634e7929541eC2318f3dCF7e // USDC
+        });
+
+        // Create authority signature
+        LeXcheXMinter.AuthorityData memory authData = LeXcheXMinter.AuthorityData({
+            uuid: request.uuid,
+            owner: request.owner,
+            investorName: request.investorName,
+            investorType: request.investorType,
+            investorJurisdiction: request.investorJurisdiction,
+            investorContact: request.investorContact,
+            mintPrice: request.mintPrice,
+            expiry: request.expiry,
+            paymentToken: request.paymentToken
+        });
+
+        bytes memory authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
+            vm,
+            lexchexMinter.DOMAIN_SEPARATOR(),
+            lexchexMinter.AUTHORITY_TYPEHASH(),
+            authData,
+            testPrivateKey // Admin signs the authority data
+        );
+
+        // Prepare agreement data
+        bytes32 templateId = bytes32(uint256(1));
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "LexChex Agreement";
+        address[] memory parties = new address[](1);
+        parties[0] = investorAddr;
+
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Investor Party Value";
+
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                templateId,
+                1337, // salt
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory agreementSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            investorPk
+        );
+
+        // Give the investor some USDC for payment
+        vm.startPrank(investorAddr);
+        deal(request.paymentToken, investorAddr, request.mintPrice);
+        IERC20(request.paymentToken).approve(address(lexchexMinter), request.mintPrice);
+
+        // Request mint
+        (bytes32 agreementId, uint256 tokenId) = lexchexMinter.requestMint(
+            request,
+            templateId,
+            1337, // salt
+            globalValues,
+            parties,
+            partyValues,
+            agreementSignature,
+            authoritySignature
+        );
+        vm.stopPrank();
+
+        // Verify the LexChex token was minted
+        assertEq(lexchex.ownerOf(tokenId), investorAddr, "Token should be owned by investor");
+        assertTrue(lexchex.isValid(tokenId), "Token should be valid");
+
+        Accreditation memory acc = lexchex.accreditations(tokenId);
+        assertEq(acc.investorName, "John Investor", "Investor name should match");
+        assertEq(acc.agreementId, agreementId, "Agreement ID should match");
+
+        console.log("LexChex minted successfully:");
+        console.log("Token ID:", tokenId);
+        console.log("Agreement ID:", vm.toString(agreementId));
+        console.log("Token owner:", lexchex.ownerOf(tokenId));
+        console.log("Token is valid:", lexchex.isValid(tokenId));
+
+        // Now test that this LexChex token can be used for a deal with conditions
+        uint256 dealPartyPk = 54321;
+        address dealPartyAddr = vm.addr(dealPartyPk);
+
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jurisdiction etc",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory dealGlobalValues = new string[](1);
+        dealGlobalValues[0] = "Deal Global Value 1";
+        address[] memory dealParties = new address[](2);
+        dealParties[0] = address(testAddress);
+        dealParties[1] = address(investorAddr); // Use the LexChex token holder
+        uint256 _paymentAmount = 1000000000000000000;
+        string[][] memory dealPartyValues = new string[][](2);
+        dealPartyValues[0] = new string[](1);
+        dealPartyValues[0][0] = "Deal Party Value 1";
+        dealPartyValues[1] = new string[](1);
+        dealPartyValues[1][0] = "Deal Counter Party Value 1";
+
+        bytes32 dealContractId = keccak256(
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                dealGlobalValues,
+                dealParties
+            )
+        );
+
+        bytes memory dealSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            dealContractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            dealGlobalValues,
+            dealPartyValues[0],
+            testPrivateKey
+        );
+
+        // Add LexChex condition to the deal
+        address[] memory conditions = new address[](1);
+        conditions[0] = address(lexchexCondition);
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 dealId,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            dealGlobalValues,
+            dealParties,
+            _paymentAmount,
+            dealPartyValues,
+            dealSignature,
+            _details,
+            conditions, // Include LexChex condition
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+
+        IDealManager dealManager = IDealManager(dealManagerAddr);
+        vm.startPrank(investorAddr);
+        deal(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e,
+            investorAddr,
+            _paymentAmount
+        );
+        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(
+            address(dealManager),
+            _paymentAmount
+        );
+
+        bytes memory investorDealSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            dealContractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            dealGlobalValues,
+            dealPartyValues[1],
+            investorPk
+        );
+
+        // This should succeed because the investor has a valid LexChex token
+        dealManager.signAndFinalizeDeal(
+            investorAddr,
+            dealContractId,
+            dealPartyValues[1],
+            investorDealSignature,
+            true,
+            "LexChex Verified Investor",
+            ""
+        );
+        vm.stopPrank();
+
+        console.log("Deal with LexChex condition completed successfully!");
+        console.log("Deal ID:", vm.toString(dealId));
+        console.log("Investor LexChex token:", tokenId);
     }
 }

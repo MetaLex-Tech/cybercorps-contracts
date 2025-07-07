@@ -13,6 +13,10 @@ import "../LexScroWLite.sol";
 
     address public lexchex;
 
+    constructor(address _lexchex) {
+        lexchex = _lexchex;
+    }
+
     function checkCondition(address _contract, bytes4 _functionSignature, bytes memory data) public view override returns (bool) {
         LexScroWLite lexScrow = LexScroWLite(_contract);
         bytes32 agreementId = abi.decode(data, (bytes32));
