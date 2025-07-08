@@ -2,19 +2,31 @@
 pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts/interfaces/IERC165.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./baseCondition.sol";
 import "../../interfaces/ILexChex.sol";
 import "../LexScroWLite.sol";
+import "../auth.sol";
 
 /// @title  LexChexCondition - A condition that checks if the user has a valid LexChex accreditation
 /// @author MetaLeX Labs, Inc.
 
-    contract LexChexCondition is BaseCondition {
+contract LexChexCondition is BaseCondition, BorgAuthACL {
 
     address public lexchex;
+    string public constant NAME = "LexChexCondition";
+    uint256 public constant VERSION = 1;
 
-    constructor(address _lexchex) {
+    /// @notice Empty constructor for implementation contract
+    constructor() {
+    }
+
+    /// @notice Initializer replacing the constructor
+    /// @param _lexchex Address of the LexChex contract
+    /// @param _auth Address of the BorgAuth contract
+    function initialize(address _lexchex, address _auth) public initializer {
         lexchex = _lexchex;
+        __BorgAuthACL_init(_auth);
     }
 
     function checkCondition(address _contract, bytes4 _functionSignature, bytes memory data) public view override returns (bool) {
@@ -23,24 +35,11 @@ import "../LexScroWLite.sol";
         
         // Get the counterparty address directly from escrow details
         address counterparty = lexScrow.getEscrowDetails(agreementId).counterParty;
-        
-        // Get all LexChex token IDs owned by the counterparty
-        uint256[] memory tokenIds = ILexChex(lexchex).getTokenIdsByOwner(counterparty);
-        
-        // If no tokens, return false
-        if (tokenIds.length == 0) {
-            return false;
-        }
-        
-        // Check if at least one token is valid
-        for (uint256 i = 0; i < tokenIds.length; i++) {
-            if (ILexChex(lexchex).isValid(tokenIds[i])) {
-                return true; // Found at least one valid token
-            }
-        }
-        
-        // No valid tokens found
-        return false;
+        return ILexChex(lexchex).hasValidLexCheX(counterparty);
+    }
+
+    function updateLexChex(address _lexchex) public onlyAdmin {
+        lexchex = _lexchex;
     }
 
     function supportsInterface(bytes4 interfaceId) external view override returns (bool) {

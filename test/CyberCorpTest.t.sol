@@ -265,7 +265,8 @@ contract CyberCorpTest is Test {
             )
         )));
 
-        lexchexCondition = new LexChexCondition{salt: salt}(address(lexchex));
+        lexchexCondition = new LexChexCondition{salt: salt}();
+        lexchexCondition.initialize(address(lexchex), address(auth));
 
         auth.updateRole(address(multisig), 200);
         auth.updateRole(address(lexchexMinter), 98);

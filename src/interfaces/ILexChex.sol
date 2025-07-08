@@ -26,12 +26,12 @@ interface ILexChex is IERC5484 {
     function setAccreditation(uint256 tokenId, Accreditation memory acc) external;
     function mint(address to, Accreditation memory acc) external returns (uint256);
     function burn(uint256 tokenId) external;
+    function hasValidLexCheX(address owner) external view returns (bool);
     function getAccreditation(uint256 tokenId) external view returns (Accreditation memory);
     function getTokenIdsByOwner(address owner) external view returns (uint256[] memory);
     function getAccreditationByOwner(address owner) external view returns (uint256);
     function balanceOf(address owner) external view returns (uint256);
     function isValid(uint256 tokenId) external view returns (bool);
-    function isValid(address owner) external view returns (bool);
 }
 
 

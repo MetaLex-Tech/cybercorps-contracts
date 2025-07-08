@@ -21,11 +21,12 @@ import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {SAFTExtension} from "../src/storage/extensions/SAFTExtension.sol";
 import {LeXcheX} from "../src/creds/lexchex.sol";
 import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
+import {LexChexCondition} from "../src/libs/conditions/lexchexCondition.sol";
 
 contract BaseScript is Script {
      function run() public {
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.3"));
-        bytes32 secondSalt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.2.3"));
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.lexchex"));
+        bytes32 secondSalt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.2.lexchex"));
         address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         address testAdmin = 0x42069BaBe92462393FaFdc653A88F958B64EC9A3;
@@ -52,7 +53,6 @@ contract BaseScript is Script {
 
         BorgAuth lexchexAuth = new BorgAuth{salt: secondSalt}(deployerAddress);
 
-
          LeXcheX lexchex = LeXcheX(address(new ERC1967Proxy{salt: salt}(
             address(new LeXcheX{salt: salt}()),
             abi.encodeWithSelector(LeXcheX.initialize.selector, address(lexchexAuth))
@@ -69,10 +69,23 @@ contract BaseScript is Script {
             )
         )));
 
+        LexChexCondition lexchexCondition = new LexChexCondition{salt: salt}();
+        lexchexCondition.initialize(address(lexchex), address(lexchexAuth));
+
+         string[] memory globalFieldsLexchex = new string[](1);
+        globalFieldsLexchex[0] = "expiryDate";
+
+        string[] memory partyFieldsLexchex = new string[](4);
+        partyFieldsLexchex[0] = "investorName";
+        partyFieldsLexchex[1] = "investorType";
+        partyFieldsLexchex[2] = "investorJurisdiction";
+        partyFieldsLexchex[3] = "investorContact";
+
+       // CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(404)), "MetaLeX LeXCheX agreement v.1.0 DRAFT", "ipfs://bafybeighlffqicblntl7shsqhsku4h54dtpitlrsvwkd3quofxkix77wt4", globalFieldsLexchex, partyFieldsLexchex);
+     
         // Grant LeXcheXMinter admin access to LeXcheX
         lexchexAuth.updateRole(address(lexchexMinter), lexchexAuth.ADMIN_ROLE());
         lexchexAuth.updateRole(address(multisig), lexchexAuth.OWNER_ROLE());
-        lexchexAuth.updateRole(address(testAdmin), lexchexAuth.ADMIN_ROLE());
 
         console.log("LexchexAuth: ", address(lexchexAuth));
         console.log("Lexchex: ", address(lexchex));
