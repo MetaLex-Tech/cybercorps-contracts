@@ -71,7 +71,6 @@ contract LeXcheX is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable,
     using Strings for uint256;
 
     BurnAuth constant BURNAUTH = BurnAuth.OwnerOnly;
-    uint256 public constant DURATION = 30 days;
 
     // Upgrade notes: Reduced gap to account for new variables (50 - 1 = 49)
     uint256[49] private __gap;
