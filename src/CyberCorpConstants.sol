@@ -89,7 +89,8 @@ enum ExercisePriceMethod {
 
 enum TokenCalculationMethod {
     equityProRataToCompanyReserve,
-    equityProRataToTokenSupply 
+    equityProRataToTokenSupply,
+    dollarProRataToProtocolVal
 }
 
 enum UnlockStartTimeType {

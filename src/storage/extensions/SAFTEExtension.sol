@@ -47,17 +47,17 @@ import "../../CyberCorpConstants.sol";
 import "../../libs/auth.sol";
 
 struct SAFTEData {
-    uint256 protocolUSDValuationAtTimeofInvestment;
-    UnlockStartTimeType unlockStartTimeType;    // enum of different types, can be tokenWarrantTime, tgeTime, or setTime
+    UnlockStartTimeType unlockStartTimeType;    
     uint256 unlockStartTime;                
-    uint256 unlockingPeriod; //in interval units
-    uint256 unlockingCliffPeriod; // seconds
+    uint256 unlockingPeriod; 
+    uint256 unlockingCliffPeriod; 
     uint256 unlockingCliffPercentage; 
     UnlockingIntervalType unlockingIntervalType;
-    TokenCalculationMethod tokenCalculationMethod; //equityProRataToTokenSupply or equityProRataToCompanyReserve
-    uint256 minCompanyReserve; //minimum company reserve within an equityProRataToCompanyReserve method--set to 0 if there is no minimum
-    uint256 tokenPremiumMultiplier; //multiplier of network valuation over company equity valuation, to be used within equityProRataToTokenSupply method (set to 0 if no premium)
-}
+    TokenCalculationMethod tokenCalculationMethod; 
+    uint256 minCompanyReserve;
+    uint256 tokenPremiumMultiplier;
+    uint256 protocolUSDValuationAtTimeofInvestment;
+    }
 
 contract SAFTEExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     bytes32 public constant EXTENSION_TYPE = keccak256("SAFTE");
@@ -128,8 +128,9 @@ contract SAFTEExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     }
 
     function conversionTypeToString(TokenCalculationMethod _type) internal pure returns (string memory) {
-        if (_type == TokenCalculationMethod.equityProRataToCompanyReserve) return "safteFixedEquityProRataToCompanyReserve";
+        if (_type == TokenCalculationMethod.equityProRataToCompanyReserve) return "equityProRataToCompanyReserve";
         if (_type == TokenCalculationMethod.equityProRataToTokenSupply) return "equityProRataToTokenSupply";
+        if (_type == TokenCalculationMethod.dollarProRataToProtocolVal) return "dollarProRataToProtocolVal";
         return "Unknown";
     }
 

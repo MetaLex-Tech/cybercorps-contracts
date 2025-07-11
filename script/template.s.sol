@@ -80,6 +80,7 @@ contract BaseScript is Script {
         CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(23)), "MetaLeX cyberSAFE + cyberTokenWarrant a16z non-US Reg S v 1.0", "ipfs://bafybeieoahzrvqk3vggrv6zyljlgkrqn2ls5wgpbgp4w4ylenr2r2ftugm", globalFieldsSafeT, partyFieldsSafeT);
         */
          BorgAuth auth = BorgAuth(0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01);
+         
         //deploy saft data extension with create2
         address safteExtension = address(new ERC1967Proxy{salt: salt}(
            address(new SAFTEExtension{salt: salt}()),
@@ -106,24 +107,22 @@ contract BaseScript is Script {
 | minCompanyReserve       | This is a number of tokens   |
 | tokenPremiumMultiplier  | */
 
-        string[] memory globalFieldsSafT = new string[](17);
+        string[] memory globalFieldsSafT = new string[](15);
         globalFieldsSafT[0] = "purchaseAmount";
         globalFieldsSafT[1] = "postMoneyValuationCap";
         globalFieldsSafT[2] = "protocolUSDValuationAtTimeofInvestment";
         globalFieldsSafT[3] = "expirationTime";
         globalFieldsSafT[4] = "governingJurisdiction";
          globalFieldsSafT[5] = "disputeResolution";
-        globalFieldsSafT[6] = "exercisePriceMethod";
-        globalFieldsSafT[7] = "exercisePrice";
-        globalFieldsSafT[8] = "unlockStartTimeType";
-        globalFieldsSafT[9] = "unlockStartTime";
-        globalFieldsSafT[10] = "unlockingPeriod";
-        globalFieldsSafT[11] = "unlockingCliffPeriod";
-        globalFieldsSafT[12] = "unlockingCliffPercentage";
-        globalFieldsSafT[13] = "unlockingIntervalType";
-        globalFieldsSafT[14] = "tokenCalculationMethod";
-        globalFieldsSafT[15] = "minCompanyReserve";
-        globalFieldsSafT[16] = "tokenPremiumMultiplier";
+        globalFieldsSafT[6] = "unlockStartTimeType";
+        globalFieldsSafT[7] = "unlockStartTime";
+        globalFieldsSafT[8] = "unlockingPeriod";
+        globalFieldsSafT[9] = "unlockingCliffPeriod";
+        globalFieldsSafT[10] = "unlockingCliffPercentage";
+        globalFieldsSafT[11] = "unlockingIntervalType";
+        globalFieldsSafT[12] = "tokenCalculationMethod";
+        globalFieldsSafT[13] = "minCompanyReserve";
+        globalFieldsSafT[14] = "tokenPremiumMultiplier";
 
 
         string[] memory partyFieldsSaft = new string[](5);
@@ -133,6 +132,6 @@ contract BaseScript is Script {
         partyFieldsSaft[3] = "investorType";
         partyFieldsSaft[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(26)), "MetaLeX cyberSAFTE reg D v.1.0", "ipfs://bafybeidnjftuutxtrfovto533thugxbseezktmy3trj6kjh4fwedfm4l2y", globalFieldsSafT, partyFieldsSaft);
+        //CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(26)), "MetaLeX cyberSAFTE reg D v.1.0", "ipfs://bafybeidnjftuutxtrfovto533thugxbseezktmy3trj6kjh4fwedfm4l2y", globalFieldsSafT, partyFieldsSaft);
      }
 }
