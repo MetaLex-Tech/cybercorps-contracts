@@ -18,7 +18,7 @@ import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {console} from "forge-std/console.sol";
 import "../src/CyberCorpConstants.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
-import {SAFTExtension} from "../src/storage/extensions/SAFTExtension.sol";
+import {SAFTEExtension} from "../src/storage/extensions/SAFTEExtension.sol";
 
 contract BaseScript is Script {
      function run() public {
@@ -29,6 +29,7 @@ contract BaseScript is Script {
 
         address registry = address(CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134));
 
+ /*string[] memory globalFieldsSafeT = new string[](17);
  /*string[] memory globalFieldsSafeT = new string[](17);
         globalFieldsSafeT[0] = "purchaseAmount";
         globalFieldsSafeT[1] = "postMoneyValuationCap";
@@ -80,24 +81,49 @@ contract BaseScript is Script {
         */
          BorgAuth auth = BorgAuth(0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01);
         //deploy saft data extension with create2
-        address saftExtension = address(new ERC1967Proxy{salt: salt}(
-           address(new SAFTExtension{salt: salt}()),
-           abi.encodeWithSelector(SAFTExtension.initialize.selector, address(auth))
+        address safteExtension = address(new ERC1967Proxy{salt: salt}(
+           address(new SAFTEExtension{salt: salt}()),
+           abi.encodeWithSelector(SAFTEExtension.initialize.selector, address(auth))
         ));
 
-        console.log("SAFTExtension: ", address(saftExtension));
+         console.log("SAFTEExtension: ", address(safteExtension));
 
-        string[] memory globalFieldsSafT = new string[](10);
+/*| **globalFieldName** | **description**                    |
+|:--------------------|:-----------------------------------|
+| purchaseAmount      |       e.g. "1000.00"              |
+| postMoneyValuationCap  |     postmoney equity valuation of the company  |
+| protocolUSDValuationAtTimeofInvestment    |  valuation of the 'network' or 'protocol' (i.e., FDV of all tokens)  |
+| expirationTime      |    time at which offer to sign agreement (purchasing the SAFTE) expires     |
+| governingJurisdiction       |     jurisdiction of incorporation and also jurisdiction of governing law for the agreement     |
+| disputeResolution   |       method of dispute resolution   |
+| unlockStartTimeType |"agreementExecutionTime" \|"tgeTime" \| "setTime"        |
+| unlockStartTime       | only set if using `setTime` for `unlockStartTimeType` |
+| unlockingPeriod       | Duration in `unlockingInvervalType` units  |
+| unlockingCliffPeriod       | Duration in `unlockingIntervalType`, first tokens unlocked at `unlockingStartTime` + `unlockingCliffPeriod`  |
+| unlockingCliffPercentage       | e.g. "10.5%" |
+| unlockingIntervalType       |  "secondly", "hourly", "daily", "monthly", "blockly". Note that this affects both `unlockingPeriod` and `unlockingCliffPeriod`   |
+| tokenCalculationMethod       |  `equityProRataToTokenSupply` or `equityProRataToCompanyReserve` or 'dollarProRataToProtocolVal' |
+| minCompanyReserve       | This is a number of tokens   |
+| tokenPremiumMultiplier  | */
+
+        string[] memory globalFieldsSafT = new string[](17);
         globalFieldsSafT[0] = "purchaseAmount";
-        globalFieldsSafT[1] = "protocolValuationCap";
-        globalFieldsSafT[2] = "governingJurisdiction";
-        globalFieldsSafT[3] = "disputeResolution";
-        globalFieldsSafT[4] = "unlockStartTimeType";
-        globalFieldsSafT[5] = "unlockStartTime";
-        globalFieldsSafT[6] = "unlockingPeriod";
-        globalFieldsSafT[7] = "unlockingCliffPeriod";
-        globalFieldsSafT[8] = "unlockingCliffPercentage";
-        globalFieldsSafT[9] = "unlockingIntervalType";
+        globalFieldsSafT[1] = "postMoneyValuationCap";
+        globalFieldsSafT[2] = "protocolUSDValuationAtTimeofInvestment";
+        globalFieldsSafT[3] = "expirationTime";
+        globalFieldsSafT[4] = "governingJurisdiction";
+         globalFieldsSafT[5] = "disputeResolution";
+        globalFieldsSafT[6] = "exercisePriceMethod";
+        globalFieldsSafT[7] = "exercisePrice";
+        globalFieldsSafT[8] = "unlockStartTimeType";
+        globalFieldsSafT[9] = "unlockStartTime";
+        globalFieldsSafT[10] = "unlockingPeriod";
+        globalFieldsSafT[11] = "unlockingCliffPeriod";
+        globalFieldsSafT[12] = "unlockingCliffPercentage";
+        globalFieldsSafT[13] = "unlockingIntervalType";
+        globalFieldsSafT[14] = "tokenCalculationMethod";
+        globalFieldsSafT[15] = "minCompanyReserve";
+        globalFieldsSafT[16] = "tokenPremiumMultiplier";
 
 
         string[] memory partyFieldsSaft = new string[](5);
@@ -107,6 +133,6 @@ contract BaseScript is Script {
         partyFieldsSaft[3] = "investorType";
         partyFieldsSaft[4] = "investorJurisdiction";
 
-        //CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(25)), "MetaLeX cyberSAFT reg D v.1.0", "ipfs://bafybeif6fqgexescp4g2hbb6fjkk3ifrqpopc2lv2oue5tiq6h3t2pmgc4", globalFieldsSafT, partyFieldsSaft);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(26)), "MetaLeX cyberSAFTE reg D v.1.0", "ipfs://bafybeidnjftuutxtrfovto533thugxbseezktmy3trj6kjh4fwedfm4l2y", globalFieldsSafT, partyFieldsSaft);
      }
 }

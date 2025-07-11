@@ -14,7 +14,7 @@ import "../auth.sol";
 contract LexChexCondition is BaseCondition, BorgAuthACL {
 
     address public lexchex;
-    string public constant NAME = "LexChexCondition";
+    string public constant NAME = "LexCheXCondition";
     uint256 public constant VERSION = 1;
 
     /// @notice Empty constructor for implementation contract

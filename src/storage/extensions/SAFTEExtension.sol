@@ -47,6 +47,7 @@ import "../../CyberCorpConstants.sol";
 import "../../libs/auth.sol";
 
 struct SAFTEData {
+    uint256 protocolUSDValuationAtTimeofInvestment;
     UnlockStartTimeType unlockStartTimeType;    // enum of different types, can be tokenWarrantTime, tgeTime, or setTime
     uint256 unlockStartTime;                
     uint256 unlockingPeriod; //in interval units
@@ -87,7 +88,8 @@ contract SAFTEExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         
         string memory json = string(abi.encodePacked(
             ', "SAFTEDetails": {',
-            '"unlockStartTimeType": "', UnlockStartTimeTypeToString(decoded.unlockStartTimeType),
+            '"protocolUSDValuationAtTimeofInvestment": "', uint256ToString(decoded.protocolUSDValuationAtTimeofInvestment),
+            '", "unlockStartTimeType": "', UnlockStartTimeTypeToString(decoded.unlockStartTimeType),
             '", "unlockStartTime": "', uint256ToString(decoded.unlockStartTime),
             '", "unlockingPeriod": "', uint256ToString(decoded.unlockingPeriod),
             '", "unlockingCliffPeriod": "', uint256ToString(decoded.unlockingCliffPeriod),

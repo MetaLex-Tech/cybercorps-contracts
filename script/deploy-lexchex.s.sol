@@ -25,8 +25,8 @@ import {LexChexCondition} from "../src/libs/conditions/lexchexCondition.sol";
 
 contract BaseScript is Script {
      function run() public {
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.lexchex"));
-        bytes32 secondSalt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.2.lexchex"));
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.lexchex.2"));
+        bytes32 secondSalt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.2.lexchex.2"));
         address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         address testAdmin = 0x42069BaBe92462393FaFdc653A88F958B64EC9A3;
@@ -81,15 +81,17 @@ contract BaseScript is Script {
         partyFieldsLexchex[2] = "investorJurisdiction";
         partyFieldsLexchex[3] = "investorContact";
 
-       // CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(404)), "MetaLeX LeXCheX agreement v.1.0 DRAFT", "ipfs://bafybeighlffqicblntl7shsqhsku4h54dtpitlrsvwkd3quofxkix77wt4", globalFieldsLexchex, partyFieldsLexchex);
+        //CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(400)), "MetaLeX LeXCheX agreement v.1.0", "ipfs://bafkreifikp43eagam765uiapfakvk6bc4chv62e2pv5qytrv6wlsrt6qji", globalFieldsLexchex, partyFieldsLexchex);
      
         // Grant LeXcheXMinter admin access to LeXcheX
         lexchexAuth.updateRole(address(lexchexMinter), lexchexAuth.ADMIN_ROLE());
         lexchexAuth.updateRole(address(multisig), lexchexAuth.OWNER_ROLE());
+        //lexchexAuth.updateRole(address(testAdmin), lexchexAuth.ADMIN_ROLE());
 
         console.log("LexchexAuth: ", address(lexchexAuth));
         console.log("Lexchex: ", address(lexchex));
         console.log("LexchexMinter: ", address(lexchexMinter));
+        console.log("LexchexCondition: ", address(lexchexCondition));
 
 
         //CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(25)), "MetaLeX cyberSAFT reg D v.1.0", "ipfs://bafybeif6fqgexescp4g2hbb6fjkk3ifrqpopc2lv2oue5tiq6h3t2pmgc4", globalFieldsSafT, partyFieldsSaft);

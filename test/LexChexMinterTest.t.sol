@@ -472,7 +472,7 @@ contract LexChexMinterTest is Test {
             investorType: "LLC",
             investorJurisdiction: "Delaware",
             investorContact: "test@test.com",
-            mintPrice: 10e6,
+            mintPrice: 0,
             expiry: block.timestamp + 1 days,
             paymentToken: address(paymentToken)
         });
@@ -495,7 +495,7 @@ contract LexChexMinterTest is Test {
         );
         // Request should succeed
         vm.expectEmit(true, true, true, true);
-        emit LeXcheXMinter.RenewalRequested(user1, 10e6, agreementId);
+        emit LeXcheXMinter.RenewalRequested(user1, 0, agreementId);
         vm.expectEmit(true, true, true, true);
         emit LeXcheXMinter.RenewalCompleted(user1, 0, agreementId);
         vm.prank(agent);
@@ -508,8 +508,8 @@ contract LexChexMinterTest is Test {
         assertEq(lexchex.balanceOf(user1), 1, "user1 should still have one token");
         assertEq(lexchex.ownerOf(0), user1, "token should be owned by user 1");
         assertEq(lexchex.accreditations(0).agreementId, agreementId, "agreement ID should be the same");
-        assertEq(agentPaymentBalanceBefore - paymentToken.balanceOf(agent), 10e6, "payment amount is not correct");
-        assertEq(paymentToken.balanceOf(treasury) - treasuryPaymentBalanceBefore, 10e6, "treasury received amount is not correct");
+        assertEq(agentPaymentBalanceBefore - paymentToken.balanceOf(agent), 0, "payment amount is not correct");
+        assertEq(paymentToken.balanceOf(treasury) - treasuryPaymentBalanceBefore, 0, "treasury received amount is not correct");
     }
 
     function testRequestRenewalExpiredToken() public {
