@@ -3851,6 +3851,7 @@ contract CyberCorpTest is Test {
         ));
 
         SAFTEData memory safteData = SAFTEData({
+            protocolUSDValuationAtTimeofInvestment: 100000000,
             unlockStartTimeType: UnlockStartTimeType.tokenWarrantTime,
             unlockStartTime: block.timestamp,
             unlockingPeriod: 100000,
