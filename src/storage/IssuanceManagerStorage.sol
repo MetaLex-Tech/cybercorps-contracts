@@ -54,6 +54,8 @@ library IssuanceManagerStorage {
         address uriBuilder;
         address upgradeFactory;
         address[] printers;
+        UpgradeableBeacon CyberCert20Beacon;
+        mapping(address => address) fractionalizedCert;    
     }
 
     // Returns the storage layout
@@ -98,6 +100,10 @@ library IssuanceManagerStorage {
         issuanceManagerStorage().uriBuilder = _uriBuilder;
     }
 
+    function setCyberCert20Beacon(UpgradeableBeacon _beacon) internal {
+        issuanceManagerStorage().CyberCert20Beacon = _beacon;
+    }
+
     function setCyberCertPrinterBeacon(UpgradeableBeacon _beacon) internal {
         issuanceManagerStorage().CyberCertPrinterBeacon = _beacon;
     }
@@ -136,5 +142,9 @@ library IssuanceManagerStorage {
     // Beacon upgrade function
     function updateBeaconImplementation(address _newImplementation) internal {
         issuanceManagerStorage().CyberCertPrinterBeacon.upgradeTo(_newImplementation);
+    }
+
+    function updateCyberCert20Beacon(address _newImplementation) internal {
+        issuanceManagerStorage().CyberCert20Beacon.upgradeTo(_newImplementation);
     }
 } 

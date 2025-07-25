@@ -99,7 +99,8 @@ contract IssuanceManager is Initializable, BorgAuthACL {
         address _CORP,
         address _CyberCertPrinterImplementation,
         address _uriBuilder,
-        address _upgradeFactory
+        address _upgradeFactory,
+        address _CyberCert20Implementation
     ) external initializer {
         __BorgAuthACL_init(_auth);
 
@@ -110,8 +111,15 @@ contract IssuanceManager is Initializable, BorgAuthACL {
             _CyberCertPrinterImplementation,
             address(this)
         );
+
+        UpgradeableBeacon beacon20 = new UpgradeableBeacon(
+            _CyberCert20Implementation,
+            address(this)
+        );
+
         IssuanceManagerStorage.setCyberCertPrinterBeacon(beacon);
         IssuanceManagerStorage.setUpgradeFactory(_upgradeFactory);
+        IssuanceManagerStorage.setCyberCert20Beacon(beacon20);
     }
 
     modifier onlyUpgradeFactory() {
