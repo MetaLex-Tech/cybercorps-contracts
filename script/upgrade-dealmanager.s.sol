@@ -23,7 +23,7 @@ import {DealManager} from "../src/DealManager.sol";
 
 contract BaseScript is Script {
      function run() public {
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.2"));
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.2.Upgrade"));
         address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         vm.startBroadcast(deployerPrivateKey);
@@ -31,14 +31,18 @@ contract BaseScript is Script {
         address registry = address(CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134));
         address deployedFactoryAddr = 0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3;
         DealManagerFactory deployedFactory = DealManagerFactory(deployedFactoryAddr);
-
         address newImplementation = address(new DealManager{salt: salt}());
-        console.log("New implementation deployed at:", newImplementation);
-
-        deployedFactory.upgradeImplementation(newImplementation);
+        console.log("New DealManager implementation deployed at:", newImplementation);
+        //deployedFactory.upgradeImplementation(newImplementation);
+        
+        address newRegistryImplementation = address(new CyberAgreementRegistry{salt: salt}());
+        console.log("New CyberAgreementRegistry implementation deployed at:", newRegistryImplementation);
+        // Upgrade the CyberAgreementRegistry
+       // CyberAgreementRegistry(registry).upgradeToAndCall(newRegistryImplementation, "");
 
         // Verify the upgrade was successful
         address updatedImplementation = deployedFactory.getBeaconImplementation();
-        console.log("Updated beacon implementation:", updatedImplementation);
+        console.log("Updated DealManager beacon implementation:", updatedImplementation);
+
      }
 }

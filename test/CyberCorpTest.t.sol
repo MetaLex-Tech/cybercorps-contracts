@@ -3832,7 +3832,7 @@ contract CyberCorpTest is Test {
     function testPrintCertificateSAFTEUri() public {
         vm.startPrank(testAddress);
         //bytes32 check = bytes32(bytes("nuvolari_safet"));
-        bytes32 check = bytes32(uint256(400));
+        bytes32 check = bytes32(uint256(27));
         console.logBytes32(check);
         check = bytes32(uint256(11));
         console.logBytes32(check);

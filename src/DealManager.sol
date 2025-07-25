@@ -48,6 +48,7 @@ import "./libs/auth.sol";
 import "./storage/DealManagerStorage.sol";
 import "./storage/BorgAuthStorage.sol";
 import "./interfaces/ICyberCorp.sol";
+import "./interfaces/IRoundManager.sol";
 
 /// @title DealManager
 /// @notice Manages the lifecycle of deals between parties, including creation, signing, payment, and finalization for a CyberCorp
@@ -332,14 +333,14 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
         }
         else {
             DealManagerStorage.setCounterPartyValues(agreementId, partyValues);
+            
         }
             
-        if(!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
-        
         if(!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).hasSigned(agreementId, signer))
             ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
 
         updateEscrow(agreementId, msg.sender, name);
+        if(!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
         handleCounterPartyPayment(agreementId);
         finalizeDeal(agreementId);
     }
@@ -476,25 +477,7 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
         return DealManagerStorage.getCounterPartyValues(agreementId);
     }
 
-/*        uint256 salt,
-        string memory companyName,
-        string memory companyType,
-        string memory companyJurisdiction,
-        string memory companyContactDetails,
-        string memory defaultDisputeResolution,
-        address _companyPayable,
-        CompanyOfficer memory _officer,
-        CyberCertData[] memory _certData,
-        bytes32 _templateId,
-        string[] memory _globalValues,
-        address[] memory _parties,
-        uint256 _paymentAmount,
-        string[][] memory _partyValues,
-        bytes memory signature,
-        CertificateDetails[] memory _details,
-        address[] memory conditions,
-        bytes32 secretHash,
-        uint256 expiry*/
+
     /// @notice Creates an offer for an existing CyberCorp
     /// @dev Creates certificate printers and proposes a deal without deploying a new CyberCorp
     /// @param _certData Array of certificate data structures

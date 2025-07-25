@@ -82,12 +82,12 @@ contract BaseScript is Script {
          BorgAuth auth = BorgAuth(0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01);
          
         //deploy saft data extension with create2
-        address safteExtension = address(new ERC1967Proxy{salt: salt}(
+  /*      address safteExtension = address(new ERC1967Proxy{salt: salt}(
            address(new SAFTEExtension{salt: salt}()),
            abi.encodeWithSelector(SAFTEExtension.initialize.selector, address(auth))
         ));
 
-         console.log("SAFTEExtension: ", address(safteExtension));
+         console.log("SAFTEExtension: ", address(safteExtension));*/
 
 /*| **globalFieldName** | **description**                    |
 |:--------------------|:-----------------------------------|
@@ -132,6 +132,6 @@ contract BaseScript is Script {
         partyFieldsSaft[3] = "investorType";
         partyFieldsSaft[4] = "investorJurisdiction";
 
-        //CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(26)), "MetaLeX cyberSAFTE reg D v.1.0", "ipfs://bafybeidnjftuutxtrfovto533thugxbseezktmy3trj6kjh4fwedfm4l2y", globalFieldsSafT, partyFieldsSaft);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(27)), "MetaLeX cyberSAFTE reg D v.1.1", "ipfs://bafybeidephecyo4ovg2xtik6kiuuhejri4owu5qi6s6qft5j2uj2sf2t3q", globalFieldsSafT, partyFieldsSaft);
      }
 }
