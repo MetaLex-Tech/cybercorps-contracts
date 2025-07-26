@@ -49,6 +49,8 @@ import "@openzeppelin/contracts/utils/Address.sol";
 import "./interfaces/ICyberCertPrinter.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./storage/IssuanceManagerStorage.sol";
+import "./interfaces/ITransferRestrictionHook.sol";
+import "./interfaces/ICyberCert20.sol";
 
 /// @title IssuanceManager
 /// @notice Manages the issuance and lifecycle of digital certificates representing securities and more
@@ -63,6 +65,11 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     error NotSAFEToken();
     error NotUpgradeFactory();
     error FractionalizedCertNotAllowed();
+    event FractionalizedCert(
+        address indexed certAddress,
+        uint256 indexed id,
+        address indexed fractionalizedCert
+    );
 
     event CertPrinterCreated(
         address indexed certificate,
@@ -79,7 +86,7 @@ contract IssuanceManager is Initializable, BorgAuthACL {
         address indexed certificate,
         uint256 amount,
         uint256 cap,
-        CertificateDetails details, 
+        CertificateDetails details,
         string tokenURI
     );
     event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
@@ -489,29 +496,46 @@ contract IssuanceManager is Initializable, BorgAuthACL {
         certificate.removeCertLegendAt(tokenId, index);
     }
 
-
     //deploy matching erc20 contract for a cert
-    function deployCyberCert20(address certAddress) internal returns (address) {
-        bytes32 salt = keccak256(
-            abi.encodePacked(
-                certAddress,
-                address(this)
-            )
-        );
+    function deployCyberCert20(
+        address certAddress,
+        ITransferRestrictionHook[] memory typeRestrictionHooks
+    ) internal returns (address) {
+        bytes32 salt = keccak256(abi.encodePacked(certAddress, address(this)));
         address newCert20 = Create2.deploy(0, salt, _getBytecode());
-        ICyberCert20(newCert20).initialize(certAddress, address(this), string(abi.encodePacked("f", ICyberCertPrinter(certAddress).name())), string(abi.encodePacked("f", ICyberCertPrinter(certAddress).symbol())));
+        ICyberCert20(newCert20).initialize(
+            certAddress,
+            address(this),
+            string(
+                abi.encodePacked("f", ICyberCertPrinter(certAddress).name())
+            ),
+            string(
+                abi.encodePacked("f", ICyberCertPrinter(certAddress).symbol())
+            ),
+            typeRestrictionHooks
+        );
         IssuanceManagerStorage.setFractionalizedCert(certAddress, newCert20);
         return newCert20;
     }
-    
+
     function fractionalizeCert(address certAddress, uint256 id) external {
-        address fractionalizedCert = IssuanceManagerStorage.getFractionalizedCert(certAddress); 
-        if (fractionalizedCert == address(0)) 
+        address fractionalizedCert = IssuanceManagerStorage
+            .getFractionalizedCert(certAddress);
+        if (fractionalizedCert == address(0))
             revert FractionalizedCertNotAllowed();
-        
-        ICyberCertPrinter(certAddress).safeTransferFrom(msg.sender, address(this), id);
+
+        ICyberCertPrinter(certAddress).safeTransferFrom(
+            msg.sender,
+            address(this),
+            id
+        );
         ICyberCertPrinter(certAddress).voidCert(id);
-        ICyberCert20(fractionalizedCert).mint(msg.sender, ICyberCertPrinter(certAddress).getCertificateDetails(id).unitsRepresented);
+        ICyberCert20(fractionalizedCert).mint(
+            msg.sender,
+            ICyberCertPrinter(certAddress)
+                .getCertificateDetails(id)
+                .unitsRepresented
+        );
         emit FractionalizedCert(certAddress, id, fractionalizedCert);
     }
 
