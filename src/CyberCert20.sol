@@ -18,16 +18,19 @@ contract FractionalizedCyberCert is Initializable, ERC20Upgradeable, BorgAuthACL
     error NotTransferable();
     error RestrictedTransfer(string reason);
 
+    modifier onlyIssuanceManager() {
+        if (msg.sender != CyberCertPrinterStorage.cyberCertStorage().issuanceManager) revert NotIssuanceManager();
+        _;
+    }
+
     function initialize(
         address _certPrinter,
         address _issuanceManager,
-        uint256 _tokenId,
         string memory _name,
         string memory _symbol
     ) external initializer {
         __ERC20_init(_name, _symbol);
         certPrinter = _certPrinter;
-        underlyingTokenId = _tokenId;
         IssuanceManager = _issuanceManager;
     }
 

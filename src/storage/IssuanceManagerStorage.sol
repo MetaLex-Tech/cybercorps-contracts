@@ -147,4 +147,12 @@ library IssuanceManagerStorage {
     function updateCyberCert20Beacon(address _newImplementation) internal {
         issuanceManagerStorage().CyberCert20Beacon.upgradeTo(_newImplementation);
     }
+
+    function getFractionalizedCert(address certAddress) internal view returns (address) {
+        return issuanceManagerStorage().fractionalizedCert[certAddress];
+    }
+
+    function setFractionalizedCert(address certAddress, address fractionalizedCert) internal {
+        issuanceManagerStorage().fractionalizedCert[certAddress] = fractionalizedCert;
+    }
 } 

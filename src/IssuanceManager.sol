@@ -62,6 +62,7 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     error TokenProxyNotFound();
     error NotSAFEToken();
     error NotUpgradeFactory();
+    error FractionalizedCertNotAllowed();
 
     event CertPrinterCreated(
         address indexed certificate,
@@ -486,6 +487,32 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     ) external onlyAdmin {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.removeCertLegendAt(tokenId, index);
+    }
+
+
+    //deploy matching erc20 contract for a cert
+    function deployCyberCert20(address certAddress) internal returns (address) {
+        bytes32 salt = keccak256(
+            abi.encodePacked(
+                certAddress,
+                address(this)
+            )
+        );
+        address newCert20 = Create2.deploy(0, salt, _getBytecode());
+        ICyberCert20(newCert20).initialize(certAddress, address(this), string(abi.encodePacked("f", ICyberCertPrinter(certAddress).name())), string(abi.encodePacked("f", ICyberCertPrinter(certAddress).symbol())));
+        IssuanceManagerStorage.setFractionalizedCert(certAddress, newCert20);
+        return newCert20;
+    }
+    
+    function fractionalizeCert(address certAddress, uint256 id) external {
+        address fractionalizedCert = IssuanceManagerStorage.getFractionalizedCert(certAddress); 
+        if (fractionalizedCert == address(0)) 
+            revert FractionalizedCertNotAllowed();
+        
+        ICyberCertPrinter(certAddress).safeTransferFrom(msg.sender, address(this), id);
+        ICyberCertPrinter(certAddress).voidCert(id);
+        ICyberCert20(fractionalizedCert).mint(msg.sender, ICyberCertPrinter(certAddress).getCertificateDetails(id).unitsRepresented);
+        emit FractionalizedCert(certAddress, id, fractionalizedCert);
     }
 
     function getUpgradeFactory() public view returns (address) {

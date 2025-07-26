@@ -60,6 +60,7 @@ interface ICyberCertPrinter {
     function defaultLegend() external view returns (string[] memory);
     function setRestrictionHook(uint256 _id, address _hookAddress) external;
     function setGlobalRestrictionHook(address hookAddress) external;
+    function voidCert(uint256 tokenId) external;
     function safeMint(
         uint256 tokenId,
         address to,
