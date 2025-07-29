@@ -66,6 +66,13 @@ import {Escrow} from "../src/storage/LexScrowStorage.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {TokenWarrantExtension, TokenWarrantData} from "../src/storage/extensions/TokenWarrantExtension.sol";
 import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
+import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
+import {SAFTEExtension, SAFTEData} from "../src/storage/extensions/SAFTEExtension.sol";
+import {LeXcheX} from "../src/creds/lexchex.sol";
+import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
+import {LexChexCondition} from "../src/libs/conditions/lexchexCondition.sol";
+import {LeXcheXUtils} from "./libs/LeXcheXUtils.sol";
+import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
 
 contract CyberCorpTest is Test {
     using ERC1967ProxyLib for address;
@@ -90,6 +97,9 @@ contract CyberCorpTest is Test {
     string[] certificateUris;
     string[][] defaultLegends;
     address[] extensions;
+    LeXcheX lexchex;
+    LeXcheXMinter lexchexMinter;
+    LexChexCondition lexchexCondition;
 
     function setUp() public {
         testPrivateKey = 1337;
@@ -183,8 +193,7 @@ contract CyberCorpTest is Test {
             address(new CertificateUriBuilder{salt: salt}()),
             abi.encodeWithSelector(
                 CertificateUriBuilder.initialize.selector,
-                address(auth)
-            )
+                address(auth))
         ));
 
         cyberCorpFactory = CyberCorpFactory(address(new ERC1967Proxy{salt: salt}(
@@ -236,7 +245,31 @@ contract CyberCorpTest is Test {
             partyFields
         );
 
+        // Deploy LexChex contracts
+        lexchex = LeXcheX(address(new ERC1967Proxy{salt: salt}(
+            address(new LeXcheX{salt: salt}()),
+            abi.encodeWithSelector(
+                LeXcheX.initialize.selector,
+                address(auth)
+            )
+        )));
+
+        lexchexMinter = LeXcheXMinter(address(new ERC1967Proxy{salt: salt}(
+            address(new LeXcheXMinter{salt: salt}()),
+            abi.encodeWithSelector(
+                LeXcheXMinter.initialize.selector,
+                address(auth),
+                address(lexchex),
+                address(registry),
+                multisig // treasury
+            )
+        )));
+
+        lexchexCondition = new LexChexCondition{salt: salt}();
+        lexchexCondition.initialize(address(lexchex), address(auth));
+
         auth.updateRole(address(multisig), 200);
+        auth.updateRole(address(lexchexMinter), 98);
         auth.zeroOwner();
         auth.userRoles(multisig);
         vm.stopPrank();
@@ -286,7 +319,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -379,7 +413,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -433,7 +468,8 @@ contract CyberCorpTest is Test {
             address(dealManager),
             _paymentAmount
         );
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -523,7 +559,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -617,7 +654,8 @@ contract CyberCorpTest is Test {
             address(dealManager),
             _paymentAmount
         );
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -692,7 +730,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -804,7 +843,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registrya.DOMAIN_SEPARATOR(),
             registrya.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -831,7 +871,8 @@ contract CyberCorpTest is Test {
         uint256 newPartyPk = 80085;
         address newPartyAddr = vm.addr(newPartyPk);
 
-        signature = _signAgreementTypedData(
+        signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registrya.DOMAIN_SEPARATOR(),
             registrya.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -904,7 +945,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory proposerSignature = _signAgreementTypedData(
+        bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -953,7 +995,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1034,7 +1077,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory proposerSignature = _signAgreementTypedData(
+        bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1083,7 +1127,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1167,7 +1212,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory proposerSignature = _signAgreementTypedData(
+        bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1216,7 +1262,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1251,46 +1298,6 @@ contract CyberCorpTest is Test {
         vm.stopPrank();
     }
 
-    function _signAgreementTypedData(
-        bytes32 _domainSeparator,
-        bytes32 _typeHash,
-        bytes32 contractId,
-        string memory contractUri,
-        string[] memory globalFields,
-        string[] memory partyFields,
-        string[] memory globalValues,
-        string[] memory partyValues,
-        uint256 privKey
-    ) internal pure returns (bytes memory signature) {
-        // Hash string arrays the same way as the contract
-        bytes32 contractUriHash = keccak256(bytes(contractUri));
-        bytes32 globalFieldsHash = _hashStringArray(globalFields);
-        bytes32 partyFieldsHash = _hashStringArray(partyFields);
-        bytes32 globalValuesHash = _hashStringArray(globalValues);
-        bytes32 partyValuesHash = _hashStringArray(partyValues);
-
-        // Create the message hash using the same approach as the contract
-        bytes32 structHash = keccak256(
-            abi.encode(
-                _typeHash,
-                contractId,
-                contractUriHash,
-                globalFieldsHash,
-                partyFieldsHash,
-                globalValuesHash,
-                partyValuesHash
-            )
-        );
-
-        bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", _domainSeparator, structHash)
-        );
-
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privKey, digest);
-        signature = abi.encodePacked(r, s, v);
-        return signature;
-    }
-
     function _signVoidRequest(
         bytes32 _domainSeparator,
         bytes32 _typeHash,
@@ -1310,17 +1317,6 @@ contract CyberCorpTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privKey, digest);
         signature = abi.encodePacked(r, s, v);
         return signature;
-    }
-
-    // Add this helper function to your test contract
-    function _hashStringArray(
-        string[] memory array
-    ) internal pure returns (bytes32) {
-        bytes32[] memory hashes = new bytes32[](array.length);
-        for (uint256 i = 0; i < array.length; i++) {
-            hashes[i] = keccak256(bytes(array[i]));
-        }
-        return keccak256(abi.encodePacked(hashes));
     }
 
     function testRevokeDealBeforePayment() public {
@@ -1367,7 +1363,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1470,7 +1467,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1520,7 +1518,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1602,7 +1601,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1705,7 +1705,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1811,7 +1812,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1911,7 +1913,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -1959,7 +1962,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2037,7 +2041,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2085,7 +2090,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2175,7 +2181,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2231,7 +2238,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2319,7 +2327,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2366,7 +2375,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2447,7 +2457,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2498,7 +2509,8 @@ contract CyberCorpTest is Test {
         partyValuesB[0] = "Party Value B";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2602,7 +2614,8 @@ contract CyberCorpTest is Test {
             )
         );
 
-        bytes memory proposerSignature = _signAgreementTypedData(
+        bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2655,7 +2668,8 @@ contract CyberCorpTest is Test {
         partyValuesB[4] = "Deleware";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2758,7 +2772,7 @@ contract CyberCorpTest is Test {
          TokenWarrantData memory tokenWarrant = TokenWarrantData({
             exercisePriceMethod: ExercisePriceMethod.perWarrant,
             exercisePrice: 100000,
-            unlockStartTimeType: UnlockStartTimeType.tokenWarrentTime,
+            unlockStartTimeType: UnlockStartTimeType.tokenWarrantTime,
             unlockStartTime: block.timestamp,
             unlockingPeriod: 100000,
             latestExpirationTime: block.timestamp + 100000,
@@ -2836,7 +2850,8 @@ contract CyberCorpTest is Test {
         address[] memory extensions = new address[](1);
         extensions[0] = warrantExtension;
 
-        bytes memory proposerSignature = _signAgreementTypedData(
+        bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -2848,6 +2863,7 @@ contract CyberCorpTest is Test {
             testPrivateKey
         );
 
+        certData[0].extension = warrantExtension;
         (
             address cyberCorp,
             address auth,
@@ -2889,7 +2905,8 @@ contract CyberCorpTest is Test {
         partyValuesB[4] = "Deleware";
 
         vm.startPrank(newPartyAddr);
-        bytes memory newPartySignature = _signAgreementTypedData(
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -3088,7 +3105,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -3198,7 +3216,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -3324,7 +3343,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -3463,7 +3483,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -3592,7 +3613,8 @@ contract CyberCorpTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
 
-        bytes memory signature = _signAgreementTypedData(
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
@@ -3805,5 +3827,1755 @@ contract CyberCorpTest is Test {
 
     function precisionTest() public {
 
+    }
+
+    function testPrintCertificateSAFTEUri() public {
+        vm.startPrank(testAddress);
+        //bytes32 check = bytes32(bytes("nuvolari_safet"));
+        bytes32 check = bytes32(uint256(400));
+        console.logBytes32(check);
+        check = bytes32(uint256(11));
+        console.logBytes32(check);
+
+        check = bytes32(uint256(12));
+        console.logBytes32(check);
+
+        check = bytes32(uint256(13));
+        console.logBytes32(check);
+
+        bytes32 salt = bytes32(keccak256("TestSAFTE"));
+
+        address safteExtension = address(new ERC1967Proxy{salt: salt}(
+           address(new SAFTEExtension{salt: salt}()),
+           abi.encodeWithSelector(SAFTEExtension.initialize.selector, address(auth))
+        ));
+
+        SAFTEData memory safteData = SAFTEData({
+            protocolUSDValuationAtTimeofInvestment: 100000000,
+            unlockStartTimeType: UnlockStartTimeType.tokenWarrantTime,
+            unlockStartTime: block.timestamp,
+            unlockingPeriod: 100000,
+            unlockingCliffPeriod: 100000,
+            unlockingCliffPercentage: 100000,
+            unlockingIntervalType: UnlockingIntervalType.monthly,
+            tokenCalculationMethod: TokenCalculationMethod.equityProRataToTokenSupply,
+            minCompanyReserve: 0,
+            tokenPremiumMultiplier: 0
+        });
+
+        bytes memory safteDataEncoded = abi.encode(safteData);
+
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "Gabe",
+            signingOfficerTitle: "CEO",
+            investmentAmountUSD: 100000,
+            issuerUSDValuationAtTimeOfInvestment: 100000000,
+            unitsRepresented: 100000,
+            legalDetails: "Legal Details",
+            extensionData: safteDataEncoded
+        });
+        _details[0] = _detailsA;
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalFields = new string[](5);
+        globalFields[0] = "purchaseAmount";
+        globalFields[1] = "postMoneyValuationCap";
+        globalFields[2] = "expirationTime";
+        globalFields[3] = "governingJurisdiction";
+        globalFields[4] = "disputeResolution";
+
+        string[] memory partyFields = new string[](5);
+        partyFields[0] = "name";
+        partyFields[1] = "evmAddress";
+        partyFields[2] = "contactDetails";
+        partyFields[3] = "investorType";
+        partyFields[4] = "investorJurisdiction";
+
+        address[] memory parties = new address[](2);
+        parties[0] = testAddress;
+        parties[1] = address(0);
+        uint256 _paymentAmount = 100000;
+
+        string[] memory globalValues = new string[](5);
+        globalValues[0] = "100000";
+        globalValues[1] = "100000000";
+        globalValues[2] = "12/1/2025";
+        globalValues[3] = "Deleware";
+        globalValues[4] = "Binding Arbitration";
+
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](5);
+        partyValues[0][0] = "Gabe";
+        partyValues[0][1] = "0xDEADBABE12345678909876543210866666666666";
+        partyValues[0][2] = "@Gabe";
+        partyValues[0][3] = "Limited Liability Company";
+        partyValues[0][4] = "Deleware";
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                bytes32(uint256(2)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "https://ipfs.io/ipfs/bafybeieee4xjqpwcq5nowm4iqw6ik4wkwpz7uqohl3yamypwz54was2h64",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        certData[0].extension = safteExtension;
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+                block.timestamp,
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                testAddress,
+                officer,
+                certData,
+                bytes32(uint256(2)),
+                globalValues,
+                parties,
+                _paymentAmount,
+                partyValues,
+                proposerSignature,
+                _details,
+                conditions,
+                bytes32(0),
+                block.timestamp + 1000000
+            );
+        vm.stopPrank();
+
+        uint256 newPartyPk = 80085;
+        address newPartyAddr = vm.addr(newPartyPk);
+        string[] memory partyValuesB = new string[](5);
+        partyValuesB[0] = "Mr. Prepop";
+        partyValuesB[1] = "0xC0FFEEBABE12345678909876543210866666666666";
+        partyValuesB[2] = "@0xPrepop";
+        partyValuesB[3] = "Limited Liability Company";
+        partyValuesB[4] = "Deleware";
+
+        vm.startPrank(newPartyAddr);
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "https://ipfs.io/ipfs/bafybeieee4xjqpwcq5nowm4iqw6ik4wkwpz7uqohl3yamypwz54was2h64",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValuesB,
+            newPartyPk
+        );
+        IDealManager dealManager = IDealManager(dealManagerAddr);
+        deal(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e,
+            newPartyAddr,
+            _paymentAmount
+        );
+        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(
+            address(dealManager),
+            _paymentAmount
+        );
+
+        dealManager.signAndFinalizeDeal(
+            newPartyAddr,
+            id,
+            partyValuesB,
+            newPartySignature,
+            true,
+            "John Doe",
+            "passphrase"
+        );
+
+        // Get the token URI and verify it contains the SAFTE details
+        string memory tokenUri = CyberCertPrinter(cyberCertPrinterAddr[0]).tokenURI(0);
+        assertTrue(bytes(tokenUri).length > 0, "Token URI should not be empty");
+        console.log("tokenUri: ", tokenUri);
+        vm.stopPrank();
+    }
+
+    function testCreateOfferBasic() public {
+        // First deploy a CyberCorp without creating an offer
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "Test Officer",
+            signingOfficerTitle: "CEO",
+            investmentAmountUSD: 100000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 1000,
+            legalDetails: "Legal Details for test",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("CreateOfferTest"),
+            "TestCorp",
+            "Limited Liability Company",
+            "Delaware",
+            "Contact Details",
+            "Dispute Resolution",
+            testAddress,
+            officer
+        );
+        vm.stopPrank();
+
+        // Now create an offer using the new createOffer function
+        DealManager dealManager = DealManager(dealManagerAddr);
+
+        // Prepare certificate data
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Test Legend";
+
+        DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](1);
+        certData[0] = DealManager.CyberCertData({
+            name: "Test Certificate",
+            symbol: "TEST",
+            uri: "ipfs://test-uri",
+            securityClass: SecurityClass.SAFE,
+            securitySeries: SecuritySeries.SeriesPreSeed,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+
+        // Prepare deal parameters
+        bytes32 templateId = bytes32(uint256(1));
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = testAddress;
+        parties[1] = address(0);
+        uint256 paymentAmount = 1000000000000000000; // 1 ETH
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+
+        // Create signature
+        bytes32 contractId = keccak256(
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        address[] memory conditions = new address[](0);
+        bytes32 secretHash = bytes32(0);
+        uint256 expiry = block.timestamp + 1000000;
+        address stableAddress = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
+
+        vm.startPrank(testAddress);
+        (
+            address[] memory certPrinterAddress,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = dealManager.proposeAndSignNewCertsDeal(
+            block.timestamp,
+            certData,
+            templateId,
+            globalValues,
+            parties,
+            paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            secretHash,
+            expiry,
+            stableAddress
+        );
+        vm.stopPrank();
+
+        // Verify the results
+        assertEq(certPrinterAddress.length, 1, "Should have created 1 certificate printer");
+        assertEq(certIds.length, 1, "Should have created 1 certificate");
+        assertTrue(id != bytes32(0), "Should have created a valid agreement ID");
+
+        // Verify the certificate printer was created correctly
+        CyberCertPrinter certPrinter = CyberCertPrinter(certPrinterAddress[0]);
+
+
+        // Verify the certificate name includes the company name
+        string memory expectedName = "TestCorp Test Certificate";
+        // Note: We can't directly check the name as it's not exposed in the interface
+        // but we can verify the certificate was created successfully
+
+        // Verify the deal was created in the registry
+        assertTrue(
+            CyberAgreementRegistry(registry).hasSigned(id, testAddress),
+            "Deal should be signed by the proposer"
+        );
+
+        console.log("Created certificate printer:", certPrinterAddress[0]);
+        console.log("Created certificate ID:", certIds[0]);
+        console.log("Created agreement ID:", vm.toString(id));
+    }
+
+    function testCreateOfferMultipleCertificates() public {
+        // First deploy a CyberCorp without creating an offer
+        CertificateDetails[] memory _details = new CertificateDetails[](2);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "Test Officer",
+            signingOfficerTitle: "CEO",
+            investmentAmountUSD: 100000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 1000,
+            legalDetails: "Legal Details for SAFE",
+            extensionData: ""
+        });
+        CertificateDetails memory _detailsB = CertificateDetails({
+            signingOfficerName: "Test Officer",
+            signingOfficerTitle: "CEO",
+            investmentAmountUSD: 50000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 500,
+            legalDetails: "Legal Details for Token Warrant",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+        _details[1] = _detailsB;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("CreateOfferMultipleTest"),
+            "MultiCertCorp",
+            "Limited Liability Company",
+            "Delaware",
+            "Contact Details",
+            "Dispute Resolution",
+            testAddress,
+            officer
+        );
+        vm.stopPrank();
+
+        // Now create an offer with multiple certificates
+        DealManager dealManager = DealManager(dealManagerAddr);
+
+        // Prepare certificate data for multiple certificates
+        string[] memory safeLegend = new string[](1);
+        safeLegend[0] = "SAFE Legend";
+        string[] memory warrantLegend = new string[](1);
+        warrantLegend[0] = "Token Warrant Legend";
+
+        DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](2);
+        certData[0] = DealManager.CyberCertData({
+            name: "SAFE Certificate",
+            symbol: "SAFE",
+            uri: "ipfs://safe-uri",
+            securityClass: SecurityClass.SAFE,
+            securitySeries: SecuritySeries.SeriesPreSeed,
+            extension: address(0),
+            defaultLegend: safeLegend
+        });
+        certData[1] = DealManager.CyberCertData({
+            name: "Token Warrant",
+            symbol: "TWARRANT",
+            uri: "ipfs://warrant-uri",
+            securityClass: SecurityClass.TokenWarrant,
+            securitySeries: SecuritySeries.SeriesPreSeed,
+            extension: address(0),
+            defaultLegend: warrantLegend
+        });
+
+        // Prepare deal parameters
+        bytes32 templateId = bytes32(uint256(1));
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = testAddress;
+        parties[1] = address(0);
+        uint256 paymentAmount = 1500000000000000000; // 1.5 ETH
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+
+        // Create signature
+        bytes32 contractId = keccak256(
+            abi.encode(
+                templateId,
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        address[] memory conditions = new address[](0);
+        bytes32 secretHash = bytes32(0);
+        uint256 expiry = block.timestamp + 1000000;
+        address stableAddress = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
+
+        vm.startPrank(testAddress);
+        (
+            address[] memory certPrinterAddress,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = dealManager.proposeAndSignNewCertsDeal(
+             block.timestamp,
+            certData,
+            templateId,
+            globalValues,
+            parties,
+            paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            secretHash,
+            expiry,
+            stableAddress
+        );
+        vm.stopPrank();
+
+        // Verify the results
+        assertEq(certPrinterAddress.length, 2, "Should have created 2 certificate printers");
+        assertEq(certIds.length, 2, "Should have created 2 certificates");
+        assertTrue(id != bytes32(0), "Should have created a valid agreement ID");
+
+        // Verify the first certificate printer (SAFE)
+        CyberCertPrinter safePrinter = CyberCertPrinter(certPrinterAddress[0]);
+
+        // Verify the second certificate printer (Token Warrant)
+        CyberCertPrinter warrantPrinter = CyberCertPrinter(certPrinterAddress[1]);
+
+
+        // Verify the deal was created in the registry
+        assertTrue(
+            CyberAgreementRegistry(registry).hasSigned(id, testAddress),
+            "Deal should be signed by the proposer"
+        );
+
+        // Test that we can retrieve the escrow details
+        Escrow memory escrow = dealManager.getEscrowDetails(id);
+        assertEq(escrow.corpAssets.length, 2, "Escrow should have 2 corporate assets");
+        assertEq(escrow.buyerAssets.length, 1, "Escrow should have 1 buyer asset");
+        assertEq(escrow.buyerAssets[0].amount, paymentAmount, "Payment amount should match");
+
+        console.log("Created SAFE certificate printer:", certPrinterAddress[0]);
+        console.log("Created Token Warrant certificate printer:", certPrinterAddress[1]);
+        console.log("Created SAFE certificate ID:", certIds[0]);
+        console.log("Created Token Warrant certificate ID:", certIds[1]);
+        console.log("Created agreement ID:", vm.toString(id));
+    }
+
+    function testUpgradeDealManagerBeaconViaDeployedFactory() public {
+        // First deploy a CyberCorp which will create a DealManager
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "Test Officer",
+            signingOfficerTitle: "CEO",
+            investmentAmountUSD: 100000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 1000,
+            legalDetails: "Legal Details for test",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("DealManagerUpgradeTest"),
+            "TestCorp",
+            "Limited Liability Company",
+            "Delaware",
+            "Contact Details",
+            "Dispute Resolution",
+            testAddress,
+            officer
+        );
+        vm.stopPrank();
+
+        // Verify the DealManager was deployed
+        assertTrue(dealManagerAddr != address(0), "DealManager should be deployed");
+        console.log("Deployed DealManager at:", dealManagerAddr);
+
+        // Get the deployed DealManagerFactory address
+        address deployedFactoryAddr = 0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3;
+        DealManagerFactory deployedFactory = DealManagerFactory(deployedFactoryAddr);
+
+        // Get the current beacon implementation
+        address currentImplementation = deployedFactory.getBeaconImplementation();
+        console.log("Current beacon implementation:", currentImplementation);
+
+        // Deploy a new DealManager implementation using CREATE2
+        bytes32 implementationSalt = bytes32(keccak256("NewDealManagerImplementation"));
+        address newImplementation = address(new DealManager{salt: implementationSalt}());
+        console.log("New implementation deployed at:", newImplementation);
+
+        // Non-owner should not be able to upgrade it
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
+        deployedFactory.upgradeImplementation(newImplementation);
+
+        // Owner should be able to upgrade it
+        vm.prank(multisig);
+        deployedFactory.upgradeImplementation(newImplementation);
+
+        // Verify the upgrade was successful
+        address updatedImplementation = deployedFactory.getBeaconImplementation();
+        assertEq(updatedImplementation, newImplementation, "Beacon implementation should be updated");
+        console.log("Updated beacon implementation:", updatedImplementation);
+
+        // Verify the existing DealManager still works by checking its state
+        DealManager dealManager = DealManager(dealManagerAddr);
+
+
+        // Create a simple deal to verify functionality still works
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Test Legend";
+
+        DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](1);
+        certData[0] = DealManager.CyberCertData({
+            name: "Test Certificate",
+            symbol: "TEST",
+            uri: "ipfs://test-uri",
+            securityClass: SecurityClass.SAFE,
+            securitySeries: SecuritySeries.SeriesPreSeed,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+
+        bytes32 templateId = bytes32(uint256(1));
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = testAddress;
+        parties[1] = address(0);
+        uint256 paymentAmount = 1000000000000000000; // 1 ETH
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                templateId,
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        address[] memory conditions = new address[](0);
+        bytes32 secretHash = bytes32(0);
+        uint256 expiry = block.timestamp + 1000000;
+        address stableAddress = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
+
+        vm.startPrank(testAddress);
+        (
+            address[] memory certPrinterAddress,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = dealManager.proposeAndSignNewCertsDeal(
+            block.timestamp,
+            certData,
+            templateId,
+            globalValues,
+            parties,
+            paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            secretHash,
+            expiry,
+            stableAddress
+        );
+        vm.stopPrank();
+
+        // Verify the deal was created successfully after the upgrade
+        assertEq(certPrinterAddress.length, 1, "Should have created 1 certificate printer");
+        assertEq(certIds.length, 1, "Should have created 1 certificate");
+        assertTrue(id != bytes32(0), "Should have created a valid agreement ID");
+
+        console.log("Successfully created deal after upgrade with ID:", vm.toString(id));
+        console.log("Certificate printer created at:", certPrinterAddress[0]);
+        console.log("Certificate ID:", certIds[0]);
+    }
+
+    // Helper function to mint a LexChex token for testing
+    function _mintLexChexToken(address owner, uint256 uuid) internal returns (uint256 tokenId) {
+        Accreditation memory acc = Accreditation({
+            uuid: uuid,
+            agreementId: bytes32(uint256(123)),
+            registryAddress: address(registry),
+            investorName: "Test Investor",
+            investorType: "Individual",
+            investorJurisdiction: "Delaware",
+            investorContact: "test@investor.com",
+            issuanceDate: block.timestamp,
+            expiryDate: block.timestamp + 365 days,
+            voided: "",
+            signature: bytes("test-signature")
+        });
+
+        vm.prank(multisig); // Admin can mint
+        tokenId = lexchex.mint(owner, acc);
+    }
+
+    function testLexChexConditionWithValidToken() public {
+        uint256 newPartyPk = 80085;
+        address newPartyAddr = vm.addr(newPartyPk);
+        vm.prank(multisig);
+        auth.updateRole(address(testAddress), 98); // Give testAddress ADMIN_ROLE for testing
+        // First mint a LexChex token for the counterparty
+        uint256 tokenId = _mintLexChexToken(newPartyAddr, 1);
+
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jurisdiction etc",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress);
+        parties[1] = address(newPartyAddr); // Set counterparty to the LexChex token holder
+        uint256 _paymentAmount = 1000000000000000000;
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+        partyValues[1] = new string[](1);
+        partyValues[1][0] = "Counter Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        // Add LexChex condition to the deal
+        address[] memory conditions = new address[](1);
+        conditions[0] = address(lexchexCondition);
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions, // Include LexChex condition
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+
+        IDealManager dealManager = IDealManager(dealManagerAddr);
+        vm.startPrank(newPartyAddr);
+        deal(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e,
+            newPartyAddr,
+            _paymentAmount
+        );
+        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(
+            address(dealManager),
+            _paymentAmount
+        );
+
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[1],
+            newPartyPk
+        );
+
+        // This should succeed because the counterparty has a valid LexChex token
+        dealManager.signAndFinalizeDeal(
+            newPartyAddr,
+            contractId,
+            partyValues[1],
+            newPartySignature,
+            true,
+            "Counter Party Name",
+            ""
+        );
+        vm.stopPrank();
+
+        console.log("Deal finalized successfully with LexChex condition");
+        console.log("LexChex token ID:", tokenId);
+        console.log("Token owner:", lexchex.ownerOf(tokenId));
+    }
+
+    function testLexChexConditionWithInvalidToken() public {
+        uint256 newPartyPk = 80085;
+        address newPartyAddr = vm.addr(newPartyPk);
+
+        // Mint a LexChex token but void it
+        uint256 tokenId = _mintLexChexToken(newPartyAddr, 2);
+        
+        // Void the token
+        vm.prank(multisig);
+        lexchex.void(tokenId, "Token voided for testing");
+
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jurisdiction etc",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress);
+        parties[1] = address(newPartyAddr); // Set counterparty to the LexChex token holder
+        uint256 _paymentAmount = 1000000000000000000;
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+        partyValues[1] = new string[](1);
+        partyValues[1][0] = "Counter Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        // Add LexChex condition to the deal
+        address[] memory conditions = new address[](1);
+        conditions[0] = address(lexchexCondition);
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions, // Include LexChex condition
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+
+        IDealManager dealManager = IDealManager(dealManagerAddr);
+        vm.startPrank(newPartyAddr);
+        deal(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e,
+            newPartyAddr,
+            _paymentAmount
+        );
+        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(
+            address(dealManager),
+            _paymentAmount
+        );
+
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[1],
+            newPartyPk
+        );
+
+        // This should fail because the counterparty has an invalid (voided) LexChex token
+        vm.expectRevert(); // Expect revert due to condition not being met
+        dealManager.signAndFinalizeDeal(
+            newPartyAddr,
+            contractId,
+            partyValues[1],
+            newPartySignature,
+            true,
+            "Counter Party Name",
+            ""
+        );
+        vm.stopPrank();
+
+        console.log("Deal correctly failed with invalid LexChex token");
+        console.log("LexChex token ID:", tokenId);
+        console.log("Token is voided:", bytes(lexchex.accreditations(tokenId).voided).length > 0);
+    }
+
+    function testLexChexConditionWithNoToken() public {
+        uint256 newPartyPk = 80085;
+        address newPartyAddr = vm.addr(newPartyPk);
+
+        // Don't mint any LexChex token for the counterparty
+
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jurisdiction etc",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress);
+        parties[1] = address(newPartyAddr); // Set counterparty without LexChex token
+        uint256 _paymentAmount = 1000000000000000000;
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+        partyValues[1] = new string[](1);
+        partyValues[1][0] = "Counter Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        // Add LexChex condition to the deal
+        address[] memory conditions = new address[](1);
+        conditions[0] = address(lexchexCondition);
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions, // Include LexChex condition
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+
+        IDealManager dealManager = IDealManager(dealManagerAddr);
+        vm.startPrank(newPartyAddr);
+        deal(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e,
+            newPartyAddr,
+            _paymentAmount
+        );
+        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(
+            address(dealManager),
+            _paymentAmount
+        );
+
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[1],
+            newPartyPk
+        );
+
+        // This should fail because the counterparty has no LexChex token
+        vm.expectRevert(); // Expect revert due to condition not being met
+        dealManager.signAndFinalizeDeal(
+            newPartyAddr,
+            contractId,
+            partyValues[1],
+            newPartySignature,
+            true,
+            "Counter Party Name",
+            ""
+        );
+        vm.stopPrank();
+
+        console.log("Deal correctly failed with no LexChex token");
+        console.log("Counterparty token balance:", lexchex.balanceOf(newPartyAddr));
+    }
+
+    function testLexChexMinterIntegration() public {
+        uint256 investorPk = 12345;
+        address investorAddr = vm.addr(investorPk);
+
+        vm.startPrank(multisig);
+        auth.updateRole(address(testAddress), 98); // Give testAddress ADMIN_ROLE for testing
+        vm.stopPrank();
+
+        // Prepare mint request
+        LeXcheXMinter.MintRequest memory request = LeXcheXMinter.MintRequest({
+            uuid: 1,
+            owner: investorAddr,
+            investorName: "John Investor",
+            investorType: "Individual",
+            investorJurisdiction: "Delaware",
+            investorContact: "john@investor.com",
+            mintPrice: 1000000, // 1 USDC (6 decimals)
+            expiry: block.timestamp + 365 days,
+            paymentToken: 0x036CbD53842c5426634e7929541eC2318f3dCF7e // USDC
+        });
+
+        // Create authority signature
+        LeXcheXMinter.AuthorityData memory authData = LeXcheXMinter.AuthorityData({
+            uuid: request.uuid,
+            owner: request.owner,
+            investorName: request.investorName,
+            investorType: request.investorType,
+            investorJurisdiction: request.investorJurisdiction,
+            investorContact: request.investorContact,
+            mintPrice: request.mintPrice,
+            expiry: request.expiry,
+            paymentToken: request.paymentToken
+        });
+
+        bytes memory authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
+            vm,
+            lexchexMinter.DOMAIN_SEPARATOR(),
+            lexchexMinter.AUTHORITY_TYPEHASH(),
+            authData,
+            testPrivateKey // Admin signs the authority data
+        );
+
+        // Prepare agreement data
+        bytes32 templateId = bytes32(uint256(1));
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "LexChex Agreement";
+        address[] memory parties = new address[](1);
+        parties[0] = investorAddr;
+
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Investor Party Value";
+
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                templateId,
+                1337, // salt
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory agreementSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            investorPk
+        );
+
+        // Give the investor some USDC for payment
+        vm.startPrank(investorAddr);
+        deal(request.paymentToken, investorAddr, request.mintPrice);
+        IERC20(request.paymentToken).approve(address(lexchexMinter), request.mintPrice);
+
+        // Request mint
+        (bytes32 agreementId, uint256 tokenId) = lexchexMinter.requestMint(
+            request,
+            templateId,
+            1337, // salt
+            globalValues,
+            parties,
+            partyValues,
+            agreementSignature,
+            authoritySignature
+        );
+        vm.stopPrank();
+
+        // Verify the LexChex token was minted
+        assertEq(lexchex.ownerOf(tokenId), investorAddr, "Token should be owned by investor");
+        assertTrue(lexchex.isValid(tokenId), "Token should be valid");
+
+        Accreditation memory acc = lexchex.accreditations(tokenId);
+        assertEq(acc.investorName, "John Investor", "Investor name should match");
+        assertEq(acc.agreementId, agreementId, "Agreement ID should match");
+
+        console.log("LexChex minted successfully:");
+        console.log("Token ID:", tokenId);
+        console.log("Agreement ID:", vm.toString(agreementId));
+        console.log("Token owner:", lexchex.ownerOf(tokenId));
+        console.log("Token is valid:", lexchex.isValid(tokenId));
+
+        // Now test that this LexChex token can be used for a deal with conditions
+        uint256 dealPartyPk = 54321;
+        address dealPartyAddr = vm.addr(dealPartyPk);
+
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jurisdiction etc",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory dealGlobalValues = new string[](1);
+        dealGlobalValues[0] = "Deal Global Value 1";
+        address[] memory dealParties = new address[](2);
+        dealParties[0] = address(testAddress);
+        dealParties[1] = address(investorAddr); // Use the LexChex token holder
+        uint256 _paymentAmount = 1000000000000000000;
+        string[][] memory dealPartyValues = new string[][](2);
+        dealPartyValues[0] = new string[](1);
+        dealPartyValues[0][0] = "Deal Party Value 1";
+        dealPartyValues[1] = new string[](1);
+        dealPartyValues[1][0] = "Deal Counter Party Value 1";
+
+        bytes32 dealContractId = keccak256(
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                dealGlobalValues,
+                dealParties
+            )
+        );
+
+        bytes memory dealSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            dealContractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            dealGlobalValues,
+            dealPartyValues[0],
+            testPrivateKey
+        );
+
+        // Add LexChex condition to the deal
+        address[] memory conditions = new address[](1);
+        conditions[0] = address(lexchexCondition);
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 dealId,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            dealGlobalValues,
+            dealParties,
+            _paymentAmount,
+            dealPartyValues,
+            dealSignature,
+            _details,
+            conditions, // Include LexChex condition
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+
+        IDealManager dealManager = IDealManager(dealManagerAddr);
+        vm.startPrank(investorAddr);
+        deal(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e,
+            investorAddr,
+            _paymentAmount
+        );
+        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(
+            address(dealManager),
+            _paymentAmount
+        );
+
+        bytes memory investorDealSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            dealContractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            dealGlobalValues,
+            dealPartyValues[1],
+            investorPk
+        );
+
+        // This should succeed because the investor has a valid LexChex token
+        dealManager.signAndFinalizeDeal(
+            investorAddr,
+            dealContractId,
+            dealPartyValues[1],
+            investorDealSignature,
+            true,
+            "LexChex Verified Investor",
+            ""
+        );
+        vm.stopPrank();
+
+        console.log("Deal with LexChex condition completed successfully!");
+        console.log("Deal ID:", vm.toString(dealId));
+        console.log("Investor LexChex token:", tokenId);
+    }
+
+    function testDelegateSigningDeal() public {
+        // Create three parties:
+        // 1. testAddress - the company/proposer
+        // 2. principalAddr - the investor who will delegate
+        // 3. delegateAddr - the delegate who will sign and pay on behalf of principal
+
+        uint256 principalPk = 11111;
+        address principalAddr = vm.addr(principalPk);
+        
+        uint256 delegatePk = 22222;
+        address delegateAddr = vm.addr(delegatePk);
+
+        // Setup: Principal sets delegate
+        vm.startPrank(principalAddr);
+        registry.setDelegation(delegateAddr, 0); // No expiry (0 means permanent)
+        vm.stopPrank();
+
+        // Verify delegation is set
+        (address retrievedDelegate, uint256 expiry) = registry.getDelegation(principalAddr);
+        assertEq(retrievedDelegate, delegateAddr, "Delegate should be set correctly");
+        assertEq(expiry, 0, "Expiry should be 0 (no expiry)");
+        assertTrue(registry.isValidDelegate(principalAddr, delegateAddr), "Delegate should be valid");
+
+        // Create a deal with the principal as a party
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "Test Officer",
+            signingOfficerTitle: "CEO",
+            investmentAmountUSD: 100000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 1000,
+            legalDetails: "Legal Details for delegation test",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Delegation Test Deal";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress); // Company
+        parties[1] = address(principalAddr); // Principal (who has delegated)
+        uint256 _paymentAmount = 1000000000000000000; // 1 ETH
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Company Party Value";
+        partyValues[1] = new string[](1);
+        partyValues[1][0] = "Principal Party Value";
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        // Company signs the deal first
+        bytes memory companySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        // Create the deal
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "DelegationTestCorp",
+            "Limited Liability Company",
+            "Delaware",
+            "Contact Details",
+            "Dispute Resolution",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            companySignature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+
+        // Verify the deal was created but not yet complete
+        assertFalse(registry.hasSigned(id, principalAddr), "Principal should not have signed yet");
+        assertTrue(registry.hasSigned(id, testAddress), "Company should have signed");
+
+        // Now the delegate signs and pays on behalf of the principal
+        // Create signature - delegate signs with their private key but for the principal
+        vm.startPrank(delegateAddr);
+        bytes memory delegateSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[1], // Principal's party values
+            delegatePk // Delegate's private key
+        );
+        vm.stopPrank();
+        IDealManager dealManager = IDealManager(dealManagerAddr);
+        
+        // Give the delegate funds to pay on behalf of the principal
+        vm.startPrank(principalAddr);
+        deal(
+            0x036CbD53842c5426634e7929541eC2318f3dCF7e,
+            principalAddr,
+            _paymentAmount
+        );
+        IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e).approve(
+            address(dealManager),
+            _paymentAmount
+        );
+
+        // The delegate signs the deal FOR the principal using signContractFor
+        // This is different from signAndFinalizeDeal - it's signing on behalf of another party
+        registry.signContractFor(
+            principalAddr, // The principal (signer)
+            contractId, // The contract ID (same as the deal ID)
+            partyValues[1], // The principal's party values
+            delegateSignature, // Delegate's signature
+            false, // Not filling unallocated
+            "" // No secret
+        );
+
+        // Now finalize the deal by making the payment
+        dealManager.signAndFinalizeDeal(
+            principalAddr, // Principal address (who the deal is for)
+            contractId,
+            partyValues[1],
+            delegateSignature,
+            true, // Finalize payment
+            "Principal via Delegate",
+            ""
+        );
+        vm.stopPrank();
+
+        // Verify the deal is now complete
+        assertTrue(registry.hasSigned(id, principalAddr), "Principal should now have signed (via delegate)");
+        assertTrue(registry.hasSigned(id, testAddress), "Company should have signed");
+
+        // Verify the certificate was issued to the principal (not the delegate)
+        CyberCertPrinter certPrinter = CyberCertPrinter(cyberCertPrinterAddr[0]);
+        assertEq(certPrinter.ownerOf(certIds[0]), principalAddr, "Certificate should be owned by principal");
+
+        console.log("Delegation test completed successfully!");
+        console.log("Principal:", principalAddr);
+        console.log("Delegate:", delegateAddr);
+        console.log("Certificate owner:", certPrinter.ownerOf(certIds[0]));
+        console.log("Deal ID:", vm.toString(id));
+        console.log("Contract ID:", vm.toString(contractId));
+    }
+
+    function testDelegateSigningWithExpiry() public {
+        uint256 principalPk = 33333;
+        address principalAddr = vm.addr(principalPk);
+        
+        uint256 delegatePk = 44444;
+        address delegateAddr = vm.addr(delegatePk);
+
+        // Setup: Principal sets delegate with expiry
+        uint256 delegationExpiry = block.timestamp + 1000; // Expires in 1000 seconds
+        vm.startPrank(principalAddr);
+        registry.setDelegation(delegateAddr, delegationExpiry);
+        vm.stopPrank();
+
+        // Verify delegation is set and valid
+        assertTrue(registry.isValidDelegate(principalAddr, delegateAddr), "Delegate should be valid");
+        (address retrievedDelegate, uint256 expiry) = registry.getDelegation(principalAddr);
+        assertEq(retrievedDelegate, delegateAddr, "Delegate should be set correctly");
+        assertEq(expiry, delegationExpiry, "Expiry should match");
+
+        // Create a simple deal
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "Test Officer",
+            signingOfficerTitle: "CEO",
+            investmentAmountUSD: 100000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 1000,
+            legalDetails: "Legal Details for expiry test",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Delegation Expiry Test Deal";
+        address[] memory parties = new address[](2);
+        parties[0] = address(testAddress);
+        parties[1] = address(principalAddr);
+        uint256 _paymentAmount = 1000000000000000000;
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Company Party Value";
+        partyValues[1] = new string[](1);
+        partyValues[1][0] = "Principal Party Value";
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
+        bytes memory companySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        vm.startPrank(testAddress);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "DelegationExpiryCorp",
+            "Limited Liability Company",
+            "Delaware",
+            "Contact Details",
+            "Dispute Resolution",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            companySignature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 2000000 // Long expiry for the deal
+        );
+        vm.stopPrank();
+
+        // Fast forward past the delegation expiry
+        vm.warp(block.timestamp + 1001);
+
+        // Verify delegation is now expired
+        assertFalse(registry.isValidDelegate(principalAddr, delegateAddr), "Delegate should be expired");
+
+        // Create delegate signature
+        bytes memory delegateSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[1],
+            delegatePk
+        );
+
+        // Try to sign with expired delegation - should fail
+        vm.startPrank(delegateAddr);
+        vm.expectRevert(); // Should revert due to expired delegation
+        registry.signContractFor(
+            principalAddr,
+            contractId,
+            partyValues[1],
+            delegateSignature,
+            false,
+            ""
+        );
+        vm.stopPrank();
+
+        console.log("Delegation expiry test completed successfully!");
+        console.log("Delegation expired after:", delegationExpiry);
+        console.log("Current time:", block.timestamp);
+    }
+
+    function testRevokeDelegation() public {
+        uint256 principalPk = 55555;
+        address principalAddr = vm.addr(principalPk);
+        
+        uint256 delegatePk = 66666;
+        address delegateAddr = vm.addr(delegatePk);
+
+        // Setup: Principal sets delegate
+        vm.startPrank(principalAddr);
+        registry.setDelegation(delegateAddr, 0); // No expiry
+        vm.stopPrank();
+
+        // Verify delegation is set
+        assertTrue(registry.isValidDelegate(principalAddr, delegateAddr), "Delegate should be valid");
+
+        // Principal revokes delegation
+        vm.startPrank(principalAddr);
+        registry.revokeDelegation();
+        vm.stopPrank();
+
+        // Verify delegation is revoked
+        assertFalse(registry.isValidDelegate(principalAddr, delegateAddr), "Delegate should be revoked");
+        (address retrievedDelegate, uint256 expiry) = registry.getDelegation(principalAddr);
+        assertEq(retrievedDelegate, address(0), "Delegate should be cleared");
+        assertEq(expiry, 0, "Expiry should be cleared");
+
+        console.log("Delegation revocation test completed successfully!");
+        console.log("Principal:", principalAddr);
+        console.log("Delegate:", delegateAddr);
     }
 }

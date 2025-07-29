@@ -46,23 +46,21 @@ import "./ICertificateExtension.sol";
 import "../../CyberCorpConstants.sol";
 import "../../libs/auth.sol";
 
-struct TokenWarrantData {
-    ExercisePriceMethod exercisePriceMethod;  // perToken or perWarrant
-    uint256 exercisePrice;  // 18 decimals
-    UnlockStartTimeType unlockStartTimeType;    // enum of different types, can be tokenWarrantTime, tgeTime, or setTime
+struct SAFTEData {
+    UnlockStartTimeType unlockStartTimeType;    
     uint256 unlockStartTime;                
-    uint256 unlockingPeriod; //in interval units
-    uint256 latestExpirationTime; //latest time at which the Warrant can expire (cease to be exercisable)--denominated in seconds
-    uint256 unlockingCliffPeriod; // seconds
+    uint256 unlockingPeriod; 
+    uint256 unlockingCliffPeriod; 
     uint256 unlockingCliffPercentage; 
     UnlockingIntervalType unlockingIntervalType;
-    TokenCalculationMethod tokenCalculationMethod; //equityProRataToTokenSupply or equityProRataToCompanyReserve
-    uint256 minCompanyReserve; //minimum company reserve within an equityProRataToCompanyReserve method--set to 0 if there is no minimum
-    uint256 tokenPremiumMultiplier; //multiplier of network valuation over company equity valuation, to be used within equityProRataToTokenSupply method (set to 0 if no premium)
-}
+    TokenCalculationMethod tokenCalculationMethod; 
+    uint256 minCompanyReserve;
+    uint256 tokenPremiumMultiplier;
+    uint256 protocolUSDValuationAtTimeofInvestment;
+    }
 
-contract TokenWarrantExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
-    bytes32 public constant EXTENSION_TYPE = keccak256("TOKEN_WARRANT");
+contract SAFTEExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
+    bytes32 public constant EXTENSION_TYPE = keccak256("SAFTE");
     uint256 public constant PERCENTAGE_PRECISION = 10 ** 4;
 
     //ofset to leave for future upgrades
@@ -73,11 +71,11 @@ contract TokenWarrantExtension is UUPSUpgradeable, ICertificateExtension, BorgAu
         __BorgAuthACL_init(_auth);
     }
 
-    function decodeExtensionData(bytes memory data) external view returns (TokenWarrantData memory) {
-        return abi.decode(data, (TokenWarrantData));
+    function decodeExtensionData(bytes memory data) external view returns (SAFTEData memory) {
+        return abi.decode(data, (SAFTEData));
     }
 
-    function encodeExtensionData(TokenWarrantData memory data) external pure returns (bytes memory) {
+    function encodeExtensionData(SAFTEData memory data) external pure returns (bytes memory) {
         return abi.encode(data);
     }
 
@@ -86,16 +84,14 @@ contract TokenWarrantExtension is UUPSUpgradeable, ICertificateExtension, BorgAu
     }
 
     function getExtensionURI(bytes memory data) external view override returns (string memory) {
-        TokenWarrantData memory decoded = abi.decode(data, (TokenWarrantData));
+        SAFTEData memory decoded = abi.decode(data, (SAFTEData));
         
         string memory json = string(abi.encodePacked(
-            ', "warrantDetails": {',
-            '"exercisePriceMethod": "', ExercisePriceMethodToString(decoded.exercisePriceMethod),
-            '", "exercisePrice": "', uint256ToString(decoded.exercisePrice),
+            ', "SAFTEDetails": {',
+            '"protocolUSDValuationAtTimeofInvestment": "', uint256ToString(decoded.protocolUSDValuationAtTimeofInvestment),
             '", "unlockStartTimeType": "', UnlockStartTimeTypeToString(decoded.unlockStartTimeType),
             '", "unlockStartTime": "', uint256ToString(decoded.unlockStartTime),
             '", "unlockingPeriod": "', uint256ToString(decoded.unlockingPeriod),
-            '", "latestExpirationTime": "', uint256ToString(decoded.latestExpirationTime),
             '", "unlockingCliffPeriod": "', uint256ToString(decoded.unlockingCliffPeriod),
             '", "unlockingCliffPercentage": "', uint256ToString(decoded.unlockingCliffPercentage),
             '", "unlockingIntervalType": "', UnlockingIntervalTypeToString(decoded.unlockingIntervalType),
@@ -131,21 +127,15 @@ contract TokenWarrantExtension is UUPSUpgradeable, ICertificateExtension, BorgAu
         return string(bstr);
     }
 
-    // Helper functions to convert enums to strings
-    function ExercisePriceMethodToString(ExercisePriceMethod _type) internal pure returns (string memory) {
-        if (_type == ExercisePriceMethod.perWarrant) return "perWarrant";
-        if (_type == ExercisePriceMethod.perToken) return "perToken";
-        return "Unknown";
-    }
-
     function conversionTypeToString(TokenCalculationMethod _type) internal pure returns (string memory) {
         if (_type == TokenCalculationMethod.equityProRataToCompanyReserve) return "equityProRataToCompanyReserve";
         if (_type == TokenCalculationMethod.equityProRataToTokenSupply) return "equityProRataToTokenSupply";
+        if (_type == TokenCalculationMethod.dollarProRataToProtocolVal) return "dollarProRataToProtocolVal";
         return "Unknown";
     }
 
     function UnlockStartTimeTypeToString(UnlockStartTimeType _type) internal pure returns (string memory) {
-        if (_type == UnlockStartTimeType.tokenWarrantTime) return "tokenWarrantTime";
+        if (_type == UnlockStartTimeType.tokenWarrantTime) return "agreementDateTime";
         if (_type == UnlockStartTimeType.tgeTime) return "tgeTime";
         if (_type == UnlockStartTimeType.setTime) return "setTime";
         return "Unknown";

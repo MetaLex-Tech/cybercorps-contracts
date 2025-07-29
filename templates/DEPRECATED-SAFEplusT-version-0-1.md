@@ -3,8 +3,8 @@
 id: bytes32(uint256(26))
 
 legalURI:
-safteURI:
-
+safeURI:https://ipfs.io/ipfs/bafybeiacwnkl4oai7ncsomqniu5jwoc3soibnwocrrt2jm2fhpz6c2cczm
+tokenWarrantURI:https://ipfs.io/ipfs/bafybeia2kruqmomqbyw37oi5mbodzrfsnk2b3x2d46k2e224u6oinrpudi
 
 ## Global Fields
 
@@ -19,6 +19,7 @@ safteURI:
 | unlockStartTimeType |"agreementExecutionTime" \|"tgeTime" \| "setTime"        |
 | unlockStartTime       | only set if using `setTime` for `unlockStartTimeType` |
 | unlockingPeriod       | Duration in `unlockingInvervalType` units  |
+| latestExpirationTime       | Unix timestamp. Will not be prompted for in UI, will be 10 yrs from deal date   |
 | unlockingCliffPeriod       | Duration in `unlockingIntervalType`, first tokens unlocked at `unlockingStartTime` + `unlockingCliffPeriod`  |
 | unlockingCliffPercentage       | e.g. "10.5%" |
 | unlockingIntervalType       |  "secondly", "hourly", "daily", "monthly", "blockly". Note that this affects both `unlockingPeriod` and `unlockingCliffPeriod`   |
@@ -76,6 +77,11 @@ struct CertificateDetails {
 ```
 
 ```
+enum ExercisePriceMethod {
+    perToken,
+    perWarrant
+}
+
 enum TokenCalculationMethod {
     equityProRataToCompanyReserve,
     equityProRataToTokenSupply,
