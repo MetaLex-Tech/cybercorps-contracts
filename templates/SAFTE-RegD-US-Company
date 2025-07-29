@@ -1,6 +1,6 @@
 # Data Overview
 
-id: bytes32(uint256(2))
+id: bytes32(uint256(26))
 
 legalURI:
 safteURI:
@@ -46,19 +46,18 @@ safteURI:
 
 name: TokenWarrantExtension
 ```solidity
-struct TokenWarrantData {
-    ExercisePriceMethod exercisePriceMethod;  // perToken or perWarrant
-    uint256 exercisePrice;    // 18 decimals
-    UnlockStartTimeType unlockStartTimeType;    // enum of different types, can be tokenWarrantTime, tgeTime, or setTime
+struct SAFTEData {
+    uint256 protocolUSDValuationAtTimeofInvestment;
+    UnlockStartTimeType unlockStartTimeType;    
     uint256 unlockStartTime;                
-    uint256 unlockingPeriod;
-    uint256 unlockingCliffPeriod;
+    uint256 unlockingPeriod; 
+    uint256 unlockingCliffPeriod; 
     uint256 unlockingCliffPercentage; 
-    UnlockingIntervalType unlockingIntervalType; // blockly, secondly, daily, weekly, monthly
-    TokenCalculationMethod tokenCalculationMethod; //equityProRataToTokenSupply or equityProRataToCompanyReserve or dollarProRataToProtocolVal
-    uint256 minCompanyReserve; //minimum company reserve within an equityProRataToCompanyReserve method--set to 0 if there is no minimum
-    uint256 tokenPremiumMultiplier; //multiplier of network valuation over company equity valuation, to be used within equityProRataToTokenSupply method (set to 0 if no premium)
-}
+    UnlockingIntervalType unlockingIntervalType;
+    TokenCalculationMethod tokenCalculationMethod; 
+    uint256 minCompanyReserve;
+     uint256 tokenPremiumMultiplier;
+    }
 ```
 
 ## CertificateDetails Struct (for reference)
