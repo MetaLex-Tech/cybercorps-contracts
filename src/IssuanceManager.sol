@@ -64,11 +64,11 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     error TokenProxyNotFound();
     error NotSAFEToken();
     error NotUpgradeFactory();
-    error FractionalizedCertNotAllowed();
-    event FractionalizedCert(
+    error ScripifiedCertNotAllowed();
+    event ScripifiedCert(
         address indexed certAddress,
         uint256 indexed id,
-        address indexed fractionalizedCert
+        address indexed scripifiedCert
     );
 
     event CertPrinterCreated(
@@ -514,15 +514,15 @@ contract IssuanceManager is Initializable, BorgAuthACL {
             ),
             typeRestrictionHooks
         );
-        IssuanceManagerStorage.setFractionalizedCert(certAddress, newCert20);
+        IssuanceManagerStorage.setScripifiedCert(certAddress, newCert20);
         return newCert20;
     }
 
-    function fractionalizeCert(address certAddress, uint256 id) external {
-        address fractionalizedCert = IssuanceManagerStorage
-            .getFractionalizedCert(certAddress);
-        if (fractionalizedCert == address(0))
-            revert FractionalizedCertNotAllowed();
+    function scripifyCert(address certAddress, uint256 id) external {
+        address scripifiedCert = IssuanceManagerStorage
+            .getScripifiedCert(certAddress);
+        if (scripifiedCert == address(0))
+            revert ScripifiedCertNotAllowed();
 
         ICyberCertPrinter(certAddress).safeTransferFrom(
             msg.sender,
@@ -530,13 +530,13 @@ contract IssuanceManager is Initializable, BorgAuthACL {
             id
         );
         ICyberCertPrinter(certAddress).voidCert(id);
-        ICyberCert20(fractionalizedCert).mint(
+        ICyberCert20(scripifiedCert).mint(
             msg.sender,
             ICyberCertPrinter(certAddress)
                 .getCertificateDetails(id)
                 .unitsRepresented
         );
-        emit FractionalizedCert(certAddress, id, fractionalizedCert);
+        emit ScripifiedCert(certAddress, id, scripifiedCert);
     }
 
     function getUpgradeFactory() public view returns (address) {

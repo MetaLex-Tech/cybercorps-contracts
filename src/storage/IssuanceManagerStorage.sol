@@ -55,7 +55,7 @@ library IssuanceManagerStorage {
         address upgradeFactory;
         address[] printers;
         UpgradeableBeacon CyberCert20Beacon;
-        mapping(address => address) fractionalizedCert;    
+        mapping(address => address) scripifiedCert;    
     }
 
     // Returns the storage layout
@@ -148,11 +148,11 @@ library IssuanceManagerStorage {
         issuanceManagerStorage().CyberCert20Beacon.upgradeTo(_newImplementation);
     }
 
-    function getFractionalizedCert(address certAddress) internal view returns (address) {
-        return issuanceManagerStorage().fractionalizedCert[certAddress];
+    function getScripifiedCert(address certAddress) internal view returns (address) {
+        return issuanceManagerStorage().scripifiedCert[certAddress];
     }
 
-    function setFractionalizedCert(address certAddress, address fractionalizedCert) internal {
-        issuanceManagerStorage().fractionalizedCert[certAddress] = fractionalizedCert;
+    function setScripifiedCert(address certAddress, address scripifiedCert) internal {
+        issuanceManagerStorage().scripifiedCert[certAddress] = scripifiedCert;
     }
 } 

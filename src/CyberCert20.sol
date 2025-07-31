@@ -7,7 +7,7 @@ import "./interfaces/ITransferRestrictionHook.sol";
 import "./interfaces/ICyberCertPrinter.sol";
 import "./libs/auth.sol";
 
-contract FractionalizedCyberCert is Initializable, ERC20Upgradeable, BorgAuthACL {
+contract ScripifiedCyberCert is Initializable, ERC20Upgradeable, BorgAuthACL {
     address public certPrinter;
     uint256 public underlyingTokenId;
     bool public transferable;
