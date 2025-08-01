@@ -62,6 +62,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
 
     address public registryAddress;
     address public cyberCertPrinterImplementation;
+    address public cyberCert20Implementation;
     address public issuanceManagerFactory;
     address public cyberCorpSingleFactory;
     address public cyberAgreementFactory;
@@ -127,6 +128,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         address _auth,
         address _registryAddress,
         address _cyberCertPrinterImplementation,
+        address _cyberCert20Implementation,
         address _issuanceManagerFactory,
         address _cyberCorpSingleFactory,
         address _dealManagerFactory,
@@ -138,6 +140,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
 
         registryAddress = _registryAddress;
         cyberCertPrinterImplementation = _cyberCertPrinterImplementation;
+        cyberCert20Implementation = _cyberCert20Implementation;
         issuanceManagerFactory = _issuanceManagerFactory;
         cyberCorpSingleFactory = _cyberCorpSingleFactory;
         dealManagerFactory = _dealManagerFactory;
@@ -208,7 +211,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             cyberCorpAddress,
             cyberCertPrinterImplementation,
             uriBuilder,
-            issuanceManagerFactory
+            issuanceManagerFactory,
+            cyberCert20Implementation
         );
 
         //update role for issuance manager
@@ -370,6 +374,19 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         address oldDealFactory = dealManagerFactory;
         dealManagerFactory = _dealManagerFactory;
         emit DealManagerFactoryUpdated(dealManagerFactory, oldDealFactory);
+    }
+
+    event CyberCert20ImplementationUpdated(
+        address indexed cyberCert20Implementation,
+        address oldImplementation
+    );
+
+    function setCyberCert20Implementation(
+        address _cyberCert20Implementation
+    ) external onlyOwner {
+        address oldImplementation = cyberCert20Implementation;
+        cyberCert20Implementation = _cyberCert20Implementation;
+        emit CyberCert20ImplementationUpdated(cyberCert20Implementation, oldImplementation);
     }
 
     function _authorizeUpgrade(
