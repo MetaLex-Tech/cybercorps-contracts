@@ -85,7 +85,7 @@
 
      event RoundCreated(bytes32 indexed roundId, address corp, Round round);
      event EOISubmitted(bytes32 indexed agreementId, bytes32 indexed roundId, address investor, uint256 maxAmount);
-     event AllocationMade(bytes32 indexed agreementId, bytes32 indexed roundId, uint256 allocatedAmount, uint256 certId);
+     event AllocationMade(bytes32 indexed agreementId, bytes32 indexed roundId, uint256 allocatedAmount, uint256[] certIds);
      event EOIRejected(bytes32 indexed agreementId, bytes32 indexed roundId);
  
      /// @custom:oz-upgrades-unsafe-allow constructor
@@ -299,10 +299,13 @@
              legalDetails: "",
              extensionData: ""
          });
+
+         IIssuanceManager issuanceManager = RoundManagerStorage.getIssuanceManager();
  
         //loop through certPrinter and create cert for each
+        uint256[] memory certIds = new uint256[](round.certPrinter.length);
         for (uint256 i = 0; i < round.certPrinter.length; i++) {
-            uint256 certId = issuanceManager.createCert(
+            certIds[i] = issuanceManager.createCert(
                 round.certPrinter[i],
                 address(this),
                 details
@@ -322,13 +325,13 @@
  
         //loop through certPrinter and add endorsement to each
         for (uint256 i = 0; i < round.certPrinter.length; i++) {
-            ICyberCertPrinter(round.certPrinter[i]).addEndorsement(certId, endorsement);
+            ICyberCertPrinter(round.certPrinter[i]).addEndorsement(certIds[i], endorsement);
         }
  
          // Add to escrow
          //loop through certPrinter and add to escrow
          for (uint256 i = 0; i < round.certPrinter.length; i++) {
-            escrow.corpAssets.push(Token(TokenType.ERC721, round.certPrinter[i], certId, 1));
+            escrow.corpAssets.push(Token(TokenType.ERC721, round.certPrinter[i], certIds[i], 1));
          }
  
          // Refund difference
@@ -352,7 +355,7 @@
          // Update raised
          round.raised += allocatedAmount;
  
-         emit AllocationMade(agreementId, roundId, allocatedAmount, certId);
+         emit AllocationMade(agreementId, roundId, allocatedAmount, certIds);
      }
  
      /// @notice Rejects an EOI and voids the deal
