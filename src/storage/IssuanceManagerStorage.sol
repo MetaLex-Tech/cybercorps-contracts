@@ -54,7 +54,7 @@ library IssuanceManagerStorage {
         address uriBuilder;
         address upgradeFactory;
         address[] printers;
-        UpgradeableBeacon CyberCert20Beacon;
+        UpgradeableBeacon CyberScripBeacon;
         mapping(address => address) scripifiedCert;    
     }
 
@@ -100,8 +100,12 @@ library IssuanceManagerStorage {
         issuanceManagerStorage().uriBuilder = _uriBuilder;
     }
 
-    function setCyberCert20Beacon(UpgradeableBeacon _beacon) internal {
-        issuanceManagerStorage().CyberCert20Beacon = _beacon;
+    function setCyberScripBeacon(UpgradeableBeacon _beacon) internal {
+        issuanceManagerStorage().CyberScripBeacon = _beacon;
+    }
+
+    function getCyberScripBeacon() internal view returns (UpgradeableBeacon) {
+        return issuanceManagerStorage().CyberScripBeacon;
     }
 
     function setCyberCertPrinterBeacon(UpgradeableBeacon _beacon) internal {
@@ -144,8 +148,8 @@ library IssuanceManagerStorage {
         issuanceManagerStorage().CyberCertPrinterBeacon.upgradeTo(_newImplementation);
     }
 
-    function updateCyberCert20Beacon(address _newImplementation) internal {
-        issuanceManagerStorage().CyberCert20Beacon.upgradeTo(_newImplementation);
+    function updateCyberScripBeacon(address _newImplementation) internal {
+        issuanceManagerStorage().CyberScripBeacon.upgradeTo(_newImplementation);
     }
 
     function getScripifiedCert(address certAddress) internal view returns (address) {

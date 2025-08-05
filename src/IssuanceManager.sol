@@ -50,7 +50,7 @@ import "./interfaces/ICyberCertPrinter.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./storage/IssuanceManagerStorage.sol";
 import "./interfaces/ITransferRestrictionHook.sol";
-import "./interfaces/ICyberCert20.sol";
+import "./interfaces/ICyberScrip.sol";
 
 /// @title IssuanceManager
 /// @notice Manages the issuance and lifecycle of digital certificates representing securities and more
@@ -108,7 +108,7 @@ contract IssuanceManager is Initializable, BorgAuthACL {
         address _CyberCertPrinterImplementation,
         address _uriBuilder,
         address _upgradeFactory,
-        address _CyberCert20Implementation
+        address _CyberScripImplementation
     ) external initializer {
         __BorgAuthACL_init(_auth);
 
@@ -120,14 +120,14 @@ contract IssuanceManager is Initializable, BorgAuthACL {
             address(this)
         );
 
-        UpgradeableBeacon beacon20 = new UpgradeableBeacon(
-            _CyberCert20Implementation,
+        UpgradeableBeacon beaconScrip = new UpgradeableBeacon(
+            _CyberScripImplementation,
             address(this)
         );
 
         IssuanceManagerStorage.setCyberCertPrinterBeacon(beacon);
         IssuanceManagerStorage.setUpgradeFactory(_upgradeFactory);
-        IssuanceManagerStorage.setCyberCert20Beacon(beacon20);
+        IssuanceManagerStorage.setCyberScripBeacon(beaconScrip);
     }
 
     modifier onlyUpgradeFactory() {
@@ -368,6 +368,14 @@ contract IssuanceManager is Initializable, BorgAuthACL {
         );
     }
 
+    function _getBytecodeScrip() private view returns (bytes memory bytecode) {
+        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
+        bytecode = abi.encodePacked(
+            sourceCodeBytes,
+            abi.encode(IssuanceManagerStorage.getCyberScripBeacon(), "")
+        );
+    }
+
     /// @notice Gets the company name from the CyberCorp contract
     /// @return string The company name
     function companyName() external view returns (string memory) {
@@ -497,13 +505,13 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     }
 
     //deploy matching erc20 contract for a cert
-    function deployCyberCert20(
+    function deployCyberScrip(
         address certAddress,
         ITransferRestrictionHook[] memory typeRestrictionHooks
     ) internal returns (address) {
         bytes32 salt = keccak256(abi.encodePacked(certAddress, address(this)));
-        address newCert20 = Create2.deploy(0, salt, _getBytecode());
-        ICyberCert20(newCert20).initialize(
+        address newScrip = Create2.deploy(0, salt, _getBytecodeScrip());
+        ICyberScrip(newScrip).initialize(
             certAddress,
             address(this),
             string(
@@ -514,8 +522,8 @@ contract IssuanceManager is Initializable, BorgAuthACL {
             ),
             typeRestrictionHooks
         );
-        IssuanceManagerStorage.setScripifiedCert(certAddress, newCert20);
-        return newCert20;
+        IssuanceManagerStorage.setScripifiedCert(certAddress, newScrip);
+        return newScrip;
     }
 
     function scripifyCert(address certAddress, uint256 id) external {
@@ -530,7 +538,7 @@ contract IssuanceManager is Initializable, BorgAuthACL {
             id
         );
         ICyberCertPrinter(certAddress).voidCert(id);
-        ICyberCert20(scripifiedCert).mint(
+        ICyberScrip(scripifiedCert).mint(
             msg.sender,
             ICyberCertPrinter(certAddress)
                 .getCertificateDetails(id)

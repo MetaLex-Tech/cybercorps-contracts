@@ -166,7 +166,7 @@ contract CyberCorpTest is Test {
             cyberCertPrinterImplementation
         );
 
-        // Deploy CyberCert20 implementation
+        // Deploy CyberScrip implementation
         address CyberScripImplementation = address(
             new CyberScrip{salt: salt}()
         );

@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "./ITransferRestrictionHook.sol";
 
-interface ICyberCert20 is IERC20 {
+interface ICyberScrip is IERC20 {
     error NotTransferable();
     error RestrictedTransfer(string reason);
 
