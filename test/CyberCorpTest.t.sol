@@ -44,7 +44,7 @@ pragma solidity ^0.8.18;
 import {Test, console} from "forge-std/Test.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCertPrinter, Endorsement} from "../src/CyberCertPrinter.sol";
-import {ScripifiedCyberCert} from "../src/CyberCert20.sol";
+import {CyberScrip} from "../src/CyberScrip.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory, IssuanceManager} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
@@ -167,8 +167,8 @@ contract CyberCorpTest is Test {
         );
 
         // Deploy CyberCert20 implementation
-        address ScripifiedCyberCertImplementation = address(
-            new ScripifiedCyberCert{salt: salt}()
+        address CyberScripImplementation = address(
+            new CyberScrip{salt: salt}()
         );
 
         defaultLegends = new string[][](1);
@@ -209,7 +209,7 @@ contract CyberCorpTest is Test {
                 address(auth),
                 address(registry),
                 cyberCertPrinterImplementation,
-                ScripifiedCyberCertImplementation,
+                CyberScripImplementation,
                 issuanceManagerFactory,
                 cyberCorpSingleFactory,
                 dealManagerFactory,
