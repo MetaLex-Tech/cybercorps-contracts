@@ -16,12 +16,8 @@ interface ICyberScrip is IERC20 {
     ) external;
 
     function setRestrictionHook(ITransferRestrictionHook[] calldata _typeRestrictionHook) external;
-
     function certPrinter() external view returns (address);
-    function underlyingTokenId() external view returns (uint256);
-    function transferable() external view returns (bool);
     function IssuanceManager() external view returns (address);
-    function typeRestrictionHook(uint256 index) external view returns (ITransferRestrictionHook);
-
+    function transferRestrictionHooks(uint256 index) external view returns (ITransferRestrictionHook);
     function mint(address to, uint256 amount) external;
 } 
