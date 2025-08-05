@@ -59,6 +59,17 @@
      using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
      using LexScrowStorage for LexScrowStorage.LexScrowData;
      using SafeERC20 for IERC20;
+
+         /// @notice Certificate data structure for creating new certificates
+    struct CyberCertData {
+        string name;
+        string symbol;
+        string uri;
+        SecurityClass securityClass;
+        SecuritySeries securitySeries;
+        address extension;
+        string[] defaultLegend;
+    }
  
      error InvalidRound();
      error RoundNotOpen();
@@ -70,7 +81,8 @@
      error InvalidCert();
      error AgreementConditionsNotMet();
      error ZeroAddress();
- 
+     error InvalidIssuanceManager();
+
      event RoundCreated(bytes32 indexed roundId, address corp, Round round);
      event EOISubmitted(bytes32 indexed agreementId, bytes32 indexed roundId, address investor, uint256 maxAmount);
      event AllocationMade(bytes32 indexed agreementId, bytes32 indexed roundId, uint256 allocatedAmount, uint256 certId);
@@ -110,7 +122,7 @@
      /// @param startTime Start timestamp
      /// @param endTime End timestamp
      /// @param templateId Agreement template ID
-     /// @param certPrinter Certificate printer address
+     /// @param certData Certificate printer address
      /// @param paymentToken Payment token address
      /// @param pricePerUnit Price per unit in payment token decimals
      /// @param valuation Valuation in USD
@@ -126,15 +138,33 @@
          uint256 startTime,
          uint256 endTime,
          bytes32 templateId,
-         address certPrinter,
+         CyberCertData[] memory certData,
          address paymentToken,
          uint256 pricePerUnit,
          uint256 valuation,
          uint256 paymentDecimals
      ) external onlyOwner returns (bytes32 roundId) {
          roundId = keccak256(abi.encodePacked(
-             seriesType, raiseCap, minTicket, maxTicket, uint8(roundType), terms, startTime, endTime, templateId, certPrinter, paymentToken, pricePerUnit, valuation, paymentDecimals, block.timestamp
+             seriesType, raiseCap, minTicket, maxTicket, uint8(roundType), terms, startTime, endTime, templateId, paymentToken, pricePerUnit, valuation, paymentDecimals, block.timestamp
          ));
+         string memory companyName = ICyberCorp(LexScrowStorage.getCorp()).cyberCORPName();
+         IIssuanceManager issuanceManager = RoundManagerStorage.getIssuanceManager();
+
+         address[] memory certPrinterAddresses = new address[](certData.length);
+        for (uint256 i = 0; i < certData.length; i++) {
+            ICyberCertPrinter certPrinter = ICyberCertPrinter(
+                issuanceManager.createCertPrinter(
+                    certData[i].defaultLegend,
+                    string.concat(companyName, " ", certData[i].name),
+                    certData[i].symbol,
+                    certData[i].uri,
+                    certData[i].securityClass,
+                    certData[i].securitySeries,
+                    certData[i].extension
+                )
+            );
+            certPrinterAddresses[i] = address(certPrinter);
+        }
  
          Round memory newRound = Round({
              id: roundId,
@@ -147,7 +177,7 @@
              startTime: startTime,
              endTime: endTime,
              templateId: templateId,
-             certPrinter: certPrinter,
+             certPrinter: certPrinterAddresses,
              paymentToken: paymentToken,
              pricePerUnit: pricePerUnit,
              valuation: valuation,
@@ -270,11 +300,14 @@
              extensionData: ""
          });
  
-         uint256 certId = RoundManagerStorage.getIssuanceManager().createCert(
-             round.certPrinter,
-             address(this),
-             details
-         );
+        //loop through certPrinter and create cert for each
+        for (uint256 i = 0; i < round.certPrinter.length; i++) {
+            uint256 certId = issuanceManager.createCert(
+                round.certPrinter[i],
+                address(this),
+                details
+                );
+         }  
  
          // Add endorsement
          Endorsement memory endorsement = Endorsement({
@@ -287,10 +320,16 @@
              endorseeName: eoi.name
          });
  
-         ICyberCertPrinter(round.certPrinter).addEndorsement(certId, endorsement);
+        //loop through certPrinter and add endorsement to each
+        for (uint256 i = 0; i < round.certPrinter.length; i++) {
+            ICyberCertPrinter(round.certPrinter[i]).addEndorsement(certId, endorsement);
+        }
  
          // Add to escrow
-         escrow.corpAssets.push(Token(TokenType.ERC721, round.certPrinter, certId, 1));
+         //loop through certPrinter and add to escrow
+         for (uint256 i = 0; i < round.certPrinter.length; i++) {
+            escrow.corpAssets.push(Token(TokenType.ERC721, round.certPrinter[i], certId, 1));
+         }
  
          // Refund difference
          uint256 refund = escrow.buyerAssets[0].amount - allocatedAmount;

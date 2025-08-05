@@ -3839,15 +3839,15 @@ contract CyberCorpTest is Test {
     function testPrintCertificateSAFTEUri() public {
         vm.startPrank(testAddress);
         //bytes32 check = bytes32(bytes("nuvolari_safet"));
-        bytes32 check = bytes32(uint256(27));
+        bytes32 check = bytes32(uint256(30));
         console.logBytes32(check);
-        check = bytes32(uint256(11));
-        console.logBytes32(check);
-
-        check = bytes32(uint256(12));
+        check = bytes32(uint256(30));
         console.logBytes32(check);
 
-        check = bytes32(uint256(13));
+        check = bytes32(uint256(31));
+        console.logBytes32(check);
+
+        check = bytes32(uint256(32));
         console.logBytes32(check);
 
         bytes32 salt = bytes32(keccak256("TestSAFTE"));

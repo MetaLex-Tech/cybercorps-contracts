@@ -61,7 +61,7 @@ struct Round {
     uint256 startTime;
     uint256 endTime;
     bytes32 templateId;
-    address certPrinter;
+    address[] certPrinter;
     address paymentToken;
     uint256 pricePerUnit;
     uint256 valuation;
