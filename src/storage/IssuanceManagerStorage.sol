@@ -42,6 +42,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "../interfaces/ICondition.sol";
 
 library IssuanceManagerStorage {
     // Storage slot for our struct
@@ -55,7 +56,9 @@ library IssuanceManagerStorage {
         address upgradeFactory;
         address[] printers;
         UpgradeableBeacon CyberScripBeacon;
-        mapping(address => address) scripifiedCert;    
+        mapping(address => address) scripifiedCert;
+        mapping(address => ICondition[]) certToScripConditions;
+        mapping(address => ICondition[]) scripToCertConditions;
     }
 
     // Returns the storage layout
@@ -158,5 +161,27 @@ library IssuanceManagerStorage {
 
     function setScripifiedCert(address certAddress, address scripifiedCert) internal {
         issuanceManagerStorage().scripifiedCert[certAddress] = scripifiedCert;
+    }
+
+    function getCertToScripConditions(address certAddress) internal view returns (ICondition[] storage) {
+        return issuanceManagerStorage().certToScripConditions[certAddress];
+    }
+
+    function getScripToCertConditions(address certAddress) internal view returns (ICondition[] storage) {
+        return issuanceManagerStorage().scripToCertConditions[certAddress];
+    }
+
+    function setCertToScripConditions(address certAddress, ICondition[] memory conditions) internal {
+        delete issuanceManagerStorage().certToScripConditions[certAddress];
+        for (uint i = 0; i < conditions.length; i++) {
+            issuanceManagerStorage().certToScripConditions[certAddress].push(conditions[i]);
+        }
+    }
+
+    function setScripToCertConditions(address certAddress, ICondition[] memory conditions) internal {
+        delete issuanceManagerStorage().scripToCertConditions[certAddress];
+        for (uint i = 0; i < conditions.length; i++) {
+            issuanceManagerStorage().scripToCertConditions[certAddress].push(conditions[i]);
+        }
     }
 } 

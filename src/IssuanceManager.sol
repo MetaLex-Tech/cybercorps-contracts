@@ -65,6 +65,8 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     error NotSAFEToken();
     error NotUpgradeFactory();
     error ScripifiedCertNotAllowed();
+    error ConditionCheckFailed();
+    
     event ScripifiedCert(
         address indexed certAddress,
         uint256 indexed id,
@@ -507,7 +509,9 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     //deploy matching erc20 contract for a cert
     function deployCyberScrip(
         address certAddress,
-        ITransferRestrictionHook[] memory typeRestrictionHooks
+        ITransferRestrictionHook[] memory typeRestrictionHooks,
+        ICondition[] memory certToScripConditions,
+        ICondition[] memory scripToCertConditions
     ) internal returns (address) {
         bytes32 salt = keccak256(abi.encodePacked(certAddress, address(this)));
         address newScrip = Create2.deploy(0, salt, _getBytecodeScrip());
@@ -515,14 +519,16 @@ contract IssuanceManager is Initializable, BorgAuthACL {
             certAddress,
             address(this),
             string(
-                abi.encodePacked("f", ICyberCertPrinter(certAddress).name())
+                abi.encodePacked("scrip", ICyberCertPrinter(certAddress).name())
             ),
             string(
-                abi.encodePacked("f", ICyberCertPrinter(certAddress).symbol())
+                abi.encodePacked("scrip", ICyberCertPrinter(certAddress).symbol())
             ),
             typeRestrictionHooks
         );
         IssuanceManagerStorage.setScripifiedCert(certAddress, newScrip);
+        IssuanceManagerStorage.setCertToScripConditions(certAddress, certToScripConditions);
+        IssuanceManagerStorage.setScripToCertConditions(certAddress, scripToCertConditions);
         return newScrip;
     }
 
@@ -531,6 +537,18 @@ contract IssuanceManager is Initializable, BorgAuthACL {
             .getScripifiedCert(certAddress);
         if (scripifiedCert == address(0))
             revert ScripifiedCertNotAllowed();
+
+        // Check all cert-to-scrip conditions
+        ICondition[] storage conditions = IssuanceManagerStorage.getCertToScripConditions(certAddress);
+        for (uint i = 0; i < conditions.length; i++) {
+            if (!conditions[i].checkCondition(
+                certAddress,
+                this.scripifyCert.selector,
+                abi.encode(id)
+            )) {
+                revert ConditionCheckFailed();
+            }
+        }
 
         ICyberCertPrinter(certAddress).safeTransferFrom(
             msg.sender,
@@ -549,5 +567,63 @@ contract IssuanceManager is Initializable, BorgAuthACL {
 
     function getUpgradeFactory() public view returns (address) {
         return IssuanceManagerStorage.getUpgradeFactory();
+    }
+
+    function convertScripToCert(address certAddress, uint256 amount) external {
+        address scripifiedCert = IssuanceManagerStorage.getScripifiedCert(certAddress);
+        if (scripifiedCert == address(0))
+            revert ScripifiedCertNotAllowed();
+
+        // Check all scrip-to-cert conditions
+        ICondition[] storage conditions = IssuanceManagerStorage.getScripToCertConditions(certAddress);
+        for (uint i = 0; i < conditions.length; i++) {
+            if (!conditions[i].checkCondition(
+                certAddress,
+                this.convertScripToCert.selector,
+                abi.encode(amount)
+            )) {
+                revert ConditionCheckFailed();
+            }
+        }
+
+        // Check for voided certificates owned by the sender
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        uint256 balance = certificate.balanceOf(msg.sender);
+        bool foundVoided = false;
+        uint256 voidedTokenId;
+        CertificateDetails memory voidedDetails;
+
+        for (uint256 i = 0; i < balance; i++) {
+            uint256 tokenId = certificate.tokenOfOwnerByIndex(msg.sender, i);
+            voidedDetails = certificate.getCertificateDetails(tokenId);
+            if (voidedDetails.unitsRepresented == amount) {
+                // Found a matching voided certificate, unvoid it
+                foundVoided = true;
+                voidedTokenId = tokenId;
+                break;
+            }
+        }
+
+        // Burn the scrip tokens
+        ICyberScrip(scripifiedCert).burnFrom(msg.sender, amount);
+
+        if (foundVoided) {
+            // Unvoid the existing certificate by updating its details
+            certificate.updateCertificateDetails(voidedTokenId, voidedDetails);
+        } else {
+            // Create a new certificate if no matching voided one was found
+
+            CertificateDetails memory details = CertificateDetails({
+                signingOfficerName: "",  // Can be set by admin later if needed
+                signingOfficerTitle: "", // Can be set by admin later if needed
+                investmentAmountUSD: 0,  // Maintaining original value from scrip
+                issuerUSDValuationAtTimeOfInvestment: 0, // Maintaining original value from scrip
+                unitsRepresented: amount,
+                legalDetails: "",        // Can be set by admin later if needed
+                extensionData: ""        // Can be set by admin later if needed
+            });
+
+            createCertAndAssign(certAddress, msg.sender, details);
+        }
     }
 }

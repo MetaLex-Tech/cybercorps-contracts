@@ -43,6 +43,10 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
         super._update(from, to, amount);
     }
 
+    function burnFrom(address account, uint256 amount) public virtual onlyIssuanceManager {
+        super._burn(account, amount);
+    }
+
     function setRestrictionHook(ITransferRestrictionHook[] memory _transferRestrictionHooks) external onlyIssuanceManager {
         transferRestrictionHooks = _transferRestrictionHooks;
     }
