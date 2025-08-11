@@ -28,12 +28,12 @@ Github: TODO
 
 ## Party Fields
 
-| **partyFieldName**   | **description**                        |
-|:---------------------|:---------------------------------------|
-| name                 | Name of the individual or organization |
-| evmAddress           |                                        |
-| contactDetails       |                                        |
-| investorType         |                                        |
+| **partyFieldName** | **description**                        |
+|:-------------------|:---------------------------------------|
+| name               | Name of the individual or organization |
+| evmAddress         |                                        |
+| contactDetails     |                                        |
+| granteeType        |                                        |
 
 
 ## MetaVesT Deal
