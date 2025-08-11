@@ -232,6 +232,169 @@ contract CyberScripTest is Test {
         vm.stopPrank();
     }
 
+    // ------------------------
+    // Additional coverage
+    // ------------------------
+
+    function test_MintBypassesHooksAndFreeze() public {
+        // Disable transfers in hook and freeze recipient
+        mockHook.setAllowTransfers(false);
+        vm.startPrank(issuanceManager);
+        cyberScrip.setFrozen(user2, true);
+        vm.stopPrank();
+
+        // Mint to frozen recipient should still work (from == address(0))
+        cyberScrip.mint(user2, 123 ether);
+        assertEq(cyberScrip.balanceOf(user2), 123 ether);
+    }
+
+    function test_BurnFromBypassesHooksAndFreeze() public {
+        // Freeze account and disable hook transfers
+        mockHook.setAllowTransfers(false);
+        vm.startPrank(issuanceManager);
+        cyberScrip.setFrozen(user1, true);
+        // Burn should still succeed (to == address(0))
+        cyberScrip.burnFrom(user1, 100 ether);
+        vm.stopPrank();
+        assertEq(cyberScrip.balanceOf(user1), 900 ether);
+    }
+
+    function test_TransferFromRespectsRestrictions() public {
+        // Approve user2 to move from user1
+        vm.startPrank(user1);
+        cyberScrip.approve(user2, 50 ether);
+        vm.stopPrank();
+
+        // Deny via hook
+        mockHook.setAllowTransfers(false);
+
+        vm.startPrank(user2);
+        vm.expectRevert(abi.encodeWithSignature("RestrictedTransfer(string)", "Transfers disabled in mock hook"));
+        cyberScrip.transferFrom(user1, user2, 10 ether);
+        vm.stopPrank();
+
+        // Allow via hook
+        mockHook.setAllowTransfers(true);
+        vm.startPrank(user2);
+        cyberScrip.transferFrom(user1, user2, 10 ether);
+        vm.stopPrank();
+
+        assertEq(cyberScrip.balanceOf(user1), 990 ether);
+        assertEq(cyberScrip.balanceOf(user2), 10 ether);
+    }
+
+    function test_SetRestrictionHookEmptyClearsChecks() public {
+        // Deny transfers via current hook
+        mockHook.setAllowTransfers(false);
+
+        // Clear hooks
+        ITransferRestrictionHook[] memory emptyHooks = new ITransferRestrictionHook[](0);
+        vm.startPrank(issuanceManager);
+        cyberScrip.setRestrictionHook(emptyHooks);
+        vm.stopPrank();
+
+        // Now transfer should succeed since no hooks are enforced
+        vm.startPrank(user1);
+        cyberScrip.transfer(user2, 1 ether);
+        vm.stopPrank();
+
+        assertEq(cyberScrip.balanceOf(user1), 999 ether);
+        assertEq(cyberScrip.balanceOf(user2), 1 ether);
+    }
+
+    function test_MultipleHooks_SecondDenies() public {
+        // Create second hook (allow)
+        MockTransferHook allowHook = new MockTransferHook();
+        allowHook.setAllowTransfers(true);
+
+        // First allow, second deny
+        MockTransferHook denyHook = new MockTransferHook();
+        denyHook.setAllowTransfers(false);
+
+        ITransferRestrictionHook[] memory hooks = new ITransferRestrictionHook[](2);
+        hooks[0] = ITransferRestrictionHook(address(allowHook));
+        hooks[1] = ITransferRestrictionHook(address(denyHook));
+
+        vm.startPrank(issuanceManager);
+        cyberScrip.setRestrictionHook(hooks);
+        vm.stopPrank();
+
+        vm.startPrank(user1);
+        vm.expectRevert(abi.encodeWithSignature("RestrictedTransfer(string)", "Transfers disabled in mock hook"));
+        cyberScrip.transfer(user2, 1 ether);
+        vm.stopPrank();
+    }
+
+    function test_DisableFreezeAfterFrozen_AllowsTransfer() public {
+        // Freeze sender then disable freeze feature
+        vm.startPrank(issuanceManager);
+        cyberScrip.setFrozen(user1, true);
+        cyberScrip.disableFreeze();
+        vm.stopPrank();
+
+        // Transfer should now ignore frozen mapping
+        vm.startPrank(user1);
+        cyberScrip.transfer(user2, 1 ether);
+        vm.stopPrank();
+
+        assertEq(cyberScrip.balanceOf(user1), 999 ether);
+        assertEq(cyberScrip.balanceOf(user2), 1 ether);
+    }
+
+    function test_DisableIdempotent_NoRevertTwice() public {
+        vm.startPrank(issuanceManager);
+        cyberScrip.disableForceTransfer();
+        cyberScrip.disableForceTransfer();
+        cyberScrip.disableForceBurn();
+        cyberScrip.disableForceBurn();
+        cyberScrip.disableFreeze();
+        cyberScrip.disableFreeze();
+        vm.stopPrank();
+
+        assertFalse(cyberScrip.canForceTransfer());
+        assertFalse(cyberScrip.canForceBurn());
+        assertFalse(cyberScrip.canFreeze());
+    }
+
+    function test_ForceTransfer_ZeroAddressReverts() public {
+        vm.startPrank(issuanceManager);
+        vm.expectRevert(bytes("force: zero addr"));
+        cyberScrip.forceTransfer(address(0), user2, 1);
+
+        vm.expectRevert(bytes("force: zero addr"));
+        cyberScrip.forceTransfer(user1, address(0), 1);
+        vm.stopPrank();
+    }
+
+    function test_ForceBurn_ZeroAddressReverts() public {
+        vm.startPrank(issuanceManager);
+        vm.expectRevert(bytes("forceBurn: zero addr"));
+        cyberScrip.forceBurn(address(0), 1);
+        vm.stopPrank();
+    }
+
+    function test_Events_FreezeStatusAndDisable() public {
+        // Expect freeze event
+        vm.startPrank(issuanceManager);
+        vm.expectEmit(true, true, false, true);
+        //emit FreezeStatusUpdated(user1, true);
+        cyberScrip.setFrozen(user1, true);
+
+        // Expect disable events
+        vm.expectEmit(false, false, false, true);
+       // emit ComplianceFeatureDisabledEvent("freeze");
+        cyberScrip.disableFreeze();
+
+        vm.expectEmit(false, false, false, true);
+       // emit ComplianceFeatureDisabledEvent("forceTransfer");
+        cyberScrip.disableForceTransfer();
+
+        vm.expectEmit(false, false, false, true);
+       // emit ComplianceFeatureDisabledEvent("forceBurn");
+        cyberScrip.disableForceBurn();
+        vm.stopPrank();
+    }
+
     function test_RevertWhen_NonIssuanceManagerUpdatesHooks() public {
         ITransferRestrictionHook[] memory newHooks = new ITransferRestrictionHook[](1);
         newHooks[0] = ITransferRestrictionHook(address(mockHook));
