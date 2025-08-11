@@ -13,8 +13,6 @@ Github: TODO
 
 | **globalFieldName**   | **description**                                                                                         |
 |:----------------------|:--------------------------------------------------------------------------------------------------------|
-| governingJurisdiction | TODO do we need this?                                                                                   |
-| disputeResolution     | TODO do we need this?                                                                                   |
 | metavestType          | "Vesting", (WIP)"TokenOption", (WIP)"RestrictedTokenAward"                                              |
 | grantee               | Address of the signer                                                                                   |
 | recipient             | Address to receive unlocked tokens                                                                      |
@@ -26,7 +24,6 @@ Github: TODO
 | vestingStartTime      | Epoch time in seconds                                                                                   |
 | unlockRate            | Amount unlocked per seconds                                                                             |
 | unlockStartTime       | Epoch time in seconds                                                                                   |
-|                       | TODO what about milestones?                                                                             |
 
 
 ## Party Fields
@@ -36,8 +33,7 @@ Github: TODO
 | name                 | Name of the individual or organization |
 | evmAddress           |                                        |
 | contactDetails       |                                        |
-| investorType         | TODO do we need this?                  |
-| investorJurisdiction | TODO do we need this?                  |
+| investorType         |                                        |
 
 
 ## MetaVesT Deal
