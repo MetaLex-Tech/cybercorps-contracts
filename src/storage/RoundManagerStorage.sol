@@ -50,6 +50,28 @@ enum RoundType {
     FounderApproved
 }
 
+enum RoundingMode {
+    Floor,
+    Ceil,
+    Round
+}
+
+struct CapTableSnapshot {
+    uint256 totalCapitalSecuritiesOutstanding;
+    uint256 totalConvertingSecurities;
+    uint256 totalOptionsIssuedAndOutstanding;
+    uint256 totalPromisedOptions;
+    uint256 unissuedOptionPoolPreRound;
+    uint256 unissuedOptionPoolIncreaseIncludedInCalc;
+    uint256 cCapUsed; // computed capitalization used for conversions
+}
+
+struct RoundingPolicy {
+    RoundingMode mode;
+    uint8 priceDecimals; // decimals used for price math
+    uint8 shareDecimals; // decimals for share quantities if fractional
+}
+
 struct Round {
     bytes32 id;
     string seriesType;
@@ -67,6 +89,11 @@ struct Round {
     uint256 valuation;
     uint256 paymentDecimals;
     uint256 raised;
+    // Normalized round price and primary security sold to new money
+    uint256 roundPricePerShare; // normalized to priceDecimals
+    uint8 roundPriceDecimals;
+    SecurityClass primarySecurityClass;
+    SecuritySeries primarySecuritySeries;
 }
 
 struct EOI {
@@ -106,6 +133,15 @@ library RoundManagerStorage {
         
         /// @notice Mapping from agreement IDs to pre-signed void signatures
         mapping(bytes32 => bytes) voidSignatures;
+
+        /// @notice Per-round capitalization snapshot
+        mapping(bytes32 => CapTableSnapshot) roundSnapshots;
+
+        /// @notice Per-round rounding policy
+        mapping(bytes32 => RoundingPolicy) roundingPolicies;
+
+        /// @notice Per-round mapping from PMVC (valuation cap) to SAFE sub-series label
+        mapping(bytes32 => mapping(uint256 => string)) pmvcToSubseriesLabel;
     }
 
     /// @notice Retrieves the storage reference for the RoundManagerData struct
@@ -130,6 +166,33 @@ library RoundManagerStorage {
     /// @param round The round data to store
     function setRound(bytes32 roundId, Round memory round) internal {
         roundManagerStorage().rounds[roundId] = round;
+    }
+
+    // -------- Round snapshot --------
+    function setRoundSnapshot(bytes32 roundId, CapTableSnapshot memory snapshot) internal {
+        roundManagerStorage().roundSnapshots[roundId] = snapshot;
+    }
+
+    function getRoundSnapshot(bytes32 roundId) internal view returns (CapTableSnapshot memory) {
+        return roundManagerStorage().roundSnapshots[roundId];
+    }
+
+    // -------- Rounding policy --------
+    function setRoundingPolicy(bytes32 roundId, RoundingPolicy memory policy) internal {
+        roundManagerStorage().roundingPolicies[roundId] = policy;
+    }
+
+    function getRoundingPolicy(bytes32 roundId) internal view returns (RoundingPolicy memory) {
+        return roundManagerStorage().roundingPolicies[roundId];
+    }
+
+    // -------- SAFE sub-series labels --------
+    function setPMVCSubseriesLabel(bytes32 roundId, uint256 pmvc, string memory label) internal {
+        roundManagerStorage().pmvcToSubseriesLabel[roundId][pmvc] = label;
+    }
+
+    function getPMVCSubseriesLabel(bytes32 roundId, uint256 pmvc) internal view returns (string memory) {
+        return roundManagerStorage().pmvcToSubseriesLabel[roundId][pmvc];
     }
 
     /// @notice Retrieves the round ID for an agreement

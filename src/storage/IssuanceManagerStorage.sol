@@ -59,6 +59,10 @@ library IssuanceManagerStorage {
         mapping(address => address) scripifiedCert;
         mapping(address => ICondition[]) certToScripConditions;
         mapping(address => ICondition[]) scripToCertConditions;
+        // SAFE conversion tracking
+        mapping(address => mapping(uint256 => bool)) safeConverted; // safePrinter => tokenId => converted
+        mapping(address => mapping(uint256 => address)) safeToEquityPrinter; // safePrinter => tokenId => equity printer
+        mapping(address => mapping(uint256 => uint256)) safeToEquityTokenId; // safePrinter => tokenId => new equity tokenId
     }
 
     // Returns the storage layout
@@ -169,6 +173,30 @@ library IssuanceManagerStorage {
 
     function getScripToCertConditions(address certAddress) internal view returns (ICondition[] storage) {
         return issuanceManagerStorage().scripToCertConditions[certAddress];
+    }
+
+    // ------- SAFE conversion helpers -------
+    function isSafeConverted(address safePrinter, uint256 safeTokenId) internal view returns (bool) {
+        return issuanceManagerStorage().safeConverted[safePrinter][safeTokenId];
+    }
+
+    function setSafeConversion(
+        address safePrinter,
+        uint256 safeTokenId,
+        address equityPrinter,
+        uint256 equityTokenId
+    ) internal {
+        IssuanceManagerData storage s = issuanceManagerStorage();
+        s.safeConverted[safePrinter][safeTokenId] = true;
+        s.safeToEquityPrinter[safePrinter][safeTokenId] = equityPrinter;
+        s.safeToEquityTokenId[safePrinter][safeTokenId] = equityTokenId;
+    }
+
+    function getSafeConversion(address safePrinter, uint256 safeTokenId) internal view returns (bool converted, address equityPrinter, uint256 equityTokenId) {
+        IssuanceManagerData storage s = issuanceManagerStorage();
+        converted = s.safeConverted[safePrinter][safeTokenId];
+        equityPrinter = s.safeToEquityPrinter[safePrinter][safeTokenId];
+        equityTokenId = s.safeToEquityTokenId[safePrinter][safeTokenId];
     }
 
     function setCertToScripConditions(address certAddress, ICondition[] memory conditions) internal {

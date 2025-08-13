@@ -84,6 +84,18 @@
      error InvalidIssuanceManager();
 
      event RoundCreated(bytes32 indexed roundId, address corp, Round round);
+     event RoundSnapshotSet(
+         bytes32 indexed roundId,
+         uint256 totalCapitalSecuritiesOutstanding,
+         uint256 totalConvertingSecurities,
+         uint256 totalOptionsIssuedAndOutstanding,
+         uint256 totalPromisedOptions,
+         uint256 unissuedOptionPoolPreRound,
+         uint256 unissuedOptionPoolIncreaseIncludedInCalc,
+         uint256 cCapUsed
+     );
+     event RoundingPolicySet(bytes32 indexed roundId, uint8 mode, uint8 priceDecimals, uint8 shareDecimals);
+     event PMVCSubseriesLabelSet(bytes32 indexed roundId, uint256 pmvc, string label);
      event EOISubmitted(bytes32 indexed agreementId, bytes32 indexed roundId, address investor, uint256 maxAmount);
      event AllocationMade(bytes32 indexed agreementId, bytes32 indexed roundId, uint256 allocatedAmount, uint256[] certIds);
      event EOIRejected(bytes32 indexed agreementId, bytes32 indexed roundId);
@@ -128,7 +140,7 @@
      /// @param valuation Valuation in USD
      /// @param paymentDecimals Decimals of payment token
      /// @return roundId The unique ID of the created round
-     function createRound(
+      function createRound(
          string memory seriesType,
          uint256 raiseCap,
          uint256 minTicket,
@@ -182,13 +194,112 @@
              pricePerUnit: pricePerUnit,
              valuation: valuation,
              paymentDecimals: paymentDecimals,
-             raised: 0
+              raised: 0,
+              roundPricePerShare: 0,
+              roundPriceDecimals: 0,
+              primarySecurityClass: certData.length > 0 ? certData[0].securityClass : SecurityClass.CommonStock,
+              primarySecuritySeries: certData.length > 0 ? certData[0].securitySeries : SecuritySeries.NA
          });
  
          RoundManagerStorage.setRound(roundId, newRound);
  
          emit RoundCreated(roundId, LexScrowStorage.getCorp(), newRound);
      }
+
+      // ===============
+      // Round metadata
+      // ===============
+
+      function setRoundPricePerShare(bytes32 roundId, uint256 price, uint8 priceDecimals) external onlyOwner {
+          Round storage round = RoundManagerStorage.getRound(roundId);
+          if (round.id == bytes32(0)) revert InvalidRound();
+          round.roundPricePerShare = price;
+          round.roundPriceDecimals = priceDecimals;
+      }
+
+      function setPrimarySecurity(bytes32 roundId, SecurityClass cls, SecuritySeries series) external onlyOwner {
+          Round storage round = RoundManagerStorage.getRound(roundId);
+          if (round.id == bytes32(0)) revert InvalidRound();
+          round.primarySecurityClass = cls;
+          round.primarySecuritySeries = series;
+      }
+
+      function setCapTableSnapshot(bytes32 roundId, CapTableSnapshot calldata snapshot) external onlyOwner {
+          Round storage round = RoundManagerStorage.getRound(roundId);
+          if (round.id == bytes32(0)) revert InvalidRound();
+          RoundManagerStorage.setRoundSnapshot(roundId, snapshot);
+          emit RoundSnapshotSet(
+            roundId,
+            snapshot.totalCapitalSecuritiesOutstanding,
+            snapshot.totalConvertingSecurities,
+            snapshot.totalOptionsIssuedAndOutstanding,
+            snapshot.totalPromisedOptions,
+            snapshot.unissuedOptionPoolPreRound,
+            snapshot.unissuedOptionPoolIncreaseIncludedInCalc,
+            snapshot.cCapUsed
+          );
+      }
+
+      function setRoundingPolicy(bytes32 roundId, RoundingPolicy calldata policy) external onlyOwner {
+          Round storage round = RoundManagerStorage.getRound(roundId);
+          if (round.id == bytes32(0)) revert InvalidRound();
+          RoundManagerStorage.setRoundingPolicy(roundId, policy);
+          emit RoundingPolicySet(roundId, uint8(policy.mode), policy.priceDecimals, policy.shareDecimals);
+      }
+
+      function setPMVCSubseriesLabel(bytes32 roundId, uint256 pmvc, string calldata label) external onlyOwner {
+          Round storage round = RoundManagerStorage.getRound(roundId);
+          if (round.id == bytes32(0)) revert InvalidRound();
+          RoundManagerStorage.setPMVCSubseriesLabel(roundId, pmvc, label);
+          emit PMVCSubseriesLabelSet(roundId, pmvc, label);
+      }
+
+      // Getters for convenience
+      // Getters with primitives to avoid cross-type coupling
+      function getCapTableSnapshotFields(bytes32 roundId) external view returns (
+        uint256 totalCapitalSecuritiesOutstanding,
+        uint256 totalConvertingSecurities,
+        uint256 totalOptionsIssuedAndOutstanding,
+        uint256 totalPromisedOptions,
+        uint256 unissuedOptionPoolPreRound,
+        uint256 unissuedOptionPoolIncreaseIncludedInCalc,
+        uint256 cCapUsed
+      ) {
+          CapTableSnapshot memory s = RoundManagerStorage.getRoundSnapshot(roundId);
+          return (
+            s.totalCapitalSecuritiesOutstanding,
+            s.totalConvertingSecurities,
+            s.totalOptionsIssuedAndOutstanding,
+            s.totalPromisedOptions,
+            s.unissuedOptionPoolPreRound,
+            s.unissuedOptionPoolIncreaseIncludedInCalc,
+            s.cCapUsed
+          );
+      }
+
+      function getRoundingPolicyFields(bytes32 roundId) external view returns (uint8 mode, uint8 priceDecimals, uint8 shareDecimals) {
+          RoundingPolicy memory p = RoundManagerStorage.getRoundingPolicy(roundId);
+          return (uint8(p.mode), p.priceDecimals, p.shareDecimals);
+      }
+
+      function getRoundPriceInfo(bytes32 roundId) external view returns (uint256 roundPricePerShare, uint8 roundPriceDecimals) {
+          Round storage round = RoundManagerStorage.getRound(roundId);
+          return (round.roundPricePerShare, round.roundPriceDecimals);
+      }
+
+      function getPrimarySecurity(bytes32 roundId) external view returns (SecurityClass cls, SecuritySeries series) {
+          Round storage round = RoundManagerStorage.getRound(roundId);
+          return (round.primarySecurityClass, round.primarySecuritySeries);
+      }
+
+      function roundExists(bytes32 roundId) external view returns (bool) {
+          Round storage round = RoundManagerStorage.getRound(roundId);
+          return round.id != bytes32(0);
+      }
+
+      function getPMVCSubseriesLabel(bytes32 roundId, uint256 pmvc) external view returns (string memory) {
+          return RoundManagerStorage.getPMVCSubseriesLabel(roundId, pmvc);
+      }
  
      /// @notice Submits an Expression of Interest for a round
      /// @param roundId The round ID

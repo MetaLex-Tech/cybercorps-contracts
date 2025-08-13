@@ -51,6 +51,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./storage/IssuanceManagerStorage.sol";
 import "./interfaces/ITransferRestrictionHook.sol";
 import "./interfaces/ICyberScrip.sol";
+import "./RoundManager.sol";
 
 /// @title IssuanceManager
 /// @notice Manages the issuance and lifecycle of digital certificates representing securities and more
@@ -92,6 +93,7 @@ contract IssuanceManager is Initializable, BorgAuthACL {
         string tokenURI
     );
     event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
+    event SafeConverted(bytes32 indexed roundId, address indexed safePrinter, uint256 indexed safeTokenId, address equityPrinter, uint256 equityTokenId, uint256 sharesIssued, uint256 priceBasis, uint256 safePrice, uint256 roundPrice, uint256 cCapUsed);
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -625,5 +627,90 @@ contract IssuanceManager is Initializable, BorgAuthACL {
 
             createCertAndAssign(certAddress, msg.sender, details);
         }
+    }
+
+    // ================================
+    // SAFE conversion
+    // ================================
+    error AlreadyConverted();
+    error InvalidRoundConfig();
+    error MathError();
+
+    function convertSAFE(
+        address roundManager,
+        bytes32 roundId,
+        address safePrinter,
+        uint256 safeTokenId,
+        address equityPrinter
+    ) external onlyOwner returns (uint256 newEquityTokenId) {
+        if (IssuanceManagerStorage.isSafeConverted(safePrinter, safeTokenId)) revert AlreadyConverted();
+
+        // Pull SAFE details
+        ICyberCertPrinter safe = ICyberCertPrinter(safePrinter);
+        CertificateDetails memory safeDetails = safe.getCertificateDetails(safeTokenId);
+        address safeOwner = safe.ownerOf(safeTokenId);
+
+        // Pull round info from RoundManager via primitive getters
+        RoundManager rm = RoundManager(roundManager);
+        if (!rm.roundExists(roundId)) revert InvalidRoundConfig();
+        (
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            uint256 cCapUsed
+        ) = rm.getCapTableSnapshotFields(roundId);
+        (uint8 mode, uint8 priceDecimals, uint8 shareDecimals) = rm.getRoundingPolicyFields(roundId);
+        (uint256 roundPrice, uint8 roundPriceDecimals) = rm.getRoundPriceInfo(roundId);
+        if (cCapUsed == 0 || roundPrice == 0) revert InvalidRoundConfig();
+
+        // Compute SAFE price = PMVC / CCap
+        // Normalize to roundPriceDecimals
+        uint256 pmvc = safeDetails.issuerUSDValuationAtTimeOfInvestment;
+        uint256 pa = safeDetails.investmentAmountUSD;
+        if (pmvc == 0 || pa == 0) revert InvalidRoundConfig();
+
+        // SAFE_Price = (PMVC * 10^priceDecimals) / CCap
+        uint256 safePrice = (pmvc * (10 ** uint256(roundPriceDecimals))) / cCapUsed;
+        uint256 priceBasis = safePrice < roundPrice ? safePrice : roundPrice;
+
+        // shares = (PA * 10^shareDecimals) / priceBasis with rounding policy
+        uint256 numerator = pa * (10 ** (uint256(roundPriceDecimals) + uint256(shareDecimals)));
+        // Divide by priceBasis then by 10^priceDecimals (already embedded above)
+        uint256 raw = numerator / priceBasis;
+        uint256 shares;
+        if (mode == 0) { // Floor
+            shares = raw / (10 ** uint256(roundPriceDecimals));
+        } else if (mode == 1) { // Ceil
+            uint256 denom = (10 ** uint256(roundPriceDecimals));
+            shares = (raw + denom - 1) / denom;
+        } else {
+            // Round half up
+            uint256 denom = (10 ** uint256(roundPriceDecimals));
+            shares = (raw + denom / 2) / denom;
+        }
+
+        // Mint equity cert to SAFE owner
+        CertificateDetails memory eq = CertificateDetails({
+            //use converting officer name and title 
+            signingOfficerName: safeDetails.signingOfficerName,
+            signingOfficerTitle: safeDetails.signingOfficerTitle,
+            investmentAmountUSD: pa,
+            issuerUSDValuationAtTimeOfInvestment: pmvc,
+            unitsRepresented: shares,
+            legalDetails: "Converted from SAFE",
+            extensionData: ""
+        });
+        newEquityTokenId = createCert(equityPrinter, safeOwner, eq);
+
+        // Void SAFE
+        safe.voidCert(safeTokenId);
+
+        // Record mapping
+        IssuanceManagerStorage.setSafeConversion(safePrinter, safeTokenId, equityPrinter, newEquityTokenId);
+
+        emit SafeConverted(roundId, safePrinter, safeTokenId, equityPrinter, newEquityTokenId, shares, priceBasis, safePrice, roundPrice, cCapUsed);
     }
 }
