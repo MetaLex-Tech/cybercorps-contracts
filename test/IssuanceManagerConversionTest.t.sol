@@ -3,7 +3,6 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 import "../src/IssuanceManager.sol";
-import "../src/CyberCertPrinter.sol";
 import "../src/CyberScrip.sol";
 import "../src/libs/auth.sol";
 
@@ -51,10 +50,56 @@ contract MockRoundManagerForConversion {
     }
 }
 
+contract MockCertPrinter {
+    using IssuanceManagerStorage for IssuanceManagerStorage.IssuanceManagerData;
+
+    mapping(uint256 => CertificateDetails) internal _details;
+    mapping(uint256 => address) internal _owners;
+    uint256 internal _total;
+    string internal _name = "Mock";
+    string internal _symbol = "MOCK";
+
+    function initialize(
+        string[] memory,
+        string memory name_,
+        string memory symbol_,
+        string memory,
+        address,
+        SecurityClass,
+        SecuritySeries,
+        address
+    ) external {
+        _name = name_;
+        _symbol = symbol_;
+    }
+
+    function name() external view returns (string memory) { return _name; }
+    function symbol() external view returns (string memory) { return _symbol; }
+
+    function totalSupply() external view returns (uint256) { return _total; }
+
+    function safeMint(uint256 tokenId, address to, CertificateDetails memory details) external returns (uint256) {
+        _details[tokenId] = details;
+        _owners[tokenId] = to;
+        if (tokenId == _total) {
+            _total = tokenId + 1;
+        }
+        return tokenId;
+    }
+
+    function tokenURI(uint256) external pure returns (string memory) { return ""; }
+
+    function ownerOf(uint256 tokenId) external view returns (address) { return _owners[tokenId]; }
+
+    function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory) { return _details[tokenId]; }
+
+    function voidCert(uint256 /*tokenId*/) external {}
+}
+
 contract IssuanceManagerConversionTest is Test {
     IssuanceManager public issuanceManager;
-    CyberCertPrinter public safePrinter;
-    CyberCertPrinter public equityPrinter;
+    MockCertPrinter public safePrinter;
+    MockCertPrinter public equityPrinter;
     BorgAuth public auth;
     MockRoundManagerForConversion public mockRM;
 
@@ -70,15 +115,15 @@ contract IssuanceManagerConversionTest is Test {
 
         // IssuanceManager init
         issuanceManager = new IssuanceManager();
-        CyberCertPrinter implCert = new CyberCertPrinter();
+        MockCertPrinter implCert = new MockCertPrinter();
         CyberScrip implScrip = new CyberScrip();
         issuanceManager.initialize(address(auth), address(0xC0DE), address(implCert), address(0xBEEF), address(0xFACADE), address(implScrip));
 
         // Deploy printers and initialize with issuanceManager as controller
-        safePrinter = new CyberCertPrinter();
+        safePrinter = new MockCertPrinter();
         safePrinter.initialize(new string[](0), "SAFE Cert", "SAFE", "uri://safe", address(issuanceManager), SecurityClass.SAFT, SecuritySeries.NA, address(0));
 
-        equityPrinter = new CyberCertPrinter();
+        equityPrinter = new MockCertPrinter();
         equityPrinter.initialize(new string[](0), "Equity Cert", "EQTY", "uri://eq", address(issuanceManager), SecurityClass.PreferredStock, SecuritySeries.SeriesA, address(0));
 
         // Mock round manager
