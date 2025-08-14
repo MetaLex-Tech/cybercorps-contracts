@@ -382,15 +382,15 @@ contract CyberScripTest is Test {
 
         // Expect disable events
         vm.expectEmit(false, false, false, true);
-       // emit ComplianceFeatureDisabledEvent("freeze");
+  
         cyberScrip.disableFreeze();
 
         vm.expectEmit(false, false, false, true);
-       // emit ComplianceFeatureDisabledEvent("forceTransfer");
+ 
         cyberScrip.disableForceTransfer();
 
         vm.expectEmit(false, false, false, true);
-       // emit ComplianceFeatureDisabledEvent("forceBurn");
+
         cyberScrip.disableForceBurn();
         vm.stopPrank();
     }
