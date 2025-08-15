@@ -11,19 +11,19 @@ Github: TODO
 
 ## Global Fields
 
-| **globalFieldName**   | **description**                                                                                         |
-|:----------------------|:--------------------------------------------------------------------------------------------------------|
-| metavestType          | "Vesting", (WIP)"TokenOption", (WIP)"RestrictedTokenAward"                                              |
-| grantee               | Address of the signer                                                                                   |
-| recipient             | Address to receive unlocked tokens                                                                      |
-| tokenContract         | Address of the token                                                                                    |
-| tokenStreamTotal      | Total amount to tokens subject to linear vesting (includes cliff credits but not each 'milestoneAward') |
-| vestingCliffCredit    | Amount vested at vestingStartTime                                                                       |
-| unlockingCliffCredit  | Amount unlocked at unlockStartTime                                                                      |
-| vestingRate           | Amount vested per seconds                                                                               |
-| vestingStartTime      | Epoch time in seconds                                                                                   |
-| unlockRate            | Amount unlocked per seconds                                                                             |
-| unlockStartTime       | Epoch time in seconds                                                                                   |
+| **globalFieldName**  | **description**                                                                                         |
+|:---------------------|:--------------------------------------------------------------------------------------------------------|
+| metavestType         | "Vesting", (WIP)"TokenOption", (WIP)"RestrictedTokenAward"                                              |
+| grantor              | Address of the grantor                                                                                  |
+| grantee              | Address of the grantee                                                                                  |
+| tokenContract        | Address of the token                                                                                    |
+| tokenStreamTotal     | Total amount to tokens subject to linear vesting (includes cliff credits but not each 'milestoneAward') |
+| vestingCliffCredit   | Amount vested at vestingStartTime                                                                       |
+| unlockingCliffCredit | Amount unlocked at unlockStartTime                                                                      |
+| vestingRate          | Amount vested per seconds                                                                               |
+| vestingStartTime     | Epoch time in seconds                                                                                   |
+| unlockRate           | Amount unlocked per seconds                                                                             |
+| unlockStartTime      | Epoch time in seconds                                                                                   |
 
 
 ## Party Fields
@@ -33,7 +33,7 @@ Github: TODO
 | name               | Name of the individual or organization |
 | evmAddress         |                                        |
 | contactDetails     |                                        |
-| granteeType        |                                        |
+| type               |                                        |
 
 
 ## MetaVesT Deal
@@ -43,9 +43,9 @@ struct DealData {
     bytes32 agreementId;
     metavestType _metavestType;
     address grantee;
-    address recipient;
     BaseAllocation.Allocation allocation;
     BaseAllocation.Milestone[] milestones;
+    address metavest;
 }
 
 struct Allocation {
