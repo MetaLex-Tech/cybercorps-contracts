@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "../src/IssuanceManager.sol";
 import "../src/CyberScrip.sol";
 import "../src/libs/auth.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract MockRoundManagerForConversion {
     bool public exists;
@@ -113,11 +114,20 @@ contract IssuanceManagerConversionTest is Test {
         // Auth
         auth = new BorgAuth(owner);
 
-        // IssuanceManager init
-        issuanceManager = new IssuanceManager();
+        // IssuanceManager via proxy (implementation disables initializers in constructor)
+        IssuanceManager impl = new IssuanceManager();
         MockCertPrinter implCert = new MockCertPrinter();
         CyberScrip implScrip = new CyberScrip();
-        issuanceManager.initialize(address(auth), address(0xC0DE), address(implCert), address(0xBEEF), address(0xFACADE), address(implScrip));
+        bytes memory initData = abi.encodeWithSelector(
+            IssuanceManager.initialize.selector,
+            address(auth),
+            address(0xC0DE),
+            address(implCert),
+            address(0xBEEF),
+            address(0xFACADE),
+            address(implScrip)
+        );
+        issuanceManager = IssuanceManager(address(new ERC1967Proxy(address(impl), initData)));
 
         // Deploy printers and initialize with issuanceManager as controller
         safePrinter = new MockCertPrinter();

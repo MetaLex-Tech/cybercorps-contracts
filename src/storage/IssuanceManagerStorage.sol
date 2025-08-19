@@ -59,6 +59,8 @@ library IssuanceManagerStorage {
         mapping(address => address) scripifiedCert;
         mapping(address => ICondition[]) certToScripConditions;
         mapping(address => ICondition[]) scripToCertConditions;
+        // External converter responsible for conversion math/logic
+        address certificateConverter;
         // SAFE conversion tracking
         mapping(address => mapping(uint256 => bool)) safeConverted; // safePrinter => tokenId => converted
         mapping(address => mapping(uint256 => address)) safeToEquityPrinter; // safePrinter => tokenId => equity printer
@@ -173,6 +175,14 @@ library IssuanceManagerStorage {
 
     function getScripToCertConditions(address certAddress) internal view returns (ICondition[] storage) {
         return issuanceManagerStorage().scripToCertConditions[certAddress];
+    }
+
+    function setCertificateConverter(address converter) internal {
+        issuanceManagerStorage().certificateConverter = converter;
+    }
+
+    function getCertificateConverter() internal view returns (address) {
+        return issuanceManagerStorage().certificateConverter;
     }
 
     // ------- SAFE conversion helpers -------
