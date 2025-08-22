@@ -85,7 +85,9 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
-            6 // USDC decimals
+            6, // USDC decimals
+            new string[](0),
+            bytes("")
         );
         
         // Fund investor
@@ -241,8 +243,7 @@ contract RoundManagerTest is Test {
             conditions,
             secretHash,
             expiry,
-            "Test Investor",
-            voidSignature
+            "Test Investor"
         );
         
         assertTrue(agreementId != bytes32(0), "Agreement ID should not be zero");
@@ -281,8 +282,7 @@ contract RoundManagerTest is Test {
             new address[](0),
             bytes32(0),
             block.timestamp + 7 days,
-            "Test Investor",
-            "0x"
+            "Test Investor"
         );
         
         vm.stopPrank();
@@ -311,8 +311,7 @@ contract RoundManagerTest is Test {
             new address[](0),
             bytes32(0),
             block.timestamp + 7 days,
-            "Test Investor",
-            "0x"
+            "Test Investor"
         );
         
         vm.stopPrank();
@@ -321,7 +320,7 @@ contract RoundManagerTest is Test {
         uint256 allocatedAmount = 7500 * 10**6; // 7,500 USDC
         
         vm.prank(owner);
-        roundManager.allocate(agreementId, allocatedAmount);
+        roundManager.allocate(agreementId, allocatedAmount, "0x");
         
         // Verify allocation by checking if the round exists and getting its price info
         assertTrue(roundManager.roundExists(ROUND_ID), "Round should exist");
@@ -359,8 +358,7 @@ contract RoundManagerTest is Test {
             new address[](0),
             bytes32(0),
             block.timestamp + 7 days,
-            "Test Investor",
-            "0x"
+            "Test Investor"
         );
         
         vm.stopPrank();
@@ -371,7 +369,7 @@ contract RoundManagerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(RoundManager.InvalidAllocation.selector));
         
         vm.prank(owner);
-        roundManager.allocate(agreementId, invalidAmount);
+        roundManager.allocate(agreementId, invalidAmount, "0x");
     }
 
     function test_Allocate_ExceedsRaiseCap() public {
@@ -397,8 +395,7 @@ contract RoundManagerTest is Test {
             new address[](0),
             bytes32(0),
             block.timestamp + 7 days,
-            "Test Investor",
-            "0x"
+            "Test Investor"
         );
         
         vm.stopPrank();
@@ -406,7 +403,7 @@ contract RoundManagerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(RoundManager.InvalidAllocation.selector));
         
         vm.prank(owner);
-        roundManager.allocate(agreementId, RAISE_CAP + 1);
+        roundManager.allocate(agreementId, RAISE_CAP + 1, "0x");
     }
 
     function test_SubmitEOI_RoundClosed() public {
@@ -436,8 +433,7 @@ contract RoundManagerTest is Test {
             new address[](0),
             bytes32(0),
             block.timestamp + 7 days,
-            "Test Investor",
-            "0x"
+            "Test Investor"
         );
         
         vm.stopPrank();
@@ -465,8 +461,7 @@ contract RoundManagerTest is Test {
             new address[](0),
             bytes32(0),
             block.timestamp + 7 days,
-            "Investor 1",
-            "0x"
+            "Investor 1"
         );
         vm.stopPrank();
         
@@ -495,22 +490,21 @@ contract RoundManagerTest is Test {
             new address[](0),
             bytes32(0),
             block.timestamp + 7 days,
-            "Investor 2",
-            "0x"
+            "Investor 2"
         );
         vm.stopPrank();
         
         // Allocate to first investor
         vm.startPrank(owner);
-        roundManager.allocate(agreementId1, 500000 * 10**6); // 500k USDC
+        roundManager.allocate(agreementId1, 500000 * 10**6, "0x"); // 500k USDC
         
         // Try to allocate remaining to second investor
-        roundManager.allocate(agreementId2, 500000 * 10**6); // 500k USDC
+        roundManager.allocate(agreementId2, 500000 * 10**6, "0x"); // 500k USDC
         
         // Verify total raised equals sum of allocations by checking that the round is closed
         // When total raised equals raise cap, no more allocations should be possible
         vm.expectRevert(abi.encodeWithSelector(RoundManager.InvalidAllocation.selector));
-        roundManager.allocate(agreementId2, 1); // Try to allocate 1 more token, should fail
+        roundManager.allocate(agreementId2, 1, "0x"); // Try to allocate 1 more token, should fail
         vm.stopPrank();
     }
 }

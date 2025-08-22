@@ -82,6 +82,7 @@
      error AgreementConditionsNotMet();
      error ZeroAddress();
      error InvalidIssuanceManager();
+     error InvalidEscrowedSignature();
 
      event RoundCreated(bytes32 indexed roundId, address corp, Round round);
      event RoundSnapshotSet(
@@ -154,8 +155,13 @@
          address paymentToken,
          uint256 pricePerUnit,
          uint256 valuation,
-         uint256 paymentDecimals
+         uint256 paymentDecimals,
+         string[] memory roundPartyValues,
+         bytes memory escrowedSignature
      ) external onlyOwner returns (bytes32 roundId) {
+        if(roundType == RoundType.FCFS) {
+            if(escrowedSignature.length == 0) revert InvalidEscrowedSignature();
+        }
          roundId = keccak256(abi.encodePacked(
              seriesType, raiseCap, minTicket, maxTicket, uint8(roundType), terms, startTime, endTime, templateId, paymentToken, pricePerUnit, valuation, paymentDecimals, block.timestamp
          ));
@@ -198,7 +204,10 @@
               roundPricePerShare: 0,
               roundPriceDecimals: 0,
               primarySecurityClass: certData.length > 0 ? certData[0].securityClass : SecurityClass.CommonStock,
-              primarySecuritySeries: certData.length > 0 ? certData[0].securitySeries : SecuritySeries.NA
+              primarySecuritySeries: certData.length > 0 ? certData[0].securitySeries : SecuritySeries.NA,
+              authorityOfficer: msg.sender,
+              roundPartyValues: roundPartyValues,
+              escrowedSignature: escrowedSignature
          });
  
          RoundManagerStorage.setRound(roundId, newRound);
@@ -312,7 +321,6 @@
      /// @param secretHash Secret hash if required
      /// @param expiry Expiry timestamp
      /// @param name Investor's name for endorsement
-     /// @param voidSignature Pre-signed void signature for potential rejection
      /// @return agreementId The created agreement ID
      function submitEOI(
          bytes32 roundId,
@@ -324,19 +332,20 @@
          address[] memory conditions,
          bytes32 secretHash,
          uint256 expiry,
-         string memory name,
-         bytes memory voidSignature
+         string memory name
      ) external returns (bytes32 agreementId) {
          Round storage round = RoundManagerStorage.getRound(roundId);
          if (round.id == bytes32(0)) revert InvalidRound();
          if (block.timestamp < round.startTime || block.timestamp > round.endTime) revert RoundNotOpen();
          if (eoi.minAmount > eoi.maxAmount || eoi.maxAmount < round.minTicket || eoi.maxAmount > round.maxTicket) revert InvalidAmount();
  
-         address[] memory parties = new address[](1);
-         parties[0] = msg.sender;
+         address[] memory parties = new address[](2);
+         parties[1] = msg.sender;
+         parties[0] = round.authorityOfficer;
  
-         string[][] memory partyValuesArray = new string[][](1);
-         partyValuesArray[0] = partyValues;
+         string[][] memory partyValuesArray = new string[][](2);
+         partyValuesArray[0] = round.roundPartyValues;
+         partyValuesArray[1] = partyValues;
  
          agreementId = ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).createContract(
              round.templateId,
@@ -355,6 +364,17 @@
  
          createEscrow(agreementId, msg.sender, corpAssets, buyerAssets, expiry);
  
+         if(round.roundType == RoundType.FCFS) {
+            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractWithEscrow(
+                round.authorityOfficer,
+                agreementId,
+                round.roundPartyValues,
+                round.escrowedSignature,
+                false,
+                ""
+            );
+         }
+
          ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractFor(
              msg.sender,
              agreementId,
@@ -371,7 +391,6 @@
          RoundManagerStorage.setAgreementToRound(agreementId, roundId);
          RoundManagerStorage.getRoundToAgreements(roundId).push(agreementId);
          RoundManagerStorage.setAgreementToEOI(agreementId, eoi);
-         RoundManagerStorage.setVoidSignature(agreementId, voidSignature);
  
          // Add conditions
          for (uint256 i = 0; i < conditions.length; i++) {
@@ -384,7 +403,8 @@
      /// @notice Allocates an amount to an EOI and finalizes the deal
      /// @param agreementId The agreement ID
      /// @param allocatedAmount The amount to allocate
-     function allocate(bytes32 agreementId, uint256 allocatedAmount) external onlyOwner {
+     /// @param signature Company officer signature to be recorded on the escrow
+     function allocate(bytes32 agreementId, uint256 allocatedAmount, bytes memory signature) external onlyOwner {
          bytes32 roundId = RoundManagerStorage.getAgreementToRound(agreementId);
          Round storage round = RoundManagerStorage.getRound(roundId);
          EOI storage eoi = RoundManagerStorage.getAgreementToEOI(agreementId);
@@ -486,13 +506,8 @@
  
          // Void escrow
          voidEscrow(agreementId);
- 
-         // Void agreement using pre-signed signature
-         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(
-             agreementId,
-             escrow.counterParty,
-             RoundManagerStorage.getVoidSignature(agreementId)
-         );
+
+        //todo: void agreement
  
          emit EOIRejected(agreementId, roundId);
      }

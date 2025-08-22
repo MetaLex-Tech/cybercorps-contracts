@@ -94,6 +94,9 @@ struct Round {
     uint8 roundPriceDecimals;
     SecurityClass primarySecurityClass;
     SecuritySeries primarySecuritySeries;
+    address authorityOfficer;
+    string[] roundPartyValues;
+    bytes escrowedSignature;
 }
 
 struct EOI {
@@ -131,8 +134,6 @@ library RoundManagerStorage {
         /// @notice Mapping from agreement IDs to EOI data
         mapping(bytes32 => EOI) agreementToEOI;
         
-        /// @notice Mapping from agreement IDs to pre-signed void signatures
-        mapping(bytes32 => bytes) voidSignatures;
 
         /// @notice Per-round capitalization snapshot
         mapping(bytes32 => CapTableSnapshot) roundSnapshots;
@@ -228,20 +229,6 @@ library RoundManagerStorage {
     /// @param eoi The EOI data to store
     function setAgreementToEOI(bytes32 agreementId, EOI memory eoi) internal {
         roundManagerStorage().agreementToEOI[agreementId] = eoi;
-    }
-
-    /// @notice Retrieves the pre-signed void signature for an agreement
-    /// @param agreementId The agreement identifier
-    /// @return bytes The void signature
-    function getVoidSignature(bytes32 agreementId) internal view returns (bytes storage) {
-        return roundManagerStorage().voidSignatures[agreementId];
-    }
-
-    /// @notice Sets the pre-signed void signature for an agreement
-    /// @param agreementId The agreement identifier
-    /// @param signature The void signature to store
-    function setVoidSignature(bytes32 agreementId, bytes memory signature) internal {
-        roundManagerStorage().voidSignatures[agreementId] = signature;
     }
 
     /// @notice Retrieves the current issuance manager

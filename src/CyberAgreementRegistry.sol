@@ -462,6 +462,71 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         }
     }
 
+    function signContractWithEscrow(
+        address escrowSigner,
+        bytes32 contractId,
+        string[] memory partyValues,
+        bytes calldata signature,
+        bool fillUnallocated, // to fill a 0 address or not
+        string memory secret
+    ) onlyFinalizer(contractId) external {
+        AgreementData storage agreementData = agreements[contractId];
+        Template memory template = templates[agreementData.templateId];
+        if (agreementData.parties.length == 0) revert ContractDoesNotExist();
+        if (agreementData.signedAt[escrowSigner] != 0) revert AlreadySigned();
+        if (isVoided(contractId)) revert ContractAlreadyVoided();
+        if (agreementData.finalized) revert ContractAlreadyFinalized();
+        if (agreementData.expiry > 0 && agreementData.expiry < block.timestamp)
+            revert ContractExpired();
+
+        if (!isParty(contractId, escrowSigner)) {
+            if (
+                agreementData.secretHash > 0 &&
+                keccak256(abi.encode(secret)) != agreementData.secretHash
+            ) revert InvalidSecret();
+            // Not a named party, so check if there's an open slot
+            uint256 firstOpenPartyIndex = getFirstOpenPartyIndex(contractId);
+            if (firstOpenPartyIndex == 0 || !fillUnallocated)
+                revert NotAParty();
+            // There is a spare slot, assign the sender to this slot.
+            agreementData.parties[firstOpenPartyIndex] = escrowSigner;
+            agreementsForParty[agreementData.parties[firstOpenPartyIndex]].push(
+                    contractId
+                );
+        }
+
+        //verify if the contract is closed
+        if (agreementData.partyValues[escrowSigner].length > 0) {
+            //check that the submitted partyValues match
+            if (
+                keccak256(abi.encode(agreementData.partyValues[escrowSigner])) !=
+                keccak256(abi.encode(partyValues))
+            ) {
+                revert ClosedAgreementPartyValueMismatch();
+            }
+        }
+
+        if (partyValues.length != template.partyFields.length)
+            revert MismatchedFieldsLength();
+
+        uint256 timestamp = block.timestamp;
+
+        agreementData.partyValues[escrowSigner] = partyValues;
+        agreementData.signedAt[escrowSigner] = timestamp;
+        uint256 totalSignatures = ++agreementData.numSignatures;
+
+        emit AgreementSigned(contractId, escrowSigner, timestamp);
+
+        if (totalSignatures == agreementData.parties.length) {
+            if (agreementData.finalizer == address(0)) {
+                agreementData.finalized = true;
+                emit ContractFinalized(contractId, msg.sender, timestamp);
+            }
+
+            emit ContractFullySigned(contractId, timestamp);
+        }
+    }
+
     function voidContractFor(
         bytes32 contractId,
         address party,
