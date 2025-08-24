@@ -415,6 +415,29 @@
          if (round.raised + allocatedAmount > round.raiseCap) revert InvalidAllocation();
          if (escrow.status != EscrowStatus.PAID) revert DealNotPaid();
          if (escrow.corpAssets.length > 0) revert AlreadyAllocated();
+
+         //if the round is FCFS, sign the agreement with the escrow signer
+         if(round.roundType == RoundType.FCFS) {
+            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractWithEscrow(
+                round.authorityOfficer,
+                agreementId,
+                round.roundPartyValues,
+                round.escrowedSignature,
+                false,
+                ""
+            );
+         }
+         //else sign the agreement with the signature provided
+         else {
+            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractFor(
+                msg.sender,
+                agreementId,
+                round.roundPartyValues,
+                signature,
+                false,
+                ""
+            );
+         }
  
          // Calculate units and investment USD
          uint256 units = allocatedAmount / round.pricePerUnit;
