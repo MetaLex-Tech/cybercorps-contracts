@@ -25,8 +25,8 @@ o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o8888
 888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888     
 `88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
  `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P 
-             .o..P'                                                                     888           
-             `Y8P'                                                                     o888o          
+             .o..P'                                                                     888            
+             `Y8P'                                                                     o888o           
 _______________________________________________________________________________________________________
 
 All software, documentation and other files and information in this repository (collectively, the "Software")
@@ -41,65 +41,64 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity ^0.8.28;
 
-import "../../interfaces/ITransferRestrictionHook.sol";
-import "../../libs/auth.sol";
+import "./BaseTransferHook.sol";
 
-/// @title BaseTransferHook
-/// @notice Base contract for implementing transfer restriction hooks
-/// @dev Inherit from this contract to create custom transfer restriction hooks
-abstract contract BaseTransferHook is ITransferRestrictionHook, BorgAuthACL {
-    // Custom errors
-    error HookNotEnabled();
-    error InvalidParameters();
-    
-    // Whether the hook is enabled
-    bool public enabled;
-    
-    // Event for when the hook is enabled/disabled
-    event HookStatusChanged(bool enabled);
-    
-    // Initialization helper to wire BorgAuth
-    function __BaseTransferHook_init(address _auth) internal onlyInitializing {
-        __BorgAuthACL_init(_auth);
+/// @title ToggleTransferHook
+/// @notice Global restriction hook enabling per-certificate (tokenId) transfer toggling by the issuing company
+contract ToggleTransferHook is BaseTransferHook {
+    // Default transferability applied when a specific token override is not set
+    bool public defaultTransferable;
+
+    // Per-token transferability overrides
+    mapping(uint256 => bool) private tokenTransferable;
+    mapping(uint256 => bool) private tokenHasOverride;
+
+    event DefaultTransferabilitySet(bool transferable);
+    event TokenTransferabilitySet(uint256 indexed tokenId, bool transferable);
+    event TokenTransferabilityBatchSet(uint256[] tokenIds, bool transferable);
+
+    function initialize(address _auth) external initializer {
+        __BaseTransferHook_init(_auth);
     }
-    
-    /// @notice Enable or disable the hook
-    /// @param _enabled Whether to enable or disable the hook
-    function setEnabled(bool _enabled) external onlyAdmin {
-        enabled = _enabled;
-        emit HookStatusChanged(_enabled);
+
+    /// @notice Set the default transferability applied to tokens without an explicit override
+    function setDefaultTransferable(bool transferable) external onlyAdmin {
+        defaultTransferable = transferable;
+        emit DefaultTransferabilitySet(transferable);
     }
-    
-    /// @notice Check if a transfer is allowed
-    /// @param from The address tokens are being transferred from
-    /// @param to The address tokens are being transferred to
-    /// @param tokenId The ID of the token being transferred
-    /// @param data Additional data passed to the hook
-    /// @return allowed Whether the transfer is allowed
-    /// @return reason The reason if the transfer is not allowed
-    function checkTransferRestriction(
-        address from,
-        address to,
-        uint256 tokenId,
-        bytes memory data
-    ) public view virtual override returns (bool allowed, string memory reason) {
-        if (!enabled) return (true, "");
-        
-        return _checkTransferRestriction(from, to, tokenId, data);
+
+    /// @notice Set transferability for a specific tokenId
+    function setTokenTransferable(uint256 tokenId, bool transferable) external onlyAdmin {
+        tokenTransferable[tokenId] = transferable;
+        tokenHasOverride[tokenId] = true;
+        emit TokenTransferabilitySet(tokenId, transferable);
     }
-    
-    /// @notice Internal function to implement the actual transfer restriction logic
-    /// @dev Override this function in derived contracts to implement specific restriction logic
-    /// @param from The address tokens are being transferred from
-    /// @param to The address tokens are being transferred to
-    /// @param tokenId The ID of the token being transferred
-    /// @param data Additional data passed to the hook
-    /// @return allowed Whether the transfer is allowed
-    /// @return reason The reason if the transfer is not allowed
+
+    /// @notice Batch set transferability for multiple tokenIds
+    function batchSetTokenTransferable(uint256[] calldata tokenIds, bool transferable) external onlyAdmin {
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            tokenTransferable[tokenIds[i]] = transferable;
+            tokenHasOverride[tokenIds[i]] = true;
+        }
+        emit TokenTransferabilityBatchSet(tokenIds, transferable);
+    }
+
+    /// @inheritdoc BaseTransferHook
     function _checkTransferRestriction(
-        address from,
-        address to,
+        address /* from */,
+        address /* to */,
         uint256 tokenId,
-        bytes memory data
-    ) internal view virtual returns (bool allowed, string memory reason);
-} 
+        bytes memory /* data */
+    ) internal view override returns (bool allowed, string memory reason) {
+        bool isTransferable = tokenHasOverride[tokenId]
+            ? tokenTransferable[tokenId]
+            : defaultTransferable;
+
+        if (isTransferable) {
+            return (true, "");
+        }
+        return (false, "Transfer disabled by global hook");
+    }
+}
+
+

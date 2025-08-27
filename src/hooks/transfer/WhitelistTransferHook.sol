@@ -52,7 +52,9 @@ contract WhitelistTransferHook is BaseTransferHook {
     // Event for when addresses are added/removed from whitelist
     event WhitelistUpdated(address indexed account, bool whitelisted);
     
-    constructor(address _auth) BaseTransferHook(_auth) {}
+    function initialize(address _auth) external initializer {
+        __BaseTransferHook_init(_auth);
+    }
     
     /// @notice Add or remove addresses from the whitelist
     /// @param account The address to update

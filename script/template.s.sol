@@ -70,10 +70,10 @@ contract BaseScript is Script {
         partyFieldsSafe[3] = "investorType";
         partyFieldsSafe[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(30)), "MetaLeX cyberSAFE jx-neutral-style Reg D raise", "ipfs://bafybeiazn4jdtlu4yz7lqbfhzaxsfhsfuwaq55m4x5mhjdeddbwwrhfufe", globalFieldsSafe, partyFieldsSafe);
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(31)), "MetaLeX cyberTokenWarrant a16z jx-neutral-style-issuer Reg D raise", "ipfs://bafybeibojsh6f4wxj3gvwjbv7uvvurony7jumyqqi5i6rqsv7wcywdsi44", globalFieldsSafeT, partyFieldsSafeT);
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(32)), "MetaLeX cyberSAFE jx-neutral-style Reg S raise", "ipfs://bafybeib5pqnqwbfdsnv4lqdkdglz2e4xqz2qklwdzzpbftydopzuqnri2a", globalFieldsSafe, partyFieldsSafe);
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(34)), "MetaLeX cyberTokenWarrant a16z-jx-neutral-style-issuer Reg S raise", "ipfs://bafybeihi77o6kxeien3kbg2tquhmyg4bbxvbf2kjejjswk7akfzdfprwle", globalFieldsSafeT, partyFieldsSafeT);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(bytes("APlus_SAFE")), "APlus_SAFE_testnet", "ipfs://bafybeigurcpdzxkzpj4gaa54hzyjz5gr5imikwrgyttbrlqufx2434tg7q", globalFieldsSafe, partyFieldsSafe);
+     //   CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(31)), "MetaLeX cyberTokenWarrant a16z jx-neutral-style-issuer Reg D raise", "ipfs://bafybeibojsh6f4wxj3gvwjbv7uvvurony7jumyqqi5i6rqsv7wcywdsi44", globalFieldsSafeT, partyFieldsSafeT);
+     //   CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(32)), "MetaLeX cyberSAFE jx-neutral-style Reg S raise", "ipfs://bafybeib5pqnqwbfdsnv4lqdkdglz2e4xqz2qklwdzzpbftydopzuqnri2a", globalFieldsSafe, partyFieldsSafe);
+     //   CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(34)), "MetaLeX cyberTokenWarrant a16z-jx-neutral-style-issuer Reg S raise", "ipfs://bafybeihi77o6kxeien3kbg2tquhmyg4bbxvbf2kjejjswk7akfzdfprwle", globalFieldsSafeT, partyFieldsSafeT);
         
         // BorgAuth auth = BorgAuth(0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01);
          
@@ -123,6 +123,6 @@ contract BaseScript is Script {
         partyFieldsSaftt[3] = "investorType";
         partyFieldsSaftt[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(35)), "MetaLeX cyberSAFT Reg S raise", "ipfs://bafybeidquzma24o53tiys7kvspvx5izc7iru5n5dfgfwmxefi3qd67ou2y", globalFieldsSafTt, partyFieldsSaftt);
+       // CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(35)), "MetaLeX cyberSAFT Reg S raise", "ipfs://bafybeidquzma24o53tiys7kvspvx5izc7iru5n5dfgfwmxefi3qd67ou2y", globalFieldsSafTt, partyFieldsSaftt);
      }
 }
