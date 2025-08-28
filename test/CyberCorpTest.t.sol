@@ -59,6 +59,7 @@ import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/Upgradeabl
 import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {CompanyOfficer} from "../src/storage/CyberCertPrinterStorage.sol";
+import {ToggleTransferHook} from "../src/hooks/transfer/ToggleTransferHook.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -5553,6 +5554,129 @@ contract CyberCorpTest is Test {
         console.log("Delegation expiry test completed successfully!");
         console.log("Delegation expired after:", delegationExpiry);
         console.log("Current time:", block.timestamp);
+    }
+
+    function testToggleTransferHookPerToken() public {
+        vm.startPrank(testAddress);
+        // Deploy a CyberCorp to obtain an issuance manager and printer
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
+            unitsRepresented: 0,
+            legalDetails: "",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        (
+            address cyberCorp,
+            address authAddr,
+            address issuanceManager,
+            address dealManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("ToggleHookTest"),
+            "ToggleHookCorp",
+            "Limited Liability Company",
+            "Delaware",
+            "Contact Details",
+            "Dispute",
+            testAddress,
+            officer
+        );
+        vm.stopPrank();
+
+        // Create a certificate printer
+        string[] memory ledger = new string[](1);
+        ledger[0] = "Legend";
+        vm.prank(testAddress);
+        address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
+            ledger,
+            "Test Certificate",
+            "TEST",
+            "ipfs://test",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesPreSeed,
+            address(0)
+        );
+
+        // Deploy and initialize the toggle hook with the corp's AUTH used by issuanceManager
+        ToggleTransferHook hook = new ToggleTransferHook();
+        BorgAuth corpAuthForIssuance = IssuanceManager(issuanceManager).AUTH();
+        hook.initialize(address(corpAuthForIssuance));
+
+        // Attach the global hook via IssuanceManager (admin)
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).setGlobalRestrictionHook(certPrinter, address(hook));
+
+        // Enable global transferable on the printer (so hook decides allow/deny)
+        vm.prank(issuanceManager);
+        CyberCertPrinter(certPrinter).setGlobalTransferable(true);
+
+        // Configure hook: default off, tokenId 1 on
+        vm.startPrank(testAddress);
+        hook.setDefaultTransferable(false);
+        hook.setTokenTransferable(1, true);
+        vm.stopPrank();
+
+        // Mint 3 certificates to the owner (testAddress)
+        CertificateDetails memory cd = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
+            unitsRepresented: 1,
+            legalDetails: "",
+            extensionData: ""
+        });
+
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // tokenId 0
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // tokenId 1
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // tokenId 2
+
+        // Prepare recipient
+        address recipient = vm.addr(0xBEEF);
+
+        // Token 0 should be blocked by hook
+        vm.startPrank(testAddress);
+        vm.expectRevert();
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
+        vm.stopPrank();
+
+        // Token 1 should be allowed by hook, but endorsement is required by printer
+        vm.startPrank(testAddress);
+        Endorsement memory e = Endorsement({
+            endorser: testAddress,
+            timestamp: block.timestamp,
+            signatureHash: bytes("hook-test"),
+            registry: address(0),
+            agreementId: bytes32(0),
+            endorsee: recipient,
+            endorseeName: "Recipient"
+        });
+        CyberCertPrinter(certPrinter).addEndorsement(1, e);
+        vm.stopPrank();
+        vm.prank(testAddress);
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 1);
+        assertEq(CyberCertPrinter(certPrinter).ownerOf(1), recipient);
+
+        // Token 2 should be blocked
+        vm.startPrank(testAddress);
+        vm.expectRevert();
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 2);
+        vm.stopPrank();
     }
 
     function testRevokeDelegation() public {
