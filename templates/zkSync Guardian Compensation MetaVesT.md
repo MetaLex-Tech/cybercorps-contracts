@@ -32,8 +32,6 @@ Github: TODO
 |:-------------------|:---------------------------------------|
 | name               | Name of the individual or organization |
 | evmAddress         |                                        |
-| contactDetails     |                                        |
-| type               |                                        |
 
 
 ## MetaVesT Deal
