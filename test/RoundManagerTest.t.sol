@@ -14,11 +14,13 @@ import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {LexScrowStorage, Escrow, EscrowStatus} from "../src/storage/LexScrowStorage.sol";
+import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 
 // Import necessary types
 using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
@@ -518,10 +520,13 @@ contract RoundManagerTest is Test {
         vm.stopPrank();
     }
 
-    // =====================
-    // FCFS-focused tests
-    // =====================
+}
 
+// Separate FCFS tests in their own contract to avoid the original setUp()
+contract RoundManagerFCFSTest is Test {
+    using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
+
+    // Infra helpers copied from above
     function _deployRegistryAndFactories(address owner)
         internal
         returns (
@@ -535,7 +540,6 @@ contract RoundManagerTest is Test {
     {
         bytes32 salt = keccak256(abi.encodePacked("fcfs-infra", owner));
 
-        // Deploy registry (UUPS) with a BorgAuth owner we control via CyberCorpTest pattern
         BorgAuth bootstrapAuth = new BorgAuth{salt: salt}(owner);
 
         registry = CyberAgreementRegistry(
@@ -554,7 +558,6 @@ contract RoundManagerTest is Test {
         cyberCorpSingleFactory = address(new CyberCorpSingleFactory{salt: salt}(address(bootstrapAuth)));
         dealManagerFactory = address(new DealManagerFactory{salt: salt}(address(bootstrapAuth)));
 
-        // Implementations
         address certPrinterImpl = address(new CyberCertPrinter{salt: salt}());
         address cyberScripImpl = address(new CyberScrip{salt: salt}());
 
@@ -577,7 +580,6 @@ contract RoundManagerTest is Test {
     }
 
     function _createTemplate(CyberAgreementRegistry registry) internal {
-        // Minimal template: 1 global field, 2 party fields
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field";
         string[] memory partyFields = new string[](2);
@@ -589,6 +591,35 @@ contract RoundManagerTest is Test {
             "ipfs://template",
             globalFields,
             partyFields
+        );
+    }
+
+    function _computeEOISignature(
+        CyberAgreementRegistry registry,
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        string[] memory partyValues,
+        address authorityOfficer,
+        uint256 signerPrivKey
+    ) internal view returns (bytes memory) {
+        (string memory legalUri, , string[] memory glFields, string[] memory partyFields) = registry.getTemplateDetails(templateId);
+        address signer = vm.addr(signerPrivKey);
+        address[] memory parties = new address[](2);
+        parties[0] = authorityOfficer;
+        parties[1] = signer;
+        bytes32 contractId = keccak256(abi.encode(templateId, salt, globalValues, parties));
+        return CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            legalUri,
+            glFields,
+            partyFields,
+            globalValues,
+            partyValues,
+            signerPrivKey
         );
     }
 
@@ -606,7 +637,6 @@ contract RoundManagerTest is Test {
             address dealManager
         )
     {
-        CyberCorpFactory.CyberCertData[] memory none = new CyberCorpFactory.CyberCertData[](0);
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: officerEOA,
             name: "Officer",
@@ -637,20 +667,21 @@ contract RoundManagerTest is Test {
         address registry,
         address issuance
     ) internal returns (RoundManager rm) {
-        rm = new RoundManager();
-        rm.initialize(auth, corp, registry, issuance, address(0));
-        // Grant rm OWNER role in auth so it can call IssuanceManager.onlyOwner functions
+        // Deploy RoundManager via factory (BeaconProxy), then initialize
+        RoundManagerFactory rmFactory = new RoundManagerFactory(auth);
+        address proxy = rmFactory.deployRoundManager(keccak256("rm-fcfs"));
+        rm = RoundManager(payable(proxy));
+        rm.initialize(auth, corp, registry, issuance, address(rmFactory));
+        // Allow RoundManager to call IssuanceManager.onlyOwner
         BorgAuth(auth).updateRole(address(rm), 99);
     }
 
     function _createFCFSRound(
         RoundManager rm,
-        address issuance,
         address paymentToken,
         uint8 payDec,
         bytes32 templateId
     ) internal returns (bytes32) {
-        // Prepare certificate data
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Legend";
         RoundManager.CyberCertData[] memory certData = new RoundManager.CyberCertData[](1);
@@ -668,7 +699,7 @@ contract RoundManagerTest is Test {
         roundPartyValues[0] = "Alice Officer";
         roundPartyValues[1] = "CEO";
 
-        bytes memory escrowedSig = hex"01"; // non-empty
+        bytes memory escrowedSig = hex"01";
 
         return rm.createRound(
             "Seed",
@@ -682,7 +713,7 @@ contract RoundManagerTest is Test {
             templateId,
             certData,
             paymentToken,
-            10 * (10 ** payDec), // pricePerUnit
+            10 * (10 ** payDec),
             10_000_000,
             payDec,
             roundPartyValues,
@@ -695,10 +726,10 @@ contract RoundManagerTest is Test {
         (
             CyberAgreementRegistry registry,
             CyberCorpFactory corpFactory,
-            address imFactory,
-            address ccSingleFactory,
-            address dmFactory,
-            address uriBuilder
+            ,
+            ,
+            ,
+            
         ) = _deployRegistryAndFactories(me);
 
         _createTemplate(registry);
@@ -706,7 +737,6 @@ contract RoundManagerTest is Test {
         (address corp, address auth, address issuance, ) = _deployCorp(corpFactory, "Corp A", me, me);
         RoundManager rm = _initRoundManager(auth, corp, address(registry), issuance);
 
-        // Prepare minimal cert data
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Legend";
         RoundManager.CyberCertData[] memory certData = new RoundManager.CyberCertData[](1);
@@ -740,7 +770,7 @@ contract RoundManagerTest is Test {
             1,
             6,
             roundPartyValues,
-            bytes("") // empty => revert
+            bytes("")
         );
     }
 
@@ -759,14 +789,12 @@ contract RoundManagerTest is Test {
         (address corp, address auth, address issuance, ) = _deployCorp(corpFactory, "Corp B", me, me);
         RoundManager rm = _initRoundManager(auth, corp, address(registry), issuance);
 
-        // Payment token
         MockPaymentToken usdc = new MockPaymentToken();
+        bytes32 roundId = _createFCFSRound(rm, address(usdc), usdc.decimals(), bytes32(uint256(777)));
 
-        // Create FCFS round
-        bytes32 roundId = _createFCFSRound(rm, issuance, address(usdc), usdc.decimals(), bytes32(uint256(777)));
-
-        // Investor funds & approval
-        address investor = address(0x111);
+        uint256 salt = 1;
+        uint256 privKey = 0xA11CE;
+        address investor = vm.addr(privKey);
         usdc.transfer(investor, 20_000 * (10 ** usdc.decimals()));
         vm.startPrank(investor);
         usdc.approve(address(rm), type(uint256).max);
@@ -786,13 +814,23 @@ contract RoundManagerTest is Test {
         partyValues[0] = "Officer";
         partyValues[1] = "CEO";
 
+        bytes memory sig = _computeEOISignature(
+            registry,
+            bytes32(uint256(777)),
+            salt,
+            globalValues,
+            partyValues,
+            address(this),
+            privKey
+        );
+
         bytes32 agreementId = rm.submitEOI(
             roundId,
             eoi,
             globalValues,
             partyValues,
-            hex"01",
-            1,
+            sig,
+            salt,
             new address[](0),
             bytes32(0),
             block.timestamp + 7 days,
@@ -800,10 +838,9 @@ contract RoundManagerTest is Test {
         );
         vm.stopPrank();
 
-        // Escrow should be finalized and contain corp assets
         Escrow memory esc = rm.getEscrowDetails(agreementId);
         assertEq(uint256(esc.status), uint256(EscrowStatus.FINALIZED));
-        assertGt(esc.corpAssets.length, 0, "corp assets minted");
+        assertGt(esc.corpAssets.length, 0);
     }
 
     function test_FCFS_RefundsExcessPayment() public {
@@ -822,15 +859,16 @@ contract RoundManagerTest is Test {
         RoundManager rm = _initRoundManager(auth, corp, address(registry), issuance);
 
         MockPaymentToken usdc = new MockPaymentToken();
-        bytes32 roundId = _createFCFSRound(rm, issuance, address(usdc), usdc.decimals(), bytes32(uint256(777)));
+        bytes32 roundId = _createFCFSRound(rm, address(usdc), usdc.decimals(), bytes32(uint256(777)));
 
-        address investor = address(0x222);
+        uint256 salt = 1;
+        uint256 privKey = 0xB0B;
+        address investor = vm.addr(privKey);
         uint256 startBal = usdc.balanceOf(investor);
         usdc.transfer(investor, 50_000 * (10 ** usdc.decimals()));
         vm.startPrank(investor);
         usdc.approve(address(rm), type(uint256).max);
 
-        // EOI where max escrowed greatly exceeds what pricePerUnit can consume at min ticket
         EOI memory eoi = EOI({
             name: "Investor 2",
             investorType: "Individual",
@@ -846,13 +884,23 @@ contract RoundManagerTest is Test {
         partyValues[0] = "Officer";
         partyValues[1] = "CEO";
 
+        bytes memory sig = _computeEOISignature(
+            registry,
+            bytes32(uint256(777)),
+            salt,
+            globalValues,
+            partyValues,
+            address(this),
+            privKey
+        );
+
         rm.submitEOI(
             roundId,
             eoi,
             globalValues,
             partyValues,
-            hex"01",
-            1,
+            sig,
+            salt,
             new address[](0),
             bytes32(0),
             block.timestamp + 7 days,
@@ -860,11 +908,9 @@ contract RoundManagerTest is Test {
         );
         vm.stopPrank();
 
-        // Investor final balance should equal initial + transfer - allocatedAmount = start + minted - allocated
-        // Since we don't know allocated precisely here without recomputing, assert it's strictly less than start+40k and greater than start
         uint256 endBal = usdc.balanceOf(investor);
-        assertGt(endBal, startBal, "refund occurred");
-        assertLt(endBal, startBal + 40_000 * (10 ** usdc.decimals()), "not all funds consumed");
+        assertGt(endBal, startBal);
+        assertLt(endBal, startBal + 40_000 * (10 ** usdc.decimals()));
     }
 
     function test_FCFS_SubmitEOI_InvalidAmount_Reverts() public {
@@ -882,21 +928,20 @@ contract RoundManagerTest is Test {
         (address corp, address auth, address issuance, ) = _deployCorp(corpFactory, "Corp D", me, me);
         RoundManager rm = _initRoundManager(auth, corp, address(registry), issuance);
         MockPaymentToken usdc = new MockPaymentToken();
-        bytes32 roundId = _createFCFSRound(rm, issuance, address(usdc), usdc.decimals(), bytes32(uint256(777)));
+        bytes32 roundId = _createFCFSRound(rm, address(usdc), usdc.decimals(), bytes32(uint256(777)));
 
         address investor = address(0x333);
         usdc.transfer(investor, 5_000 * (10 ** usdc.decimals()));
         vm.startPrank(investor);
         usdc.approve(address(rm), type(uint256).max);
 
-        // max below round.minTicket => revert InvalidAmount
         EOI memory eoi = EOI({
             name: "Investor 3",
             investorType: "Individual",
             jurisdiction: "US",
             contact: "email",
             minAmount: 100,
-            maxAmount: 500 // too small vs minTicket 1_000 * 10^6
+            maxAmount: 500
         });
 
         string[] memory globalValues = new string[](1);
@@ -937,11 +982,11 @@ contract RoundManagerTest is Test {
         RoundManager rm = _initRoundManager(auth, corp, address(registry), issuance);
         MockPaymentToken usdc = new MockPaymentToken();
 
-        // Create FCFS round with small remaining after first EOI
-        bytes32 roundId = _createFCFSRound(rm, issuance, address(usdc), usdc.decimals(), bytes32(uint256(777)));
+        bytes32 roundId = _createFCFSRound(rm, address(usdc), usdc.decimals(), bytes32(uint256(777)));
 
-        // First investor consumes nearly all raise with a valid allocation
-        address inv1 = address(0x444);
+        uint256 salt1 = 1;
+        uint256 privKey1 = 0xC01;
+        address inv1 = vm.addr(privKey1);
         usdc.transfer(inv1, 100_000 * (10 ** usdc.decimals()));
         vm.startPrank(inv1);
         usdc.approve(address(rm), type(uint256).max);
@@ -959,11 +1004,21 @@ contract RoundManagerTest is Test {
         string[] memory partyValues = new string[](2);
         partyValues[0] = "Officer";
         partyValues[1] = "CEO";
-        rm.submitEOI(roundId, eoi1, globalValues, partyValues, hex"01", 1, new address[](0), bytes32(0), block.timestamp + 7 days, "A");
+        bytes memory sig1 = _computeEOISignature(
+            registry,
+            bytes32(uint256(777)),
+            salt1,
+            globalValues,
+            partyValues,
+            address(this),
+            privKey1
+        );
+        rm.submitEOI(roundId, eoi1, globalValues, partyValues, sig1, salt1, new address[](0), bytes32(0), block.timestamp + 7 days, "A");
         vm.stopPrank();
 
-        // Second investor tries but remaining < minRequired => overall revert and no transferFrom should occur
-        address inv2 = address(0x555);
+        uint256 salt2 = 2;
+        uint256 privKey2 = 0xD02;
+        address inv2 = vm.addr(privKey2);
         uint256 startBal = usdc.balanceOf(inv2);
         usdc.transfer(inv2, 2_000 * (10 ** usdc.decimals()));
         vm.startPrank(inv2);
@@ -976,9 +1031,18 @@ contract RoundManagerTest is Test {
             minAmount: 2_000 * (10 ** usdc.decimals()),
             maxAmount: 2_000 * (10 ** usdc.decimals())
         });
+        bytes memory sig2 = _computeEOISignature(
+            registry,
+            bytes32(uint256(777)),
+            salt2,
+            globalValues,
+            partyValues,
+            address(this),
+            privKey2
+        );
         vm.expectRevert(abi.encodeWithSelector(RoundManager.InvalidAllocation.selector));
-        rm.submitEOI(roundId, eoi2, globalValues, partyValues, hex"01", 2, new address[](0), bytes32(0), block.timestamp + 7 days, "B");
+        rm.submitEOI(roundId, eoi2, globalValues, partyValues, sig2, salt2, new address[](0), bytes32(0), block.timestamp + 7 days, "B");
         vm.stopPrank();
-        assertEq(usdc.balanceOf(inv2), startBal + 2_000 * (10 ** usdc.decimals()), "No funds pulled on revert");
+        assertEq(usdc.balanceOf(inv2), startBal + 2_000 * (10 ** usdc.decimals()));
     }
 }
