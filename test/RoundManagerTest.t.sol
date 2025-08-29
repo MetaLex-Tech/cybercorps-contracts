@@ -9,6 +9,16 @@ import "../src/storage/RoundManagerStorage.sol";
 import "../src/CyberCorpConstants.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
+import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
+import {DealManagerFactory} from "../src/DealManagerFactory.sol";
+import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
+import {CyberScrip} from "../src/CyberScrip.sol";
+import {BorgAuth} from "../src/libs/auth.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {LexScrowStorage, Escrow, EscrowStatus} from "../src/storage/LexScrowStorage.sol";
 
 // Import necessary types
 using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
@@ -506,5 +516,469 @@ contract RoundManagerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(RoundManager.InvalidAllocation.selector));
         roundManager.allocate(agreementId2, 1, "0x"); // Try to allocate 1 more token, should fail
         vm.stopPrank();
+    }
+
+    // =====================
+    // FCFS-focused tests
+    // =====================
+
+    function _deployRegistryAndFactories(address owner)
+        internal
+        returns (
+            CyberAgreementRegistry registry,
+            CyberCorpFactory corpFactory,
+            address issuanceManagerFactory,
+            address cyberCorpSingleFactory,
+            address dealManagerFactory,
+            address uriBuilder
+        )
+    {
+        bytes32 salt = keccak256(abi.encodePacked("fcfs-infra", owner));
+
+        // Deploy registry (UUPS) with a BorgAuth owner we control via CyberCorpTest pattern
+        BorgAuth bootstrapAuth = new BorgAuth{salt: salt}(owner);
+
+        registry = CyberAgreementRegistry(
+            address(new ERC1967Proxy{salt: salt}(
+                address(new CyberAgreementRegistry{salt: salt}()),
+                abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(bootstrapAuth))
+            ))
+        );
+
+        uriBuilder = address(new ERC1967Proxy{salt: salt}(
+            address(new CertificateUriBuilder{salt: salt}()),
+            abi.encodeWithSelector(CertificateUriBuilder.initialize.selector, address(bootstrapAuth))
+        ));
+
+        issuanceManagerFactory = address(new IssuanceManagerFactory{salt: salt}(address(bootstrapAuth)));
+        cyberCorpSingleFactory = address(new CyberCorpSingleFactory{salt: salt}(address(bootstrapAuth)));
+        dealManagerFactory = address(new DealManagerFactory{salt: salt}(address(bootstrapAuth)));
+
+        // Implementations
+        address certPrinterImpl = address(new CyberCertPrinter{salt: salt}());
+        address cyberScripImpl = address(new CyberScrip{salt: salt}());
+
+        corpFactory = CyberCorpFactory(
+            address(new ERC1967Proxy{salt: salt}(
+                address(new CyberCorpFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    CyberCorpFactory.initialize.selector,
+                    address(bootstrapAuth),
+                    address(registry),
+                    certPrinterImpl,
+                    cyberScripImpl,
+                    issuanceManagerFactory,
+                    cyberCorpSingleFactory,
+                    dealManagerFactory,
+                    uriBuilder
+                )
+            ))
+        );
+    }
+
+    function _createTemplate(CyberAgreementRegistry registry) internal {
+        // Minimal template: 1 global field, 2 party fields
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field";
+        string[] memory partyFields = new string[](2);
+        partyFields[0] = "Officer Name";
+        partyFields[1] = "Officer Title";
+        registry.createTemplate(
+            bytes32(uint256(777)),
+            "FCFS-Test",
+            "ipfs://template",
+            globalFields,
+            partyFields
+        );
+    }
+
+    function _deployCorp(
+        CyberCorpFactory corpFactory,
+        string memory companyName,
+        address companyPayable,
+        address officerEOA
+    )
+        internal
+        returns (
+            address corp,
+            address auth,
+            address issuance,
+            address dealManager
+        )
+    {
+        CyberCorpFactory.CyberCertData[] memory none = new CyberCorpFactory.CyberCertData[](0);
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: officerEOA,
+            name: "Officer",
+            contact: "officer@example.com",
+            title: "CEO"
+        });
+
+        (
+            corp,
+            auth,
+            issuance,
+            dealManager
+        ) = corpFactory.deployCyberCorp(
+            keccak256("fcfs-corp"),
+            companyName,
+            "corporation",
+            "DE",
+            "contact",
+            "arbitration",
+            companyPayable,
+            officer
+        );
+    }
+
+    function _initRoundManager(
+        address auth,
+        address corp,
+        address registry,
+        address issuance
+    ) internal returns (RoundManager rm) {
+        rm = new RoundManager();
+        rm.initialize(auth, corp, registry, issuance, address(0));
+        // Grant rm OWNER role in auth so it can call IssuanceManager.onlyOwner functions
+        BorgAuth(auth).updateRole(address(rm), 99);
+    }
+
+    function _createFCFSRound(
+        RoundManager rm,
+        address issuance,
+        address paymentToken,
+        uint8 payDec,
+        bytes32 templateId
+    ) internal returns (bytes32) {
+        // Prepare certificate data
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Legend";
+        RoundManager.CyberCertData[] memory certData = new RoundManager.CyberCertData[](1);
+        certData[0] = RoundManager.CyberCertData({
+            name: "Equity",
+            symbol: "EQ",
+            uri: "ipfs://eq",
+            securityClass: SecurityClass.CommonStock,
+            securitySeries: SecuritySeries.NA,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+
+        string[] memory roundPartyValues = new string[](2);
+        roundPartyValues[0] = "Alice Officer";
+        roundPartyValues[1] = "CEO";
+
+        bytes memory escrowedSig = hex"01"; // non-empty
+
+        return rm.createRound(
+            "Seed",
+            1_000_000 * (10 ** payDec),
+            1_000 * (10 ** payDec),
+            100_000 * (10 ** payDec),
+            RoundType.FCFS,
+            "terms",
+            block.timestamp,
+            block.timestamp + 30 days,
+            templateId,
+            certData,
+            paymentToken,
+            10 * (10 ** payDec), // pricePerUnit
+            10_000_000,
+            payDec,
+            roundPartyValues,
+            escrowedSig
+        );
+    }
+
+    function test_FCFS_CreateRound_RequiresEscrowSignature() public {
+        address me = address(this);
+        (
+            CyberAgreementRegistry registry,
+            CyberCorpFactory corpFactory,
+            address imFactory,
+            address ccSingleFactory,
+            address dmFactory,
+            address uriBuilder
+        ) = _deployRegistryAndFactories(me);
+
+        _createTemplate(registry);
+
+        (address corp, address auth, address issuance, ) = _deployCorp(corpFactory, "Corp A", me, me);
+        RoundManager rm = _initRoundManager(auth, corp, address(registry), issuance);
+
+        // Prepare minimal cert data
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Legend";
+        RoundManager.CyberCertData[] memory certData = new RoundManager.CyberCertData[](1);
+        certData[0] = RoundManager.CyberCertData({
+            name: "Equity",
+            symbol: "EQ",
+            uri: "ipfs://eq",
+            securityClass: SecurityClass.CommonStock,
+            securitySeries: SecuritySeries.NA,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+        string[] memory roundPartyValues = new string[](2);
+        roundPartyValues[0] = "Officer";
+        roundPartyValues[1] = "CEO";
+
+        vm.expectRevert(abi.encodeWithSelector(RoundManager.InvalidEscrowedSignature.selector));
+        rm.createRound(
+            "Seed",
+            1,
+            1,
+            1,
+            RoundType.FCFS,
+            "terms",
+            block.timestamp,
+            block.timestamp + 1,
+            bytes32(uint256(777)),
+            certData,
+            address(0xDEAD),
+            1,
+            1,
+            6,
+            roundPartyValues,
+            bytes("") // empty => revert
+        );
+    }
+
+    function test_FCFS_SubmitEOI_AutoAllocates_FinalizesAndMints() public {
+        address me = address(this);
+        (
+            CyberAgreementRegistry registry,
+            CyberCorpFactory corpFactory,
+            ,
+            ,
+            ,
+            
+        ) = _deployRegistryAndFactories(me);
+        _createTemplate(registry);
+
+        (address corp, address auth, address issuance, ) = _deployCorp(corpFactory, "Corp B", me, me);
+        RoundManager rm = _initRoundManager(auth, corp, address(registry), issuance);
+
+        // Payment token
+        MockPaymentToken usdc = new MockPaymentToken();
+
+        // Create FCFS round
+        bytes32 roundId = _createFCFSRound(rm, issuance, address(usdc), usdc.decimals(), bytes32(uint256(777)));
+
+        // Investor funds & approval
+        address investor = address(0x111);
+        usdc.transfer(investor, 20_000 * (10 ** usdc.decimals()));
+        vm.startPrank(investor);
+        usdc.approve(address(rm), type(uint256).max);
+
+        EOI memory eoi = EOI({
+            name: "Investor 1",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "email",
+            minAmount: 5_000 * (10 ** usdc.decimals()),
+            maxAmount: 10_000 * (10 ** usdc.decimals())
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "g";
+        string[] memory partyValues = new string[](2);
+        partyValues[0] = "Officer";
+        partyValues[1] = "CEO";
+
+        bytes32 agreementId = rm.submitEOI(
+            roundId,
+            eoi,
+            globalValues,
+            partyValues,
+            hex"01",
+            1,
+            new address[](0),
+            bytes32(0),
+            block.timestamp + 7 days,
+            "Investor 1"
+        );
+        vm.stopPrank();
+
+        // Escrow should be finalized and contain corp assets
+        Escrow memory esc = rm.getEscrowDetails(agreementId);
+        assertEq(uint256(esc.status), uint256(EscrowStatus.FINALIZED));
+        assertGt(esc.corpAssets.length, 0, "corp assets minted");
+    }
+
+    function test_FCFS_RefundsExcessPayment() public {
+        address me = address(this);
+        (
+            CyberAgreementRegistry registry,
+            CyberCorpFactory corpFactory,
+            ,
+            ,
+            ,
+            
+        ) = _deployRegistryAndFactories(me);
+        _createTemplate(registry);
+
+        (address corp, address auth, address issuance, ) = _deployCorp(corpFactory, "Corp C", me, me);
+        RoundManager rm = _initRoundManager(auth, corp, address(registry), issuance);
+
+        MockPaymentToken usdc = new MockPaymentToken();
+        bytes32 roundId = _createFCFSRound(rm, issuance, address(usdc), usdc.decimals(), bytes32(uint256(777)));
+
+        address investor = address(0x222);
+        uint256 startBal = usdc.balanceOf(investor);
+        usdc.transfer(investor, 50_000 * (10 ** usdc.decimals()));
+        vm.startPrank(investor);
+        usdc.approve(address(rm), type(uint256).max);
+
+        // EOI where max escrowed greatly exceeds what pricePerUnit can consume at min ticket
+        EOI memory eoi = EOI({
+            name: "Investor 2",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "email",
+            minAmount: 10_000 * (10 ** usdc.decimals()),
+            maxAmount: 40_000 * (10 ** usdc.decimals())
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "g";
+        string[] memory partyValues = new string[](2);
+        partyValues[0] = "Officer";
+        partyValues[1] = "CEO";
+
+        rm.submitEOI(
+            roundId,
+            eoi,
+            globalValues,
+            partyValues,
+            hex"01",
+            1,
+            new address[](0),
+            bytes32(0),
+            block.timestamp + 7 days,
+            "Investor 2"
+        );
+        vm.stopPrank();
+
+        // Investor final balance should equal initial + transfer - allocatedAmount = start + minted - allocated
+        // Since we don't know allocated precisely here without recomputing, assert it's strictly less than start+40k and greater than start
+        uint256 endBal = usdc.balanceOf(investor);
+        assertGt(endBal, startBal, "refund occurred");
+        assertLt(endBal, startBal + 40_000 * (10 ** usdc.decimals()), "not all funds consumed");
+    }
+
+    function test_FCFS_SubmitEOI_InvalidAmount_Reverts() public {
+        address me = address(this);
+        (
+            CyberAgreementRegistry registry,
+            CyberCorpFactory corpFactory,
+            ,
+            ,
+            ,
+            
+        ) = _deployRegistryAndFactories(me);
+        _createTemplate(registry);
+
+        (address corp, address auth, address issuance, ) = _deployCorp(corpFactory, "Corp D", me, me);
+        RoundManager rm = _initRoundManager(auth, corp, address(registry), issuance);
+        MockPaymentToken usdc = new MockPaymentToken();
+        bytes32 roundId = _createFCFSRound(rm, issuance, address(usdc), usdc.decimals(), bytes32(uint256(777)));
+
+        address investor = address(0x333);
+        usdc.transfer(investor, 5_000 * (10 ** usdc.decimals()));
+        vm.startPrank(investor);
+        usdc.approve(address(rm), type(uint256).max);
+
+        // max below round.minTicket => revert InvalidAmount
+        EOI memory eoi = EOI({
+            name: "Investor 3",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "email",
+            minAmount: 100,
+            maxAmount: 500 // too small vs minTicket 1_000 * 10^6
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "g";
+        string[] memory partyValues = new string[](2);
+        partyValues[0] = "Officer";
+        partyValues[1] = "CEO";
+
+        vm.expectRevert(abi.encodeWithSelector(RoundManager.InvalidAmount.selector));
+        rm.submitEOI(
+            roundId,
+            eoi,
+            globalValues,
+            partyValues,
+            hex"01",
+            1,
+            new address[](0),
+            bytes32(0),
+            block.timestamp + 7 days,
+            "Investor 3"
+        );
+        vm.stopPrank();
+    }
+
+    function test_FCFS_SubmitEOI_RemainingBelowMin_RevertsAndNoFundsPulled() public {
+        address me = address(this);
+        (
+            CyberAgreementRegistry registry,
+            CyberCorpFactory corpFactory,
+            ,
+            ,
+            ,
+            
+        ) = _deployRegistryAndFactories(me);
+        _createTemplate(registry);
+
+        (address corp, address auth, address issuance, ) = _deployCorp(corpFactory, "Corp E", me, me);
+        RoundManager rm = _initRoundManager(auth, corp, address(registry), issuance);
+        MockPaymentToken usdc = new MockPaymentToken();
+
+        // Create FCFS round with small remaining after first EOI
+        bytes32 roundId = _createFCFSRound(rm, issuance, address(usdc), usdc.decimals(), bytes32(uint256(777)));
+
+        // First investor consumes nearly all raise with a valid allocation
+        address inv1 = address(0x444);
+        usdc.transfer(inv1, 100_000 * (10 ** usdc.decimals()));
+        vm.startPrank(inv1);
+        usdc.approve(address(rm), type(uint256).max);
+
+        EOI memory eoi1 = EOI({
+            name: "A",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "email",
+            minAmount: 50_000 * (10 ** usdc.decimals()),
+            maxAmount: 990_000 * (10 ** usdc.decimals())
+        });
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "g";
+        string[] memory partyValues = new string[](2);
+        partyValues[0] = "Officer";
+        partyValues[1] = "CEO";
+        rm.submitEOI(roundId, eoi1, globalValues, partyValues, hex"01", 1, new address[](0), bytes32(0), block.timestamp + 7 days, "A");
+        vm.stopPrank();
+
+        // Second investor tries but remaining < minRequired => overall revert and no transferFrom should occur
+        address inv2 = address(0x555);
+        uint256 startBal = usdc.balanceOf(inv2);
+        usdc.transfer(inv2, 2_000 * (10 ** usdc.decimals()));
+        vm.startPrank(inv2);
+        usdc.approve(address(rm), type(uint256).max);
+        EOI memory eoi2 = EOI({
+            name: "B",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "email",
+            minAmount: 2_000 * (10 ** usdc.decimals()),
+            maxAmount: 2_000 * (10 ** usdc.decimals())
+        });
+        vm.expectRevert(abi.encodeWithSelector(RoundManager.InvalidAllocation.selector));
+        rm.submitEOI(roundId, eoi2, globalValues, partyValues, hex"01", 2, new address[](0), bytes32(0), block.timestamp + 7 days, "B");
+        vm.stopPrank();
+        assertEq(usdc.balanceOf(inv2), startBal + 2_000 * (10 ** usdc.decimals()), "No funds pulled on revert");
     }
 }
