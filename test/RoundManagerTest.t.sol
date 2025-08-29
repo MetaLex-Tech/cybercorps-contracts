@@ -722,6 +722,54 @@ contract RoundManagerFCFSTest is Test {
         );
     }
 
+    function _createFCFSRoundCustom(
+        RoundManager rm,
+        address paymentToken,
+        uint8 payDec,
+        bytes32 templateId,
+        uint256 raiseCap,
+        uint256 minTicket,
+        uint256 maxTicket
+    ) internal returns (bytes32) {
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Legend";
+        RoundManager.CyberCertData[] memory certData = new RoundManager.CyberCertData[](1);
+        certData[0] = RoundManager.CyberCertData({
+            name: "Equity",
+            symbol: "EQ",
+            uri: "ipfs://eq",
+            securityClass: SecurityClass.CommonStock,
+            securitySeries: SecuritySeries.NA,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+
+        string[] memory roundPartyValues = new string[](2);
+        roundPartyValues[0] = "Alice Officer";
+        roundPartyValues[1] = "CEO";
+
+        bytes memory escrowedSig = hex"01";
+
+        return rm.createRound(
+            "Seed",
+            raiseCap,
+            minTicket,
+            maxTicket,
+            RoundType.FCFS,
+            "terms",
+            block.timestamp,
+            block.timestamp + 30 days,
+            templateId,
+            certData,
+            paymentToken,
+            10 * (10 ** payDec),
+            10_000_000,
+            payDec,
+            roundPartyValues,
+            escrowedSig
+        );
+    }
+
     function test_FCFS_CreateRound_RequiresEscrowSignature() public {
         address me = address(this);
         (
@@ -795,7 +843,15 @@ contract RoundManagerFCFSTest is Test {
         CyberCorp(corp).setDealManager(address(rm));
 
         MockPaymentToken usdc = new MockPaymentToken();
-        bytes32 roundId = _createFCFSRound(rm, address(usdc), usdc.decimals(), bytes32(uint256(777)));
+        bytes32 roundId = _createFCFSRoundCustom(
+            rm,
+            address(usdc),
+            usdc.decimals(),
+            bytes32(uint256(777)),
+            2_000 * (10 ** usdc.decimals()),
+            2_000 * (10 ** usdc.decimals()),
+            50_000 * (10 ** usdc.decimals())
+        );
 
         uint256 salt = 1;
         uint256 privKey = 0xA11CE;
@@ -992,7 +1048,7 @@ contract RoundManagerFCFSTest is Test {
         CyberCorp(corp).setDealManager(address(rm));
         MockPaymentToken usdc = new MockPaymentToken();
 
-        bytes32 roundId = _createFCFSRound(rm, address(usdc), usdc.decimals(), bytes32(uint256(777)));
+        bytes32 roundId = _createFCFSRoundCustom(rm, address(usdc), usdc.decimals(), bytes32(uint256(777)), 1_500 * (10 ** usdc.decimals()), 1_500 * (10 ** usdc.decimals()), 100_000 * (10 ** usdc.decimals()));
 
         uint256 salt1 = 1;
         uint256 privKey1 = 0xC01;
@@ -1006,8 +1062,8 @@ contract RoundManagerFCFSTest is Test {
             investorType: "Individual",
             jurisdiction: "US",
             contact: "email",
-            minAmount: 50_000 * (10 ** usdc.decimals()),
-            maxAmount: 990_000 * (10 ** usdc.decimals())
+            minAmount: 1_000 * (10 ** usdc.decimals()),
+            maxAmount: 2_000 * (10 ** usdc.decimals())
         });
         string[] memory globalValues = new string[](1);
         globalValues[0] = "g";

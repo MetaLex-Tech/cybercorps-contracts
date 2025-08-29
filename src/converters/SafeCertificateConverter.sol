@@ -6,7 +6,7 @@ import "../interfaces/ICyberCertPrinter.sol";
 import "../RoundManager.sol";
 
 /// @title SafeCertificateConverter
-/// @notice Computes conversion plan for SAFE-like certificates into equity based on RoundManager data
+/// @notice Computes conversion plan for certificates based on RoundManager data
 contract SafeCertificateConverter is ICertificateConverter {
     error InvalidRoundConfig();
     error MathError();
