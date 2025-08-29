@@ -17,6 +17,7 @@ import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
+import {CyberCorp} from "../src/CyberCorp.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {LexScrowStorage, Escrow, EscrowStatus} from "../src/storage/LexScrowStorage.sol";
@@ -789,6 +790,10 @@ contract RoundManagerFCFSTest is Test {
         (address corp, address auth, address issuance, ) = _deployCorp(corpFactory, "Corp B", me, me);
         RoundManager rm = _initRoundManager(auth, corp, address(registry), issuance);
 
+        // Allow RoundManager to transfer certs by setting it as the corp's dealManager
+        vm.prank(address(corpFactory));
+        CyberCorp(corp).setDealManager(address(rm));
+
         MockPaymentToken usdc = new MockPaymentToken();
         bytes32 roundId = _createFCFSRound(rm, address(usdc), usdc.decimals(), bytes32(uint256(777)));
 
@@ -857,6 +862,9 @@ contract RoundManagerFCFSTest is Test {
 
         (address corp, address auth, address issuance, ) = _deployCorp(corpFactory, "Corp C", me, me);
         RoundManager rm = _initRoundManager(auth, corp, address(registry), issuance);
+
+        vm.prank(address(corpFactory));
+        CyberCorp(corp).setDealManager(address(rm));
 
         MockPaymentToken usdc = new MockPaymentToken();
         bytes32 roundId = _createFCFSRound(rm, address(usdc), usdc.decimals(), bytes32(uint256(777)));
@@ -980,6 +988,8 @@ contract RoundManagerFCFSTest is Test {
 
         (address corp, address auth, address issuance, ) = _deployCorp(corpFactory, "Corp E", me, me);
         RoundManager rm = _initRoundManager(auth, corp, address(registry), issuance);
+        vm.prank(address(corpFactory));
+        CyberCorp(corp).setDealManager(address(rm));
         MockPaymentToken usdc = new MockPaymentToken();
 
         bytes32 roundId = _createFCFSRound(rm, address(usdc), usdc.decimals(), bytes32(uint256(777)));
