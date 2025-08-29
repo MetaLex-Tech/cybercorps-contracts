@@ -156,6 +156,7 @@ contract IssuanceManagerConversionTest is Test {
             investmentAmountUSD: 1_000_000, // PA
             issuerUSDValuationAtTimeOfInvestment: 10_000_000, // PMVC
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "",
             extensionData: ""
         });

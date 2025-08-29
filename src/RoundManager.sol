@@ -612,6 +612,7 @@ contract RoundManager is
             investmentAmountUSD: investmentUSD,
             issuerUSDValuationAtTimeOfInvestment: round.valuation,
             unitsRepresented: units,
+            typeOfUnitsRepresented: "",
             legalDetails: "",
             extensionData: ""
         });

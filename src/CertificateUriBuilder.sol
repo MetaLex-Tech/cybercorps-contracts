@@ -167,6 +167,7 @@ struct CertificateDetails {
     uint256 investmentAmountUSD;
     uint256 issuerUSDValuationAtTimeOfInvestment;
     uint256 unitsRepresented;
+    string typeOfUnitsRepresented;
     string legalDetails;
     bytes extensionData;
 }
@@ -194,6 +195,7 @@ struct CertificateDetails {
             '{"trait_type": "CurrentOwner", "value": "', addressToString(owner.ownerAddress),
             '"}, {"trait_type": "investmentAmount", "value": "', uint256ToString(details.investmentAmountUSD),
             '"}, {"trait_type": "unitsRepresented", "value": "', uint256ToString(details.unitsRepresented),
+            '"}, {"trait_type": "typeOfUnitsRepresented", "value": "', details.typeOfUnitsRepresented,
             '"}, {"trait_type": "issuerUSDValuationAtTimeOfInvestment", "value": "', uint256ToString(details.issuerUSDValuationAtTimeOfInvestment),
             '"}'
         ));
@@ -325,6 +327,7 @@ struct CertificateDetails {
             '", "investmentAmountUSD": "', uint256ToString(details.investmentAmountUSD),
             '", "issuerUSDValuationAtTimeOfInvestment": "', uint256ToString(details.issuerUSDValuationAtTimeOfInvestment),
             '", "unitsRepresented": "', uint256ToString(details.unitsRepresented),
+            '", "typeOfUnitsRepresented": "', details.typeOfUnitsRepresented,
             '", "legalDetails": "', details.legalDetails,
             '"'
         );
@@ -402,6 +405,7 @@ struct CertificateDetails {
             '", "investmentAmountUSD": "', uint256ToString(details.investmentAmountUSD),
             '", "issuerUSDValuationAtTimeOfInvestment": "', uint256ToString(details.issuerUSDValuationAtTimeOfInvestment),
             '", "unitsRepresented": "', uint256ToString(details.unitsRepresented),
+            '", "typeOfUnitsRepresented": "', details.typeOfUnitsRepresented,
             '", "legalDetails": "', details.legalDetails,
             '"'
         );

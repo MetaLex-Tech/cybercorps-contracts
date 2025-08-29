@@ -627,6 +627,7 @@ contract IssuanceManager is Initializable, BorgAuthACL {
                 investmentAmountUSD: 0,  // Maintaining original value from scrip
                 issuerUSDValuationAtTimeOfInvestment: 0, // Maintaining original value from scrip
                 unitsRepresented: amount,
+                typeOfUnitsRepresented: "",
                 legalDetails: "",        // Can be set by admin later if needed
                 extensionData: ""        // Can be set by admin later if needed
             });
@@ -668,6 +669,7 @@ contract IssuanceManager is Initializable, BorgAuthACL {
             investmentAmountUSD: srcDetails.investmentAmountUSD,
             issuerUSDValuationAtTimeOfInvestment: srcDetails.issuerUSDValuationAtTimeOfInvestment,
             unitsRepresented: plan.shares,
+            typeOfUnitsRepresented: "",
             legalDetails: plan.legalDetails,
             extensionData: ""
         });

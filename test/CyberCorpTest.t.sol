@@ -291,6 +291,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -383,6 +384,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -512,6 +514,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -521,6 +524,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -702,6 +706,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -917,6 +922,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -1046,6 +1052,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -1181,6 +1188,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -1336,6 +1344,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -1440,6 +1449,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -1574,6 +1584,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -1678,6 +1689,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -1785,6 +1797,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -1886,6 +1899,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -2014,6 +2028,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -2154,6 +2169,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -2298,6 +2314,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -2429,6 +2446,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -2568,6 +2586,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 100000,
             issuerUSDValuationAtTimeOfInvestment: 100000000,
             unitsRepresented: 100000,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details",
             extensionData: ""
         });
@@ -2801,6 +2820,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 100000,
             issuerUSDValuationAtTimeOfInvestment: 100000000,
             unitsRepresented: 100000,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details",
             extensionData: tokenWarrantData
         });
@@ -3082,6 +3102,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -3188,6 +3209,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -3315,6 +3337,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -3456,6 +3479,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -3585,6 +3609,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jusidictione etc",
             extensionData: ""
         });
@@ -3880,6 +3905,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 100000,
             issuerUSDValuationAtTimeOfInvestment: 100000000,
             unitsRepresented: 100000,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details",
             extensionData: safteDataEncoded
         });
@@ -4038,6 +4064,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 100000,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 1000,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details for test",
             extensionData: ""
         });
@@ -4187,6 +4214,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 100000,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 1000,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details for SAFE",
             extensionData: ""
         });
@@ -4196,6 +4224,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 50000,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 500,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details for Token Warrant",
             extensionData: ""
         });
@@ -4363,6 +4392,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 100000,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 1000,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details for test",
             extensionData: ""
         });
@@ -4552,6 +4582,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jurisdiction etc",
             extensionData: ""
         });
@@ -4699,6 +4730,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jurisdiction etc",
             extensionData: ""
         });
@@ -4842,6 +4874,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jurisdiction etc",
             extensionData: ""
         });
@@ -5095,6 +5128,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details, jurisdiction etc",
             extensionData: ""
         });
@@ -5250,6 +5284,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 100000,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 1000,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details for delegation test",
             extensionData: ""
         });
@@ -5435,6 +5470,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 100000,
             issuerUSDValuationAtTimeOfInvestment: 10000000,
             unitsRepresented: 1000,
+            typeOfUnitsRepresented: "",
             legalDetails: "Legal Details for expiry test",
             extensionData: ""
         });
@@ -5566,6 +5602,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 0,
             unitsRepresented: 0,
+            typeOfUnitsRepresented: "",
             legalDetails: "",
             extensionData: ""
         });
@@ -5635,6 +5672,7 @@ contract CyberCorpTest is Test {
             investmentAmountUSD: 0,
             issuerUSDValuationAtTimeOfInvestment: 0,
             unitsRepresented: 1,
+            typeOfUnitsRepresented: "",
             legalDetails: "",
             extensionData: ""
         });
