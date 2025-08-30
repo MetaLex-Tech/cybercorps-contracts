@@ -848,7 +848,7 @@ contract RoundManagerFCFSTest is Test {
             address(usdc),
             usdc.decimals(),
             bytes32(uint256(777)),
-            2_000 * (10 ** usdc.decimals()),
+            100_000 * (10 ** usdc.decimals()),
             2_000 * (10 ** usdc.decimals()),
             50_000 * (10 ** usdc.decimals())
         );
