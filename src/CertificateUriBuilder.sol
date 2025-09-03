@@ -75,6 +75,23 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         return "Unknown";
     }
 
+    function securityClassToUnit(SecurityClass _class) public pure returns (string memory) {
+        if (_class == SecurityClass.SAFE) return "Dollars";
+        if (_class == SecurityClass.SAFT) return "Dollars";
+        if (_class == SecurityClass.SAFTE) return "Dollars";
+        if (_class == SecurityClass.TokenPurchaseAgreement) return "Tokens";
+        if (_class == SecurityClass.TokenWarrant) return "Tokens";
+        if (_class == SecurityClass.ConvertibleNote) return "Notes";
+        if (_class == SecurityClass.CommonStock) return "Shares";
+        if (_class == SecurityClass.StockOption) return "Shares";
+        if (_class == SecurityClass.PreferredStock) return "Shares";
+        if (_class == SecurityClass.RestrictedStockPurchaseAgreement) return "Units";
+        if (_class == SecurityClass.RestrictedStockUnit) return "Units";
+        if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "Units";
+        if (_class == SecurityClass.RestrictedTokenUnit) return "Units";
+        return "Unknown";
+    }
+
     // Helper function to convert SecuritySeries enum to string
     function securitySeriesToString(SecuritySeries _series) public pure returns (string memory) {
         if (_series == SecuritySeries.SeriesPreSeed) return "SeriesPreSeed";
