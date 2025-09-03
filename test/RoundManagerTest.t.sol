@@ -7,8 +7,7 @@ import "../src/IssuanceManager.sol";
 import "../src/CyberCertPrinter.sol";
 import "../src/storage/RoundManagerStorage.sol";
 import "../src/CyberCorpConstants.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
@@ -19,7 +18,7 @@ import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {LexScrowStorage, Escrow, EscrowStatus} from "../src/storage/LexScrowStorage.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 
@@ -43,10 +42,26 @@ contract RoundManagerTest is Test {
     MockPaymentToken public paymentToken;
     
     address public owner;
+    uint256 private ownerPrivKey;
     address public investor;
+    uint256 private investorPrivKey;
+
+    // Infra
+    CyberAgreementRegistry private registry;
+    CyberCorpFactory private corpFactory;
+    address private corp;
+    address private auth;
+    address private issuance;
+    address private dealManager;
+    address private uriBuilder;
+    RoundManagerFactory private rmFactory;
+    bytes32 private templateId;
+    string[] private testRoundPartyValues;
+    
+    // Captured round id
+    bytes32 public roundId;
     
     // Test round parameters
-    bytes32 public constant ROUND_ID = bytes32("TEST_ROUND_1");
     uint256 public constant MIN_TICKET = 1000 * 10**6; // 1,000 USDC
     uint256 public constant MAX_TICKET = 100000 * 10**6; // 100,000 USDC
     uint256 public constant RAISE_CAP = 1000000 * 10**6; // 1M USDC
@@ -54,19 +69,92 @@ contract RoundManagerTest is Test {
     uint256 public constant VALUATION = 10000000; // $10M valuation
 
     function setUp() public {
-        owner = address(this);
-        investor = address(0x1);
-        
+        ownerPrivKey = 0xA0A0;
+        owner = vm.addr(ownerPrivKey);
+        investorPrivKey = 0xA11CE;
+        investor = vm.addr(investorPrivKey);
+
+        // Deploy infra (auth, registry, factories)
+        bytes32 salt = keccak256(abi.encodePacked("roundmanager-infra", owner));
+        BorgAuth bootstrapAuth = new BorgAuth{salt: salt}(owner);
+
+        registry = CyberAgreementRegistry(
+            address(new ERC1967Proxy{salt: salt}(
+                address(new CyberAgreementRegistry{salt: salt}()),
+                abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(bootstrapAuth))
+            ))
+        );
+
+        uriBuilder = address(new ERC1967Proxy{salt: salt}(
+            address(new CertificateUriBuilder{salt: salt}()),
+            abi.encodeWithSelector(CertificateUriBuilder.initialize.selector, address(bootstrapAuth))
+        ));
+
+        address issuanceManagerFactoryAddr = address(new IssuanceManagerFactory{salt: salt}(address(bootstrapAuth)));
+        address cyberCorpSingleFactory = address(new CyberCorpSingleFactory{salt: salt}(address(bootstrapAuth)));
+        address dealManagerFactory = address(new DealManagerFactory{salt: salt}(address(bootstrapAuth)));
+
+        address certPrinterImpl = address(new CyberCertPrinter{salt: salt}());
+        address cyberScripImpl = address(new CyberScrip{salt: salt}());
+
+        corpFactory = CyberCorpFactory(
+            address(new ERC1967Proxy{salt: salt}(
+                address(new CyberCorpFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    CyberCorpFactory.initialize.selector,
+                    address(bootstrapAuth),
+                    address(registry),
+                    certPrinterImpl,
+                    cyberScripImpl,
+                    issuanceManagerFactoryAddr,
+                    cyberCorpSingleFactory,
+                    dealManagerFactory,
+                    uriBuilder
+                )
+            ))
+        );
+
+        // Deploy corp
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: owner,
+            name: "Officer",
+            contact: "officer@example.com",
+            title: "CEO"
+        });
+        (corp, auth, issuance, dealManager) = corpFactory.deployCyberCorp(
+            keccak256("rm-corp"),
+            "Test Corp",
+            "corporation",
+            "DE",
+            "contact",
+            "arbitration",
+            owner,
+            officer
+        );
+
+        // RoundManager via factory and initialize
+        rmFactory = new RoundManagerFactory(auth);
+        address proxy = rmFactory.deployRoundManager(keccak256("rm"));
+        roundManager = RoundManager(payable(proxy));
+        roundManager.initialize(auth, corp, address(registry), issuance, address(rmFactory));
+        // Authorize RM as owner in IssuanceManager
+        vm.prank(owner);
+        BorgAuth(auth).updateRole(address(roundManager), 99);
+        // Allow RM to transfer certs by setting it as corp's dealManager
+        vm.prank(address(corpFactory));
+        CyberCorp(corp).setDealManager(address(roundManager));
+
+        // Define a template with 1 global and 1 party field to match tests
+        templateId = bytes32("TEST_TEMPLATE");
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field";
+        vm.prank(owner);
+        registry.createTemplate(templateId, "TestT", "ipfs://template", globalFields, partyFields);
+
         // Deploy mock payment token
         paymentToken = new MockPaymentToken();
-        
-        // Setup IssuanceManager and CertPrinter (simplified setup)
-        issuanceManager = new IssuanceManager();
-        // Note: In real setup you'd need to properly initialize these with all dependencies
-        
-        // Setup RoundManager
-        roundManager = new RoundManager();
-        // Note: In real setup you'd need to properly initialize with auth and other dependencies
 
         // Create certificate data for the round
         RoundManager.CyberCertData[] memory certData = new RoundManager.CyberCertData[](1);
@@ -83,8 +171,13 @@ contract RoundManagerTest is Test {
             defaultLegend: defaultLegend
         });
         
+        // Create test round (template has 1 party field; provide 1 round party value)
+        testRoundPartyValues = new string[](1);
+        testRoundPartyValues[0] = "Officer";
+        
         // Create test round
-        roundManager.createRound(
+        vm.prank(owner);
+        roundId = roundManager.createRound(
             "Series A",
             RAISE_CAP,
             MIN_TICKET,
@@ -93,13 +186,13 @@ contract RoundManagerTest is Test {
             "Test Terms",
             block.timestamp,
             block.timestamp + 30 days,
-            bytes32("TEST_TEMPLATE"),
+            templateId,
             certData,
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
             6, // USDC decimals
-            new string[](0),
+            testRoundPartyValues,
             bytes("")
         );
         
@@ -107,6 +200,56 @@ contract RoundManagerTest is Test {
         paymentToken.transfer(investor, 1000000 * 10**6);
         vm.prank(investor);
         paymentToken.approve(address(roundManager), type(uint256).max);
+    }
+
+    function _computeEOISignature(
+        bytes32 _templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        string[] memory partyValues,
+        address authorityOfficer,
+        uint256 signerPrivKey
+    ) internal view returns (bytes memory) {
+        (string memory legalUri, , string[] memory glFields, string[] memory partyFields) = registry.getTemplateDetails(_templateId);
+        address signer = vm.addr(signerPrivKey);
+        address[] memory parties = new address[](2);
+        parties[0] = authorityOfficer;
+        parties[1] = signer;
+        bytes32 contractId = keccak256(abi.encode(_templateId, salt, globalValues, parties));
+        return CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            legalUri,
+            glFields,
+            partyFields,
+            globalValues,
+            partyValues,
+            signerPrivKey
+        );
+    }
+
+    // Sign for an existing agreementId (used by allocate path)
+    function _signForAgreement(
+        bytes32 agreementId,
+        string[] memory globalValues,
+        string[] memory partyValues,
+        uint256 signerPrivKey
+    ) internal view returns (bytes memory) {
+        (string memory legalUri, , string[] memory glFields, string[] memory partyFields) = registry.getTemplateDetails(templateId);
+        return CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            agreementId,
+            legalUri,
+            glFields,
+            partyFields,
+            globalValues,
+            partyValues,
+            signerPrivKey
+        );
     }
 
     function _setRoundMeta(
@@ -156,7 +299,7 @@ contract RoundManagerTest is Test {
         // roundPrice = 120.00 → 12000
         uint256 roundPrice = 12_000;
 
-        _setRoundMeta(ROUND_ID, roundPrice, priceDec, CCapUsed, /*Floor*/0, priceDec, shareDec);
+        _setRoundMeta(roundId, roundPrice, priceDec, CCapUsed, /*Floor*/0, priceDec, shareDec);
 
         // Expected price basis is SAFE price (lower)
         uint256 priceBasis = safePrice < roundPrice ? safePrice : roundPrice;
@@ -178,7 +321,7 @@ contract RoundManagerTest is Test {
         // roundPrice = 100.00 → 10000
         uint256 roundPrice = 10_000;
 
-        _setRoundMeta(ROUND_ID, roundPrice, priceDec, CCapUsed, /*Floor*/0, priceDec, shareDec);
+        _setRoundMeta(roundId, roundPrice, priceDec, CCapUsed, /*Floor*/0, priceDec, shareDec);
 
         uint256 priceBasis = safePrice < roundPrice ? safePrice : roundPrice;
         assertEq(priceBasis, roundPrice);
@@ -197,27 +340,27 @@ contract RoundManagerTest is Test {
         uint256 PA = 1_000_001; // off-by-one to test rounding edges
 
         // Floor
-        _setRoundMeta(ROUND_ID, roundPrice, priceDec, CCapUsed, /*Floor*/0, priceDec, shareDec);
+        _setRoundMeta(roundId, roundPrice, priceDec, CCapUsed, /*Floor*/0, priceDec, shareDec);
         uint256 safePrice = (PMVC * (10 ** priceDec)) / CCapUsed; // 10000
         uint256 priceBasis = safePrice < roundPrice ? safePrice : roundPrice; // 10000
         uint256 floorShares = (PA * (10 ** priceDec)) / priceBasis; // 10000 (floor)
         assertEq(floorShares, 10_000);
 
         // Ceil
-        _setRoundMeta(ROUND_ID, roundPrice, priceDec, CCapUsed, /*Ceil*/1, priceDec, shareDec);
+        _setRoundMeta(roundId, roundPrice, priceDec, CCapUsed, /*Ceil*/1, priceDec, shareDec);
         uint256 ceilShares = (PA * (10 ** priceDec) + priceBasis - 1) / priceBasis;
         assertEq(ceilShares, 10_001);
 
         // Round half up
-        _setRoundMeta(ROUND_ID, roundPrice, priceDec, CCapUsed, /*Round*/2, priceDec, shareDec);
+        _setRoundMeta(roundId, roundPrice, priceDec, CCapUsed, /*Round*/2, priceDec, shareDec);
         uint256 halfUpShares = (PA * (10 ** priceDec) + (priceBasis / 2)) / priceBasis;
         assertEq(halfUpShares, 10_000); // since half of 10000 is 5000, still 10000 for these values
     }
 
     function test_PmvcSubseriesLabel_SetAndGet() public {
         vm.prank(owner);
-        roundManager.setPMVCSubseriesLabel(ROUND_ID, 10_000_000, "SAFE1");
-        string memory label = roundManager.getPMVCSubseriesLabel(ROUND_ID, 10_000_000);
+        roundManager.setPMVCSubseriesLabel(roundId, 10_000_000, "SAFE1");
+        string memory label = roundManager.getPMVCSubseriesLabel(roundId, 10_000_000);
         assertEq(keccak256(bytes(label)), keccak256(bytes("SAFE1")));
     }
 
@@ -239,15 +382,22 @@ contract RoundManagerTest is Test {
         string[] memory partyValues = new string[](1);
         partyValues[0] = "Party Value";
         
-        bytes memory signature = "0x";
         uint256 salt = 1;
+        bytes memory signature = _computeEOISignature(
+            templateId,
+            salt,
+            globalValues,
+            partyValues,
+            owner,
+            investorPrivKey
+        );
         address[] memory conditions = new address[](0);
         bytes32 secretHash = bytes32(0);
         uint256 expiry = block.timestamp + 7 days;
         bytes memory voidSignature = "0x";
         
         bytes32 agreementId = roundManager.submitEOI(
-            ROUND_ID,
+            roundId,
             eoi,
             globalValues,
             partyValues,
@@ -263,7 +413,7 @@ contract RoundManagerTest is Test {
         
         // Verify EOI was stored correctly by checking the EOISubmitted event
         vm.expectEmit(true, true, true, true);
-        emit RoundManager.EOISubmitted(agreementId, ROUND_ID, investor, eoi.maxAmount);
+        emit RoundManager.EOISubmitted(agreementId, roundId, investor, eoi.maxAmount);
         
         vm.stopPrank();
     }
@@ -285,12 +435,20 @@ contract RoundManagerTest is Test {
         
         vm.expectRevert(abi.encodeWithSelector(RoundManager.InvalidAmount.selector));
         
+        bytes memory sig = _computeEOISignature(
+            templateId,
+            1,
+            globalValues,
+            partyValues,
+            owner,
+            investorPrivKey
+        );
         roundManager.submitEOI(
-            ROUND_ID,
+            roundId,
             eoi,
             globalValues,
             partyValues,
-            "0x",
+            sig,
             1,
             new address[](0),
             bytes32(0),
@@ -315,11 +473,11 @@ contract RoundManagerTest is Test {
         });
         
         bytes32 agreementId = roundManager.submitEOI(
-            ROUND_ID,
+            roundId,
             eoi,
             new string[](1),
             new string[](1),
-            "0x",
+            _computeEOISignature(templateId, 1, new string[](1), new string[](1), owner, investorPrivKey),
             1,
             new address[](0),
             bytes32(0),
@@ -332,17 +490,25 @@ contract RoundManagerTest is Test {
         // Now allocate as owner
         uint256 allocatedAmount = 7500 * 10**6; // 7,500 USDC
         
+        // Company officer signature over party values for allocation path (signs agreementId)
+        bytes memory officerSig = _signForAgreement(
+            agreementId,
+            new string[](1),
+            testRoundPartyValues,
+            ownerPrivKey
+        );
+
         vm.prank(owner);
-        roundManager.allocate(agreementId, allocatedAmount, "0x");
+        roundManager.allocate(agreementId, allocatedAmount, officerSig);
         
         // Verify allocation by checking if the round exists and getting its price info
-        assertTrue(roundManager.roundExists(ROUND_ID), "Round should exist");
+        assertTrue(roundManager.roundExists(roundId), "Round should exist");
         
         // We can verify the allocation was successful by checking if an AllocationMade event was emitted
         vm.expectEmit(true, true, false, true);
         uint256[] memory expectedCertIds = new uint256[](1);
         expectedCertIds[0] = 0; // First certificate ID
-        emit RoundManager.AllocationMade(agreementId, ROUND_ID, allocatedAmount, expectedCertIds);
+        emit RoundManager.AllocationMade(agreementId, roundId, allocatedAmount, expectedCertIds);
         
         // Verify certificate was created
         // Note: In a real test you'd need to properly mock the CertPrinter and verify its state
@@ -362,11 +528,11 @@ contract RoundManagerTest is Test {
         });
         
         bytes32 agreementId = roundManager.submitEOI(
-            ROUND_ID,
+            roundId,
             eoi,
             new string[](1),
             new string[](1),
-            "0x",
+            _computeEOISignature(templateId, 1, new string[](1), new string[](1), owner, investorPrivKey),
             1,
             new address[](0),
             bytes32(0),
@@ -379,10 +545,18 @@ contract RoundManagerTest is Test {
         // Try to allocate an amount below min
         uint256 invalidAmount = 1000 * 10**6; // Below eoi.minAmount
         
-        vm.expectRevert(abi.encodeWithSelector(RoundManager.InvalidAllocation.selector));
         
+        
+        // Signature still required but allocation should fail before signature is used
+        bytes memory officerSig = _signForAgreement(
+            agreementId,
+            new string[](1),
+            testRoundPartyValues,
+            ownerPrivKey
+        );
         vm.prank(owner);
-        roundManager.allocate(agreementId, invalidAmount, "0x");
+        vm.expectRevert(abi.encodeWithSelector(RoundManager.InvalidAllocation.selector));
+        roundManager.allocate(agreementId, invalidAmount, officerSig);
     }
 
     function test_Allocate_ExceedsRaiseCap() public {
@@ -398,12 +572,15 @@ contract RoundManagerTest is Test {
             maxAmount: RAISE_CAP + 1 // Just over the raise cap
         });
         
-        bytes32 agreementId = roundManager.submitEOI(
-            ROUND_ID,
+        // Expect revert because eoi.maxAmount exceeds round.maxTicket bounds
+        bytes memory sig = _computeEOISignature(templateId, 1, new string[](1), new string[](1), owner, investorPrivKey);
+        vm.expectRevert(abi.encodeWithSelector(RoundManager.InvalidAmount.selector));
+        roundManager.submitEOI(
+            roundId,
             eoi,
             new string[](1),
             new string[](1),
-            "0x",
+            sig,
             1,
             new address[](0),
             bytes32(0),
@@ -412,11 +589,6 @@ contract RoundManagerTest is Test {
         );
         
         vm.stopPrank();
-        
-        vm.expectRevert(abi.encodeWithSelector(RoundManager.InvalidAllocation.selector));
-        
-        vm.prank(owner);
-        roundManager.allocate(agreementId, RAISE_CAP + 1, "0x");
     }
 
     function test_SubmitEOI_RoundClosed() public {
@@ -437,7 +609,7 @@ contract RoundManagerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(RoundManager.RoundNotOpen.selector));
         
         roundManager.submitEOI(
-            ROUND_ID,
+            roundId,
             eoi,
             new string[](1),
             new string[](1),
@@ -465,11 +637,11 @@ contract RoundManagerTest is Test {
         });
         
         bytes32 agreementId1 = roundManager.submitEOI(
-            ROUND_ID,
+            roundId,
             eoi1,
             new string[](1),
             new string[](1),
-            "0x",
+            _computeEOISignature(templateId, 1, new string[](1), new string[](1), owner, investorPrivKey),
             1,
             new address[](0),
             bytes32(0),
@@ -494,11 +666,11 @@ contract RoundManagerTest is Test {
         });
         
         bytes32 agreementId2 = roundManager.submitEOI(
-            ROUND_ID,
+            roundId,
             eoi2,
             new string[](1),
             new string[](1),
-            "0x",
+            _computeEOISignature(templateId, 2, new string[](1), new string[](1), owner, investorPrivKey),
             2,
             new address[](0),
             bytes32(0),
@@ -509,15 +681,27 @@ contract RoundManagerTest is Test {
         
         // Allocate to first investor
         vm.startPrank(owner);
-        roundManager.allocate(agreementId1, 500000 * 10**6, "0x"); // 500k USDC
+        bytes memory officerSig1 = _signForAgreement(
+            agreementId1,
+            new string[](1),
+            testRoundPartyValues,
+            ownerPrivKey
+        );
+        roundManager.allocate(agreementId1, 500000 * 10**6, officerSig1); // 500k USDC
         
         // Try to allocate remaining to second investor
-        roundManager.allocate(agreementId2, 500000 * 10**6, "0x"); // 500k USDC
+        bytes memory officerSig2 = _signForAgreement(
+            agreementId2,
+            new string[](1),
+            testRoundPartyValues,
+            ownerPrivKey
+        );
+        roundManager.allocate(agreementId2, 500000 * 10**6, officerSig2); // 500k USDC
         
         // Verify total raised equals sum of allocations by checking that the round is closed
         // When total raised equals raise cap, no more allocations should be possible
         vm.expectRevert(abi.encodeWithSelector(RoundManager.InvalidAllocation.selector));
-        roundManager.allocate(agreementId2, 1, "0x"); // Try to allocate 1 more token, should fail
+        roundManager.allocate(agreementId2, 1, officerSig2); // Try to allocate 1 more token, should fail
         vm.stopPrank();
     }
 
