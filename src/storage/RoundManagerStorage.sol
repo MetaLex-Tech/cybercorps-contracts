@@ -79,7 +79,6 @@ struct Round {
     uint256 minTicket;
     uint256 maxTicket;
     RoundType roundType;
-    string terms;
     uint256 startTime;
     uint256 endTime;
     bytes32 templateId;

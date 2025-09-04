@@ -70,7 +70,7 @@ contract BaseScript is Script {
         partyFieldsSafe[3] = "investorType";
         partyFieldsSafe[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(bytes("APlus_SAFE")), "APlus_SAFE_testnet", "ipfs://bafybeigurcpdzxkzpj4gaa54hzyjz5gr5imikwrgyttbrlqufx2434tg7q", globalFieldsSafe, partyFieldsSafe);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(bytes("ABV_safe_t")), "ABV_safe_t_testnet", "ipfs://bafybeia6l2w5kwr52w6khvhqkgg4n6poua5yjlwjmeqgb77iffh4xxpvdu", globalFieldsSafeT, partyFieldsSafeT);
      //   CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(31)), "MetaLeX cyberTokenWarrant a16z jx-neutral-style-issuer Reg D raise", "ipfs://bafybeibojsh6f4wxj3gvwjbv7uvvurony7jumyqqi5i6rqsv7wcywdsi44", globalFieldsSafeT, partyFieldsSafeT);
      //   CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(32)), "MetaLeX cyberSAFE jx-neutral-style Reg S raise", "ipfs://bafybeib5pqnqwbfdsnv4lqdkdglz2e4xqz2qklwdzzpbftydopzuqnri2a", globalFieldsSafe, partyFieldsSafe);
      //   CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(34)), "MetaLeX cyberTokenWarrant a16z-jx-neutral-style-issuer Reg S raise", "ipfs://bafybeihi77o6kxeien3kbg2tquhmyg4bbxvbf2kjejjswk7akfzdfprwle", globalFieldsSafeT, partyFieldsSafeT);

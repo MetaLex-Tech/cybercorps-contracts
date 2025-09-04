@@ -167,7 +167,6 @@ contract RoundManager is
     /// @param minTicket Minimum investment per EOI
     /// @param maxTicket Maximum investment per EOI
     /// @param roundType FCFS or FounderApproved
-    /// @param terms Terms of the round
     /// @param startTime Start timestamp
     /// @param endTime End timestamp
     /// @param templateId Agreement template ID
@@ -183,7 +182,6 @@ contract RoundManager is
         uint256 minTicket,
         uint256 maxTicket,
         RoundType roundType,
-        string memory terms,
         uint256 startTime,
         uint256 endTime,
         bytes32 templateId,
@@ -206,7 +204,6 @@ contract RoundManager is
                 minTicket,
                 maxTicket,
                 uint8(roundType),
-                terms,
                 startTime,
                 endTime,
                 templateId,
@@ -245,7 +242,6 @@ contract RoundManager is
             minTicket: minTicket,
             maxTicket: maxTicket,
             roundType: roundType,
-            terms: terms,
             startTime: startTime,
             endTime: endTime,
             templateId: templateId,
@@ -600,12 +596,14 @@ contract RoundManager is
         // Create certificate (prefer officer info captured in roundPartyValues)
         string memory officerName = "System";
         string memory officerTitle = "Automated Allocation";
+        
         if (round.roundPartyValues.length > 0) {
             officerName = round.roundPartyValues[0];
         }
         if (round.roundPartyValues.length > 1) {
             officerTitle = round.roundPartyValues[1];
         }
+
         CertificateDetails memory details = CertificateDetails({
             signingOfficerName: officerName,
             signingOfficerTitle: officerTitle,
