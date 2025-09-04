@@ -86,7 +86,6 @@ struct Round {
     address paymentToken;
     uint256 pricePerUnit;
     uint256 valuation;
-    uint256 paymentDecimals;
     uint256 raised;
     // Normalized round price and primary security sold to new money
     uint256 roundPricePerShare; // normalized to priceDecimals

@@ -43,6 +43,7 @@ pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./libs/LexScroWLite.sol";
 import "./libs/auth.sol";
@@ -174,8 +175,9 @@ contract RoundManager is
     /// @param paymentToken Payment token address
     /// @param pricePerUnit Price per unit in payment token decimals
     /// @param valuation Valuation in USD
-    /// @param paymentDecimals Decimals of payment token
     /// @return roundId The unique ID of the created round
+    /// @param roundPartyValues Round party values
+    /// @param escrowedSignature Escrowed signature
     function createRound(
         string memory seriesType,
         uint256 raiseCap,
@@ -189,7 +191,6 @@ contract RoundManager is
         address paymentToken,
         uint256 pricePerUnit,
         uint256 valuation,
-        uint256 paymentDecimals,
         string[] memory roundPartyValues,
         bytes memory escrowedSignature
     ) external onlyOwner returns (bytes32 roundId) {
@@ -209,9 +210,7 @@ contract RoundManager is
                 templateId,
                 paymentToken,
                 pricePerUnit,
-                valuation,
-                paymentDecimals,
-                block.timestamp
+                valuation
             )
         );
         string memory companyName = ICyberCorp(LexScrowStorage.getCorp())
@@ -249,7 +248,6 @@ contract RoundManager is
             paymentToken: paymentToken,
             pricePerUnit: pricePerUnit,
             valuation: valuation,
-            paymentDecimals: paymentDecimals,
             raised: 0,
             roundPricePerShare: 0,
             roundPriceDecimals: 0,
@@ -591,7 +589,8 @@ contract RoundManager is
 
         // Calculate units and investment USD
         uint256 units = allocatedAmount / round.pricePerUnit;
-        uint256 investmentUSD = allocatedAmount / (10 ** round.paymentDecimals);
+        uint8 paymentDecimals = IERC20Metadata(round.paymentToken).decimals();
+        uint256 investmentUSD = allocatedAmount / (10 ** paymentDecimals);
 
         // Create certificate (prefer officer info captured in roundPartyValues)
         string memory officerName = "System";

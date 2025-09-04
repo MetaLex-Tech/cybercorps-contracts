@@ -233,7 +233,6 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
-            6, // USDC decimals
             testRoundPartyValues,
             bytes("")
         );
@@ -992,7 +991,6 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
-            6,
             testRoundPartyValues,
             bytes("")
         );
@@ -1185,7 +1183,6 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
-            6,
             testRoundPartyValues,
             bytes("")
         );
@@ -1459,7 +1456,6 @@ contract RoundManagerFCFSTest is Test {
                 paymentToken,
                 10 * (10 ** payDec),
                 10_000_000,
-                payDec,
                 roundPartyValues,
                 escrowedSig
             );
@@ -1508,7 +1504,6 @@ contract RoundManagerFCFSTest is Test {
                 paymentToken,
                 10 * (10 ** payDec),
                 10_000_000,
-                payDec,
                 roundPartyValues,
                 escrowedSig
             );
@@ -1568,7 +1563,6 @@ contract RoundManagerFCFSTest is Test {
             1,
             1,
             RoundType.FCFS,
-   
             block.timestamp,
             block.timestamp + 1,
             bytes32(uint256(777)),
@@ -1576,7 +1570,6 @@ contract RoundManagerFCFSTest is Test {
             address(0xDEAD),
             1,
             1,
-            6,
             roundPartyValues,
             bytes("")
         );

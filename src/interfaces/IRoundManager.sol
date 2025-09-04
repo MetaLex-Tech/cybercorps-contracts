@@ -10,30 +10,40 @@
  except with the express prior written permission of the copyright holder.*/
  
  pragma solidity 0.8.28;
+
+ //import cybercorp constants
+ import "../CyberCorpConstants.sol";
  
  enum RoundType {
      FCFS,
      FounderApproved
  }
- 
+
  struct Round {
-     bytes32 id;
-     string seriesType;
-     uint256 raiseCap;
-     uint256 minTicket;
-     uint256 maxTicket;
-     RoundType roundType;
-     uint256 startTime;
-     uint256 endTime;
-     bytes32 templateId;
-     address certPrinter;
-     address paymentToken;
-     uint256 pricePerUnit;
-     uint256 valuation;
-     uint256 paymentDecimals;
-     uint256 raised;
- }
- 
+    bytes32 id;
+    string seriesType;
+    uint256 raiseCap;
+    uint256 minTicket;
+    uint256 maxTicket;
+    RoundType roundType;
+    uint256 startTime;
+    uint256 endTime;
+    bytes32 templateId;
+    address[] certPrinter;
+    address paymentToken;
+    uint256 pricePerUnit;
+    uint256 valuation;
+    uint256 raised;
+    // Normalized round price and primary security sold to new money
+    uint256 roundPricePerShare; // normalized to priceDecimals
+    uint8 roundPriceDecimals;
+    SecurityClass primarySecurityClass;
+    SecuritySeries primarySecuritySeries;
+    address authorityOfficer;
+    string[] roundPartyValues;
+    bytes escrowedSignature;
+}
+
  struct EOI {
      string name;
      string investorType;
@@ -58,11 +68,12 @@
          uint256 startTime,
          uint256 endTime,
          bytes32 templateId,
-         address certPrinter,
+         address[] calldata certPrinter,
          address paymentToken,
          uint256 pricePerUnit,
          uint256 valuation,
-         uint256 paymentDecimals
+         string[] calldata roundPartyValues,
+         bytes calldata escrowedSignature
      ) external returns (bytes32 roundId);
  
      function submitEOI(
