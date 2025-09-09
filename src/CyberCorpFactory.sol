@@ -53,8 +53,20 @@ import "./interfaces/IDealManager.sol";
 import "./interfaces/ICyberCorpSingleFactory.sol";
 import "./interfaces/ICyberCertPrinter.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
+import {IRoundManager as IRoundManagerInterface, CyberCertData as RM_CyberCertData, RoundType as RM_RoundType} from "./interfaces/IRoundManager.sol";
+import "./interfaces/IRoundManagerFactory.sol";
 import "./CyberCorpConstants.sol";
 import "./libs/auth.sol";
+
+interface IRoundManagerInit {
+    function initialize(
+        address _auth,
+        address _corp,
+        address _dealRegistry,
+        address _issuanceManager,
+        address _upgradeFactory
+    ) external;
+}
 
 contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     error InvalidSalt();
@@ -69,9 +81,10 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     address public dealManagerFactory;
     address public uriBuilder;
     address public stable; // = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;//base main net 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    address public roundManagerFactory;
 
     // Upgrade notes: Reduced gap to account for new variables (50 - 9 = 41)
-    uint256[41] private __gap;
+    uint256[40] private __gap;
 
     struct CyberCertData {
         string name;
@@ -122,6 +135,11 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     event CyberAgreementFactoryUpdated(
         address indexed cyberAgreementFactory,
         address oldCyberAgreementFactory
+    );
+
+    event RoundManagerFactoryUpdated(
+        address indexed roundManagerFactory,
+        address oldRoundManagerFactory
     );
 
     function initialize(
@@ -331,6 +349,90 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         );
     }
 
+    function deployCyberCorpAndCreatePublicRound(
+        uint256 salt,
+        string memory seriesType,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        address _companyPayable,
+        CompanyOfficer memory _officer,
+        RM_CyberCertData[] memory certData,
+        bytes32 templateId,
+        address paymentToken,
+        uint256 pricePerUnit,
+        uint256 valuation,
+        string[] memory roundPartyValues,
+        bytes memory escrowedSignature,
+        uint256 raiseCap,
+        uint256 minTicket,
+        uint256 maxTicket,
+        uint256 startTime,
+        uint256 endTime
+    )
+        external
+        returns (
+            address cyberCorpAddress,
+            address authAddress,
+            address issuanceManagerAddress,
+            address dealManagerAddress,
+            address roundManagerAddress,
+            bytes32 roundId
+        )
+    {
+        bytes32 corpSalt = keccak256(abi.encodePacked(salt));
+        _officer.eoa = msg.sender;
+
+        (
+            cyberCorpAddress,
+            authAddress,
+            issuanceManagerAddress,
+            dealManagerAddress
+        ) = deployCyberCorp(
+            corpSalt,
+            companyName,
+            companyType,
+            companyJurisdiction,
+            companyContactDetails,
+            defaultDisputeResolution,
+            _companyPayable,
+            _officer
+        );
+
+        // Deploy RoundManager via its factory
+        bytes32 rmSalt = keccak256(abi.encodePacked("round", salt));
+        roundManagerAddress = IRoundManagerFactory(roundManagerFactory).deployRoundManager(rmSalt);
+
+        // Initialize RoundManager
+        IRoundManagerInit(roundManagerAddress).initialize(
+            authAddress,
+            cyberCorpAddress,
+            registryAddress,
+            issuanceManagerAddress,
+            roundManagerFactory
+        );
+
+        // Create round (FCFS / public)
+        roundId = IRoundManagerInterface(roundManagerAddress).createRound(
+            seriesType,
+            raiseCap,
+            minTicket,
+            maxTicket,
+            RM_RoundType.FCFS,
+            startTime,
+            endTime,
+            templateId,
+            certData,
+            paymentToken,
+            pricePerUnit,
+            valuation,
+            roundPartyValues,
+            escrowedSignature
+        );
+    }
+
     function setStable(address _stable) external onlyOwner {
         stable = _stable;
     }
@@ -374,6 +476,17 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         address oldDealFactory = dealManagerFactory;
         dealManagerFactory = _dealManagerFactory;
         emit DealManagerFactoryUpdated(dealManagerFactory, oldDealFactory);
+    }
+
+    function setRoundManagerFactory(
+        address _roundManagerFactory
+    ) external onlyOwner {
+        address oldRoundManagerFactory = roundManagerFactory;
+        roundManagerFactory = _roundManagerFactory;
+        emit RoundManagerFactoryUpdated(
+            roundManagerFactory,
+            oldRoundManagerFactory
+        );
     }
 
     event CyberCert20ImplementationUpdated(

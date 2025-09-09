@@ -769,6 +769,39 @@ contract RoundManagerTest is Test {
     }
 
     function test_MultipleAllocations_RespectRaiseCap() public {
+        // Create a dedicated round with higher maxTicket to fit 600k EOIs
+        RoundManager.CyberCertData[] memory certData = new RoundManager.CyberCertData[](1);
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Legend";
+        certData[0] = RoundManager.CyberCertData({
+            name: "Equity",
+            symbol: "EQ",
+            uri: "ipfs://eq",
+            securityClass: SecurityClass.CommonStock,
+            securitySeries: SecuritySeries.NA,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+
+        bytes32 roundIdLarge;
+        vm.prank(owner);
+        roundIdLarge = roundManager.createRound(
+            "Series R2",
+            1_000_000 * 10 ** 6, // raise cap 1M
+            1_000 * 10 ** 6,
+            1_000_000 * 10 ** 6, // maxTicket large enough
+            RoundType.FounderApproved,
+            block.timestamp,
+            block.timestamp + 30 days,
+            templateId,
+            certData,
+            address(paymentToken),
+            PRICE_PER_UNIT,
+            VALUATION,
+            testRoundPartyValues,
+            bytes("")
+        );
+
         // Submit first EOI
         vm.startPrank(investor);
         EOI memory eoi1 = EOI({
@@ -781,7 +814,7 @@ contract RoundManagerTest is Test {
         });
 
         bytes32 agreementId1 = roundManager.submitEOI(
-            roundId,
+            roundIdLarge,
             eoi1,
             new string[](1),
             new string[](1),
@@ -817,7 +850,7 @@ contract RoundManagerTest is Test {
         });
 
         bytes32 agreementId2 = roundManager.submitEOI(
-            roundId,
+            roundIdLarge,
             eoi2,
             new string[](1),
             new string[](1),
@@ -856,7 +889,6 @@ contract RoundManagerTest is Test {
         );
         roundManager.allocate(agreementId2, 500000 * 10 ** 6, officerSig2); // 500k USDC
 
-        // Verify total raised equals sum of allocations by checking that the round is closed
         // When total raised equals raise cap, no more allocations should be possible
         vm.expectRevert(
             abi.encodeWithSelector(RoundManager.InvalidAllocation.selector)

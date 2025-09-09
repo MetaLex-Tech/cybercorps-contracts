@@ -9,10 +9,11 @@
  mechanical, including photocopying, recording, or by any information storage and retrieval system, 
  except with the express prior written permission of the copyright holder.*/
  
- pragma solidity 0.8.28;
+ pragma solidity ^0.8.28;
 
  //import cybercorp constants
  import "../CyberCorpConstants.sol";
+ import "./IIssuanceManager.sol";
  
  enum RoundType {
      FCFS,
@@ -44,55 +45,104 @@
     bytes escrowedSignature;
 }
 
- struct EOI {
-     string name;
-     string investorType;
-     string jurisdiction;
-     string contact;
-     uint256 minAmount;
-     uint256 maxAmount;
- }
+struct CyberCertData {
+    string name;
+    string symbol;
+    string uri;
+    SecurityClass securityClass;
+    SecuritySeries securitySeries;
+    address extension;
+    string[] defaultLegend;
+}
+
+struct EOI {
+    string name;
+    string investorType;
+    string jurisdiction;
+    string contact;
+    uint256 minAmount;
+    uint256 maxAmount;
+}
  
- interface IRoundManager {
-     event RoundCreated(bytes32 indexed roundId, address corp, Round round);
-     event EOISubmitted(bytes32 indexed agreementId, bytes32 indexed roundId, address investor, uint256 maxAmount);
-     event AllocationMade(bytes32 indexed agreementId, bytes32 indexed roundId, uint256 allocatedAmount, uint256 certId);
-     event EOIRejected(bytes32 indexed agreementId, bytes32 indexed roundId);
- 
-     function createRound(
-         string calldata seriesType,
-         uint256 raiseCap,
-         uint256 minTicket,
-         uint256 maxTicket,
-         RoundType roundType,
-         uint256 startTime,
-         uint256 endTime,
-         bytes32 templateId,
-         address[] calldata certPrinter,
-         address paymentToken,
-         uint256 pricePerUnit,
-         uint256 valuation,
-         string[] calldata roundPartyValues,
-         bytes calldata escrowedSignature
-     ) external returns (bytes32 roundId);
- 
-     function submitEOI(
-         bytes32 roundId,
-         EOI calldata eoi,
-         string[] calldata globalValues,
-         string[] calldata partyValues,
-         bytes calldata signature,
-         uint256 salt,
-         address[] calldata conditions,
-         bytes32 secretHash,
-         uint256 expiry,
-         string calldata name,
-         bytes calldata voidSignature
-     ) external returns (bytes32 agreementId);
- 
-     function allocate(bytes32 agreementId, uint256 allocatedAmount) external;
- 
-     function reject(bytes32 agreementId) external;
- 
-     function issuanceManager() external view returns (address);
- } 
+interface IRoundManager {
+    event RoundCreated(bytes32 indexed roundId, address corp, Round round);
+    event RoundSnapshotSet(
+        bytes32 indexed roundId,
+        uint256 totalCapitalSecuritiesOutstanding,
+        uint256 totalConvertingSecurities,
+        uint256 totalOptionsIssuedAndOutstanding,
+        uint256 totalPromisedOptions,
+        uint256 unissuedOptionPoolPreRound,
+        uint256 unissuedOptionPoolIncreaseIncludedInCalc,
+        uint256 cCapUsed
+    );
+    event RoundingPolicySet(bytes32 indexed roundId, uint8 mode, uint8 priceDecimals, uint8 shareDecimals);
+    event PMVCSubseriesLabelSet(bytes32 indexed roundId, uint256 pmvc, string label);
+    event EOISubmitted(bytes32 indexed agreementId, bytes32 indexed roundId, address investor, uint256 maxAmount);
+    event AllocationMade(bytes32 indexed agreementId, bytes32 indexed roundId, uint256 allocatedAmount, uint256[] certIds);
+    event EOIRejected(bytes32 indexed agreementId, bytes32 indexed roundId);
+
+    function createRound(
+        string calldata seriesType,
+        uint256 raiseCap,
+        uint256 minTicket,
+        uint256 maxTicket,
+        RoundType roundType,
+        uint256 startTime,
+        uint256 endTime,
+        bytes32 templateId,
+        CyberCertData[] calldata certData,
+        address paymentToken,
+        uint256 pricePerUnit,
+        uint256 valuation,
+        string[] calldata roundPartyValues,
+        bytes calldata escrowedSignature
+    ) external returns (bytes32 roundId);
+
+    function submitEOI(
+        bytes32 roundId,
+        EOI calldata eoi,
+        string[] calldata globalValues,
+        string[] calldata partyValues,
+        bytes calldata signature,
+        uint256 salt,
+        address[] calldata conditions,
+        bytes32 secretHash,
+        uint256 expiry,
+        string calldata name
+    ) external returns (bytes32 agreementId);
+
+    function allocate(bytes32 agreementId, uint256 allocatedAmount, bytes calldata signature) external;
+
+    function reject(bytes32 agreementId) external;
+
+    function issuanceManager() external view returns (IIssuanceManager);
+
+    function getCapTableSnapshotFields(bytes32 roundId)
+        external view
+        returns (
+            uint256 totalCapitalSecuritiesOutstanding,
+            uint256 totalConvertingSecurities,
+            uint256 totalOptionsIssuedAndOutstanding,
+            uint256 totalPromisedOptions,
+            uint256 unissuedOptionPoolPreRound,
+            uint256 unissuedOptionPoolIncreaseIncludedInCalc,
+            uint256 cCapUsed
+        );
+
+    function getRoundingPolicyFields(bytes32 roundId)
+        external view
+        returns (uint8 mode, uint8 priceDecimals, uint8 shareDecimals);
+
+    function getRoundPriceInfo(bytes32 roundId)
+        external view
+        returns (uint256 roundPricePerShare, uint8 roundPriceDecimals);
+
+    function getPrimarySecurity(bytes32 roundId)
+        external view
+        returns (SecurityClass cls, SecuritySeries series);
+
+    function roundExists(bytes32 roundId) external view returns (bool);
+
+    function getPMVCSubseriesLabel(bytes32 roundId, uint256 pmvc) external view returns (string memory);
+} 

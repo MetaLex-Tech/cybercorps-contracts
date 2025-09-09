@@ -250,10 +250,10 @@ contract RoundManager is
             valuation: valuation,
             raised: 0,
             roundPricePerShare: 0,
-            roundPriceDecimals: 0,
+            roundPriceDecimals: 18,
             primarySecurityClass: certData.length > 0
                 ? certData[0].securityClass
-                : SecurityClass.CommonStock,
+                : SecurityClass.SAFE,
             primarySecuritySeries: certData.length > 0
                 ? certData[0].securitySeries
                 : SecuritySeries.NA,
@@ -444,7 +444,8 @@ contract RoundManager is
         if (
             eoi.minAmount > eoi.maxAmount ||
             eoi.maxAmount < round.minTicket ||
-            eoi.maxAmount > round.maxTicket
+            eoi.maxAmount > round.maxTicket ||
+            eoi.minAmount < round.minTicket
         ) revert InvalidAmount();
 
         address[] memory parties = new address[](2);
@@ -539,12 +540,16 @@ contract RoundManager is
 
         if (round.id == bytes32(0)) revert InvalidRound();
         // Compute allocation candidate for any round type:
+        // - start from escrowed buyer amount
+        // - if caller provided a specific amount (not max uint), cap to it
         // - cap to remaining raise
-        // - cap to escrowed buyer amount
         // - require at least the larger of round.minTicket and eoi.minAmount
 
         uint256 remaining = round.raiseCap - round.raised;
         uint256 candidate = escrow.buyerAssets[0].amount;
+        if (allocatedAmount != type(uint256).max && allocatedAmount < candidate) {
+            candidate = allocatedAmount;
+        }
         if (candidate > remaining) {
             candidate = remaining;
         }

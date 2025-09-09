@@ -65,6 +65,7 @@ interface ICyberCorp {
     function cyberCORPType() external view returns (string memory);
     function dealManager() external view returns (address);
     function setDealManager(address _dealManager) external;
+    function setRoundManager(address _roundManager) external;
 
 }
 
