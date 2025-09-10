@@ -215,7 +215,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             issuanceManagerAddress,
             _companyPayable,
             _officer,
-            cyberCorpSingleFactory
+            cyberCorpSingleFactory,
+            address(0)
         );
 
         BorgAuth(authAddress).updateRole(cyberCorpAddress, 200);
@@ -413,6 +414,9 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             issuanceManagerAddress,
             roundManagerFactory
         );
+
+        // Set RoundManager on the corp
+        ICyberCorp(cyberCorpAddress).setRoundManager(roundManagerAddress);
 
         // Create round (FCFS / public)
         roundId = IRoundManagerInterface(roundManagerAddress).createRound(

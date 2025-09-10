@@ -109,7 +109,8 @@ contract CyberCorp is Initializable, BorgAuthACL {
         address _issuanceManager,
         address _companyPayable,
         CompanyOfficer memory _officer,
-        address _upgradeFactory
+        address _upgradeFactory,
+        address _roundManager
     ) public initializer {
         __BorgAuthACL_init(_auth);
 
@@ -122,6 +123,7 @@ contract CyberCorp is Initializable, BorgAuthACL {
         companyPayable = _companyPayable;
         companyOfficers.push(_officer);
         upgradeFactory = _upgradeFactory;
+        roundManager = _roundManager;
     }
 
     /// @notice Updates the corporation's basic details

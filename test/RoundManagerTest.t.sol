@@ -14,6 +14,7 @@ import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
+import {CyberCertData as IRM_CyberCertData} from "../src/interfaces/IRoundManager.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
@@ -151,6 +152,7 @@ contract RoundManagerTest is Test {
             contact: "officer@example.com",
             title: "CEO"
         });
+
         (corp, auth, issuance, dealManager) = corpFactory.deployCyberCorp(
             keccak256("rm-corp"),
             "Test Corp",
@@ -173,6 +175,7 @@ contract RoundManagerTest is Test {
             issuance,
             address(rmFactory)
         );
+        
         // Authorize RM as owner in IssuanceManager
         vm.prank(owner);
         BorgAuth(auth).updateRole(address(roundManager), 99);
@@ -1346,6 +1349,11 @@ contract RoundManagerFCFSTest is Test {
                 )
             )
         );
+
+        // Set RoundManagerFactory on corpFactory to enable end-to-end deployment flows
+        RoundManagerFactory rmFactory = new RoundManagerFactory(address(bootstrapAuth));
+        vm.prank(owner);
+        corpFactory.setRoundManagerFactory(address(rmFactory));
     }
 
     function _createTemplate(CyberAgreementRegistry registry) internal {
@@ -1541,6 +1549,78 @@ contract RoundManagerFCFSTest is Test {
             );
     }
 
+    function _deployCorpAndFCFSViaFactory(
+        CyberAgreementRegistry registry,
+        CyberCorpFactory corpFactory,
+        address owner,
+        bytes32 templateId,
+        address paymentToken,
+        uint8 payDec
+    )
+        internal
+        returns (
+            address corp,
+            address auth,
+            address issuance,
+            RoundManager rm,
+            bytes32 roundId
+        )
+    {
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: owner,
+            name: "Officer",
+            contact: "officer@example.com",
+            title: "CEO"
+        });
+
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Legend";
+        IRM_CyberCertData[] memory certData = new IRM_CyberCertData[](1);
+        certData[0] = IRM_CyberCertData({
+            name: "Equity",
+            symbol: "EQ",
+            uri: "ipfs://eq",
+            securityClass: SecurityClass.CommonStock,
+            securitySeries: SecuritySeries.NA,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+
+        string[] memory roundPartyValues = new string[](2);
+        roundPartyValues[0] = "Alice Officer";
+        roundPartyValues[1] = "CEO";
+
+        (address corpOut, address authOut, address issuanceOut, address dealMgrOut, address rmAddr, bytes32 rid) = corpFactory
+            .deployCyberCorpAndCreatePublicRound(
+                123,
+                "Seed",
+                "Corp-Factory",
+                "corporation",
+                "DE",
+                "contact",
+                "arbitration",
+                owner,
+                officer,
+                certData,
+                templateId,
+                paymentToken,
+                10 * (10 ** payDec),
+                10_000_000,
+                roundPartyValues,
+                hex"01",
+                1_000_000 * (10 ** payDec),
+                1_000 * (10 ** payDec),
+                100_000 * (10 ** payDec),
+                block.timestamp,
+                block.timestamp + 30 days
+            );
+        corp = corpOut;
+        auth = authOut;
+        issuance = issuanceOut;
+        rm = RoundManager(payable(rmAddr));
+        roundId = rid;
+    }
+
     function test_FCFS_CreateRound_RequiresEscrowSignature() public {
         address me = address(this);
         (
@@ -1560,11 +1640,15 @@ contract RoundManagerFCFSTest is Test {
             me,
             me
         );
-        RoundManager rm = _initRoundManager(
-            auth,
-            corp,
-            address(registry),
-            issuance
+        // Use factory-driven RoundManager instead of manual deployment
+        MockPaymentToken usdc = new MockPaymentToken();
+        (, , , RoundManager rm, ) = _deployCorpAndFCFSViaFactory(
+            registry,
+            corpFactory,
+            me,
+            bytes32(uint256(777)),
+            address(usdc),
+            usdc.decimals()
         );
 
         string[] memory defaultLegend = new string[](1);
@@ -1589,6 +1673,7 @@ contract RoundManagerFCFSTest is Test {
                 RoundManager.InvalidEscrowedSignature.selector
             )
         );
+        vm.prank(address(corpFactory));
         rm.createRound(
             "Seed",
             1,
@@ -1619,33 +1704,21 @@ contract RoundManagerFCFSTest is Test {
         ) = _deployRegistryAndFactories(me);
         _createTemplate(registry);
 
-        (address corp, address auth, address issuance, ) = _deployCorp(
+        MockPaymentToken usdc = new MockPaymentToken();
+        (address corp, , address issuance, RoundManager rm, bytes32 roundId) = _deployCorpAndFCFSViaFactory(
+            registry,
             corpFactory,
-            "Corp B",
             me,
-            me
-        );
-        RoundManager rm = _initRoundManager(
-            auth,
-            corp,
-            address(registry),
-            issuance
+            bytes32(uint256(777)),
+            address(usdc),
+            usdc.decimals()
         );
 
         // Allow RoundManager to transfer certs by setting it as the corp's dealManager
         vm.prank(address(corpFactory));
         CyberCorp(corp).setDealManager(address(rm));
 
-        MockPaymentToken usdc = new MockPaymentToken();
-        bytes32 roundId = _createFCFSRoundCustom(
-            rm,
-            address(usdc),
-            usdc.decimals(),
-            bytes32(uint256(777)),
-            100_000 * (10 ** usdc.decimals()),
-            2_000 * (10 ** usdc.decimals()),
-            50_000 * (10 ** usdc.decimals())
-        );
+        // roundId already created by factory call above
 
         uint256 salt = 1;
         uint256 privKey = 0xA11CE;
@@ -1710,29 +1783,20 @@ contract RoundManagerFCFSTest is Test {
         ) = _deployRegistryAndFactories(me);
         _createTemplate(registry);
 
-        (address corp, address auth, address issuance, ) = _deployCorp(
+        MockPaymentToken usdc = new MockPaymentToken();
+        (address corp, , address issuance, RoundManager rm, bytes32 roundId) = _deployCorpAndFCFSViaFactory(
+            registry,
             corpFactory,
-            "Corp C",
             me,
-            me
-        );
-        RoundManager rm = _initRoundManager(
-            auth,
-            corp,
-            address(registry),
-            issuance
+            bytes32(uint256(777)),
+            address(usdc),
+            usdc.decimals()
         );
 
         vm.prank(address(corpFactory));
         CyberCorp(corp).setDealManager(address(rm));
 
-        MockPaymentToken usdc = new MockPaymentToken();
-        bytes32 roundId = _createFCFSRound(
-            rm,
-            address(usdc),
-            usdc.decimals(),
-            bytes32(uint256(777))
-        );
+        // roundId already created by factory call above
 
         uint256 salt = 1;
         uint256 privKey = 0xB0B;
@@ -1798,24 +1862,14 @@ contract RoundManagerFCFSTest is Test {
         ) = _deployRegistryAndFactories(me);
         _createTemplate(registry);
 
-        (address corp, address auth, address issuance, ) = _deployCorp(
-            corpFactory,
-            "Corp D",
-            me,
-            me
-        );
-        RoundManager rm = _initRoundManager(
-            auth,
-            corp,
-            address(registry),
-            issuance
-        );
         MockPaymentToken usdc = new MockPaymentToken();
-        bytes32 roundId = _createFCFSRound(
-            rm,
+        (, , , RoundManager rm, bytes32 roundId) = _deployCorpAndFCFSViaFactory(
+            registry,
+            corpFactory,
+            me,
+            bytes32(uint256(777)),
             address(usdc),
-            usdc.decimals(),
-            bytes32(uint256(777))
+            usdc.decimals()
         );
 
         address investor = address(0x333);
@@ -1870,21 +1924,17 @@ contract RoundManagerFCFSTest is Test {
         ) = _deployRegistryAndFactories(me);
         _createTemplate(registry);
 
-        (address corp, address auth, address issuance, ) = _deployCorp(
+        MockPaymentToken usdc = new MockPaymentToken();
+        (address corp, , address issuance, RoundManager rm, ) = _deployCorpAndFCFSViaFactory(
+            registry,
             corpFactory,
-            "Corp E",
             me,
-            me
-        );
-        RoundManager rm = _initRoundManager(
-            auth,
-            corp,
-            address(registry),
-            issuance
+            bytes32(uint256(777)),
+            address(usdc),
+            usdc.decimals()
         );
         vm.prank(address(corpFactory));
         CyberCorp(corp).setDealManager(address(rm));
-        MockPaymentToken usdc = new MockPaymentToken();
 
         bytes32 roundId = _createFCFSRoundCustom(
             rm,
