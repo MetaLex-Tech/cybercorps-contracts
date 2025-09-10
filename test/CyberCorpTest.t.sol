@@ -75,6 +75,7 @@ import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
 import {LexChexCondition} from "../src/libs/conditions/lexchexCondition.sol";
 import {LeXcheXUtils} from "./libs/LeXcheXUtils.sol";
 import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
+import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 
 contract CyberCorpTest is Test {
     using ERC1967ProxyLib for address;
@@ -203,6 +204,11 @@ contract CyberCorpTest is Test {
                 address(auth))
         ));
 
+        // RoundManager via factory and initialize
+        address rmFactory = address(
+            new RoundManagerFactory{salt: salt}(address(auth))
+        );
+
         cyberCorpFactory = CyberCorpFactory(address(new ERC1967Proxy{salt: salt}(
             address(new CyberCorpFactory{salt: salt}()),
             abi.encodeWithSelector(
@@ -214,6 +220,7 @@ contract CyberCorpTest is Test {
                 issuanceManagerFactory,
                 cyberCorpSingleFactory,
                 dealManagerFactory,
+                rmFactory,
                 uriBuilder
             )
         )));
@@ -440,6 +447,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -626,6 +634,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -765,6 +774,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -971,6 +981,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -1103,6 +1114,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -1238,6 +1250,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -1397,6 +1410,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -1493,6 +1507,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -1635,6 +1650,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -1739,6 +1755,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -1838,6 +1855,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -1939,6 +1957,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -2067,6 +2086,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -2215,6 +2235,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -2353,6 +2374,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -2483,6 +2505,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -2640,6 +2663,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -2877,6 +2901,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -3135,7 +3160,7 @@ contract CyberCorpTest is Test {
         );
 
         vm.startPrank(testAddress);
-        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address[] memory cyberCertPrinterAddr, bytes32 id, uint256[] memory certIds) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address roundManagerAddr, address[] memory cyberCertPrinterAddr, bytes32 id, uint256[] memory certIds) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
             "Limited Liability Company",
@@ -3251,6 +3276,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -3378,6 +3404,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -3518,6 +3545,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -3648,6 +3676,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -3801,7 +3830,8 @@ contract CyberCorpTest is Test {
             address cyberCorpAddr,
             address authAddr,
             address issuanceManager,
-            address dealManagerAddr
+            address dealManagerAddr,
+            address roundManagerAddr
         ) = cyberCorpFactory.deployCyberCorp(
             keccak256("OfficerRemoval"),
             "CyberCorp",
@@ -3953,6 +3983,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -4055,7 +4086,8 @@ contract CyberCorpTest is Test {
             address cyberCorp,
             address auth,
             address issuanceManager,
-            address dealManagerAddr
+            address dealManagerAddr,
+            address roundManagerAddr
         ) = cyberCorpFactory.deployCyberCorp(
             keccak256("CreateOfferTest"),
             "TestCorp",
@@ -4214,7 +4246,8 @@ contract CyberCorpTest is Test {
             address cyberCorp,
             address auth,
             address issuanceManager,
-            address dealManagerAddr
+            address dealManagerAddr,
+            address roundManagerAddr
         ) = cyberCorpFactory.deployCyberCorp(
             keccak256("CreateOfferMultipleTest"),
             "MultiCertCorp",
@@ -4380,7 +4413,8 @@ contract CyberCorpTest is Test {
             address cyberCorp,
             address auth,
             address issuanceManager,
-            address dealManagerAddr
+            address dealManagerAddr,
+            address roundManagerAddr
         ) = cyberCorpFactory.deployCyberCorp(
             keccak256("DealManagerUpgradeTest"),
             "TestCorp",
@@ -4613,6 +4647,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -4760,6 +4795,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -4903,6 +4939,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -5151,6 +5188,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 dealId,
             uint256[] memory certIds
@@ -5309,6 +5347,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -5492,6 +5531,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -5582,7 +5622,8 @@ contract CyberCorpTest is Test {
             address cyberCorp,
             address authAddr,
             address issuanceManager,
-            address dealManagerAddr
+            address dealManagerAddr,
+            address roundManagerAddr
         ) = cyberCorpFactory.deployCyberCorp(
             keccak256("ToggleHookTest"),
             "ToggleHookCorp",

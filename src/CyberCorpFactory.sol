@@ -106,7 +106,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         string cyberCORPContactDetails,
         string cyberCORPJurisdiction,
         string defaultDisputeResolution,
-        address _companyPayable
+        address _companyPayable,
+        address roundManagerAddress
     );
 
     event AgreementDeployed(
@@ -150,6 +151,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         address _issuanceManagerFactory,
         address _cyberCorpSingleFactory,
         address _dealManagerFactory,
+        address _roundManagerFactory,
         address _uriBuilder
     ) public initializer {
         __UUPSUpgradeable_init();
@@ -162,6 +164,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         issuanceManagerFactory = _issuanceManagerFactory;
         cyberCorpSingleFactory = _cyberCorpSingleFactory;
         dealManagerFactory = _dealManagerFactory;
+        roundManagerFactory = _roundManagerFactory;
         uriBuilder = _uriBuilder;
     }
 
@@ -180,7 +183,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             address cyberCorpAddress,
             address authAddress,
             address issuanceManagerAddress,
-            address dealManagerAddress
+            address dealManagerAddress,
+            address roundManagerAddress
         )
     {
         if (salt == bytes32(0)) revert InvalidSalt();
@@ -242,8 +246,24 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             issuanceManagerAddress,
             dealManagerFactory
         );
+
+        roundManagerAddress = IRoundManagerFactory(roundManagerFactory).deployRoundManager(salt);
+
+        // Initialize RoundManager
+        IRoundManagerInit(roundManagerAddress).initialize(
+            authAddress,
+            cyberCorpAddress,
+            registryAddress,
+            issuanceManagerAddress,
+            roundManagerFactory
+        );
+
+        // Set RoundManager on the corp
+        ICyberCorp(cyberCorpAddress).setRoundManager(roundManagerAddress);
+
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
+        BorgAuth(authAddress).updateRole(roundManagerAddress, 99);
 
         emit CyberCorpDeployed(
             cyberCorpAddress,
@@ -255,7 +275,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             companyContactDetails,
             companyJurisdiction,
             defaultDisputeResolution,
-            _companyPayable
+            _companyPayable,
+            roundManagerAddress
         );
     }
 
@@ -286,6 +307,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             address authAddress,
             address issuanceManagerAddress,
             address dealManagerAddress,
+            address roundManagerAddress,
             address[] memory certPrinterAddress,
             bytes32 id,
             uint256[] memory certIds
@@ -301,7 +323,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             cyberCorpAddress,
             authAddress,
             issuanceManagerAddress,
-            dealManagerAddress
+            dealManagerAddress,
+            roundManagerAddress
         ) = deployCyberCorp(
             corpSalt,
             companyName,
@@ -390,7 +413,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             cyberCorpAddress,
             authAddress,
             issuanceManagerAddress,
-            dealManagerAddress
+            dealManagerAddress,
+            roundManagerAddress
         ) = deployCyberCorp(
             corpSalt,
             companyName,
@@ -404,19 +428,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
 
         // Deploy RoundManager via its factory
         bytes32 rmSalt = keccak256(abi.encodePacked("round", salt));
-        roundManagerAddress = IRoundManagerFactory(roundManagerFactory).deployRoundManager(rmSalt);
-
-        // Initialize RoundManager
-        IRoundManagerInit(roundManagerAddress).initialize(
-            authAddress,
-            cyberCorpAddress,
-            registryAddress,
-            issuanceManagerAddress,
-            roundManagerFactory
-        );
-
-        // Set RoundManager on the corp
-        ICyberCorp(cyberCorpAddress).setRoundManager(roundManagerAddress);
+       
 
         // Create round (FCFS / public)
         roundId = IRoundManagerInterface(roundManagerAddress).createRound(
