@@ -604,7 +604,7 @@ contract RoundManagerTest is Test {
             block.timestamp + 7 days,
             "Test Investor"
         );
-
+        vm.expectEmit(true, true, false, true);
         vm.stopPrank();
 
         // Now allocate as owner
@@ -625,7 +625,7 @@ contract RoundManagerTest is Test {
         assertTrue(RoundManager(roundManager).roundExists(roundId), "Round should exist");
 
         // We can verify the allocation was successful by checking if an AllocationMade event was emitted
-        vm.expectEmit(true, true, false, true);
+
         uint256[] memory expectedCertIds = new uint256[](1);
         expectedCertIds[0] = 0; // First certificate ID
         emit RoundManager.AllocationMade(
