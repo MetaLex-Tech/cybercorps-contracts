@@ -166,6 +166,7 @@ interface ICyberAgreementRegistry {
         view
         returns (
             string memory legalContractUri,
+            string memory title,
             string[] memory globalFields,
             string[] memory signerFields
         );

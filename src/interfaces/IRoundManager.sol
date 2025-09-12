@@ -95,6 +95,7 @@ interface IRoundManager {
         address paymentToken,
         uint256 pricePerUnit,
         uint256 valuation,
+        address authorityOfficer,
         string[] calldata roundPartyValues,
         bytes calldata escrowedSignature
     ) external returns (bytes32 roundId);

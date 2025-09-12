@@ -225,7 +225,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         // Skip restriction checks for minting (from == address(0)) and burning (to == address(0))
         if (from != address(0) && to != address(0)) {
             // This is a transfer, check built-in transferability flag
-            if (!CyberCertPrinterStorage.cyberCertStorage().transferable && from != ICyberCorp(IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).CORP()).dealManager()) revert TokenNotTransferable();
+            if (!CyberCertPrinterStorage.cyberCertStorage().transferable && from != ICyberCorp(IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).CORP()).dealManager() && from != ICyberCorp(IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).CORP()).roundManager()) revert TokenNotTransferable();
             
             // Check security type-specific hook if it exists
             ITransferRestrictionHook typeHook = CyberCertPrinterStorage.cyberCertStorage().restrictionHooksById[tokenId];

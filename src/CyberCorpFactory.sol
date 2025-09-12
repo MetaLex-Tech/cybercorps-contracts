@@ -74,7 +74,6 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
 
     address public registryAddress;
     address public cyberCertPrinterImplementation;
-    address public cyberCert20Implementation;
     address public issuanceManagerFactory;
     address public cyberCorpSingleFactory;
     address public cyberAgreementFactory;
@@ -82,9 +81,10 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     address public uriBuilder;
     address public stable; // = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;//base main net 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address public roundManagerFactory;
+    address public cyberCert20Implementation;
 
     // Upgrade notes: Reduced gap to account for new variables (50 - 9 = 41)
-    uint256[40] private __gap;
+    uint256[39] private __gap;
 
     struct CyberCertData {
         string name;
@@ -141,6 +141,11 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     event RoundManagerFactoryUpdated(
         address indexed roundManagerFactory,
         address oldRoundManagerFactory
+    );
+
+    event CyberCertPrinterImplementationUpdated(
+        address indexed cyberCertPrinterImplementation,
+        address oldImplementation
     );
 
     function initialize(
@@ -234,8 +239,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             cyberCorpAddress,
             cyberCertPrinterImplementation,
             uriBuilder,
-            issuanceManagerFactory,
-            cyberCert20Implementation
+            issuanceManagerFactory
         );
 
         //update role for issuance manager
@@ -390,6 +394,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         uint256 valuation,
         string[] memory roundPartyValues,
         bytes memory escrowedSignature,
+        RM_RoundType roundType,
         uint256 raiseCap,
         uint256 minTicket,
         uint256 maxTicket,
@@ -407,7 +412,6 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         )
     {
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
-        _officer.eoa = msg.sender;
 
         (
             cyberCorpAddress,
@@ -430,13 +434,13 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         bytes32 rmSalt = keccak256(abi.encodePacked("round", salt));
        
 
-        // Create round (FCFS / public)
+        // Create round with provided round type
         roundId = IRoundManagerInterface(roundManagerAddress).createRound(
             seriesType,
             raiseCap,
             minTicket,
             maxTicket,
-            RM_RoundType.FCFS,
+            roundType,
             startTime,
             endTime,
             templateId,
@@ -444,6 +448,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             paymentToken,
             pricePerUnit,
             valuation,
+            _officer.eoa,
             roundPartyValues,
             escrowedSignature
         );
@@ -516,6 +521,14 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         address oldImplementation = cyberCert20Implementation;
         cyberCert20Implementation = _cyberCert20Implementation;
         emit CyberCert20ImplementationUpdated(cyberCert20Implementation, oldImplementation);
+    }
+
+    function setCyberCertPrinterImplementation(
+        address _cyberCertPrinterImplementation
+    ) external onlyOwner {
+        address oldImplementation = cyberCertPrinterImplementation;
+        cyberCertPrinterImplementation = _cyberCertPrinterImplementation;
+        emit CyberCertPrinterImplementationUpdated(cyberCertPrinterImplementation, oldImplementation);
     }
 
     function _authorizeUpgrade(

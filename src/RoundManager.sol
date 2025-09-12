@@ -191,6 +191,7 @@ contract RoundManager is
         address paymentToken,
         uint256 pricePerUnit,
         uint256 valuation,
+        address authorityOfficer,
         string[] memory roundPartyValues,
         bytes memory escrowedSignature
     ) external onlyOwner returns (bytes32 roundId) {
@@ -257,7 +258,7 @@ contract RoundManager is
             primarySecuritySeries: certData.length > 0
                 ? certData[0].securitySeries
                 : SecuritySeries.NA,
-            authorityOfficer: msg.sender,
+            authorityOfficer: authorityOfficer,
             roundPartyValues: roundPartyValues,
             escrowedSignature: escrowedSignature
         });

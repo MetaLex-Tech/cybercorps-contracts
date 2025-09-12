@@ -26,6 +26,11 @@ import {ICondition} from "../src/interfaces/ICondition.sol";
 // Import necessary types
 using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
 
+interface IUUPS {
+    function upgradeTo(address newImplementation) external;
+    function upgradeToAndCall(address newImplementation, bytes calldata data) external payable;
+}
+
 contract MockPaymentToken is ERC20 {
     constructor() ERC20("Mock USDC", "USDC") {
         _mint(msg.sender, 1000000 * 10 ** 6); // Mint 1M tokens with 6 decimals
@@ -1352,6 +1357,79 @@ contract RoundManagerFCFSTest is Test {
         );
     }
 
+    function test_UpgradeSteps_RMFactory_CorpFactory_CorpBeacon() public {
+        address me = address(this);
+        (
+            ,
+            CyberCorpFactory corpFactory,
+            ,
+            address cyberCorpSingleFactory,
+            ,
+            
+        ) = _deployRegistryAndFactories(me);
+
+        address auth = address(corpFactory.AUTH());
+        RoundManagerFactory rmFactory = new RoundManagerFactory(auth);
+        rmFactory.upgradeImplementation(address(new RoundManager()));
+
+        IUUPS(address(corpFactory)).upgradeToAndCall(address(new CyberCorpFactory()), "");
+
+        corpFactory.setRoundManagerFactory(address(rmFactory));
+        assertEq(corpFactory.roundManagerFactory(), address(rmFactory));
+
+        CyberCorpSingleFactory(cyberCorpSingleFactory).upgradeImplementation(address(new CyberCorp()));
+        assertTrue(CyberCorpSingleFactory(cyberCorpSingleFactory).getBeaconImplementation() != address(0));
+    }
+
+    function test_UpgradedInfra_FCFS_AutoAllocates() public {
+        address me = address(this);
+        (
+            CyberAgreementRegistry registry,
+            CyberCorpFactory corpFactory,
+            ,
+            address cyberCorpSingleFactory,
+            ,
+            
+        ) = _deployRegistryAndFactories(me);
+        _createTemplate(registry);
+
+        // Apply upgrades
+        RoundManagerFactory rmFactory = new RoundManagerFactory(address(corpFactory.AUTH()));
+        rmFactory.upgradeImplementation(address(new RoundManager()));
+        IUUPS(address(corpFactory)).upgradeToAndCall(address(new CyberCorpFactory()), "");
+        corpFactory.setRoundManagerFactory(address(rmFactory));
+        CyberCorpSingleFactory(cyberCorpSingleFactory).upgradeImplementation(address(new CyberCorp()));
+
+        // Deploy upgraded corp and round manager
+        (address corp, , , , address roundManager) = _deployCorp(corpFactory, "Upgraded Corp", me, me);
+        vm.prank(address(corpFactory));
+        CyberCorp(corp).setDealManager(address(roundManager));
+
+        RoundManager rm = RoundManager(payable(roundManager));
+        MockPaymentToken usdc = new MockPaymentToken();
+
+        // Create round via helper to minimize local stack usage
+        vm.prank(address(corpFactory));
+        bytes32 roundId = _createFCFSRoundCustom(
+            rm,
+            address(usdc),
+            usdc.decimals(),
+            bytes32(uint256(777)),
+            100_000 * (10 ** usdc.decimals()),
+            2_000 * (10 ** usdc.decimals()),
+            50_000 * (10 ** usdc.decimals())
+        );
+
+        _submitEOIAndAssertFinalized(
+            rm,
+            registry,
+            bytes32(uint256(777)),
+            address(usdc),
+            usdc.decimals(),
+            roundId
+        );
+    }
+
     function _createTemplate(CyberAgreementRegistry registry) internal {
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field";
@@ -1610,6 +1688,65 @@ contract RoundManagerFCFSTest is Test {
             roundPartyValues,
             bytes("")
         );
+    }
+
+    function _submitEOIAndAssertFinalized(
+        RoundManager rm,
+        CyberAgreementRegistry registry,
+        bytes32 templateId,
+        address paymentToken,
+        uint8 payDec,
+        bytes32 roundId
+    ) internal {
+        uint256 salt = 1;
+        uint256 privKey = 0xA11CE;
+        address investor = vm.addr(privKey);
+        ERC20(payable(paymentToken)).transfer(investor, 20_000 * (10 ** payDec));
+        vm.startPrank(investor);
+        ERC20(payable(paymentToken)).approve(address(rm), type(uint256).max);
+
+        EOI memory eoi = EOI({
+            name: "Investor 1",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "email",
+            minAmount: 5_000 * (10 ** payDec),
+            maxAmount: 10_000 * (10 ** payDec)
+        });
+
+        string[] memory glValues = new string[](1);
+        glValues[0] = "g";
+        string[] memory pv = new string[](2);
+        pv[0] = "Officer";
+        pv[1] = "CEO";
+
+        bytes memory sig = _computeEOISignature(
+            registry,
+            templateId,
+            salt,
+            glValues,
+            pv,
+            address(this),
+            privKey
+        );
+
+        bytes32 agreementId = rm.submitEOI(
+            roundId,
+            eoi,
+            glValues,
+            pv,
+            sig,
+            salt,
+            new address[](0),
+            bytes32(0),
+            block.timestamp + 7 days,
+            "Investor 1"
+        );
+        vm.stopPrank();
+
+        Escrow memory esc = rm.getEscrowDetails(agreementId);
+        assertEq(uint256(esc.status), uint256(EscrowStatus.FINALIZED));
+        assertGt(esc.corpAssets.length, 0);
     }
 
     function test_FCFS_SubmitEOI_AutoAllocates_FinalizesAndMints() public {

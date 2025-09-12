@@ -20,6 +20,7 @@ import "../src/CyberCorpConstants.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {SAFTExtension} from "../src/storage/extensions/SAFTExtension.sol";
 import {DealManager} from "../src/DealManager.sol";
+import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 
 contract BaseScript is Script {
      function run() public {
@@ -29,7 +30,7 @@ contract BaseScript is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         address registry = address(CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134));
-        address deployedFactoryAddr = 0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3;
+        address deployedFactoryAddr = 0x493f41876E4b681B6e0913Fa92C527183D5E1233;
         DealManagerFactory deployedFactory = DealManagerFactory(deployedFactoryAddr);
         address newImplementation = address(new DealManager{salt: salt}());
         console.log("New DealManager implementation deployed at:", newImplementation);
@@ -44,5 +45,8 @@ contract BaseScript is Script {
         address updatedImplementation = deployedFactory.getBeaconImplementation();
         console.log("Updated DealManager beacon implementation:", updatedImplementation);
 
+        address newDealManagerImplementation = address(new DealManager{salt: salt}());
+
+        
      }
 }

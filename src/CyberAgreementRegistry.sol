@@ -273,13 +273,13 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             revert FirstPartyZeroAddress();
         }
 
-        for (uint256 i = 0; i < parties.length; i++) {
+        /*for (uint256 i = 0; i < parties.length; i++) {
             for (uint256 j = i + 1; j < parties.length; j++) {
                 if (parties[i] == parties[j]) {
                     revert DuplicateParty();
                 }
             }
-        }
+        }*/
 
         AgreementData storage agreementData = agreements[contractId];
         agreementData.templateId = templateId;
