@@ -115,6 +115,7 @@ contract RoundManager is
         bytes32 indexed agreementId,
         bytes32 indexed roundId,
         address investor,
+        uint256 minAmount,
         uint256 maxAmount
     );
     event AllocationMade(
@@ -124,6 +125,8 @@ contract RoundManager is
         uint256[] certIds
     );
     event EOIRejected(bytes32 indexed agreementId, bytes32 indexed roundId);
+    event RoundEndTimeUpdated(bytes32 indexed roundId, uint256 oldEndTime, uint256 newEndTime);
+    event RoundClosed(bytes32 indexed roundId, uint256 closedAt);
 
     modifier onlyOwnerOrSelf() {
         if (msg.sender != address(this)) {
@@ -339,6 +342,28 @@ contract RoundManager is
         emit PMVCSubseriesLabelSet(roundId, pmvc, label);
     }
 
+    /// @notice Owner can update the endTime of a round
+    /// @param roundId The round ID
+    /// @param newEndTime The new end timestamp
+    function setRoundEndTime(bytes32 roundId, uint256 newEndTime) external onlyOwner {
+        Round storage round = RoundManagerStorage.getRound(roundId);
+        if (round.id == bytes32(0)) revert InvalidRound();
+        uint256 oldEndTime = round.endTime;
+        round.endTime = newEndTime;
+        emit RoundEndTimeUpdated(roundId, oldEndTime, newEndTime);
+    }
+
+    /// @notice Owner can close the round immediately by setting endTime to now
+    /// @param roundId The round ID
+    function closeRoundNow(bytes32 roundId) external onlyOwner {
+        Round storage round = RoundManagerStorage.getRound(roundId);
+        if (round.id == bytes32(0)) revert InvalidRound();
+        uint256 oldEndTime = round.endTime;
+        round.endTime = block.timestamp;
+        emit RoundEndTimeUpdated(roundId, oldEndTime, round.endTime);
+        emit RoundClosed(roundId, block.timestamp);
+    }
+
     // Getters for convenience
     // Getters with primitives to avoid cross-type coupling
     function getCapTableSnapshotFields(
@@ -518,7 +543,7 @@ contract RoundManager is
             );
         }
 
-        emit EOISubmitted(agreementId, roundId, msg.sender, eoi.maxAmount);
+        emit EOISubmitted(agreementId, roundId, msg.sender, eoi.minAmount, eoi.maxAmount);
 
         if (round.roundType == RoundType.FCFS) {
             this.allocate(agreementId, eoi.maxAmount, bytes(""));

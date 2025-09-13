@@ -6,6 +6,8 @@ import {console} from "forge-std/console.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
+import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
@@ -17,6 +19,7 @@ import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {Vm} from "forge-std/Test.sol";
 import "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {CyberScrip} from "../src/CyberScrip.sol";
 
 interface IUUPS {
     function upgradeTo(address newImplementation) external;
@@ -41,6 +44,7 @@ contract UpgradePublicRoundsScript is Script {
         // Required existing addresses
         address cyberCorpFactoryProxyAddr = 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2;
         address cyberCorpSingleFactoryAddr = 0xc8e084D3f8B3b326FCc894C7afD28F4904196406;
+        address issuanceManagerFactoryAddr = 0xA32547aAdAA4975082D729c79e79dBaE4385EBCf;
         address usdc = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
         address registry = 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134;
 
@@ -122,10 +126,26 @@ contract UpgradePublicRoundsScript is Script {
             registry
         );
 
+        // 5b) Upgrade IssuanceManager (Beacon via IssuanceManagerFactory)
+        address newIssuanceManagerImpl = address(new IssuanceManager{salt: salt}());
+        console.log("New IssuanceManager implementation:", newIssuanceManagerImpl);
+        IssuanceManagerFactory(issuanceManagerFactoryAddr).upgradeImplementation(newIssuanceManagerImpl);
+        console.log(
+            "IssuanceManager beacon implementation set to:",
+            IssuanceManagerFactory(issuanceManagerFactoryAddr).getBeaconImplementation()
+        );
+
+        //deploy CyberScrip implementation
+        address newCyberScripImpl = address(new CyberScrip{salt: salt}());
+        console.log("New CyberScrip implementation:", newCyberScripImpl);
+        CyberCorpFactory(cyberCorpFactoryProxyAddr).setCyberCert20Implementation(newCyberScripImpl);
+
+
         // 6) upgrade CyberCertPrinter
         address newCyberCertPrinterImpl = address(new CyberCertPrinter{salt: salt}());
         console.log("New CyberCertPrinter implementation:", newCyberCertPrinterImpl);
         factoryProxy.setCyberCertPrinterImplementation(newCyberCertPrinterImpl);
+
 
         console.log("CyberCorpFactory:", address(factoryProxy));
         console.log("CyberCorpSingleFactory:", address(ccSingleFactory));

@@ -157,7 +157,7 @@ library IssuanceManagerStorage {
         issuanceManagerStorage().CyberCertPrinterBeacon.upgradeTo(_newImplementation);
     }
 
-    function updateCyberScripBeacon(address _newImplementation) internal {
+    function updateScripBeaconImplementation(address _newImplementation) internal {
         issuanceManagerStorage().CyberScripBeacon.upgradeTo(_newImplementation);
     }
 

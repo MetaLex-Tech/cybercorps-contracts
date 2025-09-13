@@ -136,8 +136,16 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     }
 
     modifier onlyUpgradeFactory() {
-        if (msg.sender != IssuanceManagerStorage.getUpgradeFactory())
-            revert NotUpgradeFactory();
+        // Allow explicitly configured upgrade factory OR contract owner
+        if (msg.sender != IssuanceManagerStorage.getUpgradeFactory()) {
+            // Check owner via BorgAuth
+            try AUTH.onlyRole(AUTH.OWNER_ROLE(), msg.sender) {
+                _;
+                return;
+            } catch {
+                revert NotUpgradeFactory();
+            }
+        }
         _;
     }
 

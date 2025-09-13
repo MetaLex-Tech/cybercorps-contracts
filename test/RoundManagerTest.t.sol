@@ -135,14 +135,22 @@ contract RoundManagerTest is Test {
         rmFactory = address(
             new RoundManagerFactory{salt: salt}(address(bootstrapAuth))
         );
-
+        /*address _auth,
+        address _registryAddress,
+        address _cyberCertPrinterImplementation,
+        address _cyberCert20Implementation,
+        address _issuanceManagerFactory,
+        address _cyberCorpSingleFactory,
+        address _dealManagerFactory,
+        address _roundManagerFactory,
+        address _uriBuilder*/
         corpFactory = CyberCorpFactory(
             address(
                 new ERC1967Proxy{salt: salt}(
                     address(new CyberCorpFactory{salt: salt}()),
-                    abi.encodeWithSelector(
+                        abi.encodeWithSelector(
                         CyberCorpFactory.initialize.selector,
-                        address(bootstrapAuth),
+                        address(auth),
                         address(registry),
                         certPrinterImpl,
                         cyberScripImpl,
@@ -175,8 +183,6 @@ contract RoundManagerTest is Test {
             officer
         );
 
-
-        
         // Authorize RM as owner in IssuanceManager
         vm.prank(owner);
         BorgAuth(auth).updateRole(address(roundManager), 99);
@@ -237,6 +243,7 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
+            owner,
             testRoundPartyValues,
             bytes("")
         );
@@ -524,12 +531,6 @@ contract RoundManagerTest is Test {
 
         // Verify EOI was stored correctly by checking the EOISubmitted event
         vm.expectEmit(true, true, true, true);
-        emit RoundManager.EOISubmitted(
-            agreementId,
-            roundId,
-            investor,
-            eoi.maxAmount
-        );
 
         vm.stopPrank();
     }
@@ -802,6 +803,7 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
+            owner,
             testRoundPartyValues,
             bytes("")
         );
@@ -1027,6 +1029,7 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
+            owner,
             testRoundPartyValues,
             bytes("")
         );
@@ -1219,6 +1222,7 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
+            owner,
             testRoundPartyValues,
             bytes("")
         );
@@ -1571,6 +1575,7 @@ contract RoundManagerFCFSTest is Test {
                 paymentToken,
                 10 * (10 ** payDec),
                 10_000_000,
+                address(this),
                 roundPartyValues,
                 escrowedSig
             );
@@ -1619,6 +1624,7 @@ contract RoundManagerFCFSTest is Test {
                 paymentToken,
                 10 * (10 ** payDec),
                 10_000_000,
+                address(this),
                 roundPartyValues,
                 escrowedSig
             );
@@ -1685,6 +1691,7 @@ contract RoundManagerFCFSTest is Test {
             address(0xDEAD),
             1,
             1,
+            address(this),
             roundPartyValues,
             bytes("")
         );

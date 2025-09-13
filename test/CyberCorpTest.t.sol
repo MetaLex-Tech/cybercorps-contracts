@@ -5720,6 +5720,114 @@ contract CyberCorpTest is Test {
         vm.stopPrank();
     }
 
+    function testPerTokenTransferabilityFlag() public {
+        vm.startPrank(testAddress);
+        // Deploy a CyberCorp to obtain an issuance manager and printer
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
+            unitsRepresented: 1,
+            legalDetails: "",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        (
+            address cyberCorp,
+            address authAddr,
+            address issuanceManager,
+            address dealManagerAddr,
+            address roundManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("PerTokenFlag"),
+            "PerTokenCorp",
+            "Limited Liability Company",
+            "Delaware",
+            "Contact Details",
+            "Dispute",
+            testAddress,
+            officer
+        );
+        vm.stopPrank();
+
+        // Create a certificate printer and mint two certs to testAddress
+        string[] memory ledger = new string[](0);
+        vm.prank(testAddress);
+        address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
+            ledger,
+            "Test",
+            "TEST",
+            "ipfs://test",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesSeed,
+            address(0)
+        );
+
+        CertificateDetails memory cd = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
+            unitsRepresented: 1,
+            legalDetails: "",
+            extensionData: ""
+        });
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // tokenId 0
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // tokenId 1
+
+        address recipient = vm.addr(0xCAFE);
+
+        // Global off; token 0 off => revert
+        vm.startPrank(testAddress);
+        vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
+        vm.stopPrank();
+
+        // Enable token 0 only
+        vm.prank(issuanceManager);
+        CyberCertPrinter(certPrinter).setTokenTransferable(0, true);
+
+        // Without endorsement should still revert
+        vm.startPrank(testAddress);
+        vm.expectRevert();
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
+        vm.stopPrank();
+
+        // Add endorsement and transfer succeeds for token 0
+        Endorsement memory e = Endorsement({
+            endorser: testAddress,
+            timestamp: block.timestamp,
+            signatureHash: hex"01",
+            registry: address(0),
+            agreementId: bytes32(0),
+            endorsee: recipient,
+            endorseeName: "Recipient"
+        });
+        vm.prank(testAddress);
+        CyberCertPrinter(certPrinter).addEndorsement(0, e);
+        vm.prank(testAddress);
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
+        assertEq(CyberCertPrinter(certPrinter).ownerOf(0), recipient);
+
+        // Token 1 should remain blocked
+        vm.startPrank(testAddress);
+        vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, vm.addr(0xBEEF), 1);
+        vm.stopPrank();
+    }
+
     function testRevokeDelegation() public {
         uint256 principalPk = 55555;
         address principalAddr = vm.addr(principalPk);

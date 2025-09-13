@@ -239,7 +239,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             cyberCorpAddress,
             cyberCertPrinterImplementation,
             uriBuilder,
-            issuanceManagerFactory
+            issuanceManagerFactory,
+            cyberCert20Implementation
         );
 
         //update role for issuance manager

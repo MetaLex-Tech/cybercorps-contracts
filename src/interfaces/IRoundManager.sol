@@ -78,7 +78,9 @@ interface IRoundManager {
     );
     event RoundingPolicySet(bytes32 indexed roundId, uint8 mode, uint8 priceDecimals, uint8 shareDecimals);
     event PMVCSubseriesLabelSet(bytes32 indexed roundId, uint256 pmvc, string label);
-    event EOISubmitted(bytes32 indexed agreementId, bytes32 indexed roundId, address investor, uint256 maxAmount);
+    event RoundEndTimeUpdated(bytes32 indexed roundId, uint256 oldEndTime, uint256 newEndTime);
+    event RoundClosed(bytes32 indexed roundId, uint256 closedAt);
+    event EOISubmitted(bytes32 indexed agreementId, bytes32 indexed roundId, address investor, uint256 minAmount, uint256 maxAmount);
     event AllocationMade(bytes32 indexed agreementId, bytes32 indexed roundId, uint256 allocatedAmount, uint256[] certIds);
     event EOIRejected(bytes32 indexed agreementId, bytes32 indexed roundId);
 
@@ -118,6 +120,10 @@ interface IRoundManager {
     function reject(bytes32 agreementId) external;
 
     function issuanceManager() external view returns (IIssuanceManager);
+
+    function setRoundEndTime(bytes32 roundId, uint256 newEndTime) external;
+
+    function closeRoundNow(bytes32 roundId) external;
 
     function getCapTableSnapshotFields(bytes32 roundId)
         external view
