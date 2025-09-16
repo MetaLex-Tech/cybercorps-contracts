@@ -61,6 +61,7 @@ abstract contract BaseTransferHook is ITransferRestrictionHook, BorgAuthACL {
     // Initialization helper to wire BorgAuth
     function __BaseTransferHook_init(address _auth) internal onlyInitializing {
         __BorgAuthACL_init(_auth);
+        enabled = true;
     }
     
     /// @notice Enable or disable the hook

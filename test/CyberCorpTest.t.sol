@@ -5858,4 +5858,273 @@ contract CyberCorpTest is Test {
         console.log("Principal:", principalAddr);
         console.log("Delegate:", delegateAddr);
     }
+
+    function testGlobalTransferabilityEphemeral() public {
+        vm.startPrank(testAddress);
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        _details[0] = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
+            unitsRepresented: 1,
+            legalDetails: "",
+            extensionData: ""
+        });
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+        (
+            address cyberCorp,
+            address authAddr,
+            address issuanceManager,
+            address dealManagerAddr,
+            address roundManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("GlobalEphemeral"),
+            "Corp",
+            "LLC",
+            "DE",
+            "Contact",
+            "Dispute",
+            testAddress,
+            officer
+        );
+        vm.stopPrank();
+
+        // Create printer and mint two certs to testAddress
+        string[] memory ledger = new string[](0);
+        vm.prank(testAddress);
+        address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
+            ledger,
+            "Cert",
+            "CRT",
+            "ipfs://uri",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesSeed,
+            address(0)
+        );
+        CertificateDetails memory cd = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
+            unitsRepresented: 1,
+            legalDetails: "",
+            extensionData: ""
+        });
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // token 0
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // token 1
+
+        address recipient1 = vm.addr(0x1001);
+        address recipient2 = vm.addr(0x1002);
+
+        // Add endorsement for token 0 -> recipient1
+        Endorsement memory e0 = Endorsement({
+            endorser: testAddress,
+            timestamp: block.timestamp,
+            signatureHash: hex"01",
+            registry: address(0),
+            agreementId: bytes32(0),
+            endorsee: recipient1,
+            endorseeName: "R1"
+        });
+        vm.prank(testAddress);
+        CyberCertPrinter(certPrinter).addEndorsement(0, e0);
+
+        // Before enabling global: expect TokenNotTransferable
+        vm.startPrank(testAddress);
+        vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient1, 0);
+        vm.stopPrank();
+
+        // Turn global on, transfer succeeds
+        vm.prank(issuanceManager);
+        CyberCertPrinter(certPrinter).setGlobalTransferable(true);
+        vm.prank(testAddress);
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient1, 0);
+        assertEq(CyberCertPrinter(certPrinter).ownerOf(0), recipient1);
+
+        // Global off again
+        vm.prank(issuanceManager);
+        CyberCertPrinter(certPrinter).setGlobalTransferable(false);
+
+        // Verify token flag not persisted
+        bool persisted = CyberCertPrinter(certPrinter).isTokenTransferable(0);
+        assertEq(persisted, false);
+
+        // Add endorsement for token 1 -> recipient2 and ensure it still reverts due to global off and no per-token flag
+        Endorsement memory e1 = Endorsement({
+            endorser: testAddress,
+            timestamp: block.timestamp,
+            signatureHash: hex"02",
+            registry: address(0),
+            agreementId: bytes32(0),
+            endorsee: recipient2,
+            endorseeName: "R2"
+        });
+        vm.prank(testAddress);
+        CyberCertPrinter(certPrinter).addEndorsement(1, e1);
+        vm.startPrank(testAddress);
+        vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient2, 1);
+        vm.stopPrank();
+    }
+
+    function testPerTokenTransferabilityWithHookDenial() public {
+        vm.startPrank(testAddress);
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+        (
+            address cyberCorp,
+            address authAddr,
+            address issuanceManager,
+            address dealManagerAddr,
+            address roundManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("PerTokenHookDeny"),
+            "Corp",
+            "LLC",
+            "DE",
+            "Contact",
+            "Dispute",
+            testAddress,
+            officer
+        );
+        vm.stopPrank();
+
+        // Create printer and mint token 0
+        string[] memory ledger = new string[](0);
+        vm.prank(testAddress);
+        address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
+            ledger,
+            "Cert",
+            "CRT",
+            "ipfs://uri",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesSeed,
+            address(0)
+        );
+        CertificateDetails memory cd = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
+            unitsRepresented: 1,
+            legalDetails: "",
+            extensionData: ""
+        });
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // token 0
+
+        // Enable per-token transferability for token 0
+        vm.prank(issuanceManager);
+        CyberCertPrinter(certPrinter).setTokenTransferable(0, true);
+
+        // Install a denying global hook
+        ToggleTransferHook hook = new ToggleTransferHook();
+        BorgAuth corpAuth = IssuanceManager(issuanceManager).AUTH();
+        hook.initialize(address(corpAuth));
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).setGlobalRestrictionHook(certPrinter, address(hook));
+        vm.prank(testAddress);
+        hook.setDefaultTransferable(false);
+
+        // With endorsement, transfer should still be blocked by hook
+        address recipient = vm.addr(0x2222);
+        Endorsement memory e = Endorsement({
+            endorser: testAddress,
+            timestamp: block.timestamp,
+            signatureHash: hex"01",
+            registry: address(0),
+            agreementId: bytes32(0),
+            endorsee: recipient,
+            endorseeName: "R"
+        });
+        vm.prank(testAddress);
+        CyberCertPrinter(certPrinter).addEndorsement(0, e);
+        vm.startPrank(testAddress);
+        vm.expectRevert();
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
+        vm.stopPrank();
+    }
+
+    function testDealManagerExemptionWithEndorsement() public {
+        vm.startPrank(testAddress);
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+        (
+            address cyberCorp,
+            address authAddr,
+            address issuanceManager,
+            address dealManagerAddr,
+            address roundManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("DealMgrExempt"),
+            "Corp",
+            "LLC",
+            "DE",
+            "Contact",
+            "Dispute",
+            testAddress,
+            officer
+        );
+        vm.stopPrank();
+
+        // Create printer and mint token to dealManager
+        string[] memory ledger = new string[](0);
+        vm.prank(testAddress);
+        address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
+            ledger,
+            "Cert",
+            "CRT",
+            "ipfs://uri",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesSeed,
+            address(0)
+        );
+        CertificateDetails memory cd = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
+            unitsRepresented: 1,
+            legalDetails: "",
+            extensionData: ""
+        });
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, dealManagerAddr, cd); // token 0 owned by dealManager
+
+        // Add endorsement to recipient
+        address recipient = vm.addr(0x3333);
+        Endorsement memory e = Endorsement({
+            endorser: dealManagerAddr,
+            timestamp: block.timestamp,
+            signatureHash: hex"01",
+            registry: address(0),
+            agreementId: bytes32(0),
+            endorsee: recipient,
+            endorseeName: "R"
+        });
+        vm.prank(dealManagerAddr);
+        CyberCertPrinter(certPrinter).addEndorsement(0, e);
+
+        // With both global and token flags off, transfer from dealManager should succeed (exemption), subject to hooks/endorsement
+        vm.prank(dealManagerAddr);
+        CyberCertPrinter(certPrinter).transferFrom(dealManagerAddr, recipient, 0);
+        assertEq(CyberCertPrinter(certPrinter).ownerOf(0), recipient);
+    }
 }

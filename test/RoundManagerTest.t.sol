@@ -150,7 +150,7 @@ contract RoundManagerTest is Test {
                     address(new CyberCorpFactory{salt: salt}()),
                         abi.encodeWithSelector(
                         CyberCorpFactory.initialize.selector,
-                        address(auth),
+                        address(bootstrapAuth),
                         address(registry),
                         certPrinterImpl,
                         cyberScripImpl,
