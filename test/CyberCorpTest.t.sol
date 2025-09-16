@@ -2737,9 +2737,9 @@ contract CyberCorpTest is Test {
             .tokenURI(0);
         console.log(certificateUri);
 
-        string memory certificateUriJson = CyberCertPrinter(cyberCertPrinterAddr[0])
+        /*string memory certificateUriJson = CyberCertPrinter(cyberCertPrinterAddr[0])
             .tokenURIJson(0);
-        console.log(certificateUriJson);
+        console.log(certificateUriJson);*/
 
         // Create a new recipient address
         address newRecipient = vm.addr(12345);
