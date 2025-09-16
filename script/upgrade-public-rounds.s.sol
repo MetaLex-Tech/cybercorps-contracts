@@ -35,6 +35,7 @@ contract UpgradePublicRoundsScript is Script {
         bytes32 salt = bytes32(
             keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV1")
         );
+        
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         uint256 testPrivateKey = vm.envUint("TEST_KEY");
 
