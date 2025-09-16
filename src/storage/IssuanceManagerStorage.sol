@@ -59,12 +59,6 @@ library IssuanceManagerStorage {
         mapping(address => address) scripifiedCert;
         mapping(address => ICondition[]) certToScripConditions;
         mapping(address => ICondition[]) scripToCertConditions;
-        // External converter responsible for conversion math/logic
-        address certificateConverter;
-        // SAFE conversion tracking
-        mapping(address => mapping(uint256 => bool)) safeConverted; // safePrinter => tokenId => converted
-        mapping(address => mapping(uint256 => address)) safeToEquityPrinter; // safePrinter => tokenId => equity printer
-        mapping(address => mapping(uint256 => uint256)) safeToEquityTokenId; // safePrinter => tokenId => new equity tokenId
     }
 
     // Returns the storage layout
@@ -177,49 +171,17 @@ library IssuanceManagerStorage {
         return issuanceManagerStorage().scripToCertConditions[certAddress];
     }
 
-    function setCertificateConverter(address converter) internal {
-        issuanceManagerStorage().certificateConverter = converter;
-    }
-
-    function getCertificateConverter() internal view returns (address) {
-        return issuanceManagerStorage().certificateConverter;
-    }
-
-    // ------- SAFE conversion helpers -------
-    function isSafeConverted(address safePrinter, uint256 safeTokenId) internal view returns (bool) {
-        return issuanceManagerStorage().safeConverted[safePrinter][safeTokenId];
-    }
-
-    function setSafeConversion(
-        address safePrinter,
-        uint256 safeTokenId,
-        address equityPrinter,
-        uint256 equityTokenId
-    ) internal {
-        IssuanceManagerData storage s = issuanceManagerStorage();
-        s.safeConverted[safePrinter][safeTokenId] = true;
-        s.safeToEquityPrinter[safePrinter][safeTokenId] = equityPrinter;
-        s.safeToEquityTokenId[safePrinter][safeTokenId] = equityTokenId;
-    }
-
-    function getSafeConversion(address safePrinter, uint256 safeTokenId) internal view returns (bool converted, address equityPrinter, uint256 equityTokenId) {
-        IssuanceManagerData storage s = issuanceManagerStorage();
-        converted = s.safeConverted[safePrinter][safeTokenId];
-        equityPrinter = s.safeToEquityPrinter[safePrinter][safeTokenId];
-        equityTokenId = s.safeToEquityTokenId[safePrinter][safeTokenId];
+    function setScripToCertConditions(address certAddress, ICondition[] memory conditions) internal {
+        delete issuanceManagerStorage().scripToCertConditions[certAddress];
+        for (uint i = 0; i < conditions.length; i++) {
+            issuanceManagerStorage().scripToCertConditions[certAddress].push(conditions[i]);
+        }
     }
 
     function setCertToScripConditions(address certAddress, ICondition[] memory conditions) internal {
         delete issuanceManagerStorage().certToScripConditions[certAddress];
         for (uint i = 0; i < conditions.length; i++) {
             issuanceManagerStorage().certToScripConditions[certAddress].push(conditions[i]);
-        }
-    }
-
-    function setScripToCertConditions(address certAddress, ICondition[] memory conditions) internal {
-        delete issuanceManagerStorage().scripToCertConditions[certAddress];
-        for (uint i = 0; i < conditions.length; i++) {
-            issuanceManagerStorage().scripToCertConditions[certAddress].push(conditions[i]);
         }
     }
 } 

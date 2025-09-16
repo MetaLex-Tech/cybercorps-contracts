@@ -93,8 +93,6 @@ contract IssuanceManager is Initializable, BorgAuthACL {
         CertificateDetails details,
         string tokenURI
     );
-    event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
-    event SafeConverted(bytes32 indexed roundId, address indexed safePrinter, uint256 indexed safeTokenId, address equityPrinter, uint256 equityTokenId, uint256 sharesIssued, uint256 priceBasis, uint256 safePrice, uint256 roundPrice, uint256 cCapUsed);
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -370,6 +368,17 @@ contract IssuanceManager is Initializable, BorgAuthACL {
             IssuanceManagerStorage.getCyberCertPrinterBeacon().implementation();
     }
 
+    function upgradeScripBeaconImplementation(
+        address _newImplementation
+    ) external onlyUpgradeFactory {
+        IssuanceManagerStorage.updateScripBeaconImplementation(_newImplementation);
+    }
+
+    function getScripBeaconImplementation() external view returns (address) {
+        return
+            IssuanceManagerStorage.getCyberScripBeacon().implementation();
+    }
+
     /// @notice Gets the bytecode for creating new certificate printer proxies
     /// @dev Internal function used by createCertPrinter
     /// @return bytecode The proxy contract creation bytecode
@@ -437,11 +446,6 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     /// @param _uriBuilder New URI builder contract address
     function setUriBuilder(address _uriBuilder) external onlyOwner {
         IssuanceManagerStorage.setUriBuilder(_uriBuilder);
-    }
-
-    /// @notice Sets the external certificate converter contract
-    function setCertificateConverter(address converter) external onlyOwner {
-        IssuanceManagerStorage.setCertificateConverter(converter);
     }
 
     /// @notice Sets a restriction hook for a specific certificate
@@ -641,47 +645,5 @@ contract IssuanceManager is Initializable, BorgAuthACL {
 
             createCertAndAssign(certAddress, msg.sender, details);
         }
-    }
-
-    // ================================
-    // SAFE conversion
-    // ================================
-    error AlreadyConverted();
-    error InvalidRoundConfig();
-    error MathError();
-
-    /// @notice Generic certificate conversion, defers math and target selection to external converter
-    function convertCertificate(
-        address roundManager,
-        bytes32 roundId,
-        address sourcePrinter,
-        uint256 tokenId,
-        address targetPrinter
-    ) external onlyOwner returns (uint256 newTokenId) {
-        if (IssuanceManagerStorage.isSafeConverted(sourcePrinter, tokenId)) revert AlreadyConverted();
-
-        address converter = IssuanceManagerStorage.getCertificateConverter();
-        if (converter == address(0)) revert InvalidRoundConfig();
-
-        ICyberCertPrinter source = ICyberCertPrinter(sourcePrinter);
-        CertificateDetails memory srcDetails = source.getCertificateDetails(tokenId);
-        address owner_ = source.ownerOf(tokenId);
-
-        ICertificateConverter.ConversionPlan memory plan = ICertificateConverter(converter).computeConversion(roundManager, roundId, sourcePrinter, tokenId);
-        if (plan.shares == 0) revert MathError();
-
-        CertificateDetails memory tgt = CertificateDetails({
-            signingOfficerName: srcDetails.signingOfficerName,
-            signingOfficerTitle: srcDetails.signingOfficerTitle,
-            investmentAmountUSD: srcDetails.investmentAmountUSD,
-            issuerUSDValuationAtTimeOfInvestment: srcDetails.issuerUSDValuationAtTimeOfInvestment,
-            unitsRepresented: plan.shares,
-            legalDetails: plan.legalDetails,
-            extensionData: ""
-        });
-        newTokenId = createCert(targetPrinter, owner_, tgt);
-
-        source.voidCert(tokenId);
-        IssuanceManagerStorage.setSafeConversion(sourcePrinter, tokenId, targetPrinter, newTokenId);
     }
 }
