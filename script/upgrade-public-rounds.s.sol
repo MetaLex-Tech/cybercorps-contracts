@@ -127,6 +127,29 @@ contract UpgradePublicRoundsScript is Script {
             registry
         );
 
+        // Add SAFE template (id 1) using SAFE fields from template.s.sol
+        string[] memory globalFieldsSafe = new string[](5);
+        globalFieldsSafe[0] = "purchaseAmount";
+        globalFieldsSafe[1] = "postMoneyValuationCap";
+        globalFieldsSafe[2] = "expirationTime";
+        globalFieldsSafe[3] = "governingJurisdiction";
+        globalFieldsSafe[4] = "disputeResolution";
+
+        string[] memory partyFieldsSafe = new string[](5);
+        partyFieldsSafe[0] = "name";
+        partyFieldsSafe[1] = "evmAddress";
+        partyFieldsSafe[2] = "contactDetails";
+        partyFieldsSafe[3] = "investorType";
+        partyFieldsSafe[4] = "investorJurisdiction";
+
+        CyberAgreementRegistry(registry).createTemplate(
+            bytes32(uint256(1)),
+            "SAFE",
+            "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi",
+            globalFieldsSafe,
+            partyFieldsSafe
+        );
+
         // 5b) Upgrade IssuanceManager (Beacon via IssuanceManagerFactory)
         address newIssuanceManagerImpl = address(new IssuanceManager{salt: salt}());
         console.log("New IssuanceManager implementation:", newIssuanceManagerImpl);
@@ -214,6 +237,43 @@ contract UpgradePublicRoundsScript is Script {
                     block.timestamp - 1,
                     block.timestamp + 14 days
                 );
+
+        // Example public round using SAFE template id 1
+        (
+            address cyberCorp2,
+            address auth2,
+            address issuance2,
+            address dealManager2,
+            address roundManager2,
+            bytes32 roundId2
+        ) = CyberCorpFactory(cyberCorpFactoryProxyAddr)
+                .deployCyberCorpAndCreatePublicRound(
+                    block.timestamp + 1,
+                    "Series SAFE",
+                    "SafeCorp",
+                    "Limited Liability Company",
+                    "Juris",
+                    "Contact",
+                    "Dispute",
+                    address(deployer),
+                    officer,
+                    certData,
+                    bytes32(uint256(1)),
+                    address(usdc),
+                    1000,
+                    1000000000000000,
+                    roundPartyValues,
+                    escrowedSig,
+                    RoundType.FCFS,
+                    100000000000,
+                    1,
+                    10000000,
+                    block.timestamp - 1,
+                    block.timestamp + 21 days
+                );
+        console.log("SAFE Template Round cyberCorp:", cyberCorp2);
+        console.log("SAFE Template Round roundManager:", roundManager2);
+        console.logBytes32(roundId2);
         vm.stopBroadcast();
 
         vm.startBroadcast(testPrivateKey);
@@ -282,6 +342,46 @@ contract UpgradePublicRoundsScript is Script {
             bytes32(0),
             block.timestamp + 7 days,
             "Investor 1"
+        );
+        vm.stopBroadcast();
+
+        // Submit EOI from another address for SAFE template round (roundId2)
+        uint256 testPrivateKey2 = vm.envUint("TEST_KEY_2");
+        address testDeployer2 = vm.addr(testPrivateKey2);
+        vm.startBroadcast(testPrivateKey2);
+        EOI memory eoi2 = EOI({
+            name: "Investor 2",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "email2",
+            minAmount: 1,
+            maxAmount: 1
+        });
+
+        // Build signature for template id 1
+        bytes memory signature2 = _computeEOISignature(
+            vm,
+            CyberAgreementRegistry(registry),
+            bytes32(uint256(1)),
+            block.timestamp,
+            roundPartyValues,
+            roundPartyValues,
+            deployer,
+            testPrivateKey2
+        );
+
+        ERC20(payable(usdc)).approve(address(roundManager2), type(uint256).max);
+        RoundManager(roundManager2).submitEOI(
+            roundId2,
+            eoi2,
+            roundPartyValues,
+            roundPartyValues,
+            signature2,
+            block.timestamp,
+            new address[](0),
+            bytes32(0),
+            block.timestamp + 7 days,
+            "Investor 2"
         );
         vm.stopBroadcast();
     }
