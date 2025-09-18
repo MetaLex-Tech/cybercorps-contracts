@@ -206,7 +206,7 @@ contract PublicRoundTestDeploy is Script {
             bytes32 roundId2
         ) = corpFactory.deployCyberCorpAndCreatePublicRound(
                 block.timestamp + 1,
-                "Series SAFE",
+                SecuritySeries.SeriesA,
                 "SafeCorp",
                 "Limited Liability Company",
                 "DE",
@@ -214,6 +214,8 @@ contract PublicRoundTestDeploy is Script {
                 "arbitration",
                 deployer,
                 officer,
+                "",
+                "",
                 certData,
                 bytes32(uint256(1)),
                 stable,
@@ -222,6 +224,7 @@ contract PublicRoundTestDeploy is Script {
                 safePartyValues,
                 escrowedSig,
                 RoundType.FCFS,
+                new address[](0),
                 100000000000,
                 1,
                 10000000,
@@ -264,7 +267,8 @@ contract PublicRoundTestDeploy is Script {
             jurisdiction: "US",
             contact: "email",
             minAmount: 1,
-            maxAmount: 1
+            maxAmount: 1,
+            expiry: block.timestamp + 7 days
         });
 
         bytes memory signature = _computeEOISignature(
@@ -287,9 +291,7 @@ contract PublicRoundTestDeploy is Script {
             signature,
             block.timestamp,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Investor 1"
+            bytes32(0)
         );
 
         vm.stopBroadcast();

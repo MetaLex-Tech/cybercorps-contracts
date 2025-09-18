@@ -231,7 +231,7 @@ contract RoundManagerTest is Test {
         // Create test round
         vm.prank(owner);
         roundId = RoundManager(roundManager).createRound(
-            "Series A",
+            SecuritySeries.SeriesA,
             RAISE_CAP,
             MIN_TICKET,
             MAX_TICKET,
@@ -240,10 +240,15 @@ contract RoundManagerTest is Test {
             block.timestamp + 30 days,
             templateId,
             certData,
+            new address[](0),
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
             owner,
+            "Officer",
+            "CEO",
+            "",
+            "",
             testRoundPartyValues,
             bytes("")
         );
@@ -488,7 +493,8 @@ contract RoundManagerTest is Test {
             jurisdiction: "US",
             contact: "test@example.com",
             minAmount: 5000 * 10 ** 6, // 5,000 USDC
-            maxAmount: 10000 * 10 ** 6 // 10,000 USDC
+            maxAmount: 10000 * 10 ** 6, // 10,000 USDC
+            expiry: block.timestamp + 7 days
         });
 
         string[] memory globalValues = new string[](1);
@@ -519,9 +525,7 @@ contract RoundManagerTest is Test {
             signature,
             salt,
             conditions,
-            secretHash,
-            expiry,
-            "Test Investor"
+            secretHash
         );
 
         assertTrue(
@@ -544,7 +548,8 @@ contract RoundManagerTest is Test {
             jurisdiction: "US",
             contact: "test@example.com",
             minAmount: 100 * 10 ** 6, // Below MIN_TICKET
-            maxAmount: 1000000 * 10 ** 6 // Above MAX_TICKET
+            maxAmount: 1000000 * 10 ** 6, // Above MAX_TICKET
+            expiry: block.timestamp + 7 days
         });
 
         string[] memory globalValues = new string[](1);
@@ -570,9 +575,7 @@ contract RoundManagerTest is Test {
             sig,
             1,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Test Investor"
+            bytes32(0)
         );
 
         vm.stopPrank();
@@ -588,7 +591,9 @@ contract RoundManagerTest is Test {
             jurisdiction: "US",
             contact: "test@example.com",
             minAmount: 5000 * 10 ** 6,
-            maxAmount: 10000 * 10 ** 6
+            maxAmount: 10000 * 10 ** 6,
+            expiry: block.timestamp + 7 days
+
         });
 
         bytes32 agreementId = RoundManager(roundManager).submitEOI(
@@ -606,9 +611,7 @@ contract RoundManagerTest is Test {
             ),
             1,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Test Investor"
+            bytes32(0)
         );
         vm.expectEmit(true, true, false, true);
         vm.stopPrank();
@@ -655,7 +658,8 @@ contract RoundManagerTest is Test {
             jurisdiction: "US",
             contact: "test@example.com",
             minAmount: 5000 * 10 ** 6,
-            maxAmount: 10000 * 10 ** 6
+            maxAmount: 10000 * 10 ** 6,
+            expiry: block.timestamp + 7 days
         });
 
         bytes32 agreementId = RoundManager(roundManager).submitEOI(
@@ -673,9 +677,7 @@ contract RoundManagerTest is Test {
             ),
             1,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Test Investor"
+            bytes32(0)
         );
 
         vm.stopPrank();
@@ -707,7 +709,8 @@ contract RoundManagerTest is Test {
             jurisdiction: "US",
             contact: "test@example.com",
             minAmount: 5000 * 10 ** 6,
-            maxAmount: RAISE_CAP + 1 // Just over the raise cap
+            maxAmount: RAISE_CAP + 1, // Just over the raise cap
+            expiry: block.timestamp + 7 days
         });
 
         // Expect revert because eoi.maxAmount exceeds round.maxTicket bounds
@@ -730,9 +733,7 @@ contract RoundManagerTest is Test {
             sig,
             1,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Test Investor"
+            bytes32(0)
         );
 
         vm.stopPrank();
@@ -750,7 +751,8 @@ contract RoundManagerTest is Test {
             jurisdiction: "US",
             contact: "test@example.com",
             minAmount: 5000 * 10 ** 6,
-            maxAmount: 10000 * 10 ** 6
+            maxAmount: 10000 * 10 ** 6,
+            expiry: block.timestamp + 7 days
         });
 
         vm.expectRevert(
@@ -765,9 +767,7 @@ contract RoundManagerTest is Test {
             "0x",
             1,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Test Investor"
+            bytes32(0)
         );
 
         vm.stopPrank();
@@ -791,7 +791,7 @@ contract RoundManagerTest is Test {
         bytes32 roundIdLarge;
         vm.prank(owner);
         roundIdLarge = RoundManager(roundManager).createRound(
-            "Series R2",
+            SecuritySeries.SeriesPreSeed,
             1_000_000 * 10 ** 6, // raise cap 1M
             1_000 * 10 ** 6,
             1_000_000 * 10 ** 6, // maxTicket large enough
@@ -800,10 +800,15 @@ contract RoundManagerTest is Test {
             block.timestamp + 30 days,
             templateId,
             certData,
+            new address[](0),
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
             owner,
+            "Officer",
+            "CEO",
+            "",
+            "",
             testRoundPartyValues,
             bytes("")
         );
@@ -816,7 +821,8 @@ contract RoundManagerTest is Test {
             jurisdiction: "US",
             contact: "investor1@example.com",
             minAmount: 400000 * 10 ** 6, // 400k USDC
-            maxAmount: 600000 * 10 ** 6 // 600k USDC
+            maxAmount: 600000 * 10 ** 6, // 600k USDC
+            expiry: block.timestamp + 7 days
         });
 
         bytes32 agreementId1 = RoundManager(roundManager).submitEOI(
@@ -834,9 +840,7 @@ contract RoundManagerTest is Test {
             ),
             1,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Investor 1"
+            bytes32(0)
         );
         vm.stopPrank();
 
@@ -852,7 +856,8 @@ contract RoundManagerTest is Test {
             jurisdiction: "US",
             contact: "investor2@example.com",
             minAmount: 400000 * 10 ** 6, // 400k USDC
-            maxAmount: 600000 * 10 ** 6 // 600k USDC
+            maxAmount: 600000 * 10 ** 6, // 600k USDC
+            expiry: block.timestamp + 7 days
         });
 
         bytes32 agreementId2 = RoundManager(roundManager).submitEOI(
@@ -870,9 +875,7 @@ contract RoundManagerTest is Test {
             ),
             2,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Investor 2"
+            bytes32(0)
         );
         vm.stopPrank();
 
@@ -912,7 +915,8 @@ contract RoundManagerTest is Test {
             jurisdiction: "US",
             contact: "reject@example.com",
             minAmount: 2_000 * 10 ** 6,
-            maxAmount: 5_000 * 10 ** 6
+            maxAmount: 5_000 * 10 ** 6,
+            expiry: block.timestamp + 7 days
         });
         uint256 balBefore = paymentToken.balanceOf(investor);
         bytes32 agreementId = RoundManager(roundManager).submitEOI(
@@ -930,9 +934,7 @@ contract RoundManagerTest is Test {
             ),
             3,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Reject Me"
+            bytes32(0)
         );
         vm.stopPrank();
         Escrow memory escBefore = RoundManager(roundManager).getEscrowDetails(agreementId);
@@ -958,7 +960,8 @@ contract RoundManagerTest is Test {
             jurisdiction: "US",
             contact: "cond@example.com",
             minAmount: 5_000 * 10 ** 6,
-            maxAmount: 10_000 * 10 ** 6
+            maxAmount: 10_000 * 10 ** 6,
+            expiry: block.timestamp + 7 days
         });
         address[] memory conditions = new address[](1);
         conditions[0] = address(cond);
@@ -977,9 +980,7 @@ contract RoundManagerTest is Test {
             ),
             4,
             conditions,
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Fail Cond"
+            bytes32(0)
         );
         vm.stopPrank();
 
@@ -1017,7 +1018,7 @@ contract RoundManagerTest is Test {
         bytes32 roundIdFuture;
         vm.prank(owner);
         roundIdFuture = RoundManager(roundManager).createRound(
-            "Series F",
+            SecuritySeries.SeriesF,
             100_000 * 10 ** 6,
             1_000 * 10 ** 6,
             50_000 * 10 ** 6,
@@ -1026,10 +1027,15 @@ contract RoundManagerTest is Test {
             block.timestamp + 30 days,
             templateId,
             certData,
+            new address[](0),
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
             owner,
+            "Officer",
+            "CEO",
+            "",
+            "",
             testRoundPartyValues,
             bytes("")
         );
@@ -1041,7 +1047,8 @@ contract RoundManagerTest is Test {
             jurisdiction: "US",
             contact: "z@z",
             minAmount: 1_000 * 10 ** 6,
-            maxAmount: 2_000 * 10 ** 6
+            maxAmount: 2_000 * 10 ** 6,
+            expiry: block.timestamp + 7 days
         });
         vm.expectRevert(
             abi.encodeWithSelector(RoundManager.RoundNotOpen.selector)
@@ -1061,9 +1068,7 @@ contract RoundManagerTest is Test {
             ),
             6,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Z"
+            bytes32(0)
         );
         vm.stopPrank();
     }
@@ -1159,7 +1164,8 @@ contract RoundManagerTest is Test {
             jurisdiction: "US",
             contact: "x@x",
             minAmount: 5_000 * 10 ** 6,
-            maxAmount: 10_000 * 10 ** 6
+            maxAmount: 10_000 * 10 ** 6,
+            expiry: block.timestamp + 7 days
         });
         string[] memory gl = new string[](1);
         string[] memory pv = new string[](1);
@@ -1182,9 +1188,7 @@ contract RoundManagerTest is Test {
             sig,
             9,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "X"
+            bytes32(0)
         );
         vm.stopPrank();
     }
@@ -1210,7 +1214,7 @@ contract RoundManagerTest is Test {
         bytes32 roundId2;
         vm.prank(owner);
         roundId2 = RoundManager(roundManager).createRound(
-            "Series R",
+            SecuritySeries.SeriesPreSeed,
             6_000 * 10 ** 6, // small cap
             1_000 * 10 ** 6,
             100_000 * 10 ** 6,
@@ -1219,10 +1223,15 @@ contract RoundManagerTest is Test {
             block.timestamp + 30 days,
             templateId,
             certData,
+            new address[](0),
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
             owner,
+            "Officer",
+            "CEO",
+            "",
+            "",
             testRoundPartyValues,
             bytes("")
         );
@@ -1235,7 +1244,8 @@ contract RoundManagerTest is Test {
             jurisdiction: "US",
             contact: "y@y",
             minAmount: 1_000 * 10 ** 6,
-            maxAmount: 10_000 * 10 ** 6
+            maxAmount: 10_000 * 10 ** 6,
+            expiry: block.timestamp + 7 days
         });
         string[] memory gl = new string[](1);
         string[] memory pv = new string[](1);
@@ -1256,9 +1266,7 @@ contract RoundManagerTest is Test {
             sig,
             5,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Y"
+            bytes32(0)
         );
         uint256 balAfterSubmit = paymentToken.balanceOf(investor);
         assertEq(balBefore - balAfterSubmit, 10_000 * 10 ** 6);
@@ -1563,7 +1571,7 @@ contract RoundManagerFCFSTest is Test {
 
         return
             rm.createRound(
-                "Seed",
+                SecuritySeries.SeriesSeed,
                 1_000_000 * (10 ** payDec),
                 1_000 * (10 ** payDec),
                 100_000 * (10 ** payDec),
@@ -1572,10 +1580,15 @@ contract RoundManagerFCFSTest is Test {
                 block.timestamp + 30 days,
                 templateId,
                 certData,
+                new address[](0),
                 paymentToken,
                 10 * (10 ** payDec),
                 10_000_000,
                 address(this),
+                "Officer",
+                "CEO",
+                "",
+                "",
                 roundPartyValues,
                 escrowedSig
             );
@@ -1612,7 +1625,7 @@ contract RoundManagerFCFSTest is Test {
 
         return
             rm.createRound(
-                "Seed",
+                SecuritySeries.SeriesSeed,
                 raiseCap,
                 minTicket,
                 maxTicket,
@@ -1621,10 +1634,15 @@ contract RoundManagerFCFSTest is Test {
                 block.timestamp + 30 days,
                 templateId,
                 certData,
+                new address[](0),
                 paymentToken,
                 10 * (10 ** payDec),
                 10_000_000,
                 address(this),
+                "Officer",
+                "CEO",
+                "",
+                "",
                 roundPartyValues,
                 escrowedSig
             );
@@ -1679,7 +1697,7 @@ contract RoundManagerFCFSTest is Test {
             )
         );
         rm.createRound(
-            "Seed",
+            SecuritySeries.SeriesPreSeed,
             1,
             1,
             1,
@@ -1688,10 +1706,15 @@ contract RoundManagerFCFSTest is Test {
             block.timestamp + 1,
             bytes32(uint256(777)),
             certData,
+            new address[](0),
             address(0xDEAD),
             1,
             1,
             address(this),
+            "Officer",
+            "CEO",
+            "",
+            "",
             roundPartyValues,
             bytes("")
         );
@@ -1718,7 +1741,8 @@ contract RoundManagerFCFSTest is Test {
             jurisdiction: "US",
             contact: "email",
             minAmount: 5_000 * (10 ** payDec),
-            maxAmount: 10_000 * (10 ** payDec)
+            maxAmount: 10_000 * (10 ** payDec),
+            expiry: block.timestamp + 7 days
         });
 
         string[] memory glValues = new string[](1);
@@ -1745,9 +1769,7 @@ contract RoundManagerFCFSTest is Test {
             sig,
             salt,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Investor 1"
+            bytes32(0)
         );
         vm.stopPrank();
 
@@ -1809,7 +1831,8 @@ contract RoundManagerFCFSTest is Test {
             jurisdiction: "US",
             contact: "email",
             minAmount: 5_000 * (10 ** usdc.decimals()),
-            maxAmount: 10_000 * (10 ** usdc.decimals())
+            maxAmount: 10_000 * (10 ** usdc.decimals()),
+            expiry: block.timestamp + 7 days
         });
 
         string[] memory globalValues = new string[](1);
@@ -1836,9 +1859,7 @@ contract RoundManagerFCFSTest is Test {
             sig,
             salt,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Investor 1"
+            bytes32(0)
         );
         vm.stopPrank();
 
@@ -1897,7 +1918,8 @@ contract RoundManagerFCFSTest is Test {
             jurisdiction: "US",
             contact: "email",
             minAmount: 10_000 * (10 ** usdc.decimals()),
-            maxAmount: 40_000 * (10 ** usdc.decimals())
+            maxAmount: 40_000 * (10 ** usdc.decimals()),
+            expiry: block.timestamp + 7 days
         });
 
         string[] memory globalValues = new string[](1);
@@ -1924,9 +1946,7 @@ contract RoundManagerFCFSTest is Test {
             sig,
             salt,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Investor 2"
+            bytes32(0)
         );
         vm.stopPrank();
 
@@ -1978,7 +1998,8 @@ contract RoundManagerFCFSTest is Test {
             jurisdiction: "US",
             contact: "email",
             minAmount: 100,
-            maxAmount: 500
+            maxAmount: 500,
+            expiry: block.timestamp + 7 days
         });
 
         string[] memory globalValues = new string[](1);
@@ -1998,9 +2019,7 @@ contract RoundManagerFCFSTest is Test {
             hex"01",
             1,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Investor 3"
+            bytes32(0)
         );
         vm.stopPrank();
     }
@@ -2058,7 +2077,8 @@ contract RoundManagerFCFSTest is Test {
             jurisdiction: "US",
             contact: "email",
             minAmount: 1_000 * (10 ** usdc.decimals()),
-            maxAmount: 2_000 * (10 ** usdc.decimals())
+            maxAmount: 2_000 * (10 ** usdc.decimals()),
+            expiry: block.timestamp + 7 days
         });
         string[] memory globalValues = new string[](1);
         globalValues[0] = "g";
@@ -2082,9 +2102,7 @@ contract RoundManagerFCFSTest is Test {
             sig1,
             salt1,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "A"
+            bytes32(0)
         );
         vm.stopPrank();
 
@@ -2101,7 +2119,8 @@ contract RoundManagerFCFSTest is Test {
             jurisdiction: "US",
             contact: "email",
             minAmount: 2_000 * (10 ** usdc.decimals()),
-            maxAmount: 2_000 * (10 ** usdc.decimals())
+            maxAmount: 2_000 * (10 ** usdc.decimals()),
+            expiry: block.timestamp + 7 days
         });
         bytes memory sig2 = _computeEOISignature(
             registry,
@@ -2123,9 +2142,7 @@ contract RoundManagerFCFSTest is Test {
             sig2,
             salt2,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "B"
+            bytes32(0)
         );
         vm.stopPrank();
         assertEq(

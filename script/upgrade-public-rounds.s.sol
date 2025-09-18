@@ -215,7 +215,7 @@ contract UpgradePublicRoundsScript is Script {
         ) = CyberCorpFactory(cyberCorpFactoryProxyAddr)
                 .deployCyberCorpAndCreatePublicRound(
                     block.timestamp,
-                    "Series A",
+                    SecuritySeries.SeriesA,
                     "CyberCorp",
                     "Limited Liability Company",
                     "Juris",
@@ -223,6 +223,8 @@ contract UpgradePublicRoundsScript is Script {
                     "Dispute Res",
                     address(deployer),
                     officer,
+                    "",
+                    "",
                     certData,
                     0x0000000000000000000000000000000000000000000000000000000000000020,
                     address(usdc),
@@ -231,6 +233,7 @@ contract UpgradePublicRoundsScript is Script {
                     roundPartyValues,
                     escrowedSig,
                     RoundType.FCFS,
+                    new address[](0),
                     100000000000,
                     1,
                     10000000,
@@ -249,7 +252,7 @@ contract UpgradePublicRoundsScript is Script {
         ) = CyberCorpFactory(cyberCorpFactoryProxyAddr)
                 .deployCyberCorpAndCreatePublicRound(
                     block.timestamp + 1,
-                    "Series SAFE",
+                    SecuritySeries.SeriesA,
                     "SafeCorp",
                     "Limited Liability Company",
                     "Juris",
@@ -257,6 +260,8 @@ contract UpgradePublicRoundsScript is Script {
                     "Dispute",
                     address(deployer),
                     officer,
+                    "",
+                    "",
                     certData,
                     bytes32(uint256(1)),
                     address(usdc),
@@ -265,6 +270,7 @@ contract UpgradePublicRoundsScript is Script {
                     roundPartyValues,
                     escrowedSig,
                     RoundType.FCFS,
+                    new address[](0),
                     100000000000,
                     1,
                     10000000,
@@ -283,7 +289,8 @@ contract UpgradePublicRoundsScript is Script {
             jurisdiction: "US",
             contact: "email",
             minAmount: 1,
-            maxAmount: 1
+            maxAmount: 1,
+            expiry: block.timestamp + 7 days
         });
 
         address[] memory parties = new address[](2);
@@ -339,9 +346,7 @@ contract UpgradePublicRoundsScript is Script {
             signature,
             block.timestamp,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Investor 1"
+            bytes32(0)
         );
         vm.stopBroadcast();
 
@@ -355,7 +360,8 @@ contract UpgradePublicRoundsScript is Script {
             jurisdiction: "US",
             contact: "email2",
             minAmount: 1,
-            maxAmount: 1
+            maxAmount: 1,
+            expiry: block.timestamp + 7 days
         });
 
         // Build signature for template id 1
@@ -379,9 +385,7 @@ contract UpgradePublicRoundsScript is Script {
             signature2,
             block.timestamp,
             new address[](0),
-            bytes32(0),
-            block.timestamp + 7 days,
-            "Investor 2"
+            bytes32(0)
         );
         vm.stopBroadcast();
     }

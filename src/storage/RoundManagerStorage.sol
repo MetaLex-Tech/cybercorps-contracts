@@ -44,6 +44,7 @@ pragma solidity 0.8.28;
 
 import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/ICondition.sol";
+import "../CyberCorpConstants.sol";
 
 enum RoundType {
     FCFS,
@@ -74,7 +75,7 @@ struct RoundingPolicy {
 
 struct Round {
     bytes32 id;
-    string seriesType;
+    SecuritySeries seriesType;
     uint256 raiseCap;
     uint256 minTicket;
     uint256 maxTicket;
@@ -87,12 +88,17 @@ struct Round {
     uint256 pricePerUnit;
     uint256 valuation;
     uint256 raised;
+    address[] roundConditions;
     // Normalized round price and primary security sold to new money
     uint256 roundPricePerShare; // normalized to priceDecimals
     uint8 roundPriceDecimals;
     SecurityClass primarySecurityClass;
     SecuritySeries primarySecuritySeries;
     address authorityOfficer;
+    string officerName;
+    string officerTitle;
+    string legalDetails;
+    bytes extensionData;
     string[] roundPartyValues;
     bytes escrowedSignature;
 }
@@ -104,6 +110,7 @@ struct EOI {
     string contact;
     uint256 minAmount;
     uint256 maxAmount;
+    uint256 expiry;
 }
 
 /// @title RoundManagerStorage
@@ -132,7 +139,6 @@ library RoundManagerStorage {
         /// @notice Mapping from agreement IDs to EOI data
         mapping(bytes32 => EOI) agreementToEOI;
         
-
         /// @notice Per-round capitalization snapshot
         mapping(bytes32 => CapTableSnapshot) roundSnapshots;
 

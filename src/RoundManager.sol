@@ -88,8 +88,9 @@ contract RoundManager is
     error ZeroAddress();
     error InvalidIssuanceManager();
     error InvalidEscrowedSignature();
+    error EOINotExpired();
 
-    event RoundCreated(bytes32 indexed roundId, address corp, Round round);
+    event RoundCreated(bytes32 indexed roundId, address indexed corp, Round round);
     event RoundSnapshotSet(
         bytes32 indexed roundId,
         uint256 totalCapitalSecuritiesOutstanding,
@@ -112,11 +113,13 @@ contract RoundManager is
         string label
     );
     event EOISubmitted(
-        bytes32 indexed agreementId,
+        bytes32 agreementId,
         bytes32 indexed roundId,
         address investor,
+        address indexed corp,
         uint256 minAmount,
-        uint256 maxAmount
+        uint256 maxAmount,
+        uint256 expiry
     );
     event AllocationMade(
         bytes32 indexed agreementId,
@@ -124,9 +127,10 @@ contract RoundManager is
         uint256 allocatedAmount,
         uint256[] certIds
     );
-    event EOIRejected(bytes32 indexed agreementId, bytes32 indexed roundId);
+    event EOIRejected(bytes32  agreementId, address indexed investor, bytes32 indexed roundId);
     event RoundEndTimeUpdated(bytes32 indexed roundId, uint256 oldEndTime, uint256 newEndTime);
     event RoundClosed(bytes32 indexed roundId, uint256 closedAt);
+    event EOIRecalled(bytes32 agreementId, address indexed investor, bytes32 indexed roundId);
 
     modifier onlyOwnerOrSelf() {
         if (msg.sender != address(this)) {
@@ -182,7 +186,7 @@ contract RoundManager is
     /// @param roundPartyValues Round party values
     /// @param escrowedSignature Escrowed signature
     function createRound(
-        string memory seriesType,
+        SecuritySeries seriesType,
         uint256 raiseCap,
         uint256 minTicket,
         uint256 maxTicket,
@@ -191,10 +195,15 @@ contract RoundManager is
         uint256 endTime,
         bytes32 templateId,
         CyberCertData[] memory certData,
+        address[] memory conditions,
         address paymentToken,
         uint256 pricePerUnit,
         uint256 valuation,
         address authorityOfficer,
+        string memory officerName,
+        string memory officerTitle,
+        string memory legalDetails,
+        bytes memory extensionData,
         string[] memory roundPartyValues,
         bytes memory escrowedSignature
     ) external onlyOwner returns (bytes32 roundId) {
@@ -253,7 +262,7 @@ contract RoundManager is
             pricePerUnit: pricePerUnit,
             valuation: valuation,
             raised: 0,
-            roundPricePerShare: 0,
+            roundPricePerShare: pricePerUnit,
             roundPriceDecimals: 18,
             primarySecurityClass: certData.length > 0
                 ? certData[0].securityClass
@@ -262,8 +271,13 @@ contract RoundManager is
                 ? certData[0].securitySeries
                 : SecuritySeries.NA,
             authorityOfficer: authorityOfficer,
+            officerName: officerName,
+            officerTitle: officerTitle,
+            legalDetails: legalDetails,
+            extensionData: extensionData,
             roundPartyValues: roundPartyValues,
-            escrowedSignature: escrowedSignature
+            escrowedSignature: escrowedSignature,
+            roundConditions: conditions 
         });
 
         RoundManagerStorage.setRound(roundId, newRound);
@@ -447,8 +461,6 @@ contract RoundManager is
     /// @param salt Salt for agreement ID
     /// @param conditions Condition contracts
     /// @param secretHash Secret hash if required
-    /// @param expiry Expiry timestamp
-    /// @param name Investor's name for endorsement
     /// @return agreementId The created agreement ID
     function submitEOI(
         bytes32 roundId,
@@ -458,9 +470,7 @@ contract RoundManager is
         bytes memory signature,
         uint256 salt,
         address[] memory conditions,
-        bytes32 secretHash,
-        uint256 expiry,
-        string memory name
+        bytes32 secretHash
     ) external returns (bytes32 agreementId) {
         Round storage round = RoundManagerStorage.getRound(roundId);
         if (round.id == bytes32(0)) revert InvalidRound();
@@ -491,7 +501,7 @@ contract RoundManager is
                 partyValuesArray,
                 secretHash,
                 address(this),
-                expiry
+                eoi.expiry
             );
 
         Token[] memory corpAssets = new Token[](0);
@@ -503,7 +513,7 @@ contract RoundManager is
             eoi.maxAmount
         );
 
-        createEscrow(agreementId, msg.sender, corpAssets, buyerAssets, expiry);
+        createEscrow(agreementId, msg.sender, corpAssets, buyerAssets, eoi.expiry);
 
         if (round.roundType == RoundType.FCFS) {
             ICyberAgreementRegistry(LexScrowStorage.getDealRegistry())
@@ -529,7 +539,7 @@ contract RoundManager is
 
         handleCounterPartyPayment(agreementId);
 
-        updateEscrow(agreementId, msg.sender, name);
+        updateEscrow(agreementId, msg.sender, eoi.name); 
 
         RoundManagerStorage.setAgreementToRound(agreementId, roundId);
         RoundManagerStorage.getRoundToAgreements(roundId).push(agreementId);
@@ -543,7 +553,7 @@ contract RoundManager is
             );
         }
 
-        emit EOISubmitted(agreementId, roundId, msg.sender, eoi.minAmount, eoi.maxAmount);
+        emit EOISubmitted(agreementId, roundId, msg.sender, LexScrowStorage.getCorp(), eoi.minAmount, eoi.maxAmount, eoi.expiry);
 
         if (round.roundType == RoundType.FCFS) {
             this.allocate(agreementId, eoi.maxAmount, bytes(""));
@@ -573,7 +583,7 @@ contract RoundManager is
 
         uint256 remaining = round.raiseCap - round.raised;
         uint256 candidate = escrow.buyerAssets[0].amount;
-        if (allocatedAmount != type(uint256).max && allocatedAmount < candidate) {
+        if (allocatedAmount < candidate) { //todo: look at this, something is off 
             candidate = allocatedAmount;
         }
         if (candidate > remaining) {
@@ -623,16 +633,9 @@ contract RoundManager is
         uint8 paymentDecimals = IERC20Metadata(round.paymentToken).decimals();
         uint256 investmentUSD = allocatedAmount / (10 ** paymentDecimals);
 
-        // Create certificate (prefer officer info captured in roundPartyValues)
-        string memory officerName = "System";
-        string memory officerTitle = "Automated Allocation";
-        
-        if (round.roundPartyValues.length > 0) {
-            officerName = round.roundPartyValues[0];
-        }
-        if (round.roundPartyValues.length > 1) {
-            officerTitle = round.roundPartyValues[1];
-        }
+        // Create certificate 
+        string memory officerName = round.officerName;
+        string memory officerTitle = round.officerTitle;
 
         CertificateDetails memory details = CertificateDetails({
             signingOfficerName: officerName,
@@ -640,8 +643,8 @@ contract RoundManager is
             investmentAmountUSD: investmentUSD,
             issuerUSDValuationAtTimeOfInvestment: round.valuation,
             unitsRepresented: units,
-            legalDetails: "",
-            extensionData: ""
+            legalDetails: round.legalDetails,
+            extensionData: round.extensionData
         });
 
         IIssuanceManager issuanceManager = RoundManagerStorage
@@ -668,7 +671,7 @@ contract RoundManager is
             signatureHash: escrow.signature,
             registry: LexScrowStorage.getDealRegistry(),
             agreementId: agreementId,
-            endorsee: escrow.counterParty,
+            endorsee: escrow.counterParty, 
             endorseeName: eoi.name
         });
 
@@ -713,7 +716,7 @@ contract RoundManager is
         // Update raised
         round.raised += allocatedAmount;
 
-        emit AllocationMade(agreementId, roundId, allocatedAmount, certIds);
+        emit AllocationMade(agreementId, roundId, allocatedAmount, certIds); //todo: buyer address indexed
     }
 
     /// @notice Rejects an EOI and voids the deal
@@ -736,8 +739,33 @@ contract RoundManager is
 
         //todo: void agreement
 
-        emit EOIRejected(agreementId, roundId);
+        emit EOIRejected(agreementId, escrow.counterParty, roundId);
     }
+
+    //allow a eoi submitter to recall their eoi and get a refund after the eoi expiry
+    function recallEOI(bytes32 agreementId) external {
+        bytes32 roundId = RoundManagerStorage.getAgreementToRound(agreementId);
+        Round storage round = RoundManagerStorage.getRound(roundId);
+        Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
+        
+        if (round.id == bytes32(0)) revert InvalidRound();
+        if (escrow.status != EscrowStatus.PAID) revert DealNotPaid();
+        if (escrow.corpAssets.length > 0) revert AlreadyAllocated();
+        if (block.timestamp < escrow.expiry && round.endTime > block.timestamp) revert EOINotExpired();
+
+        // Refund all
+        uint256 amount = escrow.buyerAssets[0].amount;
+        IERC20(round.paymentToken).safeTransfer(escrow.counterParty, amount);
+
+        // Void escrow
+        voidEscrow(agreementId);
+
+        //void agreement
+        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, escrow.counterParty, escrow.signature);
+
+        emit EOIRecalled(agreementId, escrow.counterParty, roundId);
+    }
+
 
     /// @notice Gets the issuance manager
     /// @return IIssuanceManager The issuance manager

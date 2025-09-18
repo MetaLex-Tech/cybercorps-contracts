@@ -80,12 +80,12 @@ interface IRoundManager {
     event PMVCSubseriesLabelSet(bytes32 indexed roundId, uint256 pmvc, string label);
     event RoundEndTimeUpdated(bytes32 indexed roundId, uint256 oldEndTime, uint256 newEndTime);
     event RoundClosed(bytes32 indexed roundId, uint256 closedAt);
-    event EOISubmitted(bytes32 indexed agreementId, bytes32 indexed roundId, address investor, uint256 minAmount, uint256 maxAmount);
+    event EOISubmitted(bytes32 indexed agreementId, bytes32 indexed roundId, address investor, address indexed corp, uint256 minAmount, uint256 maxAmount, uint256 expiry);
     event AllocationMade(bytes32 indexed agreementId, bytes32 indexed roundId, uint256 allocatedAmount, uint256[] certIds);
     event EOIRejected(bytes32 indexed agreementId, bytes32 indexed roundId);
 
     function createRound(
-        string calldata seriesType,
+        SecuritySeries seriesType,
         uint256 raiseCap,
         uint256 minTicket,
         uint256 maxTicket,
@@ -94,10 +94,15 @@ interface IRoundManager {
         uint256 endTime,
         bytes32 templateId,
         CyberCertData[] calldata certData,
+        address[] calldata conditions,
         address paymentToken,
         uint256 pricePerUnit,
         uint256 valuation,
         address authorityOfficer,
+        string calldata officerName,
+        string calldata officerTitle,
+        string calldata legalDetails,
+        bytes calldata extensionData,
         string[] calldata roundPartyValues,
         bytes calldata escrowedSignature
     ) external returns (bytes32 roundId);
@@ -110,9 +115,7 @@ interface IRoundManager {
         bytes calldata signature,
         uint256 salt,
         address[] calldata conditions,
-        bytes32 secretHash,
-        uint256 expiry,
-        string calldata name
+        bytes32 secretHash
     ) external returns (bytes32 agreementId);
 
     function allocate(bytes32 agreementId, uint256 allocatedAmount, bytes calldata signature) external;

@@ -380,7 +380,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
 
     function deployCyberCorpAndCreatePublicRound(
         uint256 salt,
-        string memory seriesType,
+        SecuritySeries seriesType,
         string memory companyName,
         string memory companyType,
         string memory companyJurisdiction,
@@ -388,6 +388,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         string memory defaultDisputeResolution,
         address _companyPayable,
         CompanyOfficer memory _officer,
+        string memory legalDetails,
+        bytes memory extensionData,
         RM_CyberCertData[] memory certData,
         bytes32 templateId,
         address paymentToken,
@@ -396,6 +398,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         string[] memory roundPartyValues,
         bytes memory escrowedSignature,
         RM_RoundType roundType,
+        address[] memory conditions,
         uint256 raiseCap,
         uint256 minTicket,
         uint256 maxTicket,
@@ -446,10 +449,15 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             endTime,
             templateId,
             certData,
+            conditions, 
             paymentToken,
             pricePerUnit,
             valuation,
             _officer.eoa,
+            _officer.name,
+            _officer.title,
+            legalDetails,
+            extensionData,
             roundPartyValues,
             escrowedSignature
         );
