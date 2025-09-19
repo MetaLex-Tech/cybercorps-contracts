@@ -118,7 +118,7 @@ interface IRoundManager {
         bytes32 secretHash
     ) external returns (bytes32 agreementId);
 
-    function allocate(bytes32 agreementId, uint256 allocatedAmount, bytes calldata signature) external;
+    function allocate(bytes32 agreementId, uint256 allocatedAmount) external;
 
     function reject(bytes32 agreementId) external;
 
@@ -155,4 +155,6 @@ interface IRoundManager {
     function roundExists(bytes32 roundId) external view returns (bool);
 
     function getPMVCSubseriesLabel(bytes32 roundId, uint256 pmvc) external view returns (string memory);
+
+    function recallEOI(bytes32 agreementId) external;
 } 

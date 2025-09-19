@@ -555,9 +555,6 @@ contract RoundManagerTest is Test {
         string[] memory globalValues = new string[](1);
         string[] memory partyValues = new string[](1);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(RoundManager.InvalidAmount.selector)
-        );
 
         bytes memory sig = _computeEOISignature(
             templateId,
@@ -566,6 +563,10 @@ contract RoundManagerTest is Test {
             partyValues,
             owner,
             investorPrivKey
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(RoundManager.InvalidAmount.selector)
         );
         RoundManager(roundManager).submitEOI(
             roundId,
@@ -628,7 +629,7 @@ contract RoundManagerTest is Test {
         );
 
         vm.prank(owner);
-        RoundManager(roundManager).allocate(agreementId, allocatedAmount, officerSig);
+        RoundManager(roundManager).allocate(agreementId, allocatedAmount);
 
         // Verify allocation by checking if the round exists and getting its price info
         assertTrue(RoundManager(roundManager).roundExists(roundId), "Round should exist");
@@ -691,7 +692,7 @@ contract RoundManagerTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(RoundManager.InvalidAllocation.selector)
         );
-        RoundManager(roundManager).allocate(agreementId, invalidAmount, officerSig);
+        RoundManager(roundManager).allocate(agreementId, invalidAmount);
     }
 
     function test_Allocate_ExceedsRaiseCap() public {
@@ -882,7 +883,7 @@ contract RoundManagerTest is Test {
             testRoundPartyValues,
             ownerPrivKey
         );
-        RoundManager(roundManager).allocate(agreementId1, 500000 * 10 ** 6, officerSig1); // 500k USDC
+        RoundManager(roundManager).allocate(agreementId1, 500000 * 10 ** 6); // 500k USDC
 
         // Try to allocate remaining to second investor
         bytes memory officerSig2 = _signForAgreement(
@@ -891,13 +892,13 @@ contract RoundManagerTest is Test {
             testRoundPartyValues,
             ownerPrivKey
         );
-        RoundManager(roundManager).allocate(agreementId2, 500000 * 10 ** 6, officerSig2); // 500k USDC
+        RoundManager(roundManager).allocate(agreementId2, 500000 * 10 ** 6); // 500k USDC
 
         // When total raised equals raise cap, no more allocations should be possible
         vm.expectRevert(
             abi.encodeWithSelector(RoundManager.InvalidAllocation.selector)
         );
-        RoundManager(roundManager).allocate(agreementId2, 1, officerSig2); // Try to allocate 1 more token, should fail
+        RoundManager(roundManager).allocate(agreementId2, 1); // Try to allocate 1 more token, should fail
         vm.stopPrank();
     }
 
@@ -992,7 +993,7 @@ contract RoundManagerTest is Test {
                 RoundManager.AgreementConditionsNotMet.selector
             )
         );
-        RoundManager(roundManager).allocate(agreementId, 10_000 * 10 ** 6, officerSig);
+        RoundManager(roundManager).allocate(agreementId, 10_000 * 10 ** 6);
     }
 
     function test_SubmitEOI_BeforeStart_Reverts() public {
@@ -1045,7 +1046,17 @@ contract RoundManagerTest is Test {
             maxAmount: 2_000 * 10 ** 6,
             expiry: block.timestamp + 7 days
         });
-        vm.expectRevert(
+       
+        //compute signature
+        bytes memory sig = _computeEOISignature(
+            templateId,
+            6,
+            new string[](1),
+            new string[](1),
+            owner,
+            investorPrivKey
+        );
+         vm.expectRevert(
             abi.encodeWithSelector(RoundManager.RoundNotOpen.selector)
         );
         RoundManager(roundManager).submitEOI(
@@ -1053,14 +1064,7 @@ contract RoundManagerTest is Test {
             eoi,
             new string[](1),
             new string[](1),
-            _computeEOISignature(
-                templateId,
-                6,
-                new string[](1),
-                new string[](1),
-                owner,
-                investorPrivKey
-            ),
+            sig,
             6,
             new address[](0),
             bytes32(0)
@@ -1275,7 +1279,7 @@ contract RoundManagerTest is Test {
             ownerPrivKey
         );
         vm.prank(owner);
-        RoundManager(roundManager).allocate(agreementId, type(uint256).max, officerSig);
+        RoundManager(roundManager).allocate(agreementId, type(uint256).max);
 
         uint256 balAfterAllocate = paymentToken.balanceOf(investor);
         assertEq(balAfterAllocate - balAfterSubmit, 4_000 * 10 ** 6);

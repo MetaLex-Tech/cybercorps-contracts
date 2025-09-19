@@ -89,6 +89,8 @@ contract RoundManager is
     error InvalidIssuanceManager();
     error InvalidEscrowedSignature();
     error EOINotExpired();
+    error EOIExpired();
+    error NotEOISubmitter();
 
     event RoundCreated(bytes32 indexed roundId, address indexed corp, Round round);
     event RoundSnapshotSet(
@@ -484,6 +486,8 @@ contract RoundManager is
             eoi.maxAmount > round.maxTicket ||
             eoi.minAmount < round.minTicket
         ) revert InvalidAmount();
+        //check that the eoi expiry is in the future
+        if (eoi.expiry < block.timestamp) revert EOIExpired();
 
         address[] memory parties = new address[](2);
         parties[1] = msg.sender;
@@ -546,7 +550,15 @@ contract RoundManager is
         RoundManagerStorage.getRoundToAgreements(roundId).push(agreementId);
         RoundManagerStorage.setAgreementToEOI(agreementId, eoi);
 
-        // Add conditions
+        //add round conditions
+        for (uint256 i = 0; i < round.roundConditions.length; i++) {
+            LexScrowStorage.addConditionToEscrow(
+                agreementId,
+                ICondition(round.roundConditions[i])
+            );
+        }
+
+        // Add EOI conditions
         for (uint256 i = 0; i < conditions.length; i++) {
             LexScrowStorage.addConditionToEscrow(
                 agreementId,
@@ -557,18 +569,16 @@ contract RoundManager is
         emit EOISubmitted(agreementId, roundId, msg.sender, LexScrowStorage.getCorp(), eoi.minAmount, eoi.maxAmount, eoi.expiry);
 
         if (round.roundType == RoundType.FCFS) {
-            this.allocate(agreementId, eoi.maxAmount, bytes(""));
+            this.allocate(agreementId, eoi.maxAmount);
         }
     }
 
     /// @notice Allocates an amount to an EOI and finalizes the deal
     /// @param agreementId The agreement ID
     /// @param allocatedAmount The amount to allocate
-    /// @param signature Company officer signature to be recorded on the escrow
     function allocate(
         bytes32 agreementId,
-        uint256 allocatedAmount,
-        bytes memory signature
+        uint256 allocatedAmount
     ) external onlyOwnerOrSelf {
         bytes32 roundId = RoundManagerStorage.getAgreementToRound(agreementId);
         Round storage round = RoundManagerStorage.getRound(roundId);
@@ -576,15 +586,13 @@ contract RoundManager is
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
 
         if (round.id == bytes32(0)) revert InvalidRound();
-        // Compute allocation candidate for any round type:
-        // - start from escrowed buyer amount
-        // - if caller provided a specific amount (not max uint), cap to it
-        // - cap to remaining raise
-        // - require at least the larger of round.minTicket and eoi.minAmount
+
+        //check that the eoi has not expired
+        if (eoi.expiry < block.timestamp) revert EOIExpired();
 
         uint256 remaining = round.raiseCap - round.raised;
         uint256 candidate = escrow.buyerAssets[0].amount;
-        if (allocatedAmount < candidate) { //todo: look at this, something is off 
+        if (allocatedAmount < candidate) { 
             candidate = allocatedAmount;
         }
         if (candidate > remaining) {
@@ -599,36 +607,22 @@ contract RoundManager is
         if (escrow.status != EscrowStatus.PAID) revert DealNotPaid();
         if (escrow.corpAssets.length > 0) revert AlreadyAllocated();
 
-        //if the round is FCFS, sign the agreement with the escrow signer
-        if (round.roundType == RoundType.FCFS) {
-            if (
-                !ICyberAgreementRegistry(LexScrowStorage.getDealRegistry())
-                    .hasSigned(agreementId, round.authorityOfficer)
-            ) {
-                ICyberAgreementRegistry(LexScrowStorage.getDealRegistry())
-                    .signContractWithEscrow(
-                        round.authorityOfficer,
-                        agreementId,
-                        round.roundPartyValues,
-                        round.escrowedSignature,
-                        false,
-                        ""
-                    );
-            }
-        }
-        //else sign the agreement with the signature provided
-        else {
+        //sign the agreement with the escrow signer
+        if (
+            !ICyberAgreementRegistry(LexScrowStorage.getDealRegistry())
+                .hasSigned(agreementId, round.authorityOfficer)
+        ) {
             ICyberAgreementRegistry(LexScrowStorage.getDealRegistry())
-                .signContractFor(
-                    msg.sender,
+                .signContractWithEscrow(
+                    round.authorityOfficer,
                     agreementId,
                     round.roundPartyValues,
-                    signature,
+                    round.escrowedSignature,
                     false,
                     ""
                 );
         }
-
+       
         // Calculate units and investment USD
         uint256 units = allocatedAmount / round.pricePerUnit;
         uint8 paymentDecimals = IERC20Metadata(round.paymentToken).decimals();
@@ -661,9 +655,7 @@ contract RoundManager is
             );
         }
 
-        escrow.signature = round.roundType == RoundType.FCFS
-            ? round.escrowedSignature
-            : signature;
+        escrow.signature = round.escrowedSignature;
 
         // Add endorsement
         Endorsement memory endorsement = Endorsement({
@@ -738,7 +730,6 @@ contract RoundManager is
         // Void escrow
         voidEscrow(agreementId);
 
-        //todo: void agreement
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, escrow.counterParty, escrow.signature);
 
         emit EOIRejected(agreementId, escrow.counterParty, roundId);
@@ -751,6 +742,7 @@ contract RoundManager is
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
         
         if (round.id == bytes32(0)) revert InvalidRound();
+        if (msg.sender != escrow.counterParty) revert NotEOISubmitter();
         if (escrow.status != EscrowStatus.PAID) revert DealNotPaid();
         if (escrow.corpAssets.length > 0) revert AlreadyAllocated();
         if (block.timestamp < escrow.expiry && round.endTime > block.timestamp) revert EOINotExpired();
