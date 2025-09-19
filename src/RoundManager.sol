@@ -122,8 +122,9 @@ contract RoundManager is
         uint256 expiry
     );
     event AllocationMade(
-        bytes32 indexed agreementId,
+        bytes32 agreementId,
         bytes32 indexed roundId,
+        address indexed buyer,
         uint256 allocatedAmount,
         uint256[] certIds
     );
@@ -716,7 +717,7 @@ contract RoundManager is
         // Update raised
         round.raised += allocatedAmount;
 
-        emit AllocationMade(agreementId, roundId, allocatedAmount, certIds); //todo: buyer address indexed
+        emit AllocationMade(agreementId, roundId, escrow.counterParty, allocatedAmount, certIds); 
     }
 
     /// @notice Rejects an EOI and voids the deal
@@ -738,6 +739,7 @@ contract RoundManager is
         voidEscrow(agreementId);
 
         //todo: void agreement
+        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, escrow.counterParty, escrow.signature);
 
         emit EOIRejected(agreementId, escrow.counterParty, roundId);
     }

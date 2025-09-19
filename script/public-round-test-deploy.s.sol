@@ -30,7 +30,7 @@ contract PublicRoundTestDeploy is Script {
 
         // Fresh salt per request
         bytes32 salt = keccak256(
-            abi.encodePacked("PublicRound.Test.v1")
+            abi.encodePacked("PublicRound.Test.v2")
         );
 
         // Resolve stable (USDC) per chain

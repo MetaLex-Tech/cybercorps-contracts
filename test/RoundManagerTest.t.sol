@@ -637,12 +637,7 @@ contract RoundManagerTest is Test {
 
         uint256[] memory expectedCertIds = new uint256[](1);
         expectedCertIds[0] = 0; // First certificate ID
-        emit RoundManager.AllocationMade(
-            agreementId,
-            roundId,
-            allocatedAmount,
-            expectedCertIds
-        );
+
 
         // Verify certificate was created
         // Note: In a real test you'd need to properly mock the CertPrinter and verify its state
@@ -945,7 +940,7 @@ contract RoundManagerTest is Test {
         RoundManager(roundManager).reject(agreementId);
         Escrow memory escAfter = RoundManager(roundManager).getEscrowDetails(agreementId);
         assertEq(uint256(escAfter.status), uint256(EscrowStatus.VOIDED));
-        assertEq(paymentToken.balanceOf(investor) - balBefore, eoi.maxAmount);
+        assertEq(paymentToken.balanceOf(investor), balBefore);
     }
 
     function test_Allocate_WithFailingCondition_Reverts() public {
@@ -2093,6 +2088,9 @@ contract RoundManagerFCFSTest is Test {
             partyValues,
             address(this),
             privKey1
+        );
+                vm.expectRevert(
+            abi.encodeWithSelector(RoundManager.InvalidAmount.selector)
         );
         rm.submitEOI(
             roundId,

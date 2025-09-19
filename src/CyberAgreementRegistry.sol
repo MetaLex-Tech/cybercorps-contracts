@@ -539,16 +539,16 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         if (agreementData.finalized) revert ContractAlreadyFinalized();
 
         //verify the signature
-        if (
-            !_verifyVoidSignature(
-                party,
-                VoidSignatureData({contractId: contractId, party: party}),
-                signature
-            )
-        ) {
-            if (msg.sender != agreementData.finalizer)
-                revert SignatureVerificationFailed();
-        }
+        if(msg.sender != agreementData.finalizer) 
+            if (
+                !_verifyVoidSignature(
+                    party,
+                    VoidSignatureData({contractId: contractId, party: party}),
+                    signature
+                )
+            ) {
+                    revert SignatureVerificationFailed();
+            }
 
         for (uint256 i = 0; i < agreementData.voidRequestedBy.length; i++) {
             if (agreementData.voidRequestedBy[i] == party)
