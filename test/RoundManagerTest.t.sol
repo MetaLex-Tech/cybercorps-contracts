@@ -75,6 +75,103 @@ contract RoundManagerTest is Test {
     address private rmFactory;
     bytes32 private templateId;
     string[] private testRoundPartyValues;
+    // EIP-712 constants for RoundManager escrow signature
+    bytes32 constant EIP712_DOMAIN_TYPEHASH = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
+    bytes32 constant ESCROWEDSIGNATUREDATA_TYPEHASH = keccak256(
+        "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation)"
+    );
+
+    function _computeRoundId(
+        SecuritySeries seriesType,
+        uint256 raiseCap,
+        uint256 minTicket,
+        uint256 maxTicket,
+        RoundType roundType,
+        uint256 startTime,
+        uint256 endTime,
+        bytes32 templateId_,
+        address paymentToken,
+        uint256 pricePerUnit,
+        uint256 valuation
+    ) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                seriesType,
+                raiseCap,
+                minTicket,
+                maxTicket,
+                uint8(roundType),
+                startTime,
+                endTime,
+                templateId_,
+                paymentToken,
+                pricePerUnit,
+                valuation
+            )
+        );
+    }
+
+    function _computeEscrowSignature(
+        address roundManager,
+        SecuritySeries seriesType,
+        uint256 raiseCap,
+        uint256 minTicket,
+        uint256 maxTicket,
+        RoundType roundType,
+        uint256 startTime,
+        uint256 endTime,
+        bytes32 templateId_,
+        address paymentToken,
+        uint256 pricePerUnit,
+        uint256 valuation,
+        uint256 signerPrivKey
+    ) internal view returns (bytes memory sig, bytes32 roundId) {
+        roundId = _computeRoundId(
+            seriesType,
+            raiseCap,
+            minTicket,
+            maxTicket,
+            roundType,
+            startTime,
+            endTime,
+            templateId_,
+            paymentToken,
+            pricePerUnit,
+            valuation
+        );
+
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                EIP712_DOMAIN_TYPEHASH,
+                keccak256(bytes("RoundManager")),
+                keccak256(bytes("1")),
+                block.chainid,
+                roundManager
+            )
+        );
+        bytes32 structHash = keccak256(
+            abi.encode(
+                ESCROWEDSIGNATUREDATA_TYPEHASH,
+                roundId,
+                uint8(seriesType),
+                raiseCap,
+                minTicket,
+                maxTicket,
+                uint8(roundType),
+                startTime,
+                endTime,
+                templateId_,
+                paymentToken,
+                pricePerUnit,
+                valuation
+            )
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivKey, digest);
+        sig = abi.encodePacked(r, s, v);
+    }
 
     // Captured round id
     bytes32 public roundId;
@@ -229,6 +326,21 @@ contract RoundManagerTest is Test {
         testRoundPartyValues[0] = "Officer";
 
         // Create test round
+        (bytes memory escrowSig, bytes32 expectedRoundId) = _computeEscrowSignature(
+            roundManager,
+            SecuritySeries.SeriesA,
+            RAISE_CAP,
+            MIN_TICKET,
+            MAX_TICKET,
+            RoundType.FounderApproved,
+            block.timestamp,
+            block.timestamp + 30 days,
+            templateId,
+            address(paymentToken),
+            PRICE_PER_UNIT,
+            VALUATION,
+            ownerPrivKey
+        );
         vm.prank(owner);
         roundId = RoundManager(roundManager).createRound(
             SecuritySeries.SeriesA,
@@ -250,8 +362,9 @@ contract RoundManagerTest is Test {
             "",
             "",
             testRoundPartyValues,
-            bytes("")
+            escrowSig
         );
+        assertEq(roundId, expectedRoundId);
 
         // Fund investor
         paymentToken.transfer(investor, 1000000 * 10 ** 6);
@@ -785,6 +898,21 @@ contract RoundManagerTest is Test {
         });
 
         bytes32 roundIdLarge;
+        (bytes memory escSigLarge, bytes32 expectedRoundIdLarge) = _computeEscrowSignature(
+            roundManager,
+            SecuritySeries.SeriesPreSeed,
+            1_000_000 * 10 ** 6,
+            1_000 * 10 ** 6,
+            1_000_000 * 10 ** 6,
+            RoundType.FounderApproved,
+            block.timestamp,
+            block.timestamp + 30 days,
+            templateId,
+            address(paymentToken),
+            PRICE_PER_UNIT,
+            VALUATION,
+            ownerPrivKey
+        );
         vm.prank(owner);
         roundIdLarge = RoundManager(roundManager).createRound(
             SecuritySeries.SeriesPreSeed,
@@ -806,8 +934,9 @@ contract RoundManagerTest is Test {
             "",
             "",
             testRoundPartyValues,
-            bytes("")
+            escSigLarge
         );
+        assertEq(roundIdLarge, expectedRoundIdLarge);
 
         // Submit first EOI
         vm.startPrank(investor);
@@ -1211,6 +1340,21 @@ contract RoundManagerTest is Test {
         });
 
         bytes32 roundId2;
+        (bytes memory escrowSig2, bytes32 expectedRoundId2) = _computeEscrowSignature(
+            roundManager,
+            SecuritySeries.SeriesPreSeed,
+            6_000 * 10 ** 6,
+            1_000 * 10 ** 6,
+            100_000 * 10 ** 6,
+            RoundType.FounderApproved,
+            block.timestamp,
+            block.timestamp + 30 days,
+            templateId,
+            address(paymentToken),
+            PRICE_PER_UNIT,
+            VALUATION,
+            ownerPrivKey
+        );
         vm.prank(owner);
         roundId2 = RoundManager(roundManager).createRound(
             SecuritySeries.SeriesPreSeed,
@@ -1232,8 +1376,9 @@ contract RoundManagerTest is Test {
             "",
             "",
             testRoundPartyValues,
-            bytes("")
+            escrowSig2
         );
+        assertEq(roundId2, expectedRoundId2);
 
         // Investor submits EOI for 10,000 USDC, escrow pulls funds
         vm.startPrank(investor);
@@ -1421,6 +1566,8 @@ contract RoundManagerFCFSTest is Test {
 
         // Create round via helper to minimize local stack usage
         vm.prank(address(corpFactory));
+        uint256 officerPrivKey = 0xA0A5;
+        address officerEOA = vm.addr(officerPrivKey);
         bytes32 roundId = _createFCFSRoundCustom(
             rm,
             address(usdc),
@@ -1428,7 +1575,9 @@ contract RoundManagerFCFSTest is Test {
             bytes32(uint256(777)),
             100_000 * (10 ** usdc.decimals()),
             2_000 * (10 ** usdc.decimals()),
-            50_000 * (10 ** usdc.decimals())
+            50_000 * (10 ** usdc.decimals()),
+            officerEOA,
+            officerPrivKey
         );
 
         _submitEOIAndAssertFinalized(
@@ -1437,8 +1586,108 @@ contract RoundManagerFCFSTest is Test {
             bytes32(uint256(777)),
             address(usdc),
             usdc.decimals(),
-            roundId
+            roundId,
+            officerEOA
         );
+    }
+
+        function _computeRoundId(
+        SecuritySeries seriesType,
+        uint256 raiseCap,
+        uint256 minTicket,
+        uint256 maxTicket,
+        RoundType roundType,
+        uint256 startTime,
+        uint256 endTime,
+        bytes32 templateId_,
+        address paymentToken,
+        uint256 pricePerUnit,
+        uint256 valuation
+    ) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                seriesType,
+                raiseCap,
+                minTicket,
+                maxTicket,
+                uint8(roundType),
+                startTime,
+                endTime,
+                templateId_,
+                paymentToken,
+                pricePerUnit,
+                valuation
+            )
+        );
+    }
+
+        // EIP-712 constants for RoundManager escrow signature
+    bytes32 constant EIP712_DOMAIN_TYPEHASH = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
+    bytes32 constant ESCROWEDSIGNATUREDATA_TYPEHASH = keccak256(
+        "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation)"
+    );
+
+
+     function _computeEscrowSignature(
+        address roundManager,
+        SecuritySeries seriesType,
+        uint256 raiseCap,
+        uint256 minTicket,
+        uint256 maxTicket,
+        RoundType roundType,
+        uint256 startTime,
+        uint256 endTime,
+        bytes32 templateId_,
+        address paymentToken,
+        uint256 pricePerUnit,
+        uint256 valuation,
+        uint256 signerPrivKey
+    ) internal view returns (bytes memory sig, bytes32 roundId) {
+        roundId = _computeRoundId(
+            seriesType,
+            raiseCap,
+            minTicket,
+            maxTicket,
+            roundType,
+            startTime,
+            endTime,
+            templateId_,
+            paymentToken,
+            pricePerUnit,
+            valuation
+        );
+
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                EIP712_DOMAIN_TYPEHASH,
+                keccak256(bytes("RoundManager")),
+                keccak256(bytes("1")),
+                block.chainid,
+                roundManager
+            )
+        );
+        bytes32 structHash = keccak256(
+            abi.encode(
+                ESCROWEDSIGNATUREDATA_TYPEHASH,
+                roundId,
+                uint8(seriesType),
+                raiseCap,
+                minTicket,
+                maxTicket,
+                uint8(roundType),
+                startTime,
+                endTime,
+                templateId_,
+                paymentToken,
+                pricePerUnit,
+                valuation
+            )
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivKey, digest);
+        sig = abi.encodePacked(r, s, v);
     }
 
     function _createTemplate(CyberAgreementRegistry registry) internal {
@@ -1546,7 +1795,9 @@ contract RoundManagerFCFSTest is Test {
         RoundManager rm,
         address paymentToken,
         uint8 payDec,
-        bytes32 templateId
+        bytes32 templateId,
+        address officerEOA,
+        uint256 officerPrivKey
     ) internal returns (bytes32) {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Legend";
@@ -1566,7 +1817,21 @@ contract RoundManagerFCFSTest is Test {
         roundPartyValues[0] = "Alice Officer";
         roundPartyValues[1] = "CEO";
 
-        bytes memory escrowedSig = hex"01";
+        (bytes memory escrowedSig, ) = _computeEscrowSignature(
+            address(rm),
+            SecuritySeries.SeriesSeed,
+            1_000_000 * (10 ** payDec),
+            1_000 * (10 ** payDec),
+            100_000 * (10 ** payDec),
+            RoundType.FCFS,
+            block.timestamp,
+            block.timestamp + 30 days,
+            templateId,
+            paymentToken,
+            10 * (10 ** payDec),
+            10_000_000,
+            officerPrivKey
+        );
 
         return
             rm.createRound(
@@ -1583,7 +1848,7 @@ contract RoundManagerFCFSTest is Test {
                 paymentToken,
                 10 * (10 ** payDec),
                 10_000_000,
-                address(this),
+                officerEOA,
                 "Officer",
                 "CEO",
                 "",
@@ -1600,7 +1865,9 @@ contract RoundManagerFCFSTest is Test {
         bytes32 templateId,
         uint256 raiseCap,
         uint256 minTicket,
-        uint256 maxTicket
+        uint256 maxTicket,
+        address officerEOA,
+        uint256 officerPrivKey
     ) internal returns (bytes32) {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Legend";
@@ -1620,7 +1887,21 @@ contract RoundManagerFCFSTest is Test {
         roundPartyValues[0] = "Alice Officer";
         roundPartyValues[1] = "CEO";
 
-        bytes memory escrowedSig = hex"01";
+        (bytes memory escrowedSig, ) = _computeEscrowSignature(
+            address(rm),
+            SecuritySeries.SeriesSeed,
+            raiseCap,
+            minTicket,
+            maxTicket,
+            RoundType.FCFS,
+            block.timestamp,
+            block.timestamp + 30 days,
+            templateId,
+            paymentToken,
+            10 * (10 ** payDec),
+            10_000_000,
+            officerPrivKey
+        );
 
         return
             rm.createRound(
@@ -1637,7 +1918,7 @@ contract RoundManagerFCFSTest is Test {
                 paymentToken,
                 10 * (10 ** payDec),
                 10_000_000,
-                address(this),
+                officerEOA,
                 "Officer",
                 "CEO",
                 "",
@@ -1690,10 +1971,21 @@ contract RoundManagerFCFSTest is Test {
         roundPartyValues[0] = "Officer";
         roundPartyValues[1] = "CEO";
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                RoundManager.InvalidEscrowedSignature.selector
-            )
+        // Provide a valid escrow signature now that RoundManager enforces it
+        (bytes memory escSig, ) = _computeEscrowSignature(
+            address(rm),
+            SecuritySeries.SeriesPreSeed,
+            1,
+            1,
+            1,
+            RoundType.FCFS,
+            block.timestamp,
+            block.timestamp + 1,
+            bytes32(uint256(777)),
+            address(0xDEAD),
+            1,
+            1,
+            uint256(uint160(address(this)))
         );
         rm.createRound(
             SecuritySeries.SeriesPreSeed,
@@ -1715,7 +2007,7 @@ contract RoundManagerFCFSTest is Test {
             "",
             "",
             roundPartyValues,
-            bytes("")
+            escSig
         );
     }
 
@@ -1725,7 +2017,8 @@ contract RoundManagerFCFSTest is Test {
         bytes32 templateId,
         address paymentToken,
         uint8 payDec,
-        bytes32 roundId
+        bytes32 roundId,
+        address officerEOA
     ) internal {
         uint256 salt = 1;
         uint256 privKey = 0xA11CE;
@@ -1756,7 +2049,7 @@ contract RoundManagerFCFSTest is Test {
             salt,
             glValues,
             pv,
-            address(this),
+            officerEOA,
             privKey
         );
 
@@ -1814,7 +2107,9 @@ contract RoundManagerFCFSTest is Test {
             bytes32(uint256(777)),
             100_000 * (10 ** usdc.decimals()),
             2_000 * (10 ** usdc.decimals()),
-            50_000 * (10 ** usdc.decimals())
+            50_000 * (10 ** usdc.decimals()),
+            address(this),
+            uint256(uint160(address(this)))
         );
 
         uint256 salt = 1;
@@ -1900,7 +2195,9 @@ contract RoundManagerFCFSTest is Test {
             rm,
             address(usdc),
             usdc.decimals(),
-            bytes32(uint256(777))
+            bytes32(uint256(777)),
+            address(this),
+            uint256(uint160(address(this)))
         );
 
         uint256 salt = 1;
@@ -1983,7 +2280,9 @@ contract RoundManagerFCFSTest is Test {
             rm,
             address(usdc),
             usdc.decimals(),
-            bytes32(uint256(777))
+            bytes32(uint256(777)),
+            address(this),
+            uint256(uint160(address(this)))
         );
 
         address investor = address(0x333);
@@ -2053,6 +2352,8 @@ contract RoundManagerFCFSTest is Test {
         CyberCorp(corp).setDealManager(address(rm));
         MockPaymentToken usdc = new MockPaymentToken();
 
+        uint256 officerPrivKey = 0xA0A5;
+        address officerEOA = vm.addr(officerPrivKey);
         bytes32 roundId = _createFCFSRoundCustom(
             rm,
             address(usdc),
@@ -2060,7 +2361,9 @@ contract RoundManagerFCFSTest is Test {
             bytes32(uint256(777)),
             1_500 * (10 ** usdc.decimals()),
             1_500 * (10 ** usdc.decimals()),
-            100_000 * (10 ** usdc.decimals())
+            100_000 * (10 ** usdc.decimals()),
+            officerEOA,
+            officerPrivKey
         );
 
         uint256 salt1 = 1;
@@ -2072,7 +2375,7 @@ contract RoundManagerFCFSTest is Test {
 
         EOI memory eoi1 = EOI({
             name: "A",
-            investorType: "Individual",
+            investorType: "Individual", 
             jurisdiction: "US",
             contact: "email",
             minAmount: 1_000 * (10 ** usdc.decimals()),

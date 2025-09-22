@@ -51,6 +51,7 @@ import "./storage/RoundManagerStorage.sol";
 import "./storage/BorgAuthStorage.sol";
 import "./interfaces/ICyberCorp.sol";
 import "./interfaces/ICyberCertPrinter.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /// @title RoundManager
 /// @notice Manages fundraising rounds for CyberCorp, handling EOIs, escrows, and allocations
@@ -64,6 +65,17 @@ contract RoundManager is
     using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
     using LexScrowStorage for LexScrowStorage.LexScrowData;
     using SafeERC20 for IERC20;
+    using ECDSA for bytes32;
+
+    // EIP-712 domain constants
+    string public constant EIP712_NAME = "RoundManager";
+    string public constant EIP712_VERSION = "1";
+    bytes32 private constant EIP712_DOMAIN_TYPEHASH = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
+    bytes32 private constant ESCROWEDSIGNATUREDATA_TYPEHASH = keccak256(
+        "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation)"
+    );
 
     /// @notice Certificate data structure for creating new certificates
     struct CyberCertData {
@@ -135,6 +147,68 @@ contract RoundManager is
     event RoundClosed(bytes32 indexed roundId, uint256 closedAt);
     event EOIRecalled(bytes32 agreementId, address indexed investor, bytes32 indexed roundId);
 
+    struct EscrowedSignatureData {
+        bytes32 roundId;
+        uint8 seriesType;
+        uint256 raiseCap;
+        uint256 minTicket;
+        uint256 maxTicket;
+        uint8 roundType;
+        uint256 startTime;
+        uint256 endTime;
+        bytes32 templateId;
+        address paymentToken;
+        uint256 pricePerUnit;
+        uint256 valuation;
+    }
+
+    function _hashEscrowedTypedDataV4(
+        EscrowedSignatureData memory data
+    ) internal view returns (bytes32) {
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                EIP712_DOMAIN_TYPEHASH,
+                keccak256(bytes(EIP712_NAME)),
+                keccak256(bytes(EIP712_VERSION)),
+                block.chainid,
+                address(this)
+            )
+        );
+        return keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                domainSeparator,
+                keccak256(
+                    abi.encode(
+                        ESCROWEDSIGNATUREDATA_TYPEHASH,
+                        data.roundId,
+                        data.seriesType,
+                        data.raiseCap,
+                        data.minTicket,
+                        data.maxTicket,
+                        data.roundType,
+                        data.startTime,
+                        data.endTime,
+                        data.templateId,
+                        data.paymentToken,
+                        data.pricePerUnit,
+                        data.valuation
+                    )
+                )
+            )
+        );
+    }
+
+    function _verifyEscrowedSignature(
+        address signer,
+        EscrowedSignatureData memory data,
+        bytes memory signature
+    ) internal view returns (bool) {
+        bytes32 digest = _hashEscrowedTypedDataV4(data);
+        address recoveredSigner = digest.recover(signature);
+        return recoveredSigner == signer;
+    }
+
     modifier onlyOwnerOrSelf() {
         if (msg.sender != address(this)) {
             AUTH.onlyRole(AUTH.OWNER_ROLE(), msg.sender);
@@ -170,6 +244,8 @@ contract RoundManager is
 
         RoundManagerStorage.setIssuanceManager(_issuanceManager);
         RoundManagerStorage.setUpgradeFactory(_upgradeFactory);
+
+        // No persistent DOMAIN_SEPARATOR; compute dynamically to avoid storage costs
     }
 
     /// @notice Creates a new fundraising round
@@ -210,10 +286,9 @@ contract RoundManager is
         string[] memory roundPartyValues,
         bytes memory escrowedSignature
     ) external onlyOwner returns (bytes32 roundId) {
-        if (roundType == RoundType.FCFS) {
-            if (escrowedSignature.length == 0)
-                revert InvalidEscrowedSignature();
-        }
+
+        if (escrowedSignature.length == 0) revert InvalidEscrowedSignature();
+
         roundId = keccak256(
             abi.encodePacked(
                 seriesType,
@@ -229,6 +304,25 @@ contract RoundManager is
                 valuation
             )
         );
+
+        if(!_verifyEscrowedSignature(
+                authorityOfficer,
+                EscrowedSignatureData({
+                    roundId: roundId,
+                    seriesType: uint8(seriesType),
+                    raiseCap: raiseCap,
+                    minTicket: minTicket,
+                    maxTicket: maxTicket,
+                    roundType: uint8(roundType),
+                    startTime: startTime,
+                    endTime: endTime,
+                    templateId: templateId,
+                    paymentToken: paymentToken,
+                    pricePerUnit: pricePerUnit,
+                    valuation: valuation
+                }),
+                escrowedSignature
+        )) revert InvalidEscrowedSignature();
         string memory companyName = ICyberCorp(LexScrowStorage.getCorp())
             .cyberCORPName();
         IIssuanceManager issuanceManager = RoundManagerStorage
