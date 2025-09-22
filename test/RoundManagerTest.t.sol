@@ -80,7 +80,7 @@ contract RoundManagerTest is Test {
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
     );
     bytes32 constant ESCROWEDSIGNATUREDATA_TYPEHASH = keccak256(
-        "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation)"
+        "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation,address companyAddress)"
     );
 
     function _computeRoundId(
@@ -94,7 +94,8 @@ contract RoundManagerTest is Test {
         bytes32 templateId_,
         address paymentToken,
         uint256 pricePerUnit,
-        uint256 valuation
+        uint256 valuation,
+        address companyAddress
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encodePacked(
@@ -108,7 +109,8 @@ contract RoundManagerTest is Test {
                 templateId_,
                 paymentToken,
                 pricePerUnit,
-                valuation
+                valuation,
+                companyAddress
             )
         );
     }
@@ -126,7 +128,8 @@ contract RoundManagerTest is Test {
         address paymentToken,
         uint256 pricePerUnit,
         uint256 valuation,
-        uint256 signerPrivKey
+        uint256 signerPrivKey,
+        address companyAddress
     ) internal view returns (bytes memory sig, bytes32 roundId) {
         roundId = _computeRoundId(
             seriesType,
@@ -139,7 +142,8 @@ contract RoundManagerTest is Test {
             templateId_,
             paymentToken,
             pricePerUnit,
-            valuation
+            valuation,
+            companyAddress
         );
 
         bytes32 domainSeparator = keccak256(
@@ -165,7 +169,8 @@ contract RoundManagerTest is Test {
                 templateId_,
                 paymentToken,
                 pricePerUnit,
-                valuation
+                valuation,
+                companyAddress
             )
         );
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
@@ -339,7 +344,8 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
-            ownerPrivKey
+            ownerPrivKey,
+            corp
         );
         vm.prank(owner);
         roundId = RoundManager(roundManager).createRound(
@@ -911,7 +917,8 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
-            ownerPrivKey
+            ownerPrivKey,
+            corp
         );
         vm.prank(owner);
         roundIdLarge = RoundManager(roundManager).createRound(
@@ -1141,6 +1148,23 @@ contract RoundManagerTest is Test {
             defaultLegend: defaultLegend
         });
         bytes32 roundIdFuture;
+        // Compute escrowed signature for the future round
+        (bytes memory escSigFuture, ) = _computeEscrowSignature(
+            roundManager,
+            SecuritySeries.SeriesF,
+            100_000 * 10 ** 6,
+            1_000 * 10 ** 6,
+            50_000 * 10 ** 6,
+            RoundType.FounderApproved,
+            block.timestamp + 1 days,
+            block.timestamp + 30 days,
+            templateId,
+            address(paymentToken),
+            PRICE_PER_UNIT,
+            VALUATION,
+            ownerPrivKey,
+            corp
+        );
         vm.prank(owner);
         roundIdFuture = RoundManager(roundManager).createRound(
             SecuritySeries.SeriesF,
@@ -1162,7 +1186,7 @@ contract RoundManagerTest is Test {
             "",
             "",
             testRoundPartyValues,
-            bytes("")
+            escSigFuture
         );
 
         vm.startPrank(investor);
@@ -1353,7 +1377,8 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
-            ownerPrivKey
+            ownerPrivKey,
+            corp
         );
         vm.prank(owner);
         roundId2 = RoundManager(roundManager).createRound(
@@ -1577,7 +1602,8 @@ contract RoundManagerFCFSTest is Test {
             2_000 * (10 ** usdc.decimals()),
             50_000 * (10 ** usdc.decimals()),
             officerEOA,
-            officerPrivKey
+            officerPrivKey,
+            corp
         );
 
         _submitEOIAndAssertFinalized(
@@ -1591,7 +1617,7 @@ contract RoundManagerFCFSTest is Test {
         );
     }
 
-        function _computeRoundId(
+    function _computeRoundId(
         SecuritySeries seriesType,
         uint256 raiseCap,
         uint256 minTicket,
@@ -1602,7 +1628,8 @@ contract RoundManagerFCFSTest is Test {
         bytes32 templateId_,
         address paymentToken,
         uint256 pricePerUnit,
-        uint256 valuation
+        uint256 valuation,
+        address companyAddress
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encodePacked(
@@ -1616,7 +1643,8 @@ contract RoundManagerFCFSTest is Test {
                 templateId_,
                 paymentToken,
                 pricePerUnit,
-                valuation
+                valuation,
+                companyAddress
             )
         );
     }
@@ -1626,7 +1654,7 @@ contract RoundManagerFCFSTest is Test {
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
     );
     bytes32 constant ESCROWEDSIGNATUREDATA_TYPEHASH = keccak256(
-        "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation)"
+        "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation,address companyAddress)"
     );
 
 
@@ -1643,7 +1671,8 @@ contract RoundManagerFCFSTest is Test {
         address paymentToken,
         uint256 pricePerUnit,
         uint256 valuation,
-        uint256 signerPrivKey
+        uint256 signerPrivKey,
+        address companyAddress
     ) internal view returns (bytes memory sig, bytes32 roundId) {
         roundId = _computeRoundId(
             seriesType,
@@ -1656,7 +1685,8 @@ contract RoundManagerFCFSTest is Test {
             templateId_,
             paymentToken,
             pricePerUnit,
-            valuation
+            valuation,
+            companyAddress
         );
 
         bytes32 domainSeparator = keccak256(
@@ -1682,7 +1712,8 @@ contract RoundManagerFCFSTest is Test {
                 templateId_,
                 paymentToken,
                 pricePerUnit,
-                valuation
+                valuation,
+                companyAddress
             )
         );
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
@@ -1797,7 +1828,8 @@ contract RoundManagerFCFSTest is Test {
         uint8 payDec,
         bytes32 templateId,
         address officerEOA,
-        uint256 officerPrivKey
+        uint256 officerPrivKey,
+        address companyAddress
     ) internal returns (bytes32) {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Legend";
@@ -1830,7 +1862,8 @@ contract RoundManagerFCFSTest is Test {
             paymentToken,
             10 * (10 ** payDec),
             10_000_000,
-            officerPrivKey
+            officerPrivKey,
+            companyAddress
         );
 
         return
@@ -1867,7 +1900,8 @@ contract RoundManagerFCFSTest is Test {
         uint256 minTicket,
         uint256 maxTicket,
         address officerEOA,
-        uint256 officerPrivKey
+        uint256 officerPrivKey,
+        address companyAddress
     ) internal returns (bytes32) {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Legend";
@@ -1900,7 +1934,8 @@ contract RoundManagerFCFSTest is Test {
             paymentToken,
             10 * (10 ** payDec),
             10_000_000,
-            officerPrivKey
+            officerPrivKey,
+            companyAddress
         );
 
         return
@@ -1972,6 +2007,8 @@ contract RoundManagerFCFSTest is Test {
         roundPartyValues[1] = "CEO";
 
         // Provide a valid escrow signature now that RoundManager enforces it
+        uint256 officerPrivKey = 0xAA01;
+        address officerEOA = vm.addr(officerPrivKey);
         (bytes memory escSig, ) = _computeEscrowSignature(
             address(rm),
             SecuritySeries.SeriesPreSeed,
@@ -1985,7 +2022,8 @@ contract RoundManagerFCFSTest is Test {
             address(0xDEAD),
             1,
             1,
-            uint256(uint160(address(this)))
+            officerPrivKey,
+            corp
         );
         rm.createRound(
             SecuritySeries.SeriesPreSeed,
@@ -2001,7 +2039,7 @@ contract RoundManagerFCFSTest is Test {
             address(0xDEAD),
             1,
             1,
-            address(this),
+            officerEOA,
             "Officer",
             "CEO",
             "",
@@ -2100,6 +2138,8 @@ contract RoundManagerFCFSTest is Test {
         CyberCorp(corp).setDealManager(address(rm));
 
         MockPaymentToken usdc = new MockPaymentToken();
+        uint256 officerPrivKey = 0xAA04;
+        address officerEOA = vm.addr(officerPrivKey);
         bytes32 roundId = _createFCFSRoundCustom(
             rm,
             address(usdc),
@@ -2108,8 +2148,9 @@ contract RoundManagerFCFSTest is Test {
             100_000 * (10 ** usdc.decimals()),
             2_000 * (10 ** usdc.decimals()),
             50_000 * (10 ** usdc.decimals()),
-            address(this),
-            uint256(uint160(address(this)))
+            officerEOA,
+            officerPrivKey,
+            corp
         );
 
         uint256 salt = 1;
@@ -2141,14 +2182,14 @@ contract RoundManagerFCFSTest is Test {
             salt,
             globalValues,
             partyValues,
-            address(this),
+            officerEOA,
             privKey
         );
 
         bytes32 agreementId = rm.submitEOI(
             roundId,
             eoi,
-            globalValues,
+            globalValues,   
             partyValues,
             sig,
             salt,
@@ -2191,13 +2232,16 @@ contract RoundManagerFCFSTest is Test {
         CyberCorp(corp).setDealManager(address(rm));
 
         MockPaymentToken usdc = new MockPaymentToken();
+        uint256 officerPrivKey = 0xAA02;
+        address officerEOA = vm.addr(officerPrivKey);
         bytes32 roundId = _createFCFSRound(
             rm,
             address(usdc),
             usdc.decimals(),
             bytes32(uint256(777)),
-            address(this),
-            uint256(uint160(address(this)))
+            officerEOA,
+            officerPrivKey,
+            corp
         );
 
         uint256 salt = 1;
@@ -2230,7 +2274,7 @@ contract RoundManagerFCFSTest is Test {
             salt,
             globalValues,
             partyValues,
-            address(this),
+            officerEOA,
             privKey
         );
 
@@ -2276,13 +2320,16 @@ contract RoundManagerFCFSTest is Test {
             issuance
         );
         MockPaymentToken usdc = new MockPaymentToken();
+        uint256 officerPrivKey = 0xAA03;
+        address officerEOA = vm.addr(officerPrivKey);
         bytes32 roundId = _createFCFSRound(
             rm,
             address(usdc),
             usdc.decimals(),
             bytes32(uint256(777)),
-            address(this),
-            uint256(uint160(address(this)))
+            officerEOA,
+            officerPrivKey,
+            corp
         );
 
         address investor = address(0x333);
@@ -2363,7 +2410,8 @@ contract RoundManagerFCFSTest is Test {
             1_500 * (10 ** usdc.decimals()),
             100_000 * (10 ** usdc.decimals()),
             officerEOA,
-            officerPrivKey
+            officerPrivKey,
+            corp
         );
 
         uint256 salt1 = 1;
@@ -2393,7 +2441,7 @@ contract RoundManagerFCFSTest is Test {
             salt1,
             globalValues,
             partyValues,
-            address(this),
+            officerEOA,
             privKey1
         );
                 vm.expectRevert(
@@ -2433,7 +2481,7 @@ contract RoundManagerFCFSTest is Test {
             salt2,
             globalValues,
             partyValues,
-            address(this),
+            officerEOA,
             privKey2
         );
         vm.expectRevert(

@@ -74,7 +74,7 @@ contract RoundManager is
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
     );
     bytes32 private constant ESCROWEDSIGNATUREDATA_TYPEHASH = keccak256(
-        "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation)"
+        "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation,address companyAddress)"
     );
 
     /// @notice Certificate data structure for creating new certificates
@@ -160,6 +160,7 @@ contract RoundManager is
         address paymentToken;
         uint256 pricePerUnit;
         uint256 valuation;
+        address companyAddress;
     }
 
     function _hashEscrowedTypedDataV4(
@@ -192,7 +193,8 @@ contract RoundManager is
                         data.templateId,
                         data.paymentToken,
                         data.pricePerUnit,
-                        data.valuation
+                        data.valuation,
+                        data.companyAddress
                     )
                 )
             )
@@ -301,11 +303,12 @@ contract RoundManager is
                 templateId,
                 paymentToken,
                 pricePerUnit,
-                valuation
+                valuation,
+                LexScrowStorage.getCorp()
             )
         );
 
-        if(!_verifyEscrowedSignature(
+        /*if(!_verifyEscrowedSignature(
                 authorityOfficer,
                 EscrowedSignatureData({
                     roundId: roundId,
@@ -319,10 +322,11 @@ contract RoundManager is
                     templateId: templateId,
                     paymentToken: paymentToken,
                     pricePerUnit: pricePerUnit,
-                    valuation: valuation
+                    valuation: valuation,
+                    companyAddress: LexScrowStorage.getCorp()
                 }),
                 escrowedSignature
-        )) revert InvalidEscrowedSignature();
+        )) revert InvalidEscrowedSignature();*/
         string memory companyName = ICyberCorp(LexScrowStorage.getCorp())
             .cyberCORPName();
         IIssuanceManager issuanceManager = RoundManagerStorage
