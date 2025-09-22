@@ -19,7 +19,7 @@ contract SafeCertificateConverter is ICertificateConverter {
         uint256 tokenId
     ) external view override returns (ConversionPlan memory plan) {
         // Read source cert details
-        ICyberCertPrinter source = ICyberCertPrinter(certPrinter);
+       /* ICyberCertPrinter source = ICyberCertPrinter(certPrinter);
         CertificateDetails memory src = source.getCertificateDetails(tokenId);
 
         // Pull round info from RoundManager via primitive getters
@@ -73,7 +73,7 @@ contract SafeCertificateConverter is ICertificateConverter {
         plan.priceBasis = priceBasis;
         plan.targetClass = cls;
         plan.targetSeries = series;
-        plan.legalDetails = "Converted from SAFE";
+        plan.legalDetails = "Converted from SAFE";*/
     }
 }
 

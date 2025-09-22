@@ -412,51 +412,6 @@ contract RoundManager is
         round.primarySecuritySeries = series;
     }
 
-    function setCapTableSnapshot(
-        bytes32 roundId,
-        CapTableSnapshot calldata snapshot
-    ) external onlyOwner {
-        Round storage round = RoundManagerStorage.getRound(roundId);
-        if (round.id == bytes32(0)) revert InvalidRound();
-        RoundManagerStorage.setRoundSnapshot(roundId, snapshot);
-        emit RoundSnapshotSet(
-            roundId,
-            snapshot.totalCapitalSecuritiesOutstanding,
-            snapshot.totalConvertingSecurities,
-            snapshot.totalOptionsIssuedAndOutstanding,
-            snapshot.totalPromisedOptions,
-            snapshot.unissuedOptionPoolPreRound,
-            snapshot.unissuedOptionPoolIncreaseIncludedInCalc,
-            snapshot.cCapUsed
-        );
-    }
-
-    function setRoundingPolicy(
-        bytes32 roundId,
-        RoundingPolicy calldata policy
-    ) external onlyOwner {
-        Round storage round = RoundManagerStorage.getRound(roundId);
-        if (round.id == bytes32(0)) revert InvalidRound();
-        RoundManagerStorage.setRoundingPolicy(roundId, policy);
-        emit RoundingPolicySet(
-            roundId,
-            uint8(policy.mode),
-            policy.priceDecimals,
-            policy.shareDecimals
-        );
-    }
-
-    function setPMVCSubseriesLabel(
-        bytes32 roundId,
-        uint256 pmvc,
-        string calldata label
-    ) external onlyOwner {
-        Round storage round = RoundManagerStorage.getRound(roundId);
-        if (round.id == bytes32(0)) revert InvalidRound();
-        RoundManagerStorage.setPMVCSubseriesLabel(roundId, pmvc, label);
-        emit PMVCSubseriesLabelSet(roundId, pmvc, label);
-    }
-
     /// @notice Owner can update the endTime of a round
     /// @param roundId The round ID
     /// @param newEndTime The new end timestamp
@@ -477,50 +432,6 @@ contract RoundManager is
         round.endTime = block.timestamp;
         emit RoundEndTimeUpdated(roundId, oldEndTime, round.endTime);
         emit RoundClosed(roundId, block.timestamp);
-    }
-
-    // Getters for convenience
-    // Getters with primitives to avoid cross-type coupling
-    function getCapTableSnapshotFields(
-        bytes32 roundId
-    )
-        external
-        view
-        returns (
-            uint256 totalCapitalSecuritiesOutstanding,
-            uint256 totalConvertingSecurities,
-            uint256 totalOptionsIssuedAndOutstanding,
-            uint256 totalPromisedOptions,
-            uint256 unissuedOptionPoolPreRound,
-            uint256 unissuedOptionPoolIncreaseIncludedInCalc,
-            uint256 cCapUsed
-        )
-    {
-        CapTableSnapshot memory s = RoundManagerStorage.getRoundSnapshot(
-            roundId
-        );
-        return (
-            s.totalCapitalSecuritiesOutstanding,
-            s.totalConvertingSecurities,
-            s.totalOptionsIssuedAndOutstanding,
-            s.totalPromisedOptions,
-            s.unissuedOptionPoolPreRound,
-            s.unissuedOptionPoolIncreaseIncludedInCalc,
-            s.cCapUsed
-        );
-    }
-
-    function getRoundingPolicyFields(
-        bytes32 roundId
-    )
-        external
-        view
-        returns (uint8 mode, uint8 priceDecimals, uint8 shareDecimals)
-    {
-        RoundingPolicy memory p = RoundManagerStorage.getRoundingPolicy(
-            roundId
-        );
-        return (uint8(p.mode), p.priceDecimals, p.shareDecimals);
     }
 
     function getRoundPriceInfo(
@@ -544,13 +455,6 @@ contract RoundManager is
     function roundExists(bytes32 roundId) external view returns (bool) {
         Round storage round = RoundManagerStorage.getRound(roundId);
         return round.id != bytes32(0);
-    }
-
-    function getPMVCSubseriesLabel(
-        bytes32 roundId,
-        uint256 pmvc
-    ) external view returns (string memory) {
-        return RoundManagerStorage.getPMVCSubseriesLabel(roundId, pmvc);
     }
 
     /// @notice Submits an Expression of Interest for a round
