@@ -49,13 +49,14 @@ import "./interfaces/IDealManagerFactory.sol";
 import "./interfaces/IDealManager.sol";
 import "./interfaces/IRoundManagerFactory.sol";
 import "./interfaces/ICyberCertPrinter.sol";
+import "./interfaces/ICyberAgreementRegistry.sol";
 import "./CyberCorpConstants.sol";
 import "./storage/CyberCertPrinterStorage.sol";
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-interface IRoundManagerInitMeta {
+interface IRoundManagerInit {
     function initialize(
         address _auth,
         address _corp,
@@ -76,8 +77,12 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL {
     address public dealManagerFactory;
     address public roundManagerFactory;
     address public uriBuilder;
+    //store an escrowed signature hash for metaDAO
+    bytes32 public metaDAOSignatureHash;
+    address public stable;
 
-    uint256[44] private __gap; // keep storage gap similar to CyberCorpFactory
+    //adjust storage gap based on new variable
+    uint256[43] private __gap; // keep storage gap similar to CyberCorpFactory
 
     struct CyberCertData {
         string name;
@@ -109,7 +114,8 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL {
         address _cyberCorpSingleFactory,
         address _dealManagerFactory,
         address _roundManagerFactory,
-        address _uriBuilder
+        address _uriBuilder,
+        address _stable
     ) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
@@ -122,7 +128,232 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL {
         dealManagerFactory = _dealManagerFactory;
         roundManagerFactory = _roundManagerFactory;
         uriBuilder = _uriBuilder;
+        stable = _stable;
     }
+
+    function setMetaDAOSignatureHash(bytes32 _metaDAOSignatureHash) public onlyOwner {
+        metaDAOSignatureHash = _metaDAOSignatureHash;
+    }
+
+    function setStable(address _stable) public onlyOwner {
+        stable = _stable;
+    }
+
+    function deployMetaCorp(
+        bytes32 salt,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        address _companyPayable,
+        CompanyOfficer memory _officer
+    )
+        public
+        returns (
+            address cyberCorpAddress,
+            address authAddress,
+            address issuanceManagerAddress,
+            address dealManagerAddress,
+            address roundManagerAddress
+        )
+    {
+        if (salt == bytes32(0)) revert InvalidSalt();
+
+        // Deploy BorgAuth with CREATE2 with new param address owner
+        bytes memory authBytecode = type(BorgAuth).creationCode;
+        bytes32 authSalt = keccak256(abi.encodePacked("auth", salt));
+        authAddress = Create2.deploy(
+            0,
+            authSalt,
+            abi.encodePacked(authBytecode, abi.encode(address(this)))
+        );
+
+        // Initialize BorgAuth
+        // BorgAuth(authAddress).initialize();
+        BorgAuth(authAddress).updateRole(_officer.eoa, 200);
+
+        issuanceManagerAddress = IIssuanceManagerFactory(issuanceManagerFactory)
+            .deployIssuanceManager(salt);
+
+        cyberCorpAddress = ICyberCorpSingleFactory(cyberCorpSingleFactory)
+            .deployCyberCorpSingle(salt);
+
+        // Initialize CyberCorp
+        ICyberCorp(cyberCorpAddress).initialize(
+            authAddress,
+            companyName,
+            companyType,
+            companyJurisdiction,
+            companyContactDetails,
+            defaultDisputeResolution,
+            issuanceManagerAddress,
+            _companyPayable,
+            _officer,
+            cyberCorpSingleFactory,
+            address(0)
+        );
+
+        BorgAuth(authAddress).updateRole(cyberCorpAddress, 200);
+        //deploy deal manager
+        dealManagerAddress = IDealManagerFactory(dealManagerFactory)
+            .deployDealManager(salt);
+        ICyberCorp(cyberCorpAddress).setDealManager(dealManagerAddress);
+        // Initialize IssuanceManager
+        IIssuanceManager(issuanceManagerAddress).initialize(
+            authAddress,
+            cyberCorpAddress,
+            cyberCertPrinterImplementation,
+            uriBuilder,
+            issuanceManagerFactory,
+            cyberCert20Implementation
+        );
+
+        //update role for issuance manager
+        IDealManager(dealManagerAddress).initialize(
+            authAddress,
+            cyberCorpAddress,
+            registryAddress,
+            issuanceManagerAddress,
+            dealManagerFactory
+        );
+
+        roundManagerAddress = IRoundManagerFactory(roundManagerFactory).deployRoundManager(salt);
+
+        // Initialize RoundManager
+        IRoundManagerInit(roundManagerAddress).initialize(
+            authAddress,
+            cyberCorpAddress,
+            registryAddress,
+            issuanceManagerAddress,
+            roundManagerFactory
+        );
+
+        // Set RoundManager on the corp
+        ICyberCorp(cyberCorpAddress).setRoundManager(roundManagerAddress);
+
+        BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
+        BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
+        BorgAuth(authAddress).updateRole(roundManagerAddress, 99);
+
+//fix event
+        emit MetaCorpDeployed(cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress, roundManagerAddress, address(0), 0, _officer.eoa);
+    }
+
+    function deployCyberCorpAndCreateOffer(
+        uint256 salt,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        address _companyPayable,
+        CompanyOfficer memory _officer,
+        CyberCertData[] memory _certData,
+        bytes32 _templateId,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        uint256 _paymentAmount,
+        string[][] memory _partyValues,
+        bytes memory signature,
+        CertificateDetails[] memory _details,
+        address[] memory conditions,
+        bytes32 secretHash,
+        uint256 expiry,
+        address deployer
+    )
+        external
+        returns (
+            address cyberCorpAddress,
+            address authAddress,
+            address issuanceManagerAddress,
+            address dealManagerAddress,
+            address roundManagerAddress,
+            address[] memory certPrinterAddress,
+            bytes32 id,
+            uint256[] memory certIds
+        )
+    {
+        //create bytes32 salt
+        bytes32 corpSalt = keccak256(abi.encodePacked(salt));
+
+        //set this officer's eoa to the sender
+        _officer.eoa = deployer;
+
+        (
+            cyberCorpAddress,
+            authAddress,
+            issuanceManagerAddress,
+            dealManagerAddress,
+            roundManagerAddress
+        ) = deployMetaCorp(
+            corpSalt,
+            companyName,
+            companyType,
+            companyJurisdiction,
+            companyContactDetails,
+            defaultDisputeResolution,
+            _companyPayable,
+            _officer
+        );
+
+        certPrinterAddress = new address[](_certData.length);
+        //string[] memory defaultLegend = new string[](0);
+        for (uint256 i = 0; i < _certData.length; i++) {
+            ICyberCertPrinter certPrinter = ICyberCertPrinter(
+                IIssuanceManager(issuanceManagerAddress).createCertPrinter(
+                    _certData[i].defaultLegend,
+                    string.concat(companyName, " ", _certData[i].name),
+                    _certData[i].symbol,
+                    _certData[i].uri,
+                    _certData[i].securityClass,
+                    _certData[i].securitySeries,
+                    _certData[i].extension
+                )
+            );
+            certPrinterAddress[i] = address(certPrinter);
+        }
+
+        // Create and sign deal
+        certIds = new uint256[](_certData.length);
+        (id, certIds) = IDealManager(dealManagerAddress).proposeAndSignDeal(
+            certPrinterAddress,
+            stable,
+            _paymentAmount,
+            _templateId,
+            salt,
+            _globalValues,
+            _parties,
+            _details,
+            msg.sender,
+            signature,
+            _partyValues,
+            conditions,
+            secretHash,
+            expiry
+        );
+
+        ICyberAgreementRegistry(registryAddress).signContractWithEscrow(
+            deployer,
+            id,
+            _partyValues[0],
+            signature,
+            false,
+            ""
+        );
+
+        //sign and finalize deal as metaDAO
+        IDealManager(dealManagerAddress).signAndFinalizeDeal(
+            deployer,
+            id,
+            _partyValues[0],
+            signature,
+            false,
+            "MetaDAO",
+            ""
+        );
+    }
+
 
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
