@@ -275,12 +275,9 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         CyberCertData[] memory _certData,
         bytes32 _templateId,
         string[] memory _globalValues,
-        address[] memory _parties,
-        uint256 _paymentAmount,
         string[][] memory _partyValues,
         bytes memory signature,
         CertificateDetails[] memory _details,
-        address[] memory conditions,
         bytes32 secretHash,
         uint256 expiry,
         address deployer
