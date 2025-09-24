@@ -474,6 +474,15 @@ contract IssuanceManager is Initializable, BorgAuthACL {
         certificate.setGlobalRestrictionHook(hookAddress);
     }
 
+    function setTokenTransferable(
+        address certAddress,
+        uint256 tokenId,
+        bool value
+    ) external onlyAdmin {
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        certificate.setTokenTransferable(tokenId, value);
+    }
+
     /// @notice Adds a default legend to a certificate contract
     /// @dev Only callable by admin
     /// @param certAddress Address of the certificate printer contract

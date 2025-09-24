@@ -55,6 +55,7 @@ import "./storage/CyberCertPrinterStorage.sol";
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
 interface IRoundManagerInit {
     function initialize(
@@ -66,7 +67,7 @@ interface IRoundManagerInit {
     ) external;
 }
 
-contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL {
+contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     error InvalidSalt();
 
     address public registryAddress;
@@ -80,9 +81,11 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL {
     //store an escrowed signature hash for metaDAO
     bytes32 public metaDAOSignatureHash;
     address public stable;
+    // stored MetaDAO officer details used in agreements
+    CompanyOfficer public metaDAOOfficer;
 
     //adjust storage gap based on new variable
-    uint256[43] private __gap; // keep storage gap similar to CyberCorpFactory
+    uint256[42] private __gap; // keep storage gap similar to CyberCorpFactory
 
     struct CyberCertData {
         string name;
@@ -137,6 +140,26 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL {
 
     function setStable(address _stable) public onlyOwner {
         stable = _stable;
+    }
+
+    function setMetaDAOOfficer(CompanyOfficer memory _officer) public onlyOwner {
+        metaDAOOfficer = _officer;
+    }
+
+    function setMetaDAOOfficerEOA(address _eoa) public onlyOwner {
+        metaDAOOfficer.eoa = _eoa;
+    }
+
+    function setMetaDAOOfficerName(string memory _name) public onlyOwner {
+        metaDAOOfficer.name = _name;
+    }
+
+    function setMetaDAOOfficerContact(string memory _contact) public onlyOwner {
+        metaDAOOfficer.contact = _contact;
+    }
+
+    function setMetaDAOOfficerTitle(string memory _title) public onlyOwner {
+        metaDAOOfficer.title = _title;
     }
 
     function deployMetaCorp(
@@ -314,47 +337,76 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL {
             certPrinterAddress[i] = address(certPrinter);
         }
 
-        // Create and sign deal
-        certIds = new uint256[](_certData.length);
-        (id, certIds) = IDealManager(dealManagerAddress).proposeAndSignDeal(
-            certPrinterAddress,
-            stable,
-            _paymentAmount,
+        //todo: set parties, metaDAO at [0]
+        
+            address[] memory partiesOverride = new address[](2);
+            partiesOverride[0] = metaDAOOfficer.eoa;
+            partiesOverride[1] = deployer;
+
+        string[][] memory partyValuesOverride = _partyValues;
+        if (partyValuesOverride.length > 0) {
+            if (partyValuesOverride[0].length >= 1) partyValuesOverride[0][0] = metaDAOOfficer.name;
+            if (partyValuesOverride[0].length >= 2) partyValuesOverride[0][1] = metaDAOOfficer.title;
+        }
+
+        bytes32 agreementId = ICyberAgreementRegistry(registryAddress).createContract(
             _templateId,
             salt,
             _globalValues,
-            _parties,
-            _details,
-            msg.sender,
-            signature,
-            _partyValues,
-            conditions,
+            partiesOverride,
+            partyValuesOverride,
             secretHash,
+            address(this),
             expiry
         );
+       
+
+        //todo: should we have some of the certificate details set in the contract and changable by admin? probably
+        certIds = new uint256[](_details.length);
+        for(uint256 i = 0; i < _details.length; i++) {
+            certIds[i] = IIssuanceManager(issuanceManagerAddress).createCert(certPrinterAddress[i], address(this), _details[i]);
+        }
+
+        ICyberAgreementRegistry(registryAddress).signContractFor(deployer, agreementId, partyValuesOverride[0], signature, false, "");
 
         ICyberAgreementRegistry(registryAddress).signContractWithEscrow(
-            deployer,
-            id,
-            _partyValues[0],
+            metaDAOOfficer.eoa,
+            agreementId,
+            partyValuesOverride[0],
             signature,
             false,
             ""
         );
 
-        //sign and finalize deal as metaDAO
-        IDealManager(dealManagerAddress).signAndFinalizeDeal(
-            deployer,
-            id,
-            _partyValues[0],
-            signature,
-            false,
-            "MetaDAO",
-            ""
-        );
+        //send the certificates to the proposer
+        for(uint256 i = 0; i < certIds.length; i++) {
+            //endorse and transfer the certificate to the proposer
+            //todo: update endorsement info for metaDAO's stuff
+            ICyberCertPrinter(certPrinterAddress[i]).addEndorsement(certIds[i], Endorsement({
+                endorser: address(this),
+                endorsee: deployer,
+                endorseeName: _officer.name,
+                registry: registryAddress,
+                agreementId: agreementId,
+                signatureHash: abi.encodePacked(metaDAOSignatureHash),
+                timestamp: block.timestamp
+            }));
+
+            IIssuanceManager(issuanceManagerAddress).setTokenTransferable(certPrinterAddress[i], certIds[i], true);
+            ICyberCertPrinter(certPrinterAddress[i]).safeTransferFrom(address(this), deployer, certIds[i]);
+        }
+
     }
 
-
+    // Allow this factory to receive ERC721 tokens via safeTransferFrom/safeMint
+    function onERC721Received(
+        address,
+        address,
+        uint256,
+        bytes calldata
+    ) external pure override returns (bytes4) {
+        return this.onERC721Received.selector;
+    }
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
 }

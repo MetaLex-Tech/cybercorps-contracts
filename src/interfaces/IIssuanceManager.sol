@@ -161,6 +161,12 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
         address hookAddress
     ) external;
 
+    function setTokenTransferable(
+        address certAddress,
+        uint256 tokenId,
+        bool value
+    ) external;
+
     function restrictionHooksById(
         uint256 tokenId
     ) external view returns (ITransferRestrictionHook);

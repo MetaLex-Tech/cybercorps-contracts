@@ -41,7 +41,7 @@ contract MetaDAOTest is Test {
         owner = vm.addr(ownerPrivKey);
         investorPrivKey = 0xB0B0;
         investor = vm.addr(investorPrivKey);
-
+        vm.startPrank(owner);
         // Bootstrap auth
         bytes32 salt = keccak256(abi.encodePacked("metadao-infra", owner));
         BorgAuth bootstrapAuth = new BorgAuth{salt: salt}(owner);
@@ -105,6 +105,23 @@ contract MetaDAOTest is Test {
             )
         );
 
+        // Set up MetaDAO owner and officer on factory
+        uint256 metaDAOPrivKey = 0xD00D;
+        address metaDAO = vm.addr(metaDAOPrivKey);
+
+        BorgAuth(address(factory.AUTH())).updateRole(metaDAO, 99);
+        vm.stopPrank();
+        CompanyOfficer memory metaOfficer = CompanyOfficer({
+            eoa: metaDAO,
+            name: "Officer",
+            contact: "metadao@example.com",
+            title: "CEO"
+        });
+        vm.prank(metaDAO);
+        factory.setMetaDAOOfficer(metaOfficer);
+        vm.prank(metaDAO);
+        factory.setMetaDAOSignatureHash(keccak256("META_ESCROW_SIG"));
+
         // Template with 1 global + 1 party field
         bytes32 templateId = bytes32("TEST_TEMPLATE");
         string[] memory globalFields = new string[](1);
@@ -160,8 +177,13 @@ contract MetaDAOTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Officer";
 
-        // Compute agreementId and signer signature for proposer (msg.sender below)
+        // Compute agreementId and signer signature for deployer (who will sign)
         uint256 saltUint = 1;
+        uint256 deployerPrivKey = 0xA1A1;
+        address deployer = vm.addr(deployerPrivKey);
+        // Parties must match what factory will set: [metaDAOOfficer.eoa, deployer]
+        parties[0] = metaDAO;
+        parties[1] = deployer;
         bytes32 contractId = keccak256(abi.encode(templateId, saltUint, globalValues, parties));
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -173,11 +195,9 @@ contract MetaDAOTest is Test {
             partyFields,
             globalValues,
             partyValues[0],
-            ownerPrivKey
+            deployerPrivKey
         );
 
-        // Expect revert because MetaDAOFactory is not the finalizer when calling signContractWithEscrow
-        address deployer = address(0x1);
         vm.prank(deployer);
         factory.deployCyberCorpAndCreateOffer(
             saltUint,
@@ -199,7 +219,7 @@ contract MetaDAOTest is Test {
             new address[](0),
             bytes32(0),
             block.timestamp + 7 days,
-            investor // deployer param
+            deployer // deployer param
         );
     }
 }
