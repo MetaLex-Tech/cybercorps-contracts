@@ -140,6 +140,7 @@ contract RoundManager is
         bytes32 indexed roundId,
         address indexed buyer,
         uint256 allocatedAmount,
+        uint256 totalRaised,
         uint256[] certIds
     );
     event EOIRejected(bytes32  agreementId, address indexed investor, bytes32 indexed roundId);
@@ -711,7 +712,7 @@ contract RoundManager is
         // Update raised
         round.raised += allocatedAmount;
 
-        emit AllocationMade(agreementId, roundId, escrow.counterParty, allocatedAmount, certIds); 
+        emit AllocationMade(agreementId, roundId, escrow.counterParty, allocatedAmount, round.raised, certIds); 
     }
 
     /// @notice Rejects an EOI and voids the deal

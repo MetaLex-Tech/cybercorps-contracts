@@ -81,7 +81,7 @@ interface IRoundManager {
     event RoundEndTimeUpdated(bytes32 indexed roundId, uint256 oldEndTime, uint256 newEndTime);
     event RoundClosed(bytes32 indexed roundId, uint256 closedAt);
     event EOISubmitted(bytes32 indexed agreementId, bytes32 indexed roundId, address investor, address indexed corp, uint256 minAmount, uint256 maxAmount, uint256 expiry);
-    event AllocationMade(bytes32 indexed agreementId, bytes32 indexed roundId, uint256 allocatedAmount, uint256[] certIds);
+    event AllocationMade(bytes32 indexed agreementId, bytes32 indexed roundId, uint256 allocatedAmount, uint256 totalRaised, uint256[] certIds);
     event EOIRejected(bytes32 indexed agreementId, bytes32 indexed roundId);
 
     function createRound(
