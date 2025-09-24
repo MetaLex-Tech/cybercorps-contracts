@@ -84,8 +84,16 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     // stored MetaDAO officer details used in agreements
     CompanyOfficer public metaDAOOfficer;
 
+    // Parent corp (MetaDAO) deployment record
+    address public parentCorp;
+    address public parentAuth;
+    address public parentIssuanceManager;
+    address public parentDealManager;
+    address public parentRoundManager;
+    bool public parentCorpCreated;
+
     //adjust storage gap based on new variable
-    uint256[42] private __gap; // keep storage gap similar to CyberCorpFactory
+    uint256[36] private __gap; // keep storage gap similar to CyberCorpFactory
 
     struct CyberCertData {
         string name;
@@ -106,6 +114,14 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         address certPrinter,
         uint256 certTokenId,
         address ownerEOA
+    );
+
+    event ParentCorpCreated(
+        address indexed corp,
+        address indexed auth,
+        address indexed issuanceManager,
+        address dealManager,
+        address roundManager
     );
 
     function initialize(
@@ -261,6 +277,53 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
 
 //fix event
         emit MetaCorpDeployed(cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress, roundManagerAddress, address(0), 0, _officer.eoa);
+    }
+
+    // Admin-only, one-time creation of the MetaDAO parent corp
+    function createParentCorp(
+        bytes32 salt,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        address _companyPayable
+    ) external onlyOwner returns (
+        address corp,
+        address auth,
+        address issuance,
+        address dealMgr,
+        address roundMgr
+    ) {
+        if (parentCorpCreated) revert("ParentCorpAlreadyCreated");
+        CompanyOfficer memory officer = metaDAOOfficer;
+        if (officer.eoa == address(0)) revert("MetaDAOOfficerNotSet");
+
+        (
+            corp,
+            auth,
+            issuance,
+            dealMgr,
+            roundMgr
+        ) = deployMetaCorp(
+            salt,
+            companyName,
+            companyType,
+            companyJurisdiction,
+            companyContactDetails,
+            defaultDisputeResolution,
+            _companyPayable,
+            officer
+        );
+
+        parentCorp = corp;
+        parentAuth = auth;
+        parentIssuanceManager = issuance;
+        parentDealManager = dealMgr;
+        parentRoundManager = roundMgr;
+        parentCorpCreated = true;
+
+        emit ParentCorpCreated(corp, auth, issuance, dealMgr, roundMgr);
     }
 
     function deployCyberCorpAndCreateOffer(

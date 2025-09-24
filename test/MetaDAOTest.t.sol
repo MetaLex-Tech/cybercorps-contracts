@@ -211,12 +211,9 @@ contract MetaDAOTest is Test {
             certData,
             templateId,
             globalValues,
-            parties,
-            10_000 * 10 ** usdc.decimals(),
             partyValues,
             signature,
             details,
-            new address[](0),
             bytes32(0),
             block.timestamp + 7 days,
             deployer // deployer param
