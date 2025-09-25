@@ -65,7 +65,7 @@ struct EOI {
 }
  
 interface IRoundManager {
-    event RoundCreated(bytes32 indexed roundId, address corp, Round round);
+    event RoundCreated(bytes32 indexed roundId, address corp, Round round, bool publicRound);
     event RoundSnapshotSet(
         bytes32 indexed roundId,
         uint256 totalCapitalSecuritiesOutstanding,
@@ -104,7 +104,8 @@ interface IRoundManager {
         string calldata legalDetails,
         bytes calldata extensionData,
         string[] calldata roundPartyValues,
-        bytes calldata escrowedSignature
+        bytes calldata escrowedSignature,
+        bool publicRound
     ) external returns (bytes32 roundId);
 
     function submitEOI(

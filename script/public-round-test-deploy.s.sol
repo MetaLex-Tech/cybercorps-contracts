@@ -229,7 +229,8 @@ contract PublicRoundTestDeploy is Script {
                 1,
                 10000000,
                 block.timestamp - 1,
-                block.timestamp + 21 days
+                block.timestamp + 21 days,
+                true
             );
 
         // Lock down AUTH if desired (mirror deploy.s.sol behavior lightly)

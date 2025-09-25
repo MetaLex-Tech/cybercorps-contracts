@@ -238,7 +238,8 @@ contract UpgradePublicRoundsScript is Script {
                     1,
                     10000000,
                     block.timestamp - 1,
-                    block.timestamp + 14 days
+                    block.timestamp + 14 days,
+                    true
                 );
 
         // Example public round using SAFE template id 1
@@ -275,7 +276,8 @@ contract UpgradePublicRoundsScript is Script {
                     1,
                     10000000,
                     block.timestamp - 1,
-                    block.timestamp + 21 days
+                    block.timestamp + 21 days,
+                    true
                 );
         console.log("SAFE Template Round cyberCorp:", cyberCorp2);
         console.log("SAFE Template Round roundManager:", roundManager2);

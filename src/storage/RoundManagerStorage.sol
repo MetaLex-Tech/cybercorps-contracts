@@ -79,6 +79,7 @@ struct Round {
     bytes extensionData;
     string[] roundPartyValues;
     bytes escrowedSignature;
+    bool publicRound;
 }
 
 struct EOI {
@@ -104,6 +105,7 @@ library RoundManagerStorage {
         /// @notice Reference to the issuance manager contract
         IIssuanceManager issuanceManager;
         address upgradeFactory;
+        address lexChexCondition;
         
         /// @notice Mapping from round IDs to their data
         mapping(bytes32 => Round) rounds;
@@ -195,5 +197,13 @@ library RoundManagerStorage {
 
     function getUpgradeFactory() external view returns (address) {
         return roundManagerStorage().upgradeFactory;
+    }
+
+    function setLexChexCondition(address _lexChexCondition) internal {
+        roundManagerStorage().lexChexCondition = _lexChexCondition;
+    }
+
+    function getLexChexCondition() internal view returns (address) {
+        return roundManagerStorage().lexChexCondition;
     }
 }

@@ -411,7 +411,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         uint256 minTicket,
         uint256 maxTicket,
         uint256 startTime,
-        uint256 endTime
+        uint256 endTime,
+        bool publicRound
     )
         external
         returns (
@@ -467,7 +468,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             legalDetails,
             extensionData,
             roundPartyValues,
-            escrowedSignature
+            escrowedSignature,
+            publicRound
         );
     }
 

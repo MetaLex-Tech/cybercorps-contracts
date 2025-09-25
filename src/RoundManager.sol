@@ -104,7 +104,7 @@ contract RoundManager is
     error EOIExpired();
     error NotEOISubmitter();
 
-    event RoundCreated(bytes32 indexed roundId, address indexed corp, Round round);
+    event RoundCreated(bytes32 indexed roundId, address indexed corp, Round round, bool publicRound);
     event RoundSnapshotSet(
         bytes32 indexed roundId,
         uint256 totalCapitalSecuritiesOutstanding,
@@ -287,7 +287,8 @@ contract RoundManager is
         string memory legalDetails,
         bytes memory extensionData,
         string[] memory roundPartyValues,
-        bytes memory escrowedSignature
+        bytes memory escrowedSignature,
+        bool publicRound
     ) external onlyOwner returns (bytes32 roundId) {
 
         if (escrowedSignature.length == 0) revert InvalidEscrowedSignature();
@@ -379,12 +380,13 @@ contract RoundManager is
             extensionData: extensionData,
             roundPartyValues: roundPartyValues,
             escrowedSignature: escrowedSignature,
-            roundConditions: conditions 
+            roundConditions: conditions,
+            publicRound: publicRound
         });
 
         RoundManagerStorage.setRound(roundId, newRound);
 
-        emit RoundCreated(roundId, LexScrowStorage.getCorp(), newRound);
+        emit RoundCreated(roundId, LexScrowStorage.getCorp(), newRound, publicRound);
     }
 
     // ===============
@@ -566,6 +568,14 @@ contract RoundManager is
             LexScrowStorage.addConditionToEscrow(
                 agreementId,
                 ICondition(conditions[i])
+            );
+        }
+
+        //add lexchex if public round
+        if (round.publicRound && RoundManagerStorage.getLexChexCondition() != address(0)) {
+            LexScrowStorage.addConditionToEscrow(
+                agreementId,
+                ICondition(RoundManagerStorage.getLexChexCondition())
             );
         }
 
