@@ -49,6 +49,7 @@ import {ERC721Enumerable} from "openzeppelin-contracts/token/ERC721/extensions/E
 import {BorgAuth} from "../src/libs/auth.sol";
 import {LexScroWLite} from "../src/libs/LexScroWLite.sol";
 import {LexScrowStorage, Token, TokenType, EscrowStatus} from "../src/storage/LexScrowStorage.sol";
+import {Endorsement} from "../src/storage/CyberCertPrinterStorage.sol";
 
 contract ERC20Mock is ERC20 {
     constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) {}
@@ -65,6 +66,14 @@ contract ERC721Mock is ERC721Enumerable {
         uint256 tokenId = totalSupply();
         _safeMint(to, tokenId);
         return tokenId;
+    }
+}
+
+contract ERC721WithEndorsementMock is ERC721Mock {
+    constructor(string memory _name, string memory _symbol) ERC721Mock(_name, _symbol) {}
+
+    function addEndorsement(uint256 tokenId, Endorsement memory newEndorsement) public {
+        // no-op
     }
 }
 
@@ -88,6 +97,10 @@ contract LexScroWLiteMock is LexScroWLite {
 
     function createEscrow_(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets, uint256 expiry) public {
         createEscrow(agreementId, counterParty, corpAssets, buyerAssets, expiry);
+    }
+
+    function updateEscrow_(bytes32 agreementId, address counterParty, string memory buyerName) public {
+        updateEscrow(agreementId, counterParty, buyerName);
     }
 
     function handleCounterPartyPayment_(bytes32 agreementId) public {
@@ -129,11 +142,14 @@ contract LexScroWLiteTest is Test {
     address public companyPayable = address(1000);
     address public companyOwner = address(1001);
     address public alice = address(1002);
+    address public bob = address(1003);
 
     ERC20Mock public corpTokenErc20 = new ERC20Mock("Corp ERC20", "CORP20");
     ERC721Mock public corpTokenErc721 = new ERC721Mock("Corp ERC721", "CORP721");
+    ERC721WithEndorsementMock public corpTokenErc721WithEndorsement = new ERC721WithEndorsementMock("Corp ERC721 with Endorsement", "CORP721E");
     ERC1155Mock public corpTokenErc1155 = new ERC1155Mock("corp/erc1155");
     uint256 public corpTokenErc721Id;
+    uint256 public corpTokenErc721WithEndorsementId;
     uint256 public corpTokenErc1155Id = 0;
 
     ERC20Mock public buyerTokenErc20 = new ERC20Mock("Buyer ERC20", "BUY20");
@@ -168,6 +184,7 @@ contract LexScroWLiteTest is Test {
 
         corpTokenErc20.mint(address(lexScrow), 10 ether);
         corpTokenErc721Id = corpTokenErc721.mint(address(lexScrow));
+        corpTokenErc721WithEndorsementId = corpTokenErc721WithEndorsement.mint(address(lexScrow));
         corpTokenErc1155.mint(address(lexScrow), corpTokenErc1155Id, 10 ether);
 
         buyerTokenErc20.mint(alice, 100 ether);
@@ -368,17 +385,67 @@ contract LexScroWLiteTest is Test {
     }
 
     function test_UpdateEscrowNonERC721() public {
+        // Prepare Escrow
+
+        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        Token[] memory corpAssets = new Token[](2);
+        corpAssets[0] = Token({
+            tokenType: TokenType.ERC20,
+            tokenAddress: address(corpTokenErc20),
+            tokenId: 0,
+            amount: 10 ether
+        });
+        corpAssets[1] = Token({
+            tokenType: TokenType.ERC1155,
+            tokenAddress: address(corpTokenErc1155),
+            tokenId: corpTokenErc1155Id,
+            amount: 10 ether
+        });
+        Token[] memory buyerAssets = _getBuyerAssets();
+
+        lexScrow.createEscrow_(agreementId, alice, corpAssets, buyerAssets, block.timestamp);
+
         // updateEscrow should update the counter-party of the escrow
+
+        lexScrow.updateEscrow_(agreementId, bob, "Bob");
+
+        assertEq(lexScrow.getEscrowDetails(agreementId).counterParty, bob);
     }
 
     function test_UpdateEscrowERC721() public {
         // updateEscrow should update the counter-party of the escrow, and if the token is ERC721,
         // it assumes the token implements ICyberCertPrinter and will add endorsement to it.
+
+        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        Token[] memory corpAssets = new Token[](1);
+        corpAssets[0] = Token({
+            tokenType: TokenType.ERC721,
+            tokenAddress: address(corpTokenErc721WithEndorsement),
+            tokenId: corpTokenErc721Id,
+            amount: 1
+        });
+        Token[] memory buyerAssets = _getBuyerAssets();
+
+        lexScrow.createEscrow_(agreementId, alice, corpAssets, buyerAssets, block.timestamp);
+
+        // updateEscrow should fail because the corpAssets contain non-ICyberCertPrinter ERC-721 tokens
+
+        lexScrow.updateEscrow_(agreementId, bob, "Bob");
     }
 
     function test_RevertIf_UpdateEscrowERC721WithoutEndorsement() public {
         // updateEscrow assumes an ERC721 token implements ICyberCertPrinter and
         // will fail if it does not implement `addEndorsement()`
+
+        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        Token[] memory corpAssets = _getCorpAssets();
+        Token[] memory buyerAssets = _getBuyerAssets();
+
+        lexScrow.createEscrow_(agreementId, alice, corpAssets, buyerAssets, block.timestamp);
+
+        // updateEscrow should fail because the corpAssets contain non-ICyberCertPrinter ERC-721 tokens
+        vm.expectRevert(); // ex. unrecognized function selector 0x94b5611f for contract 0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef, which has no fallback function
+        lexScrow.updateEscrow_(agreementId, bob, "Bob");
     }
 
     function test_ConditionCheck() public {
