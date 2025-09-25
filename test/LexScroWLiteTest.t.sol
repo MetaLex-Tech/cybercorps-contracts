@@ -46,10 +46,9 @@ import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import {ERC721} from "openzeppelin-contracts/token/ERC721/ERC721.sol";
 import {ERC1155} from "openzeppelin-contracts/token/ERC1155/ERC1155.sol";
 import {ERC721Enumerable} from "openzeppelin-contracts/token/ERC721/extensions/ERC721Enumerable.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {LexScroWLite} from "../src/libs/LexScroWLite.sol";
-import {LexScrowStorage, Token, TokenType} from "../src/storage/LexScrowStorage.sol";
+import {LexScrowStorage, Token, TokenType, EscrowStatus} from "../src/storage/LexScrowStorage.sol";
 
 contract ERC20Mock is ERC20 {
     constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) {}
@@ -98,6 +97,18 @@ contract LexScroWLiteMock is LexScroWLite {
     function finalizeEscrow_(bytes32 agreementId) public {
         finalizeEscrow(agreementId);
     }
+
+    function voidAndRefund_(bytes32 agreementId) public {
+        voidAndRefund(agreementId);
+    }
+}
+
+contract CyberAgreementRegistryMock {
+    mapping(bytes32 => bool) public isVoided;
+
+    function mockVoidAgreement(bytes32 agreementId, bool _isVoided) public {
+        isVoided[agreementId] = _isVoided;
+    }
 }
 
 contract CyberCorpMock {
@@ -131,24 +142,12 @@ contract LexScroWLiteTest is Test {
     uint256 public buyerTokenErc721Id;
     uint256 public buyerTokenErc1155Id = 0;
 
-    CyberAgreementRegistry public registry;
+    CyberAgreementRegistryMock public registry;
     CyberCorpMock public corp;
     LexScroWLiteMock public lexScrow;
 
     function setUp() public {
-        BorgAuth auth = new BorgAuth{salt: salt}(owner);
-
-        registry = CyberAgreementRegistry(
-            address(
-                new ERC1967Proxy{salt: salt}(
-                    address(new CyberAgreementRegistry{salt: salt}()),
-                    abi.encodeWithSelector(
-                        CyberAgreementRegistry.initialize.selector,
-                        address(auth)
-                    )
-                )
-            )
-        );
+        registry = new CyberAgreementRegistryMock{salt: salt}();
 
         corp = new CyberCorpMock{salt: salt}(companyPayable);
 
@@ -174,6 +173,12 @@ contract LexScroWLiteTest is Test {
         buyerTokenErc20.mint(alice, 100 ether);
         buyerTokenErc721Id = buyerTokenErc721.mint(alice);
         buyerTokenErc1155.mint(alice, buyerTokenErc1155Id, 100 ether);
+
+        vm.startPrank(alice);
+        buyerTokenErc20.approve(address(lexScrow), 100 ether);
+        buyerTokenErc721.approve(address(lexScrow), buyerTokenErc721Id);
+        buyerTokenErc1155.setApprovalForAll(address(lexScrow), true);
+        vm.stopPrank();
     }
 
     function test_NormalFlow() public {
@@ -181,55 +186,10 @@ contract LexScroWLiteTest is Test {
         // Escrow configs
 
         bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
-
-        Token[] memory corpAssets = new Token[](3);
-        corpAssets[0] = Token({
-            tokenType: TokenType.ERC20,
-            tokenAddress: address(corpTokenErc20),
-            tokenId: 0,
-            amount: 10 ether
-        });
-        corpAssets[1] = Token({
-            tokenType: TokenType.ERC721,
-            tokenAddress: address(corpTokenErc721),
-            tokenId: corpTokenErc721Id,
-            amount: 1
-        });
-        corpAssets[2] = Token({
-            tokenType: TokenType.ERC1155,
-            tokenAddress: address(corpTokenErc1155),
-            tokenId: corpTokenErc1155Id,
-            amount: 10 ether
-        });
-
-        Token[] memory buyerAssets = new Token[](3);
-        buyerAssets[0] = Token({
-            tokenType: TokenType.ERC20,
-            tokenAddress: address(buyerTokenErc20),
-            tokenId: 0,
-            amount: 100 ether
-        });
-        buyerAssets[1] = Token({
-            tokenType: TokenType.ERC721,
-            tokenAddress: address(buyerTokenErc721),
-            tokenId: buyerTokenErc721Id,
-            amount: 1
-        });
-        buyerAssets[2] = Token({
-            tokenType: TokenType.ERC1155,
-            tokenAddress: address(buyerTokenErc1155),
-            tokenId: buyerTokenErc1155Id,
-            amount: 100 ether
-        });
+        Token[] memory corpAssets = _getCorpAssets();
+        Token[] memory buyerAssets = _getBuyerAssets();
 
         // Run through the typical escrow flow
-
-        // Buyer preparations
-        vm.startPrank(alice);
-        buyerTokenErc20.approve(address(lexScrow), 100 ether);
-        buyerTokenErc721.approve(address(lexScrow), buyerTokenErc721Id);
-        buyerTokenErc1155.setApprovalForAll(address(lexScrow), true);
-        vm.stopPrank();
 
         uint256 aliceCorpTokenErc20BalancesBefore = corpTokenErc20.balanceOf(alice);
         assertEq(corpTokenErc721.ownerOf(corpTokenErc721Id), address(lexScrow), "Corp ERC721 token should be in escrow");
@@ -244,6 +204,8 @@ contract LexScroWLiteTest is Test {
         lexScrow.handleCounterPartyPayment_(agreementId);
 
         lexScrow.finalizeEscrow_(agreementId);
+
+        // Verify the assets are exchanged
 
         assertEq(
             corpTokenErc20.balanceOf(alice),
@@ -270,21 +232,226 @@ contract LexScroWLiteTest is Test {
         );
     }
 
-    function test_NormalFlowWithCondition() public {}
+    function test_PaymentFlow_HandleCounterPartyPayment() public {
+        // handleCounterPartyPayment() should be the only function that pull assets from the buyer,
+        // and the escrow status must change to PAID after it, or otherwise `voidAndRefund()` would fail
 
-    function test_UpdateEscrowNonERC721() public {}
+        // Prepare Escrow
 
-    function test_UpdateEscrowERC721() public {}
+        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        Token[] memory corpAssets = _getCorpAssets();
+        Token[] memory buyerAssets = _getBuyerAssets();
 
-    function test_AddCondition() public {}
+        lexScrow.createEscrow_(agreementId, alice, corpAssets, buyerAssets, block.timestamp);
 
-    function test_RemoveCondition() public {}
+        // Asset should stay with the buyer until handleCounterPartyPayment() is called
 
-    function test_VoidExpiredUnpaid() public {}
+        assertEq(buyerTokenErc20.balanceOf(alice), 100 ether, "Alice should own Buyer ERC20 token before payment");
+        assertEq(buyerTokenErc721.ownerOf(buyerTokenErc721Id), alice, "Alice should own Buyer ERC721 token before payment");
+        assertEq(buyerTokenErc1155.balanceOf(alice, buyerTokenErc1155Id), 100 ether, "Alice should own Buyer ERC1155 token before payment");
 
-    function test_VoidExpiredPaid() public {}
+        // Verify escrow status
+        assertEq(uint8(lexScrow.getEscrowDetails(agreementId).status), uint8(EscrowStatus.PENDING), "Escrow status should be PENDING");
 
-    function test_VoidByPartyUnpaid() public {}
+        lexScrow.handleCounterPartyPayment_(agreementId);
 
-    function test_VoidByPartyPaid() public {}
+        // Verify assets are in escrow
+
+        assertEq(buyerTokenErc20.balanceOf(alice), 0 ether, "Alice should have paid Buyer ERC20 token");
+        assertEq(buyerTokenErc1155.balanceOf(alice, buyerTokenErc1155Id), 0 ether, "Alice should have paid Buyer ERC1155 token");
+
+        assertEq(buyerTokenErc20.balanceOf(address(lexScrow)), 100 ether, "Alice's ERC20 token should be in escrow");
+        assertEq(buyerTokenErc721.ownerOf(buyerTokenErc721Id), address(lexScrow), "Alice's ERC712 token should be in escrow");
+        assertEq(buyerTokenErc1155.balanceOf(address(lexScrow), buyerTokenErc1155Id), 100 ether, "Alice's ERC1155 token should be in escrow");
+
+        // Verify escrow status
+        assertEq(uint8(lexScrow.getEscrowDetails(agreementId).status), uint8(EscrowStatus.PAID), "Escrow status should be PAID");
+    }
+
+    function test_PaymentFlow_FinalizeEscrow() public {
+        // finalizeEscrow() should be the only function that settles and transfer all assets to their destinations,
+        // and the escrow status should change to FINALIZED after it.
+
+        // Prepare Escrow
+
+        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        Token[] memory corpAssets = _getCorpAssets();
+        Token[] memory buyerAssets = _getBuyerAssets();
+
+        lexScrow.createEscrow_(agreementId, alice, corpAssets, buyerAssets, block.timestamp);
+        lexScrow.handleCounterPartyPayment_(agreementId);
+
+        // All assets should be in escrow until finalized
+
+        assertEq(corpTokenErc20.balanceOf(address(lexScrow)), 10 ether, "Corp's ERC20 token should be in escrow");
+        assertEq(corpTokenErc721.ownerOf(corpTokenErc721Id), address(lexScrow), "Corp's ERC712 token should be in escrow");
+        assertEq(corpTokenErc1155.balanceOf(address(lexScrow), corpTokenErc1155Id), 10 ether, "Corp's ERC1155 token should be in escrow");
+        assertEq(buyerTokenErc20.balanceOf(address(lexScrow)), 100 ether, "Alice's ERC20 token should be in escrow");
+        assertEq(buyerTokenErc721.ownerOf(buyerTokenErc721Id), address(lexScrow), "Alice's ERC712 token should be in escrow");
+        assertEq(buyerTokenErc1155.balanceOf(address(lexScrow), buyerTokenErc1155Id), 100 ether, "Alice's ERC1155 token should be in escrow");
+
+        // Verify escrow status
+        assertEq(uint8(lexScrow.getEscrowDetails(agreementId).status), uint8(EscrowStatus.PAID), "Escrow status should be PAID");
+
+        lexScrow.finalizeEscrow_(agreementId);
+
+        // Verify assets are distributed
+
+        assertEq(corpTokenErc20.balanceOf(alice), 10 ether, "Alice should have Corp's ERC20 token");
+        assertEq(corpTokenErc721.ownerOf(corpTokenErc721Id), alice, "Alice should have Corp's ERC712 token");
+        assertEq(corpTokenErc1155.balanceOf(alice, corpTokenErc1155Id), 10 ether, "Alice should have Corp's ERC1155");
+        assertEq(buyerTokenErc20.balanceOf(companyPayable), 100 ether, "Company should have Alice's ERC20 token");
+        assertEq(buyerTokenErc721.ownerOf(buyerTokenErc721Id), companyPayable, "Company should have Alice's ERC712 token");
+        assertEq(buyerTokenErc1155.balanceOf(companyPayable, buyerTokenErc1155Id), 100 ether, "Company should have Alice's ERC1155 token");
+
+        // Verify escrow status
+        assertEq(uint8(lexScrow.getEscrowDetails(agreementId).status), uint8(EscrowStatus.FINALIZED), "Escrow status should be FINALIZED");
+    }
+
+    function test_PaymentFlow_VoidAndRefund() public {
+        // voidAndRefund() should be the only function that returns assets to the buyer, and it should verify buyer's
+        // payment status before and update it after refund.
+
+        // Prepare Escrow
+
+        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        Token[] memory corpAssets = _getCorpAssets();
+        Token[] memory buyerAssets = _getBuyerAssets();
+
+        lexScrow.createEscrow_(agreementId, alice, corpAssets, buyerAssets, block.timestamp);
+        lexScrow.handleCounterPartyPayment_(agreementId);
+
+        // All assets should be in escrow until finalized
+
+        assertEq(corpTokenErc20.balanceOf(address(lexScrow)), 10 ether, "Corp's ERC20 token should be in escrow");
+        assertEq(corpTokenErc721.ownerOf(corpTokenErc721Id), address(lexScrow), "Corp's ERC712 token should be in escrow");
+        assertEq(corpTokenErc1155.balanceOf(address(lexScrow), corpTokenErc1155Id), 10 ether, "Corp's ERC1155 token should be in escrow");
+        assertEq(buyerTokenErc20.balanceOf(address(lexScrow)), 100 ether, "Alice's ERC20 token should be in escrow");
+        assertEq(buyerTokenErc721.ownerOf(buyerTokenErc721Id), address(lexScrow), "Alice's ERC712 token should be in escrow");
+        assertEq(buyerTokenErc1155.balanceOf(address(lexScrow), buyerTokenErc1155Id), 100 ether, "Alice's ERC1155 token should be in escrow");
+
+        // Verify escrow status
+        assertEq(uint8(lexScrow.getEscrowDetails(agreementId).status), uint8(EscrowStatus.PAID), "Escrow status should be PAID");
+
+        registry.mockVoidAgreement(agreementId, true);
+        lexScrow.voidAndRefund_(agreementId);
+
+        // Verify assets are returned
+
+        assertEq(buyerTokenErc20.balanceOf(alice), 100 ether, "Alice should have ERC20 token refund");
+        assertEq(buyerTokenErc721.ownerOf(buyerTokenErc721Id), alice, "Alice should have ERC712 token refund");
+        assertEq(buyerTokenErc1155.balanceOf(alice, buyerTokenErc1155Id), 100 ether, "Alice should have ERC1155 token refund");
+
+        // Note LexScroWLite by default does not implement corp asset refunds, so they will be stuck in escrow
+
+        assertEq(corpTokenErc20.balanceOf(address(lexScrow)), 10 ether, "Corp's ERC20 token should still be in escrow");
+        assertEq(corpTokenErc721.ownerOf(corpTokenErc721Id), address(lexScrow), "Corp's ERC712 token should still be in escrow");
+        assertEq(corpTokenErc1155.balanceOf(address(lexScrow), corpTokenErc1155Id), 10 ether, "Corp's ERC1155 token should still be in escrow");
+
+        // Verify escrow status
+        assertEq(uint8(lexScrow.getEscrowDetails(agreementId).status), uint8(EscrowStatus.VOIDED), "Escrow status should be VOIDED");
+    }
+
+    function test_RevertIf_PaymentFlow_VoidAndRefundWithoutVoidedAgreement() public {
+        // Prepare Escrow
+
+        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        Token[] memory corpAssets = _getCorpAssets();
+        Token[] memory buyerAssets = _getBuyerAssets();
+
+        lexScrow.createEscrow_(agreementId, alice, corpAssets, buyerAssets, block.timestamp);
+        lexScrow.handleCounterPartyPayment_(agreementId);
+
+        // Should fail since agreement is not voided first
+        vm.expectRevert(LexScroWLite.DealNotVoided.selector);
+        lexScrow.voidAndRefund_(agreementId);
+    }
+
+    function test_UpdateEscrowNonERC721() public {
+        // updateEscrow should update the counter-party of the escrow
+    }
+
+    function test_UpdateEscrowERC721() public {
+        // updateEscrow should update the counter-party of the escrow, and if the token is ERC721,
+        // it assumes the token implements ICyberCertPrinter and will add endorsement to it.
+    }
+
+    function test_RevertIf_UpdateEscrowERC721WithoutEndorsement() public {
+        // updateEscrow assumes an ERC721 token implements ICyberCertPrinter and
+        // will fail if it does not implement `addEndorsement()`
+    }
+
+    function test_ConditionCheck() public {
+        // TODO: WIP
+    }
+
+    function test_AddCondition() public {
+        // TODO: WIP
+    }
+
+    function test_RemoveCondition() public {
+        // TODO: WIP
+    }
+
+    function test_VoidExpiredUnpaid() public {
+        // TODO: WIP
+    }
+
+    function test_VoidExpiredPaid() public {
+        // TODO: WIP
+    }
+
+    function test_VoidByPartyUnpaid() public {
+        // TODO: WIP
+    }
+
+    function test_VoidByPartyPaid() public {
+        // TODO: WIP
+    }
+
+    function _getCorpAssets() internal returns(Token[] memory) {
+        Token[] memory corpAssets = new Token[](3);
+        corpAssets[0] = Token({
+            tokenType: TokenType.ERC20,
+            tokenAddress: address(corpTokenErc20),
+            tokenId: 0,
+            amount: 10 ether
+        });
+        corpAssets[1] = Token({
+            tokenType: TokenType.ERC721,
+            tokenAddress: address(corpTokenErc721),
+            tokenId: corpTokenErc721Id,
+            amount: 1
+        });
+        corpAssets[2] = Token({
+            tokenType: TokenType.ERC1155,
+            tokenAddress: address(corpTokenErc1155),
+            tokenId: corpTokenErc1155Id,
+            amount: 10 ether
+        });
+        return corpAssets;
+    }
+
+    function _getBuyerAssets() internal returns(Token[] memory) {
+        Token[] memory buyerAssets = new Token[](3);
+        buyerAssets[0] = Token({
+            tokenType: TokenType.ERC20,
+            tokenAddress: address(buyerTokenErc20),
+            tokenId: 0,
+            amount: 100 ether
+        });
+        buyerAssets[1] = Token({
+            tokenType: TokenType.ERC721,
+            tokenAddress: address(buyerTokenErc721),
+            tokenId: buyerTokenErc721Id,
+            amount: 1
+        });
+        buyerAssets[2] = Token({
+            tokenType: TokenType.ERC1155,
+            tokenAddress: address(buyerTokenErc1155),
+            tokenId: buyerTokenErc1155Id,
+            amount: 100 ether
+        });
+        return buyerAssets;
+    }
 }
