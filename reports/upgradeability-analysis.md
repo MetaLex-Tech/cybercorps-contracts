@@ -1,13 +1,14 @@
 ## Architectures
 
-- All singleton factories are `UUPSUpgradeable` and deployed as a `ERC1967Proxy`: 
-  we decided to make only key singleton factories upgradeable and leave others immutable since the latter are 
-  modules of CyberCorpFactory and can be easily swapped
-- Factories deploy instances as `BeaconProxy`, which reference the `UpgradeableBeacon` for actual implementations;
-  the factories can replace implementation contracts and therefore change the behaviors of those deployed `BeaconProxy`
-- Factory can be nested. `IssuanceManagerProxy` is a `BeaconProxy` but also a factory that deploys `CyberCertPrinterProxy`
+- All singletons are `ERC1967Proxy` referencing a `UUPSUpgradeable` implementation so that they are upgradeable and
+  have permanent addresses. These include `CyberCorpFactory`, `CyberAgreementRegistry` and `CertificateUriBuilder`. 
+- In contrast, other peripheral factories are immutable and are upgraded by replacement (ex. swapping modules of `CyberCorpFactory`)
+- Factory-deployed instances are `BeaconProxy` referencing a singular implementation (`UpgradeableBeacon`).
+  Therefore, upgrades to the `UpgradeableBeacon` will apply to all proxy instances at once
+- Factories can be nested. `IssuanceManagerProxy` is a `BeaconProxy` but also a factory that deploys `CyberCertPrinterProxy`
   and manage their implementation through `CyberCertPrinterBeacon`
-- Note that `UpgradeableBeacon`'s implementation contract is immutable since we upgrade it by replacing it
+- In the future, we may implement separate governance on individual corps or certificates upgrades.
+  In such case, we will transition away from the beacon architecture to enable independent upgrades
 
 ```mermaid
 classDiagram
