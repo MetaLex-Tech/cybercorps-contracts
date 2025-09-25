@@ -8,6 +8,7 @@ import "../src/CyberCertPrinter.sol";
 import "../src/storage/RoundManagerStorage.sol";
 import "../src/CyberCorpConstants.sol";
 import "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import "../dependencies/openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
@@ -39,6 +40,15 @@ contract MockPaymentToken is ERC20 {
     function decimals() public pure override returns (uint8) {
         return 6;
     }
+}
+
+contract MockRoundManagerV2 is UUPSUpgradeable {
+    string public constant DEPLOY_VERSION = "2";
+
+    // UUPS upgrade authorization
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override {}
 }
 
 // Mock condition that always fails
@@ -1225,6 +1235,62 @@ contract RoundManagerTest is Test {
         uint256 balAfterAllocate = paymentToken.balanceOf(investor);
         assertEq(balAfterAllocate - balAfterSubmit, 4_000 * 10 ** 6);
     }
+
+    function test_UpgradeNextRoundManager() public {
+        assertEq(RoundManagerFactory(rmFactory).refImplementation().DEPLOY_VERSION(), "1", "reference impl version should not be changed yet");
+
+        vm.startPrank(owner);
+        RoundManagerFactory(rmFactory).setRefImplementation(RoundManager(address(new MockRoundManagerV2())));
+        vm.stopPrank();
+        assertEq(RoundManagerFactory(rmFactory).refImplementation().DEPLOY_VERSION(), "2", "reference impl version should have changed");
+
+        bytes32 salt = keccak256("test_UpgradeNextRounderManager");
+        // Next deployment should emit events with version so indexer could be informed
+        vm.expectEmit(true, true, true, true);
+        emit RoundManagerFactory.RoundManagerDeployed(
+            RoundManagerFactory(rmFactory).computeRoundManagerAddress(salt),
+            "2"
+        );
+        RoundManager nextRm = RoundManager(
+            RoundManagerFactory(rmFactory).deployRoundManager(salt)
+        );
+        assertEq(nextRm.DEPLOY_VERSION(), "2", "next deployment version should have changed");
+    }
+
+    function testUpgradeExistingRoundManager() public {
+        BorgAuth testAuth = new BorgAuth{salt: keccak256("testUpgradeExistingRoundManager")}(owner);
+        address placeHolderAddr = 0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF;
+
+        RoundManager rm1 = RoundManager(
+            RoundManagerFactory(rmFactory).deployRoundManager(keccak256("testUpgradeExistingRoundManager1"))
+        );
+        rm1.initialize(
+            address(testAuth),
+            placeHolderAddr,
+            placeHolderAddr,
+            placeHolderAddr,
+            placeHolderAddr
+        );
+
+        RoundManager rm2 = RoundManager(
+            RoundManagerFactory(rmFactory).deployRoundManager(keccak256("testUpgradeExistingRoundManager2"))
+        );
+        rm2.initialize(
+            address(testAuth),
+            placeHolderAddr,
+            placeHolderAddr,
+            placeHolderAddr,
+            placeHolderAddr
+        );
+
+        vm.startPrank(owner);
+        // TODO WIP: Should have governance approval on upgrades
+        rm2.upgradeToAndCall(address(new MockRoundManagerV2()), "");
+        vm.stopPrank();
+
+        assertEq(rm2.DEPLOY_VERSION(), "2", "Target RoundManager should be upgraded");
+        assertEq(rm1.DEPLOY_VERSION(), "1", "Other RoundManager should not be upgraded");
+    }
 }
 
 // Separate FCFS tests in their own contract to avoid the original setUp()
@@ -1322,7 +1388,7 @@ contract RoundManagerFCFSTest is Test {
 
         address auth = address(corpFactory.AUTH());
         RoundManagerFactory rmFactory = new RoundManagerFactory(auth);
-        rmFactory.upgradeImplementation(address(new RoundManager()));
+        rmFactory.setRefImplementation(new RoundManager());
 
         IUUPS(address(corpFactory)).upgradeToAndCall(address(new CyberCorpFactory()), "");
 
@@ -1347,7 +1413,7 @@ contract RoundManagerFCFSTest is Test {
 
         // Apply upgrades
         RoundManagerFactory rmFactory = new RoundManagerFactory(address(corpFactory.AUTH()));
-        rmFactory.upgradeImplementation(address(new RoundManager()));
+        rmFactory.setRefImplementation(new RoundManager());
         IUUPS(address(corpFactory)).upgradeToAndCall(address(new CyberCorpFactory()), "");
         corpFactory.setRoundManagerFactory(address(rmFactory));
         CyberCorpSingleFactory(cyberCorpSingleFactory).upgradeImplementation(address(new CyberCorp()));

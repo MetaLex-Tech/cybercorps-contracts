@@ -77,6 +77,14 @@ contract RoundManager is
         "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation,address companyAddress)"
     );
 
+    string public constant DEPLOY_VERSION = "1"; // For version-tracking on all deployment and future upgrades
+
+    // Upgrade notes: Reduced gap to account for new variables
+    //  50
+    //   -1 (BorgAuthACL)
+    //  = 49
+    uint256[49] private __gap;
+
     /// @notice Certificate data structure for creating new certificates
     struct CyberCertData {
         string name;

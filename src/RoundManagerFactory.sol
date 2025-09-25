@@ -42,28 +42,26 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "./RoundManager.sol";
-import "@openzeppelin/contracts/utils/Create2.sol";
-import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
-import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import "openzeppelin-contracts/utils/Create2.sol";
 import "./libs/auth.sol";
 
 /// @title RoundManagerFactory
 /// @notice Factory contract for deploying RoundManager instances
-/// @dev Uses BeaconProxy pattern for upgradeable RoundManager instances
+/// @dev Uses ERC1967Proxy+UUPSUpgradeable pattern for upgradeable RoundManager instances
 contract RoundManagerFactory is BorgAuthACL {
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
-    
-    UpgradeableBeacon public beacon;
 
-    event RoundManagerDeployed(address roundManager);
+    RoundManager public refImplementation; // implementation contract to use for new deployments
+    
+    event RoundManagerDeployed(address roundManager, string version);
 
     /// @notice Constructor that deploys the implementation and beacon
     /// @param _auth Address of the BorgAuth contract
     constructor(address _auth) {
-        // Deploy the implementation contract and beacon
-        beacon = new UpgradeableBeacon(address(new RoundManager()), address(this));
+        refImplementation = new RoundManager();
         initialize(_auth);
     }
 
@@ -85,10 +83,10 @@ contract RoundManagerFactory is BorgAuthACL {
         
         // Deploy using CREATE2
         address roundManagerProxy = Create2.deploy(0, _salt, proxyBytecode);
-        
+
         if(roundManagerProxy == address(0)) revert DeploymentFailed();
         
-        emit RoundManagerDeployed(roundManagerProxy);
+        emit RoundManagerDeployed(roundManagerProxy, refImplementation.DEPLOY_VERSION());
         return roundManagerProxy;
     }
 
@@ -104,20 +102,14 @@ contract RoundManagerFactory is BorgAuthACL {
     /// @dev Internal function used by deployRoundManager
     /// @return bytecode The proxy contract creation bytecode
     function _getBytecode() private view returns (bytes memory bytecode) {
-        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
-        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(beacon, ""));
+        bytes memory sourceCodeBytes = type(ERC1967Proxy).creationCode;
+        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(refImplementation, ""));
     }
 
-    /// @notice Upgrades the implementation contract
+    /// @notice Set the reference implementation contract for the next deployments
     /// @dev Only callable by addresses with the admin role
     /// @param _newImplementation Address of the new implementation
-    function upgradeImplementation(address _newImplementation) external onlyOwner {
-        UpgradeableBeacon(beacon).upgradeTo(_newImplementation);
-    }
-
-    /// @notice Gets the current implementation address
-    /// @return The address of the current implementation contract
-    function getBeaconImplementation() external view returns (address) {
-        return UpgradeableBeacon(beacon).implementation();
+    function setRefImplementation(RoundManager _newImplementation) public onlyOwner {
+        refImplementation = _newImplementation;
     }
 }
