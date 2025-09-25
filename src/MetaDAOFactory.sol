@@ -403,13 +403,26 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             partiesOverride[0] = metaDAOOfficer.eoa;
             partiesOverride[1] = deployer;
 
+        // Size party values to match template partyFields length to avoid OOB
+        (
+            ,
+            ,
+            ,
+            string[] memory templatePartyFields
+        ) = ICyberAgreementRegistry(registryAddress).getTemplateDetails(_templateId);
+        uint256 partyFieldCount = templatePartyFields.length;
+
         string[][] memory partyValuesOverride = new string[][](2);
-        partyValuesOverride[0] = new string[](2);
-        partyValuesOverride[0][0] = metaDAOOfficer.name;
-        partyValuesOverride[0][1] = metaDAOOfficer.title;
-        partyValuesOverride[1] = new string[](1);
-        partyValuesOverride[1][0] = _officer.name;
-        partyValuesOverride[1][1] = _officer.title;
+        partyValuesOverride[0] = new string[](partyFieldCount);
+        partyValuesOverride[1] = new string[](partyFieldCount);
+        if (partyFieldCount > 0) {
+            partyValuesOverride[0][0] = metaDAOOfficer.name;
+            partyValuesOverride[1][0] = _officer.name;
+        }
+        if (partyFieldCount > 1) {
+            partyValuesOverride[0][1] = metaDAOOfficer.title;
+            partyValuesOverride[1][1] = _officer.title;
+        }
 
         bytes32 agreementId = ICyberAgreementRegistry(registryAddress).createContract(
             _templateId,
