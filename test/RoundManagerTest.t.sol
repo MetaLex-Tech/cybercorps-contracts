@@ -72,6 +72,8 @@ contract RoundManagerTest is Test {
     uint256 private ownerPrivKey;
     address public investor;
     uint256 private investorPrivKey;
+    address public corpOwner;
+    uint256 private corpOwnerPrivKey;
 
     // Infra
     CyberAgreementRegistry private registry;
@@ -203,6 +205,8 @@ contract RoundManagerTest is Test {
         owner = vm.addr(ownerPrivKey);
         investorPrivKey = 0xA11CE;
         investor = vm.addr(investorPrivKey);
+        corpOwnerPrivKey = 0xB0B;
+        corpOwner = vm.addr(corpOwnerPrivKey);
 
         // Deploy infra (auth, registry, factories)
         bytes32 salt = keccak256(abi.encodePacked("roundmanager-infra", owner));
@@ -1257,39 +1261,76 @@ contract RoundManagerTest is Test {
         assertEq(nextRm.DEPLOY_VERSION(), "2", "next deployment version should have changed");
     }
 
-    function testUpgradeExistingRoundManager() public {
-        BorgAuth testAuth = new BorgAuth{salt: keccak256("testUpgradeExistingRoundManager")}(owner);
+    function test_UpgradeExistingRoundManager() public {
+        BorgAuth corpAuth = new BorgAuth{salt: keccak256("testUpgradeExistingRoundManager")}(corpOwner);
         address placeHolderAddr = 0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF;
+
+        // Deploy existing RoundManagers
 
         RoundManager rm1 = RoundManager(
             RoundManagerFactory(rmFactory).deployRoundManager(keccak256("testUpgradeExistingRoundManager1"))
         );
         rm1.initialize(
-            address(testAuth),
+            address(corpAuth),
             placeHolderAddr,
             placeHolderAddr,
             placeHolderAddr,
-            placeHolderAddr
+            rmFactory
         );
 
         RoundManager rm2 = RoundManager(
             RoundManagerFactory(rmFactory).deployRoundManager(keccak256("testUpgradeExistingRoundManager2"))
         );
         rm2.initialize(
-            address(testAuth),
+            address(corpAuth),
             placeHolderAddr,
             placeHolderAddr,
             placeHolderAddr,
-            placeHolderAddr
+            rmFactory
         );
 
+        // MetaLeX to release new RoundManager v2
+
         vm.startPrank(owner);
-        // TODO WIP: Should have governance approval on upgrades
-        rm2.upgradeToAndCall(address(new MockRoundManagerV2()), "");
+        RoundManagerFactory(rmFactory).setRefImplementation(RoundManager(address(new MockRoundManagerV2())));
+        vm.stopPrank();
+
+        // Corp2 owner decided to accept the upgrade
+
+        vm.startPrank(corpOwner);
+        rm2.upgradeToAndCall(address(RoundManagerFactory(rmFactory).refImplementation()), "");
         vm.stopPrank();
 
         assertEq(rm2.DEPLOY_VERSION(), "2", "Target RoundManager should be upgraded");
         assertEq(rm1.DEPLOY_VERSION(), "1", "Other RoundManager should not be upgraded");
+    }
+
+    function test_RevertIf_UpgradeExistingRoundManagerNotRefImplementation() public {
+        BorgAuth corpAuth = new BorgAuth{salt: keccak256("testUpgradeExistingRoundManager")}(corpOwner);
+        address placeHolderAddr = 0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF;
+
+        // Deploy existing RoundManagers
+
+        RoundManager rm = RoundManager(
+            RoundManagerFactory(rmFactory).deployRoundManager(keccak256("testUpgradeExistingRoundManager2"))
+        );
+        rm.initialize(
+            address(corpAuth),
+            placeHolderAddr,
+            placeHolderAddr,
+            placeHolderAddr,
+            rmFactory
+        );
+
+        // Corp owner can't upgrade to v2 without MetaLeX releasing it first
+
+        vm.startPrank(corpOwner);
+        address nonOfficialRoundManager = address(new MockRoundManagerV2());
+        vm.expectRevert(
+            abi.encodeWithSelector(RoundManager.NotRefImplementation.selector)
+        );
+        rm.upgradeToAndCall(nonOfficialRoundManager, "");
+        vm.stopPrank();
     }
 }
 

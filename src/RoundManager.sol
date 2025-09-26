@@ -51,6 +51,7 @@ import "./storage/RoundManagerStorage.sol";
 import "./storage/BorgAuthStorage.sol";
 import "./interfaces/ICyberCorp.sol";
 import "./interfaces/ICyberCertPrinter.sol";
+import "./interfaces/IRoundManagerFactory.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /// @title RoundManager
@@ -111,6 +112,7 @@ contract RoundManager is
     error EOINotExpired();
     error EOIExpired();
     error NotEOISubmitter();
+    error NotRefImplementation();
 
     event RoundCreated(bytes32 indexed roundId, address indexed corp, Round round, bool publicRound);
     event RoundSnapshotSet(
@@ -788,8 +790,14 @@ contract RoundManager is
         return RoundManagerStorage.getIssuanceManager();
     }
 
-    // UUPS upgrade authorization
+    /// @notice UUPS upgrade authorization
+    /// @dev MetaLeX releases new versions through the factory's reference implementation,
+    /// and the CyberCorp owner can decide if or when he wants to perform the upgrade
     function _authorizeUpgrade(
         address newImplementation
-    ) internal override onlyOwner {}
+    ) internal override onlyOwner {
+        if(IRoundManagerFactory(RoundManagerStorage.getUpgradeFactory()).refImplementation() != newImplementation) {
+            revert NotRefImplementation();
+        }
+    }
 }
