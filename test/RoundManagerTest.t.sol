@@ -368,7 +368,8 @@ contract RoundManagerTest is Test {
             "",
             "",
             testRoundPartyValues,
-            escrowSig
+            escrowSig,
+            false
         );
         assertEq(roundId, expectedRoundId);
 
@@ -781,7 +782,8 @@ contract RoundManagerTest is Test {
             "",
             "",
             testRoundPartyValues,
-            escSigLarge
+            escSigLarge,
+            false
         );
         assertEq(roundIdLarge, expectedRoundIdLarge);
 
@@ -1026,7 +1028,8 @@ contract RoundManagerTest is Test {
             "",
             "",
             testRoundPartyValues,
-            escSigFuture
+            escSigFuture,
+            false
         );
 
         vm.startPrank(investor);
@@ -1168,7 +1171,8 @@ contract RoundManagerTest is Test {
             "",
             "",
             testRoundPartyValues,
-            escrowSig2
+            escrowSig2,
+            false
         );
         assertEq(roundId2, expectedRoundId2);
 
@@ -1654,7 +1658,8 @@ contract RoundManagerFCFSTest is Test {
                 "",
                 "",
                 roundPartyValues,
-                escrowedSig
+                escrowedSig,
+                true
             );
     }
 
@@ -1726,7 +1731,8 @@ contract RoundManagerFCFSTest is Test {
                 "",
                 "",
                 roundPartyValues,
-                escrowedSig
+                escrowedSig,
+                true
             );
     }
 
@@ -1812,7 +1818,8 @@ contract RoundManagerFCFSTest is Test {
             "",
             "",
             roundPartyValues,
-            escSig
+            escSig,
+            true
         );
     }
 

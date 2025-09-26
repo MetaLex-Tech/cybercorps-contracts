@@ -104,7 +104,7 @@ contract RoundManager is
     error EOIExpired();
     error NotEOISubmitter();
 
-    event RoundCreated(bytes32 indexed roundId, address indexed corp, Round round);
+    event RoundCreated(bytes32 indexed roundId, address indexed corp, Round round, bool publicRound);
     event RoundSnapshotSet(
         bytes32 indexed roundId,
         uint256 totalCapitalSecuritiesOutstanding,
@@ -140,6 +140,7 @@ contract RoundManager is
         bytes32 indexed roundId,
         address indexed buyer,
         uint256 allocatedAmount,
+        uint256 totalRaised,
         uint256[] certIds
     );
     event EOIRejected(bytes32  agreementId, address indexed investor, bytes32 indexed roundId);
@@ -286,7 +287,8 @@ contract RoundManager is
         string memory legalDetails,
         bytes memory extensionData,
         string[] memory roundPartyValues,
-        bytes memory escrowedSignature
+        bytes memory escrowedSignature,
+        bool publicRound
     ) external onlyOwner returns (bytes32 roundId) {
 
         if (escrowedSignature.length == 0) revert InvalidEscrowedSignature();
@@ -378,12 +380,13 @@ contract RoundManager is
             extensionData: extensionData,
             roundPartyValues: roundPartyValues,
             escrowedSignature: escrowedSignature,
-            roundConditions: conditions 
+            roundConditions: conditions,
+            publicRound: publicRound
         });
 
         RoundManagerStorage.setRound(roundId, newRound);
 
-        emit RoundCreated(roundId, LexScrowStorage.getCorp(), newRound);
+        emit RoundCreated(roundId, LexScrowStorage.getCorp(), newRound, publicRound);
     }
 
     // ===============
@@ -568,6 +571,14 @@ contract RoundManager is
             );
         }
 
+        //add lexchex if public round
+        if (round.publicRound && RoundManagerStorage.getLexChexCondition() != address(0)) {
+            LexScrowStorage.addConditionToEscrow(
+                agreementId,
+                ICondition(RoundManagerStorage.getLexChexCondition())
+            );
+        }
+
         emit EOISubmitted(agreementId, roundId, msg.sender, LexScrowStorage.getCorp(), eoi.minAmount, eoi.maxAmount, eoi.expiry);
 
         if (round.roundType == RoundType.FCFS) {
@@ -711,7 +722,7 @@ contract RoundManager is
         // Update raised
         round.raised += allocatedAmount;
 
-        emit AllocationMade(agreementId, roundId, escrow.counterParty, allocatedAmount, certIds); 
+        emit AllocationMade(agreementId, roundId, escrow.counterParty, allocatedAmount, round.raised, certIds); 
     }
 
     /// @notice Rejects an EOI and voids the deal

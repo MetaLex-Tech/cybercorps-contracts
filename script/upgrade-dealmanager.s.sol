@@ -20,7 +20,7 @@ import "../src/CyberCorpConstants.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {SAFTExtension} from "../src/storage/extensions/SAFTExtension.sol";
 import {DealManager} from "../src/DealManager.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+
 
 contract BaseScript is Script {
      function run() public {

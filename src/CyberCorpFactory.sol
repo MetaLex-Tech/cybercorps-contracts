@@ -106,8 +106,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         string cyberCORPContactDetails,
         string cyberCORPJurisdiction,
         string defaultDisputeResolution,
-        address _companyPayable,
-        address roundManagerAddress
+        address _companyPayable
     );
 
     event AgreementDeployed(
@@ -120,6 +119,11 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     event DealManagerFactoryUpdated(
         address indexed dealManagerFactory,
         address oldDealFactory
+    );
+
+    event RoundManagerDeployed(
+        address indexed cyberCorp,
+        address indexed roundManager
     );
 
     //create an event when IssuanceManagerFactory is updated
@@ -280,7 +284,11 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             companyContactDetails,
             companyJurisdiction,
             defaultDisputeResolution,
-            _companyPayable,
+            _companyPayable
+        );
+
+        emit RoundManagerDeployed(
+            cyberCorpAddress,
             roundManagerAddress
         );
     }
@@ -342,7 +350,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         );
 
         certPrinterAddress = new address[](_certData.length);
-        //string[] memory defaultLegend = new string[](0);
+
         for (uint256 i = 0; i < _certData.length; i++) {
             ICyberCertPrinter certPrinter = ICyberCertPrinter(
                 IIssuanceManager(issuanceManagerAddress).createCertPrinter(
@@ -403,7 +411,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         uint256 minTicket,
         uint256 maxTicket,
         uint256 startTime,
-        uint256 endTime
+        uint256 endTime,
+        bool publicRound
     )
         external
         returns (
@@ -459,7 +468,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             legalDetails,
             extensionData,
             roundPartyValues,
-            escrowedSignature
+            escrowedSignature,
+            publicRound
         );
     }
 
