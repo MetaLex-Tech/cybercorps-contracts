@@ -414,6 +414,15 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
             voidAndRefund(agreementId);
     }
 
+    /// @notice Refund a voided deal
+    /// @dev Use this method to initiate refund if the deal agreement has been voided externally
+    /// (e.g. directly to CyberAgreementRegistry without being processed by Deal Manager)
+    /// @param agreementId Unique identifier for the agreement
+    function refundVoidedDeal(bytes32 agreementId) public {
+        // Re-sync Deal Manager internal escrow to VOIDED, then refund
+        voidAndRefund(agreementId);
+    }
+
     /// @notice Adds a condition to a deal
     /// @dev Can only be called by owner for pending deals
     /// @param agreementId Unique identifier for the agreement

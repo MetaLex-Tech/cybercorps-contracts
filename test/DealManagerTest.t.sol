@@ -46,7 +46,7 @@ import {ERC721} from "../dependencies/openzeppelin-contracts/contracts/token/ERC
 import {ERC721Enumerable} from "../dependencies/openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
-import {DealManager} from "../src/DealManager.sol";
+import {DealManager, LexScroWLite} from "../src/DealManager.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CertificateDetails, Endorsement} from "../src/storage/CyberCertPrinterStorage.sol";
@@ -89,6 +89,7 @@ contract CyberAgreementRegistryMock {
 
     mapping(bytes => bool) private _isValidSignatures;
     mapping(address => bool) private _hasSigned;
+    mapping(bytes32 => bool) private _isReadyToVoid;
 
     function createContract(
         bytes32 templateId,
@@ -123,6 +124,19 @@ contract CyberAgreementRegistryMock {
         // No-op
     }
 
+    function voidContractFor(
+        bytes32 contractId,
+        address party,
+        bytes calldata signature
+    ) public {
+        if (isVoided[contractId]) {
+            revert CyberAgreementRegistry.ContractAlreadyVoided();
+        }
+        if (_isReadyToVoid[contractId]) {
+            isVoided[contractId] = true;
+        }
+    }
+
     function hasSigned(
         bytes32 contractId,
         address signer
@@ -136,11 +150,25 @@ contract CyberAgreementRegistryMock {
         return true;
     }
 
-    function setMockValidSignatures(
+    function mockValidSignatures(
         bytes calldata signature,
         bool isValid
     ) external {
         _isValidSignatures[signature] = isValid;
+    }
+
+    function mockIsVoided(
+        bytes32 contractId,
+        bool _isVoided
+    ) external {
+        isVoided[contractId] = _isVoided;
+    }
+
+    function mockIsReadyToVoid(
+        bytes32 contractId,
+        bool __isReadyToVoid
+    ) external {
+        _isReadyToVoid[contractId] = __isReadyToVoid;
     }
 }
 
@@ -216,7 +244,7 @@ contract DealManagerTest is Test {
         
         // Configure mock signatures
 
-        registry.setMockValidSignatures(GOOD_SIGNATURE, true);
+        registry.mockValidSignatures(GOOD_SIGNATURE, true);
 
         // Prepare funds
 
@@ -579,5 +607,170 @@ contract DealManagerTest is Test {
             "Alice",
             ""
         );
+    }
+
+    function test_PaymentFlow_SignToVoid() public {
+        // signToVoid() should submit the signature for voiding an agreement.address.
+        // When the conditions are met and the agreement is voided, it should also refund the payment token
+
+        // Deal configs
+
+        uint256 salt = uint256(keccak256("DealManagerTest.Deal"));
+
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        // Party 1 proposes the deal and sign
+        vm.prank(owner);
+        (bytes32 agreementId, uint256[] memory certIds) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            salt,
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // TODO conditions
+            bytes32(0), // secretHash
+            block.timestamp // expiry
+        );
+
+        // Party 2 sign and pay
+        vm.prank(alice);
+        dm.signDealAndPay(
+            alice, // signer
+            agreementId,
+            GOOD_SIGNATURE, // signature
+            new string[](0), // partyValues
+            false, // TODO _fillUnallocated
+            "Alice",
+            ""
+        );
+
+        uint256 alicePaymentTokenBalancesBefore = paymentToken.balanceOf(alice);
+
+        // Simulate Alice sign to void
+        vm.prank(alice);
+        dm.signToVoid(agreementId, alice, GOOD_SIGNATURE);
+
+        // The agreement wasn't successfully voided yet, so no refund issued
+        assertEq(paymentToken.balanceOf(alice), alicePaymentTokenBalancesBefore, "Alice should not receive the refund yet");
+
+        // Simulate company sign to void
+        registry.mockIsReadyToVoid(agreementId, true);
+        vm.prank(companyOwner);
+        dm.signToVoid(agreementId, companyOwner, GOOD_SIGNATURE);
+
+        assertEq(paymentToken.balanceOf(alice), alicePaymentTokenBalancesBefore + 10 ether, "Alice should receive the refund");
+    }
+
+    function test_PaymentFlow_RefundVoidedDeal() public {
+        // If the agreement is voided through the registry instead of Deal Manager,
+        // DealManager should still be able to refund through other means
+
+        // Deal configs
+
+        uint256 salt = uint256(keccak256("DealManagerTest.Deal"));
+
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        // Party 1 proposes the deal and sign
+        vm.prank(owner);
+        (bytes32 agreementId, uint256[] memory certIds) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            salt,
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // TODO conditions
+            bytes32(0), // secretHash
+            block.timestamp // expiry
+        );
+
+        // Party 2 sign and pay
+        vm.prank(alice);
+        dm.signDealAndPay(
+            alice, // signer
+            agreementId,
+            GOOD_SIGNATURE, // signature
+            new string[](0), // partyValues
+            false, // TODO _fillUnallocated
+            "Alice",
+            ""
+        );
+
+        uint256 alicePaymentTokenBalancesBefore = paymentToken.balanceOf(alice);
+
+        // Simulate the agreement being voided externally so it is out of sync with Deal Manager's state.
+        // In such case, calling `dm.signToVoid()` would fail because Deal Manager would try to void the contract again
+        registry.mockIsVoided(agreementId, true);
+        vm.prank(companyOwner);
+        vm.expectRevert(CyberAgreementRegistry.ContractAlreadyVoided.selector);
+        dm.signToVoid(agreementId, companyOwner, GOOD_SIGNATURE);
+
+        // Should call `refundVoidedDeal()` instead so Deal Manager would re-sync and refund
+        dm.refundVoidedDeal(agreementId);
+
+        assertEq(paymentToken.balanceOf(alice), alicePaymentTokenBalancesBefore + 10 ether, "Alice should receive the refund");
+    }
+
+    function test_RevertIf_PaymentFlow_RefundVoidedDealNotVoided() public {
+        // Deal Manager must check the agreement being voided before refund
+
+        // Deal configs
+
+        uint256 salt = uint256(keccak256("DealManagerTest.Deal"));
+
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        // Party 1 proposes the deal and sign
+        vm.prank(owner);
+        (bytes32 agreementId, uint256[] memory certIds) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            salt,
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // TODO conditions
+            bytes32(0), // secretHash
+            block.timestamp // expiry
+        );
+
+        // Party 2 sign and pay
+        vm.prank(alice);
+        dm.signDealAndPay(
+            alice, // signer
+            agreementId,
+            GOOD_SIGNATURE, // signature
+            new string[](0), // partyValues
+            false, // TODO _fillUnallocated
+            "Alice",
+            ""
+        );
+
+        // Refund should fail because the deal is not voided
+        vm.expectRevert(LexScroWLite.DealNotVoided.selector);
+        dm.refundVoidedDeal(agreementId);
     }
 }
