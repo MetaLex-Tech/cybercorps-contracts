@@ -45,6 +45,7 @@ import {ERC20} from "../dependencies/openzeppelin-contracts/contracts/token/ERC2
 import {ERC721} from "../dependencies/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
 import {ERC721Enumerable} from "../dependencies/openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {DealManager} from "../src/DealManager.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
@@ -86,6 +87,9 @@ contract CyberAgreementRegistryMock {
     mapping(bytes32 => bool) public isVoided;
     mapping(bytes32 => bool) public isFinalized;
 
+    mapping(bytes => bool) private _isValidSignatures;
+    mapping(address => bool) private _hasSigned;
+
     function createContract(
         bytes32 templateId,
         uint256 salt,
@@ -107,7 +111,10 @@ contract CyberAgreementRegistryMock {
         bool fillUnallocated, // to fill a 0 address or not
         string memory secret
     ) external {
-        // No-op
+        if (!_isValidSignatures[signature]) {
+            revert CyberAgreementRegistry.SignatureVerificationFailed();
+        }
+        _hasSigned[signer] = true;
     }
 
     function finalizeContract(
@@ -120,13 +127,20 @@ contract CyberAgreementRegistryMock {
         bytes32 contractId,
         address signer
     ) external view returns (bool) {
-        // Always signed
-        return true;
+        // Applies to any contract
+        return _hasSigned[signer];
     }
 
     function allPartiesSigned(bytes32 contractId) public view returns (bool) {
         // Always signed
         return true;
+    }
+
+    function setMockValidSignatures(
+        bytes calldata signature,
+        bool isValid
+    ) external {
+        _isValidSignatures[signature] = isValid;
     }
 }
 
@@ -139,6 +153,9 @@ contract CyberCorpMock {
 }
 
 contract DealManagerTest is Test {
+    
+    bytes public constant GOOD_SIGNATURE = "good signature";
+    bytes public constant BAD_SIGNATURE = "bad signature";
 
     bytes32 public salt = keccak256("DealManagerTest");
 
@@ -196,6 +213,10 @@ contract DealManagerTest is Test {
                 )
             )
         );
+        
+        // Configure mock signatures
+
+        registry.setMockValidSignatures(GOOD_SIGNATURE, true);
 
         // Prepare funds
 
@@ -207,7 +228,7 @@ contract DealManagerTest is Test {
 
     function test_NormalFlow() public {
 
-        // Escrow configs
+        // Deal configs
 
         uint256 salt = uint256(keccak256("DealManagerTest.Deal"));
 
@@ -231,7 +252,7 @@ contract DealManagerTest is Test {
             defaultParties,
             defaultCertDetails,
             companyOwner, // proposer
-            "corpOwnerSignature", // signature
+            GOOD_SIGNATURE, // signature
             partyValues,
             new address[](0), // TODO conditions
             bytes32(0), // secretHash
@@ -244,7 +265,7 @@ contract DealManagerTest is Test {
             alice, // signer
             agreementId,
             new string[](0), // partyValues
-            "aliceSignature", // signature
+            GOOD_SIGNATURE, // signature
             false, // TODO _fillUnallocated
             "Alice",
             ""
@@ -256,6 +277,307 @@ contract DealManagerTest is Test {
             paymentToken.balanceOf(companyPayable),
             companyPaymentTokenBalancesBefore + 10 ether,
             "Company should receive payment tokens"
+        );
+    }
+
+    function test_PaymentFlow_ProposeDeal() public {
+        // proposeDeal() is one of the two methods that'll pull certificates from the issuing company (first party)
+        // Unlike the more generic LexScroWLite, DealManager assumes the company's assets are certificates-only
+        // After the transaction, the company's certificates should be in escrow.
+
+        // Deal configs
+
+        uint256 salt = uint256(keccak256("DealManagerTest.Deal"));
+
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        // Party 1 proposes the deal and sign
+        vm.prank(owner);
+        (bytes32 agreementId, uint256[] memory certIds) = dm.proposeDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            salt,
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            partyValues,
+            new address[](0), // TODO conditions
+            bytes32(0), // secretHash
+            block.timestamp // expiry
+        );
+
+        // Verify the certificates are in escrow
+        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), address(dm), "Corp Certificate should be in escrow");
+    }
+
+    function test_PaymentFlow_ProposeAndSignDeal() public {
+        // proposeAndSignDeal() is one of the two methods that'll pull certificates from the issuing company (first party)
+        // Unlike the more generic LexScroWLite, DealManager assumes the company's assets are certificates-only
+        // The signature must be valid.
+        // After the transaction, the company's certificates should be in escrow.
+
+        // Deal configs
+
+        uint256 salt = uint256(keccak256("DealManagerTest.Deal"));
+
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        // Party 1 proposes the deal and sign
+        vm.prank(owner);
+        (bytes32 agreementId, uint256[] memory certIds) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            salt,
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // TODO conditions
+            bytes32(0), // secretHash
+            block.timestamp // expiry
+        );
+
+        // Verify the certificates are in escrow
+        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), address(dm), "Corp Certificate should be in escrow");
+    }
+
+    function test_RevertIf_PaymentFlow_ProposeAndSignDealBadSignature() public {
+        // Deal configs
+
+        uint256 salt = uint256(keccak256("DealManagerTest.Deal"));
+
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        // Party 1 proposes the deal and sign
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(CyberAgreementRegistry.SignatureVerificationFailed.selector));
+        (bytes32 agreementId, uint256[] memory certIds) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            salt,
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            BAD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // TODO conditions
+            bytes32(0), // secretHash
+            block.timestamp // expiry
+        );
+    }
+
+    function test_PaymentFlow_SignDealAndPay() public {
+        // signDealAndPay() is one of the two methods that'll pull funds from the counterparty.
+        // The deal must be available, and the signature must be valid.
+        // After the transaction, the counterparty's fund should be in escrow
+
+        // Deal configs
+
+        uint256 salt = uint256(keccak256("DealManagerTest.Deal"));
+
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        // Party 1 proposes the deal and sign
+        vm.prank(owner);
+        (bytes32 agreementId, uint256[] memory certIds) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            salt,
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // TODO conditions
+            bytes32(0), // secretHash
+            block.timestamp // expiry
+        );
+
+        // Party 2 sign and pay
+
+        uint256 escrowPaymentTokenBalanceBefore = paymentToken.balanceOf(address(dm));
+
+        vm.prank(alice);
+        dm.signDealAndPay(
+            alice, // signer
+            agreementId,
+            GOOD_SIGNATURE, // signature
+            new string[](0), // partyValues
+            false, // TODO _fillUnallocated
+            "Alice",
+            ""
+        );
+
+        // Verify the payment are in escrow
+        assertEq(
+            paymentToken.balanceOf(address(dm)),
+            escrowPaymentTokenBalanceBefore + 10 ether,
+            "Payment tokens should be in escrow"
+        );
+    }
+
+    function test_RevertIf_PaymentFlow_SignDealAndPayBadSignature() public {
+        // Deal configs
+
+        uint256 salt = uint256(keccak256("DealManagerTest.Deal"));
+
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        // Party 1 proposes the deal and sign
+        vm.prank(owner);
+        (bytes32 agreementId, uint256[] memory certIds) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            salt,
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // TODO conditions
+            bytes32(0), // secretHash
+            block.timestamp // expiry
+        );
+
+        // Party 2 sign and pay
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(CyberAgreementRegistry.SignatureVerificationFailed.selector));
+        dm.signDealAndPay(
+            alice, // signer
+            agreementId,
+            BAD_SIGNATURE, // signature
+            new string[](0), // partyValues
+            false, // TODO _fillUnallocated
+            "Alice",
+            ""
+        );
+    }
+
+    function test_PaymentFlow_SignAndFinalizeDeal() public {
+        // signAndFinalizeDeal() is the other one of the two methods that'll pull funds from the counterparty
+        // The deal must be available, and the signature must be valid.
+        // After the transaction the whole escrow and exchange should be complete and finalized
+
+        // Deal configs
+
+        uint256 salt = uint256(keccak256("DealManagerTest.Deal"));
+
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        uint256 companyPaymentTokenBalancesBefore = paymentToken.balanceOf(companyPayable);
+
+        // Party 1 proposes the deal and sign
+        vm.prank(owner);
+        (bytes32 agreementId, uint256[] memory certIds) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            salt,
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // TODO conditions
+            bytes32(0), // secretHash
+            block.timestamp // expiry
+        );
+
+        // Party 2 signs the deal, pays and finalizes it
+        vm.prank(alice);
+        dm.signAndFinalizeDeal(
+            alice, // signer
+            agreementId,
+            new string[](0), // partyValues
+            GOOD_SIGNATURE, // signature
+            false, // TODO _fillUnallocated
+            "Alice",
+            ""
+        );
+
+        // Verify the assets are exchanged
+        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), alice, "Alice should receive Corp Certificate");
+        assertEq(
+            paymentToken.balanceOf(companyPayable),
+            companyPaymentTokenBalancesBefore + 10 ether,
+            "Company should receive payment tokens"
+        );
+    }
+
+    function test_RevertIf_PaymentFlow_SignAndFinalizeDealBadSignature() public {
+        // signAndFinalizeDeal() is the other one of the two methods that'll pull funds from the counterparty
+        // The deal must be available, and the signature must be valid.
+        // After the transaction the whole escrow and exchange should be complete and finalized
+
+        // Deal configs
+
+        uint256 salt = uint256(keccak256("DealManagerTest.Deal"));
+
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        uint256 companyPaymentTokenBalancesBefore = paymentToken.balanceOf(companyPayable);
+
+        // Party 1 proposes the deal and sign
+        vm.prank(owner);
+        (bytes32 agreementId, uint256[] memory certIds) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            salt,
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // TODO conditions
+            bytes32(0), // secretHash
+            block.timestamp // expiry
+        );
+
+        // Party 2 signs the deal, pays and finalizes it
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(CyberAgreementRegistry.SignatureVerificationFailed.selector));
+        dm.signAndFinalizeDeal(
+            alice, // signer
+            agreementId,
+            new string[](0), // partyValues
+            BAD_SIGNATURE, // signature
+            false, // TODO _fillUnallocated
+            "Alice",
+            ""
         );
     }
 }
