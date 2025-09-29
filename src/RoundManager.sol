@@ -44,6 +44,7 @@ pragma solidity ^0.8.28;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "./CyberAgreementRegistry.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./libs/LexScroWLite.sol";
 import "./libs/auth.sol";
@@ -310,6 +311,7 @@ contract RoundManager is
             )
         );
 
+        // TODO this is not used?
         /*if(!_verifyEscrowedSignature(
                 authorityOfficer,
                 EscrowedSignatureData({
@@ -728,6 +730,16 @@ contract RoundManager is
     /// @notice Rejects an EOI and voids the deal
     /// @param agreementId The agreement ID
     function reject(bytes32 agreementId) external onlyOwner {
+        reject(agreementId, true);
+    }
+
+    /// @notice Rejects an EOI and voids the deal if necessary
+    /// @dev The extra parameter allows handling the edge case where the party voided the agreement by
+    /// directly requesting to CyberAgreementRegistry and bypassing RoundManager.
+    /// In such case, we want to skip `voidContractFor()` so it does not attempt to void the contract again.
+    /// @param agreementId The agreement ID
+    /// @param isVoidAgreement True if voiding the deal
+    function reject(bytes32 agreementId, bool isVoidAgreement) public onlyOwner {
         bytes32 roundId = RoundManagerStorage.getAgreementToRound(agreementId);
         Round storage round = RoundManagerStorage.getRound(roundId);
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
@@ -743,13 +755,26 @@ contract RoundManager is
         // Void escrow
         voidEscrow(agreementId);
 
-        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, escrow.counterParty, escrow.signature);
+        if (isVoidAgreement) {
+            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, escrow.counterParty, escrow.signature);
+        }
 
         emit EOIRejected(agreementId, escrow.counterParty, roundId);
     }
 
-    //allow a eoi submitter to recall their eoi and get a refund after the eoi expiry
+    /// @notice Allow a eoi submitter to recall their eoi, get a refund and void the agreement after the eoi expiry
+    /// @param agreementId The agreement ID
     function recallEOI(bytes32 agreementId) external {
+        recallEOI(agreementId, true);
+    }
+
+    /// @notice Allow a eoi submitter to recall their eoi, get a refund and void the agreement if necessary after the eoi expiry
+    /// @dev The extra parameter allows handling the edge case where the party voided the agreement by
+    /// directly requesting to CyberAgreementRegistry and bypassing RoundManager.
+    /// In such case, we want to skip `voidContractFor()` so it does not attempt to void the contract again.
+    /// @param agreementId The agreement ID
+    /// @param isVoidAgreement True if voiding the deal
+    function recallEOI(bytes32 agreementId, bool isVoidAgreement) public {
         bytes32 roundId = RoundManagerStorage.getAgreementToRound(agreementId);
         Round storage round = RoundManagerStorage.getRound(roundId);
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
@@ -767,8 +792,10 @@ contract RoundManager is
         // Void escrow
         voidEscrow(agreementId);
 
-        //void agreement
-        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, escrow.counterParty, escrow.signature);
+        // void agreement
+        if (isVoidAgreement) {
+            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, escrow.counterParty, escrow.signature);
+        }
 
         emit EOIRecalled(agreementId, escrow.counterParty, roundId);
     }

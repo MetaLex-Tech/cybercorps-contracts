@@ -880,6 +880,65 @@ contract RoundManagerTest is Test {
         vm.stopPrank();
     }
 
+    function test_Allocate_IgnoreVoidRequest() public {
+        // Submit EOI
+        vm.startPrank(investor);
+
+        EOI memory eoi = EOI({
+            name: "Test Investor",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "test@example.com",
+            minAmount: 5000 * 10 ** 6,
+            maxAmount: 10000 * 10 ** 6,
+            expiry: block.timestamp + 7 days
+        });
+
+        bytes32 agreementId = RoundManager(roundManager).submitEOI(
+            roundId,
+            eoi,
+            new string[](1),
+            new string[](1),
+            _computeEOISignature(
+                templateId,
+                1,
+                new string[](1),
+                new string[](1),
+                owner,
+                investorPrivKey
+            ),
+            1,
+            new address[](0),
+            bytes32(0)
+        );
+
+        vm.stopPrank();
+
+        // Simulate deal being voided externally through the registry.
+        // This will not void the EOI and the owner should still be able to fill it.
+        registry.voidContractFor(
+            agreementId,
+            investor,
+            CyberAgreementUtils.signVoidAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.VOIDSIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                investor,
+                investorPrivKey
+            )
+        );
+
+        // Verify the owner can fill the EOI
+        uint256 balBeforeAllocate = paymentToken.balanceOf(owner);
+
+        vm.prank(owner);
+        RoundManager(roundManager).allocate(agreementId, 5_000 * 10 ** 6);
+
+        uint256 balAfterAllocate = paymentToken.balanceOf(owner);
+        assertEq(balAfterAllocate - balBeforeAllocate, 5_000 * 10 ** 6);
+    }
+
     function test_RejectEOI_RefundsAndVoids() public {
         // Submit EOI
         vm.startPrank(investor);
@@ -920,6 +979,216 @@ contract RoundManagerTest is Test {
         Escrow memory escAfter = RoundManager(roundManager).getEscrowDetails(agreementId);
         assertEq(uint256(escAfter.status), uint256(EscrowStatus.VOIDED));
         assertEq(paymentToken.balanceOf(investor), balBefore);
+    }
+
+    function test_RejectEOI_RefundsVoidedDeal() public {
+        // Submit EOI
+        vm.startPrank(investor);
+        EOI memory eoi = EOI({
+            name: "Reject Me",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "reject@example.com",
+            minAmount: 2_000 * 10 ** 6,
+            maxAmount: 5_000 * 10 ** 6,
+            expiry: block.timestamp + 7 days
+        });
+        uint256 balBefore = paymentToken.balanceOf(investor);
+        bytes32 agreementId = RoundManager(roundManager).submitEOI(
+            roundId,
+            eoi,
+            new string[](1),
+            new string[](1),
+            _computeEOISignature(
+                templateId,
+                3,
+                new string[](1),
+                new string[](1),
+                owner,
+                investorPrivKey
+            ),
+            3,
+            new address[](0),
+            bytes32(0)
+        );
+        vm.stopPrank();
+        Escrow memory escBefore = RoundManager(roundManager).getEscrowDetails(agreementId);
+        assertEq(uint256(escBefore.status), uint256(EscrowStatus.PAID));
+
+        // Simulate deal being voided externally through the registry
+        registry.voidContractFor(
+            agreementId,
+            investor,
+            CyberAgreementUtils.signVoidAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.VOIDSIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                investor,
+                investorPrivKey
+            )
+        );
+
+        // Owner can no longer call `reject()` because it would try to void the agreement again
+        vm.prank(owner);
+        vm.expectRevert(CyberAgreementRegistry.ContractAlreadyVoided.selector);
+        RoundManager(roundManager).reject(agreementId);
+
+        // Instead, he could choose to skip voiding the agreement
+        vm.prank(owner);
+        RoundManager(roundManager).reject(agreementId, false);
+        Escrow memory escAfter = RoundManager(roundManager).getEscrowDetails(agreementId);
+        assertEq(uint256(escAfter.status), uint256(EscrowStatus.VOIDED));
+        assertEq(paymentToken.balanceOf(investor), balBefore);
+    }
+
+    function test_RecallEOI_RefundsAndVoids() public {
+        // Submit EOI
+        vm.startPrank(investor);
+        EOI memory eoi = EOI({
+            name: "Recall Me",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "reject@example.com",
+            minAmount: 2_000 * 10 ** 6,
+            maxAmount: 5_000 * 10 ** 6,
+            expiry: block.timestamp + 7 days
+        });
+        uint256 balBefore = paymentToken.balanceOf(investor);
+        bytes32 agreementId = RoundManager(roundManager).submitEOI(
+            roundId,
+            eoi,
+            new string[](1),
+            new string[](1),
+            _computeEOISignature(
+                templateId,
+                3,
+                new string[](1),
+                new string[](1),
+                owner,
+                investorPrivKey
+            ),
+            3,
+            new address[](0),
+            bytes32(0)
+        );
+        vm.stopPrank();
+        Escrow memory escBefore = RoundManager(roundManager).getEscrowDetails(agreementId);
+        assertEq(uint256(escBefore.status), uint256(EscrowStatus.PAID));
+
+        // Simulate pass both EOI expiry and Round end time
+        vm.warp(block.timestamp + 30 days);
+
+        // Recall as investor after expiry -> refund and void
+        vm.prank(investor);
+        RoundManager(roundManager).recallEOI(agreementId);
+        Escrow memory escAfter = RoundManager(roundManager).getEscrowDetails(agreementId);
+        assertEq(uint256(escAfter.status), uint256(EscrowStatus.VOIDED));
+        assertEq(paymentToken.balanceOf(investor), balBefore);
+    }
+
+    function test_RecallEOI_RefundsVoidedDeal() public {
+        // Submit EOI
+        vm.startPrank(investor);
+        EOI memory eoi = EOI({
+            name: "Recall Me",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "reject@example.com",
+            minAmount: 2_000 * 10 ** 6,
+            maxAmount: 5_000 * 10 ** 6,
+            expiry: block.timestamp + 7 days
+        });
+        uint256 balBefore = paymentToken.balanceOf(investor);
+        bytes32 agreementId = RoundManager(roundManager).submitEOI(
+            roundId,
+            eoi,
+            new string[](1),
+            new string[](1),
+            _computeEOISignature(
+                templateId,
+                3,
+                new string[](1),
+                new string[](1),
+                owner,
+                investorPrivKey
+            ),
+            3,
+            new address[](0),
+            bytes32(0)
+        );
+        vm.stopPrank();
+        Escrow memory escBefore = RoundManager(roundManager).getEscrowDetails(agreementId);
+        assertEq(uint256(escBefore.status), uint256(EscrowStatus.PAID));
+
+        // Simulate pass both EOI expiry and Round end time
+        vm.warp(block.timestamp + 30 days);
+
+        // Simulate deal being voided externally through the registry
+        registry.voidContractFor(
+            agreementId,
+            investor,
+            CyberAgreementUtils.signVoidAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.VOIDSIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                investor,
+                investorPrivKey
+            )
+        );
+
+        // Investor can no longer call `recall()` because it would try to void the agreement again
+        vm.prank(investor);
+        vm.expectRevert(CyberAgreementRegistry.ContractAlreadyVoided.selector);
+        RoundManager(roundManager).recallEOI(agreementId);
+
+        // Instead, he could choose to skip voiding the agreement
+        vm.prank(investor);
+        RoundManager(roundManager).recallEOI(agreementId, false);
+        Escrow memory escAfter = RoundManager(roundManager).getEscrowDetails(agreementId);
+        assertEq(uint256(escAfter.status), uint256(EscrowStatus.VOIDED));
+        assertEq(paymentToken.balanceOf(investor), balBefore);
+    }
+
+    function test_RevertIf_RecallEOI_NotExpired() public {
+        // Submit EOI
+        vm.startPrank(investor);
+        EOI memory eoi = EOI({
+            name: "Recall Me",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "reject@example.com",
+            minAmount: 2_000 * 10 ** 6,
+            maxAmount: 5_000 * 10 ** 6,
+            expiry: block.timestamp + 7 days
+        });
+        uint256 balBefore = paymentToken.balanceOf(investor);
+        bytes32 agreementId = RoundManager(roundManager).submitEOI(
+            roundId,
+            eoi,
+            new string[](1),
+            new string[](1),
+            _computeEOISignature(
+                templateId,
+                3,
+                new string[](1),
+                new string[](1),
+                owner,
+                investorPrivKey
+            ),
+            3,
+            new address[](0),
+            bytes32(0)
+        );
+        vm.stopPrank();
+        Escrow memory escBefore = RoundManager(roundManager).getEscrowDetails(agreementId);
+        assertEq(uint256(escBefore.status), uint256(EscrowStatus.PAID));
+
+        // Immediate recall should fail as the EOI isn't expired
+        vm.prank(investor);
+        vm.expectRevert(RoundManager.EOINotExpired.selector);
+        RoundManager(roundManager).recallEOI(agreementId);
     }
 
     function test_Allocate_WithFailingCondition_Reverts() public {
