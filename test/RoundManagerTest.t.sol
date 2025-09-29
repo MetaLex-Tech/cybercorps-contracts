@@ -33,7 +33,7 @@ interface IUUPS {
 
 contract MockPaymentToken is ERC20 {
     constructor() ERC20("Mock USDC", "USDC") {
-        _mint(msg.sender, 1000000 * 10 ** 6); // Mint 1M tokens with 6 decimals
+        _mint(msg.sender, 2000000 * 10 ** 6); // Mint 2M tokens with 6 decimals
     }
 
     function decimals() public pure override returns (uint8) {
@@ -62,6 +62,8 @@ contract RoundManagerTest is Test {
     uint256 private ownerPrivKey;
     address public investor;
     uint256 private investorPrivKey;
+    address public investor2;
+    uint256 private investor2PrivKey;
 
     // Infra
     CyberAgreementRegistry private registry;
@@ -193,6 +195,8 @@ contract RoundManagerTest is Test {
         owner = vm.addr(ownerPrivKey);
         investorPrivKey = 0xA11CE;
         investor = vm.addr(investorPrivKey);
+        investor2PrivKey = 0xB0B;
+        investor2 = vm.addr(investor2PrivKey);
 
         // Deploy infra (auth, registry, factories)
         bytes32 salt = keccak256(abi.encodePacked("roundmanager-infra", owner));
@@ -477,6 +481,20 @@ contract RoundManagerTest is Test {
         uint256 expiry = block.timestamp + 7 days;
         bytes memory voidSignature = "0x";
 
+        // Verify EOI was stored correctly by checking the EOISubmitted event
+        address[] memory parties = new address[](2);
+        parties[0] = owner;
+        parties[1] = investor;
+        vm.expectEmit(true, true, true, true);
+        emit RoundManager.EOISubmitted(
+            keccak256(abi.encode(templateId, salt, globalValues, parties)),
+            roundId,
+            investor,
+            corp,
+            eoi.minAmount,
+            eoi.maxAmount,
+            eoi.expiry
+        );
         bytes32 agreementId = RoundManager(roundManager).submitEOI(
             roundId,
             eoi,
@@ -492,9 +510,6 @@ contract RoundManagerTest is Test {
             agreementId != bytes32(0),
             "Agreement ID should not be zero"
         );
-
-        // Verify EOI was stored correctly by checking the EOISubmitted event
-        vm.expectEmit(true, true, true, true);
 
         vm.stopPrank();
     }
@@ -574,7 +589,7 @@ contract RoundManagerTest is Test {
             new address[](0),
             bytes32(0)
         );
-        vm.expectEmit(true, true, false, true);
+
         vm.stopPrank();
 
         // Now allocate as owner
@@ -588,6 +603,8 @@ contract RoundManagerTest is Test {
             ownerPrivKey
         );
 
+        vm.expectEmit(true, true, true, true);
+        emit RoundManager.AllocationMade(agreementId, roundId, investor, allocatedAmount, allocatedAmount, new uint256[](1));
         vm.prank(owner);
         RoundManager(roundManager).allocate(agreementId, allocatedAmount);
 
@@ -819,7 +836,6 @@ contract RoundManagerTest is Test {
         vm.stopPrank();
 
         // Submit second EOI from different investor
-        address investor2 = address(0x2);
         paymentToken.transfer(investor2, 1000000 * 10 ** 6);
         vm.startPrank(investor2);
         paymentToken.approve(address(roundManager), type(uint256).max);
@@ -845,7 +861,7 @@ contract RoundManagerTest is Test {
                 new string[](1),
                 new string[](1),
                 owner,
-                investorPrivKey
+                investor2PrivKey
             ),
             2,
             new address[](0),
