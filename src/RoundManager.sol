@@ -320,7 +320,7 @@ contract RoundManager is
             )
         );
 
-        /*if(!_verifyEscrowedSignature(
+        if(!_verifyEscrowedSignature(
                 authorityOfficer,
                 EscrowedSignatureData({
                     roundId: roundId,
@@ -338,7 +338,7 @@ contract RoundManager is
                     companyAddress: LexScrowStorage.getCorp()
                 }),
                 escrowedSignature
-        )) revert InvalidEscrowedSignature();*/
+        )) revert InvalidEscrowedSignature();
         string memory companyName = ICyberCorp(LexScrowStorage.getCorp())
             .cyberCORPName();
         IIssuanceManager issuanceManager = RoundManagerStorage
