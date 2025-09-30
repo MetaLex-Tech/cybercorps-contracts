@@ -447,6 +447,63 @@ contract RoundManagerTest is Test {
             );
     }
 
+    function test_RevertIf_CreateRound_InvalidSignature() public {
+        RoundManager.CyberCertData[] memory certData = new RoundManager.CyberCertData[](1);
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Legend";
+        certData[0] = RoundManager.CyberCertData({
+            name: "Test Certificate",
+            symbol: "TEST",
+            uri: "https://test.uri",
+            securityClass: SecurityClass.CommonStock,
+            securitySeries: SecuritySeries.NA,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+
+        (bytes memory signature, ) = _computeEscrowSignature(
+            roundManager,
+            SecuritySeries.SeriesA,
+            RAISE_CAP,
+            MIN_TICKET,
+            MAX_TICKET,
+            RoundType.FounderApproved,
+            block.timestamp,
+            block.timestamp + 30 days,
+            templateId,
+            address(paymentToken),
+            PRICE_PER_UNIT,
+            VALUATION,
+            investor2PrivKey, // wrong signer key
+            corp
+        );
+
+        vm.prank(owner);
+        vm.expectRevert(RoundManager.InvalidEscrowedSignature.selector);
+        RoundManager(roundManager).createRound(
+            SecuritySeries.SeriesA,
+            RAISE_CAP,
+            MIN_TICKET,
+            MAX_TICKET,
+            RoundType.FounderApproved,
+            block.timestamp,
+            block.timestamp + 30 days,
+            templateId,
+            certData,
+            new address[](0),
+            address(paymentToken),
+            PRICE_PER_UNIT,
+            VALUATION,
+            owner,
+            "Officer",
+            "CEO",
+            "",
+            "",
+            testRoundPartyValues,
+            signature,
+            false
+        );
+    }
 
     function test_SubmitEOI_Success() public {
         vm.startPrank(investor);
