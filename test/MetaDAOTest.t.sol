@@ -120,7 +120,7 @@ contract MetaDAOTest is Test {
         vm.prank(metaDAO);
         factory.setMetaDAOOfficer(metaOfficer);
         vm.prank(metaDAO);
-        factory.setMetaDAOSignatureHash(keccak256("META_ESCROW_SIG"));
+        factory.setMetaDAOSignatureHash(abi.encodePacked("META_ESCROW_SIG"));
 
         // Template with 1 global + 1 party field
         bytes32 templateId = bytes32("TEST_TEMPLATE");
@@ -199,7 +199,7 @@ contract MetaDAOTest is Test {
         );
 
         vm.prank(deployer);
-        factory.deployCyberCorpAndCreateOffer(
+        factory.deployMetaDAOContractFor(
             saltUint,
             "Corp Meta",
             "corporation",
@@ -208,14 +208,10 @@ contract MetaDAOTest is Test {
             "arbitration",
             deployer,
             officer,
-            certData,
             templateId,
             globalValues,
             partyValues,
             signature,
-            details,
-            bytes32(0),
-            block.timestamp + 7 days,
             deployer // deployer param
         );
     }
