@@ -50,6 +50,7 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import {LexScroWLite} from "../src/libs/LexScroWLite.sol";
 import {LexScrowStorage, Token, TokenType, EscrowStatus} from "../src/storage/LexScrowStorage.sol";
 import {Endorsement} from "../src/storage/CyberCertPrinterStorage.sol";
+import {ICondition} from "../src/interfaces/ICondition.sol";
 
 contract ERC20Mock is ERC20 {
     constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) {}
@@ -85,6 +86,26 @@ contract ERC1155Mock is ERC1155 {
     }
 }
 
+contract ConditionMock is ICondition {
+    bool public result;
+
+    constructor(bool _result) {
+        result = _result;
+    }
+
+    function checkCondition(
+        address,
+        bytes4,
+        bytes memory
+    ) external view returns (bool) {
+        return result;
+    }
+
+    function setResult(bool newResult) public {
+        result = newResult;
+    }
+}
+
 contract LexScroWLiteMock is LexScroWLite {
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -113,6 +134,16 @@ contract LexScroWLiteMock is LexScroWLite {
 
     function voidAndRefund_(bytes32 agreementId) public {
         voidAndRefund(agreementId);
+    }
+
+    function voidEscrow_(bytes32 agreementId) public {
+        voidEscrow(agreementId);
+    }
+
+    function addConditions(bytes32 agreementId, address[] calldata conditions) public {
+        for(uint256 i = 0; i < conditions.length; i++) {
+            LexScrowStorage.addConditionToEscrow(agreementId, ICondition(conditions[i]));
+        }
     }
 }
 
@@ -369,7 +400,26 @@ contract LexScroWLiteTest is Test {
         assertEq(uint8(lexScrow.getEscrowDetails(agreementId).status), uint8(EscrowStatus.VOIDED), "Escrow status should be VOIDED");
     }
 
+    function test_RevertIf_PaymentFlow_VoidAndRefundUnpaid() public {
+        // `voidAndRefund()` should fail if the escrow is unpaid
+
+        // Prepare escrow
+
+        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        Token[] memory corpAssets = _getCorpAssets();
+        Token[] memory buyerAssets = _getBuyerAssets();
+
+        lexScrow.createEscrow_(agreementId, alice, corpAssets, buyerAssets, block.timestamp);
+        // Escrow is unpaid
+
+        // Should fail since the escrow is unpaid
+        vm.expectRevert(LexScroWLite.EscrowNotPaid.selector);
+        lexScrow.voidAndRefund_(agreementId);
+    }
+
     function test_RevertIf_PaymentFlow_VoidAndRefundWithoutVoidedAgreement() public {
+        // `voidAndRefund()` should fail if the agreement is not voided first
+
         // Prepare Escrow
 
         bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
@@ -378,6 +428,8 @@ contract LexScroWLiteTest is Test {
 
         lexScrow.createEscrow_(agreementId, alice, corpAssets, buyerAssets, block.timestamp);
         lexScrow.handleCounterPartyPayment_(agreementId);
+        // Escrow is paid
+        // Agreement is not voided yet
 
         // Should fail since agreement is not voided first
         vm.expectRevert(LexScroWLite.DealNotVoided.selector);
@@ -448,32 +500,54 @@ contract LexScroWLiteTest is Test {
         lexScrow.updateEscrow_(agreementId, bob, "Bob");
     }
 
+    function test_VoidEscrowUnpaid() public {
+        // `voidEscrow()` will void the contract regardless of its status
+        bytes32 agreementId = bytes32(uint256(1));
+
+        assertEq(uint8(lexScrow.getEscrowDetails(agreementId).status), uint8(EscrowStatus.PENDING));
+        vm.expectEmit(true, true, true, true);
+        emit LexScroWLite.DealVoidedAt(agreementId, address(registry), block.timestamp);
+        lexScrow.voidEscrow_(agreementId);
+        assertEq(uint8(lexScrow.getEscrowDetails(agreementId).status), uint8(EscrowStatus.VOIDED));
+    }
+
+    function test_VoidEscrowPaid() public {
+        // `voidEscrow()` will void the contract regardless of its status
+
+        // Prepare Escrow
+
+        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        Token[] memory corpAssets = _getCorpAssets();
+        Token[] memory buyerAssets = _getBuyerAssets();
+
+        lexScrow.createEscrow_(agreementId, alice, corpAssets, buyerAssets, block.timestamp);
+        lexScrow.handleCounterPartyPayment_(agreementId);
+        // Escrow is paid
+
+        assertEq(uint8(lexScrow.getEscrowDetails(agreementId).status), uint8(EscrowStatus.PAID));
+        vm.expectEmit(true, true, true, true);
+        emit LexScroWLite.DealVoidedAt(agreementId, address(registry), block.timestamp);
+        lexScrow.voidEscrow_(agreementId);
+        assertEq(uint8(lexScrow.getEscrowDetails(agreementId).status), uint8(EscrowStatus.VOIDED));
+    }
+
     function test_ConditionCheck() public {
-        // TODO: WIP
-    }
+        // Should check every conditions
 
-    function test_AddCondition() public {
-        // TODO: WIP
-    }
+        // Setup
+        bytes32 agreementId = bytes32(uint256(1));
+        address[] memory conditions = new address[](2);
+        for(uint256 i = 0; i < conditions.length; i++) {
+            conditions[i] = address(new ConditionMock(true)); // default to pass
+        }
+        lexScrow.addConditions(agreementId, conditions);
 
-    function test_RemoveCondition() public {
-        // TODO: WIP
-    }
+        // Simulate and verify all conditions passed
+        assertTrue(lexScrow.conditionCheck(agreementId));
 
-    function test_VoidExpiredUnpaid() public {
-        // TODO: WIP
-    }
-
-    function test_VoidExpiredPaid() public {
-        // TODO: WIP
-    }
-
-    function test_VoidByPartyUnpaid() public {
-        // TODO: WIP
-    }
-
-    function test_VoidByPartyPaid() public {
-        // TODO: WIP
+        // Simulate and verify one condition not met
+        ConditionMock(conditions[1]).setResult(false);
+        assertFalse(lexScrow.conditionCheck(agreementId));
     }
 
     function _getCorpAssets() internal returns(Token[] memory) {

@@ -44,7 +44,6 @@ pragma solidity ^0.8.28;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import "./CyberAgreementRegistry.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./libs/LexScroWLite.sol";
 import "./libs/auth.sol";
@@ -311,8 +310,7 @@ contract RoundManager is
             )
         );
 
-        // TODO this is not used?
-        /*if(!_verifyEscrowedSignature(
+        if(!_verifyEscrowedSignature(
                 authorityOfficer,
                 EscrowedSignatureData({
                     roundId: roundId,
@@ -330,7 +328,7 @@ contract RoundManager is
                     companyAddress: LexScrowStorage.getCorp()
                 }),
                 escrowedSignature
-        )) revert InvalidEscrowedSignature();*/
+        )) revert InvalidEscrowedSignature();
         string memory companyName = ICyberCorp(LexScrowStorage.getCorp())
             .cyberCORPName();
         IIssuanceManager issuanceManager = RoundManagerStorage
