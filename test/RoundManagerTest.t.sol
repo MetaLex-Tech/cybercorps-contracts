@@ -2007,6 +2007,8 @@ contract RoundManagerFCFSTest is Test {
         vm.startPrank(investor);
         usdc.approve(address(rm), type(uint256).max);
 
+        uint256 meUsdcBalanceBefore = usdc.balanceOf(me);
+
         EOI memory eoi = EOI({
             name: "Investor 1",
             investorType: "Individual",
@@ -2048,6 +2050,9 @@ contract RoundManagerFCFSTest is Test {
         Escrow memory esc = rm.getEscrowDetails(agreementId);
         assertEq(uint256(esc.status), uint256(EscrowStatus.FINALIZED));
         assertGt(esc.corpAssets.length, 0);
+        assertEq(usdc.balanceOf(me) - meUsdcBalanceBefore, 10_000 * (10 ** usdc.decimals()), "Investor should have paid maximum ticket size");
+        Token memory corpToken = esc.corpAssets[0];
+        assertEq(CyberCertPrinter(corpToken.tokenAddress).ownerOf(corpToken.tokenId), investor, "Investor should have received equity");
     }
 
     function test_FCFS_RefundsExcessPayment() public {
@@ -2078,14 +2083,20 @@ contract RoundManagerFCFSTest is Test {
         vm.prank(address(corpFactory));
         CyberCorp(corp).setDealManager(address(rm));
 
+        // Simulate a round where `maxTicket` > `raiseCap` so an investor could deposit more than remaining
+        // and trigger a refund
+
         MockPaymentToken usdc = new MockPaymentToken();
         uint256 officerPrivKey = 0xAA02;
         address officerEOA = vm.addr(officerPrivKey);
-        bytes32 roundId = _createFCFSRound(
+        bytes32 roundId = _createFCFSRoundCustom(
             rm,
             address(usdc),
             usdc.decimals(),
             bytes32(uint256(777)),
+            50_000 * (10 ** usdc.decimals()),
+            2_000 * (10 ** usdc.decimals()),
+            80_000 * (10 ** usdc.decimals()),
             officerEOA,
             officerPrivKey,
             corp
@@ -2094,8 +2105,8 @@ contract RoundManagerFCFSTest is Test {
         uint256 salt = 1;
         uint256 privKey = 0xB0B;
         address investor = vm.addr(privKey);
+        usdc.transfer(investor, 80_000 * (10 ** usdc.decimals()));
         uint256 startBal = usdc.balanceOf(investor);
-        usdc.transfer(investor, 50_000 * (10 ** usdc.decimals()));
         vm.startPrank(investor);
         usdc.approve(address(rm), type(uint256).max);
 
@@ -2105,7 +2116,7 @@ contract RoundManagerFCFSTest is Test {
             jurisdiction: "US",
             contact: "email",
             minAmount: 10_000 * (10 ** usdc.decimals()),
-            maxAmount: 40_000 * (10 ** usdc.decimals()),
+            maxAmount: 80_000 * (10 ** usdc.decimals()),
             expiry: block.timestamp + 7 days
         });
 
@@ -2137,9 +2148,9 @@ contract RoundManagerFCFSTest is Test {
         );
         vm.stopPrank();
 
+        // Investor deposited 80k at the beginning, but later got refunded the 30k difference from remaining cap
         uint256 endBal = usdc.balanceOf(investor);
-        assertGt(endBal, startBal);
-        assertLt(endBal, startBal + 40_000 * (10 ** usdc.decimals()));
+        assertEq(startBal - endBal, 50_000 * (10 ** usdc.decimals()), "Investor should have paid exactly raise cap");
     }
 
     function test_FCFS_SubmitEOI_InvalidAmount_Reverts() public {
