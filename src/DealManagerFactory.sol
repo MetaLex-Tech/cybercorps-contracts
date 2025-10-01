@@ -41,23 +41,26 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts/utils/Create2.sol";
-import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
-import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import "openzeppelin-contracts/utils/Create2.sol";
 import "./DealManager.sol";
 import "./libs/auth.sol";
 
+/// @title DealManagerFactory
+/// @notice Factory contract for deploying DealManager instances
+/// @dev Uses ERC1967Proxy+UUPSUpgradeable pattern for upgradeable DealManager instances
 contract DealManagerFactory is BorgAuthACL {
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
-    UpgradeableBeacon public beacon;
 
-    event DealManagerDeployed(address dealManager);
+    DealManager public refImplementation; // implementation contract to use for new deployments
+
+    event DealManagerDeployed(address dealManager, string version);
 
     constructor(address _auth) {
-        // Deploy the implementation contract
-        beacon = new UpgradeableBeacon(address(new DealManager()), address(this));
+        // Deploy the reference implementation contract
+        refImplementation = new DealManager();
         initialize(_auth);
     }
     
@@ -77,7 +80,7 @@ contract DealManagerFactory is BorgAuthACL {
         
         if(dealManagerProxy == address(0)) revert DeploymentFailed();
         
-        emit DealManagerDeployed(dealManagerProxy);
+        emit DealManagerDeployed(dealManagerProxy, refImplementation.DEPLOY_VERSION());
         return dealManagerProxy;
     }
 
@@ -93,16 +96,14 @@ contract DealManagerFactory is BorgAuthACL {
     /// @dev Internal function used by deployDealManager
     /// @return bytecode The proxy contract creation bytecode
     function _getBytecode() private view returns (bytes memory bytecode) {
-        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
-        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(beacon, ""));
+        bytes memory sourceCodeBytes = type(ERC1967Proxy).creationCode;
+        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(refImplementation, ""));
     }
 
-    function upgradeImplementation(address _newImplementation) external onlyOwner {
-        UpgradeableBeacon(beacon).upgradeTo(_newImplementation);
-    }
-
-    function getBeaconImplementation() external view returns (address) {
-        return UpgradeableBeacon(beacon).implementation();
+    /// @notice Set the reference implementation contract for the next deployments
+    /// @dev Only callable by addresses with the admin role
+    /// @param _newImplementation Address of the new implementation
+    function setRefImplementation(DealManager _newImplementation) public onlyOwner {
+        refImplementation = _newImplementation;
     }
 }
-

@@ -3304,22 +3304,22 @@ contract CyberCorpTest is Test {
         vm.stopPrank();
 
         // Deploy new implementation
-        address newImplementation = address(new DealManager());
+        DealManager newImplementation = new DealManager();
         address factoryaddr = cyberCorpFactory.dealManagerFactory();
         // Upgrade beacon implementation
         console.log(DealManagerFactory(factoryaddr).AUTH().userRoles(address(multisig)));
 
         // Non-owner should not be able to upgrade it
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
-        DealManagerFactory(factoryaddr).upgradeImplementation(newImplementation);
+        DealManagerFactory(factoryaddr).setRefImplementation(newImplementation);
 
         // Owner should be able to upgrade it
         console.log(
             DealManagerFactory(factoryaddr).AUTH().userRoles(address(multisig))
         );
         vm.prank(multisig);
-        DealManagerFactory(factoryaddr).upgradeImplementation(newImplementation);
-        assertEq(DealManagerFactory(factoryaddr).getBeaconImplementation(), newImplementation);
+        DealManagerFactory(factoryaddr).setRefImplementation(newImplementation);
+        assertEq(address(DealManagerFactory(factoryaddr).refImplementation()), address(newImplementation));
 
         // Verify the deal manager still works by checking the deal
         Escrow memory escrow = DealManager(dealManagerAddr).getEscrowDetails(
@@ -3327,10 +3327,6 @@ contract CyberCorpTest is Test {
         );
 
         console.log(escrow.counterParty);
-        assertEq(
-            DealManagerFactory(factoryaddr).getBeaconImplementation(),
-            newImplementation
-        );
     }
 
     function testUpgradeIssuanceManager() public {
@@ -4436,25 +4432,25 @@ contract CyberCorpTest is Test {
         DealManagerFactory deployedFactory = DealManagerFactory(deployedFactoryAddr);
 
         // Get the current beacon implementation
-        address currentImplementation = deployedFactory.getBeaconImplementation();
+        address currentImplementation = address(deployedFactory.refImplementation());
         console.log("Current beacon implementation:", currentImplementation);
 
         // Deploy a new DealManager implementation using CREATE2
         bytes32 implementationSalt = bytes32(keccak256("NewDealManagerImplementation"));
-        address newImplementation = address(new DealManager{salt: implementationSalt}());
-        console.log("New implementation deployed at:", newImplementation);
+        DealManager newImplementation = new DealManager{salt: implementationSalt}();
+        console.log("New implementation deployed at:", address(newImplementation));
 
         // Non-owner should not be able to upgrade it
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
-        deployedFactory.upgradeImplementation(newImplementation);
+        deployedFactory.setRefImplementation(newImplementation);
 
         // Owner should be able to upgrade it
         vm.prank(multisig);
-        deployedFactory.upgradeImplementation(newImplementation);
+        deployedFactory.setRefImplementation(newImplementation);
 
         // Verify the upgrade was successful
-        address updatedImplementation = deployedFactory.getBeaconImplementation();
-        assertEq(updatedImplementation, newImplementation, "Beacon implementation should be updated");
+        address updatedImplementation = address(deployedFactory.refImplementation());
+        assertEq(updatedImplementation, address(newImplementation), "Beacon implementation should be updated");
         console.log("Updated beacon implementation:", updatedImplementation);
 
         // Verify the existing DealManager still works by checking its state

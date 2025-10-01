@@ -42,8 +42,8 @@ contract BaseScript is Script {
        // CyberAgreementRegistry(registry).upgradeToAndCall(newRegistryImplementation, "");
 
         // Verify the upgrade was successful
-        address updatedImplementation = deployedFactory.getBeaconImplementation();
-        console.log("Updated DealManager beacon implementation:", updatedImplementation);
+        address updatedImplementation = address(deployedFactory.refImplementation());
+        console.log("Updated DealManager reference implementation:", updatedImplementation);
 
         address newDealManagerImplementation = address(new DealManager{salt: salt}());
 

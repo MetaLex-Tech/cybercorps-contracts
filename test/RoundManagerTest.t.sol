@@ -1378,6 +1378,15 @@ contract RoundManagerTest is Test {
         assertEq(rm1.DEPLOY_VERSION(), "1", "Other RoundManager should not be upgraded");
     }
 
+    function test_RevertIf_UpgradeNonFactoryOwner() public {
+        // Non-MetaLeX admin should not be able to set new reference implementation
+
+        RoundManager newImplementation = RoundManager(address(new MockRoundManagerV2()));
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, BorgAuth(auth).OWNER_ROLE(), corpOwner));
+        vm.prank(corpOwner);
+        RoundManagerFactory(rmFactory).setRefImplementation(newImplementation);
+    }
+
     function test_RevertIf_UpgradeExistingRoundManagerNotRefImplementation() public {
         BorgAuth corpAuth = new BorgAuth{salt: keccak256("testUpgradeExistingRoundManager")}(corpOwner);
         address placeHolderAddr = 0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF;
