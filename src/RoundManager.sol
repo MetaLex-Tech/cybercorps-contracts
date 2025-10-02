@@ -44,6 +44,7 @@ pragma solidity ^0.8.28;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./libs/LexScroWLite.sol";
 import "./libs/auth.sol";
@@ -59,6 +60,7 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 contract RoundManager is
     Initializable,
     UUPSUpgradeable,
+    ReentrancyGuard,
     BorgAuthACL,
     LexScroWLite
 {
@@ -592,15 +594,16 @@ contract RoundManager is
     function allocate(
         bytes32 agreementId,
         uint256 allocatedAmount
-    ) external onlyOwnerOrSelf {
+    ) external onlyOwnerOrSelf nonReentrant {
         bytes32 roundId = RoundManagerStorage.getAgreementToRound(agreementId);
         Round storage round = RoundManagerStorage.getRound(roundId);
         EOI storage eoi = RoundManagerStorage.getAgreementToEOI(agreementId);
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
 
+        // Check: round validity
         if (round.id == bytes32(0)) revert InvalidRound();
 
-        //check that the eoi has not expired
+        // Check: eoi has not expired
         if (eoi.expiry < block.timestamp) revert EOIExpired();
 
         uint256 remaining = round.raiseCap - round.raised;
@@ -616,11 +619,12 @@ contract RoundManager is
             revert InvalidAllocation();
         }
         allocatedAmount = candidate;
-        
+
+        // Check: status
         if (escrow.status != EscrowStatus.PAID) revert DealNotPaid();
         if (escrow.corpAssets.length > 0) revert AlreadyAllocated();
 
-        //sign the agreement with the escrow signer
+        // Effect: sign the agreement with the escrow signer
         if (
             !ICyberAgreementRegistry(LexScrowStorage.getDealRegistry())
                 .hasSigned(agreementId, round.authorityOfficer)
@@ -658,7 +662,7 @@ contract RoundManager is
         IIssuanceManager issuanceManager = RoundManagerStorage
             .getIssuanceManager();
 
-        //loop through certPrinter and create cert for each
+        // Effect: loop through certPrinter and create cert for each
         uint256[] memory certIds = new uint256[](round.certPrinter.length);
         for (uint256 i = 0; i < round.certPrinter.length; i++) {
             certIds[i] = issuanceManager.createCert(
@@ -681,7 +685,7 @@ contract RoundManager is
             endorseeName: eoi.name
         });
 
-        //loop through certPrinter and add endorsement to each
+        // Effect: loop through certPrinter and add endorsement to each
         for (uint256 i = 0; i < round.certPrinter.length; i++) {
             ICyberCertPrinter(round.certPrinter[i]).addEndorsement(
                 certIds[i],
@@ -689,38 +693,38 @@ contract RoundManager is
             );
         }
 
-        // Add to escrow
-        //loop through certPrinter and add to escrow
+        // Effect: Add to escrow
+        // loop through certPrinter and add to escrow
         for (uint256 i = 0; i < round.certPrinter.length; i++) {
             escrow.corpAssets.push(
                 Token(TokenType.ERC721, round.certPrinter[i], certIds[i], 1)
             );
         }
 
-        // Refund difference
+        // Effect: Calculate refund amount and update escrowed amount
         uint256 refund = escrow.buyerAssets[0].amount - allocatedAmount;
+        escrow.buyerAssets[0].amount = allocatedAmount;
+
+        // Check: Check conditions
+        if (!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
+
+        // Effect: Finalize agreement
+        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry())
+            .finalizeContract(agreementId);
+
+        // Effect: update raised amount
+        round.raised += allocatedAmount;
+
         if (refund > 0) {
+            // Interaction: Refund
             IERC20(round.paymentToken).safeTransfer(
                 escrow.counterParty,
                 refund
             );
         }
 
-        // Update escrowed amount
-        escrow.buyerAssets[0].amount = allocatedAmount;
-
-        // Check conditions
-        if (!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
-
-        // Finalize agreement
-        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry())
-            .finalizeContract(agreementId);
-
-        // Finalize escrow
+        // Interaction: Finalize escrow and payments
         finalizeEscrow(agreementId);
-
-        // Update raised
-        round.raised += allocatedAmount;
 
         emit AllocationMade(agreementId, roundId, escrow.counterParty, allocatedAmount, round.raised, certIds); 
     }
@@ -742,20 +746,21 @@ contract RoundManager is
         Round storage round = RoundManagerStorage.getRound(roundId);
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
 
+        // Check: check status
         if (round.id == bytes32(0)) revert InvalidRound();
         if (escrow.status != EscrowStatus.PAID) revert DealNotPaid();
         if (escrow.corpAssets.length > 0) revert AlreadyAllocated();
 
-        // Refund all
-        uint256 amount = escrow.buyerAssets[0].amount;
-        IERC20(round.paymentToken).safeTransfer(escrow.counterParty, amount);
-
-        // Void escrow
+        // Effect: update status
         voidEscrow(agreementId);
 
         if (isVoidAgreement) {
             ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, escrow.counterParty, escrow.signature);
         }
+
+        // Interaction: Refund all
+        uint256 amount = escrow.buyerAssets[0].amount;
+        IERC20(round.paymentToken).safeTransfer(escrow.counterParty, amount);
 
         emit EOIRejected(agreementId, escrow.counterParty, roundId);
     }
@@ -776,24 +781,26 @@ contract RoundManager is
         bytes32 roundId = RoundManagerStorage.getAgreementToRound(agreementId);
         Round storage round = RoundManagerStorage.getRound(roundId);
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
-        
+
+        // Check: check status
         if (round.id == bytes32(0)) revert InvalidRound();
         if (msg.sender != escrow.counterParty) revert NotEOISubmitter();
         if (escrow.status != EscrowStatus.PAID) revert DealNotPaid();
         if (escrow.corpAssets.length > 0) revert AlreadyAllocated();
         if (block.timestamp < escrow.expiry && round.endTime > block.timestamp) revert EOINotExpired();
 
-        // Refund all
-        uint256 amount = escrow.buyerAssets[0].amount;
-        IERC20(round.paymentToken).safeTransfer(escrow.counterParty, amount);
-
-        // Void escrow
+        // Effect: update status
         voidEscrow(agreementId);
 
         // void agreement
         if (isVoidAgreement) {
             ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, escrow.counterParty, escrow.signature);
         }
+
+
+        // Interaction: Refund all
+        uint256 amount = escrow.buyerAssets[0].amount;
+        IERC20(round.paymentToken).safeTransfer(escrow.counterParty, amount);
 
         emit EOIRecalled(agreementId, escrow.counterParty, roundId);
     }
