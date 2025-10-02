@@ -52,6 +52,17 @@ contract AlwaysFalseCondition is ICondition {
     }
 }
 
+// Mock condition that always pass
+contract AlwaysTrueCondition is ICondition {
+    function checkCondition(
+        address,
+        bytes4,
+        bytes memory
+    ) external pure returns (bool) {
+        return true;
+    }
+}
+
 contract RoundManagerTest is Test {
    // RoundManager public roundManager;
     IssuanceManager public issuanceManager;
@@ -1573,6 +1584,14 @@ contract RoundManagerTest is Test {
 contract RoundManagerFCFSTest is Test {
     using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
 
+    address public constant KNOWN_LEXCHEX_CONDITION_ADDRESS = 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42;
+
+    function setUp() public {
+        // Mock LexChexCondition to always pass
+        address alwaysTrueCondition = address(new AlwaysTrueCondition());
+        vm.etch(KNOWN_LEXCHEX_CONDITION_ADDRESS, alwaysTrueCondition.code);
+    }
+
     // Infra helpers copied from above
     function _deployRegistryAndFactories(
         address owner
@@ -2629,5 +2648,103 @@ contract RoundManagerFCFSTest is Test {
             usdc.balanceOf(inv2),
             startBal + 2_000 * (10 ** usdc.decimals())
         );
+    }
+
+    function test_RevertIf_FCFS_SubmitEOI_FailLexChexCondition() public {
+        address me = address(this);
+        (
+            CyberAgreementRegistry registry,
+            CyberCorpFactory corpFactory,
+            ,
+            ,
+            ,
+
+        ) = _deployRegistryAndFactories(me);
+        _createTemplate(registry);
+
+        (address corp, address auth, address issuance, address dealManager, address roundManager) = _deployCorp(
+            corpFactory,
+            "Corp B",
+            me,
+            me
+        );
+        RoundManager rm = _initRoundManager(
+            auth,
+            corp,
+            address(registry),
+            issuance
+        );
+
+        // Allow RoundManager to transfer certs by setting it as the corp's dealManager
+        vm.prank(address(corpFactory));
+        CyberCorp(corp).setDealManager(address(rm));
+
+        MockPaymentToken usdc = new MockPaymentToken();
+        uint256 officerPrivKey = 0xAA04;
+        address officerEOA = vm.addr(officerPrivKey);
+        bytes32 roundId = _createFCFSRoundCustom(
+            rm,
+            address(usdc),
+            usdc.decimals(),
+            bytes32(uint256(777)),
+            100_000 * (10 ** usdc.decimals()),
+            2_000 * (10 ** usdc.decimals()),
+            50_000 * (10 ** usdc.decimals()),
+            officerEOA,
+            officerPrivKey,
+            corp
+        );
+
+        uint256 salt = 1;
+        uint256 privKey = 0xA11CE;
+        address investor = vm.addr(privKey);
+        usdc.transfer(investor, 20_000 * (10 ** usdc.decimals()));
+        vm.startPrank(investor);
+        usdc.approve(address(rm), type(uint256).max);
+
+        uint256 meUsdcBalanceBefore = usdc.balanceOf(me);
+
+        EOI memory eoi = EOI({
+            name: "Investor 1",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "email",
+            minAmount: 5_000 * (10 ** usdc.decimals()),
+            maxAmount: 10_000 * (10 ** usdc.decimals()),
+            expiry: block.timestamp + 7 days
+        });
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "g";
+        string[] memory partyValues = new string[](2);
+        partyValues[0] = "Officer";
+        partyValues[1] = "CEO";
+
+        bytes memory sig = _computeEOISignature(
+            registry,
+            bytes32(uint256(777)),
+            salt,
+            globalValues,
+            partyValues,
+            officerEOA,
+            privKey
+        );
+
+        // Mock LexChexCondition to always fail
+        address alwaysFalseCondition = address(new AlwaysFalseCondition());
+        vm.etch(KNOWN_LEXCHEX_CONDITION_ADDRESS, alwaysFalseCondition.code);
+
+        vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
+        rm.submitEOI(
+            roundId,
+            eoi,
+            globalValues,
+            partyValues,
+            sig,
+            salt,
+            new address[](0),
+            bytes32(0)
+        );
+        vm.stopPrank();
     }
 }
