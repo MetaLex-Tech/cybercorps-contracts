@@ -106,7 +106,30 @@ contract DeployMetaDAOFactoryScript is Script {
             )
         );
 
-        // Assign roles and revoke EOA ownership
+        // Configure MetaDAO officer and escrowed signature BEFORE revoking deployer ownership
+        metaDAOFactory.setMetaDAOOfficerEOA(multisig);
+        metaDAOFactory.setMetaDAOOfficerName("MetaDAO Officer");
+        metaDAOFactory.setMetaDAOOfficerContact("metadao@example.com");
+        metaDAOFactory.setMetaDAOOfficerTitle("CEO");
+        // Example escrowed signature payload (bytes)
+        metaDAOFactory.setMetaDAOSignatureHash(abi.encodePacked("EXAMPLE_META_ESCROW_SIG"));
+
+        // Create the parent corp (one-time). Reverts if called again.
+        (address parentCorp,
+         address parentAuth,
+         address parentIssuance,
+         address parentDealMgr,
+         address parentRoundMgr) = metaDAOFactory.createParentCorp(
+            bytes32(keccak256("MetaDAO.parent.corp.v1")),
+            "MetaLeX MetaDAO",
+            "corporation",
+            "DE",
+            "contact@metadao.example",
+            "arbitration",
+            multisig
+        );
+
+        // Assign roles and revoke EOA ownership (after setup)
         auth.updateRole(address(multisig), auth.OWNER_ROLE());
         auth.zeroOwner();
 
@@ -120,6 +143,11 @@ contract DeployMetaDAOFactoryScript is Script {
         console.log("CyberCertPrinter Impl:", address(cyberCertPrinterImplementation));
         console.log("CyberScrip Impl:", address(cyberCert20Implementation));
         console.log("MetaDAOFactory (proxy):", address(metaDAOFactory));
+        console.log("ParentCorp:", parentCorp);
+        console.log("ParentAuth:", parentAuth);
+        console.log("ParentIssuance:", parentIssuance);
+        console.log("ParentDealMgr:", parentDealMgr);
+        console.log("ParentRoundMgr:", parentRoundMgr);
 
         vm.stopBroadcast();
     }

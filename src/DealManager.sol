@@ -43,6 +43,7 @@ pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./libs/LexScroWLite.sol";
 import "./libs/auth.sol";
@@ -54,11 +55,12 @@ import "./interfaces/IDealManagerFactory.sol";
 /// @title DealManager
 /// @notice Manages the lifecycle of deals between parties, including creation, signing, payment, and finalization for a CyberCorp
 /// @dev Implements UUPS upgradeable pattern and integrates with BorgAuth for access control
-contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLite {
+contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAuthACL, LexScroWLite {
     using DealManagerStorage for DealManagerStorage.DealManagerData;
 
     string public constant DEPLOY_VERSION = "1"; // For version-tracking on all deployment and future upgrades
 
+    // TODO take ReentrancyGuard into account
     // Upgrade notes: Reduced gap to account for new variables
     //  50
     //   -1 (BorgAuthACL)
@@ -358,14 +360,18 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     /// @notice Finalizes a deal
     /// @dev Checks signatures, conditions and finalizes the agreement
     /// @param agreementId Unique identifier for the agreement
-    function finalizeDeal(bytes32 agreementId) public {
+    function finalizeDeal(bytes32 agreementId) public nonReentrant {
+        // Check: status
         if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId)) revert DealVoided();
         if(LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PAID) revert DealNotPaid();
         if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isFinalized(agreementId)) revert DealAlreadyFinalized();
         if(!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).allPartiesSigned(agreementId)) revert DealNotFullySigned();
         if(!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
-        
+
+        // Effect: update status
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).finalizeContract(agreementId);
+
+        // Interaction: payments
         finalizeEscrow(agreementId);
         emit DealFinalized(
             agreementId,
@@ -381,9 +387,12 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     /// @param agreementId Unique identifier for the agreement
     /// @param signer Address of the signer
     /// @param signature Signature of the signer
-    function voidExpiredDeal(bytes32 agreementId, address signer, bytes memory signature) public {
+    function voidExpiredDeal(bytes32 agreementId, address signer, bytes memory signature) public nonReentrant {
+        // Check: status
         Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
         if (block.timestamp <= deal.expiry) revert DealNotExpired();
+
+        // Effect: update status
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
         for(uint256 i = 0; i < deal.corpAssets.length; i++) {
             if(deal.corpAssets[i].tokenType == TokenType.ERC721) {
@@ -393,9 +402,12 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
                 );
             }
         }
-        if(deal.status == EscrowStatus.PAID) 
+
+        if(deal.status == EscrowStatus.PAID)
+            // Interaction: payment
             voidAndRefund(agreementId);
         else if(deal.status == EscrowStatus.PENDING)
+            // Effect: update status
             voidEscrow(agreementId);
     }
 
@@ -417,11 +429,24 @@ contract DealManager is Initializable, UUPSUpgradeable, BorgAuthACL, LexScroWLit
     /// @param agreementId Unique identifier for the agreement
     /// @param signer Address of the signer
     /// @param signature Signature of the signer
-    function signToVoid(bytes32 agreementId, address signer, bytes memory signature) public {
+    function signToVoid(bytes32 agreementId, address signer, bytes memory signature) public nonReentrant {
+        // Check: status
         if(msg.sender != signer) revert CounterPartyValueMismatch();
+
+        // Effect: update status
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
         if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId) && LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PAID)
+            // Interaction: payment
             voidAndRefund(agreementId);
+    }
+
+    /// @notice Refund a voided deal
+    /// @dev Use this method to initiate refund if the deal agreement has been voided externally
+    /// (e.g. directly to CyberAgreementRegistry without being processed by Deal Manager)
+    /// @param agreementId Unique identifier for the agreement
+    function refundVoidedDeal(bytes32 agreementId) public nonReentrant {
+        // Interaction: Re-sync Deal Manager internal escrow to VOIDED, then refund
+        voidAndRefund(agreementId);
     }
 
     /// @notice Adds a condition to a deal
