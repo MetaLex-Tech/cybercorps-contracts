@@ -248,6 +248,8 @@ contract RoundManager is
         RoundManagerStorage.setIssuanceManager(_issuanceManager);
         RoundManagerStorage.setUpgradeFactory(_upgradeFactory);
 
+        RoundManagerStorage.setLexChexCondition(address(0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42));
+
         // No persistent DOMAIN_SEPARATOR; compute dynamically to avoid storage costs
     }
 
