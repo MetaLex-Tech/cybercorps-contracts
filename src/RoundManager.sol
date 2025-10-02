@@ -84,9 +84,10 @@ contract RoundManager is
 
     // Upgrade notes: Reduced gap to account for new variables
     //  50
+    //   -1 (ReentrancyGuard)
     //   -1 (BorgAuthACL)
-    //  = 49
-    uint256[49] private __gap;
+    //  = 48
+    uint256[48] private __gap;
 
     /// @notice Certificate data structure for creating new certificates
     struct CyberCertData {

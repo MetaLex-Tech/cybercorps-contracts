@@ -44,32 +44,41 @@ pragma solidity 0.8.28;
 import "./RoundManager.sol";
 import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "openzeppelin-contracts/utils/Create2.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./libs/auth.sol";
 
 /// @title RoundManagerFactory
 /// @notice Factory contract for deploying RoundManager instances
 /// @dev Uses ERC1967Proxy+UUPSUpgradeable pattern for upgradeable RoundManager instances
-contract RoundManagerFactory is BorgAuthACL {
+contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
 
     RoundManager public refImplementation; // implementation contract to use for new deployments
+
+    // Upgrade notes: Reduced gap to account for new variables
+    //  50
+    //   -1 (BorgAuthACL)
+    //   -1 (self)
+    //  = 48
+    uint256[48] private __gap;
     
     event RoundManagerDeployed(address roundManager, string version);
 
-    /// @notice Constructor that deploys the implementation and beacon
-    /// @param _auth Address of the BorgAuth contract
-    constructor(address _auth) {
-        refImplementation = new RoundManager();
-        initialize(_auth);
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
     }
 
-    /// @notice Initializes the factory with auth
+    /// @notice Initialize the factory with authentication and reference implementation
     /// @param _auth Address of the BorgAuth contract
-    function initialize(address _auth) public initializer {
+    /// @param _refImplementation Address of the reference RoundManager implementation
+    function initialize(address _auth, address _refImplementation) public initializer {
         // Initialize BorgAuthACL
         __BorgAuthACL_init(_auth);
+
+        refImplementation = RoundManager(_refImplementation);
     }
 
     /// @notice Deploys a new RoundManager instance
@@ -112,4 +121,8 @@ contract RoundManagerFactory is BorgAuthACL {
     function setRefImplementation(RoundManager _newImplementation) public onlyOwner {
         refImplementation = _newImplementation;
     }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {}
 }

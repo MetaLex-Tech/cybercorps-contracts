@@ -64,6 +64,7 @@ import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {DealManager} from "../src/DealManager.sol";
+import {RoundManager} from "../src/RoundManager.sol";
 import {Escrow} from "../src/storage/LexScrowStorage.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {TokenWarrantExtension, TokenWarrantData} from "../src/storage/extensions/TokenWarrantExtension.sol";
@@ -184,7 +185,14 @@ contract CyberCorpTest is Test {
         );
 
         address dealManagerFactory = address(
-            new DealManagerFactory{salt: salt}(address(auth))
+            new ERC1967Proxy{salt: salt}(
+                address(new DealManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    DealManagerFactory.initialize.selector,
+                    address(auth),
+                    address(new DealManager())
+                )
+            )
         );
 
         // Deploy upgradeable singletons
@@ -206,7 +214,14 @@ contract CyberCorpTest is Test {
 
         // RoundManager via factory and initialize
         address rmFactory = address(
-            new RoundManagerFactory{salt: salt}(address(auth))
+            new ERC1967Proxy{salt: salt}(
+                address(new RoundManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(auth),
+                    address(new RoundManager())
+                )
+            )
         );
 
         cyberCorpFactory = CyberCorpFactory(address(new ERC1967Proxy{salt: salt}(

@@ -8,8 +8,8 @@ import {MetaDAOFactory} from "../src/MetaDAOFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
-import {DealManagerFactory} from "../src/DealManagerFactory.sol";
-import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
+import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
+import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
@@ -72,10 +72,24 @@ contract DeployMetaDAOFactoryScript is Script {
             new CyberCorpSingleFactory{salt: salt}(address(auth))
         );
         address dealManagerFactory = address(
-            new DealManagerFactory{salt: salt}(address(auth))
+            new ERC1967Proxy{salt: salt}(
+                address(new DealManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    DealManagerFactory.initialize.selector,
+                    address(auth),
+                    address(new DealManager())
+                )
+            )
         );
         address roundManagerFactory = address(
-            new RoundManagerFactory{salt: salt}(address(auth))
+            new ERC1967Proxy{salt: salt}(
+                address(new RoundManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(auth),
+                    address(new RoundManager())
+                )
+            )
         );
 
         address cyberCertPrinterImplementation = address(

@@ -12,9 +12,9 @@ import "../dependencies/openzeppelin-contracts-upgradeable/contracts/proxy/utils
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
-import {DealManagerFactory} from "../src/DealManagerFactory.sol";
+import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
-import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
+import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
@@ -256,15 +256,28 @@ contract RoundManagerTest is Test {
             new CyberCorpSingleFactory{salt: salt}(address(bootstrapAuth))
         );
         address dealManagerFactory = address(
-            new DealManagerFactory{salt: salt}(address(bootstrapAuth))
+            new ERC1967Proxy{salt: salt}(
+                address(new DealManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    DealManagerFactory.initialize.selector,
+                    address(bootstrapAuth),
+                    address(new DealManager())
+                )
+            )
         );
 
         address certPrinterImpl = address(new CyberCertPrinter{salt: salt}());
         address cyberScripImpl = address(new CyberScrip{salt: salt}());
 
-                // RoundManager via factory and initialize
         rmFactory = address(
-            new RoundManagerFactory{salt: salt}(address(bootstrapAuth))
+            new ERC1967Proxy{salt: salt}(
+                address(new RoundManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(bootstrapAuth),
+                    address(new RoundManager())
+                )
+            )
         );
         /*address _auth,
         address _registryAddress,
@@ -1755,11 +1768,25 @@ contract RoundManagerFCFSTest is Test {
             new CyberCorpSingleFactory{salt: salt}(address(bootstrapAuth))
         );
         dealManagerFactory = address(
-            new DealManagerFactory{salt: salt}(address(bootstrapAuth))
+            new ERC1967Proxy{salt: salt}(
+                address(new DealManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    DealManagerFactory.initialize.selector,
+                    address(bootstrapAuth),
+                    address(new DealManager())
+                )
+            )
         );
 
         address rmFactory = address(
-            new RoundManagerFactory{salt: salt}(address(bootstrapAuth))
+            new ERC1967Proxy{salt: salt}(
+                address(new RoundManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(bootstrapAuth),
+                    address(new RoundManager())
+                )
+            )
         );
 
         address certPrinterImpl = address(new CyberCertPrinter{salt: salt}());
@@ -1798,7 +1825,16 @@ contract RoundManagerFCFSTest is Test {
         ) = _deployRegistryAndFactories(me);
 
         address auth = address(corpFactory.AUTH());
-        RoundManagerFactory rmFactory = new RoundManagerFactory(auth);
+        RoundManagerFactory rmFactory = RoundManagerFactory(address(
+            new ERC1967Proxy(
+                address(new RoundManagerFactory()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(auth),
+                    address(new RoundManager())
+                )
+            )
+        ));
         rmFactory.setRefImplementation(new RoundManager());
 
         IUUPS(address(corpFactory)).upgradeToAndCall(address(new CyberCorpFactory()), "");
@@ -1823,7 +1859,16 @@ contract RoundManagerFCFSTest is Test {
         _createTemplate(registry);
 
         // Apply upgrades
-        RoundManagerFactory rmFactory = new RoundManagerFactory(address(corpFactory.AUTH()));
+        RoundManagerFactory rmFactory = RoundManagerFactory(address(
+            new ERC1967Proxy(
+                address(new RoundManagerFactory()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(corpFactory.AUTH()),
+                    address(new RoundManager())
+                )
+            )
+        ));
         rmFactory.setRefImplementation(new RoundManager());
         IUUPS(address(corpFactory)).upgradeToAndCall(address(new CyberCorpFactory()), "");
         corpFactory.setRoundManagerFactory(address(rmFactory));
@@ -2062,7 +2107,16 @@ contract RoundManagerFCFSTest is Test {
         address issuance
     ) internal returns (RoundManager rm) {
         // Deploy RoundManager via factory (BeaconProxy), then initialize
-        RoundManagerFactory rmFactory = new RoundManagerFactory(auth);
+        RoundManagerFactory rmFactory = RoundManagerFactory(address(
+            new ERC1967Proxy(
+                address(new RoundManagerFactory()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(auth),
+                    address(new RoundManager())
+                )
+            )
+        ));
         address proxy = rmFactory.deployRoundManager(keccak256("rm-fcfs"));
         rm = RoundManager(payable(proxy));
         rm.initialize(auth, corp, registry, issuance, address(rmFactory));

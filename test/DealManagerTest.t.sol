@@ -235,7 +235,18 @@ contract DealManagerTest is Test {
         defaultCertPrinters = new address[](1);
         defaultCertPrinters[0] = address(new CyberCertPrinterMock{salt: salt}());
 
-        dmFactory = new DealManagerFactory{salt: salt}(address(bootstrapAuth));
+        dmFactory = DealManagerFactory(
+            address(
+                new ERC1967Proxy{salt: salt}(
+                    address(new DealManagerFactory{salt: salt}()),
+                    abi.encodeWithSelector(
+                        DealManagerFactory.initialize.selector,
+                        address(bootstrapAuth),
+                        address(new DealManager())
+                    )
+                )
+            )
+        );
         dm = DealManager(
             address(
                 new ERC1967Proxy{salt: salt}(
@@ -864,10 +875,10 @@ contract DealManagerTest is Test {
 
         // Deploy existing DealManagers
 
-        DealManager rm = DealManager(
+        DealManager dm = DealManager(
             DealManagerFactory(dmFactory).deployDealManager(keccak256("testUpgradeExistingDealManager2"))
         );
-        rm.initialize(
+        dm.initialize(
             address(corpAuth),
             placeHolderAddr,
             placeHolderAddr,
@@ -882,7 +893,7 @@ contract DealManagerTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(DealManager.NotRefImplementation.selector)
         );
-        rm.upgradeToAndCall(nonOfficialDealManager, "");
+        dm.upgradeToAndCall(nonOfficialDealManager, "");
         vm.stopPrank();
     }
 }

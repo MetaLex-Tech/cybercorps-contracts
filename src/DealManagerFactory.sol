@@ -43,30 +43,42 @@ pragma solidity 0.8.28;
 
 import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "openzeppelin-contracts/utils/Create2.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./DealManager.sol";
 import "./libs/auth.sol";
 
 /// @title DealManagerFactory
 /// @notice Factory contract for deploying DealManager instances
 /// @dev Uses ERC1967Proxy+UUPSUpgradeable pattern for upgradeable DealManager instances
-contract DealManagerFactory is BorgAuthACL {
+contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
 
     DealManager public refImplementation; // implementation contract to use for new deployments
 
+    // Upgrade notes: Reduced gap to account for new variables
+    //  50
+    //   -1 (BorgAuthACL)
+    //   -1 (self)
+    //  = 48
+    uint256[48] private __gap;
+
     event DealManagerDeployed(address dealManager, string version);
 
-    constructor(address _auth) {
-        // Deploy the reference implementation contract
-        refImplementation = new DealManager();
-        initialize(_auth);
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
     }
-    
-    function initialize(address _auth) public initializer {
+
+    /// @notice Initialize the factory with authentication and reference implementation
+    /// @param _auth Address of the BorgAuth contract
+    /// @param _refImplementation Address of the reference DealManager implementation
+    function initialize(address _auth, address _refImplementation) public initializer {
         // Initialize BorgAuthACL
         __BorgAuthACL_init(_auth);
+
+        refImplementation = DealManager(_refImplementation);
     }
 
     function deployDealManager(bytes32 _salt) public returns (address) {
@@ -106,4 +118,8 @@ contract DealManagerFactory is BorgAuthACL {
     function setRefImplementation(DealManager _newImplementation) public onlyOwner {
         refImplementation = _newImplementation;
     }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {}
 }

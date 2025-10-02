@@ -6,8 +6,8 @@ import {MetaDAOFactory} from "../src/MetaDAOFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
-import {DealManagerFactory} from "../src/DealManagerFactory.sol";
-import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
+import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
+import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
@@ -73,8 +73,26 @@ contract MetaDAOTest is Test {
         // Factories
         address issuanceManagerFactoryAddr = address(new IssuanceManagerFactory{salt: salt}(address(bootstrapAuth)));
         address cyberCorpSingleFactory = address(new CyberCorpSingleFactory{salt: salt}(address(bootstrapAuth)));
-        address dealManagerFactory = address(new DealManagerFactory{salt: salt}(address(bootstrapAuth)));
-        address roundManagerFactory = address(new RoundManagerFactory{salt: salt}(address(bootstrapAuth)));
+        address dealManagerFactory = address(
+            new ERC1967Proxy{salt: salt}(
+                address(new DealManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    DealManagerFactory.initialize.selector,
+                    address(bootstrapAuth),
+                    address(new DealManager())
+                )
+            )
+        );
+        address roundManagerFactory = address(
+            new ERC1967Proxy{salt: salt}(
+                address(new RoundManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(bootstrapAuth),
+                    address(new RoundManager())
+                )
+            )
+        );
 
         // Implementations
         address certPrinterImpl = address(new CyberCertPrinter{salt: salt}());
