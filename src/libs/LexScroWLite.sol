@@ -135,7 +135,7 @@ abstract contract LexScroWLite is Initializable {
         escrow.status = EscrowStatus.PAID;
     }
 
-    /// @dev: External functions who call this should implement their own reentrancy guards
+    /// @dev External functions who call this should implement their own reentrancy guards
     function voidAndRefund(bytes32 agreementId) internal {
         // Check: check status
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
@@ -159,7 +159,7 @@ abstract contract LexScroWLite is Initializable {
         }
     }
 
-    /// @dev: External functions who call this should implement their own reentrancy guards
+    /// @dev External functions who call this should implement their own reentrancy guards
     function finalizeEscrow(bytes32 agreementId) internal {
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
 
