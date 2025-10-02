@@ -731,7 +731,17 @@ contract RoundManager is
 
     /// @notice Rejects an EOI and voids the deal
     /// @param agreementId The agreement ID
-    function reject(bytes32 agreementId) external onlyOwner nonReentrant {
+    function reject(bytes32 agreementId) external onlyOwner {
+        reject(agreementId, true);
+    }
+
+    /// @notice Rejects an EOI and voids the deal if necessary
+    /// @dev The extra parameter allows handling the edge case where the party voided the agreement by
+    /// directly requesting to CyberAgreementRegistry and bypassing RoundManager.
+    /// In such case, we want to skip `voidContractFor()` so it does not attempt to void the contract again.
+    /// @param agreementId The agreement ID
+    /// @param isVoidAgreement True if voiding the deal
+    function reject(bytes32 agreementId, bool isVoidAgreement) public onlyOwner {
         bytes32 roundId = RoundManagerStorage.getAgreementToRound(agreementId);
         Round storage round = RoundManagerStorage.getRound(roundId);
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
@@ -743,7 +753,10 @@ contract RoundManager is
 
         // Effect: update status
         voidEscrow(agreementId);
-        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, escrow.counterParty, escrow.signature);
+
+        if (isVoidAgreement) {
+            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, escrow.counterParty, escrow.signature);
+        }
 
         // Interaction: Refund all
         uint256 amount = escrow.buyerAssets[0].amount;
@@ -752,8 +765,19 @@ contract RoundManager is
         emit EOIRejected(agreementId, escrow.counterParty, roundId);
     }
 
-    //allow a eoi submitter to recall their eoi and get a refund after the eoi expiry
-    function recallEOI(bytes32 agreementId) external nonReentrant {
+    /// @notice Allow a eoi submitter to recall their eoi, get a refund and void the agreement after the eoi expiry
+    /// @param agreementId The agreement ID
+    function recallEOI(bytes32 agreementId) external {
+        recallEOI(agreementId, true);
+    }
+
+    /// @notice Allow a eoi submitter to recall their eoi, get a refund and void the agreement if necessary after the eoi expiry
+    /// @dev The extra parameter allows handling the edge case where the party voided the agreement by
+    /// directly requesting to CyberAgreementRegistry and bypassing RoundManager.
+    /// In such case, we want to skip `voidContractFor()` so it does not attempt to void the contract again.
+    /// @param agreementId The agreement ID
+    /// @param isVoidAgreement True if voiding the deal
+    function recallEOI(bytes32 agreementId, bool isVoidAgreement) public {
         bytes32 roundId = RoundManagerStorage.getAgreementToRound(agreementId);
         Round storage round = RoundManagerStorage.getRound(roundId);
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
@@ -767,7 +791,12 @@ contract RoundManager is
 
         // Effect: update status
         voidEscrow(agreementId);
-        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, escrow.counterParty, escrow.signature);
+
+        // void agreement
+        if (isVoidAgreement) {
+            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, escrow.counterParty, escrow.signature);
+        }
+
 
         // Interaction: Refund all
         uint256 amount = escrow.buyerAssets[0].amount;
