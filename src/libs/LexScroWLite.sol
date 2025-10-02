@@ -50,11 +50,10 @@ import "../interfaces/ICyberCorp.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICondition.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {LexScrowStorage, Escrow, Token, TokenType, EscrowStatus} from "../storage/LexScrowStorage.sol";
 
 
-abstract contract LexScroWLite is Initializable, ReentrancyGuard {
+abstract contract LexScroWLite is Initializable {
     using LexScrowStorage for LexScrowStorage.LexScrowData;
     using SafeERC20 for IERC20;
 
@@ -136,12 +135,17 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
         escrow.status = EscrowStatus.PAID;
     }
 
-    function voidAndRefund(bytes32 agreementId) internal nonReentrant {
+    /// @dev External functions who call this should implement their own reentrancy guards
+    function voidAndRefund(bytes32 agreementId) internal {
+        // Check: check status
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
         if(escrow.status != EscrowStatus.PAID) revert EscrowNotPaid();
         if(!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId)) revert DealNotVoided();
 
-        // Refund buyer assets first
+        // Effect: update status
+        voidEscrow(agreementId);
+
+        // Interaction: Refund buyer assets
         for(uint256 i = 0; i < escrow.buyerAssets.length; i++) {
             if(escrow.buyerAssets[i].tokenType == TokenType.ERC20) {
                 IERC20(escrow.buyerAssets[i].tokenAddress).safeTransfer(escrow.counterParty, escrow.buyerAssets[i].amount);
@@ -153,22 +157,21 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
                 IERC1155(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), escrow.counterParty, escrow.buyerAssets[i].tokenId, escrow.buyerAssets[i].amount, "");
             }
         }
-
-        voidEscrow(agreementId);
     }
 
-    function finalizeEscrow(bytes32 agreementId) internal nonReentrant {
+    /// @dev External functions who call this should implement their own reentrancy guards
+    function finalizeEscrow(bytes32 agreementId) internal {
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
 
-        // Check all conditions before proceeding
+        // Check: Check all conditions before proceeding
         if(block.timestamp > escrow.expiry) revert DealExpired();
         if(escrow.status != EscrowStatus.PAID) revert EscrowNotPaid();
 
-        // Update state before external calls
+        // Effect: Update state before external calls
         escrow.status = EscrowStatus.FINALIZED;
         emit DealFinalizedAt(agreementId, LexScrowStorage.getDealRegistry(), block.timestamp);
 
-        // Transfer buyer assets to company
+        // Interaction: Transfer buyer assets to company
         for(uint256 i = 0; i < escrow.buyerAssets.length; i++) {
             if(escrow.buyerAssets[i].tokenType == TokenType.ERC20) {
                 IERC20(escrow.buyerAssets[i].tokenAddress).safeTransfer(ICyberCorp(LexScrowStorage.getCorp()).companyPayable(), escrow.buyerAssets[i].amount);
@@ -181,7 +184,7 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
             }
         }
 
-        // Transfer corp assets to counter party
+        // Interaction: Transfer corp assets to counter party
         for(uint256 i = 0; i < escrow.corpAssets.length; i++) {
             if(escrow.corpAssets[i].tokenType == TokenType.ERC20) {
                 IERC20(escrow.corpAssets[i].tokenAddress).safeTransfer(escrow.counterParty, escrow.corpAssets[i].amount);

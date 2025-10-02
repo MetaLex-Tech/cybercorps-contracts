@@ -76,6 +76,31 @@ library CyberAgreementUtils {
             )
         );
 
+        return _signTypedData(vm, _domainSeparator, structHash, privKey);
+    }
+
+    function signVoidAgreementTypedData(
+        Vm vm,
+        bytes32 _domainSeparator,
+        bytes32 _typeHash,
+        bytes32 contractId,
+        address party,
+        uint256 privKey
+    ) internal pure returns (bytes memory signature) {
+        // Create the message hash using the same approach as the contract
+        bytes32 structHash = keccak256(
+            abi.encode(_typeHash, contractId, party)
+        );
+
+        return _signTypedData(vm, _domainSeparator, structHash, privKey);
+    }
+
+    function _signTypedData(
+        Vm vm,
+        bytes32 _domainSeparator,
+        bytes32 structHash,
+        uint256 privKey
+    ) internal pure returns (bytes memory signature) {
         bytes32 digest = keccak256(
             abi.encodePacked("\x19\x01", _domainSeparator, structHash)
         );
