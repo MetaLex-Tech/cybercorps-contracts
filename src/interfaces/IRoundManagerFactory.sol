@@ -46,5 +46,5 @@ import "./IPlatformPayable.sol";
 interface IRoundManagerFactory is IPlatformPayable {
     function deployRoundManager(bytes32 _salt) external returns (address);
 
-    function refImplementation() external returns (address);
+    function getRefImplementation() external returns (address);
 }

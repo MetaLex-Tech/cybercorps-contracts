@@ -42,18 +42,18 @@
 
 pragma solidity 0.8.28;
 
-/// @title RoundManagerFactoryStorage
-/// @notice Storage library for the RoundManagerFactory contract that handles persistent data storage
+/// @title DealManagerFactoryStorage
+/// @notice Storage library for the DealManagerFactory contract that handles persistent data storage
 /// @dev Uses the unstructured storage pattern to manage factory-related data
-library RoundManagerFactoryStorage {
+library DealManagerFactoryStorage {
     // Storage slot for our struct
-    bytes32 constant STORAGE_POSITION = keccak256("cybercorp.round.manager.factory.storage.v1");
+    bytes32 constant STORAGE_POSITION = keccak256("cybercorp.deal.manager.factory.storage.v1");
 
     uint256 public constant BASIS_POINTS = 10000; // 100%
 
     /// @notice Main storage layout struct that holds all persisted data
     /// @dev Uses unstructured storage pattern to avoid storage collisions
-    struct RoundManagerFactoryData {
+    struct DealManagerFactoryData {
         address refImplementation; // implementation contract to use for new deployments
 
         address platformPayable; // Recipient of platform fees
@@ -61,10 +61,10 @@ library RoundManagerFactoryStorage {
         uint256 defaultFeeCorpCutRatio; // CyberCorp cut of total fee as % of ticket size (<= feeRatio, BASIS_POINTS = 100%)
     }
 
-    /// @notice Retrieves the storage reference for the RoundManagerFactoryData struct
+    /// @notice Retrieves the storage reference for the DealManagerFactoryData struct
     /// @dev Uses assembly to compute the storage position
-    /// @return ds Reference to the RoundManagerFactoryData struct in storage
-    function roundManagerFactoryStorage() internal pure returns (RoundManagerFactoryData storage ds) {
+    /// @return ds Reference to the DealManagerFactoryData struct in storage
+    function dealManagerFactoryStorage() internal pure returns (DealManagerFactoryData storage ds) {
         bytes32 position = STORAGE_POSITION;
         assembly {
             ds.slot := position
@@ -72,43 +72,43 @@ library RoundManagerFactoryStorage {
     }
 
     function getRefImplementation() internal view returns (address) {
-        return roundManagerFactoryStorage().refImplementation;
+        return dealManagerFactoryStorage().refImplementation;
     }
 
     function getPlatformPayable() internal view returns (address) {
-        return roundManagerFactoryStorage().platformPayable;
+        return dealManagerFactoryStorage().platformPayable;
     }
 
     function getDefaultFeeRatio() internal view returns (uint256) {
-        return roundManagerFactoryStorage().defaultFeeRatio;
+        return dealManagerFactoryStorage().defaultFeeRatio;
     }
 
     function getDefaultFeeCorpCutRatio() internal view returns (uint256) {
-        return roundManagerFactoryStorage().defaultFeeCorpCutRatio;
+        return dealManagerFactoryStorage().defaultFeeCorpCutRatio;
     }
 
     function setRefImplementation(address newImplementation) internal {
-        roundManagerFactoryStorage().refImplementation = newImplementation;
+        dealManagerFactoryStorage().refImplementation = newImplementation;
     }
 
     function setPlatformPayable(address platformPayable) internal {
-        roundManagerFactoryStorage().platformPayable = platformPayable;
+        dealManagerFactoryStorage().platformPayable = platformPayable;
     }
 
     function setDefaultFeeRatio(uint256 feeRatio) internal returns (bool) {
         if (feeRatio > BASIS_POINTS) {
             return false; // fee ratio should not exceed 100%
         } else {
-            roundManagerFactoryStorage().defaultFeeRatio = feeRatio;
+            dealManagerFactoryStorage().defaultFeeRatio = feeRatio;
             return true;
         }
     }
 
     function setDefaultFeeCorpCutRatio(uint256 feeCorpCutRatio) internal returns (bool) {
-        if (feeCorpCutRatio > roundManagerFactoryStorage().defaultFeeCorpCutRatio) {
+        if (feeCorpCutRatio > dealManagerFactoryStorage().defaultFeeCorpCutRatio) {
             return false; // CyberCorp's cut should not exceed fee ratio
         } else {
-            roundManagerFactoryStorage().defaultFeeCorpCutRatio = feeCorpCutRatio;
+            dealManagerFactoryStorage().defaultFeeCorpCutRatio = feeCorpCutRatio;
             return true;
         }
     }

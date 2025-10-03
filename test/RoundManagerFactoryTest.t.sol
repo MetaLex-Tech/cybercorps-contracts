@@ -117,12 +117,12 @@ contract RoundManagerFactoryTest is Test {
 
         // MetaLeX to release new RoundManager v2
         vm.startPrank(owner);
-        RoundManagerFactory(rmFactory).setRefImplementation(RoundManager(address(new MockRoundManagerV2())));
+        RoundManagerFactory(rmFactory).setRefImplementation(address(new MockRoundManagerV2()));
         vm.stopPrank();
 
         // Corp owner decided to accept the upgrade
         vm.startPrank(companyOwner);
-        rm.upgradeToAndCall(address(RoundManagerFactory(rmFactory).refImplementation()), "");
+        rm.upgradeToAndCall(RoundManagerFactory(rmFactory).getRefImplementation(), "");
         vm.stopPrank();
         assertEq(rm.DEPLOY_VERSION(), "2", "RoundManager should be upgraded");
     }

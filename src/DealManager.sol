@@ -60,13 +60,6 @@ contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAut
 
     string public constant DEPLOY_VERSION = "1"; // For version-tracking on all deployment and future upgrades
 
-    // Upgrade notes: Reduced gap to account for new variables
-    //  50
-    //   -1 (ReentrancyGuard)
-    //   -1 (BorgAuthACL)
-    //  = 48
-    uint256[48] private __gap;
-
     /// @notice Certificate data structure for creating new certificates
     struct CyberCertData {
         string name;
@@ -596,7 +589,7 @@ contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAut
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyOwner {
-        if(IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).refImplementation() != newImplementation) {
+        if(IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).getRefImplementation() != newImplementation) {
             revert NotRefImplementation();
         }
     }

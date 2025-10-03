@@ -46,6 +46,7 @@ import "openzeppelin-contracts/utils/Create2.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./DealManager.sol";
 import "./libs/auth.sol";
+import "./storage/DealManagerFactoryStorage.sol";
 
 /// @title DealManagerFactory
 /// @notice Factory contract for deploying DealManager instances
@@ -54,15 +55,6 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
-
-    DealManager public refImplementation; // implementation contract to use for new deployments
-
-    // Upgrade notes: Reduced gap to account for new variables
-    //  50
-    //   -1 (BorgAuthACL)
-    //   -1 (self)
-    //  = 48
-    uint256[48] private __gap;
 
     event DealManagerDeployed(address dealManager, string version);
 
@@ -78,7 +70,7 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
         // Initialize BorgAuthACL
         __BorgAuthACL_init(_auth);
 
-        refImplementation = DealManager(_refImplementation);
+        DealManagerFactoryStorage.setRefImplementation(_refImplementation);
     }
 
     function deployDealManager(bytes32 _salt) public returns (address) {
@@ -92,7 +84,7 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
         
         if(dealManagerProxy == address(0)) revert DeploymentFailed();
         
-        emit DealManagerDeployed(dealManagerProxy, refImplementation.DEPLOY_VERSION());
+        emit DealManagerDeployed(dealManagerProxy, DealManager(DealManagerFactoryStorage.getRefImplementation()).DEPLOY_VERSION());
         return dealManagerProxy;
     }
 
@@ -109,14 +101,20 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
     /// @return bytecode The proxy contract creation bytecode
     function _getBytecode() private view returns (bytes memory bytecode) {
         bytes memory sourceCodeBytes = type(ERC1967Proxy).creationCode;
-        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(refImplementation, ""));
+        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(DealManagerFactoryStorage.getRefImplementation(), ""));
+    }
+
+    /// @notice Get the reference implementation contract for the next deployments
+    /// @return Current reference implementation contract address
+    function getRefImplementation() public returns(address) {
+        return DealManagerFactoryStorage.getRefImplementation();
     }
 
     /// @notice Set the reference implementation contract for the next deployments
     /// @dev Only callable by addresses with the admin role
     /// @param _newImplementation Address of the new implementation
-    function setRefImplementation(DealManager _newImplementation) public onlyOwner {
-        refImplementation = _newImplementation;
+    function setRefImplementation(address _newImplementation) public onlyOwner {
+        DealManagerFactoryStorage.setRefImplementation(_newImplementation);
     }
 
     // TODO WIP: no fees for DealManager yet

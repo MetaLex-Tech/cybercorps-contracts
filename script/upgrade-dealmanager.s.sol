@@ -42,7 +42,7 @@ contract BaseScript is Script {
        // CyberAgreementRegistry(registry).upgradeToAndCall(newRegistryImplementation, "");
 
         // Verify the upgrade was successful
-        address updatedImplementation = address(deployedFactory.refImplementation());
+        address updatedImplementation = deployedFactory.getRefImplementation();
         console.log("Updated DealManager reference implementation:", updatedImplementation);
 
         address newDealManagerImplementation = address(new DealManager{salt: salt}());

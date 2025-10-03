@@ -3319,7 +3319,7 @@ contract CyberCorpTest is Test {
         vm.stopPrank();
 
         // Deploy new implementation
-        DealManager newImplementation = new DealManager();
+        address newImplementation = address(new DealManager());
         address factoryaddr = cyberCorpFactory.dealManagerFactory();
         // Upgrade beacon implementation
         console.log(DealManagerFactory(factoryaddr).AUTH().userRoles(address(multisig)));
@@ -3334,7 +3334,7 @@ contract CyberCorpTest is Test {
         );
         vm.prank(multisig);
         DealManagerFactory(factoryaddr).setRefImplementation(newImplementation);
-        assertEq(address(DealManagerFactory(factoryaddr).refImplementation()), address(newImplementation));
+        assertEq(DealManagerFactory(factoryaddr).getRefImplementation(), newImplementation);
 
         // Verify the deal manager still works by checking the deal
         Escrow memory escrow = DealManager(dealManagerAddr).getEscrowDetails(
@@ -4447,12 +4447,12 @@ contract CyberCorpTest is Test {
         DealManagerFactory deployedFactory = DealManagerFactory(deployedFactoryAddr);
 
         // Get the current beacon implementation
-        address currentImplementation = address(deployedFactory.refImplementation());
+        address currentImplementation = deployedFactory.getRefImplementation();
         console.log("Current beacon implementation:", currentImplementation);
 
         // Deploy a new DealManager implementation using CREATE2
         bytes32 implementationSalt = bytes32(keccak256("NewDealManagerImplementation"));
-        DealManager newImplementation = new DealManager{salt: implementationSalt}();
+        address newImplementation = address(new DealManager{salt: implementationSalt}());
         console.log("New implementation deployed at:", address(newImplementation));
 
         // Non-owner should not be able to upgrade it
@@ -4464,7 +4464,7 @@ contract CyberCorpTest is Test {
         deployedFactory.setRefImplementation(newImplementation);
 
         // Verify the upgrade was successful
-        address updatedImplementation = address(deployedFactory.refImplementation());
+        address updatedImplementation = deployedFactory.getRefImplementation();
         assertEq(updatedImplementation, address(newImplementation), "Beacon implementation should be updated");
         console.log("Updated beacon implementation:", updatedImplementation);
 
