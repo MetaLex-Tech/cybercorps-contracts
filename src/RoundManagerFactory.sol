@@ -46,6 +46,7 @@ import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "openzeppelin-contracts/utils/Create2.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./libs/auth.sol";
+import {RoundManagerFactoryStorage} from "./storage/RoundManagerFactoryStorage.sol";
 
 /// @title RoundManagerFactory
 /// @notice Factory contract for deploying RoundManager instances
@@ -55,15 +56,6 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
     error DeploymentFailed();
     error ZeroAddress();
 
-    RoundManager public refImplementation; // implementation contract to use for new deployments
-
-    // Upgrade notes: Reduced gap to account for new variables
-    //  50
-    //   -1 (BorgAuthACL)
-    //   -1 (self)
-    //  = 48
-    uint256[48] private __gap;
-    
     event RoundManagerDeployed(address roundManager, string version);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -78,7 +70,7 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
         // Initialize BorgAuthACL
         __BorgAuthACL_init(_auth);
 
-        refImplementation = RoundManager(_refImplementation);
+        RoundManagerFactoryStorage.setRefImplementation(_refImplementation);
     }
 
     /// @notice Deploys a new RoundManager instance
@@ -95,7 +87,7 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
 
         if(roundManagerProxy == address(0)) revert DeploymentFailed();
         
-        emit RoundManagerDeployed(roundManagerProxy, refImplementation.DEPLOY_VERSION());
+        emit RoundManagerDeployed(roundManagerProxy, RoundManager(RoundManagerFactoryStorage.getRefImplementation()).DEPLOY_VERSION());
         return roundManagerProxy;
     }
 
@@ -112,14 +104,20 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
     /// @return bytecode The proxy contract creation bytecode
     function _getBytecode() private view returns (bytes memory bytecode) {
         bytes memory sourceCodeBytes = type(ERC1967Proxy).creationCode;
-        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(refImplementation, ""));
+        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(RoundManagerFactoryStorage.getRefImplementation(), ""));
+    }
+
+    /// @notice Get the reference implementation contract for the next deployments
+    /// @return Current reference implementation contract address
+    function getRefImplementation() public returns(address) {
+        return RoundManagerFactoryStorage.getRefImplementation();
     }
 
     /// @notice Set the reference implementation contract for the next deployments
     /// @dev Only callable by addresses with the admin role
     /// @param _newImplementation Address of the new implementation
-    function setRefImplementation(RoundManager _newImplementation) public onlyOwner {
-        refImplementation = _newImplementation;
+    function setRefImplementation(address _newImplementation) public onlyOwner {
+        RoundManagerFactoryStorage.setRefImplementation(_newImplementation);
     }
 
     function _authorizeUpgrade(

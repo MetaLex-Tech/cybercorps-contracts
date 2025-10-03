@@ -117,12 +117,12 @@ contract DealManagerFactoryTest is Test {
 
         // MetaLeX to release new DealManager v2
         vm.startPrank(owner);
-        DealManagerFactory(dmFactory).setRefImplementation(DealManager(address(new MockDealManagerV2())));
+        DealManagerFactory(dmFactory).setRefImplementation(address(new MockDealManagerV2()));
         vm.stopPrank();
 
         // Corp owner decided to accept the upgrade
         vm.startPrank(companyOwner);
-        dm.upgradeToAndCall(address(DealManagerFactory(dmFactory).refImplementation()), "");
+        dm.upgradeToAndCall(address(DealManagerFactory(dmFactory).getRefImplementation()), "");
         vm.stopPrank();
         assertEq(dm.DEPLOY_VERSION(), "2", "DealManager should be upgraded");
     }

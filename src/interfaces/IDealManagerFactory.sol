@@ -46,5 +46,5 @@ interface IDealManagerFactory {
     function computeDealManagerAddress(bytes32 salt) external view returns (address);
     function initialize(address _auth) external;
 
-    function refImplementation() external returns (address);
+    function getRefImplementation() external returns (address);
 }

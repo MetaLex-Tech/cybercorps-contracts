@@ -1607,12 +1607,12 @@ contract RoundManagerTest is Test {
     }
 
     function test_UpgradeNextRoundManager() public {
-        assertEq(RoundManagerFactory(rmFactory).refImplementation().DEPLOY_VERSION(), "1", "reference impl version should not be changed yet");
+        assertEq(RoundManager(RoundManagerFactory(rmFactory).getRefImplementation()).DEPLOY_VERSION(), "1", "reference impl version should not be changed yet");
 
         vm.startPrank(owner);
-        RoundManagerFactory(rmFactory).setRefImplementation(RoundManager(address(new MockRoundManagerV2())));
+        RoundManagerFactory(rmFactory).setRefImplementation(address(new MockRoundManagerV2()));
         vm.stopPrank();
-        assertEq(RoundManagerFactory(rmFactory).refImplementation().DEPLOY_VERSION(), "2", "reference impl version should have changed");
+        assertEq(RoundManager(RoundManagerFactory(rmFactory).getRefImplementation()).DEPLOY_VERSION(), "2", "reference impl version should have changed");
 
         bytes32 salt = keccak256("test_UpgradeNextRounderManager");
         // Next deployment should emit events with version so indexer could be informed
@@ -1658,13 +1658,13 @@ contract RoundManagerTest is Test {
         // MetaLeX to release new RoundManager v2
 
         vm.startPrank(owner);
-        RoundManagerFactory(rmFactory).setRefImplementation(RoundManager(address(new MockRoundManagerV2())));
+        RoundManagerFactory(rmFactory).setRefImplementation(address(new MockRoundManagerV2()));
         vm.stopPrank();
 
         // Corp2 owner decided to accept the upgrade
 
         vm.startPrank(corpOwner);
-        rm2.upgradeToAndCall(address(RoundManagerFactory(rmFactory).refImplementation()), "");
+        rm2.upgradeToAndCall(address(RoundManagerFactory(rmFactory).getRefImplementation()), "");
         vm.stopPrank();
 
         assertEq(rm2.DEPLOY_VERSION(), "2", "Target RoundManager should be upgraded");
@@ -1674,7 +1674,7 @@ contract RoundManagerTest is Test {
     function test_RevertIf_UpgradeNonFactoryOwner() public {
         // Non-MetaLeX admin should not be able to set new reference implementation
 
-        RoundManager newImplementation = RoundManager(address(new MockRoundManagerV2()));
+        address newImplementation = address(new MockRoundManagerV2());
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, BorgAuth(auth).OWNER_ROLE(), corpOwner));
         vm.prank(corpOwner);
         RoundManagerFactory(rmFactory).setRefImplementation(newImplementation);
@@ -1835,7 +1835,7 @@ contract RoundManagerFCFSTest is Test {
                 )
             )
         ));
-        rmFactory.setRefImplementation(new RoundManager());
+        rmFactory.setRefImplementation(address(new RoundManager()));
 
         IUUPS(address(corpFactory)).upgradeToAndCall(address(new CyberCorpFactory()), "");
 
@@ -1869,7 +1869,7 @@ contract RoundManagerFCFSTest is Test {
                 )
             )
         ));
-        rmFactory.setRefImplementation(new RoundManager());
+        rmFactory.setRefImplementation(address(new RoundManager()));
         IUUPS(address(corpFactory)).upgradeToAndCall(address(new CyberCorpFactory()), "");
         corpFactory.setRoundManagerFactory(address(rmFactory));
         CyberCorpSingleFactory(cyberCorpSingleFactory).upgradeImplementation(address(new CyberCorp()));

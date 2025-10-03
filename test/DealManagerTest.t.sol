@@ -796,12 +796,12 @@ contract DealManagerTest is Test {
     }
 
     function test_UpgradeNextDealManager() public {
-        assertEq(DealManagerFactory(dmFactory).refImplementation().DEPLOY_VERSION(), "1", "reference impl version should not be changed yet");
+        assertEq(DealManager(DealManagerFactory(dmFactory).getRefImplementation()).DEPLOY_VERSION(), "1", "reference impl version should not be changed yet");
 
         vm.startPrank(owner);
-        DealManagerFactory(dmFactory).setRefImplementation(DealManager(address(new MockDealManagerV2())));
+        DealManagerFactory(dmFactory).setRefImplementation(address(new MockDealManagerV2()));
         vm.stopPrank();
-        assertEq(DealManagerFactory(dmFactory).refImplementation().DEPLOY_VERSION(), "2", "reference impl version should have changed");
+        assertEq(DealManager(DealManagerFactory(dmFactory).getRefImplementation()).DEPLOY_VERSION(), "2", "reference impl version should have changed");
 
         bytes32 salt = keccak256("test_UpgradeNextDealerManager");
         // Next deployment should emit events with version so indexer could be informed
@@ -847,13 +847,13 @@ contract DealManagerTest is Test {
         // MetaLeX to release new DealManager v2
 
         vm.startPrank(owner);
-        DealManagerFactory(dmFactory).setRefImplementation(DealManager(address(new MockDealManagerV2())));
+        DealManagerFactory(dmFactory).setRefImplementation(address(new MockDealManagerV2()));
         vm.stopPrank();
 
         // Corp2 owner decided to accept the upgrade
 
         vm.startPrank(companyOwner);
-        dm2.upgradeToAndCall(address(DealManagerFactory(dmFactory).refImplementation()), "");
+        dm2.upgradeToAndCall(DealManagerFactory(dmFactory).getRefImplementation(), "");
         vm.stopPrank();
 
         assertEq(dm2.DEPLOY_VERSION(), "2", "Target DealManager should be upgraded");
@@ -863,7 +863,7 @@ contract DealManagerTest is Test {
     function test_RevertIf_UpgradeNonFactoryOwner() public {
         // Non-MetaLeX admin should not be able to set new reference implementation
 
-        DealManager newImplementation = DealManager(address(new MockDealManagerV2()));
+        address newImplementation = address(new MockDealManagerV2());
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, bootstrapAuth.OWNER_ROLE(), companyOwner));
         vm.prank(companyOwner);
         DealManagerFactory(dmFactory).setRefImplementation(newImplementation);
