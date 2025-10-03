@@ -526,7 +526,6 @@ contract RoundManagerTest is Test {
     address private roundManager;
     address private uriBuilder;
     address private rmFactory;
-    string[] private testRoundGlobalValues;
     string[] private testRoundPartyValues;
     // EIP-712 constants for RoundManager escrow signature
     bytes32 constant EIP712_DOMAIN_TYPEHASH = keccak256(
@@ -547,6 +546,12 @@ contract RoundManagerTest is Test {
     uint256 public constant VALUATION = 10000000; // $10M valuation
 
     function setUp() public {
+        // Configs
+
+        testRoundPartyValues = new string[](2);
+        testRoundPartyValues[0] = "Officer";
+        testRoundPartyValues[1] = "CEO";
+
         CyberCorpHelper.mockLexChexCondition(true);
 
         ownerPrivKey = 0xA0A0;
@@ -558,62 +563,10 @@ contract RoundManagerTest is Test {
         corpOwnerPrivKey = 0xCAD;
         corpOwner = vm.addr(corpOwnerPrivKey);
 
-//        // Deploy infra (auth, registry, factories)
-//        bytes32 salt = keccak256(abi.encodePacked("roundmanager-infra", owner));
-//        BorgAuth bootstrapAuth = new BorgAuth{salt: salt}(owner);
-//
-//        registry = CyberAgreementRegistry(
-//            address(
-//                new ERC1967Proxy{salt: salt}(
-//                    address(new CyberAgreementRegistry{salt: salt}()),
-//                    abi.encodeWithSelector(
-//                        CyberAgreementRegistry.initialize.selector,
-//                        address(bootstrapAuth)
-//                    )
-//                )
-//            )
-//        );
-//
-//        uriBuilder = address(
-//            new ERC1967Proxy{salt: salt}(
-//                address(new CertificateUriBuilder{salt: salt}()),
-//                abi.encodeWithSelector(
-//                    CertificateUriBuilder.initialize.selector,
-//                    address(bootstrapAuth)
-//                )
-//            )
-//        );
-//
-//        address issuanceManagerFactoryAddr = address(
-//            new IssuanceManagerFactory{salt: salt}(address(bootstrapAuth))
-//        );
-//        address cyberCorpSingleFactory = address(
-//            new CyberCorpSingleFactory{salt: salt}(address(bootstrapAuth))
-//        );
-//        address dealManagerFactory = address(
-//            new ERC1967Proxy{salt: salt}(
-//                address(new DealManagerFactory{salt: salt}()),
-//                abi.encodeWithSelector(
-//                    DealManagerFactory.initialize.selector,
-//                    address(bootstrapAuth),
-//                    address(new DealManager())
-//                )
-//            )
-//        );
-//
-//        address certPrinterImpl = address(new CyberCertPrinter{salt: salt}());
-//        address cyberScripImpl = address(new CyberScrip{salt: salt}());
-//
-//        rmFactory = address(
-//            new ERC1967Proxy{salt: salt}(
-//                address(new RoundManagerFactory{salt: salt}()),
-//                abi.encodeWithSelector(
-//                    RoundManagerFactory.initialize.selector,
-//                    address(bootstrapAuth),
-//                    address(new RoundManager())
-//                )
-//            )
-//        );
+        // Deploy
+
+        // Deploy mock payment token
+        paymentToken = new MockPaymentToken();
 
         address issuanceManagerFactory;
         address cyberCorpSingleFactory;
@@ -639,154 +592,12 @@ contract RoundManagerTest is Test {
 
         vm.stopPrank();
 
-//        /*address _auth,
-//        address _registryAddress,
-//        address _cyberCertPrinterImplementation,
-//        address _cyberCert20Implementation,
-//        address _issuanceManagerFactory,
-//        address _cyberCorpSingleFactory,
-//        address _dealManagerFactory,
-//        address _roundManagerFactory,
-//        address _uriBuilder*/
-//        corpFactory = CyberCorpFactory(
-//            address(
-//                new ERC1967Proxy{salt: salt}(
-//                    address(new CyberCorpFactory{salt: salt}()),
-//                        abi.encodeWithSelector(
-//                        CyberCorpFactory.initialize.selector,
-//                        address(bootstrapAuth),
-//                        address(registry),
-//                        certPrinterImpl,
-//                        cyberScripImpl,
-//                        issuanceManagerFactoryAddr,
-//                        cyberCorpSingleFactory,
-//                        dealManagerFactory,
-//                        rmFactory,
-//                        uriBuilder
-//                    )
-//                )
-//            )
-//        );
-
-//        // Deploy corp
-//        CompanyOfficer memory officer = CompanyOfficer({
-//            eoa: corpOwner, // TODO fix impact for all tests
-//            name: "Officer",
-//            contact: "officer@example.com",
-//            title: "CEO"
-//        });
-//
-//        (corp, auth, issuance, dealManager, roundManager) = corpFactory.deployCyberCorp(
-//            keccak256("rm-corp"),
-//            "Test Corp",
-//            "corporation",
-//            "DE",
-//            "contact",
-//            "arbitration",
-//            corpOwner,
-//            officer
-//        );
-//
-//        // Authorize RM as owner in IssuanceManager
-//        vm.prank(corpOwner);
-//        BorgAuth(auth).updateRole(address(roundManager), 99);
-//        // Allow RM to transfer certs by setting it as corp's dealManager
-//        vm.prank(address(corpFactory));
-//        CyberCorp(corp).setDealManager(address(roundManager));
-//
-//        // Define a template with 1 global and 1 party field to match tests
-//        CyberCorpHelper.TEMPLATE_ID = bytes32("TEST_TEMPLATE");
-//        string[] memory globalFields = new string[](1);
-//        globalFields[0] = "Global Field";
-//        string[] memory partyFields = new string[](1);
-//        partyFields[0] = "Party Field";
-//        vm.prank(owner);
-//        registry.createTemplate(
-//            CyberCorpHelper.TEMPLATE_ID,
-//            "TestT",
-//            "ipfs://template",
-//            globalFields,
-//            partyFields
-//        );
-
         (corp, auth, issuance, dealManager, roundManager) = CyberCorpHelper.deployCorp(
             corpFactory,
             "Test Corp",
             corpOwner,
             corpOwner
         );
-
-        // Deploy mock payment token
-        paymentToken = new MockPaymentToken();
-
-        testRoundGlobalValues = new string[](1);
-        testRoundGlobalValues[0] = "g";
-        testRoundPartyValues = new string[](2);
-        testRoundPartyValues[0] = "Officer";
-        testRoundPartyValues[1] = "CEO";
-
-//        // Create certificate data for the round
-//        RoundManager.CyberCertData[]
-//            memory certData = new RoundManager.CyberCertData[](1);
-//        string[] memory defaultLegend = new string[](1);
-//        defaultLegend[0] = "Test Legend";
-//
-//        certData[0] = RoundManager.CyberCertData({
-//            name: "Test Certificate",
-//            symbol: "TEST",
-//            uri: "https://test.uri",
-//            securityClass: SecurityClass.CommonStock,
-//            securitySeries: SecuritySeries.NA,
-//            extension: address(0),
-//            defaultLegend: defaultLegend
-//        });
-//
-//        // Create test round (template has 1 party field; provide 1 round party value)
-//        testRoundPartyValues = new string[](1);
-//        testRoundPartyValues[0] = "Officer";
-//
-//        // Create test round
-//        (bytes memory escrowSig, bytes32 expectedRoundId) = CyberCorpHelper.computeEscrowSignature(
-//            roundManager,
-//            SecuritySeries.SeriesA,
-//            RAISE_CAP,
-//            MIN_TICKET,
-//            MAX_TICKET,
-//            RoundType.FounderApproved,
-//            block.timestamp,
-//            block.timestamp + 30 days,
-//            CyberCorpHelper.TEMPLATE_ID,
-//            address(paymentToken),
-//            PRICE_PER_UNIT,
-//            VALUATION,
-//            corpOwnerPrivKey,
-//            corp
-//        );
-//        vm.prank(corpOwner);
-//        roundId = RoundManager(roundManager).createRound(
-//            SecuritySeries.SeriesA,
-//            RAISE_CAP,
-//            MIN_TICKET,
-//            MAX_TICKET,
-//            RoundType.FounderApproved,
-//            block.timestamp,
-//            block.timestamp + 30 days,
-//            CyberCorpHelper.TEMPLATE_ID,
-//            certData,
-//            new address[](0),
-//            address(paymentToken),
-//            PRICE_PER_UNIT,
-//            VALUATION,
-//            corpOwner,
-//            "Officer",
-//            "CEO",
-//            "",
-//            "",
-//            testRoundPartyValues,
-//            escrowSig,
-//            false
-//        );
-//        assertEq(roundId, expectedRoundId);
 
         vm.startPrank(corpOwner);
         roundId = CyberCorpHelper.createRound(
@@ -808,34 +619,6 @@ contract RoundManagerTest is Test {
         paymentToken.transfer(investor, 1000000 * 10 ** 6);
         vm.prank(investor);
         paymentToken.approve(address(roundManager), type(uint256).max);
-    }
-
-    // Sign for an existing agreementId (used by allocate path)
-    function _signForAgreement(
-        bytes32 agreementId,
-        string[] memory globalValues,
-        string[] memory partyValues,
-        uint256 signerPrivKey
-    ) internal view returns (bytes memory) {
-        (
-            string memory legalUri,
-            ,
-            string[] memory glFields,
-            string[] memory partyFields
-        ) = registry.getTemplateDetails(CyberCorpHelper.TEMPLATE_ID);
-        return
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                agreementId,
-                legalUri,
-                glFields,
-                partyFields,
-                globalValues,
-                partyValues,
-                signerPrivKey
-            );
     }
 
     function test_RevertIf_CreateRound_InvalidSignature() public {
@@ -1047,14 +830,6 @@ contract RoundManagerTest is Test {
         // Now allocate as owner
         uint256 allocatedAmount = 7500 * 10 ** 6; // 7,500 USDC
 
-        // Company officer signature over party values for allocation path (signs agreementId)
-        bytes memory officerSig = _signForAgreement(
-            agreementId,
-            testRoundGlobalValues,
-            testRoundPartyValues,
-            ownerPrivKey
-        );
-
         vm.expectEmit(true, true, true, true);
         emit RoundManager.AllocationMade(agreementId, roundId, investor, allocatedAmount, allocatedAmount, new uint256[](1));
         vm.prank(corpOwner);
@@ -1111,13 +886,6 @@ contract RoundManagerTest is Test {
         // Try to allocate an amount below min
         uint256 invalidAmount = 1000 * 10 ** 6; // Below eoi.minAmount
 
-        // Signature still required but allocation should fail before signature is used
-        bytes memory officerSig = _signForAgreement(
-            agreementId,
-            testRoundGlobalValues,
-            testRoundPartyValues,
-            ownerPrivKey
-        );
         vm.prank(corpOwner);
         vm.expectRevert(
             abi.encodeWithSelector(RoundManager.InvalidAllocation.selector)
@@ -1696,12 +1464,6 @@ contract RoundManagerTest is Test {
         vm.stopPrank();
 
         // Attempt allocation -> should revert due to AgreementConditionsNotMet
-        bytes memory officerSig = _signForAgreement(
-            agreementId,
-            testRoundGlobalValues,
-            testRoundPartyValues,
-            ownerPrivKey
-        );
         vm.prank(corpOwner);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -1953,12 +1715,6 @@ contract RoundManagerTest is Test {
         vm.stopPrank();
 
         // Allocate as owner: candidate will be remaining (6,000 USDC), refund 4,000 USDC
-        bytes memory officerSig = _signForAgreement(
-            agreementId,
-            testRoundGlobalValues,
-            testRoundPartyValues,
-            corpOwnerPrivKey
-        );
         vm.prank(corpOwner);
         RoundManager(roundManager).allocate(agreementId, type(uint256).max);
 
