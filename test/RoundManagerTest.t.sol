@@ -393,7 +393,7 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
-            ownerPrivKey,
+            corpOwnerPrivKey,
             corp
         );
         vm.prank(corpOwner);
@@ -411,7 +411,7 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
-            owner,
+            corpOwner,
             "Officer",
             "CEO",
             "",
@@ -523,7 +523,7 @@ contract RoundManagerTest is Test {
             corp
         );
 
-        vm.prank(owner);
+        vm.prank(corpOwner);
         vm.expectRevert(RoundManager.InvalidEscrowedSignature.selector);
         RoundManager(roundManager).createRound(
             SecuritySeries.SeriesA,
@@ -539,7 +539,7 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
-            owner,
+            corpOwner,
             "Officer",
             "CEO",
             "",
@@ -575,7 +575,7 @@ contract RoundManagerTest is Test {
             salt,
             globalValues,
             partyValues,
-            owner,
+            corpOwner,
             investorPrivKey
         );
         address[] memory conditions = new address[](0);
@@ -585,7 +585,7 @@ contract RoundManagerTest is Test {
 
         // Verify EOI was stored correctly by checking the EOISubmitted event
         address[] memory parties = new address[](2);
-        parties[0] = owner;
+        parties[0] = corpOwner;
         parties[1] = investor;
         vm.expectEmit(true, true, true, true);
         emit RoundManager.EOISubmitted(
@@ -684,7 +684,7 @@ contract RoundManagerTest is Test {
                 1,
                 new string[](1),
                 new string[](1),
-                owner,
+                corpOwner,
                 investorPrivKey
             ),
             1,
@@ -707,7 +707,7 @@ contract RoundManagerTest is Test {
 
         vm.expectEmit(true, true, true, true);
         emit RoundManager.AllocationMade(agreementId, roundId, investor, allocatedAmount, allocatedAmount, new uint256[](1));
-        vm.prank(owner);
+        vm.prank(corpOwner);
         RoundManager(roundManager).allocate(agreementId, allocatedAmount);
 
         // Verify allocation by checking if the round exists and getting its price info
@@ -747,7 +747,7 @@ contract RoundManagerTest is Test {
                 1,
                 new string[](1),
                 new string[](1),
-                owner,
+                corpOwner,
                 investorPrivKey
             ),
             1,
@@ -767,7 +767,7 @@ contract RoundManagerTest is Test {
             testRoundPartyValues,
             ownerPrivKey
         );
-        vm.prank(owner);
+        vm.prank(corpOwner);
         vm.expectRevert(
             abi.encodeWithSelector(RoundManager.InvalidAllocation.selector)
         );
@@ -794,7 +794,7 @@ contract RoundManagerTest is Test {
             1,
             new string[](1),
             new string[](1),
-            owner,
+            corpOwner,
             investorPrivKey
         );
         vm.expectRevert(
@@ -877,10 +877,10 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
-            ownerPrivKey,
+            corpOwnerPrivKey,
             corp
         );
-        vm.prank(owner);
+        vm.prank(corpOwner);
         roundIdLarge = RoundManager(roundManager).createRound(
             SecuritySeries.SeriesPreSeed,
             1_000_000 * 10 ** 6, // raise cap 1M
@@ -895,7 +895,7 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
-            owner,
+            corpOwner,
             "Officer",
             "CEO",
             "",
@@ -928,7 +928,7 @@ contract RoundManagerTest is Test {
                 1,
                 new string[](1),
                 new string[](1),
-                owner,
+                corpOwner,
                 investorPrivKey
             ),
             1,
@@ -962,7 +962,7 @@ contract RoundManagerTest is Test {
                 2,
                 new string[](1),
                 new string[](1),
-                owner,
+                corpOwner,
                 investor2PrivKey
             ),
             2,
@@ -972,22 +972,10 @@ contract RoundManagerTest is Test {
         vm.stopPrank();
 
         // Allocate to first investor
-        vm.startPrank(owner);
-        bytes memory officerSig1 = _signForAgreement(
-            agreementId1,
-            new string[](1),
-            testRoundPartyValues,
-            ownerPrivKey
-        );
+        vm.startPrank(corpOwner);
         RoundManager(roundManager).allocate(agreementId1, 500000 * 10 ** 6); // 500k USDC
 
         // Try to allocate remaining to second investor
-        bytes memory officerSig2 = _signForAgreement(
-            agreementId2,
-            new string[](1),
-            testRoundPartyValues,
-            ownerPrivKey
-        );
         RoundManager(roundManager).allocate(agreementId2, 500000 * 10 ** 6); // 500k USDC
 
         // When total raised equals raise cap, no more allocations should be possible
@@ -1022,7 +1010,7 @@ contract RoundManagerTest is Test {
                 1,
                 new string[](1),
                 new string[](1),
-                owner,
+                corpOwner,
                 investorPrivKey
             ),
             1,
@@ -1081,7 +1069,7 @@ contract RoundManagerTest is Test {
                 3,
                 new string[](1),
                 new string[](1),
-                owner,
+                corpOwner,
                 investorPrivKey
             ),
             3,
@@ -1092,8 +1080,8 @@ contract RoundManagerTest is Test {
         Escrow memory escBefore = RoundManager(roundManager).getEscrowDetails(agreementId);
         assertEq(uint256(escBefore.status), uint256(EscrowStatus.PAID));
 
-        // Reject as owner -> refund and void
-        vm.prank(owner);
+        // Reject as corp owner -> refund and void
+        vm.prank(corpOwner);
         RoundManager(roundManager).reject(agreementId);
         Escrow memory escAfter = RoundManager(roundManager).getEscrowDetails(agreementId);
         assertEq(uint256(escAfter.status), uint256(EscrowStatus.VOIDED));
@@ -1123,7 +1111,7 @@ contract RoundManagerTest is Test {
                 3,
                 new string[](1),
                 new string[](1),
-                owner,
+                corpOwner,
                 investorPrivKey
             ),
             3,
@@ -1148,13 +1136,13 @@ contract RoundManagerTest is Test {
             )
         );
 
-        // Owner can no longer call `reject()` because it would try to void the agreement again
-        vm.prank(owner);
+        // Corp owner can no longer call `reject()` because it would try to void the agreement again
+        vm.prank(corpOwner);
         vm.expectRevert(CyberAgreementRegistry.ContractAlreadyVoided.selector);
         RoundManager(roundManager).reject(agreementId);
 
         // Instead, he could choose to skip voiding the agreement
-        vm.prank(owner);
+        vm.prank(corpOwner);
         RoundManager(roundManager).reject(agreementId, false);
         Escrow memory escAfter = RoundManager(roundManager).getEscrowDetails(agreementId);
         assertEq(uint256(escAfter.status), uint256(EscrowStatus.VOIDED));
@@ -1184,7 +1172,7 @@ contract RoundManagerTest is Test {
                 3,
                 new string[](1),
                 new string[](1),
-                owner,
+                corpOwner,
                 investorPrivKey
             ),
             3,
@@ -1229,7 +1217,7 @@ contract RoundManagerTest is Test {
                 3,
                 new string[](1),
                 new string[](1),
-                owner,
+                corpOwner,
                 investorPrivKey
             ),
             3,
@@ -1293,7 +1281,7 @@ contract RoundManagerTest is Test {
                 3,
                 new string[](1),
                 new string[](1),
-                owner,
+                corpOwner,
                 investorPrivKey
             ),
             3,
@@ -1337,7 +1325,7 @@ contract RoundManagerTest is Test {
                 4,
                 new string[](1),
                 new string[](1),
-                owner,
+                corpOwner,
                 investorPrivKey
             ),
             4,
@@ -1353,7 +1341,7 @@ contract RoundManagerTest is Test {
             testRoundPartyValues,
             ownerPrivKey
         );
-        vm.prank(owner);
+        vm.prank(corpOwner);
         vm.expectRevert(
             abi.encodeWithSelector(
                 RoundManager.AgreementConditionsNotMet.selector
@@ -1392,10 +1380,10 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
-            ownerPrivKey,
+            corpOwnerPrivKey,
             corp
         );
-        vm.prank(owner);
+        vm.prank(corpOwner);
         roundIdFuture = RoundManager(roundManager).createRound(
             SecuritySeries.SeriesF,
             100_000 * 10 ** 6,
@@ -1410,7 +1398,7 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
-            owner,
+            corpOwner,
             "Officer",
             "CEO",
             "",
@@ -1437,7 +1425,7 @@ contract RoundManagerTest is Test {
             6,
             new string[](1),
             new string[](1),
-            owner,
+            corpOwner,
             investorPrivKey
         );
          vm.expectRevert(
@@ -1484,7 +1472,7 @@ contract RoundManagerTest is Test {
             9,
             gl,
             pv,
-            owner,
+            corpOwner,
             investorPrivKey
         );
         vm.expectRevert(
@@ -1535,10 +1523,10 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
-            ownerPrivKey,
+            corpOwnerPrivKey,
             corp
         );
-        vm.prank(owner);
+        vm.prank(corpOwner);
         roundId2 = RoundManager(roundManager).createRound(
             SecuritySeries.SeriesPreSeed,
             6_000 * 10 ** 6, // small cap
@@ -1553,7 +1541,7 @@ contract RoundManagerTest is Test {
             address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
-            owner,
+            corpOwner,
             "Officer",
             "CEO",
             "",
@@ -1582,7 +1570,7 @@ contract RoundManagerTest is Test {
             5,
             gl,
             pv,
-            owner,
+            corpOwner,
             investorPrivKey
         );
         uint256 balBefore = paymentToken.balanceOf(investor);
@@ -1605,9 +1593,9 @@ contract RoundManagerTest is Test {
             agreementId,
             new string[](1),
             testRoundPartyValues,
-            ownerPrivKey
+            corpOwnerPrivKey
         );
-        vm.prank(owner);
+        vm.prank(corpOwner);
         RoundManager(roundManager).allocate(agreementId, type(uint256).max);
 
         uint256 balAfterAllocate = paymentToken.balanceOf(investor);
