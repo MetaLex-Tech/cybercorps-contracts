@@ -41,7 +41,9 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-interface IRoundManagerFactory {
+import "./IPlatformPayable.sol";
+
+interface IRoundManagerFactory is IPlatformPayable {
     function deployRoundManager(bytes32 _salt) external returns (address);
 
     function refImplementation() external returns (address);

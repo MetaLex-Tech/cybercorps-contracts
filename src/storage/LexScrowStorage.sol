@@ -61,6 +61,7 @@ struct Token {
     address tokenAddress;
     uint256 tokenId;
     uint256 amount;
+    bool isFee;
 }
 
 struct Escrow {
@@ -77,10 +78,17 @@ library LexScrowStorage {
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.lexscrow.storage.v1");
 
+    uint256 public constant BASIS_POINTS = 10000; // 100%
+
     // Main storage layout struct
     struct LexScrowData {
         address CORP;
         address DEAL_REGISTRY;
+        address UPGRADE_FACTORY;
+
+        uint256 feeRatio; // total fee as % of ticket size (BASIS_POINTS = 100%)
+        uint256 feeCorpCutRatio; // CyberCorp cut of total fee as % of ticket size (<= feeRatio, BASIS_POINTS = 100%)
+
         mapping(bytes32 => Escrow) escrows;
         mapping(bytes32 => ICondition[]) conditionsByEscrow;
     }
@@ -102,12 +110,24 @@ library LexScrowStorage {
         return lexScrowStorage().DEAL_REGISTRY;
     }
 
+    function getUpgradeFactory() internal view returns (address) {
+        return lexScrowStorage().UPGRADE_FACTORY;
+    }
+
     function getEscrow(bytes32 agreementId) internal view returns (Escrow storage) {
         return lexScrowStorage().escrows[agreementId];
     }
 
     function getConditionsByEscrow(bytes32 agreementId) internal view returns (ICondition[] storage) {
         return lexScrowStorage().conditionsByEscrow[agreementId];
+    }
+
+    function getFeeRatio() internal view returns (uint256) {
+        return lexScrowStorage().feeRatio;
+    }
+
+    function getFeeCorpCutRatio() internal view returns (uint256) {
+        return lexScrowStorage().feeCorpCutRatio;
     }
 
     // Setters
@@ -117,6 +137,10 @@ library LexScrowStorage {
 
     function setDealRegistry(address _dealRegistry) internal {
         lexScrowStorage().DEAL_REGISTRY = _dealRegistry;
+    }
+
+    function setUpgradeFactory(address _upgradeFactory) internal {
+        lexScrowStorage().UPGRADE_FACTORY = _upgradeFactory;
     }
 
     function setEscrow(bytes32 agreementId, Escrow memory escrow) internal {
@@ -136,4 +160,22 @@ library LexScrowStorage {
         }
         conditions.pop();
     }
-} 
+
+    function setFeeRatio(uint256 feeRatio) internal returns (bool) {
+        if (feeRatio > BASIS_POINTS) {
+            return false; // fee ratio should not exceed 100%
+        } else {
+            lexScrowStorage().feeRatio = feeRatio;
+            return true;
+        }
+    }
+
+    function setFeeCorpCutRatio(uint256 feeCorpCutRatio) internal returns (bool) {
+        if (feeCorpCutRatio > lexScrowStorage().feeCorpCutRatio) {
+            return false; // CyberCorp's cut should not exceed fee ratio
+        } else {
+            lexScrowStorage().feeCorpCutRatio = feeCorpCutRatio;
+            return true;
+        }
+    }
+}

@@ -252,7 +252,7 @@ contract RoundManager is
     ) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
-        __LexScroWLite_init(_corp, _dealRegistry);
+        __LexScroWLite_init(_corp, _dealRegistry, _upgradeFactory);
 
         if (_corp == address(0)) revert ZeroAddress();
         if (_dealRegistry == address(0)) revert ZeroAddress();
@@ -535,7 +535,8 @@ contract RoundManager is
             TokenType.ERC20,
             round.paymentToken,
             0,
-            eoi.maxAmount
+            eoi.maxAmount,
+            true
         );
 
         createEscrow(agreementId, msg.sender, corpAssets, buyerAssets, eoi.expiry);
@@ -710,7 +711,7 @@ contract RoundManager is
         // loop through certPrinter and add to escrow
         for (uint256 i = 0; i < round.certPrinter.length; i++) {
             escrow.corpAssets.push(
-                Token(TokenType.ERC721, round.certPrinter[i], certIds[i], 1)
+                Token(TokenType.ERC721, round.certPrinter[i], certIds[i], 1, false)
             );
         }
 

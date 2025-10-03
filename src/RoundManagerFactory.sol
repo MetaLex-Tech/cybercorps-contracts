@@ -46,6 +46,7 @@ import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "openzeppelin-contracts/utils/Create2.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./libs/auth.sol";
+import {RoundManagerFactoryStorage} from "./storage/RoundManagerFactoryStorage.sol";
 
 /// @title RoundManagerFactory
 /// @notice Factory contract for deploying RoundManager instances
@@ -54,9 +55,13 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
+    error InvalidFeeRatio();
+    error InvalidFeeCorpCutRatio();
 
+    // TODO put it in storage
     RoundManager public refImplementation; // implementation contract to use for new deployments
 
+    // TODO deprecated: no longer needed with diamond storage pattern
     // Upgrade notes: Reduced gap to account for new variables
     //  50
     //   -1 (BorgAuthACL)
@@ -120,6 +125,30 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
     /// @param _newImplementation Address of the new implementation
     function setRefImplementation(RoundManager _newImplementation) public onlyOwner {
         refImplementation = _newImplementation;
+    }
+
+    function platformPayable() external returns (address) {
+        return RoundManagerFactoryStorage.getPlatformPayable();
+    }
+
+    function setPlatformPayable(address platformPayable) external onlyOwner {
+        RoundManagerFactoryStorage.setPlatformPayable(platformPayable);
+    }
+
+    function defaultFeeRatio() external returns (uint256) {
+        return RoundManagerFactoryStorage.getDefaultFeeRatio();
+    }
+
+    function setDefaultFeeRatio(uint256 feeRatio) external onlyOwner {
+        if(!RoundManagerFactoryStorage.setDefaultFeeRatio(feeRatio)) revert InvalidFeeRatio();
+    }
+
+    function defaultFeeCorpCutRatio() external returns (uint256) {
+        return RoundManagerFactoryStorage.getDefaultFeeCorpCutRatio();
+    }
+
+    function setDefaultFeeCorpCutRatio(uint256 feeRatio) external onlyOwner {
+        if(!RoundManagerFactoryStorage.setDefaultFeeCorpCutRatio(feeRatio)) revert InvalidFeeCorpCutRatio();
     }
 
     function _authorizeUpgrade(

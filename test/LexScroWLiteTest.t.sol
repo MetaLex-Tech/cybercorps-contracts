@@ -112,8 +112,8 @@ contract LexScroWLiteMock is LexScroWLite {
         _disableInitializers();
     }
 
-    function initialize(address _corp, address _dealRegistry) public initializer {
-        __LexScroWLite_init(_corp, _dealRegistry);
+    function initialize(address _corp, address _dealRegistry, address _upgradeFactory) public initializer {
+        __LexScroWLite_init(_corp, _dealRegistry, _upgradeFactory);
     }
 
     function createEscrow_(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets, uint256 expiry) public {
@@ -163,6 +163,15 @@ contract CyberCorpMock {
     }
 }
 
+contract UpgradeFactoryMock {
+    function getDefaultFeeRatio() external returns (uint256) {
+        return 0; // TODO WIP
+    }
+    function getDefaultFeeCorpCutRatio() external returns (uint256) {
+        return 0; // TODO WIP
+    }
+}
+
 contract LexScroWLiteTest is Test {
 
     bytes32 public salt = keccak256("LexScroWLiteTest");
@@ -191,12 +200,15 @@ contract LexScroWLiteTest is Test {
 
     CyberAgreementRegistryMock public registry;
     CyberCorpMock public corp;
+    UpgradeFactoryMock public upgradeFactory;
     LexScroWLiteMock public lexScrow;
 
     function setUp() public {
         registry = new CyberAgreementRegistryMock{salt: salt}();
 
         corp = new CyberCorpMock{salt: salt}(companyPayable);
+
+        upgradeFactory = new UpgradeFactoryMock{salt: salt}();
 
         lexScrow = LexScroWLiteMock(
             address(
@@ -205,7 +217,8 @@ contract LexScroWLiteTest is Test {
                     abi.encodeWithSelector(
                         LexScroWLiteMock.initialize.selector,
                         address(corp),
-                        address(registry)
+                        address(registry),
+                        address(upgradeFactory)
                     )
                 )
             )
@@ -445,13 +458,15 @@ contract LexScroWLiteTest is Test {
             tokenType: TokenType.ERC20,
             tokenAddress: address(corpTokenErc20),
             tokenId: 0,
-            amount: 10 ether
+            amount: 10 ether,
+            isFee: false
         });
         corpAssets[1] = Token({
             tokenType: TokenType.ERC1155,
             tokenAddress: address(corpTokenErc1155),
             tokenId: corpTokenErc1155Id,
-            amount: 10 ether
+            amount: 10 ether,
+            isFee: false
         });
         Token[] memory buyerAssets = _getBuyerAssets();
 
@@ -474,7 +489,8 @@ contract LexScroWLiteTest is Test {
             tokenType: TokenType.ERC721,
             tokenAddress: address(corpTokenErc721WithEndorsement),
             tokenId: corpTokenErc721Id,
-            amount: 1
+            amount: 1,
+            isFee: false
         });
         Token[] memory buyerAssets = _getBuyerAssets();
 
@@ -556,19 +572,22 @@ contract LexScroWLiteTest is Test {
             tokenType: TokenType.ERC20,
             tokenAddress: address(corpTokenErc20),
             tokenId: 0,
-            amount: 10 ether
+            amount: 10 ether,
+            isFee: false
         });
         corpAssets[1] = Token({
             tokenType: TokenType.ERC721,
             tokenAddress: address(corpTokenErc721),
             tokenId: corpTokenErc721Id,
-            amount: 1
+            amount: 1,
+            isFee: false
         });
         corpAssets[2] = Token({
             tokenType: TokenType.ERC1155,
             tokenAddress: address(corpTokenErc1155),
             tokenId: corpTokenErc1155Id,
-            amount: 10 ether
+            amount: 10 ether,
+            isFee: false
         });
         return corpAssets;
     }
@@ -579,19 +598,22 @@ contract LexScroWLiteTest is Test {
             tokenType: TokenType.ERC20,
             tokenAddress: address(buyerTokenErc20),
             tokenId: 0,
-            amount: 100 ether
+            amount: 100 ether,
+            isFee: false
         });
         buyerAssets[1] = Token({
             tokenType: TokenType.ERC721,
             tokenAddress: address(buyerTokenErc721),
             tokenId: buyerTokenErc721Id,
-            amount: 1
+            amount: 1,
+            isFee: false
         });
         buyerAssets[2] = Token({
             tokenType: TokenType.ERC1155,
             tokenAddress: address(buyerTokenErc1155),
             tokenId: buyerTokenErc1155Id,
-            amount: 100 ether
+            amount: 100 ether,
+            isFee: false
         });
         return buyerAssets;
     }

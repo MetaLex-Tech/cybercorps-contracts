@@ -150,7 +150,8 @@ contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAut
         DealManagerStorage.setIssuanceManager(_issuanceManager);
 
         // Initialize LexScroWLite without setting storage
-        __LexScroWLite_init(_corp, _dealRegistry);
+        // TODO WIP: save upgradeFactory in the parent contract instead
+        __LexScroWLite_init(_corp, _dealRegistry, _upgradeFactory);
         DealManagerStorage.setUpgradeFactory(_upgradeFactory);
     }
 
@@ -190,11 +191,11 @@ contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAut
         certIds = new uint256[](_certDetails.length);
         for(uint256 i = 0; i < _certDetails.length; i++) {
             certIds[i] = DealManagerStorage.getIssuanceManager().createCert(_certPrinterAddress[i], address(this), _certDetails[i]);
-            corpAssets[i] = Token(TokenType.ERC721, _certPrinterAddress[i], certIds[i], 1);
+            corpAssets[i] = Token(TokenType.ERC721, _certPrinterAddress[i], certIds[i], 1, false);
         }
 
         Token[] memory buyerAssets = new Token[](1);
-        buyerAssets[0] = Token(TokenType.ERC20, _paymentToken, 0, _paymentAmount);
+        buyerAssets[0] = Token(TokenType.ERC20, _paymentToken, 0, _paymentAmount, true);
 
         Escrow memory newEscrow = Escrow({
             agreementId: agreementId,

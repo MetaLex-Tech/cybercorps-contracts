@@ -279,6 +279,13 @@ contract RoundManagerTest is Test {
                 )
             )
         );
+
+        // Set platform fee
+        vm.startPrank(owner);
+        RoundManagerFactory(rmFactory).setPlatformPayable(owner);
+        RoundManagerFactory(rmFactory).setDefaultFeeRatio(25);
+        vm.stopPrank();
+
         /*address _auth,
         address _registryAddress,
         address _cyberCertPrinterImplementation,
@@ -310,7 +317,7 @@ contract RoundManagerTest is Test {
 
         // Deploy corp
         CompanyOfficer memory officer = CompanyOfficer({
-            eoa: owner,
+            eoa: corpOwner, // TODO fix impact for all tests
             name: "Officer",
             contact: "officer@example.com",
             title: "CEO"
@@ -323,12 +330,12 @@ contract RoundManagerTest is Test {
             "DE",
             "contact",
             "arbitration",
-            owner,
+            corpOwner,
             officer
         );
 
         // Authorize RM as owner in IssuanceManager
-        vm.prank(owner);
+        vm.prank(corpOwner);
         BorgAuth(auth).updateRole(address(roundManager), 99);
         // Allow RM to transfer certs by setting it as corp's dealManager
         vm.prank(address(corpFactory));
@@ -389,7 +396,7 @@ contract RoundManagerTest is Test {
             ownerPrivKey,
             corp
         );
-        vm.prank(owner);
+        vm.prank(corpOwner);
         roundId = RoundManager(roundManager).createRound(
             SecuritySeries.SeriesA,
             RAISE_CAP,
@@ -1041,13 +1048,14 @@ contract RoundManagerTest is Test {
         );
 
         // Verify the owner can fill the EOI
-        uint256 balBeforeAllocate = paymentToken.balanceOf(owner);
+        uint256 balBeforeAllocate = paymentToken.balanceOf(corpOwner);
 
-        vm.prank(owner);
+        vm.prank(corpOwner);
         RoundManager(roundManager).allocate(agreementId, 5_000 * 10 ** 6);
 
-        uint256 balAfterAllocate = paymentToken.balanceOf(owner);
-        assertEq(balAfterAllocate - balBeforeAllocate, 5_000 * 10 ** 6);
+        uint256 balAfterAllocate = paymentToken.balanceOf(corpOwner);
+        // 5000 * (1 - 0.25%) = 4987.5
+        assertEq(balAfterAllocate - balBeforeAllocate, 4987.5 * 10 ** 6);
     }
 
     function test_RejectEOI_RefundsAndVoids() public {

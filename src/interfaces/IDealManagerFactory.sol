@@ -41,7 +41,9 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-interface IDealManagerFactory {
+import "./IPlatformPayable.sol";
+
+interface IDealManagerFactory is IPlatformPayable {
     function deployDealManager(bytes32 salt) external returns (address);
     function computeDealManagerAddress(bytes32 salt) external view returns (address);
     function initialize(address _auth) external;

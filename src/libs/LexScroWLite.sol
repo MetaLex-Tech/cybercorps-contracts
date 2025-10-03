@@ -50,6 +50,7 @@ import "../interfaces/ICyberCorp.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICondition.sol";
+import "../interfaces/IPlatformPayable.sol";
 import {LexScrowStorage, Escrow, Token, TokenType, EscrowStatus} from "../storage/LexScrowStorage.sol";
 
 
@@ -67,17 +68,24 @@ abstract contract LexScroWLite is Initializable {
     error DealNotVoided();
     error DealNotPaid();
     error DealVoided();
+    error InvalidFeeRatio();
+    error InvalidFeeCorpCutRatio();
 
     event DealVoidedAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
     event DealPaidAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
     event DealFinalizedAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
+    event FeeDistributed(bytes32 indexed agreementId, address indexed feeToken, uint256 totalFee, uint256 corpCutFee);
 
     constructor() {
     }
 
-    function __LexScroWLite_init(address _corp, address _dealRegistry) internal onlyInitializing {
+    function __LexScroWLite_init(address _corp, address _dealRegistry, address _upgradeFactory) internal onlyInitializing {
         LexScrowStorage.setCorp(_corp);
         LexScrowStorage.setDealRegistry(_dealRegistry);
+        LexScrowStorage.setUpgradeFactory(_upgradeFactory);
+
+        if (!LexScrowStorage.setFeeRatio(IPlatformPayable(_upgradeFactory).defaultFeeRatio())) revert InvalidFeeRatio();
+        if (!LexScrowStorage.setFeeCorpCutRatio(IPlatformPayable(_upgradeFactory).defaultFeeCorpCutRatio())) revert InvalidFeeCorpCutRatio();
     }
 
     function createEscrow(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets, uint256 expiry) internal {
@@ -171,10 +179,32 @@ abstract contract LexScroWLite is Initializable {
         escrow.status = EscrowStatus.FINALIZED;
         emit DealFinalizedAt(agreementId, LexScrowStorage.getDealRegistry(), block.timestamp);
 
-        // Interaction: Transfer buyer assets to company
+        // Interaction: Transfer buyer assets to company and collect fees
         for(uint256 i = 0; i < escrow.buyerAssets.length; i++) {
             if(escrow.buyerAssets[i].tokenType == TokenType.ERC20) {
-                IERC20(escrow.buyerAssets[i].tokenAddress).safeTransfer(ICyberCorp(LexScrowStorage.getCorp()).companyPayable(), escrow.buyerAssets[i].amount);
+                uint256 amountToCompany = escrow.buyerAssets[i].amount;
+                uint256 amountToPlatform = 0;
+
+                // Check: if the asset is fee token
+                if (escrow.buyerAssets[i].isFee) {
+                    // TODO assumptions: company as fee source
+                    // Effect: Calculate fees
+                    uint256 totalFee = escrow.buyerAssets[i].amount * LexScrowStorage.getFeeRatio() / LexScrowStorage.BASIS_POINTS;
+                    uint256 corpCutFee = escrow.buyerAssets[i].amount * LexScrowStorage.getFeeCorpCutRatio() / LexScrowStorage.BASIS_POINTS;
+
+                    amountToPlatform = totalFee - corpCutFee;
+                    amountToCompany -= amountToPlatform;
+
+                    emit FeeDistributed(agreementId, escrow.buyerAssets[i].tokenAddress, totalFee, corpCutFee);
+                }
+
+                // Interaction: Distribute payment and fees
+                if (amountToCompany > 0) {
+                    IERC20(escrow.buyerAssets[i].tokenAddress).safeTransfer(ICyberCorp(LexScrowStorage.getCorp()).companyPayable(), amountToCompany);
+                }
+                if (amountToPlatform > 0) {
+                    IERC20(escrow.buyerAssets[i].tokenAddress).safeTransfer(IPlatformPayable(LexScrowStorage.getUpgradeFactory()).platformPayable(), amountToPlatform);
+                }
             }
             else if(escrow.buyerAssets[i].tokenType == TokenType.ERC721) {
                 IERC721(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), ICyberCorp(LexScrowStorage.getCorp()).companyPayable(), escrow.buyerAssets[i].tokenId);
