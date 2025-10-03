@@ -67,6 +67,7 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
     /// @param _auth Address of the BorgAuth contract
     /// @param _refImplementation Address of the reference DealManager implementation
     function initialize(address _auth, address _refImplementation) public initializer {
+        __UUPSUpgradeable_init();
         // Initialize BorgAuthACL
         __BorgAuthACL_init(_auth);
 

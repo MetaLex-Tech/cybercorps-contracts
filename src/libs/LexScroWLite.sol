@@ -83,9 +83,6 @@ abstract contract LexScroWLite is Initializable {
         LexScrowStorage.setCorp(_corp);
         LexScrowStorage.setDealRegistry(_dealRegistry);
         LexScrowStorage.setUpgradeFactory(_upgradeFactory);
-
-        if (!LexScrowStorage.setFeeRatio(IPlatformPayable(_upgradeFactory).defaultFeeRatio())) revert InvalidFeeRatio();
-        if (!LexScrowStorage.setFeeCorpCutRatio(IPlatformPayable(_upgradeFactory).defaultFeeCorpCutRatio())) revert InvalidFeeCorpCutRatio();
     }
 
     function createEscrow(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets, uint256 expiry) internal {

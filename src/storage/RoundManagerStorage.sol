@@ -104,6 +104,10 @@ library RoundManagerStorage {
     struct RoundManagerData {
         /// @notice Reference to the issuance manager contract
         IIssuanceManager issuanceManager;
+
+        /// @dev Superseded by its parent `LexScrowStorage`. Kept as placeholder to avoid storage conflicts
+        address deprecated_upgradeFactory;
+
         address upgradeFactory;
         address lexChexCondition;
         
@@ -189,14 +193,6 @@ library RoundManagerStorage {
     /// @param _issuanceManager Address of the new issuance manager contract
     function setIssuanceManager(address _issuanceManager) internal {
         roundManagerStorage().issuanceManager = IIssuanceManager(_issuanceManager);
-    }
-
-    function setUpgradeFactory(address _upgradeFactory) internal {
-        roundManagerStorage().upgradeFactory = _upgradeFactory;
-    }
-
-    function getUpgradeFactory() external view returns (address) {
-        return roundManagerStorage().upgradeFactory;
     }
 
     function setLexChexCondition(address _lexChexCondition) internal {

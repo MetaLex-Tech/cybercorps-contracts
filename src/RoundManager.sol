@@ -245,15 +245,17 @@ contract RoundManager is
     ) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
-        __LexScroWLite_init(_corp, _dealRegistry, _upgradeFactory);
 
         if (_corp == address(0)) revert ZeroAddress();
         if (_dealRegistry == address(0)) revert ZeroAddress();
         if (_issuanceManager == address(0)) revert ZeroAddress();
 
-        RoundManagerStorage.setIssuanceManager(_issuanceManager);
-        RoundManagerStorage.setUpgradeFactory(_upgradeFactory);
+        __LexScroWLite_init(_corp, _dealRegistry, _upgradeFactory);
 
+        if (!LexScrowStorage.setFeeRatio(IPlatformPayable(_upgradeFactory).defaultFeeRatio())) revert InvalidFeeRatio();
+        if (!LexScrowStorage.setFeeCorpCutRatio(IPlatformPayable(_upgradeFactory).defaultFeeCorpCutRatio())) revert InvalidFeeCorpCutRatio();
+
+        RoundManagerStorage.setIssuanceManager(_issuanceManager);
         RoundManagerStorage.setLexChexCondition(address(0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42));
 
         // No persistent DOMAIN_SEPARATOR; compute dynamically to avoid storage costs
@@ -819,13 +821,25 @@ contract RoundManager is
         return RoundManagerStorage.getIssuanceManager();
     }
 
+    /// @notice Accept and apply new fee ratios
+    /// @dev MetaLeX propose new fee ratios through the factory,
+    /// and the CyberCorp owner can decide if or when he wants to accept it
+    function acceptFeeRatios() external onlyOwner {
+        if (!LexScrowStorage.setFeeRatio(
+            IPlatformPayable(LexScrowStorage.getUpgradeFactory()).defaultFeeRatio()
+        )) revert InvalidFeeRatio();
+        if (!LexScrowStorage.setFeeCorpCutRatio(
+            IPlatformPayable(LexScrowStorage.getUpgradeFactory()).defaultFeeCorpCutRatio()
+        )) revert InvalidFeeCorpCutRatio();
+    }
+
     /// @notice UUPS upgrade authorization
     /// @dev MetaLeX releases new versions through the factory's reference implementation,
     /// and the CyberCorp owner can decide if or when he wants to perform the upgrade
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyOwner {
-        if(IRoundManagerFactory(RoundManagerStorage.getUpgradeFactory()).getRefImplementation() != newImplementation) {
+        if(IRoundManagerFactory(LexScrowStorage.getUpgradeFactory()).getRefImplementation() != newImplementation) {
             revert NotRefImplementation();
         }
     }

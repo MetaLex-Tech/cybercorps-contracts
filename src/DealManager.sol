@@ -131,21 +131,17 @@ contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAut
     /// @param _dealRegistry Address of the CyberAgreementRegistry
     /// @param _issuanceManager Address of the CyberCorp's issuance manager
     function initialize(address _auth, address _corp, address _dealRegistry, address _issuanceManager, address _upgradeFactory) public initializer {
+        __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
         
         if (_corp == address(0)) revert ZeroAddress();
         if (_dealRegistry == address(0)) revert ZeroAddress();
         if (_issuanceManager == address(0)) revert ZeroAddress();
 
-        // Set storage values
-        LexScrowStorage.setCorp(_corp);
-        LexScrowStorage.setDealRegistry(_dealRegistry);
-        DealManagerStorage.setIssuanceManager(_issuanceManager);
-
-        // Initialize LexScroWLite without setting storage
-        // TODO WIP: save upgradeFactory in the parent contract instead
         __LexScroWLite_init(_corp, _dealRegistry, _upgradeFactory);
-        DealManagerStorage.setUpgradeFactory(_upgradeFactory);
+
+        // Set storage values
+        DealManagerStorage.setIssuanceManager(_issuanceManager);
     }
 
     /// @notice Proposes a new deal
@@ -589,7 +585,7 @@ contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAut
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyOwner {
-        if(IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).getRefImplementation() != newImplementation) {
+        if(IDealManagerFactory(LexScrowStorage.getUpgradeFactory()).getRefImplementation() != newImplementation) {
             revert NotRefImplementation();
         }
     }
