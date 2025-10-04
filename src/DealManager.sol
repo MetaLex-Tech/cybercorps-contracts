@@ -115,6 +115,7 @@ contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAut
         address dealRegistry,
         bool fillUnallocated
     );
+    event MigratedV0_V1();
 
     /// @notice Maps agreement IDs to arrays of counter party values for closed deals.
     mapping(bytes32 => string[]) public counterPartyValues;
@@ -588,5 +589,12 @@ contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAut
         if(IDealManagerFactory(LexScrowStorage.getUpgradeFactory()).getRefImplementation() != newImplementation) {
             revert NotRefImplementation();
         }
+    }
+
+    /// @notice Migrate data from v0 to v1
+    /// @dev No ACL needed since the migration is non-destructive
+    function migrateV0_V1() external {
+        DealManagerStorage.migrateV0_V1();
+        emit MigratedV0_V1();
     }
 }

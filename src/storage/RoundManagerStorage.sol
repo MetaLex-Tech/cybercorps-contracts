@@ -45,6 +45,7 @@ pragma solidity 0.8.28;
 import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/ICondition.sol";
 import "../CyberCorpConstants.sol";
+import "./LexScrowStorage.sol";
 
 enum RoundType {
     FCFS,
@@ -201,5 +202,11 @@ library RoundManagerStorage {
 
     function getLexChexCondition() internal view returns (address) {
         return roundManagerStorage().lexChexCondition;
+    }
+
+    /// @notice Migrate data from v0 to v1
+    function migrateV0_V1() internal {
+        // Move `upgradeFactory` from child's to parent's storage
+        LexScrowStorage.setUpgradeFactory(roundManagerStorage().deprecated_upgradeFactory);
     }
 }

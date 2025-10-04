@@ -153,6 +153,7 @@ contract RoundManager is
     event RoundEndTimeUpdated(bytes32 indexed roundId, uint256 oldEndTime, uint256 newEndTime);
     event RoundClosed(bytes32 indexed roundId, uint256 closedAt);
     event EOIRecalled(bytes32 agreementId, address indexed investor, bytes32 indexed roundId);
+    event MigratedV0_V1();
 
     struct EscrowedSignatureData {
         bytes32 roundId;
@@ -842,5 +843,12 @@ contract RoundManager is
         if(IRoundManagerFactory(LexScrowStorage.getUpgradeFactory()).getRefImplementation() != newImplementation) {
             revert NotRefImplementation();
         }
+    }
+
+    /// @notice Migrate data from v0 to v1
+    /// @dev No ACL needed since the migration is non-destructive
+    function migrateV0_V1() external {
+        RoundManagerStorage.migrateV0_V1();
+        emit MigratedV0_V1();
     }
 }

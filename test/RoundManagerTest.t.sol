@@ -42,6 +42,24 @@ contract MockPaymentToken is ERC20 {
     }
 }
 
+contract MockRoundManagerV0 is UUPSUpgradeable {
+    function initialize() public {
+        RoundManagerStorage.roundManagerStorage().deprecated_upgradeFactory = address(123);
+    }
+
+    // UUPS upgrade authorization
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override {}
+}
+
+contract RoundManagerHelper is RoundManager {
+    // Expose upgradeFactory for tests
+    function getUpgradeFactory() external returns(address) {
+        return LexScrowStorage.getUpgradeFactory();
+    }
+}
+
 contract MockRoundManagerV2 is UUPSUpgradeable {
     string public constant DEPLOY_VERSION = "2";
 
@@ -1785,6 +1803,25 @@ contract RoundManagerTest is Test {
 
         assertEq(rm2.DEPLOY_VERSION(), "2", "Target RoundManager should be upgraded");
         assertEq(rm1.DEPLOY_VERSION(), "1", "Other RoundManager should not be upgraded");
+    }
+
+    function test_UpgradeV0_V1() public {
+        // Simulate a v0 contract
+        MockRoundManagerV0 rm = MockRoundManagerV0(address(
+            new ERC1967Proxy{salt: CyberCorpHelper.SALT}(
+                address(new MockRoundManagerV0{salt: CyberCorpHelper.SALT}()),
+                abi.encodeWithSelector(MockRoundManagerV0.initialize.selector)
+            )
+        ));
+
+        // Upgrade it to v1 with atomic migration
+        rm.upgradeToAndCall(
+            address(new RoundManagerHelper()),
+            abi.encodeWithSelector(RoundManager.migrateV0_V1.selector)
+        );
+
+        // Verify migrate results
+        assertEq(RoundManagerHelper(address(rm)).getUpgradeFactory(), address(123), "upgradeFactory should be migrated");
     }
 
     function test_RevertIf_UpgradeNonFactoryOwner() public {

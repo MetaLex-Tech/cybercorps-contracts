@@ -42,6 +42,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "../interfaces/IIssuanceManager.sol";
+import "./LexScrowStorage.sol";
 
 /// @title DealManagerStorage
 /// @notice Storage library for the DealManager contract that handles persistent data storage
@@ -101,5 +102,11 @@ library DealManagerStorage {
     /// @param _issuanceManager Address of the new issuance manager contract
     function setIssuanceManager(address _issuanceManager) internal {
         dealManagerStorage().issuanceManager = IIssuanceManager(_issuanceManager);
+    }
+
+    /// @notice Migrate data from v0 to v1
+    function migrateV0_V1() internal {
+        // Move `upgradeFactory` from child's to parent's storage
+        LexScrowStorage.setUpgradeFactory(dealManagerStorage().deprecated_upgradeFactory);
     }
 }

@@ -118,21 +118,6 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
         DealManagerFactoryStorage.setRefImplementation(_newImplementation);
     }
 
-    // TODO WIP: no fees for DealManager yet
-    function platformPayable() external returns (address) {
-        return address(0);
-    }
-
-    // TODO WIP: no fees for DealManager yet
-    function defaultFeeRatio() external returns (uint256) {
-        return 0;
-    }
-
-    // TODO WIP: no fees for DealManager yet
-    function defaultFeeCorpCutRatio() external returns (uint256) {
-        return 0;
-    }
-
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyOwner {}
