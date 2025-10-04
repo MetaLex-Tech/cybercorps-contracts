@@ -14,7 +14,7 @@ import {RoundManager} from "../src/RoundManager.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberCertData, RoundType} from "../src/interfaces/IRoundManager.sol";
-import {EOI} from "../src/storage/RoundManagerStorage.sol";
+import {EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {Vm} from "forge-std/Test.sol";
 import "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
@@ -292,7 +292,27 @@ contract UpgradePublicRoundsScript is Script {
             contact: "email",
             minAmount: 1,
             maxAmount: 1,
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: LexChexDetails({
+                request: MintRequest({
+                    uuid: 0,
+                    owner: address(0),
+                    investorName: "",
+                    investorType: "",
+                    investorJurisdiction: "",
+                    investorContact: "",
+                    mintPrice: 0,
+                    expiry: 0,
+                    paymentToken: address(0)
+                }),
+                templateId: bytes32(0),
+                salt: 0,
+                globalValues: new string[](0),
+                parties: new address[](0),
+                partyValues: new string[][](0),
+                agreementSignature: ""
+            })
         });
 
         address[] memory parties = new address[](2);
@@ -363,7 +383,27 @@ contract UpgradePublicRoundsScript is Script {
             contact: "email2",
             minAmount: 1,
             maxAmount: 1,
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: LexChexDetails({
+                request: MintRequest({
+                    uuid: 0,
+                    owner: address(0),
+                    investorName: "",
+                    investorType: "",
+                    investorJurisdiction: "",
+                    investorContact: "",
+                    mintPrice: 0,
+                    expiry: 0,
+                    paymentToken: address(0)
+                }),
+                templateId: bytes32(0),
+                salt: 0,
+                globalValues: new string[](0),
+                parties: new address[](0),
+                partyValues: new string[][](0),
+                agreementSignature: ""
+            })
         });
 
         // Build signature for template id 1

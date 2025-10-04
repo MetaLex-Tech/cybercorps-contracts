@@ -225,6 +225,12 @@ contract CyberCorpTest is Test {
             )
         )));
         cyberCorpFactory.setStable(stable);
+        uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
+        address upgradeOwner = vm.addr(upgradePrivKey);
+        address lxAuth = cyberCorpFactory.lexchexAuth();
+        vm.startPrank(upgradeOwner);
+        BorgAuth(lxAuth).updateRole(address(cyberCorpFactory), BorgAuth(lxAuth).OWNER_ROLE());
+        vm.stopPrank();
 
         string[] memory globalFieldsSafe = new string[](5);
         globalFieldsSafe[0] = "purchaseAmount";

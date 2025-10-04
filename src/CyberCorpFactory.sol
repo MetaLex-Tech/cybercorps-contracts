@@ -82,9 +82,10 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     address public stable; // = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;//base main net 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address public roundManagerFactory;
     address public cyberCert20Implementation;
+    address public lexchexAuth;
 
-    // Upgrade notes: Reduced gap to account for new variables (50 - 9 = 41)
-    uint256[39] private __gap;
+    // Upgrade notes: Reduced gap to account for new variables
+    uint256[38] private __gap;
 
     struct CyberCertData {
         string name;
@@ -151,6 +152,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         address indexed cyberCertPrinterImplementation,
         address oldImplementation
     );
+    
+    event LexchexAuthUpdated(address indexed lexchexAuth, address oldLexchexAuth);
 
     function initialize(
         address _auth,
@@ -175,6 +178,11 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         dealManagerFactory = _dealManagerFactory;
         roundManagerFactory = _roundManagerFactory;
         uriBuilder = _uriBuilder;
+
+        // Set default LeXcheX AUTH if not already set
+        if (lexchexAuth == address(0)) {
+            lexchexAuth = 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2;
+        }
     }
 
     function deployCyberCorp(
@@ -266,6 +274,14 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             issuanceManagerAddress,
             roundManagerFactory
         );
+
+        // Add newly created RoundManager as OWNER in LeXcheX AUTH
+        if (lexchexAuth != address(0)) {
+            BorgAuth(lexchexAuth).updateRole(
+                roundManagerAddress,
+                BorgAuth(lexchexAuth).OWNER_ROLE()
+            );
+        }
 
         // Set RoundManager on the corp
         ICyberCorp(cyberCorpAddress).setRoundManager(roundManagerAddress);
@@ -548,6 +564,12 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         address oldImplementation = cyberCertPrinterImplementation;
         cyberCertPrinterImplementation = _cyberCertPrinterImplementation;
         emit CyberCertPrinterImplementationUpdated(cyberCertPrinterImplementation, oldImplementation);
+    }
+
+    function setLexchexAuth(address _lexchexAuth) external onlyOwner {
+        address old = lexchexAuth;
+        lexchexAuth = _lexchexAuth;
+        emit LexchexAuthUpdated(lexchexAuth, old);
     }
 
     function _authorizeUpgrade(

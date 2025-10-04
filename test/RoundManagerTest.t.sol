@@ -22,6 +22,7 @@ import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/pro
 import {LexScrowStorage, Escrow, EscrowStatus} from "../src/storage/LexScrowStorage.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
+import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
 
 // Import necessary types
 using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
@@ -252,6 +253,12 @@ contract RoundManagerTest is Test {
         rmFactory = address(
             new RoundManagerFactory{salt: salt}(address(bootstrapAuth))
         );
+        // Perform an upgrade of the existing UUPS proxy at the known address
+        address _lexchexMinterUpgraded = address(new LeXcheXMinter());  
+        uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
+        address upgradeOwner = vm.addr(upgradePrivKey);
+        vm.prank(upgradeOwner);
+        IUUPS(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960).upgradeToAndCall(_lexchexMinterUpgraded, "");    
         /*address _auth,
         address _registryAddress,
         address _cyberCertPrinterImplementation,
@@ -280,6 +287,16 @@ contract RoundManagerTest is Test {
                 )
             )
         );
+
+        // Ensure CyberCorpFactory is OWNER of lexchexAuth using upgradeOwner from .env
+        {
+            uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
+            address upgradeOwner = vm.addr(upgradePrivKey);
+            address lxAuth = corpFactory.lexchexAuth();
+            vm.startPrank(upgradeOwner);
+            BorgAuth(lxAuth).updateRole(address(corpFactory), BorgAuth(lxAuth).OWNER_ROLE());
+            vm.stopPrank();
+        }
 
         // Deploy corp
         CompanyOfficer memory officer = CompanyOfficer({
@@ -458,6 +475,28 @@ contract RoundManagerTest is Test {
             );
     }
 
+    function _emptyLex() internal pure returns (LexChexDetails memory) {
+        return LexChexDetails({
+            request: MintRequest({
+                uuid: 0,
+                owner: address(0),
+                investorName: "",
+                investorType: "",
+                investorJurisdiction: "",
+                investorContact: "",
+                mintPrice: 0,
+                expiry: 0,
+                paymentToken: address(0)
+            }),
+            templateId: bytes32(0),
+            salt: 0,
+            globalValues: new string[](0),
+            parties: new address[](0),
+            partyValues: new string[][](0),
+            agreementSignature: ""
+        });
+    }
+
     function test_RevertIf_CreateRound_InvalidSignature() public {
         RoundManager.CyberCertData[] memory certData = new RoundManager.CyberCertData[](1);
         string[] memory defaultLegend = new string[](1);
@@ -526,7 +565,9 @@ contract RoundManagerTest is Test {
             contact: "test@example.com",
             minAmount: 5000 * 10 ** 6, // 5,000 USDC
             maxAmount: 10000 * 10 ** 6, // 10,000 USDC
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
 
         string[] memory globalValues = new string[](1);
@@ -563,7 +604,7 @@ contract RoundManagerTest is Test {
             eoi.maxAmount,
             eoi.expiry
         );
-        bytes32 agreementId = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, ) = RoundManager(roundManager).submitEOI(
             roundId,
             eoi,
             globalValues,
@@ -592,7 +633,9 @@ contract RoundManagerTest is Test {
             contact: "test@example.com",
             minAmount: 100 * 10 ** 6, // Below MIN_TICKET
             maxAmount: 1000000 * 10 ** 6, // Above MAX_TICKET
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
 
         string[] memory globalValues = new string[](1);
@@ -636,11 +679,13 @@ contract RoundManagerTest is Test {
             contact: "test@example.com",
             minAmount: 5000 * 10 ** 6,
             maxAmount: 10000 * 10 ** 6,
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
 
         });
 
-        bytes32 agreementId = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, ) = RoundManager(roundManager).submitEOI(
             roundId,
             eoi,
             new string[](1),
@@ -700,10 +745,12 @@ contract RoundManagerTest is Test {
             contact: "test@example.com",
             minAmount: 5000 * 10 ** 6,
             maxAmount: 10000 * 10 ** 6,
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
 
-        bytes32 agreementId = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, ) = RoundManager(roundManager).submitEOI(
             roundId,
             eoi,
             new string[](1),
@@ -751,7 +798,9 @@ contract RoundManagerTest is Test {
             contact: "test@example.com",
             minAmount: 5000 * 10 ** 6,
             maxAmount: RAISE_CAP + 1, // Just over the raise cap
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
 
         // Expect revert because eoi.maxAmount exceeds round.maxTicket bounds
@@ -793,7 +842,9 @@ contract RoundManagerTest is Test {
             contact: "test@example.com",
             minAmount: 5000 * 10 ** 6,
             maxAmount: 10000 * 10 ** 6,
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
 
         vm.expectRevert(
@@ -881,10 +932,12 @@ contract RoundManagerTest is Test {
             contact: "investor1@example.com",
             minAmount: 400000 * 10 ** 6, // 400k USDC
             maxAmount: 600000 * 10 ** 6, // 600k USDC
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
 
-        bytes32 agreementId1 = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId1, ) = RoundManager(roundManager).submitEOI(
             roundIdLarge,
             eoi1,
             new string[](1),
@@ -915,10 +968,12 @@ contract RoundManagerTest is Test {
             contact: "investor2@example.com",
             minAmount: 400000 * 10 ** 6, // 400k USDC
             maxAmount: 600000 * 10 ** 6, // 600k USDC
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
 
-        bytes32 agreementId2 = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId2, ) = RoundManager(roundManager).submitEOI(
             roundIdLarge,
             eoi2,
             new string[](1),
@@ -975,10 +1030,12 @@ contract RoundManagerTest is Test {
             contact: "test@example.com",
             minAmount: 5000 * 10 ** 6,
             maxAmount: 10000 * 10 ** 6,
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
 
-        bytes32 agreementId = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, uint256 tokenId) = RoundManager(roundManager).submitEOI(
             roundId,
             eoi,
             new string[](1),
@@ -1033,10 +1090,12 @@ contract RoundManagerTest is Test {
             contact: "reject@example.com",
             minAmount: 2_000 * 10 ** 6,
             maxAmount: 5_000 * 10 ** 6,
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
         uint256 balBefore = paymentToken.balanceOf(investor);
-        bytes32 agreementId = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, uint256 tokenId) = RoundManager(roundManager).submitEOI(
             roundId,
             eoi,
             new string[](1),
@@ -1075,10 +1134,12 @@ contract RoundManagerTest is Test {
             contact: "reject@example.com",
             minAmount: 2_000 * 10 ** 6,
             maxAmount: 5_000 * 10 ** 6,
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
         uint256 balBefore = paymentToken.balanceOf(investor);
-        bytes32 agreementId = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, ) = RoundManager(roundManager).submitEOI(
             roundId,
             eoi,
             new string[](1),
@@ -1136,10 +1197,12 @@ contract RoundManagerTest is Test {
             contact: "reject@example.com",
             minAmount: 2_000 * 10 ** 6,
             maxAmount: 5_000 * 10 ** 6,
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
         uint256 balBefore = paymentToken.balanceOf(investor);
-        bytes32 agreementId = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, ) = RoundManager(roundManager).submitEOI(
             roundId,
             eoi,
             new string[](1),
@@ -1181,10 +1244,12 @@ contract RoundManagerTest is Test {
             contact: "reject@example.com",
             minAmount: 2_000 * 10 ** 6,
             maxAmount: 5_000 * 10 ** 6,
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
         uint256 balBefore = paymentToken.balanceOf(investor);
-        bytes32 agreementId = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, ) = RoundManager(roundManager).submitEOI(
             roundId,
             eoi,
             new string[](1),
@@ -1245,10 +1310,12 @@ contract RoundManagerTest is Test {
             contact: "reject@example.com",
             minAmount: 2_000 * 10 ** 6,
             maxAmount: 5_000 * 10 ** 6,
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
         uint256 balBefore = paymentToken.balanceOf(investor);
-        bytes32 agreementId = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, uint256 tokenId) = RoundManager(roundManager).submitEOI(
             roundId,
             eoi,
             new string[](1),
@@ -1288,11 +1355,13 @@ contract RoundManagerTest is Test {
             contact: "cond@example.com",
             minAmount: 5_000 * 10 ** 6,
             maxAmount: 10_000 * 10 ** 6,
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
         address[] memory conditions = new address[](1);
         conditions[0] = address(cond);
-        bytes32 agreementId = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, ) = RoundManager(roundManager).submitEOI(
             roundId,
             eoi,
             new string[](1),
@@ -1393,7 +1462,9 @@ contract RoundManagerTest is Test {
             contact: "z@z",
             minAmount: 1_000 * 10 ** 6,
             maxAmount: 2_000 * 10 ** 6,
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
        
         //compute signature
@@ -1440,7 +1511,9 @@ contract RoundManagerTest is Test {
             contact: "x@x",
             minAmount: 5_000 * 10 ** 6,
             maxAmount: 10_000 * 10 ** 6,
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
         string[] memory gl = new string[](1);
         string[] memory pv = new string[](1);
@@ -1538,7 +1611,9 @@ contract RoundManagerTest is Test {
             contact: "y@y",
             minAmount: 1_000 * 10 ** 6,
             maxAmount: 10_000 * 10 ** 6,
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
         string[] memory gl = new string[](1);
         string[] memory pv = new string[](1);
@@ -1551,7 +1626,7 @@ contract RoundManagerTest is Test {
             investorPrivKey
         );
         uint256 balBefore = paymentToken.balanceOf(investor);
-        bytes32 agreementId = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, uint256 tokenId) = RoundManager(roundManager).submitEOI(
             roundId2,
             eoi,
             gl,
@@ -1590,6 +1665,11 @@ contract RoundManagerFCFSTest is Test {
         // Mock LexChexCondition to always pass
         address alwaysTrueCondition = address(new AlwaysTrueCondition());
         vm.etch(KNOWN_LEXCHEX_CONDITION_ADDRESS, alwaysTrueCondition.code);
+        address _lexchexMinterUpgraded = address(new LeXcheXMinter());  
+        uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
+        address upgradeOwner = vm.addr(upgradePrivKey);
+        vm.prank(upgradeOwner);
+        IUUPS(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960).upgradeToAndCall(_lexchexMinterUpgraded, "");
     }
 
     // Infra helpers copied from above
@@ -1668,6 +1748,16 @@ contract RoundManagerFCFSTest is Test {
                 )
             )
         );
+
+                // Ensure CyberCorpFactory is OWNER of lexchexAuth using upgradeOwner from .env
+        {
+            uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
+            address upgradeOwner = vm.addr(upgradePrivKey);
+            address lxAuth = corpFactory.lexchexAuth();
+            vm.startPrank(upgradeOwner);
+            BorgAuth(lxAuth).updateRole(address(corpFactory), BorgAuth(lxAuth).OWNER_ROLE());
+            vm.stopPrank();
+        }
     }
 
     function test_UpgradeSteps_RMFactory_CorpFactory_CorpBeacon() public {
@@ -1952,6 +2042,12 @@ contract RoundManagerFCFSTest is Test {
         rm.initialize(auth, corp, registry, issuance, address(rmFactory));
         // Allow RoundManager to call IssuanceManager.onlyOwner
         BorgAuth(auth).updateRole(address(rm), 99);
+        //add to lexchexAuth
+        uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
+        address upgradeOwner = vm.addr(upgradePrivKey);
+        vm.startPrank(upgradeOwner);
+        BorgAuth(0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2).updateRole(address(rm), BorgAuth(0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2).OWNER_ROLE());
+        vm.stopPrank();
     }
 
     function _createFCFSRound(
@@ -2184,6 +2280,28 @@ contract RoundManagerFCFSTest is Test {
         );
     }
 
+        function _emptyLex() internal pure returns (LexChexDetails memory) {
+        return LexChexDetails({
+            request: MintRequest({
+                uuid: 0,
+                owner: address(0),
+                investorName: "",
+                investorType: "",
+                investorJurisdiction: "",
+                investorContact: "",
+                mintPrice: 0,
+                expiry: 0,
+                paymentToken: address(0)
+            }),
+            templateId: bytes32(0),
+            salt: 0,
+            globalValues: new string[](0),
+            parties: new address[](0),
+            partyValues: new string[][](0),
+            agreementSignature: ""
+        });
+    }
+
     function _submitEOIAndAssertFinalized(
         RoundManager rm,
         CyberAgreementRegistry registry,
@@ -2207,7 +2325,9 @@ contract RoundManagerFCFSTest is Test {
             contact: "email",
             minAmount: 5_000 * (10 ** payDec),
             maxAmount: 10_000 * (10 ** payDec),
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
 
         string[] memory glValues = new string[](1);
@@ -2226,7 +2346,7 @@ contract RoundManagerFCFSTest is Test {
             privKey
         );
 
-        bytes32 agreementId = rm.submitEOI(
+        (bytes32 agreementId, ) = rm.submitEOI(
             roundId,
             eoi,
             glValues,
@@ -2304,7 +2424,9 @@ contract RoundManagerFCFSTest is Test {
             contact: "email",
             minAmount: 5_000 * (10 ** usdc.decimals()),
             maxAmount: 10_000 * (10 ** usdc.decimals()),
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
 
         string[] memory globalValues = new string[](1);
@@ -2323,7 +2445,7 @@ contract RoundManagerFCFSTest is Test {
             privKey
         );
 
-        bytes32 agreementId = rm.submitEOI(
+        (bytes32 agreementId, ) = rm.submitEOI(
             roundId,
             eoi,
             globalValues,   
@@ -2405,7 +2527,9 @@ contract RoundManagerFCFSTest is Test {
             contact: "email",
             minAmount: 10_000 * (10 ** usdc.decimals()),
             maxAmount: 80_000 * (10 ** usdc.decimals()),
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
 
         string[] memory globalValues = new string[](1);
@@ -2490,7 +2614,9 @@ contract RoundManagerFCFSTest is Test {
             contact: "email",
             minAmount: 100,
             maxAmount: 500,
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
 
         string[] memory globalValues = new string[](1);
@@ -2574,7 +2700,9 @@ contract RoundManagerFCFSTest is Test {
             contact: "email",
             minAmount: 1_000 * (10 ** usdc.decimals()),
             maxAmount: 2_000 * (10 ** usdc.decimals()),
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
         string[] memory globalValues = new string[](1);
         globalValues[0] = "g";
@@ -2619,7 +2747,9 @@ contract RoundManagerFCFSTest is Test {
             contact: "email",
             minAmount: 2_000 * (10 ** usdc.decimals()),
             maxAmount: 2_000 * (10 ** usdc.decimals()),
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
         bytes memory sig2 = _computeEOISignature(
             registry,
@@ -2711,7 +2841,9 @@ contract RoundManagerFCFSTest is Test {
             contact: "email",
             minAmount: 5_000 * (10 ** usdc.decimals()),
             maxAmount: 10_000 * (10 ** usdc.decimals()),
-            expiry: block.timestamp + 7 days
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
         });
 
         string[] memory globalValues = new string[](1);

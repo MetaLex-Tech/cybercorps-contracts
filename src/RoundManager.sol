@@ -54,6 +54,18 @@ import "./interfaces/ICyberCorp.sol";
 import "./interfaces/ICyberCertPrinter.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
+interface ILexChexMinter {
+    function requestMintFor(
+        MintRequest calldata request,
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        bytes memory agreementSignature
+    ) external returns (bytes32 agreementId, uint256 tokenId);
+}
+
 /// @title RoundManager
 /// @notice Manages fundraising rounds for CyberCorp, handling EOIs, escrows, and allocations
 /// @dev Implements UUPS upgradeable pattern and integrates with BorgAuth for access control
@@ -251,7 +263,7 @@ contract RoundManager is
         RoundManagerStorage.setUpgradeFactory(_upgradeFactory);
 
         RoundManagerStorage.setLexChexCondition(address(0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42));
-
+        RoundManagerStorage.setLexChexMinter(address(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960));
         // No persistent DOMAIN_SEPARATOR; compute dynamically to avoid storage costs
     }
 
@@ -483,7 +495,7 @@ contract RoundManager is
         uint256 salt,
         address[] memory conditions,
         bytes32 secretHash
-    ) external returns (bytes32 agreementId) {
+    ) external returns (bytes32 agreementId, uint256 tokenId) {
         Round storage round = RoundManagerStorage.getRound(roundId);
         if (round.id == bytes32(0)) revert InvalidRound();
         if (
@@ -596,7 +608,7 @@ contract RoundManager is
     function allocate(
         bytes32 agreementId,
         uint256 allocatedAmount
-    ) external onlyOwnerOrSelf nonReentrant {
+    ) external onlyOwnerOrSelf nonReentrant returns (uint256 tokenId) {
         bytes32 roundId = RoundManagerStorage.getAgreementToRound(agreementId);
         Round storage round = RoundManagerStorage.getRound(roundId);
         EOI storage eoi = RoundManagerStorage.getAgreementToEOI(agreementId);
@@ -706,6 +718,14 @@ contract RoundManager is
         // Effect: Calculate refund amount and update escrowed amount
         uint256 refund = escrow.buyerAssets[0].amount - allocatedAmount;
         escrow.buyerAssets[0].amount = allocatedAmount;
+
+        //mint lexchex if over 200k for individual or 1 million for corporate, account for decimals of the payment token
+        if (allocatedAmount >= 200000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && eoi.naturalPerson) {
+           (agreementId, tokenId) = ILexChexMinter(RoundManagerStorage.getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
+        }
+        if (allocatedAmount >= 1000000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && !eoi.naturalPerson) {
+                (agreementId, tokenId) = ILexChexMinter(RoundManagerStorage.getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
+        }
 
         // Check: Check conditions
         if (!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
