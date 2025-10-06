@@ -75,6 +75,9 @@ contract AlwaysTrueCondition is ICondition {
 }
 
 contract RoundManagerTest is Test {
+    address public constant LEXCHEX_MINTER_ADDRESS = 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960;
+    address public constant UPGRADE_OWNER = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
+
    // RoundManager public roundManager;
     IssuanceManager public issuanceManager;
     CyberCertPrinter public certPrinter;
@@ -282,10 +285,8 @@ contract RoundManagerTest is Test {
         );
         // Perform an upgrade of the existing UUPS proxy at the known address
         address _lexchexMinterUpgraded = address(new LeXcheXMinter());  
-        uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
-        address upgradeOwner = vm.addr(upgradePrivKey);
-        vm.prank(upgradeOwner);
-        IUUPS(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960).upgradeToAndCall(_lexchexMinterUpgraded, "");    
+        vm.prank(UPGRADE_OWNER);
+        IUUPS(LEXCHEX_MINTER_ADDRESS).upgradeToAndCall(_lexchexMinterUpgraded, "");
         /*address _auth,
         address _registryAddress,
         address _cyberCertPrinterImplementation,
@@ -315,12 +316,10 @@ contract RoundManagerTest is Test {
             )
         );
 
-        // Ensure CyberCorpFactory is OWNER of lexchexAuth using upgradeOwner from .env
+        // Ensure CyberCorpFactory is OWNER of lexchexAuth
         {
-            uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
-            address upgradeOwner = vm.addr(upgradePrivKey);
             address lxAuth = corpFactory.lexchexAuth();
-            vm.startPrank(upgradeOwner);
+            vm.startPrank(UPGRADE_OWNER);
             BorgAuth(lxAuth).updateRole(address(corpFactory), BorgAuth(lxAuth).OWNER_ROLE());
             vm.stopPrank();
         }
@@ -1788,17 +1787,17 @@ contract RoundManagerTest is Test {
 contract RoundManagerFCFSTest is Test {
     using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
 
-    address public constant KNOWN_LEXCHEX_CONDITION_ADDRESS = 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42;
+    address public constant LEXCHEX_CONDITION_ADDRESS = 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42;
+    address public constant LEXCHEX_MINTER_ADDRESS = 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960;
+    address public constant UPGRADE_OWNER = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
 
     function setUp() public {
         // Mock LexChexCondition to always pass
         address alwaysTrueCondition = address(new AlwaysTrueCondition());
-        vm.etch(KNOWN_LEXCHEX_CONDITION_ADDRESS, alwaysTrueCondition.code);
+        vm.etch(LEXCHEX_CONDITION_ADDRESS, alwaysTrueCondition.code);
         address _lexchexMinterUpgraded = address(new LeXcheXMinter());  
-        uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
-        address upgradeOwner = vm.addr(upgradePrivKey);
-        vm.prank(upgradeOwner);
-        IUUPS(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960).upgradeToAndCall(_lexchexMinterUpgraded, "");
+        vm.prank(UPGRADE_OWNER);
+        IUUPS(LEXCHEX_MINTER_ADDRESS).upgradeToAndCall(_lexchexMinterUpgraded, "");
     }
 
     // Infra helpers copied from above
@@ -1892,12 +1891,10 @@ contract RoundManagerFCFSTest is Test {
             )
         );
 
-                // Ensure CyberCorpFactory is OWNER of lexchexAuth using upgradeOwner from .env
+        // Ensure CyberCorpFactory is OWNER of lexchexAuth
         {
-            uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
-            address upgradeOwner = vm.addr(upgradePrivKey);
             address lxAuth = corpFactory.lexchexAuth();
-            vm.startPrank(upgradeOwner);
+            vm.startPrank(UPGRADE_OWNER);
             BorgAuth(lxAuth).updateRole(address(corpFactory), BorgAuth(lxAuth).OWNER_ROLE());
             vm.stopPrank();
         }
@@ -2213,9 +2210,7 @@ contract RoundManagerFCFSTest is Test {
         // Allow RoundManager to call IssuanceManager.onlyOwner
         BorgAuth(auth).updateRole(address(rm), 99);
         //add to lexchexAuth
-        uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
-        address upgradeOwner = vm.addr(upgradePrivKey);
-        vm.startPrank(upgradeOwner);
+        vm.startPrank(UPGRADE_OWNER);
         BorgAuth(0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2).updateRole(address(rm), BorgAuth(0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2).OWNER_ROLE());
         vm.stopPrank();
     }
@@ -3034,7 +3029,7 @@ contract RoundManagerFCFSTest is Test {
 
         // Mock LexChexCondition to always fail
         address alwaysFalseCondition = address(new AlwaysFalseCondition());
-        vm.etch(KNOWN_LEXCHEX_CONDITION_ADDRESS, alwaysFalseCondition.code);
+        vm.etch(LEXCHEX_CONDITION_ADDRESS, alwaysFalseCondition.code);
 
         vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
         rm.submitEOI(
