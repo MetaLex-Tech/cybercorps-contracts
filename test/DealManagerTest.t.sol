@@ -41,6 +41,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import {Test, console} from "forge-std/Test.sol";
+import {UUPSUpgradeable} from "../dependencies/openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
 import {ERC20} from "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {ERC721} from "../dependencies/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
 import {ERC721Enumerable} from "../dependencies/openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
@@ -180,8 +181,17 @@ contract CyberCorpMock {
     }
 }
 
+contract MockDealManagerV2 is UUPSUpgradeable {
+    string public constant DEPLOY_VERSION = "2";
+
+    // UUPS upgrade authorization
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override {}
+}
+
 contract DealManagerTest is Test {
-    
+
     bytes public constant GOOD_SIGNATURE = "good signature";
     bytes public constant BAD_SIGNATURE = "bad signature";
 
@@ -225,7 +235,18 @@ contract DealManagerTest is Test {
         defaultCertPrinters = new address[](1);
         defaultCertPrinters[0] = address(new CyberCertPrinterMock{salt: salt}());
 
-        dmFactory = new DealManagerFactory{salt: salt}(address(bootstrapAuth));
+        dmFactory = DealManagerFactory(
+            address(
+                new ERC1967Proxy{salt: salt}(
+                    address(new DealManagerFactory{salt: salt}()),
+                    abi.encodeWithSelector(
+                        DealManagerFactory.initialize.selector,
+                        address(bootstrapAuth),
+                        address(new DealManager())
+                    )
+                )
+            )
+        );
         dm = DealManager(
             address(
                 new ERC1967Proxy{salt: salt}(
@@ -241,7 +262,7 @@ contract DealManagerTest is Test {
                 )
             )
         );
-        
+
         // Configure mock signatures
 
         registry.mockValidSignatures(GOOD_SIGNATURE, true);
@@ -772,5 +793,107 @@ contract DealManagerTest is Test {
         // Refund should fail because the deal is not voided
         vm.expectRevert(LexScroWLite.DealNotVoided.selector);
         dm.refundVoidedDeal(agreementId);
+    }
+
+    function test_UpgradeNextDealManager() public {
+        assertEq(DealManager(DealManagerFactory(dmFactory).getRefImplementation()).DEPLOY_VERSION(), "1", "reference impl version should not be changed yet");
+
+        vm.startPrank(owner);
+        DealManagerFactory(dmFactory).setRefImplementation(address(new MockDealManagerV2()));
+        vm.stopPrank();
+        assertEq(DealManager(DealManagerFactory(dmFactory).getRefImplementation()).DEPLOY_VERSION(), "2", "reference impl version should have changed");
+
+        bytes32 salt = keccak256("test_UpgradeNextDealerManager");
+        // Next deployment should emit events with version so indexer could be informed
+        vm.expectEmit(true, true, true, true);
+        emit DealManagerFactory.DealManagerDeployed(
+            DealManagerFactory(dmFactory).computeDealManagerAddress(salt),
+            "2"
+        );
+        DealManager nextRm = DealManager(
+            DealManagerFactory(dmFactory).deployDealManager(salt)
+        );
+        assertEq(nextRm.DEPLOY_VERSION(), "2", "next deployment version should have changed");
+    }
+
+    function test_UpgradeExistingDealManager() public {
+        BorgAuth corpAuth = new BorgAuth{salt: keccak256("testUpgradeExistingDealManager")}(companyOwner);
+        address placeHolderAddr = 0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF;
+
+        // Deploy existing DealManagers
+
+        DealManager dm1 = DealManager(
+            DealManagerFactory(dmFactory).deployDealManager(keccak256("testUpgradeExistingDealManager1"))
+        );
+        dm1.initialize(
+            address(corpAuth),
+            placeHolderAddr,
+            placeHolderAddr,
+            placeHolderAddr,
+            address(dmFactory)
+        );
+
+        DealManager dm2 = DealManager(
+            DealManagerFactory(dmFactory).deployDealManager(keccak256("testUpgradeExistingDealManager2"))
+        );
+        dm2.initialize(
+            address(corpAuth),
+            placeHolderAddr,
+            placeHolderAddr,
+            placeHolderAddr,
+            address(dmFactory)
+        );
+
+        // MetaLeX to release new DealManager v2
+
+        vm.startPrank(owner);
+        DealManagerFactory(dmFactory).setRefImplementation(address(new MockDealManagerV2()));
+        vm.stopPrank();
+
+        // Corp2 owner decided to accept the upgrade
+
+        vm.startPrank(companyOwner);
+        dm2.upgradeToAndCall(DealManagerFactory(dmFactory).getRefImplementation(), "");
+        vm.stopPrank();
+
+        assertEq(dm2.DEPLOY_VERSION(), "2", "Target DealManager should be upgraded");
+        assertEq(dm1.DEPLOY_VERSION(), "1", "Other DealManager should not be upgraded");
+    }
+
+    function test_RevertIf_UpgradeNonFactoryOwner() public {
+        // Non-MetaLeX admin should not be able to set new reference implementation
+
+        address newImplementation = address(new MockDealManagerV2());
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, bootstrapAuth.OWNER_ROLE(), companyOwner));
+        vm.prank(companyOwner);
+        DealManagerFactory(dmFactory).setRefImplementation(newImplementation);
+    }
+
+    function test_RevertIf_UpgradeExistingDealManagerNotRefImplementation() public {
+        BorgAuth corpAuth = new BorgAuth{salt: keccak256("testUpgradeExistingDealManager")}(companyOwner);
+        address placeHolderAddr = 0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF;
+
+        // Deploy existing DealManagers
+
+        DealManager dm = DealManager(
+            DealManagerFactory(dmFactory).deployDealManager(keccak256("testUpgradeExistingDealManager2"))
+        );
+        dm.initialize(
+            address(corpAuth),
+            placeHolderAddr,
+            placeHolderAddr,
+            placeHolderAddr,
+            address(dmFactory)
+        );
+
+        // Corp owner can't upgrade to v2 without MetaLeX releasing it first
+
+        vm.startPrank(companyOwner);
+        address nonOfficialDealManager = address(new MockDealManagerV2());
+        vm.expectRevert(
+            abi.encodeWithSelector(DealManager.NotRefImplementation.selector)
+        );
+        dm.upgradeToAndCall(nonOfficialDealManager, "");
+        vm.stopPrank();
     }
 }

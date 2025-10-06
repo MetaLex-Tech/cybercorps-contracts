@@ -1,4 +1,5 @@
 openzeppelin-contracts/=dependencies/openzeppelin-contracts/contracts/
+openzeppelin-contracts-upgradeable/=dependencies/openzeppelin-contracts-upgradeable/contracts/
 erc721a/=dependencies/erc721a-4.3.0/
 forge-std/=dependencies/forge-std/src/
 ConditionManager=dependencies/ConditionManager/src/

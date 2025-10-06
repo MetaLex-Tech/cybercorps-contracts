@@ -42,36 +42,35 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "./RoundManager.sol";
-import "@openzeppelin/contracts/utils/Create2.sol";
-import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
-import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import "openzeppelin-contracts/utils/Create2.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./libs/auth.sol";
+import {RoundManagerFactoryStorage} from "./storage/RoundManagerFactoryStorage.sol";
 
 /// @title RoundManagerFactory
 /// @notice Factory contract for deploying RoundManager instances
-/// @dev Uses BeaconProxy pattern for upgradeable RoundManager instances
-contract RoundManagerFactory is BorgAuthACL {
+/// @dev Uses ERC1967Proxy+UUPSUpgradeable pattern for upgradeable RoundManager instances
+contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
-    
-    UpgradeableBeacon public beacon;
 
-    event RoundManagerDeployed(address roundManager);
+    event RoundManagerDeployed(address roundManager, string version);
 
-    /// @notice Constructor that deploys the implementation and beacon
-    /// @param _auth Address of the BorgAuth contract
-    constructor(address _auth) {
-        // Deploy the implementation contract and beacon
-        beacon = new UpgradeableBeacon(address(new RoundManager()), address(this));
-        initialize(_auth);
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
     }
 
-    /// @notice Initializes the factory with auth
+    /// @notice Initialize the factory with authentication and reference implementation
     /// @param _auth Address of the BorgAuth contract
-    function initialize(address _auth) public initializer {
+    /// @param _refImplementation Address of the reference RoundManager implementation
+    function initialize(address _auth, address _refImplementation) public initializer {
         // Initialize BorgAuthACL
         __BorgAuthACL_init(_auth);
+
+        RoundManagerFactoryStorage.setRefImplementation(_refImplementation);
     }
 
     /// @notice Deploys a new RoundManager instance
@@ -85,10 +84,10 @@ contract RoundManagerFactory is BorgAuthACL {
         
         // Deploy using CREATE2
         address roundManagerProxy = Create2.deploy(0, _salt, proxyBytecode);
-        
+
         if(roundManagerProxy == address(0)) revert DeploymentFailed();
         
-        emit RoundManagerDeployed(roundManagerProxy);
+        emit RoundManagerDeployed(roundManagerProxy, RoundManager(RoundManagerFactoryStorage.getRefImplementation()).DEPLOY_VERSION());
         return roundManagerProxy;
     }
 
@@ -104,20 +103,24 @@ contract RoundManagerFactory is BorgAuthACL {
     /// @dev Internal function used by deployRoundManager
     /// @return bytecode The proxy contract creation bytecode
     function _getBytecode() private view returns (bytes memory bytecode) {
-        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
-        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(beacon, ""));
+        bytes memory sourceCodeBytes = type(ERC1967Proxy).creationCode;
+        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(RoundManagerFactoryStorage.getRefImplementation(), ""));
     }
 
-    /// @notice Upgrades the implementation contract
+    /// @notice Get the reference implementation contract for the next deployments
+    /// @return Current reference implementation contract address
+    function getRefImplementation() public returns(address) {
+        return RoundManagerFactoryStorage.getRefImplementation();
+    }
+
+    /// @notice Set the reference implementation contract for the next deployments
     /// @dev Only callable by addresses with the admin role
     /// @param _newImplementation Address of the new implementation
-    function upgradeImplementation(address _newImplementation) external onlyOwner {
-        UpgradeableBeacon(beacon).upgradeTo(_newImplementation);
+    function setRefImplementation(address _newImplementation) public onlyOwner {
+        RoundManagerFactoryStorage.setRefImplementation(_newImplementation);
     }
 
-    /// @notice Gets the current implementation address
-    /// @return The address of the current implementation contract
-    function getBeaconImplementation() external view returns (address) {
-        return UpgradeableBeacon(beacon).implementation();
-    }
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {}
 }

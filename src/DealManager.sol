@@ -42,6 +42,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./libs/LexScroWLite.sol";
@@ -49,13 +50,15 @@ import "./libs/auth.sol";
 import "./storage/DealManagerStorage.sol";
 import "./storage/BorgAuthStorage.sol";
 import "./interfaces/ICyberCorp.sol";
-import "./interfaces/IRoundManager.sol";
+import "./interfaces/IDealManagerFactory.sol";
 
 /// @title DealManager
 /// @notice Manages the lifecycle of deals between parties, including creation, signing, payment, and finalization for a CyberCorp
 /// @dev Implements UUPS upgradeable pattern and integrates with BorgAuth for access control
-contract DealManager is Initializable, ReentrancyGuard, BorgAuthACL, LexScroWLite {
+contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAuthACL, LexScroWLite {
     using DealManagerStorage for DealManagerStorage.DealManagerData;
+
+    string public constant DEPLOY_VERSION = "1"; // For version-tracking on all deployment and future upgrades
 
     /// @notice Certificate data structure for creating new certificates
     struct CyberCertData {
@@ -77,6 +80,7 @@ contract DealManager is Initializable, ReentrancyGuard, BorgAuthACL, LexScroWLit
     error ConditionDoesNotExist();
     error NotUpgradeFactory();
     error DealNotExpired();
+    error NotRefImplementation();
 
     /// @notice Emitted when a new deal is proposed
     /// @param agreementId Unique identifier for the agreement
@@ -576,5 +580,16 @@ contract DealManager is Initializable, ReentrancyGuard, BorgAuthACL, LexScroWLit
             secretHash,
             expiry
         );
+    }
+
+    /// @notice UUPS upgrade authorization
+    /// @dev MetaLeX releases new versions through the factory's reference implementation,
+    /// and the CyberCorp owner can decide if or when he wants to perform the upgrade
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {
+        if(IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).getRefImplementation() != newImplementation) {
+            revert NotRefImplementation();
+        }
     }
 }

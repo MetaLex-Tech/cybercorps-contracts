@@ -17,7 +17,8 @@ import {CyberCertData, RoundType} from "../src/interfaces/IRoundManager.sol";
 import {EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {Vm} from "forge-std/Test.sol";
-import "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import "openzeppelin-contracts/token/ERC20/ERC20.sol";
+import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 
@@ -64,9 +65,16 @@ contract UpgradePublicRoundsScript is Script {
                 "Deployer is not AUTH owner; use the AUTH owner key to upgrade"
             );
         }
-        RoundManagerFactory roundManagerFactory = new RoundManagerFactory{
-            salt: salt
-        }(auth);
+        RoundManagerFactory roundManagerFactory = RoundManagerFactory(address(
+            new ERC1967Proxy{salt: salt}(
+                address(new RoundManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(auth),
+                    address(new RoundManager())
+                )
+            )
+        ));
         console.log(
             "RoundManagerFactory deployed:",
             address(roundManagerFactory)

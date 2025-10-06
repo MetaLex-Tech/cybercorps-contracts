@@ -8,12 +8,13 @@ import "../src/CyberCertPrinter.sol";
 import "../src/storage/RoundManagerStorage.sol";
 import "../src/CyberCorpConstants.sol";
 import "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import "../dependencies/openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
-import {DealManagerFactory} from "../src/DealManagerFactory.sol";
+import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
-import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
+import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
@@ -42,6 +43,15 @@ contract MockPaymentToken is ERC20 {
     }
 }
 
+contract MockRoundManagerV2 is UUPSUpgradeable {
+    string public constant DEPLOY_VERSION = "2";
+
+    // UUPS upgrade authorization
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override {}
+}
+
 // Mock condition that always fails
 contract AlwaysFalseCondition is ICondition {
     function checkCondition(
@@ -65,6 +75,9 @@ contract AlwaysTrueCondition is ICondition {
 }
 
 contract RoundManagerTest is Test {
+    address public constant LEXCHEX_MINTER_ADDRESS = 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960;
+    address public constant UPGRADE_OWNER = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
+
    // RoundManager public roundManager;
     IssuanceManager public issuanceManager;
     CyberCertPrinter public certPrinter;
@@ -76,6 +89,8 @@ contract RoundManagerTest is Test {
     uint256 private investorPrivKey;
     address public investor2;
     uint256 private investor2PrivKey;
+    address public corpOwner;
+    uint256 private corpOwnerPrivKey;
 
     // Infra
     CyberAgreementRegistry private registry;
@@ -209,6 +224,8 @@ contract RoundManagerTest is Test {
         investor = vm.addr(investorPrivKey);
         investor2PrivKey = 0xB0B;
         investor2 = vm.addr(investor2PrivKey);
+        corpOwnerPrivKey = 0xCAD;
+        corpOwner = vm.addr(corpOwnerPrivKey);
 
         // Deploy infra (auth, registry, factories)
         bytes32 salt = keccak256(abi.encodePacked("roundmanager-infra", owner));
@@ -243,22 +260,33 @@ contract RoundManagerTest is Test {
             new CyberCorpSingleFactory{salt: salt}(address(bootstrapAuth))
         );
         address dealManagerFactory = address(
-            new DealManagerFactory{salt: salt}(address(bootstrapAuth))
+            new ERC1967Proxy{salt: salt}(
+                address(new DealManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    DealManagerFactory.initialize.selector,
+                    address(bootstrapAuth),
+                    address(new DealManager())
+                )
+            )
         );
 
         address certPrinterImpl = address(new CyberCertPrinter{salt: salt}());
         address cyberScripImpl = address(new CyberScrip{salt: salt}());
 
-                // RoundManager via factory and initialize
         rmFactory = address(
-            new RoundManagerFactory{salt: salt}(address(bootstrapAuth))
+            new ERC1967Proxy{salt: salt}(
+                address(new RoundManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(bootstrapAuth),
+                    address(new RoundManager())
+                )
+            )
         );
         // Perform an upgrade of the existing UUPS proxy at the known address
         address _lexchexMinterUpgraded = address(new LeXcheXMinter());  
-        uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
-        address upgradeOwner = vm.addr(upgradePrivKey);
-        vm.prank(upgradeOwner);
-        IUUPS(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960).upgradeToAndCall(_lexchexMinterUpgraded, "");    
+        vm.prank(UPGRADE_OWNER);
+        IUUPS(LEXCHEX_MINTER_ADDRESS).upgradeToAndCall(_lexchexMinterUpgraded, "");
         /*address _auth,
         address _registryAddress,
         address _cyberCertPrinterImplementation,
@@ -288,12 +316,10 @@ contract RoundManagerTest is Test {
             )
         );
 
-        // Ensure CyberCorpFactory is OWNER of lexchexAuth using upgradeOwner from .env
+        // Ensure CyberCorpFactory is OWNER of lexchexAuth
         {
-            uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
-            address upgradeOwner = vm.addr(upgradePrivKey);
             address lxAuth = corpFactory.lexchexAuth();
-            vm.startPrank(upgradeOwner);
+            vm.startPrank(UPGRADE_OWNER);
             BorgAuth(lxAuth).updateRole(address(corpFactory), BorgAuth(lxAuth).OWNER_ROLE());
             vm.stopPrank();
         }
@@ -1653,23 +1679,125 @@ contract RoundManagerTest is Test {
         uint256 balAfterAllocate = paymentToken.balanceOf(investor);
         assertEq(balAfterAllocate - balAfterSubmit, 4_000 * 10 ** 6);
     }
+
+    function test_UpgradeNextRoundManager() public {
+        assertEq(RoundManager(RoundManagerFactory(rmFactory).getRefImplementation()).DEPLOY_VERSION(), "1", "reference impl version should not be changed yet");
+
+        vm.startPrank(owner);
+        RoundManagerFactory(rmFactory).setRefImplementation(address(new MockRoundManagerV2()));
+        vm.stopPrank();
+        assertEq(RoundManager(RoundManagerFactory(rmFactory).getRefImplementation()).DEPLOY_VERSION(), "2", "reference impl version should have changed");
+
+        bytes32 salt = keccak256("test_UpgradeNextRounderManager");
+        // Next deployment should emit events with version so indexer could be informed
+        vm.expectEmit(true, true, true, true);
+        emit RoundManagerFactory.RoundManagerDeployed(
+            RoundManagerFactory(rmFactory).computeRoundManagerAddress(salt),
+            "2"
+        );
+        RoundManager nextRm = RoundManager(
+            RoundManagerFactory(rmFactory).deployRoundManager(salt)
+        );
+        assertEq(nextRm.DEPLOY_VERSION(), "2", "next deployment version should have changed");
+    }
+
+    function test_UpgradeExistingRoundManager() public {
+        BorgAuth corpAuth = new BorgAuth{salt: keccak256("testUpgradeExistingRoundManager")}(corpOwner);
+        address placeHolderAddr = 0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF;
+
+        // Deploy existing RoundManagers
+
+        RoundManager rm1 = RoundManager(
+            RoundManagerFactory(rmFactory).deployRoundManager(keccak256("testUpgradeExistingRoundManager1"))
+        );
+        rm1.initialize(
+            address(corpAuth),
+            placeHolderAddr,
+            placeHolderAddr,
+            placeHolderAddr,
+            rmFactory
+        );
+
+        RoundManager rm2 = RoundManager(
+            RoundManagerFactory(rmFactory).deployRoundManager(keccak256("testUpgradeExistingRoundManager2"))
+        );
+        rm2.initialize(
+            address(corpAuth),
+            placeHolderAddr,
+            placeHolderAddr,
+            placeHolderAddr,
+            rmFactory
+        );
+
+        // MetaLeX to release new RoundManager v2
+
+        vm.startPrank(owner);
+        RoundManagerFactory(rmFactory).setRefImplementation(address(new MockRoundManagerV2()));
+        vm.stopPrank();
+
+        // Corp2 owner decided to accept the upgrade
+
+        vm.startPrank(corpOwner);
+        rm2.upgradeToAndCall(address(RoundManagerFactory(rmFactory).getRefImplementation()), "");
+        vm.stopPrank();
+
+        assertEq(rm2.DEPLOY_VERSION(), "2", "Target RoundManager should be upgraded");
+        assertEq(rm1.DEPLOY_VERSION(), "1", "Other RoundManager should not be upgraded");
+    }
+
+    function test_RevertIf_UpgradeNonFactoryOwner() public {
+        // Non-MetaLeX admin should not be able to set new reference implementation
+
+        address newImplementation = address(new MockRoundManagerV2());
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, BorgAuth(auth).OWNER_ROLE(), corpOwner));
+        vm.prank(corpOwner);
+        RoundManagerFactory(rmFactory).setRefImplementation(newImplementation);
+    }
+
+    function test_RevertIf_UpgradeExistingRoundManagerNotRefImplementation() public {
+        BorgAuth corpAuth = new BorgAuth{salt: keccak256("testUpgradeExistingRoundManager")}(corpOwner);
+        address placeHolderAddr = 0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF;
+
+        // Deploy existing RoundManagers
+
+        RoundManager rm = RoundManager(
+            RoundManagerFactory(rmFactory).deployRoundManager(keccak256("testUpgradeExistingRoundManager2"))
+        );
+        rm.initialize(
+            address(corpAuth),
+            placeHolderAddr,
+            placeHolderAddr,
+            placeHolderAddr,
+            rmFactory
+        );
+
+        // Corp owner can't upgrade to v2 without MetaLeX releasing it first
+
+        vm.startPrank(corpOwner);
+        address nonOfficialRoundManager = address(new MockRoundManagerV2());
+        vm.expectRevert(
+            abi.encodeWithSelector(RoundManager.NotRefImplementation.selector)
+        );
+        rm.upgradeToAndCall(nonOfficialRoundManager, "");
+        vm.stopPrank();
+    }
 }
 
 // Separate FCFS tests in their own contract to avoid the original setUp()
 contract RoundManagerFCFSTest is Test {
     using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
 
-    address public constant KNOWN_LEXCHEX_CONDITION_ADDRESS = 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42;
+    address public constant LEXCHEX_CONDITION_ADDRESS = 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42;
+    address public constant LEXCHEX_MINTER_ADDRESS = 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960;
+    address public constant UPGRADE_OWNER = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
 
     function setUp() public {
         // Mock LexChexCondition to always pass
         address alwaysTrueCondition = address(new AlwaysTrueCondition());
-        vm.etch(KNOWN_LEXCHEX_CONDITION_ADDRESS, alwaysTrueCondition.code);
+        vm.etch(LEXCHEX_CONDITION_ADDRESS, alwaysTrueCondition.code);
         address _lexchexMinterUpgraded = address(new LeXcheXMinter());  
-        uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
-        address upgradeOwner = vm.addr(upgradePrivKey);
-        vm.prank(upgradeOwner);
-        IUUPS(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960).upgradeToAndCall(_lexchexMinterUpgraded, "");
+        vm.prank(UPGRADE_OWNER);
+        IUUPS(LEXCHEX_MINTER_ADDRESS).upgradeToAndCall(_lexchexMinterUpgraded, "");
     }
 
     // Infra helpers copied from above
@@ -1719,11 +1847,25 @@ contract RoundManagerFCFSTest is Test {
             new CyberCorpSingleFactory{salt: salt}(address(bootstrapAuth))
         );
         dealManagerFactory = address(
-            new DealManagerFactory{salt: salt}(address(bootstrapAuth))
+            new ERC1967Proxy{salt: salt}(
+                address(new DealManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    DealManagerFactory.initialize.selector,
+                    address(bootstrapAuth),
+                    address(new DealManager())
+                )
+            )
         );
 
         address rmFactory = address(
-            new RoundManagerFactory{salt: salt}(address(bootstrapAuth))
+            new ERC1967Proxy{salt: salt}(
+                address(new RoundManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(bootstrapAuth),
+                    address(new RoundManager())
+                )
+            )
         );
 
         address certPrinterImpl = address(new CyberCertPrinter{salt: salt}());
@@ -1749,12 +1891,10 @@ contract RoundManagerFCFSTest is Test {
             )
         );
 
-                // Ensure CyberCorpFactory is OWNER of lexchexAuth using upgradeOwner from .env
+        // Ensure CyberCorpFactory is OWNER of lexchexAuth
         {
-            uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
-            address upgradeOwner = vm.addr(upgradePrivKey);
             address lxAuth = corpFactory.lexchexAuth();
-            vm.startPrank(upgradeOwner);
+            vm.startPrank(UPGRADE_OWNER);
             BorgAuth(lxAuth).updateRole(address(corpFactory), BorgAuth(lxAuth).OWNER_ROLE());
             vm.stopPrank();
         }
@@ -1772,8 +1912,17 @@ contract RoundManagerFCFSTest is Test {
         ) = _deployRegistryAndFactories(me);
 
         address auth = address(corpFactory.AUTH());
-        RoundManagerFactory rmFactory = new RoundManagerFactory(auth);
-        rmFactory.upgradeImplementation(address(new RoundManager()));
+        RoundManagerFactory rmFactory = RoundManagerFactory(address(
+            new ERC1967Proxy(
+                address(new RoundManagerFactory()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(auth),
+                    address(new RoundManager())
+                )
+            )
+        ));
+        rmFactory.setRefImplementation(address(new RoundManager()));
 
         IUUPS(address(corpFactory)).upgradeToAndCall(address(new CyberCorpFactory()), "");
 
@@ -1797,8 +1946,17 @@ contract RoundManagerFCFSTest is Test {
         _createTemplate(registry);
 
         // Apply upgrades
-        RoundManagerFactory rmFactory = new RoundManagerFactory(address(corpFactory.AUTH()));
-        rmFactory.upgradeImplementation(address(new RoundManager()));
+        RoundManagerFactory rmFactory = RoundManagerFactory(address(
+            new ERC1967Proxy(
+                address(new RoundManagerFactory()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(corpFactory.AUTH()),
+                    address(new RoundManager())
+                )
+            )
+        ));
+        rmFactory.setRefImplementation(address(new RoundManager()));
         IUUPS(address(corpFactory)).upgradeToAndCall(address(new CyberCorpFactory()), "");
         corpFactory.setRoundManagerFactory(address(rmFactory));
         CyberCorpSingleFactory(cyberCorpSingleFactory).upgradeImplementation(address(new CyberCorp()));
@@ -2036,16 +2194,23 @@ contract RoundManagerFCFSTest is Test {
         address issuance
     ) internal returns (RoundManager rm) {
         // Deploy RoundManager via factory (BeaconProxy), then initialize
-        RoundManagerFactory rmFactory = new RoundManagerFactory(auth);
+        RoundManagerFactory rmFactory = RoundManagerFactory(address(
+            new ERC1967Proxy(
+                address(new RoundManagerFactory()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(auth),
+                    address(new RoundManager())
+                )
+            )
+        ));
         address proxy = rmFactory.deployRoundManager(keccak256("rm-fcfs"));
         rm = RoundManager(payable(proxy));
         rm.initialize(auth, corp, registry, issuance, address(rmFactory));
         // Allow RoundManager to call IssuanceManager.onlyOwner
         BorgAuth(auth).updateRole(address(rm), 99);
         //add to lexchexAuth
-        uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
-        address upgradeOwner = vm.addr(upgradePrivKey);
-        vm.startPrank(upgradeOwner);
+        vm.startPrank(UPGRADE_OWNER);
         BorgAuth(0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2).updateRole(address(rm), BorgAuth(0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2).OWNER_ROLE());
         vm.stopPrank();
     }
@@ -2864,7 +3029,7 @@ contract RoundManagerFCFSTest is Test {
 
         // Mock LexChexCondition to always fail
         address alwaysFalseCondition = address(new AlwaysFalseCondition());
-        vm.etch(KNOWN_LEXCHEX_CONDITION_ADDRESS, alwaysFalseCondition.code);
+        vm.etch(LEXCHEX_CONDITION_ADDRESS, alwaysFalseCondition.code);
 
         vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
         rm.submitEOI(
