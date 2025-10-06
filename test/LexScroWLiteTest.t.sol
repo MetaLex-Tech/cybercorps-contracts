@@ -145,6 +145,14 @@ contract LexScroWLiteMock is LexScroWLite {
             LexScrowStorage.addConditionToEscrow(agreementId, ICondition(conditions[i]));
         }
     }
+
+    function computeFee(uint256 size) public override view returns (uint256) {
+        return 0; // Not in use
+    }
+
+    function getPlatformPayable() public override view returns (address) {
+        return address(0); // Not in use
+    }
 }
 
 contract CyberAgreementRegistryMock {
@@ -445,13 +453,15 @@ contract LexScroWLiteTest is Test {
             tokenType: TokenType.ERC20,
             tokenAddress: address(corpTokenErc20),
             tokenId: 0,
-            amount: 10 ether
+            amount: 10 ether,
+            isFee: false
         });
         corpAssets[1] = Token({
             tokenType: TokenType.ERC1155,
             tokenAddress: address(corpTokenErc1155),
             tokenId: corpTokenErc1155Id,
-            amount: 10 ether
+            amount: 10 ether,
+            isFee: false
         });
         Token[] memory buyerAssets = _getBuyerAssets();
 
@@ -474,7 +484,8 @@ contract LexScroWLiteTest is Test {
             tokenType: TokenType.ERC721,
             tokenAddress: address(corpTokenErc721WithEndorsement),
             tokenId: corpTokenErc721Id,
-            amount: 1
+            amount: 1,
+            isFee: false
         });
         Token[] memory buyerAssets = _getBuyerAssets();
 
@@ -556,19 +567,22 @@ contract LexScroWLiteTest is Test {
             tokenType: TokenType.ERC20,
             tokenAddress: address(corpTokenErc20),
             tokenId: 0,
-            amount: 10 ether
+            amount: 10 ether,
+            isFee: false
         });
         corpAssets[1] = Token({
             tokenType: TokenType.ERC721,
             tokenAddress: address(corpTokenErc721),
             tokenId: corpTokenErc721Id,
-            amount: 1
+            amount: 1,
+            isFee: false
         });
         corpAssets[2] = Token({
             tokenType: TokenType.ERC1155,
             tokenAddress: address(corpTokenErc1155),
             tokenId: corpTokenErc1155Id,
-            amount: 10 ether
+            amount: 10 ether,
+            isFee: false
         });
         return corpAssets;
     }
@@ -579,19 +593,22 @@ contract LexScroWLiteTest is Test {
             tokenType: TokenType.ERC20,
             tokenAddress: address(buyerTokenErc20),
             tokenId: 0,
-            amount: 100 ether
+            amount: 100 ether,
+            isFee: false
         });
         buyerAssets[1] = Token({
             tokenType: TokenType.ERC721,
             tokenAddress: address(buyerTokenErc721),
             tokenId: buyerTokenErc721Id,
-            amount: 1
+            amount: 1,
+            isFee: false
         });
         buyerAssets[2] = Token({
             tokenType: TokenType.ERC1155,
             tokenAddress: address(buyerTokenErc1155),
             tokenId: buyerTokenErc1155Id,
-            amount: 100 ether
+            amount: 100 ether,
+            isFee: false
         });
         return buyerAssets;
     }

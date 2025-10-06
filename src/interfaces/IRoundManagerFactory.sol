@@ -44,5 +44,8 @@ pragma solidity 0.8.28;
 interface IRoundManagerFactory {
     function deployRoundManager(bytes32 _salt) external returns (address);
 
-    function getRefImplementation() external returns (address);
+    function getRefImplementation() external view returns (address);
+
+    function getDefaultFeeRatio() external view returns (uint256);
+    function getPlatformPayable() external view returns (address);
 }

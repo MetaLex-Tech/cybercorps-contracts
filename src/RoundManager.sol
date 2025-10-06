@@ -49,6 +49,7 @@ import "./interfaces/IIssuanceManager.sol";
 import "./libs/LexScroWLite.sol";
 import "./libs/auth.sol";
 import "./storage/RoundManagerStorage.sol";
+import "./storage/RoundManagerFactoryStorage.sol";
 import "./storage/BorgAuthStorage.sol";
 import "./interfaces/ICyberCorp.sol";
 import "./interfaces/ICyberCertPrinter.sol";
@@ -563,7 +564,8 @@ contract RoundManager is
             TokenType.ERC20,
             round.paymentToken,
             0,
-            eoi.maxAmount
+            eoi.maxAmount,
+            true // Will be used as fee token
         );
 
         createEscrow(agreementId, msg.sender, corpAssets, buyerAssets, eoi.expiry);
@@ -738,7 +740,7 @@ contract RoundManager is
         // loop through certPrinter and add to escrow
         for (uint256 i = 0; i < round.certPrinter.length; i++) {
             escrow.corpAssets.push(
-                Token(TokenType.ERC721, round.certPrinter[i], certIds[i], 1)
+                Token(TokenType.ERC721, round.certPrinter[i], certIds[i], 1, false)
             );
         }
 
@@ -862,6 +864,21 @@ contract RoundManager is
     /// @return IIssuanceManager The issuance manager
     function issuanceManager() public view returns (IIssuanceManager) {
         return RoundManagerStorage.getIssuanceManager();
+    }
+
+    /// @notice Compute fee based on ticket size
+    /// @dev Currently the factory owner (MetaLeX) unilaterally set the fee ratio;
+    /// in the future, it could be determined through a governance process.
+    /// @return Fee amount
+    function computeFee(uint256 size) public override view returns (uint256) {
+        return size * IRoundManagerFactory(RoundManagerStorage.getUpgradeFactory()).getDefaultFeeRatio() / RoundManagerFactoryStorage.BASIS_POINTS;
+    }
+
+    /// @notice Gets the payable address for the fees
+    /// @dev The factory owner (MetaLeX) unilaterally set the payable address
+    /// @return Payable address for the fees
+    function getPlatformPayable() public override view returns (address) {
+        return IRoundManagerFactory(RoundManagerStorage.getUpgradeFactory()).getPlatformPayable();
     }
 
     /// @notice UUPS upgrade authorization

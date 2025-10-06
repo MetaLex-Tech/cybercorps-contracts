@@ -49,10 +49,15 @@ library RoundManagerFactoryStorage {
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.round.manager.factory.storage.v1");
 
+    uint256 public constant BASIS_POINTS = 10000; // 100%
+
     /// @notice Main storage layout struct that holds all persisted data
     /// @dev Uses unstructured storage pattern to avoid storage collisions
     struct RoundManagerFactoryData {
         address refImplementation; // implementation contract to use for new deployments
+
+        address platformPayable; // Recipient of platform fees
+        uint256 defaultFeeRatio; // total fee as % of ticket size (BASIS_POINTS = 100%)
     }
 
     /// @notice Retrieves the storage reference for the RoundManagerFactoryData struct
@@ -69,7 +74,23 @@ library RoundManagerFactoryStorage {
         return roundManagerFactoryStorage().refImplementation;
     }
 
+    function getPlatformPayable() internal view returns (address) {
+        return roundManagerFactoryStorage().platformPayable;
+    }
+
+    function getDefaultFeeRatio() internal view returns (uint256) {
+        return roundManagerFactoryStorage().defaultFeeRatio;
+    }
+
     function setRefImplementation(address newImplementation) internal {
         roundManagerFactoryStorage().refImplementation = newImplementation;
+    }
+
+    function setPlatformPayable(address platformPayable) internal {
+        roundManagerFactoryStorage().platformPayable = platformPayable;
+    }
+
+    function setDefaultFeeRatio(uint256 feeRatio) internal {
+        roundManagerFactoryStorage().defaultFeeRatio = feeRatio;
     }
 }

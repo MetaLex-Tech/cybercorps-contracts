@@ -61,6 +61,7 @@ struct Token {
     address tokenAddress;
     uint256 tokenId;
     uint256 amount;
+    bool isFee;
 }
 
 struct Escrow {

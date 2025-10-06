@@ -48,6 +48,7 @@ import "./interfaces/IIssuanceManager.sol";
 import "./libs/LexScroWLite.sol";
 import "./libs/auth.sol";
 import "./storage/DealManagerStorage.sol";
+import "./storage/DealManagerFactoryStorage.sol";
 import "./storage/BorgAuthStorage.sol";
 import "./interfaces/ICyberCorp.sol";
 import "./interfaces/IDealManagerFactory.sol";
@@ -183,11 +184,11 @@ contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAut
         certIds = new uint256[](_certDetails.length);
         for(uint256 i = 0; i < _certDetails.length; i++) {
             certIds[i] = DealManagerStorage.getIssuanceManager().createCert(_certPrinterAddress[i], address(this), _certDetails[i]);
-            corpAssets[i] = Token(TokenType.ERC721, _certPrinterAddress[i], certIds[i], 1);
+            corpAssets[i] = Token(TokenType.ERC721, _certPrinterAddress[i], certIds[i], 1, false);
         }
 
         Token[] memory buyerAssets = new Token[](1);
-        buyerAssets[0] = Token(TokenType.ERC20, _paymentToken, 0, _paymentAmount);
+        buyerAssets[0] = Token(TokenType.ERC20, _paymentToken, 0, _paymentAmount, true); // Will be used as fee token
 
         Escrow memory newEscrow = Escrow({
             agreementId: agreementId,
@@ -580,6 +581,21 @@ contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAut
             secretHash,
             expiry
         );
+    }
+
+    /// @notice Compute fee based on ticket size
+    /// @dev Currently the factory owner (MetaLeX) unilaterally set the fee ratio;
+    /// in the future, it could be determined through a governance process.
+    /// @return Fee amount
+    function computeFee(uint256 size) public override view returns (uint256) {
+        return size * IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).getDefaultFeeRatio() / DealManagerFactoryStorage.BASIS_POINTS;
+    }
+
+    /// @notice Gets the payable address for the fees
+    /// @dev The factory owner (MetaLeX) unilaterally set the payable address
+    /// @return Payable address for the fees
+    function getPlatformPayable() public override view returns (address) {
+        return IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).getPlatformPayable();
     }
 
     /// @notice UUPS upgrade authorization

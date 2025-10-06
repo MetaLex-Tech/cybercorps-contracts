@@ -55,6 +55,7 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
+    error InvalidFeeRatio();
 
     event DealManagerDeployed(address dealManager, string version);
 
@@ -106,7 +107,7 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
 
     /// @notice Get the reference implementation contract for the next deployments
     /// @return Current reference implementation contract address
-    function getRefImplementation() public returns(address) {
+    function getRefImplementation() public view returns(address) {
         return DealManagerFactoryStorage.getRefImplementation();
     }
 
@@ -115,6 +116,36 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
     /// @param _newImplementation Address of the new implementation
     function setRefImplementation(address _newImplementation) public onlyOwner {
         DealManagerFactoryStorage.setRefImplementation(_newImplementation);
+    }
+
+    /// @notice Get the payable address for the fees
+    /// @return Payable address for the fees
+    function getPlatformPayable() external view returns (address) {
+        return DealManagerFactoryStorage.getPlatformPayable();
+    }
+
+    /// @notice Set the payable address for the fees
+    /// @dev Only callable by addresses with the admin role
+    /// @param platformPayable New payable address
+    function setPlatformPayable(address platformPayable) external onlyOwner {
+        DealManagerFactoryStorage.setPlatformPayable(platformPayable);
+    }
+
+    /// @notice Get the fee ratio
+    /// @return Fee ratio (same unit as BASIS_POINTS
+    function getDefaultFeeRatio() external view returns (uint256) {
+        return DealManagerFactoryStorage.getDefaultFeeRatio();
+    }
+
+    /// @notice Set the fee ratio
+    /// @dev Only callable by addresses with the admin role. Will check validity of the new value
+    /// @param feeRatio New fee ratio
+    function setDefaultFeeRatio(uint256 feeRatio) external onlyOwner {
+        if (feeRatio > DealManagerFactoryStorage.BASIS_POINTS) {
+            revert InvalidFeeRatio(); // fee ratio should not exceed 100%
+        }
+
+        DealManagerFactoryStorage.setDefaultFeeRatio(feeRatio);
     }
 
     function _authorizeUpgrade(
