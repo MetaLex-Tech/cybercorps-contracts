@@ -62,6 +62,31 @@ struct EOI {
     string contact;
     uint256 minAmount;
     uint256 maxAmount;
+    uint256 expiry;
+    bool naturalPerson;
+    LexChexDetails lexchexDetails;
+}
+
+struct MintRequest {
+    uint256 uuid;
+    address owner;
+    string investorName;
+    string investorType;
+    string investorJurisdiction;
+    string investorContact;
+    uint256 mintPrice;
+    uint256 expiry;
+    address paymentToken;
+}
+
+struct LexChexDetails {
+    MintRequest request;
+    bytes32 templateId;
+    uint256 salt;
+    string[] globalValues;
+    address[] parties;
+    string[][] partyValues;
+    bytes agreementSignature;
 }
  
 interface IRoundManager {

@@ -90,6 +90,30 @@ struct EOI {
     uint256 minAmount;
     uint256 maxAmount;
     uint256 expiry;
+    bool naturalPerson;
+    LexChexDetails lexchexDetails;
+}
+
+struct MintRequest {
+    uint256 uuid;
+    address owner;
+    string investorName;
+    string investorType;
+    string investorJurisdiction;
+    string investorContact;
+    uint256 mintPrice;
+    uint256 expiry;
+    address paymentToken;
+}
+
+struct LexChexDetails {
+    MintRequest request;
+    bytes32 templateId;
+    uint256 salt;
+    string[] globalValues;
+    address[] parties;
+    string[][] partyValues;
+    bytes agreementSignature;
 }
 
 /// @title RoundManagerStorage
@@ -105,7 +129,9 @@ library RoundManagerStorage {
         /// @notice Reference to the issuance manager contract
         IIssuanceManager issuanceManager;
         address upgradeFactory;
+        address lexChex;
         address lexChexCondition;
+        address lexChexMinter;
         
         /// @notice Mapping from round IDs to their data
         mapping(bytes32 => Round) rounds;
@@ -199,11 +225,27 @@ library RoundManagerStorage {
         return roundManagerStorage().upgradeFactory;
     }
 
+    function setLexChex(address _lexChex) internal {
+        roundManagerStorage().lexChex = _lexChex;
+    }
+
+    function getLexChex() internal view returns (address) {
+        return roundManagerStorage().lexChex;
+    }
+
     function setLexChexCondition(address _lexChexCondition) internal {
         roundManagerStorage().lexChexCondition = _lexChexCondition;
     }
 
     function getLexChexCondition() internal view returns (address) {
         return roundManagerStorage().lexChexCondition;
+    }
+
+    function setLexChexMinter(address _lexChexMinter) internal {
+        roundManagerStorage().lexChexMinter = _lexChexMinter;
+    }
+
+    function getLexChexMinter() internal view returns (address) {
+        return roundManagerStorage().lexChexMinter;
     }
 }
