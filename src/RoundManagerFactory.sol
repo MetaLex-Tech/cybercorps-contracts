@@ -46,7 +46,7 @@ import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "openzeppelin-contracts/utils/Create2.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./libs/auth.sol";
-import {RoundManagerFactoryStorage} from "./storage/RoundManagerFactoryStorage.sol";
+import "./storage/RoundManagerFactoryStorage.sol";
 
 /// @title RoundManagerFactory
 /// @notice Factory contract for deploying RoundManager instances
@@ -55,8 +55,10 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
+    error InvalidFeeRatio();
 
     event RoundManagerDeployed(address roundManager, string version);
+    event RefImplementationSet(address refImplementation, string version);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -109,7 +111,7 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
 
     /// @notice Get the reference implementation contract for the next deployments
     /// @return Current reference implementation contract address
-    function getRefImplementation() public returns(address) {
+    function getRefImplementation() public view returns(address) {
         return RoundManagerFactoryStorage.getRefImplementation();
     }
 
@@ -118,6 +120,37 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
     /// @param _newImplementation Address of the new implementation
     function setRefImplementation(address _newImplementation) public onlyOwner {
         RoundManagerFactoryStorage.setRefImplementation(_newImplementation);
+        emit RefImplementationSet(_newImplementation, RoundManager(_newImplementation).DEPLOY_VERSION());
+    }
+
+    /// @notice Get the payable address for the fees
+    /// @return Payable address for the fees
+    function getPlatformPayable() external view returns (address) {
+        return RoundManagerFactoryStorage.getPlatformPayable();
+    }
+
+    /// @notice Set the payable address for the fees
+    /// @dev Only callable by addresses with the admin role
+    /// @param platformPayable New payable address
+    function setPlatformPayable(address platformPayable) external onlyOwner {
+        RoundManagerFactoryStorage.setPlatformPayable(platformPayable);
+    }
+
+    /// @notice Get the fee ratio
+    /// @return Fee ratio (same unit as BASIS_POINTS
+    function getDefaultFeeRatio() external view returns (uint256) {
+        return RoundManagerFactoryStorage.getDefaultFeeRatio();
+    }
+
+    /// @notice Set the fee ratio
+    /// @dev Only callable by addresses with the admin role. Will check validity of the new value
+    /// @param feeRatio New fee ratio
+    function setDefaultFeeRatio(uint256 feeRatio) external onlyOwner {
+        if (feeRatio > RoundManagerFactoryStorage.BASIS_POINTS) {
+            revert InvalidFeeRatio(); // fee ratio should not exceed 100%
+        }
+
+        RoundManagerFactoryStorage.setDefaultFeeRatio(feeRatio);
     }
 
     function _authorizeUpgrade(

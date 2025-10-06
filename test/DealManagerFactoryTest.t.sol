@@ -70,8 +70,11 @@ contract DealManagerFactoryTest is Test {
 
     DealManagerFactory public dmFactory;
 
+    uint256 ownerRole;
+
     function setUp() public {
         bootstrapAuth = new BorgAuth(owner);
+        ownerRole = bootstrapAuth.OWNER_ROLE();
 
         dmFactory = DealManagerFactory(
             address(
@@ -132,5 +135,52 @@ contract DealManagerFactoryTest is Test {
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, bootstrapAuth.OWNER_ROLE(), companyOwner));
         vm.prank(companyOwner);
         dmFactory.upgradeToAndCall(newFactoryImpl, "");
+    }
+
+    function test_SetRefImplementation() public  {
+        address newImplementation = address(new MockDealManagerV2());
+        assertNotEq(dmFactory.getRefImplementation(), newImplementation, "Unexpected refImplementation before set");
+
+        vm.expectEmit(true, true, true, true);
+        emit DealManagerFactory.RefImplementationSet(newImplementation, "2");
+        vm.prank(owner);
+        dmFactory.setRefImplementation(newImplementation);
+        assertEq(dmFactory.getRefImplementation(), newImplementation, "Unexpected refImplementation after set");
+    }
+
+    function test_RevertIf_SetRefImplementationNonOwner() public {
+        vm.prank(companyOwner);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, ownerRole, companyOwner));
+        dmFactory.setRefImplementation(address(0x123));
+    }
+
+    function test_SetPlatformPayable() public  {
+        address newValue = address(0x123);
+        assertNotEq(dmFactory.getPlatformPayable(), newValue, "Unexpected platformPayable before set");
+
+        vm.prank(owner);
+        dmFactory.setPlatformPayable(newValue);
+        assertEq(dmFactory.getPlatformPayable(), newValue, "Unexpected platformPayable after set");
+    }
+
+    function test_RevertIf_SetPlatformPayableNonOwner() public {
+        vm.prank(companyOwner);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, ownerRole, companyOwner));
+        dmFactory.setPlatformPayable(address(0x123));
+    }
+
+    function test_SetDefaultFeeRatio() public  {
+        uint256 newValue = 123;
+        assertNotEq(dmFactory.getDefaultFeeRatio(), newValue, "Unexpected defaultFeeRatio before set");
+
+        vm.prank(owner);
+        dmFactory.setDefaultFeeRatio(newValue);
+        assertEq(dmFactory.getDefaultFeeRatio(), newValue, "Unexpected defaultFeeRatio after set");
+    }
+
+    function test_RevertIf_SetDefaultFeeRatioNonOwner() public {
+        vm.prank(companyOwner);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, ownerRole, companyOwner));
+        dmFactory.setDefaultFeeRatio(123);
     }
 }

@@ -71,6 +71,7 @@ abstract contract LexScroWLite is Initializable {
     event DealVoidedAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
     event DealPaidAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
     event DealFinalizedAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
+    event FeeDistributed(bytes32 indexed agreementId, address indexed feeToken, uint256 totalFe);
 
     constructor() {
     }
@@ -171,10 +172,28 @@ abstract contract LexScroWLite is Initializable {
         escrow.status = EscrowStatus.FINALIZED;
         emit DealFinalizedAt(agreementId, LexScrowStorage.getDealRegistry(), block.timestamp);
 
-        // Interaction: Transfer buyer assets to company
+        // Interaction: Transfer buyer assets to company and collect fees
         for(uint256 i = 0; i < escrow.buyerAssets.length; i++) {
             if(escrow.buyerAssets[i].tokenType == TokenType.ERC20) {
-                IERC20(escrow.buyerAssets[i].tokenAddress).safeTransfer(ICyberCorp(LexScrowStorage.getCorp()).companyPayable(), escrow.buyerAssets[i].amount);
+                uint256 amountToCompany = escrow.buyerAssets[i].amount;
+                uint256 fee = 0;
+
+                // Check: if the asset is fee token
+                if (escrow.buyerAssets[i].isFee) {
+                    // Effect: Calculate fees
+                    fee = computeFee(escrow.buyerAssets[i].amount);
+                    amountToCompany -= fee;
+
+                    emit FeeDistributed(agreementId, escrow.buyerAssets[i].tokenAddress, fee);
+                }
+
+                // Interaction: Distribute payment and fees
+                if (amountToCompany > 0) {
+                    IERC20(escrow.buyerAssets[i].tokenAddress).safeTransfer(ICyberCorp(LexScrowStorage.getCorp()).companyPayable(), amountToCompany);
+                }
+                if (fee > 0) {
+                    IERC20(escrow.buyerAssets[i].tokenAddress).safeTransfer(getPlatformPayable(), fee);
+                }
             }
             else if(escrow.buyerAssets[i].tokenType == TokenType.ERC721) {
                 IERC721(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), ICyberCorp(LexScrowStorage.getCorp()).companyPayable(), escrow.buyerAssets[i].tokenId);
@@ -219,6 +238,16 @@ abstract contract LexScroWLite is Initializable {
     function getEscrowDetails(bytes32 agreementId) public view returns (Escrow memory) {
         return LexScrowStorage.getEscrow(agreementId);
     }
+
+    /// @notice Compute fee based on ticket size
+    /// @dev Child contract should implement the actual logic
+    /// @return Fee amount
+    function computeFee(uint256 size) public virtual view returns (uint256);
+
+    /// @notice Get the payable address for the fees
+    /// @dev Child contract should implement the actual logic
+    /// @return Payable address for the fees
+    function getPlatformPayable() public virtual view returns (address);
 
     //receiver erc721s
     function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata data) external returns (bytes4) {
