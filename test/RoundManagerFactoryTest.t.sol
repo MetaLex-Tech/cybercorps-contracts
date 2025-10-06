@@ -138,12 +138,14 @@ contract RoundManagerFactoryTest is Test {
     }
 
     function test_SetRefImplementation() public  {
-        address newValue = address(0x123);
-        assertNotEq(rmFactory.getRefImplementation(), newValue, "Unexpected refImplementation before set");
+        address newImplementation = address(new MockRoundManagerV2());
+        assertNotEq(rmFactory.getRefImplementation(), newImplementation, "Unexpected refImplementation before set");
 
+        vm.expectEmit(true, true, true, true);
+        emit RoundManagerFactory.RefImplementationSet(newImplementation, "2");
         vm.prank(owner);
-        rmFactory.setRefImplementation(newValue);
-        assertEq(rmFactory.getRefImplementation(), newValue, "Unexpected refImplementation after set");
+        rmFactory.setRefImplementation(newImplementation);
+        assertEq(rmFactory.getRefImplementation(), newImplementation, "Unexpected refImplementation after set");
     }
 
     function test_RevertIf_SetRefImplementationNonOwner() public {

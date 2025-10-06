@@ -138,12 +138,14 @@ contract DealManagerFactoryTest is Test {
     }
 
     function test_SetRefImplementation() public  {
-        address newValue = address(0x123);
-        assertNotEq(dmFactory.getRefImplementation(), newValue, "Unexpected refImplementation before set");
+        address newImplementation = address(new MockDealManagerV2());
+        assertNotEq(dmFactory.getRefImplementation(), newImplementation, "Unexpected refImplementation before set");
 
+        vm.expectEmit(true, true, true, true);
+        emit DealManagerFactory.RefImplementationSet(newImplementation, "2");
         vm.prank(owner);
-        dmFactory.setRefImplementation(newValue);
-        assertEq(dmFactory.getRefImplementation(), newValue, "Unexpected refImplementation after set");
+        dmFactory.setRefImplementation(newImplementation);
+        assertEq(dmFactory.getRefImplementation(), newImplementation, "Unexpected refImplementation after set");
     }
 
     function test_RevertIf_SetRefImplementationNonOwner() public {

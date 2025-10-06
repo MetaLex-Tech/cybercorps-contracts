@@ -58,6 +58,7 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
     error InvalidFeeRatio();
 
     event DealManagerDeployed(address dealManager, string version);
+    event RefImplementationSet(address refImplementation, string version);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -116,6 +117,7 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
     /// @param _newImplementation Address of the new implementation
     function setRefImplementation(address _newImplementation) public onlyOwner {
         DealManagerFactoryStorage.setRefImplementation(_newImplementation);
+        emit RefImplementationSet(_newImplementation, DealManager(_newImplementation).DEPLOY_VERSION());
     }
 
     /// @notice Get the payable address for the fees

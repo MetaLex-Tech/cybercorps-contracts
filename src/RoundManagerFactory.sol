@@ -58,6 +58,7 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
     error InvalidFeeRatio();
 
     event RoundManagerDeployed(address roundManager, string version);
+    event RefImplementationSet(address refImplementation, string version);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -119,6 +120,7 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
     /// @param _newImplementation Address of the new implementation
     function setRefImplementation(address _newImplementation) public onlyOwner {
         RoundManagerFactoryStorage.setRefImplementation(_newImplementation);
+        emit RefImplementationSet(_newImplementation, RoundManager(_newImplementation).DEPLOY_VERSION());
     }
 
     /// @notice Get the payable address for the fees
