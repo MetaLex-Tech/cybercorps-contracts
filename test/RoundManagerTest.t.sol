@@ -254,11 +254,12 @@ library CyberCorpHelper {
     function createRound(
         RoundManager rm,
         address paymentToken,
-        uint8 payDec,
         bytes32 templateId,
         uint256 raiseCap,
         uint256 minTicket,
         uint256 maxTicket,
+        uint256 pricePerUnit,
+        uint256 valuation,
         RoundType rountType,
         address officerEOA,
         uint256 officerPrivKey,
@@ -293,8 +294,8 @@ library CyberCorpHelper {
             block.timestamp + 30 days,
             templateId,
             paymentToken,
-            10 * (10 ** payDec),
-            10_000_000,
+            pricePerUnit,
+            valuation,
             officerPrivKey,
             companyAddress
         );
@@ -311,8 +312,8 @@ library CyberCorpHelper {
             certData,
             new address[](0),
             paymentToken,
-            10 * (10 ** payDec),
-            10_000_000,
+            pricePerUnit,
+            valuation,
             officerEOA,
             "Officer",
             "CEO",
@@ -324,7 +325,49 @@ library CyberCorpHelper {
         );
     }
 
-    function submitEOIAndAssertFinalized(
+    function submitEOI(
+        RoundManager rm,
+        CyberAgreementRegistry registry,
+        bytes32 roundId,
+        uint256 salt,
+        uint256 minAmount,
+        uint256 maxAmount,
+        address officerEOA,
+        uint256 investorPrivKey
+    ) internal returns (bytes32, uint256) {
+        EOI memory eoi = EOI({
+            name: "Test Investor",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "test@example.com",
+            minAmount: minAmount,
+            maxAmount: maxAmount,
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: CyberCorpHelper.emptyLex()
+        });
+
+        return RoundManager(rm).submitEOI(
+            roundId,
+            eoi,
+            new string[](1),
+            new string[](2),
+            CyberCorpHelper.computeEOISignature(
+                registry,
+                CyberCorpHelper.TEMPLATE_ID,
+                salt,
+                new string[](1),
+                new string[](2),
+                officerEOA,
+                investorPrivKey
+            ),
+            salt,
+            new address[](0),
+            bytes32(0)
+        );
+    }
+
+    function submitFCFSRoundEOIAndAssertFinalized(
         RoundManager rm,
         CyberAgreementRegistry registry,
         bytes32 templateId,
@@ -642,11 +685,12 @@ contract RoundManagerTest is Test {
         roundId = CyberCorpHelper.createRound(
             RoundManager(roundManager),
             address(paymentToken),
-            paymentToken.decimals(),
             CyberCorpHelper.TEMPLATE_ID,
             RAISE_CAP,
             MIN_TICKET,
             MAX_TICKET,
+            PRICE_PER_UNIT,
+            VALUATION,
             RoundType.FounderApproved,
             corpOwner,
             corpOwnerPrivKey,
@@ -657,6 +701,10 @@ contract RoundManagerTest is Test {
         // Fund investor
         paymentToken.transfer(investor, 1000000 * 10 ** 6);
         vm.prank(investor);
+        paymentToken.approve(address(roundManager), type(uint256).max);
+
+        paymentToken.transfer(investor2, 1000000 * 10 ** 6);
+        vm.prank(investor2);
         paymentToken.approve(address(roundManager), type(uint256).max);
     }
 
@@ -838,36 +886,15 @@ contract RoundManagerTest is Test {
         // First submit an EOI
         vm.startPrank(investor);
 
-        EOI memory eoi = EOI({
-            name: "Test Investor",
-            investorType: "Individual",
-            jurisdiction: "US",
-            contact: "test@example.com",
-            minAmount: 5000 * 10 ** 6,
-            maxAmount: 10000 * 10 ** 6,
-            expiry: block.timestamp + 7 days,
-            naturalPerson: false,
-            lexchexDetails: CyberCorpHelper.emptyLex()
-
-        });
-
-        (bytes32 agreementId, ) = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
             roundId,
-            eoi,
-            new string[](1),
-            new string[](2),
-            CyberCorpHelper.computeEOISignature(
-                registry,
-                CyberCorpHelper.TEMPLATE_ID,
-                1,
-                new string[](1),
-                new string[](2),
-                corpOwner,
-                investorPrivKey
-            ),
             1,
-            new address[](0),
-            bytes32(0)
+            5000 * 10 ** 6,
+            10000 * 10 ** 6,
+            corpOwner,
+            investorPrivKey
         );
 
         vm.stopPrank();
@@ -897,35 +924,15 @@ contract RoundManagerTest is Test {
         // Submit EOI first
         vm.startPrank(investor);
 
-        EOI memory eoi = EOI({
-            name: "Test Investor",
-            investorType: "Individual",
-            jurisdiction: "US",
-            contact: "test@example.com",
-            minAmount: 5000 * 10 ** 6,
-            maxAmount: 10000 * 10 ** 6,
-            expiry: block.timestamp + 7 days,
-            naturalPerson: false,
-            lexchexDetails: CyberCorpHelper.emptyLex()
-        });
-
-        (bytes32 agreementId, ) = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
             roundId,
-            eoi,
-            new string[](1),
-            new string[](2),
-            CyberCorpHelper.computeEOISignature(
-                registry,
-                CyberCorpHelper.TEMPLATE_ID,
-                1,
-                new string[](1),
-                new string[](2),
-                corpOwner,
-                investorPrivKey
-            ),
             1,
-            new address[](0),
-            bytes32(0)
+            5000 * 10 ** 6,
+            10000 * 10 ** 6,
+            corpOwner,
+            investorPrivKey
         );
 
         vm.stopPrank();
@@ -1021,130 +1028,48 @@ contract RoundManagerTest is Test {
 
     function test_MultipleAllocations_RespectRaiseCap() public {
         // Create a dedicated round with higher maxTicket to fit 600k EOIs
-        RoundManager.CyberCertData[] memory certData = new RoundManager.CyberCertData[](1);
-        string[] memory defaultLegend = new string[](1);
-        defaultLegend[0] = "Legend";
-        certData[0] = RoundManager.CyberCertData({
-            name: "Equity",
-            symbol: "EQ",
-            uri: "ipfs://eq",
-            securityClass: SecurityClass.CommonStock,
-            securitySeries: SecuritySeries.NA,
-            extension: address(0),
-            defaultLegend: defaultLegend
-        });
-
-        bytes32 roundIdLarge;
-        (bytes memory escSigLarge, bytes32 expectedRoundIdLarge) = CyberCorpHelper.computeEscrowSignature(
-            roundManager,
-            SecuritySeries.SeriesPreSeed,
-            1_000_000 * 10 ** 6,
-            1_000 * 10 ** 6,
-            1_000_000 * 10 ** 6,
-            RoundType.FounderApproved,
-            block.timestamp,
-            block.timestamp + 30 days,
-            CyberCorpHelper.TEMPLATE_ID,
+        vm.startPrank(corpOwner);
+        bytes32 roundIdLarge = CyberCorpHelper.createRound(
+            RoundManager(roundManager),
             address(paymentToken),
-            PRICE_PER_UNIT,
-            VALUATION,
-            corpOwnerPrivKey,
-            corp
-        );
-        vm.prank(corpOwner);
-        roundIdLarge = RoundManager(roundManager).createRound(
-            SecuritySeries.SeriesPreSeed,
+            CyberCorpHelper.TEMPLATE_ID,
             1_000_000 * 10 ** 6, // raise cap 1M
             1_000 * 10 ** 6,
             1_000_000 * 10 ** 6, // maxTicket large enough
-            RoundType.FounderApproved,
-            block.timestamp,
-            block.timestamp + 30 days,
-            CyberCorpHelper.TEMPLATE_ID,
-            certData,
-            new address[](0),
-            address(paymentToken),
             PRICE_PER_UNIT,
             VALUATION,
+            RoundType.FounderApproved,
             corpOwner,
-            "Officer",
-            "CEO",
-            "",
-            "",
-            testRoundPartyValues,
-            escSigLarge,
-            false
+            corpOwnerPrivKey,
+            corp
         );
-        assertEq(roundIdLarge, expectedRoundIdLarge);
+        vm.stopPrank();
 
         // Submit first EOI
         vm.startPrank(investor);
-        EOI memory eoi1 = EOI({
-            name: "Investor 1",
-            investorType: "Individual",
-            jurisdiction: "US",
-            contact: "investor1@example.com",
-            minAmount: 400000 * 10 ** 6, // 400k USDC
-            maxAmount: 600000 * 10 ** 6, // 600k USDC
-            expiry: block.timestamp + 7 days,
-            naturalPerson: false,
-            lexchexDetails: CyberCorpHelper.emptyLex()
-        });
-
-        (bytes32 agreementId1, ) = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId1, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
             roundIdLarge,
-            eoi1,
-            new string[](1),
-            new string[](2),
-            CyberCorpHelper.computeEOISignature(
-                registry,
-                CyberCorpHelper.TEMPLATE_ID,
-                1,
-                new string[](1),
-                new string[](2),
-                corpOwner,
-                investorPrivKey
-            ),
             1,
-            new address[](0),
-            bytes32(0)
+            400000 * 10 ** 6, // 400k USDC
+            600000 * 10 ** 6, // 600k USDC
+            corpOwner,
+            investorPrivKey
         );
         vm.stopPrank();
 
         // Submit second EOI from different investor
-        paymentToken.transfer(investor2, 1000000 * 10 ** 6);
         vm.startPrank(investor2);
-        paymentToken.approve(address(roundManager), type(uint256).max);
-
-        EOI memory eoi2 = EOI({
-            name: "Investor 2",
-            investorType: "Individual",
-            jurisdiction: "US",
-            contact: "investor2@example.com",
-            minAmount: 400000 * 10 ** 6, // 400k USDC
-            maxAmount: 600000 * 10 ** 6, // 600k USDC
-            expiry: block.timestamp + 7 days,
-            naturalPerson: false,
-            lexchexDetails: CyberCorpHelper.emptyLex()
-        });
-
-        (bytes32 agreementId2, ) = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId2, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
             roundIdLarge,
-            eoi2,
-            new string[](1),
-            new string[](2),
-            CyberCorpHelper.computeEOISignature(
-                registry,
-                CyberCorpHelper.TEMPLATE_ID,
-                2,
-                new string[](1),
-                new string[](2),
-                corpOwner,
-                investor2PrivKey
-            ),
             2,
-            new address[](0),
-            bytes32(0)
+            400000 * 10 ** 6, // 400k USDC
+            600000 * 10 ** 6, // 600k USDC
+            corpOwner,
+            investor2PrivKey
         );
         vm.stopPrank();
 
@@ -1166,38 +1091,16 @@ contract RoundManagerTest is Test {
     function test_Allocate_IgnoreVoidRequest() public {
         // Submit EOI
         vm.startPrank(investor);
-
-        EOI memory eoi = EOI({
-            name: "Test Investor",
-            investorType: "Individual",
-            jurisdiction: "US",
-            contact: "test@example.com",
-            minAmount: 5000 * 10 ** 6,
-            maxAmount: 10000 * 10 ** 6,
-            expiry: block.timestamp + 7 days,
-            naturalPerson: false,
-            lexchexDetails: CyberCorpHelper.emptyLex()
-        });
-
-        (bytes32 agreementId, uint256 tokenId) = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
             roundId,
-            eoi,
-            new string[](1),
-            new string[](2),
-            CyberCorpHelper.computeEOISignature(
-                registry,
-                CyberCorpHelper.TEMPLATE_ID,
-                1,
-                new string[](1),
-                new string[](2),
-                corpOwner,
-                investorPrivKey
-            ),
             1,
-            new address[](0),
-            bytes32(0)
+            5000 * 10 ** 6,
+            10000 * 10 ** 6,
+            corpOwner,
+            investorPrivKey
         );
-
         vm.stopPrank();
 
         // Simulate deal being voided externally through the registry.
@@ -1226,38 +1129,75 @@ contract RoundManagerTest is Test {
         assertEq(balAfterAllocate - balBeforeAllocate, 4987.5 * 10 ** 6);
     }
 
+    function test_Allocate_FeeChanged() public {
+        // Submit EOIs
+        vm.startPrank(investor);
+        (bytes32 agreementId1, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
+            roundId,
+            1,
+            5000 * 10 ** 6,
+            10000 * 10 ** 6,
+            corpOwner,
+            investorPrivKey
+        );
+        vm.stopPrank();
+
+        vm.startPrank(investor2);
+        (bytes32 agreementId2, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
+            roundId,
+            2,
+            5000 * 10 ** 6,
+            10000 * 10 ** 6,
+            corpOwner,
+            investor2PrivKey
+        );
+        vm.stopPrank();
+
+        {
+            uint256 balBeforeAllocate = paymentToken.balanceOf(corpOwner);
+
+            vm.prank(corpOwner);
+            RoundManager(roundManager).allocate(agreementId1, 5_000 * 10 ** 6);
+
+            uint256 balAfterAllocate = paymentToken.balanceOf(corpOwner);
+            // 5000 * (1 - 0.25%) = 4987.5
+            assertEq(balAfterAllocate - balBeforeAllocate, 4987.5 * 10 ** 6);
+        }
+
+        // Simulate fee ratio changes
+        vm.prank(owner);
+        RoundManagerFactory(rmFactory).setDefaultFeeRatio(100); // 1% fee
+
+        {
+            uint256 balBeforeAllocate = paymentToken.balanceOf(corpOwner);
+
+            vm.prank(corpOwner);
+            RoundManager(roundManager).allocate(agreementId2, 5_000 * 10 ** 6);
+
+            uint256 balAfterAllocate = paymentToken.balanceOf(corpOwner);
+            // 5000 * (1 - 1%) = 4950
+            assertEq(balAfterAllocate - balBeforeAllocate, 4950 * 10 ** 6);
+        }
+    }
+
     function test_RejectEOI_RefundsAndVoids() public {
+        uint256 balBefore = paymentToken.balanceOf(investor);
+        
         // Submit EOI
         vm.startPrank(investor);
-        EOI memory eoi = EOI({
-            name: "Reject Me",
-            investorType: "Individual",
-            jurisdiction: "US",
-            contact: "reject@example.com",
-            minAmount: 2_000 * 10 ** 6,
-            maxAmount: 5_000 * 10 ** 6,
-            expiry: block.timestamp + 7 days,
-            naturalPerson: false,
-            lexchexDetails: CyberCorpHelper.emptyLex()
-        });
-        uint256 balBefore = paymentToken.balanceOf(investor);
-        (bytes32 agreementId, uint256 tokenId) = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
             roundId,
-            eoi,
-            new string[](1),
-            new string[](2),
-            CyberCorpHelper.computeEOISignature(
-                registry,
-                CyberCorpHelper.TEMPLATE_ID,
-                3,
-                new string[](1),
-                new string[](2),
-                corpOwner,
-                investorPrivKey
-            ),
             3,
-            new address[](0),
-            bytes32(0)
+            2_000 * 10 ** 6,
+            5_000 * 10 ** 6,
+            corpOwner,
+            investorPrivKey
         );
         vm.stopPrank();
         Escrow memory escBefore = RoundManager(roundManager).getEscrowDetails(agreementId);
@@ -1272,37 +1212,19 @@ contract RoundManagerTest is Test {
     }
 
     function test_RejectEOI_RefundsVoidedDeal() public {
+        uint256 balBefore = paymentToken.balanceOf(investor);
+
         // Submit EOI
         vm.startPrank(investor);
-        EOI memory eoi = EOI({
-            name: "Reject Me",
-            investorType: "Individual",
-            jurisdiction: "US",
-            contact: "reject@example.com",
-            minAmount: 2_000 * 10 ** 6,
-            maxAmount: 5_000 * 10 ** 6,
-            expiry: block.timestamp + 7 days,
-            naturalPerson: false,
-            lexchexDetails: CyberCorpHelper.emptyLex()
-        });
-        uint256 balBefore = paymentToken.balanceOf(investor);
-        (bytes32 agreementId, ) = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
             roundId,
-            eoi,
-            new string[](1),
-            new string[](2),
-            CyberCorpHelper.computeEOISignature(
-                registry,
-                CyberCorpHelper.TEMPLATE_ID,
-                3,
-                new string[](1),
-                new string[](2),
-                corpOwner,
-                investorPrivKey
-            ),
             3,
-            new address[](0),
-            bytes32(0)
+            2_000 * 10 ** 6,
+            5_000 * 10 ** 6,
+            corpOwner,
+            investorPrivKey
         );
         vm.stopPrank();
         Escrow memory escBefore = RoundManager(roundManager).getEscrowDetails(agreementId);
@@ -1336,37 +1258,19 @@ contract RoundManagerTest is Test {
     }
 
     function test_RecallEOI_RefundsAndVoids() public {
+        uint256 balBefore = paymentToken.balanceOf(investor);
+
         // Submit EOI
         vm.startPrank(investor);
-        EOI memory eoi = EOI({
-            name: "Recall Me",
-            investorType: "Individual",
-            jurisdiction: "US",
-            contact: "reject@example.com",
-            minAmount: 2_000 * 10 ** 6,
-            maxAmount: 5_000 * 10 ** 6,
-            expiry: block.timestamp + 7 days,
-            naturalPerson: false,
-            lexchexDetails: CyberCorpHelper.emptyLex()
-        });
-        uint256 balBefore = paymentToken.balanceOf(investor);
-        (bytes32 agreementId, ) = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
             roundId,
-            eoi,
-            new string[](1),
-            new string[](2),
-            CyberCorpHelper.computeEOISignature(
-                registry,
-                CyberCorpHelper.TEMPLATE_ID,
-                3,
-                new string[](1),
-                new string[](2),
-                corpOwner,
-                investorPrivKey
-            ),
             3,
-            new address[](0),
-            bytes32(0)
+            2_000 * 10 ** 6,
+            5_000 * 10 ** 6,
+            corpOwner,
+            investorPrivKey
         );
         vm.stopPrank();
         Escrow memory escBefore = RoundManager(roundManager).getEscrowDetails(agreementId);
@@ -1384,37 +1288,18 @@ contract RoundManagerTest is Test {
     }
 
     function test_RecallEOI_RefundsVoidedDeal() public {
+        uint256 balBefore = paymentToken.balanceOf(investor);
         // Submit EOI
         vm.startPrank(investor);
-        EOI memory eoi = EOI({
-            name: "Recall Me",
-            investorType: "Individual",
-            jurisdiction: "US",
-            contact: "reject@example.com",
-            minAmount: 2_000 * 10 ** 6,
-            maxAmount: 5_000 * 10 ** 6,
-            expiry: block.timestamp + 7 days,
-            naturalPerson: false,
-            lexchexDetails: CyberCorpHelper.emptyLex()
-        });
-        uint256 balBefore = paymentToken.balanceOf(investor);
-        (bytes32 agreementId, ) = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
             roundId,
-            eoi,
-            new string[](1),
-            new string[](2),
-            CyberCorpHelper.computeEOISignature(
-                registry,
-                CyberCorpHelper.TEMPLATE_ID,
-                3,
-                new string[](1),
-                new string[](2),
-                corpOwner,
-                investorPrivKey
-            ),
             3,
-            new address[](0),
-            bytes32(0)
+            2_000 * 10 ** 6,
+            5_000 * 10 ** 6,
+            corpOwner,
+            investorPrivKey
         );
         vm.stopPrank();
         Escrow memory escBefore = RoundManager(roundManager).getEscrowDetails(agreementId);
@@ -1451,37 +1336,19 @@ contract RoundManagerTest is Test {
     }
 
     function test_RevertIf_RecallEOI_NotExpired() public {
+        uint256 balBefore = paymentToken.balanceOf(investor);
+
         // Submit EOI
         vm.startPrank(investor);
-        EOI memory eoi = EOI({
-            name: "Recall Me",
-            investorType: "Individual",
-            jurisdiction: "US",
-            contact: "reject@example.com",
-            minAmount: 2_000 * 10 ** 6,
-            maxAmount: 5_000 * 10 ** 6,
-            expiry: block.timestamp + 7 days,
-            naturalPerson: false,
-            lexchexDetails: CyberCorpHelper.emptyLex()
-        });
-        uint256 balBefore = paymentToken.balanceOf(investor);
-        (bytes32 agreementId, uint256 tokenId) = RoundManager(roundManager).submitEOI(
+        (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
             roundId,
-            eoi,
-            new string[](1),
-            new string[](2),
-            CyberCorpHelper.computeEOISignature(
-                registry,
-                CyberCorpHelper.TEMPLATE_ID,
-                3,
-                new string[](1),
-                new string[](2),
-                corpOwner,
-                investorPrivKey
-            ),
             3,
-            new address[](0),
-            bytes32(0)
+            2_000 * 10 ** 6,
+            5_000 * 10 ** 6,
+            corpOwner,
+            investorPrivKey
         );
         vm.stopPrank();
         Escrow memory escBefore = RoundManager(roundManager).getEscrowDetails(agreementId);
@@ -1693,97 +1560,35 @@ contract RoundManagerTest is Test {
         public
     {
         // Create a new round with small raise cap so remaining < escrowed amount
-        RoundManager.CyberCertData[]
-            memory certData = new RoundManager.CyberCertData[](1);
-        string[] memory defaultLegend = new string[](1);
-        defaultLegend[0] = "Legend";
-        certData[0] = RoundManager.CyberCertData({
-            name: "Equity",
-            symbol: "EQ",
-            uri: "ipfs://eq",
-            securityClass: SecurityClass.CommonStock,
-            securitySeries: SecuritySeries.NA,
-            extension: address(0),
-            defaultLegend: defaultLegend
-        });
-
-        bytes32 roundId2;
-        (bytes memory escrowSig2, bytes32 expectedRoundId2) = CyberCorpHelper.computeEscrowSignature(
-            roundManager,
-            SecuritySeries.SeriesPreSeed,
-            6_000 * 10 ** 6,
-            1_000 * 10 ** 6,
-            100_000 * 10 ** 6,
-            RoundType.FounderApproved,
-            block.timestamp,
-            block.timestamp + 30 days,
-            CyberCorpHelper.TEMPLATE_ID,
+        vm.startPrank(corpOwner);
+        bytes32 roundId2 = CyberCorpHelper.createRound(
+            RoundManager(roundManager),
             address(paymentToken),
+            CyberCorpHelper.TEMPLATE_ID,
+            6_000 * 10 ** 6, // raise cap 1M
+            1_000 * 10 ** 6,
+            100_000 * 10 ** 6, // maxTicket large enough
             PRICE_PER_UNIT,
             VALUATION,
+            RoundType.FounderApproved,
+            corpOwner,
             corpOwnerPrivKey,
             corp
         );
-        vm.prank(corpOwner);
-        roundId2 = RoundManager(roundManager).createRound(
-            SecuritySeries.SeriesPreSeed,
-            6_000 * 10 ** 6, // small cap
-            1_000 * 10 ** 6,
-            100_000 * 10 ** 6,
-            RoundType.FounderApproved,
-            block.timestamp,
-            block.timestamp + 30 days,
-            CyberCorpHelper.TEMPLATE_ID,
-            certData,
-            new address[](0),
-            address(paymentToken),
-            PRICE_PER_UNIT,
-            VALUATION,
-            corpOwner,
-            "Officer",
-            "CEO",
-            "",
-            "",
-            testRoundPartyValues,
-            escrowSig2,
-            false
-        );
-        assertEq(roundId2, expectedRoundId2);
+        vm.stopPrank();
 
         // Investor submits EOI for 10,000 USDC, escrow pulls funds
+        uint256 balBefore = paymentToken.balanceOf(investor);
         vm.startPrank(investor);
-        EOI memory eoi = EOI({
-            name: "Y",
-            investorType: "I",
-            jurisdiction: "US",
-            contact: "y@y",
-            minAmount: 1_000 * 10 ** 6,
-            maxAmount: 10_000 * 10 ** 6,
-            expiry: block.timestamp + 7 days,
-            naturalPerson: false,
-            lexchexDetails: CyberCorpHelper.emptyLex()
-        });
-        string[] memory gl = new string[](1);
-        string[] memory pv = new string[](2);
-        bytes memory sig = CyberCorpHelper.computeEOISignature(
+        (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
             registry,
-            CyberCorpHelper.TEMPLATE_ID,
+            roundId2,
             5,
-            gl,
-            pv,
+            1_000 * 10 ** 6,
+            10_000 * 10 ** 6,
             corpOwner,
             investorPrivKey
-        );
-        uint256 balBefore = paymentToken.balanceOf(investor);
-        (bytes32 agreementId, uint256 tokenId) = RoundManager(roundManager).submitEOI(
-            roundId2,
-            eoi,
-            gl,
-            pv,
-            sig,
-            5,
-            new address[](0),
-            bytes32(0)
         );
         uint256 balAfterSubmit = paymentToken.balanceOf(investor);
         assertEq(balBefore - balAfterSubmit, 10_000 * 10 ** 6);
@@ -1986,18 +1791,19 @@ contract RoundManagerFCFSTest is Test {
         bytes32 roundId = CyberCorpHelper.createRound(
             rm,
             address(usdc),
-            usdc.decimals(),
             CyberCorpHelper.TEMPLATE_ID,
             100_000 * (10 ** usdc.decimals()),
             2_000 * (10 ** usdc.decimals()),
             50_000 * (10 ** usdc.decimals()),
+            10 * (10 ** usdc.decimals()),
+            10_000_000,
             RoundType.FCFS,
             officerEOA,
             officerPrivKey,
             corp
         );
 
-        CyberCorpHelper.submitEOIAndAssertFinalized(
+        CyberCorpHelper.submitFCFSRoundEOIAndAssertFinalized(
             rm,
             registry,
             CyberCorpHelper.TEMPLATE_ID,
@@ -2122,11 +1928,12 @@ contract RoundManagerFCFSTest is Test {
         bytes32 roundId = CyberCorpHelper.createRound(
             rm,
             address(usdc),
-            usdc.decimals(),
             CyberCorpHelper.TEMPLATE_ID,
             100_000 * (10 ** usdc.decimals()),
             2_000 * (10 ** usdc.decimals()),
             50_000 * (10 ** usdc.decimals()),
+            10 * (10 ** usdc.decimals()),
+            10_000_000,
             RoundType.FCFS,
             officerEOA,
             officerPrivKey,
@@ -2223,11 +2030,12 @@ contract RoundManagerFCFSTest is Test {
         bytes32 roundId = CyberCorpHelper.createRound(
             rm,
             address(usdc),
-            usdc.decimals(),
             CyberCorpHelper.TEMPLATE_ID,
             50_000 * (10 ** usdc.decimals()),
             2_000 * (10 ** usdc.decimals()),
             80_000 * (10 ** usdc.decimals()),
+            10 * (10 ** usdc.decimals()),
+            10_000_000,
             RoundType.FCFS,
             officerEOA,
             officerPrivKey,
@@ -2241,44 +2049,16 @@ contract RoundManagerFCFSTest is Test {
         uint256 startBal = usdc.balanceOf(investor);
         vm.startPrank(investor);
         usdc.approve(address(rm), type(uint256).max);
-
-        EOI memory eoi = EOI({
-            name: "Investor 2",
-            investorType: "Individual",
-            jurisdiction: "US",
-            contact: "email",
-            minAmount: 10_000 * (10 ** usdc.decimals()),
-            maxAmount: 80_000 * (10 ** usdc.decimals()),
-            expiry: block.timestamp + 7 days,
-            naturalPerson: false,
-            lexchexDetails: CyberCorpHelper.emptyLex()
-        });
-
-        string[] memory globalValues = new string[](1);
-        globalValues[0] = "g";
-        string[] memory partyValues = new string[](2);
-        partyValues[0] = "Officer";
-        partyValues[1] = "CEO";
-
-        bytes memory sig = CyberCorpHelper.computeEOISignature(
+        
+        CyberCorpHelper.submitEOI(
+            rm,
             registry,
-            CyberCorpHelper.TEMPLATE_ID,
+            roundId,
             salt,
-            globalValues,
-            partyValues,
+            10_000 * (10 ** usdc.decimals()),
+            80_000 * (10 ** usdc.decimals()),
             officerEOA,
             privKey
-        );
-
-        rm.submitEOI(
-            roundId,
-            eoi,
-            globalValues,
-            partyValues,
-            sig,
-            salt,
-            new address[](0),
-            bytes32(0)
         );
         vm.stopPrank();
 
@@ -2313,11 +2093,12 @@ contract RoundManagerFCFSTest is Test {
         bytes32 roundId = CyberCorpHelper.createRound(
             rm,
             address(usdc),
-            usdc.decimals(),
             CyberCorpHelper.TEMPLATE_ID,
             1_000_000 * (10 ** usdc.decimals()),
             1_000 * (10 ** usdc.decimals()),
             100_000 * (10 ** usdc.decimals()),
+            10 * (10 ** usdc.decimals()),
+            10_000_000,
             RoundType.FCFS,
             officerEOA,
             officerPrivKey,
@@ -2394,11 +2175,12 @@ contract RoundManagerFCFSTest is Test {
         bytes32 roundId = CyberCorpHelper.createRound(
             rm,
             address(usdc),
-            usdc.decimals(),
             CyberCorpHelper.TEMPLATE_ID,
             1_500 * (10 ** usdc.decimals()),
             1_500 * (10 ** usdc.decimals()),
             100_000 * (10 ** usdc.decimals()),
+            10 * (10 ** usdc.decimals()),
+            10_000_000,
             RoundType.FCFS,
             officerEOA,
             officerPrivKey,
@@ -2530,11 +2312,12 @@ contract RoundManagerFCFSTest is Test {
         bytes32 roundId = CyberCorpHelper.createRound(
             rm,
             address(usdc),
-            usdc.decimals(),
             CyberCorpHelper.TEMPLATE_ID,
             100_000 * (10 ** usdc.decimals()),
             2_000 * (10 ** usdc.decimals()),
             50_000 * (10 ** usdc.decimals()),
+            10 * (10 ** usdc.decimals()),
+            10_000_000,
             RoundType.FCFS,
             officerEOA,
             officerPrivKey,

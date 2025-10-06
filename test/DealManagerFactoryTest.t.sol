@@ -44,7 +44,7 @@ import {Test, console} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {DealManager} from "../src/DealManager.sol";
-import {DealManagerFactory} from "../src/DealManagerFactory.sol";
+import {DealManagerFactory, DealManagerFactoryStorage} from "../src/DealManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
 contract MockDealManagerV2 is UUPSUpgradeable {
@@ -182,5 +182,11 @@ contract DealManagerFactoryTest is Test {
         vm.prank(companyOwner);
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, ownerRole, companyOwner));
         dmFactory.setDefaultFeeRatio(123);
+    }
+
+    function test_RevertIf_SetDefaultFeeRatioInvalid() public {
+        vm.prank(owner);
+        vm.expectRevert(DealManagerFactory.InvalidFeeRatio.selector);
+        dmFactory.setDefaultFeeRatio(DealManagerFactoryStorage.BASIS_POINTS + 1);
     }
 }
