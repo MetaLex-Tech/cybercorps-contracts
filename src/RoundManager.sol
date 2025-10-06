@@ -53,6 +53,7 @@ import "./storage/BorgAuthStorage.sol";
 import "./interfaces/ICyberCorp.sol";
 import "./interfaces/ICyberCertPrinter.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "./interfaces/ILexChex.sol";
 
 interface ILexChexMinter {
     function requestMintFor(
@@ -262,9 +263,22 @@ contract RoundManager is
         RoundManagerStorage.setIssuanceManager(_issuanceManager);
         RoundManagerStorage.setUpgradeFactory(_upgradeFactory);
 
+        // Default LeXcheX config
+        RoundManagerStorage.setLexChex(address(0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62));
         RoundManagerStorage.setLexChexCondition(address(0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42));
         RoundManagerStorage.setLexChexMinter(address(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960));
         // No persistent DOMAIN_SEPARATOR; compute dynamically to avoid storage costs
+    }
+
+    /// @notice Sets the LeXcheX AUTH address
+    function setLexChex(address _lexchex) external onlyOwner {
+        if (_lexchex == address(0)) revert ZeroAddress();
+        RoundManagerStorage.setLexChex(_lexchex);
+    }
+
+    /// @notice Gets the LeXcheX AUTH address
+    function getLexChex() external view returns (address) {
+        return RoundManagerStorage.getLexChex();
     }
 
     /// @notice Creates a new fundraising round
@@ -719,12 +733,15 @@ contract RoundManager is
         uint256 refund = escrow.buyerAssets[0].amount - allocatedAmount;
         escrow.buyerAssets[0].amount = allocatedAmount;
 
-        //mint lexchex if over 200k for individual or 1 million for corporate, account for decimals of the payment token
-        if (allocatedAmount >= 200000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && eoi.naturalPerson) {
-           (agreementId, tokenId) = ILexChexMinter(RoundManagerStorage.getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
-        }
-        if (allocatedAmount >= 1000000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && !eoi.naturalPerson) {
-                (agreementId, tokenId) = ILexChexMinter(RoundManagerStorage.getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
+        //if the round is public and the eoi submitter does not have a valid lexchex, mint it
+        if (round.publicRound && !eoi.naturalPerson && !ILexChex(RoundManagerStorage.getLexChex()).hasValidLexCheX(escrow.counterParty)) {
+            //mint lexchex if over 200k for individual or 1 million for corporate, account for decimals of the payment token
+            if (allocatedAmount >= 200000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && eoi.naturalPerson) {
+            (agreementId, tokenId) = ILexChexMinter(RoundManagerStorage.getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
+            }
+            if (allocatedAmount >= 1000000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && !eoi.naturalPerson) {
+                    (agreementId, tokenId) = ILexChexMinter(RoundManagerStorage.getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
+            }
         }
 
         // Check: Check conditions

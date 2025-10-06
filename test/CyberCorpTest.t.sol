@@ -228,10 +228,11 @@ contract CyberCorpTest is Test {
         uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
         address upgradeOwner = vm.addr(upgradePrivKey);
         address lxAuth = cyberCorpFactory.lexchexAuth();
+        vm.stopPrank();
         vm.startPrank(upgradeOwner);
         BorgAuth(lxAuth).updateRole(address(cyberCorpFactory), BorgAuth(lxAuth).OWNER_ROLE());
         vm.stopPrank();
-
+        vm.startPrank(testAddress);
         string[] memory globalFieldsSafe = new string[](5);
         globalFieldsSafe[0] = "purchaseAmount";
         globalFieldsSafe[1] = "postMoneyValuationCap";

@@ -129,6 +129,7 @@ library RoundManagerStorage {
         /// @notice Reference to the issuance manager contract
         IIssuanceManager issuanceManager;
         address upgradeFactory;
+        address lexChex;
         address lexChexCondition;
         address lexChexMinter;
         
@@ -222,6 +223,14 @@ library RoundManagerStorage {
 
     function getUpgradeFactory() external view returns (address) {
         return roundManagerStorage().upgradeFactory;
+    }
+
+    function setLexChex(address _lexChex) internal {
+        roundManagerStorage().lexChex = _lexChex;
+    }
+
+    function getLexChex() internal view returns (address) {
+        return roundManagerStorage().lexChex;
     }
 
     function setLexChexCondition(address _lexChexCondition) internal {
