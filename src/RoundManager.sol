@@ -183,6 +183,9 @@ contract RoundManager is
         address companyAddress;
     }
 
+    /// @notice Computes the EIP-712 typed data hash for escrowed round parameters
+    /// @param data Escrowed round parameters to be hashed
+    /// @return digest EIP-712 typed data digest used for signature verification
     function _hashEscrowedTypedDataV4(
         EscrowedSignatureData memory data
     ) internal view returns (bytes32) {
@@ -221,6 +224,11 @@ contract RoundManager is
         );
     }
 
+    /// @notice Verifies an escrowed signature against expected signer using EIP-712
+    /// @param signer Expected signer address (e.g., authority officer EOA)
+    /// @param data Escrowed round parameters used to build the typed data
+    /// @param signature Signature bytes produced over the typed data
+    /// @return isValid True if the recovered signer matches the expected signer
     function _verifyEscrowedSignature(
         address signer,
         EscrowedSignatureData memory data,
@@ -231,6 +239,7 @@ contract RoundManager is
         return recoveredSigner == signer;
     }
 
+    /// @dev Restricts execution to contract itself or AUTH.OWNER_ROLE callers
     modifier onlyOwnerOrSelf() {
         if (msg.sender != address(this)) {
             AUTH.onlyRole(AUTH.OWNER_ROLE(), msg.sender);
