@@ -77,6 +77,7 @@ import {LexChexCondition} from "../src/libs/conditions/lexchexCondition.sol";
 import {LeXcheXUtils} from "./libs/LeXcheXUtils.sol";
 import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
+import {ILegacyDealManagerFactory} from "./interfaces/ILegacyDealManagerFactory.sol";
 
 contract CyberCorpTest is Test {
     using ERC1967ProxyLib for address;
@@ -240,8 +241,7 @@ contract CyberCorpTest is Test {
             )
         )));
         cyberCorpFactory.setStable(stable);
-        uint256 upgradePrivKey = vm.envUint("PRIVATE_KEY_MAIN");
-        address upgradeOwner = vm.addr(upgradePrivKey);
+        address upgradeOwner = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
         address lxAuth = cyberCorpFactory.lexchexAuth();
         vm.stopPrank();
         vm.startPrank(upgradeOwner);
@@ -3227,7 +3227,7 @@ contract CyberCorpTest is Test {
         assertEq(uriBuilder.securityClassToString(SecurityClass.SAFT), "SAFT");
     }
 
-    function testUpgradeDealManagerBeacon() public {
+    function testUpgradeDealManagerViaRefImplementation() public {
         CertificateDetails[] memory _details = new CertificateDetails[](1);
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
@@ -4405,7 +4405,7 @@ contract CyberCorpTest is Test {
         console.log("Created agreement ID:", vm.toString(id));
     }
 
-    function testUpgradeDealManagerBeaconViaDeployedFactory() public {
+    function testUpgradeLegacyDealManagersViaBeacon() public {
         // First deploy a CyberCorp which will create a DealManager
         CertificateDetails[] memory _details = new CertificateDetails[](1);
         CertificateDetails memory _detailsA = CertificateDetails({
@@ -4449,12 +4449,12 @@ contract CyberCorpTest is Test {
         assertTrue(dealManagerAddr != address(0), "DealManager should be deployed");
         console.log("Deployed DealManager at:", dealManagerAddr);
 
-        // Get the deployed DealManagerFactory address
+        // Get the deployed DealManagerFactory address (legacy Beacon-based)
         address deployedFactoryAddr = 0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3;
-        DealManagerFactory deployedFactory = DealManagerFactory(deployedFactoryAddr);
+        ILegacyDealManagerFactory deployedFactory = ILegacyDealManagerFactory(deployedFactoryAddr);
 
         // Get the current beacon implementation
-        address currentImplementation = deployedFactory.getRefImplementation();
+        address currentImplementation = deployedFactory.getBeaconImplementation();
         console.log("Current beacon implementation:", currentImplementation);
 
         // Deploy a new DealManager implementation using CREATE2
@@ -4464,14 +4464,14 @@ contract CyberCorpTest is Test {
 
         // Non-owner should not be able to upgrade it
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
-        deployedFactory.setRefImplementation(newImplementation);
+        deployedFactory.upgradeImplementation(newImplementation);
 
         // Owner should be able to upgrade it
         vm.prank(multisig);
-        deployedFactory.setRefImplementation(newImplementation);
+        deployedFactory.upgradeImplementation(newImplementation);
 
         // Verify the upgrade was successful
-        address updatedImplementation = deployedFactory.getRefImplementation();
+        address updatedImplementation = deployedFactory.getBeaconImplementation();
         assertEq(updatedImplementation, address(newImplementation), "Beacon implementation should be updated");
         console.log("Updated beacon implementation:", updatedImplementation);
 
