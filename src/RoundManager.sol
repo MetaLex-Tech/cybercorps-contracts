@@ -58,18 +58,6 @@ import "./interfaces/IRoundManagerFactory.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./interfaces/ILexChex.sol";
 
-interface ILexChexMinter {
-    function requestMintFor(
-        MintRequest calldata request,
-        bytes32 templateId,
-        uint256 salt,
-        string[] memory globalValues,
-        address[] memory parties,
-        string[][] memory partyValues,
-        bytes memory agreementSignature
-    ) external returns (bytes32 agreementId, uint256 tokenId);
-}
-
 /// @title RoundManager
 /// @notice Manages fundraising rounds for CyberCorp, handling EOIs, escrows, and allocations
 /// @dev Implements UUPS upgradeable pattern and integrates with BorgAuth for access control
@@ -207,26 +195,6 @@ contract RoundManager is
     function createRound(
         Round memory roundDraft,
         CyberCertData[] memory certData
-//        SecuritySeries seriesType,
-//        uint256 raiseCap,
-//        uint256 minTicket,
-//        uint256 maxTicket,
-//        RoundType roundType,
-//        uint256 startTime,
-//        uint256 endTime,
-//        bytes32 templateId,
-//        address[] memory conditions,
-//        address paymentToken,
-//        uint256 pricePerUnit,
-//        uint256 valuation,
-//        address authorityOfficer,
-//        string memory officerName,
-//        string memory officerTitle,
-//        string memory legalDetails,
-//        bytes memory extensionData,
-//        string[] memory roundPartyValues,
-//        bytes memory escrowedSignature,
-//        bool publicRound
     ) external onlyOwner returns (bytes32) {
         if (roundDraft.escrowedSignature.length == 0) revert InvalidEscrowedSignature();
 
@@ -385,7 +353,7 @@ contract RoundManager is
     function allocate(
         bytes32 agreementId,
         uint256 allocatedAmount
-    ) external onlyOwnerOrSelf nonReentrant returns (uint256 tokenId) {
+    ) external onlyOwnerOrSelf nonReentrant returns (uint256) {
         bytes32 roundId = RoundManagerStorage.getAgreementToRound(agreementId);
         Round storage round = RoundManagerStorage.getRound(roundId);
         EOI storage eoi = RoundManagerStorage.getAgreementToEOI(agreementId);
@@ -415,97 +383,11 @@ contract RoundManager is
         if (escrow.status != EscrowStatus.PAID) revert DealNotPaid();
         if (escrow.corpAssets.length > 0) revert AlreadyAllocated();
 
-        // Effect: sign the agreement with the escrow signer
-        if (
-            !ICyberAgreementRegistry(LexScrowStorage.getDealRegistry())
-                .hasSigned(agreementId, round.authorityOfficer)
-        ) {
-            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry())
-                .signContractWithEscrow(
-                    round.authorityOfficer,
-                    agreementId,
-                    round.roundPartyValues,
-                    round.escrowedSignature,
-                    false,
-                    ""
-                );
-        }
-       
-        // Calculate units and investment USD
-        uint256 units = allocatedAmount / round.pricePerUnit;
-        uint8 paymentDecimals = IERC20Metadata(round.paymentToken).decimals();
-        uint256 investmentUSD = allocatedAmount / (10 ** paymentDecimals);
-
-        // Create certificate 
-        string memory officerName = round.officerName;
-        string memory officerTitle = round.officerTitle;
-
-        CertificateDetails memory details = CertificateDetails({
-            signingOfficerName: officerName,
-            signingOfficerTitle: officerTitle,
-            investmentAmountUSD: investmentUSD,
-            issuerUSDValuationAtTimeOfInvestment: round.valuation,
-            unitsRepresented: units,
-            legalDetails: round.legalDetails,
-            extensionData: round.extensionData
-        });
-
-        IIssuanceManager issuanceManager = RoundManagerStorage
-            .getIssuanceManager();
-
-        // Effect: loop through certPrinter and create cert for each
-        uint256[] memory certIds = new uint256[](round.certPrinter.length);
-        for (uint256 i = 0; i < round.certPrinter.length; i++) {
-            certIds[i] = issuanceManager.createCert(
-                round.certPrinter[i],
-                address(this),
-                details
-            );
-        }
-
-        escrow.signature = round.escrowedSignature;
-
-        // Add endorsement
-        Endorsement memory endorsement = Endorsement({
-            endorser: address(this),
-            timestamp: block.timestamp,
-            signatureHash: escrow.signature,
-            registry: LexScrowStorage.getDealRegistry(),
-            agreementId: agreementId,
-            endorsee: escrow.counterParty, 
-            endorseeName: eoi.name
-        });
-
-        // Effect: loop through certPrinter and add endorsement to each
-        for (uint256 i = 0; i < round.certPrinter.length; i++) {
-            ICyberCertPrinter(round.certPrinter[i]).addEndorsement(
-                certIds[i],
-                endorsement
-            );
-        }
-
-        // Effect: Add to escrow
-        // loop through certPrinter and add to escrow
-        for (uint256 i = 0; i < round.certPrinter.length; i++) {
-            escrow.corpAssets.push(
-                Token(TokenType.ERC721, round.certPrinter[i], certIds[i], 1, false)
-            );
-        }
-
-        // Effect: Calculate refund amount and update escrowed amount
-        uint256 refund = escrow.buyerAssets[0].amount - allocatedAmount;
-        escrow.buyerAssets[0].amount = allocatedAmount;
-
-        //if the round is public and the eoi submitter does not have a valid lexchex, mint it
-        if (round.publicRound && !ILexChex(RoundManagerStorage.getLexChex()).hasValidLexCheX(escrow.counterParty)) {
-            //mint lexchex if over 200k for individual or 1 million for corporate, account for decimals of the payment token
-            if (allocatedAmount >= 200000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && eoi.naturalPerson) {
-            (, tokenId) = ILexChexMinter(RoundManagerStorage.getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
-            }
-            if (allocatedAmount >= 1000000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && !eoi.naturalPerson) {
-                    (, tokenId) = ILexChexMinter(RoundManagerStorage.getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
-            }
-        }
+        (uint256 tokenId, uint256[] memory certIds, uint256 refund) = RoundManagerStorage.allocate(
+            LexScrowStorage.lexScrowStorage(),
+            agreementId,
+            allocatedAmount
+        );
 
         // Check: Check conditions
         if (!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
@@ -528,7 +410,9 @@ contract RoundManager is
         // Interaction: Finalize escrow and payments
         finalizeEscrow(agreementId);
 
-        emit AllocationMade(agreementId, roundId, escrow.counterParty, allocatedAmount, round.raised, certIds); 
+        emit AllocationMade(agreementId, roundId, escrow.counterParty, allocatedAmount, round.raised, certIds);
+
+        return tokenId;
     }
 
     /// @notice Rejects an EOI and voids the deal
