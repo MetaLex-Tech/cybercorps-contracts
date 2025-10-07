@@ -264,11 +264,12 @@ library CyberCorpHelper {
         uint256 pricePerUnit,
         uint256 valuation,
         RoundType rountType,
-        address officerEOA,
         uint256 officerPrivKey,
         address companyAddress,
         bool publicRound
     ) internal returns (bytes32) {
+        address officerEOA = vm.addr(officerPrivKey);
+
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Legend";
         RoundManager.CyberCertData[]
@@ -695,7 +696,6 @@ contract RoundManagerTest is Test {
             PRICE_PER_UNIT,
             VALUATION,
             RoundType.FounderApproved,
-            corpOwner,
             corpOwnerPrivKey,
             corp,
             false
@@ -1043,7 +1043,6 @@ contract RoundManagerTest is Test {
             PRICE_PER_UNIT,
             VALUATION,
             RoundType.FounderApproved,
-            corpOwner,
             corpOwnerPrivKey,
             corp,
             false
@@ -1576,7 +1575,6 @@ contract RoundManagerTest is Test {
             PRICE_PER_UNIT,
             VALUATION,
             RoundType.FounderApproved,
-            corpOwner,
             corpOwnerPrivKey,
             corp,
             false
@@ -1803,7 +1801,6 @@ contract RoundManagerFCFSTest is Test {
             10 * (10 ** usdc.decimals()),
             10_000_000,
             RoundType.FCFS,
-            officerEOA,
             officerPrivKey,
             corp,
             false
@@ -1941,7 +1938,6 @@ contract RoundManagerFCFSTest is Test {
             10 * (10 ** usdc.decimals()),
             10_000_000,
             RoundType.FCFS,
-            officerEOA,
             officerPrivKey,
             corp,
             false
@@ -2044,7 +2040,6 @@ contract RoundManagerFCFSTest is Test {
             10 * (10 ** usdc.decimals()),
             10_000_000,
             RoundType.FCFS,
-            officerEOA,
             officerPrivKey,
             corp,
             false
@@ -2108,7 +2103,6 @@ contract RoundManagerFCFSTest is Test {
             10 * (10 ** usdc.decimals()),
             10_000_000,
             RoundType.FCFS,
-            officerEOA,
             officerPrivKey,
             corp,
             false
@@ -2191,7 +2185,6 @@ contract RoundManagerFCFSTest is Test {
             10 * (10 ** usdc.decimals()),
             10_000_000,
             RoundType.FCFS,
-            officerEOA,
             officerPrivKey,
             corp,
             false
@@ -2330,10 +2323,9 @@ contract RoundManagerFCFSTest is Test {
             10 * (10 ** usdc.decimals()),
             10_000_000,
             RoundType.FCFS,
-            officerEOA,
             officerPrivKey,
             corp,
-            false
+            true
         );
 
         uint256 salt = 1;
@@ -2432,7 +2424,6 @@ contract RoundManagerFCFSTest is Test {
             10 * (10 ** usdc.decimals()),
             10_000_000,
             RoundType.FCFS,
-            officerEOA,
             officerPrivKey,
             corp,
             false
@@ -2586,7 +2577,6 @@ contract RoundManagerFCFSTest is Test {
             10 * (10 ** usdc.decimals()),
             10_000_000,
             RoundType.FCFS,
-            officerEOA,
             officerPrivKey,
             corp,
             true
