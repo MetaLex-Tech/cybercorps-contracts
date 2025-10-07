@@ -19,9 +19,10 @@ import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
+import {RoundLib, Round} from "../src/libs/RoundLib.sol";
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {LexScrowStorage, Escrow, EscrowStatus} from "../src/storage/LexScrowStorage.sol";
-import {LexChexDetails, Round} from "../src/storage/RoundManagerStorage.sol";
+import {LexChexDetails} from "../src/storage/RoundManagerStorage.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
 import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
@@ -79,6 +80,8 @@ contract AlwaysTrueCondition is ICondition {
 
 
 library CyberCorpHelper {
+    using RoundLib for Round;
+    
     /// Calculated as `address(uint160(uint256(keccak256("hevm cheat code"))))`.
     Vm constant vm = Vm(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
@@ -296,28 +299,31 @@ library CyberCorpHelper {
         );
 
         return rm.createRound(
-            RoundManagerStorage.createRoundDraft(
-                SecuritySeries.SeriesSeed,
-                raiseCap,
-                minTicket,
-                maxTicket,
-                roundType,
-                block.timestamp,
-                block.timestamp + 30 days,
-                templateId,
-                new address[](0),
-                paymentToken,
-                pricePerUnit,
-                valuation,
-                officerEOA,
-                "Officer",
-                "CEO",
-                "",
-                "",
-                roundPartyValues,
-                escrowedSig,
-                publicRound
-            ),
+            RoundLib.draft()
+                .setTickets(
+                    SecuritySeries.SeriesSeed,
+                    roundType,
+                    publicRound,
+                    raiseCap,
+                    minTicket,
+                    maxTicket,
+                    paymentToken,
+                    pricePerUnit,
+                    valuation,
+                    block.timestamp,
+                    block.timestamp + 30 days
+                )
+                .setAgreement(
+                    templateId,
+                    officerEOA,
+                    "Officer",
+                    "CEO",
+                    "",
+                    roundPartyValues,
+                    "",
+                    new address[](0),
+                    escrowedSig
+                ),
             certData
         );
     }
@@ -581,6 +587,8 @@ library CyberCorpHelper {
 }
 
 contract RoundManagerTest is Test {
+    using RoundLib for Round;
+
    // RoundManager public roundManager;
     IssuanceManager public issuanceManager;
     CyberCertPrinter public certPrinter;
@@ -738,28 +746,31 @@ contract RoundManagerTest is Test {
         vm.prank(corpOwner);
         vm.expectRevert(RoundManager.InvalidEscrowedSignature.selector);
         RoundManager(roundManager).createRound(
-            RoundManagerStorage.createRoundDraft(
-                SecuritySeries.SeriesA,
-                RAISE_CAP,
-                MIN_TICKET,
-                MAX_TICKET,
-                RoundType.FounderApproved,
-                block.timestamp,
-                block.timestamp + 30 days,
-                CyberCorpHelper.TEMPLATE_ID,
-                new address[](0),
-                address(paymentToken),
-                PRICE_PER_UNIT,
-                VALUATION,
-                corpOwner,
-                "Officer",
-                "CEO",
-                "",
-                "",
-                testRoundPartyValues,
-                signature,
-                false
-            ),
+            RoundLib.draft()
+                .setTickets(
+                    SecuritySeries.SeriesA,
+                    RoundType.FounderApproved,
+                    false,
+                    RAISE_CAP,
+                    MIN_TICKET,
+                    MAX_TICKET,
+                    address(paymentToken),
+                    PRICE_PER_UNIT,
+                    VALUATION,
+                    block.timestamp,
+                    block.timestamp + 30 days
+                )
+                .setAgreement(
+                    CyberCorpHelper.TEMPLATE_ID,
+                    corpOwner,
+                    "Officer",
+                    "CEO",
+                    "",
+                    testRoundPartyValues,
+                    "",
+                    new address[](0),
+                    signature
+                ),
             certData
         );
     }
@@ -1442,28 +1453,31 @@ contract RoundManagerTest is Test {
         );
         vm.prank(corpOwner);
         roundIdFuture = RoundManager(roundManager).createRound(
-            RoundManagerStorage.createRoundDraft(
-                SecuritySeries.SeriesF,
-                100_000 * 10 ** 6,
-                1_000 * 10 ** 6,
-                50_000 * 10 ** 6,
-                RoundType.FounderApproved,
-                block.timestamp + 1 days,
-                block.timestamp + 30 days,
-                CyberCorpHelper.TEMPLATE_ID,
-                new address[](0),
-                address(paymentToken),
-                PRICE_PER_UNIT,
-                VALUATION,
-                corpOwner,
-                "Officer",
-                "CEO",
-                "",
-                "",
-                testRoundPartyValues,
-                escSigFuture,
-                false
-            ),
+            RoundLib.draft()
+                .setTickets(
+                    SecuritySeries.SeriesF,
+                    RoundType.FounderApproved,
+                    false,
+                    100_000 * 10 ** 6,
+                    1_000 * 10 ** 6,
+                    50_000 * 10 ** 6,
+                    address(paymentToken),
+                    PRICE_PER_UNIT,
+                    VALUATION,
+                    block.timestamp + 1 days,
+                    block.timestamp + 30 days
+                )
+                .setAgreement(
+                    CyberCorpHelper.TEMPLATE_ID,
+                    corpOwner,
+                    "Officer",
+                    "CEO",
+                    "",
+                    testRoundPartyValues,
+                    "",
+                    new address[](0),
+                    escSigFuture
+                ),
             certData
         );
 
@@ -1707,6 +1721,7 @@ contract RoundManagerTest is Test {
 
 // Separate FCFS tests in their own contract to avoid the original setUp()
 contract RoundManagerFCFSTest is Test {
+    using RoundLib for Round;
     using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
 
     function setUp() public {
@@ -1872,28 +1887,31 @@ contract RoundManagerFCFSTest is Test {
             corp
         );
         rm.createRound(
-            RoundManagerStorage.createRoundDraft(
-                SecuritySeries.SeriesPreSeed,
-                1,
-                1,
-                1,
-                RoundType.FCFS,
-                block.timestamp,
-                block.timestamp + 1,
-                CyberCorpHelper.TEMPLATE_ID,
-                new address[](0),
-                address(0xDEAD),
-                1,
-                1,
-                officerEOA,
-                "Officer",
-                "CEO",
-                "",
-                "",
-                roundPartyValues,
-                escSig,
-                true
-            ),
+            RoundLib.draft()
+                .setTickets(
+                    SecuritySeries.SeriesPreSeed,
+                    RoundType.FCFS,
+                    true,
+                    1,
+                    1,
+                    1,
+                    address(0xDEAD),
+                    1,
+                    1,
+                    block.timestamp,
+                    block.timestamp + 1
+                )
+                .setAgreement(
+                    CyberCorpHelper.TEMPLATE_ID,
+                    officerEOA,
+                    "Officer",
+                    "CEO",
+                    "",
+                    roundPartyValues,
+                    "",
+                    new address[](0),
+                    escSig
+                ),
             certData
         );
     }

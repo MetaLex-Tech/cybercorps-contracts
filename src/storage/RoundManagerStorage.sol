@@ -49,6 +49,7 @@ import "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/ILexChex.sol";
 import "../libs/EIP712Lib.sol";
+import "../libs/RoundLib.sol";
 import "../storage/LexScrowStorage.sol";
 import "../storage/CyberCertPrinterStorage.sol";
 import "../CyberCorpConstants.sol";
@@ -65,11 +66,6 @@ interface ILexChexMinter {
     ) external returns (bytes32 agreementId, uint256 tokenId);
 }
 
-enum RoundType {
-    FCFS,
-    FounderApproved
-}
-
 /// @notice Certificate data structure for creating new certificates
 struct CyberCertData {
     string name;
@@ -79,37 +75,6 @@ struct CyberCertData {
     SecuritySeries securitySeries;
     address extension;
     string[] defaultLegend;
-}
-
-struct Round {
-    bytes32 id;
-    SecuritySeries seriesType;
-    uint256 raiseCap;
-    uint256 minTicket;
-    uint256 maxTicket;
-    RoundType roundType;
-    uint256 startTime;
-    uint256 endTime;
-    bytes32 templateId;
-    address[] certPrinter;
-    address paymentToken;
-    uint256 pricePerUnit;
-    uint256 valuation;
-    uint256 raised;
-    address[] roundConditions;
-    // Normalized round price and primary security sold to new money
-    uint256 roundPricePerShare; // normalized to priceDecimals
-    uint8 roundPriceDecimals;
-    SecurityClass primarySecurityClass;
-    SecuritySeries primarySecuritySeries;
-    address authorityOfficer;
-    string officerName;
-    string officerTitle;
-    string legalDetails;
-    bytes extensionData;
-    string[] roundPartyValues;
-    bytes escrowedSignature;
-    bool publicRound;
 }
 
 struct EOI {
@@ -592,73 +557,5 @@ library RoundManagerStorage {
 
     function getLexChexMinter() internal view returns (address) {
         return roundManagerStorage().lexChexMinter;
-    }
-
-    /// @param seriesType The series type (e.g., Series A)
-    /// @param raiseCap The maximum amount to raise
-    /// @param minTicket Minimum investment per EOI
-    /// @param maxTicket Maximum investment per EOI
-    /// @param roundType FCFS or FounderApproved
-    /// @param startTime Start timestamp
-    /// @param endTime End timestamp
-    /// @param templateId Agreement template ID
-    /// @param paymentToken Payment token address
-    /// @param pricePerUnit Price per unit in payment token decimals
-    /// @param valuation Valuation in USD
-    /// @param roundPartyValues Round party values
-    /// @param escrowedSignature Escrowed signature
-    /// @param publicRound Indicate public round
-    /// @return Partially filled Round struct
-    function createRoundDraft(
-        SecuritySeries seriesType,
-        uint256 raiseCap,
-        uint256 minTicket,
-        uint256 maxTicket,
-        RoundType roundType,
-        uint256 startTime,
-        uint256 endTime,
-        bytes32 templateId,
-        address[] memory conditions,
-        address paymentToken,
-        uint256 pricePerUnit,
-        uint256 valuation,
-        address authorityOfficer,
-        string memory officerName,
-        string memory officerTitle,
-        string memory legalDetails,
-        bytes memory extensionData,
-        string[] memory roundPartyValues,
-        bytes memory escrowedSignature,
-        bool publicRound
-    ) internal pure returns (Round memory) {
-        return Round({
-            id: bytes32(0),
-            seriesType: seriesType,
-            raiseCap: raiseCap,
-            minTicket: minTicket,
-            maxTicket: maxTicket,
-            roundType: roundType,
-            startTime: startTime,
-            endTime: endTime,
-            templateId: templateId,
-            certPrinter: new address[](0),
-            paymentToken: paymentToken,
-            pricePerUnit: pricePerUnit,
-            valuation: valuation,
-            raised: 0,
-            roundConditions: new address[](0),
-            roundPricePerShare: 0, // TODO is that right?
-            roundPriceDecimals: 18, // TODO is that right?
-            primarySecurityClass: SecurityClass.SAFE, // TODO is that right?
-            primarySecuritySeries: SecuritySeries.SeriesPreSeed, // TODO is that right?
-            authorityOfficer: authorityOfficer,
-            officerName: officerName,
-            officerTitle: officerTitle,
-            legalDetails: legalDetails,
-            extensionData: extensionData,
-            roundPartyValues: roundPartyValues,
-            escrowedSignature: escrowedSignature,
-            publicRound: publicRound
-        });
     }
 }
