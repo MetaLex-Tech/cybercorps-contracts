@@ -749,13 +749,13 @@ contract RoundManager is
         escrow.buyerAssets[0].amount = allocatedAmount;
 
         //if the round is public and the eoi submitter does not have a valid lexchex, mint it
-        if (round.publicRound && !eoi.naturalPerson && !ILexChex(RoundManagerStorage.getLexChex()).hasValidLexCheX(escrow.counterParty)) {
+        if (round.publicRound && !ILexChex(RoundManagerStorage.getLexChex()).hasValidLexCheX(escrow.counterParty)) {
             //mint lexchex if over 200k for individual or 1 million for corporate, account for decimals of the payment token
             if (allocatedAmount >= 200000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && eoi.naturalPerson) {
-            (agreementId, tokenId) = ILexChexMinter(RoundManagerStorage.getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
+            (, tokenId) = ILexChexMinter(RoundManagerStorage.getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
             }
             if (allocatedAmount >= 1000000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && !eoi.naturalPerson) {
-                    (agreementId, tokenId) = ILexChexMinter(RoundManagerStorage.getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
+                    (, tokenId) = ILexChexMinter(RoundManagerStorage.getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
             }
         }
 

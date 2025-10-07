@@ -76,11 +76,20 @@ abstract contract LexScroWLite is Initializable {
     constructor() {
     }
 
+    /// @notice Initialize core addresses for the escrow subsystem
+    /// @param _corp Address of the `ICyberCorp` implementation
+    /// @param _dealRegistry Address of the `ICyberAgreementRegistry` implementation
     function __LexScroWLite_init(address _corp, address _dealRegistry) internal onlyInitializing {
         LexScrowStorage.setCorp(_corp);
         LexScrowStorage.setDealRegistry(_dealRegistry);
     }
 
+    /// @notice Create a new escrow record for an agreement
+    /// @param agreementId Unique identifier of the agreement
+    /// @param counterParty Counterparty/buyer address
+    /// @param corpAssets Assets the company will deliver upon finalization
+    /// @param buyerAssets Assets the counterparty will deliver into escrow
+    /// @param expiry Unix timestamp after which the deal is considered expired
     function createEscrow(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets, uint256 expiry) internal {
         bytes memory blankSignature = abi.encodePacked(bytes32(0));
         Escrow memory newEscrow = Escrow({
@@ -95,6 +104,10 @@ abstract contract LexScroWLite is Initializable {
         LexScrowStorage.setEscrow(agreementId, newEscrow);
     }
 
+    /// @notice Update escrow counterparty and add endorsement to corp ERC721 certificates
+    /// @param agreementId Unique identifier of the agreement
+    /// @param counterParty Counterparty/buyer address to set
+    /// @param buyerName Human-readable buyer name stored in endorsements
     function updateEscrow(bytes32 agreementId, address counterParty, string memory buyerName) internal {
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
         escrow.counterParty = counterParty;
@@ -115,6 +128,8 @@ abstract contract LexScroWLite is Initializable {
         }
     }
 
+    /// @notice Pull buyer assets into escrow and mark the escrow as PAID
+    /// @param agreementId Unique identifier of the agreement
     function handleCounterPartyPayment(bytes32 agreementId) internal {
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
         if(escrow.status != EscrowStatus.PENDING) revert EscrowNotPending();
@@ -136,7 +151,9 @@ abstract contract LexScroWLite is Initializable {
         escrow.status = EscrowStatus.PAID;
     }
 
-    /// @dev External functions who call this should implement their own reentrancy guards
+    /// @notice Void a PAID escrow and refund all buyer assets
+    /// @dev External callers should implement reentrancy guards
+    /// @param agreementId Unique identifier of the agreement
     function voidAndRefund(bytes32 agreementId) internal {
         // Check: check status
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
@@ -160,7 +177,9 @@ abstract contract LexScroWLite is Initializable {
         }
     }
 
-    /// @dev External functions who call this should implement their own reentrancy guards
+    /// @notice Finalize a PAID escrow, transferring assets and distributing any fees
+    /// @dev External callers should implement reentrancy guards
+    /// @param agreementId Unique identifier of the agreement
     function finalizeEscrow(bytes32 agreementId) internal {
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
 
@@ -217,6 +236,9 @@ abstract contract LexScroWLite is Initializable {
         }
     }
 
+    /// @notice Check all conditions attached to the escrow for the given agreement
+    /// @param agreementId Unique identifier of the agreement
+    /// @return True if all conditions pass, false otherwise
     function conditionCheck(bytes32 agreementId) public view returns (bool) {
         ICondition[] storage conditions = LexScrowStorage.getConditionsByEscrow(agreementId);
         //convert bytes32 to bytes
@@ -229,12 +251,17 @@ abstract contract LexScroWLite is Initializable {
         return true;
     }
 
+    /// @notice Mark an escrow as VOIDED and emit an event
+    /// @param agreementId Unique identifier of the agreement
     function voidEscrow(bytes32 agreementId) internal {
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
         escrow.status = EscrowStatus.VOIDED;
         emit DealVoidedAt(agreementId, LexScrowStorage.getDealRegistry(), block.timestamp);
     }
 
+    /// @notice Get escrow details for a given agreement id
+    /// @param agreementId Unique identifier of the agreement
+    /// @return Escrow struct containing current state
     function getEscrowDetails(bytes32 agreementId) public view returns (Escrow memory) {
         return LexScrowStorage.getEscrow(agreementId);
     }
@@ -249,12 +276,23 @@ abstract contract LexScroWLite is Initializable {
     /// @return Payable address for the fees
     function getPlatformPayable() public virtual view returns (address);
 
-    //receiver erc721s
+    /// @notice ERC721 receiver hook for safe transfers into escrow
+    /// @param operator Address which initiated the transfer
+    /// @param from Previous owner of the token
+    /// @param tokenId Identifier of the token being transferred
+    /// @param data Additional data with no specified format
+    /// @return Selector to confirm the token transfer
     function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata data) external returns (bytes4) {
         return this.onERC721Received.selector;
     }
 
-    //receiver erc1155s
+    /// @notice ERC1155 receiver hook for safe transfers into escrow
+    /// @param operator Address which initiated the transfer
+    /// @param from Previous owner of the token(s)
+    /// @param tokenId Identifier of the token being transferred
+    /// @param amount Amount of tokens being transferred
+    /// @param data Additional data with no specified format
+    /// @return Selector to confirm the token transfer
     function onERC1155Received(address operator, address from, uint256 tokenId, uint256 amount, bytes calldata data) external returns (bytes4) {
         return this.onERC1155Received.selector;
     }
