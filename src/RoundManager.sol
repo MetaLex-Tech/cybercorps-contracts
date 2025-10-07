@@ -48,6 +48,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./libs/LexScroWLite.sol";
 import "./libs/auth.sol";
+import "./libs/EIP712Lib.sol";
 import "./storage/RoundManagerStorage.sol";
 import "./storage/RoundManagerFactoryStorage.sol";
 import "./storage/BorgAuthStorage.sol";
@@ -82,30 +83,8 @@ contract RoundManager is
     using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
     using LexScrowStorage for LexScrowStorage.LexScrowData;
     using SafeERC20 for IERC20;
-    using ECDSA for bytes32;
-
-    // EIP-712 domain constants
-    string public constant EIP712_NAME = "RoundManager";
-    string public constant EIP712_VERSION = "1";
-    bytes32 private constant EIP712_DOMAIN_TYPEHASH = keccak256(
-        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-    );
-    bytes32 private constant ESCROWEDSIGNATUREDATA_TYPEHASH = keccak256(
-        "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation,address companyAddress)"
-    );
 
     string public constant DEPLOY_VERSION = "1"; // For version-tracking on all deployment and future upgrades
-
-    /// @notice Certificate data structure for creating new certificates
-    struct CyberCertData {
-        string name;
-        string symbol;
-        string uri;
-        SecurityClass securityClass;
-        SecuritySeries securitySeries;
-        address extension;
-        string[] defaultLegend;
-    }
 
     error InvalidRound();
     error RoundNotOpen();
@@ -168,78 +147,6 @@ contract RoundManager is
     event RoundClosed(bytes32 indexed roundId, uint256 closedAt);
     event EOIRecalled(bytes32 agreementId, address indexed investor, bytes32 indexed roundId);
 
-    struct EscrowedSignatureData {
-        bytes32 roundId;
-        uint8 seriesType;
-        uint256 raiseCap;
-        uint256 minTicket;
-        uint256 maxTicket;
-        uint8 roundType;
-        uint256 startTime;
-        uint256 endTime;
-        bytes32 templateId;
-        address paymentToken;
-        uint256 pricePerUnit;
-        uint256 valuation;
-        address companyAddress;
-    }
-
-    /// @notice Computes the EIP-712 typed data hash for escrowed round parameters
-    /// @param data Escrowed round parameters to be hashed
-    /// @return digest EIP-712 typed data digest used for signature verification
-    function _hashEscrowedTypedDataV4(
-        EscrowedSignatureData memory data
-    ) internal view returns (bytes32) {
-        bytes32 domainSeparator = keccak256(
-            abi.encode(
-                EIP712_DOMAIN_TYPEHASH,
-                keccak256(bytes(EIP712_NAME)),
-                keccak256(bytes(EIP712_VERSION)),
-                block.chainid,
-                address(this)
-            )
-        );
-        return keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                domainSeparator,
-                keccak256(
-                    abi.encode(
-                        ESCROWEDSIGNATUREDATA_TYPEHASH,
-                        data.roundId,
-                        data.seriesType,
-                        data.raiseCap,
-                        data.minTicket,
-                        data.maxTicket,
-                        data.roundType,
-                        data.startTime,
-                        data.endTime,
-                        data.templateId,
-                        data.paymentToken,
-                        data.pricePerUnit,
-                        data.valuation,
-                        data.companyAddress
-                    )
-                )
-            )
-        );
-    }
-
-    /// @notice Verifies an escrowed signature against expected signer using EIP-712
-    /// @param signer Expected signer address (e.g., authority officer EOA)
-    /// @param data Escrowed round parameters used to build the typed data
-    /// @param signature Signature bytes produced over the typed data
-    /// @return isValid True if the recovered signer matches the expected signer
-    function _verifyEscrowedSignature(
-        address signer,
-        EscrowedSignatureData memory data,
-        bytes memory signature
-    ) internal view returns (bool) {
-        bytes32 digest = _hashEscrowedTypedDataV4(data);
-        address recoveredSigner = digest.recover(signature);
-        return recoveredSigner == signer;
-    }
-
     /// @dev Restricts execution to contract itself or AUTH.OWNER_ROLE callers
     modifier onlyOwnerOrSelf() {
         if (msg.sender != address(this)) {
@@ -296,141 +203,53 @@ contract RoundManager is
     }
 
     /// @notice Creates a new fundraising round
-    /// @param seriesType The series type (e.g., Series A)
-    /// @param raiseCap The maximum amount to raise
-    /// @param minTicket Minimum investment per EOI
-    /// @param maxTicket Maximum investment per EOI
-    /// @param roundType FCFS or FounderApproved
-    /// @param startTime Start timestamp
-    /// @param endTime End timestamp
-    /// @param templateId Agreement template ID
-    /// @param certData Certificate printer address
-    /// @param paymentToken Payment token address
-    /// @param pricePerUnit Price per unit in payment token decimals
-    /// @param valuation Valuation in USD
-    /// @return roundId The unique ID of the created round
-    /// @param roundPartyValues Round party values
-    /// @param escrowedSignature Escrowed signature
+    /// TODO WIP docs
     function createRound(
-        SecuritySeries seriesType,
-        uint256 raiseCap,
-        uint256 minTicket,
-        uint256 maxTicket,
-        RoundType roundType,
-        uint256 startTime,
-        uint256 endTime,
-        bytes32 templateId,
-        CyberCertData[] memory certData,
-        address[] memory conditions,
-        address paymentToken,
-        uint256 pricePerUnit,
-        uint256 valuation,
-        address authorityOfficer,
-        string memory officerName,
-        string memory officerTitle,
-        string memory legalDetails,
-        bytes memory extensionData,
-        string[] memory roundPartyValues,
-        bytes memory escrowedSignature,
-        bool publicRound
-    ) external onlyOwner returns (bytes32 roundId) {
+        Round memory roundDraft,
+        CyberCertData[] memory certData
+//        SecuritySeries seriesType,
+//        uint256 raiseCap,
+//        uint256 minTicket,
+//        uint256 maxTicket,
+//        RoundType roundType,
+//        uint256 startTime,
+//        uint256 endTime,
+//        bytes32 templateId,
+//        address[] memory conditions,
+//        address paymentToken,
+//        uint256 pricePerUnit,
+//        uint256 valuation,
+//        address authorityOfficer,
+//        string memory officerName,
+//        string memory officerTitle,
+//        string memory legalDetails,
+//        bytes memory extensionData,
+//        string[] memory roundPartyValues,
+//        bytes memory escrowedSignature,
+//        bool publicRound
+    ) external onlyOwner returns (bytes32) {
+        if (roundDraft.escrowedSignature.length == 0) revert InvalidEscrowedSignature();
 
-        if (escrowedSignature.length == 0) revert InvalidEscrowedSignature();
+        address corp = LexScrowStorage.getCorp();
 
-        roundId = keccak256(
-            abi.encodePacked(
-                seriesType,
-                raiseCap,
-                minTicket,
-                maxTicket,
-                uint8(roundType),
-                startTime,
-                endTime,
-                templateId,
-                paymentToken,
-                pricePerUnit,
-                valuation,
-                LexScrowStorage.getCorp()
-            )
+        (bytes32 roundId, Round memory round, uint256 err) = RoundManagerStorage.createRound(
+            corp,
+            roundDraft,
+            certData
         );
 
-        if(!_verifyEscrowedSignature(
-                authorityOfficer,
-                EscrowedSignatureData({
-                    roundId: roundId,
-                    seriesType: uint8(seriesType),
-                    raiseCap: raiseCap,
-                    minTicket: minTicket,
-                    maxTicket: maxTicket,
-                    roundType: uint8(roundType),
-                    startTime: startTime,
-                    endTime: endTime,
-                    templateId: templateId,
-                    paymentToken: paymentToken,
-                    pricePerUnit: pricePerUnit,
-                    valuation: valuation,
-                    companyAddress: LexScrowStorage.getCorp()
-                }),
-                escrowedSignature
-        )) revert InvalidEscrowedSignature();
-        string memory companyName = ICyberCorp(LexScrowStorage.getCorp())
-            .cyberCORPName();
-        IIssuanceManager issuanceManager = RoundManagerStorage
-            .getIssuanceManager();
-
-        address[] memory certPrinterAddresses = new address[](certData.length);
-        for (uint256 i = 0; i < certData.length; i++) {
-            ICyberCertPrinter certPrinter = ICyberCertPrinter(
-                issuanceManager.createCertPrinter(
-                    certData[i].defaultLegend,
-                    string.concat(companyName, " ", certData[i].name),
-                    certData[i].symbol,
-                    certData[i].uri,
-                    certData[i].securityClass,
-                    certData[i].securitySeries,
-                    certData[i].extension
-                )
-            );
-            certPrinterAddresses[i] = address(certPrinter);
+        if (err == 1) {
+            revert InvalidEscrowedSignature();
         }
 
-        Round memory newRound = Round({
-            id: roundId,
-            seriesType: seriesType,
-            raiseCap: raiseCap,
-            minTicket: minTicket,
-            maxTicket: maxTicket,
-            roundType: roundType,
-            startTime: startTime,
-            endTime: endTime,
-            templateId: templateId,
-            certPrinter: certPrinterAddresses,
-            paymentToken: paymentToken,
-            pricePerUnit: pricePerUnit,
-            valuation: valuation,
-            raised: 0,
-            roundPricePerShare: pricePerUnit,
-            roundPriceDecimals: 18,
-            primarySecurityClass: certData.length > 0
-                ? certData[0].securityClass
-                : SecurityClass.SAFE,
-            primarySecuritySeries: certData.length > 0
-                ? certData[0].securitySeries
-                : SecuritySeries.NA,
-            authorityOfficer: authorityOfficer,
-            officerName: officerName,
-            officerTitle: officerTitle,
-            legalDetails: legalDetails,
-            extensionData: extensionData,
-            roundPartyValues: roundPartyValues,
-            escrowedSignature: escrowedSignature,
-            roundConditions: conditions,
-            publicRound: publicRound
-        });
+        emit RoundCreated(
+            roundId,
+            corp,
+            round,
+            round.publicRound
+        );
 
-        RoundManagerStorage.setRound(roundId, newRound);
-
-        emit RoundCreated(roundId, LexScrowStorage.getCorp(), newRound, publicRound);
+        return roundId;
     }
 
     // ===============
@@ -538,91 +357,20 @@ contract RoundManager is
         //check that the eoi expiry is in the future
         if (eoi.expiry < block.timestamp) revert EOIExpired();
 
-        address[] memory parties = new address[](2);
-        parties[1] = msg.sender;
-        parties[0] = round.authorityOfficer;
-
-        string[][] memory partyValuesArray = new string[][](2);
-        partyValuesArray[0] = round.roundPartyValues;
-        partyValuesArray[1] = partyValues;
-
-        agreementId = ICyberAgreementRegistry(LexScrowStorage.getDealRegistry())
-            .createContract(
-                round.templateId,
-                salt,
-                globalValues,
-                parties,
-                partyValuesArray,
-                secretHash,
-                address(this),
-                eoi.expiry
-            );
-
-        Token[] memory corpAssets = new Token[](0);
-        Token[] memory buyerAssets = new Token[](1);
-        buyerAssets[0] = Token(
-            TokenType.ERC20,
-            round.paymentToken,
-            0,
-            eoi.maxAmount,
-            true // Will be used as fee token
+        (agreementId, tokenId) = RoundManagerStorage.submitEOI(
+            LexScrowStorage.lexScrowStorage(),
+            roundId,
+            eoi,
+            globalValues,
+            partyValues,
+            signature,
+            salt,
+            conditions,
+            secretHash
         );
 
-        createEscrow(agreementId, msg.sender, corpAssets, buyerAssets, eoi.expiry);
-
-        if (round.roundType == RoundType.FCFS) {
-            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry())
-                .signContractWithEscrow(
-                    round.authorityOfficer,
-                    agreementId,
-                    round.roundPartyValues,
-                    round.escrowedSignature,
-                    false,
-                    ""
-                );
-        }
-
-        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry())
-            .signContractFor(
-                msg.sender,
-                agreementId,
-                partyValues,
-                signature,
-                false,
-                ""
-            );
-
+        // Interaction: payments
         handleCounterPartyPayment(agreementId);
-
-        updateEscrow(agreementId, msg.sender, eoi.name); 
-
-        RoundManagerStorage.setAgreementToRound(agreementId, roundId);
-        RoundManagerStorage.getRoundToAgreements(roundId).push(agreementId);
-        RoundManagerStorage.setAgreementToEOI(agreementId, eoi);
-
-        //add round conditions
-        for (uint256 i = 0; i < round.roundConditions.length; i++) {
-            LexScrowStorage.addConditionToEscrow(
-                agreementId,
-                ICondition(round.roundConditions[i])
-            );
-        }
-
-        // Add EOI conditions
-        for (uint256 i = 0; i < conditions.length; i++) {
-            LexScrowStorage.addConditionToEscrow(
-                agreementId,
-                ICondition(conditions[i])
-            );
-        }
-
-        //add lexchex if public round
-        if (round.publicRound && RoundManagerStorage.getLexChexCondition() != address(0)) {
-            LexScrowStorage.addConditionToEscrow(
-                agreementId,
-                ICondition(RoundManagerStorage.getLexChexCondition())
-            );
-        }
 
         emit EOISubmitted(agreementId, roundId, msg.sender, LexScrowStorage.getCorp(), eoi.minAmount, eoi.maxAmount, eoi.expiry);
 
