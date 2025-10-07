@@ -155,45 +155,7 @@ library RoundManagerStorage {
         address corp,
         Round memory roundDraft,
         CyberCertData[] memory certData
-    ) external returns (bytes32, Round memory, uint256 err) { // TODO use enum
-
-        bytes32 roundId = keccak256(
-            abi.encodePacked(
-                roundDraft.seriesType,
-                roundDraft.raiseCap,
-                roundDraft.minTicket,
-                roundDraft.maxTicket,
-                uint8(roundDraft.roundType),
-                roundDraft.startTime,
-                roundDraft.endTime,
-                roundDraft.templateId,
-                roundDraft.paymentToken,
-                roundDraft.pricePerUnit,
-                roundDraft.valuation,
-                corp
-            )
-        );
-
-        if(!EIP712Lib.verifyEscrowedSignature(
-            address(this),
-            roundDraft.authorityOfficer,
-            EIP712Lib.EscrowedSignatureData({
-                roundId: roundId,
-                seriesType: uint8(roundDraft.seriesType),
-                raiseCap: roundDraft.raiseCap,
-                minTicket: roundDraft.minTicket,
-                maxTicket: roundDraft.maxTicket,
-                roundType: uint8(roundDraft.roundType),
-                startTime: roundDraft.startTime,
-                endTime: roundDraft.endTime,
-                templateId: roundDraft.templateId,
-                paymentToken: roundDraft.paymentToken,
-                pricePerUnit: roundDraft.pricePerUnit,
-                valuation: roundDraft.valuation,
-                companyAddress: corp
-            }),
-            roundDraft.escrowedSignature
-        )) return (bytes32(0), roundDraft, 1);
+    ) external returns (Round memory) {
 
         string memory companyName = ICyberCorp(corp)
             .cyberCORPName();
@@ -215,7 +177,6 @@ library RoundManagerStorage {
             certPrinterAddresses[i] = address(certPrinter);
         }
 
-        roundDraft.id = roundId;
         roundDraft.certPrinter = certPrinterAddresses;
         roundDraft.raised = 0;
         roundDraft.primarySecurityClass = certData.length > 0
@@ -225,9 +186,9 @@ library RoundManagerStorage {
             ? certData[0].securitySeries
             : SecuritySeries.NA;
 
-        setRound(roundId, roundDraft);
+        setRound(roundDraft.id, roundDraft);
 
-        return (roundId, roundDraft, 0);
+        return roundDraft;
     }
 
     /// @notice Submits an Expression of Interest for a round

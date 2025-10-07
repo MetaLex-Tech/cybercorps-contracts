@@ -200,24 +200,58 @@ contract RoundManager is
 
         address corp = LexScrowStorage.getCorp();
 
-        (bytes32 roundId, Round memory round, uint256 err) = RoundManagerStorage.createRound(
+        roundDraft.id = keccak256(
+            abi.encodePacked(
+                roundDraft.seriesType,
+                roundDraft.raiseCap,
+                roundDraft.minTicket,
+                roundDraft.maxTicket,
+                uint8(roundDraft.roundType),
+                roundDraft.startTime,
+                roundDraft.endTime,
+                roundDraft.templateId,
+                roundDraft.paymentToken,
+                roundDraft.pricePerUnit,
+                roundDraft.valuation,
+                corp
+            )
+        );
+
+        if(!EIP712Lib.verifyEscrowedSignature(
+            address(this),
+            roundDraft.authorityOfficer,
+            EIP712Lib.EscrowedSignatureData({
+                roundId: roundDraft.id,
+                seriesType: uint8(roundDraft.seriesType),
+                raiseCap: roundDraft.raiseCap,
+                minTicket: roundDraft.minTicket,
+                maxTicket: roundDraft.maxTicket,
+                roundType: uint8(roundDraft.roundType),
+                startTime: roundDraft.startTime,
+                endTime: roundDraft.endTime,
+                templateId: roundDraft.templateId,
+                paymentToken: roundDraft.paymentToken,
+                pricePerUnit: roundDraft.pricePerUnit,
+                valuation: roundDraft.valuation,
+                companyAddress: corp
+            }),
+            roundDraft.escrowedSignature
+        )) revert InvalidEscrowedSignature();
+
+        Round memory round = RoundManagerStorage.createRound(
             corp,
             roundDraft,
             certData
         );
 
-        if (err == 1) {
-            revert InvalidEscrowedSignature();
-        }
-
         emit RoundCreated(
-            roundId,
+            round.id,
             corp,
             round,
             round.publicRound
         );
 
-        return roundId;
+        return round.id;
     }
 
     // ===============
