@@ -4,12 +4,14 @@ pragma solidity ^0.8.28;
 import {Script} from "forge-std/Script.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {CyberScrip} from "../src/CyberScrip.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
+import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
@@ -54,6 +56,11 @@ contract BaseScript is Script {
         address cyberCertPrinterImplementation = address(
             new CyberCertPrinter{salt: salt}()
         );
+
+        address cyberCert20Implementation = address(
+            new CyberScrip{salt: salt}()
+        );
+
         CyberCertPrinter cyberCertPrinter = CyberCertPrinter(
             cyberCertPrinterImplementation
         );
@@ -73,6 +80,17 @@ contract BaseScript is Script {
                     DealManagerFactory.initialize.selector,
                     address(auth),
                     address(new DealManager())
+                )
+            )
+        );
+
+        address roundManagerFactory = address(
+            new ERC1967Proxy{salt: salt}(
+                address(new RoundManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(auth),
+                    address(new RoundManager())
                 )
             )
         );
@@ -108,9 +126,11 @@ contract BaseScript is Script {
                         address(auth),
                         address(registry),
                         cyberCertPrinterImplementation,
+                        cyberCert20Implementation,
                         issuanceManagerFactory,
                         cyberCorpSingleFactory,
                         dealManagerFactory,
+                        roundManagerFactory,
                         uriBuilder
                     )
                 )
