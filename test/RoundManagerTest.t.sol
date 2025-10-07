@@ -98,16 +98,6 @@ library CyberCorpHelper {
 
     bytes32 constant TEMPLATE_ID = bytes32(uint256(777));
 
-    function mockLexChexCondition(bool isPass) internal {
-        // Mock LexChexCondition to always pass
-        vm.etch(
-            LEXCHEX_CONDITION_ADDRESS,
-            (isPass)
-                ? address(new AlwaysTrueCondition()).code
-                : address(new AlwaysFalseCondition()).code
-        );
-    }
-
     // Infra helpers copied from above
     function deployRegistryAndFactories(address owner) internal returns (
         CyberAgreementRegistry registry,
@@ -2364,9 +2354,6 @@ contract RoundManagerFCFSTest is Test {
             officerEOA,
             privKey
         );
-
-        // Mock LexChexCondition to always fail
-        CyberCorpHelper.mockLexChexCondition(false);
 
         vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
         rm.submitEOI(
