@@ -2942,7 +2942,7 @@ contract CyberCorpFactoryPublicRoundTest is Test {
             maxTicket,
             startTime,
             endTime,
-            false
+            true
         );
 
         // Validations
