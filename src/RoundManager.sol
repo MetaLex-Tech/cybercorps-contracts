@@ -191,7 +191,9 @@ contract RoundManager is
     }
 
     /// @notice Creates a new fundraising round
-    /// TODO WIP docs
+    /// @param roundDraft partially-filled round info created by RoundLib
+    /// @param certData certificate info
+    /// @return roundId ID of the created round
     function createRound(
         Round memory roundDraft,
         CyberCertData[] memory certData

@@ -155,7 +155,9 @@ library RoundManagerStorage {
         address corp,
         Round memory roundDraft,
         CyberCertData[] memory certData
-    ) external returns (Round memory) {
+    )
+    external // Use external library to save space
+    returns (Round memory) {
 
         string memory companyName = ICyberCorp(corp)
             .cyberCORPName();
@@ -211,7 +213,9 @@ library RoundManagerStorage {
         uint256 salt,
         address[] memory conditions,
         bytes32 secretHash
-    ) external returns (bytes32 agreementId, uint256 tokenId) {
+    )
+    external // Use external library to save space
+    returns (bytes32 agreementId, uint256 tokenId) {
         Round storage round = getRound(roundId);
         address counterParty = msg.sender;
 
@@ -245,8 +249,7 @@ library RoundManagerStorage {
             true // Will be used as fee token
         );
 
-        // TODO WIP: this is a copy of
-//        createEscrow(agreementId, msg.sender, corpAssets, buyerAssets, eoi.expiry);
+        // Emulates LexScroWLite.createEscrow() as we couldn't call it in a library
         ls.escrows[agreementId] = Escrow({
             agreementId: agreementId,
             counterParty: counterParty,
@@ -279,11 +282,7 @@ library RoundManagerStorage {
                 ""
             );
 
-        // TODO deprecated: this is moved outside
-//        handleCounterPartyPayment(agreementId);
-
-        // TODO WIP: this is a copy of
-//        updateEscrow(agreementId, msg.sender, eoi.name);
+        // Emulates LexScroWLite.updateEscrow() as we couldn't call it in a library
         Escrow storage escrow = ls.escrows[agreementId];
         escrow.counterParty = counterParty;
         Endorsement memory newEndorsement = Endorsement(
@@ -328,7 +327,9 @@ library RoundManagerStorage {
         LexScrowStorage.LexScrowData storage ls,
         bytes32 agreementId,
         uint256 allocatedAmount
-    ) external returns (uint256 tokenId, uint256[] memory certIds, uint256 refund) {
+    )
+    external // Use external library to save space
+    returns (uint256 tokenId, uint256[] memory certIds, uint256 refund) {
         tokenId = 0;
         bytes32 roundId = getAgreementToRound(agreementId);
         Round storage round = getRound(roundId);
@@ -430,7 +431,7 @@ library RoundManagerStorage {
     /// @notice Retrieves a specific round's data
     /// @param roundId The unique identifier of the round
     /// @return Round The round data struct
-    function getRound(bytes32 roundId) public view returns (Round storage) {
+    function getRound(bytes32 roundId) internal view returns (Round storage) {
         return roundManagerStorage().rounds[roundId];
     }
 
@@ -444,7 +445,7 @@ library RoundManagerStorage {
     /// @notice Retrieves the round ID for an agreement
     /// @param agreementId The agreement identifier
     /// @return bytes32 The round ID
-    function getAgreementToRound(bytes32 agreementId) public view returns (bytes32) {
+    function getAgreementToRound(bytes32 agreementId) internal view returns (bytes32) {
         return roundManagerStorage().agreementToRound[agreementId];
     }
 
@@ -465,7 +466,7 @@ library RoundManagerStorage {
     /// @notice Retrieves EOI data for an agreement
     /// @param agreementId The agreement identifier
     /// @return EOI The EOI struct
-    function getAgreementToEOI(bytes32 agreementId) public view returns (EOI storage) {
+    function getAgreementToEOI(bytes32 agreementId) internal view returns (EOI storage) {
         return roundManagerStorage().agreementToEOI[agreementId];
     }
 
@@ -478,33 +479,33 @@ library RoundManagerStorage {
 
     /// @notice Retrieves the current issuance manager
     /// @return IIssuanceManager The current issuance manager contract
-    function getIssuanceManager() public view returns (IIssuanceManager) {
+    function getIssuanceManager() internal view returns (IIssuanceManager) {
         return roundManagerStorage().issuanceManager;
     }
 
     /// @notice Updates the issuance manager reference
     /// @param _issuanceManager Address of the new issuance manager contract
-    function setIssuanceManager(address _issuanceManager) external {
+    function setIssuanceManager(address _issuanceManager) internal {
         roundManagerStorage().issuanceManager = IIssuanceManager(_issuanceManager);
     }
 
-    function setUpgradeFactory(address _upgradeFactory) external {
+    function setUpgradeFactory(address _upgradeFactory) internal {
         roundManagerStorage().upgradeFactory = _upgradeFactory;
     }
 
-    function getUpgradeFactory() external view returns (address) {
+    function getUpgradeFactory() internal view returns (address) {
         return roundManagerStorage().upgradeFactory;
     }
 
-    function setLexChex(address _lexChex) external {
+    function setLexChex(address _lexChex) internal {
         roundManagerStorage().lexChex = _lexChex;
     }
 
-    function getLexChex() public view returns (address) {
+    function getLexChex() internal view returns (address) {
         return roundManagerStorage().lexChex;
     }
 
-    function setLexChexCondition(address _lexChexCondition) external {
+    function setLexChexCondition(address _lexChexCondition) internal {
         roundManagerStorage().lexChexCondition = _lexChexCondition;
     }
 
@@ -512,7 +513,7 @@ library RoundManagerStorage {
         return roundManagerStorage().lexChexCondition;
     }
 
-    function setLexChexMinter(address _lexChexMinter) external {
+    function setLexChexMinter(address _lexChexMinter) internal {
         roundManagerStorage().lexChexMinter = _lexChexMinter;
     }
 
