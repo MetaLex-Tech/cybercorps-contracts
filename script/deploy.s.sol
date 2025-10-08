@@ -161,24 +161,31 @@ contract BaseScript is Script {
         );
 
         auth.updateRole(address(multisig), 200);
-        auth.zeroOwner();
+        if (deployerAddress != address(multisig)) {
+            auth.zeroOwner();
+        }
 
-        console.log("auth: ", address(auth));
+        console.log("auth: `%s`", address(auth));
         console.log(
-            "issuanceManagerFactory: ",
+            "issuanceManagerFactory: `%s`",
             address(issuanceManagerFactory)
         );
         console.log(
-            "cyberCorpSingleFactory: ",
+            "cyberCorpSingleFactory: `%s`",
             address(cyberCorpSingleFactory)
         );
-        console.log("dealManagerFactory: ", address(dealManagerFactory));
-        console.log("uriBuilder: ", address(uriBuilder));
+        console.log("dealManagerFactory: `%s`", address(dealManagerFactory));
+        console.log("roundManagerFactory: `%s`", address(roundManagerFactory));
+        console.log("uriBuilder: `%s`", address(uriBuilder));
         console.log(
-            "cyberCertPrinterImplementation: ",
+            "cyberCertPrinterImplementation: `%s`",
             address(cyberCertPrinterImplementation)
         );
-        console.log("CyberAgreementRegistry: ", address(registry));
-        console.log("CyberCorpFactory: ", address(cyberCorpFactory));
+        console.log(
+            "cyberScriptImplementation: `%s`",
+            address(cyberCert20Implementation)
+        );
+        console.log("CyberAgreementRegistry: `%s`", address(registry));
+        console.log("CyberCorpFactory: `%s`", address(cyberCorpFactory));
     }
 }
