@@ -218,7 +218,7 @@ contract PublicRoundTestDeploy is Script {
             address dealManager2,
             address roundManager2,
             bytes32 roundId2
-        ) = corpFactory.deployCyberCorpAndCreatePublicRound(
+        ) = corpFactory.deployCyberCorpAndCreateRound(
                 block.timestamp + 1,
                 SecuritySeries.SeriesA,
                 "SafeCorp",

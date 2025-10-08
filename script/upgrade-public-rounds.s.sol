@@ -221,7 +221,7 @@ contract UpgradePublicRoundsScript is Script {
             address roundManager,
             bytes32 roundId
         ) = CyberCorpFactory(cyberCorpFactoryProxyAddr)
-                .deployCyberCorpAndCreatePublicRound(
+                .deployCyberCorpAndCreateRound(
                     block.timestamp,
                     SecuritySeries.SeriesA,
                     "CyberCorp",
@@ -259,7 +259,7 @@ contract UpgradePublicRoundsScript is Script {
             address roundManager2,
             bytes32 roundId2
         ) = CyberCorpFactory(cyberCorpFactoryProxyAddr)
-                .deployCyberCorpAndCreatePublicRound(
+                .deployCyberCorpAndCreateRound(
                     block.timestamp + 1,
                     SecuritySeries.SeriesA,
                     "SafeCorp",

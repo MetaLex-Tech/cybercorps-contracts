@@ -42,44 +42,39 @@
  
 pragma solidity 0.8.28;
 
+import "openzeppelin-contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/ICondition.sol";
+import "../interfaces/ICyberCertPrinter.sol";
+import "../interfaces/ICyberAgreementRegistry.sol";
+import "../interfaces/ILexChex.sol";
+import "../libs/EIP712Lib.sol";
+import "../libs/RoundLib.sol";
+import "../storage/LexScrowStorage.sol";
+import "../storage/CyberCertPrinterStorage.sol";
 import "../CyberCorpConstants.sol";
 
-enum RoundType {
-    FCFS,
-    FounderApproved
+interface ILexChexMinter {
+    function requestMintFor(
+        MintRequest calldata request,
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        bytes memory agreementSignature
+    ) external returns (bytes32 agreementId, uint256 tokenId);
 }
 
-struct Round {
-    bytes32 id;
-    SecuritySeries seriesType;
-    uint256 raiseCap;
-    uint256 minTicket;
-    uint256 maxTicket;
-    RoundType roundType;
-    uint256 startTime;
-    uint256 endTime;
-    bytes32 templateId;
-    address[] certPrinter;
-    address paymentToken;
-    uint256 pricePerUnit;
-    uint256 valuation;
-    uint256 raised;
-    address[] roundConditions;
-    // Normalized round price and primary security sold to new money
-    uint256 roundPricePerShare; // normalized to priceDecimals
-    uint8 roundPriceDecimals;
-    SecurityClass primarySecurityClass;
-    SecuritySeries primarySecuritySeries;
-    address authorityOfficer;
-    string officerName;
-    string officerTitle;
-    string legalDetails;
-    bytes extensionData;
-    string[] roundPartyValues;
-    bytes escrowedSignature;
-    bool publicRound;
+/// @notice Certificate data structure for creating new certificates
+struct CyberCertData {
+    string name;
+    string symbol;
+    string uri;
+    SecurityClass securityClass;
+    SecuritySeries securitySeries;
+    address extension;
+    string[] defaultLegend;
 }
 
 struct EOI {
@@ -156,6 +151,283 @@ library RoundManagerStorage {
         }
     }
 
+    function createRound(
+        address corp,
+        Round memory roundDraft,
+        CyberCertData[] memory certData
+    )
+    external // Use external library to save space
+    returns (Round memory) {
+
+        string memory companyName = ICyberCorp(corp)
+            .cyberCORPName();
+        IIssuanceManager issuanceManager = getIssuanceManager();
+
+        address[] memory certPrinterAddresses = new address[](certData.length);
+        for (uint256 i = 0; i < certData.length; i++) {
+            ICyberCertPrinter certPrinter = ICyberCertPrinter(
+                issuanceManager.createCertPrinter(
+                    certData[i].defaultLegend,
+                    string.concat(companyName, " ", certData[i].name),
+                    certData[i].symbol,
+                    certData[i].uri,
+                    certData[i].securityClass,
+                    certData[i].securitySeries,
+                    certData[i].extension
+                )
+            );
+            certPrinterAddresses[i] = address(certPrinter);
+        }
+
+        roundDraft.certPrinter = certPrinterAddresses;
+        roundDraft.raised = 0;
+        roundDraft.primarySecurityClass = certData.length > 0
+            ? certData[0].securityClass
+            : SecurityClass.SAFE;
+        roundDraft.primarySecuritySeries = certData.length > 0
+            ? certData[0].securitySeries
+            : SecuritySeries.NA;
+
+        setRound(roundDraft.id, roundDraft);
+
+        return roundDraft;
+    }
+
+    /// @notice Submits an Expression of Interest for a round
+    /// @param roundId The round ID
+    /// @param eoi The EOI details
+    /// @param globalValues Global values for the agreement
+    /// @param partyValues Party values for the agreement (single party: investor)
+    /// @param signature Investor's signature for the agreement
+    /// @param salt Salt for agreement ID
+    /// @param conditions Condition contracts
+    /// @param secretHash Secret hash if required
+    /// @return agreementId The created agreement ID
+    function submitEOI(
+        LexScrowStorage.LexScrowData storage ls,
+        bytes32 roundId,
+        EOI memory eoi,
+        string[] memory globalValues,
+        string[] memory partyValues,
+        bytes memory signature,
+        uint256 salt,
+        address[] memory conditions,
+        bytes32 secretHash
+    )
+    external // Use external library to save space
+    returns (bytes32 agreementId, uint256 tokenId) {
+        Round storage round = getRound(roundId);
+        address counterParty = msg.sender;
+
+        address[] memory parties = new address[](2);
+        parties[1] = counterParty;
+        parties[0] = round.authorityOfficer;
+
+        string[][] memory partyValuesArray = new string[][](2);
+        partyValuesArray[0] = round.roundPartyValues;
+        partyValuesArray[1] = partyValues;
+
+        agreementId = ICyberAgreementRegistry(ls.DEAL_REGISTRY)
+            .createContract(
+                round.templateId,
+                salt,
+                globalValues,
+                parties,
+                partyValuesArray,
+                secretHash,
+                address(this),
+                eoi.expiry
+            );
+
+        Token[] memory corpAssets = new Token[](0);
+        Token[] memory buyerAssets = new Token[](1);
+        buyerAssets[0] = Token(
+            TokenType.ERC20,
+            round.paymentToken,
+            0,
+            eoi.maxAmount,
+            true // Will be used as fee token
+        );
+
+        // Emulates LexScroWLite.createEscrow() as we couldn't call it in a library
+        ls.escrows[agreementId] = Escrow({
+            agreementId: agreementId,
+            counterParty: counterParty,
+            corpAssets: corpAssets,
+            buyerAssets: buyerAssets,
+            signature: abi.encodePacked(bytes32(0)),
+            expiry: eoi.expiry,
+            status: EscrowStatus.PENDING
+        });
+
+        if (round.roundType == RoundType.FCFS) {
+            ICyberAgreementRegistry(ls.DEAL_REGISTRY)
+                .signContractWithEscrow(
+                    round.authorityOfficer,
+                    agreementId,
+                    round.roundPartyValues,
+                    round.escrowedSignature,
+                    false,
+                    ""
+                );
+        }
+
+        ICyberAgreementRegistry(ls.DEAL_REGISTRY)
+            .signContractFor(
+                counterParty,
+                agreementId,
+                partyValues,
+                signature,
+                false,
+                ""
+            );
+
+        // Emulates LexScroWLite.updateEscrow() as we couldn't call it in a library
+        Escrow storage escrow = ls.escrows[agreementId];
+        escrow.counterParty = counterParty;
+        Endorsement memory newEndorsement = Endorsement(
+            address(this),
+            block.timestamp,
+            escrow.signature,
+            ls.DEAL_REGISTRY,
+            agreementId,
+            escrow.counterParty,
+            eoi.name
+        );
+        for(uint256 i = 0; i < escrow.corpAssets.length; i++) {
+            if(escrow.corpAssets[i].tokenType == TokenType.ERC721) {
+                ICyberCertPrinter(escrow.corpAssets[i].tokenAddress).addEndorsement(escrow.corpAssets[i].tokenId, newEndorsement);
+            }
+        }
+
+        setAgreementToRound(agreementId, roundId);
+        getRoundToAgreements(roundId).push(agreementId);
+        setAgreementToEOI(agreementId, eoi);
+
+        //add round conditions
+        for (uint256 i = 0; i < round.roundConditions.length; i++) {
+            ls.conditionsByEscrow[agreementId].push(ICondition(round.roundConditions[i]));
+        }
+
+        // Add EOI conditions
+        for (uint256 i = 0; i < conditions.length; i++) {
+            ls.conditionsByEscrow[agreementId].push(ICondition(conditions[i]));
+        }
+
+        //add lexchex if public round
+        if (round.publicRound && getLexChexCondition() != address(0)) {
+            ls.conditionsByEscrow[agreementId].push(ICondition(getLexChexCondition()));
+        }
+    }
+
+    /// @notice Allocates an amount to an EOI and finalizes the deal
+    /// @param agreementId The agreement ID
+    /// @param allocatedAmount The amount to allocate
+    function allocate(
+        LexScrowStorage.LexScrowData storage ls,
+        bytes32 agreementId,
+        uint256 allocatedAmount
+    )
+    external // Use external library to save space
+    returns (uint256 tokenId, uint256[] memory certIds, uint256 refund) {
+        tokenId = 0;
+        bytes32 roundId = getAgreementToRound(agreementId);
+        Round storage round = getRound(roundId);
+        EOI storage eoi = getAgreementToEOI(agreementId);
+        Escrow storage escrow = ls.escrows[agreementId];
+
+        // Effect: sign the agreement with the escrow signer
+        if (
+            !ICyberAgreementRegistry(ls.DEAL_REGISTRY)
+                .hasSigned(agreementId, round.authorityOfficer)
+        ) {
+            ICyberAgreementRegistry(ls.DEAL_REGISTRY)
+                .signContractWithEscrow(
+                    round.authorityOfficer,
+                    agreementId,
+                    round.roundPartyValues,
+                    round.escrowedSignature,
+                    false,
+                    ""
+                );
+        }
+
+        // Calculate units and investment USD
+        uint256 units = allocatedAmount / round.pricePerUnit;
+        uint8 paymentDecimals = IERC20Metadata(round.paymentToken).decimals();
+        uint256 investmentUSD = allocatedAmount / (10 ** paymentDecimals);
+
+        // Create certificate
+        string memory officerName = round.officerName;
+        string memory officerTitle = round.officerTitle;
+
+        CertificateDetails memory details = CertificateDetails({
+            signingOfficerName: officerName,
+            signingOfficerTitle: officerTitle,
+            investmentAmountUSD: investmentUSD,
+            issuerUSDValuationAtTimeOfInvestment: round.valuation,
+            unitsRepresented: units,
+            legalDetails: round.legalDetails,
+            extensionData: round.extensionData
+        });
+
+        IIssuanceManager issuanceManager = getIssuanceManager();
+
+        // Effect: loop through certPrinter and create cert for each
+        certIds = new uint256[](round.certPrinter.length);
+        for (uint256 i = 0; i < round.certPrinter.length; i++) {
+            certIds[i] = issuanceManager.createCert(
+                round.certPrinter[i],
+                address(this),
+                details
+            );
+        }
+
+        escrow.signature = round.escrowedSignature;
+
+        // Add endorsement
+        Endorsement memory endorsement = Endorsement({
+            endorser: address(this),
+            timestamp: block.timestamp,
+            signatureHash: escrow.signature,
+            registry: ls.DEAL_REGISTRY,
+            agreementId: agreementId,
+            endorsee: escrow.counterParty,
+            endorseeName: eoi.name
+        });
+
+        // Effect: loop through certPrinter and add endorsement to each
+        for (uint256 i = 0; i < round.certPrinter.length; i++) {
+            ICyberCertPrinter(round.certPrinter[i]).addEndorsement(
+                certIds[i],
+                endorsement
+            );
+        }
+
+        // Effect: Add to escrow
+        // loop through certPrinter and add to escrow
+        for (uint256 i = 0; i < round.certPrinter.length; i++) {
+            escrow.corpAssets.push(
+                Token(TokenType.ERC721, round.certPrinter[i], certIds[i], 1, false)
+            );
+        }
+
+        // Effect: Calculate refund amount and update escrowed amount
+        refund = escrow.buyerAssets[0].amount - allocatedAmount;
+        escrow.buyerAssets[0].amount = allocatedAmount;
+
+        //if the round is public and the eoi submitter does not have a valid lexchex, mint it
+        if (round.publicRound && !ILexChex(getLexChex()).hasValidLexCheX(escrow.counterParty)) {
+            //mint lexchex if over 200k for individual or 1 million for corporate, account for decimals of the payment token
+            if (allocatedAmount >= 200000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && eoi.naturalPerson) {
+            (, tokenId) = ILexChexMinter(getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
+            }
+            if (allocatedAmount >= 1000000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && !eoi.naturalPerson) {
+                    (, tokenId) = ILexChexMinter(getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
+            }
+        }
+    }
+
     /// @notice Retrieves a specific round's data
     /// @param roundId The unique identifier of the round
     /// @return Round The round data struct
@@ -221,7 +493,7 @@ library RoundManagerStorage {
         roundManagerStorage().upgradeFactory = _upgradeFactory;
     }
 
-    function getUpgradeFactory() external view returns (address) {
+    function getUpgradeFactory() internal view returns (address) {
         return roundManagerStorage().upgradeFactory;
     }
 
