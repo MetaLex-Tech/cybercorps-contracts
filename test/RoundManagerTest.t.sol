@@ -1717,6 +1717,69 @@ contract RoundManagerTest is Test {
         rm.upgradeToAndCall(nonOfficialRoundManager, "");
         vm.stopPrank();
     }
+
+    function test_Allocation_CertificateDetailsMatchRoundInputs() public {
+        // Investor submits an EOI for 7,500 USDC
+        vm.startPrank(investor);
+        (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
+            roundId,
+            1,
+            5_000 * 10 ** 6,
+            7_500 * 10 ** 6,
+            corpOwner,
+            investorPrivKey
+        );
+        vm.stopPrank();
+
+        // Allocate the full 7,500 USDC
+        uint256 allocatedAmount = 7_500 * 10 ** 6;
+        vm.prank(corpOwner);
+        RoundManager(roundManager).allocate(agreementId, allocatedAmount);
+
+        // Inspect escrowed corp asset (certificate)
+        Escrow memory esc = RoundManager(roundManager).getEscrowDetails(agreementId);
+        assertGt(esc.corpAssets.length, 0);
+        Token memory corpToken = esc.corpAssets[0];
+
+        // Certificate should have been minted to the investor and total supply should be 1
+        assertEq(CyberCertPrinter(corpToken.tokenAddress).ownerOf(corpToken.tokenId), investor);
+        assertEq(CyberCertPrinter(corpToken.tokenAddress).totalSupply(), 1);
+
+        // Verify certificate details match round inputs
+        CertificateDetails memory details = CyberCertPrinter(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
+
+        // Officer info from createRound agreement
+        assertEq(details.signingOfficerName, "Officer");
+        assertEq(details.signingOfficerTitle, "CEO");
+
+        // Investment USD = allocatedAmount / 10**decimals (USDC has 6)
+        uint256 expectedInvestmentUSD = allocatedAmount / (10 ** 6);
+        assertEq(details.investmentAmountUSD, expectedInvestmentUSD);
+
+        // Units represented = allocatedAmount / pricePerUnit (both in token's decimals)
+        uint256 expectedUnits = allocatedAmount / PRICE_PER_UNIT;
+        assertEq(details.unitsRepresented, expectedUnits);
+
+        // Valuation propagated
+        assertEq(details.issuerUSDValuationAtTimeOfInvestment, VALUATION);
+    }
+
+    function test_RoundPrimarySecurity_MatchesCertData() public {
+        (SecurityClass cls, SecuritySeries series) = RoundManager(roundManager).getPrimarySecurity(roundId);
+        assertEq(uint256(cls), uint256(SecurityClass.CommonStock));
+        assertEq(uint256(series), uint256(SecuritySeries.NA));
+    }
+
+    function test_SetAndGetRoundPricePerShare() public {
+        // Set and verify round price per share metadata
+        vm.prank(corpOwner);
+        RoundManager(roundManager).setRoundPricePerShare(roundId, 42, 2);
+        (uint256 price, uint8 decimals_) = RoundManager(roundManager).getRoundPriceInfo(roundId);
+        assertEq(price, 42);
+        assertEq(decimals_, 2);
+    }
 }
 
 // Separate FCFS tests in their own contract to avoid the original setUp()
@@ -2764,5 +2827,131 @@ contract RoundManagerFCFSTest is Test {
             bytes32(0)
         );
         vm.stopPrank();
+    }
+}
+
+contract CyberCorpFactoryPublicRoundTest is Test {
+    using RoundLib for Round;
+
+    function test_CyberCorpFactory_DeployCorp_And_CreatePublicRound() public {
+        address me = address(this);
+        (
+            CyberAgreementRegistry registry,
+            CyberCorpFactory corpFactory,
+            ,
+            address cyberCorpSingleFactory,
+            ,
+            address rmFactory,
+
+        ) = CyberCorpHelper.deployRegistryAndFactories(me);
+        CyberCorpHelper.createTemplate(registry);
+
+        // Payment token
+        MockPaymentToken usdc = new MockPaymentToken();
+
+        // Officer
+        uint256 officerPrivKey = 0xC0FF;
+        address officerEOA = vm.addr(officerPrivKey);
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: officerEOA,
+            name: "Officer",
+            contact: "officer@example.com",
+            title: "CEO"
+        });
+
+        // Round params
+        uint256 salt = 42;
+        bytes32 corpSalt = keccak256(abi.encodePacked(salt));
+        address predictedCorp = CyberCorpSingleFactory(cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt);
+        address predictedRM = RoundManagerFactory(rmFactory).computeRoundManagerAddress(corpSalt);
+
+        bytes32 templateId = CyberCorpHelper.TEMPLATE_ID;
+        uint256 raiseCap = 100_000 * (10 ** usdc.decimals());
+        uint256 minTicket = 2_000 * (10 ** usdc.decimals());
+        uint256 maxTicket = 50_000 * (10 ** usdc.decimals());
+        uint256 pricePerUnit = 10 * (10 ** usdc.decimals());
+        uint256 valuation = 10_000_000;
+        uint256 startTime = block.timestamp;
+        uint256 endTime = block.timestamp + 30 days;
+
+        (bytes memory escSig, bytes32 expectedRoundId) = CyberCorpHelper.computeEscrowSignature(
+            predictedRM,
+            SecuritySeries.SeriesSeed,
+            raiseCap,
+            minTicket,
+            maxTicket,
+            RoundType.FCFS,
+            startTime,
+            endTime,
+            templateId,
+            address(usdc),
+            pricePerUnit,
+            valuation,
+            officerPrivKey,
+            predictedCorp
+        );
+
+        // Certificate data
+        CyberCertData[] memory certData = new CyberCertData[](1);
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Legend";
+        certData[0] = CyberCertData({
+            name: "Equity",
+            symbol: "EQ",
+            uri: "ipfs://eq",
+            securityClass: SecurityClass.CommonStock,
+            securitySeries: SecuritySeries.NA,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+
+        string[] memory roundPartyValues = new string[](2);
+        roundPartyValues[0] = officer.name;
+        roundPartyValues[1] = officer.title;
+
+        (
+            address corp,
+            ,
+            ,
+            ,
+            address roundManager,
+            bytes32 roundId
+        ) = corpFactory.deployCyberCorpAndCreatePublicRound(
+            salt,
+            SecuritySeries.SeriesSeed,
+            "Corp CF",
+            "corporation",
+            "DE",
+            "contact",
+            "arbitration",
+            me,
+            officer,
+            "",
+            "",
+            certData,
+            templateId,
+            address(usdc),
+            pricePerUnit,
+            valuation,
+            roundPartyValues,
+            escSig,
+            RoundType.FCFS,
+            new address[](0),
+            raiseCap,
+            minTicket,
+            maxTicket,
+            startTime,
+            endTime,
+            false
+        );
+
+        // Validations
+        assertEq(corp, predictedCorp, "Corp address should match prediction");
+        assertEq(roundManager, predictedRM, "RoundManager address should match prediction");
+        assertTrue(RoundManager(roundManager).roundExists(roundId), "Round should exist");
+
+        (SecurityClass cls, SecuritySeries series) = RoundManager(roundManager).getPrimarySecurity(roundId);
+        assertEq(uint256(cls), uint256(SecurityClass.CommonStock));
+        assertEq(uint256(series), uint256(SecuritySeries.NA));
     }
 }

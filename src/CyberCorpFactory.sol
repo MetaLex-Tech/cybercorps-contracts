@@ -53,7 +53,10 @@ import "./interfaces/IDealManager.sol";
 import "./interfaces/ICyberCorpSingleFactory.sol";
 import "./interfaces/ICyberCertPrinter.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
-import {IRoundManager as IRoundManagerInterface, CyberCertData as RM_CyberCertData, RoundType as RM_RoundType} from "./interfaces/IRoundManager.sol";
+import {IRoundManager as IRoundManagerInterface} from "./interfaces/IRoundManager.sol";
+import {Round, RoundType} from "./libs/RoundLib.sol";
+import "./libs/RoundLib.sol";
+import {CyberCertData as RM_CyberCertData} from "./storage/RoundManagerStorage.sol";
 import "./interfaces/IRoundManagerFactory.sol";
 import "./CyberCorpConstants.sol";
 import "./libs/auth.sol";
@@ -69,6 +72,7 @@ interface IRoundManagerInit {
 }
 
 contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
+    using RoundLib for Round;
     error InvalidSalt();
     error DeploymentFailed();
 
@@ -421,7 +425,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         uint256 valuation,
         string[] memory roundPartyValues,
         bytes memory escrowedSignature,
-        RM_RoundType roundType,
+        RoundType roundType,
         address[] memory conditions,
         uint256 raiseCap,
         uint256 minTicket,
@@ -463,30 +467,39 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         bytes32 rmSalt = keccak256(abi.encodePacked("round", salt));
        
 
-        // Create round with provided round type
-        roundId = IRoundManagerInterface(roundManagerAddress).createRound(
-            seriesType,
-            raiseCap,
-            minTicket,
-            maxTicket,
-            roundType,
-            startTime,
-            endTime,
-            templateId,
-            certData,
-            conditions, 
-            paymentToken,
-            pricePerUnit,
-            valuation,
-            _officer.eoa,
-            _officer.name,
-            _officer.title,
-            legalDetails,
-            extensionData,
-            roundPartyValues,
-            escrowedSignature,
-            publicRound
-        );
+        // Create round with provided round type using RoundLib
+        {
+            Round memory draft = RoundLib
+                .draft()
+                .setTickets(
+                    seriesType,
+                    roundType,
+                    publicRound,
+                    raiseCap,
+                    minTicket,
+                    maxTicket,
+                    paymentToken,
+                    pricePerUnit,
+                    valuation,
+                    startTime,
+                    endTime
+                )
+                .setAgreement(
+                    templateId,
+                    _officer.eoa,
+                    _officer.name,
+                    _officer.title,
+                    legalDetails,
+                    roundPartyValues,
+                    extensionData,
+                    conditions,
+                    escrowedSignature
+                );
+            roundId = IRoundManagerInterface(roundManagerAddress).createRound(
+                draft,
+                certData
+            );
+        }
     }
 
     function setStable(address _stable) external onlyOwner {
