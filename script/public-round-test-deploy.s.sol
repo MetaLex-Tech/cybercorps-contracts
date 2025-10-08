@@ -16,13 +16,22 @@ import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
-import {IRoundManager, CyberCertData, RoundType} from "../src/interfaces/IRoundManager.sol";
-import {EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
+import {IRoundManager} from "../src/interfaces/IRoundManager.sol";
+import {CyberCertData, EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
+import {RoundType} from "../src/libs/RoundLib.sol";
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract PublicRoundTestDeploy is Script {
+    // EIP-712 constants for RoundManager escrow signature
+    bytes32 constant EIP712_DOMAIN_TYPEHASH = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
+    bytes32 constant ESCROWEDSIGNATUREDATA_TYPEHASH = keccak256(
+        "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation,address companyAddress)"
+    );
+
     function run() public {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         address deployer = vm.addr(deployerPrivateKey);
@@ -131,7 +140,7 @@ contract PublicRoundTestDeploy is Script {
 
         // Configure factory
         corpFactory.setStable(stable);
-
+       BorgAuth(0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2).updateRole(address(corpFactory), 99);
         // Create templates: (a) test template 777 (b) SAFE template id 1
         bytes32 templateId = bytes32(uint256(777));
         string[] memory globalFields = new string[](1);
@@ -208,7 +217,28 @@ contract PublicRoundTestDeploy is Script {
         string[] memory roundPartyValues = new string[](2);
         roundPartyValues[0] = "Alice Officer";
         roundPartyValues[1] = "CEO";
-        bytes memory escrowedSig = hex"01"; // non-empty per RoundManager requirement
+
+        // Predict corp and round manager addresses to build a valid escrow signature
+        bytes32 corpSalt = keccak256(abi.encodePacked(block.timestamp + 1));
+        address predictedCorp = CyberCorpSingleFactory(cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt);
+        address predictedRM = RoundManagerFactory(roundManagerFactory).computeRoundManagerAddress(corpSalt);
+
+        bytes memory escrowedSig = _computeEscrowSignature(
+            predictedRM,
+            SecuritySeries.SeriesA,
+            100000000000,
+            1,
+            10000000,
+            RoundType.FCFS,
+            block.timestamp - 1,
+            block.timestamp + 21 days,
+            bytes32(uint256(1)),
+            stable,
+            1000,
+            1000000000000000,
+            predictedCorp,
+            deployerPrivateKey
+        );
 
         // Deploy another CyberCorp and create a public round using SAFE template id 1
         (
@@ -246,6 +276,8 @@ contract PublicRoundTestDeploy is Script {
                 block.timestamp + 21 days,
                 true
             );
+
+ 
 
         // Lock down AUTH if desired (mirror deploy.s.sol behavior lightly)
         // auth.updateRole(address(multisig), 200);
@@ -368,6 +400,71 @@ contract PublicRoundTestDeploy is Script {
                 partyValues,
                 signerPrivKey
             );
+    }
+
+    function _computeEscrowSignature(
+        address roundManager,
+        SecuritySeries seriesType,
+        uint256 raiseCap,
+        uint256 minTicket,
+        uint256 maxTicket,
+        RoundType roundType,
+        uint256 startTime,
+        uint256 endTime,
+        bytes32 templateId,
+        address paymentToken,
+        uint256 pricePerUnit,
+        uint256 valuation,
+        address companyAddress,
+        uint256 signerPrivKey
+    ) internal view returns (bytes memory sig) {
+        bytes32 roundId = keccak256(
+            abi.encodePacked(
+                seriesType,
+                raiseCap,
+                minTicket,
+                maxTicket,
+                uint8(roundType),
+                startTime,
+                endTime,
+                templateId,
+                paymentToken,
+                pricePerUnit,
+                valuation,
+                companyAddress
+            )
+        );
+
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                EIP712_DOMAIN_TYPEHASH,
+                keccak256(bytes("RoundManager")),
+                keccak256(bytes("1")),
+                block.chainid,
+                roundManager
+            )
+        );
+        bytes32 structHash = keccak256(
+            abi.encode(
+                ESCROWEDSIGNATUREDATA_TYPEHASH,
+                roundId,
+                uint8(seriesType),
+                raiseCap,
+                minTicket,
+                maxTicket,
+                uint8(roundType),
+                startTime,
+                endTime,
+                templateId,
+                paymentToken,
+                pricePerUnit,
+                valuation,
+                companyAddress
+            )
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivKey, digest);
+        sig = abi.encodePacked(r, s, v);
     }
 }
 
