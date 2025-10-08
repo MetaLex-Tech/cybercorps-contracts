@@ -406,7 +406,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         );
     }
 
-    function deployCyberCorpAndCreatePublicRound(
+    function deployCyberCorpAndCreateRound(
         uint256 salt,
         SecuritySeries seriesType,
         string memory companyName,

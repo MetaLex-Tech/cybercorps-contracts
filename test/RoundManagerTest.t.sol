@@ -2916,7 +2916,7 @@ contract CyberCorpFactoryPublicRoundTest is Test {
             ,
             address roundManager,
             bytes32 roundId
-        ) = corpFactory.deployCyberCorpAndCreatePublicRound(
+        ) = corpFactory.deployCyberCorpAndCreateRound(
             salt,
             SecuritySeries.SeriesSeed,
             "Corp CF",
