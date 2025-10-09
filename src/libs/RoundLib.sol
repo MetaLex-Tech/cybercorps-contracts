@@ -72,8 +72,8 @@ struct Round {
     address authorityOfficer;
     string officerName;
     string officerTitle;
-    string legalDetails;
-    bytes extensionData;
+    string[] legalDetails;
+    bytes[] extensionData;
     string[] roundPartyValues;
     bytes escrowedSignature;
     bool publicRound;
@@ -141,9 +141,9 @@ library RoundLib {
         address authorityOfficer,
         string memory officerName,
         string memory officerTitle,
-        string memory legalDetails,
+        string[] memory legalDetails,
         string[] memory roundPartyValues,
-        bytes memory extensionData,
+        bytes[] memory extensionData,
         address[] memory roundConditions,
         bytes memory escrowedSignature
     ) internal pure returns (Round memory) {

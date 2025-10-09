@@ -212,6 +212,11 @@ contract UpgradePublicRoundsScript is Script {
 
         bytes memory escrowedSig = hex"01";
 
+        string[] memory legalDetails = new string[](1);
+        legalDetails[0] = "Legal Details";
+        bytes[] memory extensionData = new bytes[](1);
+        extensionData[0] = "";
+
         //test deploy a new CyberCorp and start a public round using the factory
         (
             address cyberCorp,
@@ -231,8 +236,8 @@ contract UpgradePublicRoundsScript is Script {
                     "Dispute Res",
                     address(deployer),
                     officer,
-                    "",
-                    "",
+                    legalDetails,
+                    extensionData,
                     certData,
                     0x0000000000000000000000000000000000000000000000000000000000000020,
                     address(usdc),
@@ -269,8 +274,8 @@ contract UpgradePublicRoundsScript is Script {
                     "Dispute",
                     address(deployer),
                     officer,
-                    "",
-                    "",
+                    legalDetails,
+                    extensionData,
                     certData,
                     bytes32(uint256(1)),
                     address(usdc),

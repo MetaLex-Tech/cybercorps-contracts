@@ -240,6 +240,11 @@ contract PublicRoundTestDeploy is Script {
             deployerPrivateKey
         );
 
+        string[] memory legalDetails = new string[](1);
+        legalDetails[0] = "Legal Details";
+        bytes[] memory extensionData = new bytes[](1);
+        extensionData[0] = "";
+
         // Deploy another CyberCorp and create a public round using SAFE template id 1
         (
             address corp2,
@@ -258,8 +263,8 @@ contract PublicRoundTestDeploy is Script {
                 "arbitration",
                 deployer,
                 officer,
-                "",
-                "",
+                legalDetails,
+                extensionData,
                 certData,
                 bytes32(uint256(1)),
                 stable,

@@ -318,9 +318,9 @@ library CyberCorpHelper {
                     officerEOA,
                     "Officer",
                     "CEO",
-                    "",
+                    new string[](certData.length),
                     roundPartyValues,
-                    "",
+                    new bytes[](certData.length),
                     new address[](0),
                     escrowedSig
                 ),
@@ -765,9 +765,9 @@ contract RoundManagerTest is Test {
                     corpOwner,
                     "Officer",
                     "CEO",
-                    "",
+                    new string[](certData.length),
                     testRoundPartyValues,
-                    "",
+                    new bytes[](certData.length),
                     new address[](0),
                     signature
                 ),
@@ -1472,9 +1472,9 @@ contract RoundManagerTest is Test {
                     corpOwner,
                     "Officer",
                     "CEO",
-                    "",
+                    new string[](certData.length),
                     testRoundPartyValues,
-                    "",
+                    new bytes[](certData.length),
                     new address[](0),
                     escSigFuture
                 ),
@@ -1772,6 +1772,123 @@ contract RoundManagerTest is Test {
         assertEq(uint256(series), uint256(SecuritySeries.NA));
     }
 
+    function test_CreateRound_WithTwoCertificates_IndexMatchedDetails() public {
+        // Prepare two certificate types
+        CyberCertData[] memory certData = new CyberCertData[](2);
+        string[] memory legendA = new string[](1);
+        legendA[0] = "Legend A";
+        string[] memory legendB = new string[](1);
+        legendB[0] = "Legend B";
+        certData[0] = CyberCertData({
+            name: "Equity A",
+            symbol: "EQA",
+            uri: "ipfs://eqa",
+            securityClass: SecurityClass.CommonStock,
+            securitySeries: SecuritySeries.NA,
+            extension: address(0),
+            defaultLegend: legendA
+        });
+        certData[1] = CyberCertData({
+            name: "Equity B",
+            symbol: "EQB",
+            uri: "ipfs://eqb",
+            securityClass: SecurityClass.CommonStock,
+            securitySeries: SecuritySeries.NA,
+            extension: address(0),
+            defaultLegend: legendB
+        });
+
+        // Round agreement arrays must match certData length
+        string[] memory legalDetails = new string[](2);
+        legalDetails[0] = "LD A";
+        legalDetails[1] = "LD B";
+        bytes[] memory extensionData = new bytes[](2);
+        extensionData[0] = bytes("extA");
+        extensionData[1] = bytes("extB");
+
+        // officer identity and escrow signature
+        uint256 officerPrivKey = corpOwnerPrivKey;
+        address officerEOA = corpOwner;
+        (bytes memory escSig, ) = CyberCorpHelper.computeEscrowSignature(
+            roundManager,
+            SecuritySeries.SeriesSeed,
+            RAISE_CAP,
+            MIN_TICKET,
+            MAX_TICKET,
+            RoundType.FCFS,
+            block.timestamp,
+            block.timestamp + 30 days,
+            CyberCorpHelper.TEMPLATE_ID,
+            address(paymentToken),
+            PRICE_PER_UNIT,
+            VALUATION,
+            officerPrivKey,
+            corp
+        );
+
+        // Create the round (FCFS for auto-allocation)
+        bytes32 roundIdTwo;
+        vm.prank(corpOwner);
+        roundIdTwo = RoundManager(roundManager).createRound(
+            RoundLib.draft()
+                .setTickets(
+                    SecuritySeries.SeriesSeed,
+                    RoundType.FCFS,
+                    false,
+                    RAISE_CAP,
+                    MIN_TICKET,
+                    MAX_TICKET,
+                    address(paymentToken),
+                    PRICE_PER_UNIT,
+                    VALUATION,
+                    block.timestamp,
+                    block.timestamp + 30 days
+                )
+                .setAgreement(
+                    CyberCorpHelper.TEMPLATE_ID,
+                    officerEOA,
+                    "Officer",
+                    "CEO",
+                    legalDetails,
+                    testRoundPartyValues,
+                    extensionData,
+                    new address[](0),
+                    escSig
+                ),
+            certData
+        );
+
+        // Submit EOI and auto-allocate (FCFS)
+        vm.startPrank(investor);
+        (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
+            roundIdTwo,
+            11,
+            5_000 * 10 ** 6,
+            10_000 * 10 ** 6,
+            officerEOA,
+            investorPrivKey
+        );
+        vm.stopPrank();
+
+        // Verify two certificates minted and details are index-matched
+        Escrow memory esc = RoundManager(roundManager).getEscrowDetails(agreementId);
+        assertEq(esc.corpAssets.length, 2);
+
+        // First certificate
+        Token memory t0 = esc.corpAssets[0];
+        CertificateDetails memory d0 = CyberCertPrinter(t0.tokenAddress).getCertificateDetails(t0.tokenId);
+        assertEq(d0.legalDetails, "LD A");
+        assertEq(keccak256(d0.extensionData), keccak256(bytes("extA")));
+
+        // Second certificate
+        Token memory t1 = esc.corpAssets[1];
+        CertificateDetails memory d1 = CyberCertPrinter(t1.tokenAddress).getCertificateDetails(t1.tokenId);
+        assertEq(d1.legalDetails, "LD B");
+        assertEq(keccak256(d1.extensionData), keccak256(bytes("extB")));
+    }
+
     function test_SetAndGetRoundPricePerShare() public {
         // Set and verify round price per share metadata
         vm.prank(corpOwner);
@@ -1969,9 +2086,9 @@ contract RoundManagerFCFSTest is Test {
                     officerEOA,
                     "Officer",
                     "CEO",
-                    "",
+                    new string[](certData.length),
                     roundPartyValues,
-                    "",
+                    new bytes[](certData.length),
                     new address[](0),
                     escSig
                 ),
@@ -2926,8 +3043,8 @@ contract CyberCorpFactoryPublicRoundTest is Test {
             "arbitration",
             me,
             officer,
-            "",
-            "",
+            new string[](certData.length),
+            new bytes[](certData.length),
             certData,
             templateId,
             address(usdc),

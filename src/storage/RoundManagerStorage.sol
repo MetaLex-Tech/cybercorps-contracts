@@ -361,21 +361,30 @@ library RoundManagerStorage {
         string memory officerName = round.officerName;
         string memory officerTitle = round.officerTitle;
 
-        CertificateDetails memory details = CertificateDetails({
-            signingOfficerName: officerName,
-            signingOfficerTitle: officerTitle,
-            investmentAmountUSD: investmentUSD,
-            issuerUSDValuationAtTimeOfInvestment: round.valuation,
-            unitsRepresented: units,
-            legalDetails: round.legalDetails,
-            extensionData: round.extensionData
-        });
-
         IIssuanceManager issuanceManager = getIssuanceManager();
 
-        // Effect: loop through certPrinter and create cert for each
+        // Create one certificate per printer, using per-index legalDetails/extensionData
         certIds = new uint256[](round.certPrinter.length);
         for (uint256 i = 0; i < round.certPrinter.length; i++) {
+            string memory certLegalDetails = "";
+            bytes memory certExtensionData = "";
+            if (round.legalDetails.length > i) {
+                certLegalDetails = round.legalDetails[i];
+            }
+            if (round.extensionData.length > i) {
+                certExtensionData = round.extensionData[i];
+            }
+
+            CertificateDetails memory details = CertificateDetails({
+                signingOfficerName: officerName,
+                signingOfficerTitle: officerTitle,
+                investmentAmountUSD: investmentUSD,
+                issuerUSDValuationAtTimeOfInvestment: round.valuation,
+                unitsRepresented: units,
+                legalDetails: certLegalDetails,
+                extensionData: certExtensionData
+            });
+
             certIds[i] = issuanceManager.createCert(
                 round.certPrinter[i],
                 address(this),

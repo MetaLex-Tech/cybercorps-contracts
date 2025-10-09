@@ -198,6 +198,9 @@ contract RoundManager is
         Round memory roundDraft,
         CyberCertData[] memory certData
     ) external onlyOwner returns (bytes32) {
+        // Validate lengths of per-cert details
+        if (roundDraft.legalDetails.length != certData.length) revert InvalidCert();
+        if (roundDraft.extensionData.length != certData.length) revert InvalidCert();
         if (roundDraft.escrowedSignature.length == 0) revert InvalidEscrowedSignature();
 
         address corp = LexScrowStorage.getCorp();
