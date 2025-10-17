@@ -20,33 +20,69 @@ import "../src/CyberCorpConstants.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {SAFTExtension} from "../src/storage/extensions/SAFTExtension.sol";
 import {DealManager} from "../src/DealManager.sol";
+import {ILegacyDealManagerFactory} from "./interfaces/ILegacyDealManagerFactory.sol";
 
 
-contract BaseScript is Script {
-     function run() public {
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.2.Upgrade"));
-        address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
+contract UpgradeDealManagerScript is Script {
+
+    function run() public {
+        run(
+            bytes32(keccak256("MetaLexCyberCorpLaunchV2.3.Upgrade")), // TODO TBD: salt
+            vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
+        );
+    }
+
+    function run(bytes32 salt, uint256 deployerPrivateKey) public returns (DealManagerFactory) {
+        address deployerAddress = vm.addr(deployerPrivateKey);
         vm.startBroadcast(deployerPrivateKey);
 
+        // Universal registry address
         address registry = address(CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134));
-        address deployedFactoryAddr = 0x493f41876E4b681B6e0913Fa92C527183D5E1233;
-        DealManagerFactory deployedFactory = DealManagerFactory(deployedFactoryAddr);
-        address newImplementation = address(new DealManager{salt: salt}());
-        console.log("New DealManager implementation deployed at:", newImplementation);
-        //deployedFactory.upgradeImplementation(newImplementation);
-        
-        address newRegistryImplementation = address(new CyberAgreementRegistry{salt: salt}());
-        console.log("New CyberAgreementRegistry implementation deployed at:", newRegistryImplementation);
-        // Upgrade the CyberAgreementRegistry
-       // CyberAgreementRegistry(registry).upgradeToAndCall(newRegistryImplementation, "");
+        BorgAuth auth = CyberAgreementRegistry(registry).AUTH();
+        vm.assertEq(address(auth), 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01, "should match universal AUTH address");
+
+        //
+        // Upgrade DealManagerFactory
+        //
+
+        // Deploy new DealManager reference implementation
+        DealManager refDm = new DealManager();
+        console.log("New DealManager reference implementation deployed at: %s", address(refDm));
+
+        // Deploy new UUPSUpgradeable DealManagerFactory
+        DealManagerFactory newDmFactory = DealManagerFactory(
+            address(
+                new ERC1967Proxy{salt: salt}(
+                    address(new DealManagerFactory{salt: salt}()),
+                    abi.encodeWithSelector(
+                        DealManagerFactory.initialize.selector,
+                        address(auth),
+                        address(refDm)
+                    )
+                )
+            )
+        );
+        console.log("New DealManagerFactory deployed at: %s", address(newDmFactory));
 
         // Verify the upgrade was successful
-        address updatedImplementation = deployedFactory.getRefImplementation();
-        console.log("Updated DealManager reference implementation:", updatedImplementation);
+        address updatedImplementation = newDmFactory.getRefImplementation();
+        vm.assertEq(newDmFactory.getRefImplementation(), address(refDm), "unexpected reference implementation");
 
-        address newDealManagerImplementation = address(new DealManager{salt: salt}());
+        //
+        // Upgrade existing DealManagers
+        //
 
-        
-     }
+        // To upgrade the legacy beacon-based DealManagers, we must first identify
+        // all existing DealManagerFactory addresses (https://dune.com/queries/5981894):
+        // - 0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3
+        // - 0x15A399Dee2b25C5a766cd9480a154B13d128E669 (deprecated, won't touch it)
+        ILegacyDealManagerFactory legacyDealManagerFactory = ILegacyDealManagerFactory(0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3);
+
+        // Upgrade beacon implementation to the new reference implementation
+        legacyDealManagerFactory.upgradeImplementation(address(refDm));
+        vm.assertEq(legacyDealManagerFactory.getBeaconImplementation(), address(refDm), "beacon implementation should be upgraded by now");
+        console.log("New beacon implementation: %s for legacy DealManagerFactory: %s", address(refDm), address(legacyDealManagerFactory));
+
+        return newDmFactory;
+    }
 }

@@ -77,7 +77,7 @@ import {LexChexCondition} from "../src/libs/conditions/lexchexCondition.sol";
 import {LeXcheXUtils} from "./libs/LeXcheXUtils.sol";
 import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
-import {ILegacyDealManagerFactory} from "./interfaces/ILegacyDealManagerFactory.sol";
+import {ILegacyDealManagerFactory} from "../script/interfaces/ILegacyDealManagerFactory.sol";
 
 contract CyberCorpTest is Test {
     using ERC1967ProxyLib for address;
