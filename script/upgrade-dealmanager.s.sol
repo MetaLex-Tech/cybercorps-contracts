@@ -20,19 +20,28 @@ import "../src/CyberCorpConstants.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {SAFTExtension} from "../src/storage/extensions/SAFTExtension.sol";
 import {DealManager} from "../src/DealManager.sol";
+import {DealManager as DealManagerMigrationOnly} from "../src/DealManagerMigrationOnly.sol";
 import {ILegacyDealManagerFactory} from "./interfaces/ILegacyDealManagerFactory.sol";
 
 
 contract UpgradeDealManagerScript is Script {
 
     function run() public {
-        run(
+        upgradeDealManager(
             bytes32(keccak256("MetaLexCyberCorpLaunchV2.3.Upgrade")), // TODO TBD: salt
             vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
         );
     }
 
-    function run(bytes32 salt, uint256 deployerPrivateKey) public returns (DealManagerFactory) {
+    function upgradeDealManager(bytes32 salt, uint256 deployerPrivateKey) public returns (DealManagerFactory, DealManagerMigrationOnly) {
+
+        // Known deployed DealManager @ Ethereum mainnet
+        // TODO Update it when needed for other network
+        address[] memory knownDealManagers = new address[](3);
+        knownDealManagers[0] = 0xB4dd83e4b12454a85AEc05e443e95c72a2c48D83;
+        knownDealManagers[1] = 0x71B4DAC6237Ce73bf673CB9cb2b94257C975D69a;
+        knownDealManagers[2] = 0x492685f1d34170F1B67e8B72cBD0f982E3E7e7a7;
+
         address deployerAddress = vm.addr(deployerPrivateKey);
         vm.startBroadcast(deployerPrivateKey);
 
@@ -78,11 +87,20 @@ contract UpgradeDealManagerScript is Script {
         // - 0x15A399Dee2b25C5a766cd9480a154B13d128E669 (deprecated, won't touch it)
         ILegacyDealManagerFactory legacyDealManagerFactory = ILegacyDealManagerFactory(0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3);
 
-        // Upgrade beacon implementation to the new reference implementation
-        legacyDealManagerFactory.upgradeImplementation(address(refDm));
-        vm.assertEq(legacyDealManagerFactory.getBeaconImplementation(), address(refDm), "beacon implementation should be upgraded by now");
-        console.log("New beacon implementation: %s for legacy DealManagerFactory: %s", address(refDm), address(legacyDealManagerFactory));
+        // Upgrade beacon implementation to the new implementation (with migration feature)
+        DealManagerMigrationOnly dmWithMigrationImpl = new DealManagerMigrationOnly();
+        legacyDealManagerFactory.upgradeImplementation(address(dmWithMigrationImpl));
+        vm.assertEq(legacyDealManagerFactory.getBeaconImplementation(), address(dmWithMigrationImpl), "beacon implementation should be upgraded by now");
+        console.log("New beacon implementation: %s for legacy DealManagerFactory: %s", address(dmWithMigrationImpl), address(legacyDealManagerFactory));
 
-        return newDmFactory;
+        // This is the ugly part: migrate existing DealManager one-by-one because they need to connect to
+        // the new DealManagerFactory to lookup fee parameters (existing DealManagerFactory is not upgradeable)
+        for (uint256 i = 0; i < knownDealManagers.length; i++) {
+            DealManagerMigrationOnly(knownDealManagers[i]).migrateToV2_3();
+            vm.assertEq(DealManager(knownDealManagers[i]).getPlatformPayable(), address(0), "should be able to lookup fee payable now");
+            console.log("Migrated legacy DealManager: %s", knownDealManagers[i]);
+        }
+
+        return (newDmFactory, dmWithMigrationImpl);
     }
 }
