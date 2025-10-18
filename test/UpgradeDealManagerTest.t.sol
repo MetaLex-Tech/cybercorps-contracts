@@ -3,11 +3,14 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {Initializable} from "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
-import {UpgradeDealManagerScript} from "../script/upgrade-dealmanager.s.sol";
+import {UpgradeDealManagerFactoryScript} from "../script/upgrade-dealmanager-factory.s.sol";
+import {UpgradeLegacyDealManagersScript} from "../script/upgrade-legacy-dealmanagers.s.sol";
 import {ILegacyDealManagerFactory} from "../script/interfaces/ILegacyDealManagerFactory.sol";
+import {GnosisTransaction} from "../script/libs/safe.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {DealManager} from "../src/DealManager.sol";
-import {DealManager as DealManagerMigrationOnly} from "../src/DealManagerMigrationOnly.sol";
+import {DealManager as DealManagerWithMigration} from "../src/DealManagerWithMigration.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 
 contract UpgradeDealManagerTest is Test {
@@ -15,6 +18,7 @@ contract UpgradeDealManagerTest is Test {
 
     // Universal registry address
     CyberAgreementRegistry registry = CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134);
+    CyberCorpFactory cyberCorpFactory = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
     ILegacyDealManagerFactory legacyDealManagerFactory = ILegacyDealManagerFactory(0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3);
 
     // Known deployed DealManager @ Ethereum mainnet
@@ -24,7 +28,8 @@ contract UpgradeDealManagerTest is Test {
     address deployer = vm.addr(deployerPrivateKey);
 
     DealManagerFactory newDmFactory;
-    DealManagerMigrationOnly dmWithMigrationImpl;
+    DealManagerWithMigration dmWithMigrationImpl;
+    GnosisTransaction safeTx;
 
     function setUp() public {
         knownDealManagers[0] = 0xB4dd83e4b12454a85AEc05e443e95c72a2c48D83;
@@ -36,16 +41,24 @@ contract UpgradeDealManagerTest is Test {
         registry.AUTH().updateRole(deployer, registry.AUTH().OWNER_ROLE());
         vm.stopPrank();
 
-        // Run upgrade scripts
-        (newDmFactory, dmWithMigrationImpl) = (new UpgradeDealManagerScript()).upgradeDealManager(
-            bytes32(keccak256("MetaLexCyberCorpLaunchV2.3.Upgrade")), // salt
-            deployerPrivateKey
-        );
+        // Run scripts to deploy DealManagerFactory
+        (newDmFactory, safeTx) = (new UpgradeDealManagerFactoryScript()).run();
+        // Expect new factory to be deployed at a predetermined address because we will hard-code it to the DealManagerWithMigration contract
+        assertEq(address(newDmFactory), 0x56eb3Ef19FDD68B985b323A875ff28E2b42A1Fc8, "new DealManagerFactory address has changed, update it in DealManagerWithMigration");
+
+        // Simulate MetaLeX Safe executing the Safe txs to replace DealManagerFactory
+        vm.startPrank(metalexSafe);
+        (safeTx.to).call{value: safeTx.value}(safeTx.data);
+        vm.stopPrank();
+
+        // Run scripts to upgrade all legacy DealManagers
+        dmWithMigrationImpl = (new UpgradeLegacyDealManagersScript()).upgradeLegacyDealManagers(address(newDmFactory));
     }
 
     function test_SanityCheck() public {
         // Script might've done it, but we'll do it again just in case
         assertEq(legacyDealManagerFactory.getBeaconImplementation(), address(dmWithMigrationImpl), "beacon implementation should be upgraded by now");
+        assertEq(cyberCorpFactory.dealManagerFactory(), address(newDmFactory), "CyberCorpFactory's DealManagerFactory should be updated by now");
     }
 
     function test_ExistingDealManagerIntegrity() public {
@@ -76,5 +89,15 @@ contract UpgradeDealManagerTest is Test {
         assertEq(dm.DEPLOY_VERSION(), "1", "unexpected DEPLOY_VERSION()");
         assertEq(dm.computeFee(1 ether), 0 ether, "new DealManager should support fee calculation with no fees");
         assertEq(dm.getPlatformPayable(), address(0), "new DealManager should support fee payable");
+    }
+
+    // TODO WIP
+    function test_DeployNewCyberCorp() public {
+
+    }
+
+    // TODO WIP
+    function test_enableFees() public {
+
     }
 }

@@ -150,8 +150,8 @@ contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAut
 
     // TODO TBD
     /// @notice Migrate legacy contracts and set upgradeFactory to the known new contract (for fee dependencies)
-    /// @dev Since the migration target is predefined, it doesn't matter when it is called or by whom
-    function migrateToV2_3() public {
+    /// @dev Since the migration target is predefined, it doesn't matter who called it or when it is called
+    function migrateUpgradeFactory() public {
         // TODO Update to the new permanent address of DealManagerFactory
         DealManagerStorage.setUpgradeFactory(0x56eb3Ef19FDD68B985b323A875ff28E2b42A1Fc8);
     }
