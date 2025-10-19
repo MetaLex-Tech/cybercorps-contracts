@@ -8,7 +8,7 @@ import {UpgradeDealManagerFactoryScript} from "../script/upgrade-dealmanager-fac
 import {UpgradeLegacyDealManagersScript} from "../script/upgrade-legacy-dealmanagers.s.sol";
 import {ILegacyDealManagerFactory} from "../script/interfaces/ILegacyDealManagerFactory.sol";
 import {GnosisTransaction} from "../script/libs/safe.sol";
-import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
+import {SecurityClass, SecuritySeries, CompanyOfficer} from "../src/CyberCorpConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {DealManager} from "../src/DealManager.sol";
@@ -18,12 +18,59 @@ import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
+/// @notice Because we are testing against the legacy CyberCorpFactory, not the one we are upgrading to
+interface ILegacyCyberCorpFactory {
+    struct CyberCertData {
+        string name;
+        string symbol;
+        string uri;
+        SecurityClass securityClass;
+        SecuritySeries securitySeries;
+        address extension;
+        string[] defaultLegend;
+    }
+    
+    function dealManagerFactory() external returns (address);
+
+    function deployCyberCorpAndCreateOffer(
+        uint256 salt,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        address _companyPayable,
+        CompanyOfficer memory _officer,
+        CyberCertData[] memory _certData,
+        bytes32 _templateId,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        uint256 _paymentAmount,
+        string[][] memory _partyValues,
+        bytes memory signature,
+        CertificateDetails[] memory _details,
+        address[] memory conditions,
+        bytes32 secretHash,
+        uint256 expiry
+    )
+    external
+    returns (
+        address cyberCorpAddress,
+        address authAddress,
+        address issuanceManagerAddress,
+        address dealManagerAddress,
+        address[] memory certPrinterAddress,
+        bytes32 id,
+        uint256[] memory certIds
+    );
+}
+
 contract UpgradeDealManagerTest is Test {
     address metalexSafe = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
 
     // Universal registry address
     CyberAgreementRegistry registry = CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134);
-    CyberCorpFactory cyberCorpFactory = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
+    ILegacyCyberCorpFactory cyberCorpFactory = ILegacyCyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
     ILegacyDealManagerFactory legacyDealManagerFactory = ILegacyDealManagerFactory(0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3);
 
     address paymentToken = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // USDC @ Ethereum mainnet
@@ -47,6 +94,11 @@ contract UpgradeDealManagerTest is Test {
     string contractUri = "ipfs.io/ipfs/[cid]";
     string[] globalFields;
     string[] partyFields;
+    address[] defaultParties = new address[](2);
+    string[] defaultGlobalValues = new string[](1);
+    string[][] defaultPartyValues = new string[][](2);
+    ILegacyCyberCorpFactory.CyberCertData[] defaultCertData = new ILegacyCyberCorpFactory.CyberCertData[](1);
+    CertificateDetails[] defaultCertDetails = new CertificateDetails[](1);
 
     function setUp() public {
         //
@@ -80,6 +132,36 @@ contract UpgradeDealManagerTest is Test {
             partyFields
         );
         vm.stopPrank();
+        
+        defaultParties[0] = alice;
+        defaultParties[1] = bob;
+        
+        defaultGlobalValues[0] = "Test global 0";
+        
+        defaultPartyValues[0] = new string[](1);
+        defaultPartyValues[0][0] = "Test party 0-0";
+        defaultPartyValues[1] = new string[](1);
+        defaultPartyValues[1][0] = "Test party 1-0";
+        
+        defaultCertDetails[0] = CertificateDetails({
+            signingOfficerName: "Alice",
+            signingOfficerTitle: "CEO",
+            investmentAmountUSD: 100,
+            issuerUSDValuationAtTimeOfInvestment: 10000,
+            unitsRepresented: 0,
+            legalDetails: "test legal details",
+            extensionData: ""
+        });
+        
+        defaultCertData[0] = ILegacyCyberCorpFactory.CyberCertData({
+            name: "Test",
+            symbol: "TEST",
+            uri: "ipfs://test",
+            securityClass: SecurityClass.CommonStock,
+            securitySeries: SecuritySeries.NA,
+            extension: address(0),
+            defaultLegend: new string[](0)
+        });
     }
 
     function test_SanityCheck() public {
@@ -118,88 +200,51 @@ contract UpgradeDealManagerTest is Test {
         address knownCyberCorp = 0x55c2Bb9973793d6Aa3dbb18C81fB5e115892F8af;
         vm.startPrank(knownCyberCorp);
 
-        address[] memory parties = new address[](2);
-        parties[0] = alice;
-        parties[1] = bob;
-
-        string[] memory globalValues = new string[](1);
-        globalValues[0] = "Test global 0";
-        string[][] memory partyValues = new string[][](2);
-        partyValues[0] = new string[](1);
-        partyValues[0][0] = "Test party 0-0";
-        partyValues[1] = new string[](1);
-        partyValues[1][0] = "Test party 1-0";
-
-        CertificateDetails[] memory certDetails = new CertificateDetails[](1);
-        certDetails[0] = CertificateDetails({
-            signingOfficerName: "Alice",
-            signingOfficerTitle: "CEO",
-            investmentAmountUSD: 100,
-            issuerUSDValuationAtTimeOfInvestment: 10000,
-            unitsRepresented: 0,
-            legalDetails: "test legal details",
-            extensionData: ""
-        });
-
-        CyberCorpFactory.CyberCertData[] memory certData = new CyberCorpFactory.CyberCertData[](1);
-        certData[0] = CyberCorpFactory.CyberCertData({
-            name: "Test",
-            symbol: "TEST",
-            uri: "ipfs://test",
-            securityClass: SecurityClass.CommonStock,
-            securitySeries: SecuritySeries.NA,
-            extension: address(0),
-            defaultLegend: new string[](0)
-        });
         address[] memory certPrinterAddress = new address[](1);
-        for (uint256 i = 0; i < certData.length; i++) {
+        for (uint256 i = 0; i < defaultCertData.length; i++) {
             certPrinterAddress[i] = IIssuanceManager(DealManager(knownDealManagers[0]).issuanceManager()).createCertPrinter(
-                certData[i].defaultLegend,
-                string.concat("TestCorp", certData[i].name),
-                certData[i].symbol,
-                certData[i].uri,
-                certData[i].securityClass,
-                certData[i].securitySeries,
-                certData[i].extension
+                defaultCertData[i].defaultLegend,
+                string.concat("TestCorp", defaultCertData[i].name),
+                defaultCertData[i].symbol,
+                defaultCertData[i].uri,
+                defaultCertData[i].securityClass,
+                defaultCertData[i].securitySeries,
+                defaultCertData[i].extension
             );
         }
 
         // Create and sign deal
-        bytes32 contractId = keccak256(
-            abi.encode(
-                templateId,
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
-
         DealManager(knownDealManagers[0]).proposeAndSignDeal(
             certPrinterAddress,
             paymentToken,
             100e6,
             templateId,
             block.timestamp,
-            globalValues,
-            parties,
-            certDetails,
+            defaultGlobalValues,
+            defaultParties,
+            defaultCertDetails,
             alice,
             CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 registry.DOMAIN_SEPARATOR(),
                 registry.SIGNATUREDATA_TYPEHASH(),
-                contractId,
+                keccak256(abi.encode(
+                    templateId,
+                    block.timestamp,
+                    defaultGlobalValues,
+                    defaultParties
+                )),
                 contractUri,
                 globalFields,
                 partyFields,
-                globalValues,
-                partyValues[0],
+                defaultGlobalValues,
+                defaultPartyValues[0],
                 alicePrivateKey
             ),
-            partyValues,
+            defaultPartyValues,
             new address[](0),
-            "",
-            block.timestamp + 3600
+            bytes32(0),
+            block.timestamp + 1000000
         );
 
         vm.stopPrank();
@@ -226,15 +271,63 @@ contract UpgradeDealManagerTest is Test {
         assertEq(dm.getPlatformPayable(), address(0), "new DealManager should support fee payable");
     }
 
-    // TODO WIP
     function test_DeployNewCyberCorp() public {
         _upgradeFactoryAndLegacyDealManagers();
 
+        vm.startPrank(alice);
+        cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "TestCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            alice,
+            CompanyOfficer({
+                eoa: alice,
+                name: "Alice",
+                contact: "test@example.com",
+                title: "CEO"
+            }),
+            defaultCertData,
+            templateId,
+            defaultGlobalValues,
+            defaultParties,
+            100e6,
+            defaultPartyValues,
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                keccak256(abi.encode(
+                    templateId,
+                    block.timestamp,
+                    defaultGlobalValues,
+                    defaultParties
+                )),
+                contractUri,
+                globalFields,
+                partyFields,
+                defaultGlobalValues,
+                defaultPartyValues[0],
+                alicePrivateKey
+            ),
+            defaultCertDetails,
+            new address[](0),
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
     }
 
     // TODO WIP
     function test_enableFees() public {
         _upgradeFactoryAndLegacyDealManagers();
+
+        vm.startPrank(metalexSafe);
+        newDmFactory.setPlatformPayable(address(metalexSafe));
+        newDmFactory.setDefaultFeeRatio(10);
+        vm.stopPrank();
     }
 
     function _upgradeFactoryAndLegacyDealManagers() internal {
