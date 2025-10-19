@@ -56,7 +56,7 @@ import "./interfaces/IDealManagerFactory.sol";
 /// @title DealManager
 /// @notice Manages the lifecycle of deals between parties, including creation, signing, payment, and finalization for a CyberCorp
 /// @dev Implements UUPS upgradeable pattern and integrates with BorgAuth for access control
-contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAuthACL, LexScroWLite {
+contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeable, ReentrancyGuard {
     using DealManagerStorage for DealManagerStorage.DealManagerData;
 
     string public constant DEPLOY_VERSION = "1"; // For version-tracking on all deployment and future upgrades

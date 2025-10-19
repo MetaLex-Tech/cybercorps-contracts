@@ -63,10 +63,10 @@ import "./interfaces/ILexChex.sol";
 /// @dev Implements UUPS upgradeable pattern and integrates with BorgAuth for access control
 contract RoundManager is
     Initializable,
-    UUPSUpgradeable,
-    ReentrancyGuard,
     BorgAuthACL,
-    LexScroWLite
+    LexScroWLite,
+    UUPSUpgradeable,
+    ReentrancyGuard
 {
     using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
     using LexScrowStorage for LexScrowStorage.LexScrowData;

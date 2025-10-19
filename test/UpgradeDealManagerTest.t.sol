@@ -1,17 +1,22 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console2} from "forge-std/Test.sol";
 import {Initializable} from "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {UpgradeDealManagerFactoryScript} from "../script/upgrade-dealmanager-factory.s.sol";
 import {UpgradeLegacyDealManagersScript} from "../script/upgrade-legacy-dealmanagers.s.sol";
 import {ILegacyDealManagerFactory} from "../script/interfaces/ILegacyDealManagerFactory.sol";
 import {GnosisTransaction} from "../script/libs/safe.sol";
+import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {DealManager} from "../src/DealManager.sol";
 import {DealManagerWithMigration} from "../src/DealManagerWithMigration.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
+import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
+import {BorgAuth} from "../src/libs/auth.sol";
 
 contract UpgradeDealManagerTest is Test {
     address metalexSafe = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
@@ -21,17 +26,33 @@ contract UpgradeDealManagerTest is Test {
     CyberCorpFactory cyberCorpFactory = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
     ILegacyDealManagerFactory legacyDealManagerFactory = ILegacyDealManagerFactory(0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3);
 
+    address paymentToken = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // USDC @ Ethereum mainnet
+
     // Known deployed DealManager @ Ethereum mainnet
     address[] knownDealManagers = new address[](3);
 
     uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
     address deployer = vm.addr(deployerPrivateKey);
+    uint256 alicePrivateKey = 0xa11ce;
+    address alice = vm.addr(alicePrivateKey);
+    uint256 bobPrivateKey = 0xb0b;
+    address bob = vm.addr(bobPrivateKey);
 
     DealManagerFactory newDmFactory;
     DealManagerWithMigration dmWithMigrationImpl;
     GnosisTransaction safeTx;
 
+    // Deal test related
+    bytes32 templateId = bytes32(uint256(10000));
+    string contractUri = "ipfs.io/ipfs/[cid]";
+    string[] globalFields;
+    string[] partyFields;
+
     function setUp() public {
+        //
+        // Prepare for upgrades
+        //
+
         knownDealManagers[0] = 0xB4dd83e4b12454a85AEc05e443e95c72a2c48D83;
         knownDealManagers[1] = 0x71B4DAC6237Ce73bf673CB9cb2b94257C975D69a;
         knownDealManagers[2] = 0x492685f1d34170F1B67e8B72cBD0f982E3E7e7a7;
@@ -41,38 +62,152 @@ contract UpgradeDealManagerTest is Test {
         registry.AUTH().updateRole(deployer, registry.AUTH().OWNER_ROLE());
         vm.stopPrank();
 
-        // Run scripts to deploy DealManagerFactory
-        (newDmFactory, safeTx) = (new UpgradeDealManagerFactoryScript()).run();
-        // Expect new factory to be deployed at a predetermined address because we will hard-code it to the DealManagerWithMigration contract
-        assertEq(address(newDmFactory), 0x56eb3Ef19FDD68B985b323A875ff28E2b42A1Fc8, "new DealManagerFactory address has changed, update it in DealManagerWithMigration");
+        //
+        // Prepare for deal tests
+        //
 
-        // Simulate MetaLeX Safe executing the Safe txs to replace DealManagerFactory
+        globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+
         vm.startPrank(metalexSafe);
-        (safeTx.to).call{value: safeTx.value}(safeTx.data);
+        registry.createTemplate(
+            templateId,
+            "Test",
+            contractUri,
+            globalFields,
+            partyFields
+        );
         vm.stopPrank();
-
-        // Run scripts to upgrade all legacy DealManagers
-        dmWithMigrationImpl = (new UpgradeLegacyDealManagersScript()).upgradeLegacyDealManagers(address(newDmFactory));
     }
 
     function test_SanityCheck() public {
+        _upgradeFactoryAndLegacyDealManagers();
+
         // Script might've done it, but we'll do it again just in case
         assertEq(legacyDealManagerFactory.getBeaconImplementation(), address(dmWithMigrationImpl), "beacon implementation should be upgraded by now");
         assertEq(cyberCorpFactory.dealManagerFactory(), address(newDmFactory), "CyberCorpFactory's DealManagerFactory should be updated by now");
     }
 
-    function test_ExistingDealManagerIntegrity() public {
+    function test_LegacyDealManagerIntegrity() public {
+        // Snapshot slot contents before upgrade
+        BorgAuth[] memory expectedAuths = new BorgAuth[](knownDealManagers.length);
+        for (uint256 i = 0; i < knownDealManagers.length; i++) {
+            expectedAuths[i] = DealManager(knownDealManagers[i]).AUTH();
+        }
+
+        // Perform upgrades
+        _upgradeFactoryAndLegacyDealManagers();
+
+        // Verify integrity
         for (uint256 i = 0; i < knownDealManagers.length; i++) {
             // New DealManager should implement new methods
             assertEq(DealManager(knownDealManagers[i]).DEPLOY_VERSION(), "1", string(abi.encodePacked("unexpected DEPLOY_VERSION() for DealManager: ", vm.toString(knownDealManagers[i]))));
             assertEq(DealManager(knownDealManagers[i]).computeFee(1 ether), 0 ether, "upgraded DealManager should support fee calculation with no fees");
             assertEq(DealManager(knownDealManagers[i]).getPlatformPayable(), address(0), "upgraded DealManager should support fee payable");
 
-            // TODO Should be able to propose deals
+            // Check for slot conflicts
+            assertEq(address(DealManager(knownDealManagers[i]).AUTH()), address(expectedAuths[i]), string(abi.encodePacked("AUTH should not change for DealManager: ", vm.toString(knownDealManagers[i]))));
         }
     }
 
+    function test_LegacyDealManagerProposeDeal() public {
+        _upgradeFactoryAndLegacyDealManagers();
+
+        address knownCyberCorp = 0x55c2Bb9973793d6Aa3dbb18C81fB5e115892F8af;
+        vm.startPrank(knownCyberCorp);
+
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Test global 0";
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Test party 0-0";
+        partyValues[1] = new string[](1);
+        partyValues[1][0] = "Test party 1-0";
+
+        CertificateDetails[] memory certDetails = new CertificateDetails[](1);
+        certDetails[0] = CertificateDetails({
+            signingOfficerName: "Alice",
+            signingOfficerTitle: "CEO",
+            investmentAmountUSD: 100,
+            issuerUSDValuationAtTimeOfInvestment: 10000,
+            unitsRepresented: 0,
+            legalDetails: "test legal details",
+            extensionData: ""
+        });
+
+        CyberCorpFactory.CyberCertData[] memory certData = new CyberCorpFactory.CyberCertData[](1);
+        certData[0] = CyberCorpFactory.CyberCertData({
+            name: "Test",
+            symbol: "TEST",
+            uri: "ipfs://test",
+            securityClass: SecurityClass.CommonStock,
+            securitySeries: SecuritySeries.NA,
+            extension: address(0),
+            defaultLegend: new string[](0)
+        });
+        address[] memory certPrinterAddress = new address[](1);
+        for (uint256 i = 0; i < certData.length; i++) {
+            certPrinterAddress[i] = IIssuanceManager(DealManager(knownDealManagers[0]).issuanceManager()).createCertPrinter(
+                certData[i].defaultLegend,
+                string.concat("TestCorp", certData[i].name),
+                certData[i].symbol,
+                certData[i].uri,
+                certData[i].securityClass,
+                certData[i].securitySeries,
+                certData[i].extension
+            );
+        }
+
+        // Create and sign deal
+        bytes32 contractId = keccak256(
+            abi.encode(
+                templateId,
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        DealManager(knownDealManagers[0]).proposeAndSignDeal(
+            certPrinterAddress,
+            paymentToken,
+            100e6,
+            templateId,
+            block.timestamp,
+            globalValues,
+            parties,
+            certDetails,
+            alice,
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                contractId,
+                contractUri,
+                globalFields,
+                partyFields,
+                globalValues,
+                partyValues[0],
+                alicePrivateKey
+            ),
+            partyValues,
+            new address[](0),
+            "",
+            block.timestamp + 3600
+        );
+
+        vm.stopPrank();
+    }
+
     function test_NewDealManagerIntegrity() public {
+        _upgradeFactoryAndLegacyDealManagers();
+
         // Deploy a new DealManager
         DealManager dm = DealManager(newDmFactory.deployDealManager(bytes32(keccak256("test_NewDealManagerIntegrity"))));
 
@@ -93,11 +228,32 @@ contract UpgradeDealManagerTest is Test {
 
     // TODO WIP
     function test_DeployNewCyberCorp() public {
+        _upgradeFactoryAndLegacyDealManagers();
 
     }
 
     // TODO WIP
     function test_enableFees() public {
+        _upgradeFactoryAndLegacyDealManagers();
+    }
 
+    function _upgradeFactoryAndLegacyDealManagers() internal {
+        //
+        // Simulate upgrades
+        //
+
+        // Run scripts to deploy DealManagerFactory
+        (newDmFactory, safeTx) = (new UpgradeDealManagerFactoryScript()).run();
+        // Expect new factory to be deployed at a predetermined address because we will hard-code it to the DealManagerWithMigration contract
+        assertEq(address(newDmFactory), 0x2E6EB43Fe6BC12543aB59239028401Ae1f9125E3, "new DealManagerFactory address has changed, update it in DealManagerWithMigration");
+
+        // Simulate MetaLeX Safe executing the Safe txs to replace DealManagerFactory
+        vm.startPrank(metalexSafe);
+        (safeTx.to).call{value: safeTx.value}(safeTx.data);
+        vm.stopPrank();
+
+        // Run scripts to upgrade all legacy DealManagers
+        // TODO should take a list of known DealManagers
+        dmWithMigrationImpl = (new UpgradeLegacyDealManagersScript()).upgradeLegacyDealManagers(address(newDmFactory));
     }
 }
