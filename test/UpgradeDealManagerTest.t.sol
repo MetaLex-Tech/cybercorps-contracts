@@ -10,7 +10,7 @@ import {GnosisTransaction} from "../script/libs/safe.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {DealManager} from "../src/DealManager.sol";
-import {DealManager as DealManagerWithMigration} from "../src/DealManagerWithMigration.sol";
+import {DealManagerWithMigration} from "../src/DealManagerWithMigration.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 
 contract UpgradeDealManagerTest is Test {

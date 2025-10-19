@@ -20,7 +20,7 @@ import "../src/CyberCorpConstants.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {SAFTExtension} from "../src/storage/extensions/SAFTExtension.sol";
 import {DealManager} from "../src/DealManager.sol";
-import {DealManager as DealManagerWithMigration} from "../src/DealManagerWithMigration.sol";
+import {DealManagerWithMigration} from "../src/DealManagerWithMigration.sol";
 import {ILegacyDealManagerFactory} from "./interfaces/ILegacyDealManagerFactory.sol";
 import {GnosisTransaction} from "./libs/safe.sol";
 
