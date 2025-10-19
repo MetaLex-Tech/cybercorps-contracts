@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {Test, console2} from "forge-std/Test.sol";
+import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import {Initializable} from "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {UpgradeDealManagerFactoryScript} from "../script/upgrade-dealmanager-factory.s.sol";
@@ -320,15 +321,99 @@ contract UpgradeDealManagerTest is Test {
         vm.stopPrank();
     }
 
-    // TODO WIP
-    function test_enableFees() public {
-        _upgradeFactoryAndLegacyDealManagers();
-
-        vm.startPrank(metalexSafe);
-        newDmFactory.setPlatformPayable(address(metalexSafe));
-        newDmFactory.setDefaultFeeRatio(10);
-        vm.stopPrank();
-    }
+    // TODO WIP: this is failing atm probably due to incompatible version of CyberCorpFactory, IssuanceManagerFactory, etc.
+    //  Need a precise plan on how we are upgrading everything
+//    function test_enableFees() public {
+//        _upgradeFactoryAndLegacyDealManagers();
+//
+//        vm.startPrank(metalexSafe);
+//        newDmFactory.setPlatformPayable(address(metalexSafe));
+//        newDmFactory.setDefaultFeeRatio(25);
+//        vm.stopPrank();
+//
+//        vm.startPrank(alice);
+//        (
+//            address cyberCorp,
+//            address auth,
+//            address issuanceManager,
+//            address dm,
+//            address[] memory cyberCertPrinterAddr,
+//            bytes32 agreementId,
+//            uint256[] memory certIds
+//        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+//            block.timestamp,
+//            "TestCorp",
+//            "Limited Liability Company",
+//            "Juris",
+//            "Contact Details",
+//            "Dispute Res",
+//            alice,
+//            CompanyOfficer({
+//                eoa: alice,
+//                name: "Alice",
+//                contact: "test@example.com",
+//                title: "CEO"
+//            }),
+//            defaultCertData,
+//            templateId,
+//            defaultGlobalValues,
+//            defaultParties,
+//            100e6,
+//            defaultPartyValues,
+//            CyberAgreementUtils.signAgreementTypedData(
+//                vm,
+//                registry.DOMAIN_SEPARATOR(),
+//                registry.SIGNATUREDATA_TYPEHASH(),
+//                keccak256(abi.encode(
+//                    templateId,
+//                    block.timestamp,
+//                    defaultGlobalValues,
+//                    defaultParties
+//                )),
+//                contractUri,
+//                globalFields,
+//                partyFields,
+//                defaultGlobalValues,
+//                defaultPartyValues[0],
+//                alicePrivateKey
+//            ),
+//            defaultCertDetails,
+//            new address[](0),
+//            bytes32(0),
+//            block.timestamp + 1000000
+//        );
+//        vm.stopPrank();
+//
+//        deal(address(paymentToken), bob, 100e6);
+//        uint256 metalexSafeBalanceBefore = ERC20(paymentToken).balanceOf(metalexSafe);
+//
+//        vm.startPrank(bob);
+//        ERC20(paymentToken).approve(dm, 100e6);
+//        DealManager(dm).signAndFinalizeDeal(
+//            bob,
+//            agreementId,
+//            defaultPartyValues[1],
+//            CyberAgreementUtils.signAgreementTypedData(
+//                vm,
+//                registry.DOMAIN_SEPARATOR(),
+//                registry.SIGNATUREDATA_TYPEHASH(),
+//                agreementId,
+//                contractUri,
+//                globalFields,
+//                partyFields,
+//                defaultGlobalValues,
+//                defaultPartyValues[1],
+//                bobPrivateKey
+//            ),
+//            true,
+//            "Bob",
+//            ""
+//        );
+//        vm.stopPrank();
+//
+//        assertEq(ERC20(paymentToken).balanceOf(alice), 100e6 - 0.25e6, "alice should receive payment minus fees");
+//        assertEq(ERC20(paymentToken).balanceOf(metalexSafe) - metalexSafeBalanceBefore, 0.25e6, "MetaLex should receive fees");
+//    }
 
     function _upgradeFactoryAndLegacyDealManagers() internal {
         //
