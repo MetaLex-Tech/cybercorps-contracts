@@ -22,17 +22,10 @@ import {SAFTExtension} from "../src/storage/extensions/SAFTExtension.sol";
 import {DealManager} from "../src/DealManager.sol";
 import {DealManagerWithMigration} from "../src/DealManagerWithMigration.sol";
 import {ILegacyDealManagerFactory} from "./interfaces/ILegacyDealManagerFactory.sol";
-
+import {KnownDealManagersLoader} from "./libs/KnownDealManagersLoader.sol";
 
 contract UpgradeLegacyDealManagersScript is Script {
-
     function run() public returns (DealManagerWithMigration) {
-        return upgradeLegacyDealManagers(
-            vm.envAddress("DEAL_MANAGER_FACTORY_ADDR")
-        );
-    }
-
-    function upgradeLegacyDealManagers(address newDealManagerFactory) public returns (DealManagerWithMigration) {
         bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.3.Upgrade")); // TODO TBD
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
 
@@ -42,12 +35,8 @@ contract UpgradeLegacyDealManagersScript is Script {
         // - 0x15A399Dee2b25C5a766cd9480a154B13d128E669 (deprecated, won't touch it)
         ILegacyDealManagerFactory legacyDealManagerFactory = ILegacyDealManagerFactory(0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3);
 
-        // Known deployed DealManager @ Ethereum mainnet
-        // TODO Find all legacy DealManagers
-        address[] memory knownDealManagers = new address[](3);
-        knownDealManagers[0] = 0xB4dd83e4b12454a85AEc05e443e95c72a2c48D83;
-        knownDealManagers[1] = 0x71B4DAC6237Ce73bf673CB9cb2b94257C975D69a;
-        knownDealManagers[2] = 0x492685f1d34170F1B67e8B72cBD0f982E3E7e7a7;
+        // Load all known deal managers
+        address[] memory knownDealManagers = KnownDealManagersLoader.load(block.chainid);
 
         vm.startBroadcast(deployerPrivateKey);
 

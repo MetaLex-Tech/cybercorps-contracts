@@ -9,6 +9,7 @@ import {UpgradeDealManagerFactoryScript} from "../script/upgrade-dealmanager-fac
 import {UpgradeLegacyDealManagersScript} from "../script/upgrade-legacy-dealmanagers.s.sol";
 import {ILegacyDealManagerFactory} from "../script/interfaces/ILegacyDealManagerFactory.sol";
 import {GnosisTransaction} from "../script/libs/safe.sol";
+import {KnownDealManagersLoader} from "../script/libs/KnownDealManagersLoader.sol";
 import {SecurityClass, SecuritySeries, CompanyOfficer} from "../src/CyberCorpConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
@@ -77,7 +78,7 @@ contract UpgradeDealManagerTest is Test {
     address paymentToken = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // USDC @ Ethereum mainnet
 
     // Known deployed DealManager @ Ethereum mainnet
-    address[] knownDealManagers = new address[](3);
+    address[] knownDealManagers;
 
     uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
     address deployer = vm.addr(deployerPrivateKey);
@@ -106,9 +107,8 @@ contract UpgradeDealManagerTest is Test {
         // Prepare for upgrades
         //
 
-        knownDealManagers[0] = 0xB4dd83e4b12454a85AEc05e443e95c72a2c48D83;
-        knownDealManagers[1] = 0x71B4DAC6237Ce73bf673CB9cb2b94257C975D69a;
-        knownDealManagers[2] = 0x492685f1d34170F1B67e8B72cBD0f982E3E7e7a7;
+        // Load all known deal managers
+        knownDealManagers = KnownDealManagersLoader.load(block.chainid);
 
         // Simulate granting the test deployer admin access so it can perform upgrades
         vm.startPrank(metalexSafe);
@@ -198,57 +198,64 @@ contract UpgradeDealManagerTest is Test {
     function test_LegacyDealManagerProposeDeal() public {
         _upgradeFactoryAndLegacyDealManagers();
 
-        address knownCyberCorp = 0x55c2Bb9973793d6Aa3dbb18C81fB5e115892F8af;
-        vm.startPrank(knownCyberCorp);
+        // Test the first three known deal managers is enough
+        uint256 testLength = knownDealManagers.length > 3 ? 3 : knownDealManagers.length;
+        for (uint256 i = 0; i < testLength; i++) {
 
-        address[] memory certPrinterAddress = new address[](1);
-        for (uint256 i = 0; i < defaultCertData.length; i++) {
-            certPrinterAddress[i] = IIssuanceManager(DealManager(knownDealManagers[0]).issuanceManager()).createCertPrinter(
-                defaultCertData[i].defaultLegend,
-                string.concat("TestCorp", defaultCertData[i].name),
-                defaultCertData[i].symbol,
-                defaultCertData[i].uri,
-                defaultCertData[i].securityClass,
-                defaultCertData[i].securitySeries,
-                defaultCertData[i].extension
-            );
-        }
+            address cyberCorp = DealManager(knownDealManagers[i]).issuanceManager().CORP();
+            vm.startPrank(cyberCorp);
 
-        // Create and sign deal
-        DealManager(knownDealManagers[0]).proposeAndSignDeal(
-            certPrinterAddress,
-            paymentToken,
-            100e6,
-            templateId,
-            block.timestamp,
-            defaultGlobalValues,
-            defaultParties,
-            defaultCertDetails,
-            alice,
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                keccak256(abi.encode(
-                    templateId,
-                    block.timestamp,
-                    defaultGlobalValues,
-                    defaultParties
-                )),
-                contractUri,
-                globalFields,
-                partyFields,
+            address[] memory certPrinterAddress = new address[](1);
+            for (uint256 j = 0; j < defaultCertData.length; j++) {
+                certPrinterAddress[j] = IIssuanceManager(DealManager(knownDealManagers[i]).issuanceManager()).createCertPrinter(
+                    defaultCertData[j].defaultLegend,
+                    string.concat("TestCorp", defaultCertData[j].name),
+                    defaultCertData[j].symbol,
+                    defaultCertData[j].uri,
+                    defaultCertData[j].securityClass,
+                    defaultCertData[j].securitySeries,
+                    defaultCertData[j].extension
+                );
+            }
+
+            uint256 agreementSalt = block.timestamp + i;
+
+            // Create and sign deal
+            DealManager(knownDealManagers[i]).proposeAndSignDeal(
+                certPrinterAddress,
+                paymentToken,
+                100e6,
+                templateId,
+                agreementSalt,
                 defaultGlobalValues,
-                defaultPartyValues[0],
-                alicePrivateKey
-            ),
-            defaultPartyValues,
-            new address[](0),
-            bytes32(0),
-            block.timestamp + 1000000
-        );
+                defaultParties,
+                defaultCertDetails,
+                alice,
+                CyberAgreementUtils.signAgreementTypedData(
+                    vm,
+                    registry.DOMAIN_SEPARATOR(),
+                    registry.SIGNATUREDATA_TYPEHASH(),
+                    keccak256(abi.encode(
+                        templateId,
+                        agreementSalt,
+                        defaultGlobalValues,
+                        defaultParties
+                    )),
+                    contractUri,
+                    globalFields,
+                    partyFields,
+                    defaultGlobalValues,
+                    defaultPartyValues[0],
+                    alicePrivateKey
+                ),
+                defaultPartyValues,
+                new address[](0),
+                bytes32(0),
+                block.timestamp + 1000000
+            );
 
-        vm.stopPrank();
+            vm.stopPrank();
+        }
     }
 
     function test_NewDealManagerIntegrity() public {
@@ -432,6 +439,6 @@ contract UpgradeDealManagerTest is Test {
 
         // Run scripts to upgrade all legacy DealManagers
         // TODO should take a list of known DealManagers
-        dmWithMigrationImpl = (new UpgradeLegacyDealManagersScript()).upgradeLegacyDealManagers(address(newDmFactory));
+        dmWithMigrationImpl = (new UpgradeLegacyDealManagersScript()).run();
     }
 }

@@ -4,5 +4,6 @@ out = "out"
 libs = ["lib", "dependencies"]
 optimizer = true
 optimizer_runs = 15
+fs_permissions = [{ access = "read", path = "./script/res" }]
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
