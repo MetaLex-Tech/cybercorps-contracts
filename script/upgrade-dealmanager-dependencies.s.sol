@@ -21,13 +21,16 @@ import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {SAFTExtension} from "../src/storage/extensions/SAFTExtension.sol";
 import {DealManager} from "../src/DealManager.sol";
 import {DealManagerWithMigration} from "../src/DealManagerWithMigration.sol";
+import {CyberScrip} from "../src/CyberScrip.sol";
+import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
+import {RoundManager} from "../src/RoundManager.sol";
 import {ILegacyDealManagerFactory} from "./interfaces/ILegacyDealManagerFactory.sol";
 import {GnosisTransaction} from "./libs/safe.sol";
 
+/// @notice Deploy and upgrade all dependencies for testing DealManager upgrades
+contract UpgradeDealManagerDependenciesScript is Script {
 
-contract UpgradeDealManagerFactoryScript is Script {
-
-    function run() public returns (DealManagerFactory, GnosisTransaction memory) {
+    function run() public {
         bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.3.Upgrade")); // TODO TBD
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
 
@@ -41,54 +44,42 @@ contract UpgradeDealManagerFactoryScript is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        //
-        // Deploy new DealManagerFactory
-        //
+        // Upgrade CyberCorpSingleFactory
+        address newCyberCorpSingleFactoryImpl = address(new CyberCorpSingleFactory(address(auth)));
+        console.log("new CyberCorpSingleFactory implementation deployed at: %s", newCyberCorpSingleFactoryImpl);
 
-        // Deploy new DealManager reference implementation
-        DealManager refDm = new DealManager{salt: salt}(); // Use create2 here so it and hence the new factory has a stable address regardless of the deployer's state
-        console.log("New DealManager reference implementation deployed at: %s", address(refDm));
+        // Upgrade IssuanceManagerFactory
+        address newIssuanceManagerFactoryImpl = address(new IssuanceManagerFactory(address(auth)));
+        console.log("new IssuanceManagerFactory implementation deployed at: %s", newIssuanceManagerFactoryImpl);
 
-        // Deploy new UUPSUpgradeable DealManagerFactory
-        DealManagerFactory newDmFactory = DealManagerFactory(
-            address(
-                new ERC1967Proxy{salt: salt}(
-                    address(new DealManagerFactory{salt: salt}()),
-                    abi.encodeWithSelector(
-                        DealManagerFactory.initialize.selector,
-                        address(auth),
-                        address(refDm)
-                    )
+        // Deploy RoundManagerFactory
+        address roundManagerFactory = address(
+            new ERC1967Proxy{salt: salt}(
+                address(new RoundManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(auth),
+                    address(new RoundManager())
                 )
             )
         );
-        console.log("New DealManagerFactory deployed at: %s", address(newDmFactory));
 
-        // Verify the upgrade was successful
-        address updatedImplementation = newDmFactory.getRefImplementation();
-        vm.assertEq(newDmFactory.getRefImplementation(), address(refDm), "unexpected reference implementation");
+        // Deploy CyberScrip implementation
+        address cyberCert20Implementation = address(new CyberScrip());
+
+        //
+        // Upgrade CybercorpFactory
+        //
+
+        address newCyberCorpFactoryImpl = address(new CyberCorpFactory());
+        CyberCorpFactory(cyberCorpFactory).upgradeToAndCall(newCyberCorpFactoryImpl, "");
+        console.log("CyberCorpFactory upgraded to implementation: %s", newCyberCorpFactoryImpl);
+
+        CyberCorpFactory(cyberCorpFactory).setCyberCorpSingleFactory(newCyberCorpSingleFactoryImpl);
+        CyberCorpFactory(cyberCorpFactory).setIssuanceManagerFactory(newIssuanceManagerFactoryImpl);
+        CyberCorpFactory(cyberCorpFactory).setRoundManagerFactory(roundManagerFactory);
+        CyberCorpFactory(cyberCorpFactory).setCyberCert20Implementation(cyberCert20Implementation);
 
         vm.stopBroadcast();
-
-        //
-        // Create Safe txs to replace old DealManagerFactory
-        //
-
-        GnosisTransaction memory safeTx = GnosisTransaction({
-            to: cyberCorpFactory,
-            value: 0 ether,
-            data: abi.encodeWithSelector(
-                CyberCorpFactory.setDealManagerFactory.selector,
-                newDmFactory
-            )
-        });
-
-        console.log("Safe tx (for replacing old DealManagerFactory):");
-        console.log("    to:", safeTx.to);
-        console.log("    value:", safeTx.value);
-        console.log("    data:");
-        console.logBytes(safeTx.data);
-
-        return (newDmFactory, safeTx);
     }
 }

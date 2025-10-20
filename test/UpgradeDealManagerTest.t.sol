@@ -5,6 +5,7 @@ import {Test, console2} from "forge-std/Test.sol";
 import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import {Initializable} from "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
+import {UpgradeDealManagerDependenciesScript} from "../script/upgrade-dealmanager-dependencies.s.sol";
 import {UpgradeDealManagerFactoryScript} from "../script/upgrade-dealmanager-factory.s.sol";
 import {UpgradeLegacyDealManagersScript} from "../script/upgrade-legacy-dealmanagers.s.sol";
 import {ILegacyDealManagerFactory} from "../script/interfaces/ILegacyDealManagerFactory.sol";
@@ -20,59 +21,12 @@ import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
-/// @notice Because we are testing against the legacy CyberCorpFactory, not the one we are upgrading to
-interface ILegacyCyberCorpFactory {
-    struct CyberCertData {
-        string name;
-        string symbol;
-        string uri;
-        SecurityClass securityClass;
-        SecuritySeries securitySeries;
-        address extension;
-        string[] defaultLegend;
-    }
-    
-    function dealManagerFactory() external returns (address);
-
-    function deployCyberCorpAndCreateOffer(
-        uint256 salt,
-        string memory companyName,
-        string memory companyType,
-        string memory companyJurisdiction,
-        string memory companyContactDetails,
-        string memory defaultDisputeResolution,
-        address _companyPayable,
-        CompanyOfficer memory _officer,
-        CyberCertData[] memory _certData,
-        bytes32 _templateId,
-        string[] memory _globalValues,
-        address[] memory _parties,
-        uint256 _paymentAmount,
-        string[][] memory _partyValues,
-        bytes memory signature,
-        CertificateDetails[] memory _details,
-        address[] memory conditions,
-        bytes32 secretHash,
-        uint256 expiry
-    )
-    external
-    returns (
-        address cyberCorpAddress,
-        address authAddress,
-        address issuanceManagerAddress,
-        address dealManagerAddress,
-        address[] memory certPrinterAddress,
-        bytes32 id,
-        uint256[] memory certIds
-    );
-}
-
 contract UpgradeDealManagerTest is Test {
     address metalexSafe = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
 
     // Universal registry address
     CyberAgreementRegistry registry = CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134);
-    ILegacyCyberCorpFactory cyberCorpFactory = ILegacyCyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
+    CyberCorpFactory cyberCorpFactory = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
     ILegacyDealManagerFactory legacyDealManagerFactory = ILegacyDealManagerFactory(0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3);
 
     address paymentToken = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // USDC @ Ethereum mainnet
@@ -99,7 +53,7 @@ contract UpgradeDealManagerTest is Test {
     address[] defaultParties = new address[](2);
     string[] defaultGlobalValues = new string[](1);
     string[][] defaultPartyValues = new string[][](2);
-    ILegacyCyberCorpFactory.CyberCertData[] defaultCertData = new ILegacyCyberCorpFactory.CyberCertData[](1);
+    CyberCorpFactory.CyberCertData[] defaultCertData = new CyberCorpFactory.CyberCertData[](1);
     CertificateDetails[] defaultCertDetails = new CertificateDetails[](1);
 
     function setUp() public {
@@ -154,7 +108,7 @@ contract UpgradeDealManagerTest is Test {
             extensionData: ""
         });
         
-        defaultCertData[0] = ILegacyCyberCorpFactory.CyberCertData({
+        defaultCertData[0] = CyberCorpFactory.CyberCertData({
             name: "Test",
             symbol: "TEST",
             uri: "ipfs://test",
@@ -427,10 +381,13 @@ contract UpgradeDealManagerTest is Test {
         // Simulate upgrades
         //
 
+        // Upgrade all other breaking changes
+        (new UpgradeDealManagerDependenciesScript()).run();
+
         // Run scripts to deploy DealManagerFactory
         (newDmFactory, safeTx) = (new UpgradeDealManagerFactoryScript()).run();
         // Expect new factory to be deployed at a predetermined address because we will hard-code it to the DealManagerWithMigration contract
-        assertEq(address(newDmFactory), 0x2E6EB43Fe6BC12543aB59239028401Ae1f9125E3, "new DealManagerFactory address has changed, update it in DealManagerWithMigration");
+        assertEq(address(newDmFactory), 0x919c7aD9aFAF40C29EE41aA41431ACf7558e35b7, "new DealManagerFactory address has changed, update it in DealManagerWithMigration");
 
         // Simulate MetaLeX Safe executing the Safe txs to replace DealManagerFactory
         vm.startPrank(metalexSafe);
