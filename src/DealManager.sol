@@ -307,7 +307,7 @@ contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAut
         }
         
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
-        updateEscrow(agreementId, msg.sender, name);
+        updateEscrow(agreementId, signer, name);
         handleCounterPartyPayment(agreementId);
     }
 
@@ -345,7 +345,7 @@ contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAut
         if(!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).hasSigned(agreementId, signer))
             ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
 
-        updateEscrow(agreementId, msg.sender, name);
+        updateEscrow(agreementId, signer, name);
         if(!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
         handleCounterPartyPayment(agreementId);
         finalizeDeal(agreementId);
