@@ -28,7 +28,7 @@ import {GnosisTransaction} from "./libs/safe.sol";
 contract UpgradeDealManagerFactoryScript is Script {
 
     function run() public returns (DealManagerFactory, GnosisTransaction memory) {
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.3.Upgrade")); // TODO TBD
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3"));
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
 
         address deployerAddress = vm.addr(deployerPrivateKey);

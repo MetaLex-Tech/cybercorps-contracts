@@ -26,7 +26,7 @@ import {KnownDealManagersLoader} from "./libs/KnownDealManagersLoader.sol";
 
 contract UpgradeLegacyDealManagersScript is Script {
     function run() public returns (DealManagerWithMigration) {
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.3.Upgrade")); // TODO TBD
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3"));
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
 
         // To upgrade the legacy beacon-based DealManagers, we must first identify

@@ -5,7 +5,7 @@ import {Test, console2} from "forge-std/Test.sol";
 import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import {Initializable} from "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
-import {UpgradeDealManagerDependenciesScript} from "../script/upgrade-dealmanager-dependencies.s.sol";
+import {UpgradePublicRoundsScript} from "../script/upgrade-public-rounds.s.sol";
 import {UpgradeDealManagerFactoryScript} from "../script/upgrade-dealmanager-factory.s.sol";
 import {UpgradeLegacyDealManagersScript} from "../script/upgrade-legacy-dealmanagers.s.sol";
 import {ILegacyDealManagerFactory} from "../script/interfaces/ILegacyDealManagerFactory.sol";
@@ -484,12 +484,12 @@ contract UpgradeDealManagerTest is Test {
         //
 
         // Upgrade all other breaking changes
-        (new UpgradeDealManagerDependenciesScript()).run();
+        (new UpgradePublicRoundsScript()).run();
 
         // Run scripts to deploy DealManagerFactory
         (newDmFactory, safeTx) = (new UpgradeDealManagerFactoryScript()).run();
         // Expect new factory to be deployed at a predetermined address because we will hard-code it to the DealManagerWithMigration contract
-        assertEq(address(newDmFactory), 0x919c7aD9aFAF40C29EE41aA41431ACf7558e35b7, "new DealManagerFactory address has changed, update it in DealManagerWithMigration");
+        assertEq(address(newDmFactory), 0x424dc367e96fc30C23f6a289F4b5e25A7fC0F21d, "new DealManagerFactory address has changed, update it in DealManagerWithMigration");
 
         // Simulate MetaLeX Safe executing the Safe txs to replace DealManagerFactory
         vm.startPrank(metalexSafe);
