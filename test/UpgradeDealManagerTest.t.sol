@@ -14,6 +14,7 @@ import {KnownDealManagersLoader} from "../script/libs/KnownDealManagersLoader.so
 import {SecurityClass, SecuritySeries, CompanyOfficer} from "../src/CyberCorpConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
+import {CyberCorp} from "../src/CyberCorp.sol";
 import {DealManager} from "../src/DealManager.sol";
 import {DealManagerWithMigration} from "../src/DealManagerWithMigration.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
@@ -285,7 +286,7 @@ contract UpgradeDealManagerTest is Test {
         vm.stopPrank();
     }
 
-    function test_enableFees() public {
+    function test_EnableFeesNewCorp() public {
         _upgradeFactoryAndLegacyDealManagers();
 
         vm.startPrank(metalexSafe);
@@ -376,6 +377,104 @@ contract UpgradeDealManagerTest is Test {
         vm.stopPrank();
 
         assertEq(ERC20(paymentToken).balanceOf(alice), 100e6 - 0.25e6, "alice should receive payment minus fees");
+        assertEq(ERC20(paymentToken).balanceOf(metalexSafe) - metalexSafeBalanceBefore, 0.25e6, "MetaLex should receive fees");
+    }
+
+    function test_EnableFeesExistingCorp() public {
+        _upgradeFactoryAndLegacyDealManagers();
+
+        vm.startPrank(metalexSafe);
+        newDmFactory.setPlatformPayable(address(metalexSafe));
+        newDmFactory.setDefaultFeeRatio(25);
+        vm.stopPrank();
+
+        // Test the first three known deal managers is enough
+        uint256 testLength = knownDealManagers.length > 3 ? 3 : knownDealManagers.length;
+
+        address cyberCorp = DealManager(knownDealManagers[0]).issuanceManager().CORP();
+        vm.startPrank(cyberCorp);
+
+        address[] memory certPrinterAddress = new address[](1);
+        for (uint256 j = 0; j < defaultCertData.length; j++) {
+            certPrinterAddress[j] = IIssuanceManager(DealManager(knownDealManagers[0]).issuanceManager()).createCertPrinter(
+                defaultCertData[j].defaultLegend,
+                string.concat("TestCorp", defaultCertData[j].name),
+                defaultCertData[j].symbol,
+                defaultCertData[j].uri,
+                defaultCertData[j].securityClass,
+                defaultCertData[j].securitySeries,
+                defaultCertData[j].extension
+            );
+        }
+
+        uint256 agreementSalt = block.timestamp;
+
+        // Create and sign deal
+        (bytes32 agreementId, ) = DealManager(knownDealManagers[0]).proposeAndSignDeal(
+            certPrinterAddress,
+            paymentToken,
+            100e6,
+            templateId,
+            agreementSalt,
+            defaultGlobalValues,
+            defaultParties,
+            defaultCertDetails,
+            alice,
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                keccak256(abi.encode(
+                    templateId,
+                    agreementSalt,
+                    defaultGlobalValues,
+                    defaultParties
+                )),
+                contractUri,
+                globalFields,
+                partyFields,
+                defaultGlobalValues,
+                defaultPartyValues[0],
+                alicePrivateKey
+            ),
+            defaultPartyValues,
+            new address[](0),
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+
+        vm.stopPrank();
+
+        deal(address(paymentToken), bob, 100e6);
+        uint256 companyPayableBalanceBefore = ERC20(paymentToken).balanceOf(CyberCorp(cyberCorp).companyPayable());
+        uint256 metalexSafeBalanceBefore = ERC20(paymentToken).balanceOf(metalexSafe);
+
+        vm.startPrank(bob);
+        ERC20(paymentToken).approve(knownDealManagers[0], 100e6);
+
+        DealManager(knownDealManagers[0]).signAndFinalizeDeal(
+            bob,
+            agreementId,
+            defaultPartyValues[1],
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                contractUri,
+                globalFields,
+                partyFields,
+                defaultGlobalValues,
+                defaultPartyValues[1],
+                bobPrivateKey
+            ),
+            true,
+            "Bob",
+            ""
+        );
+        vm.stopPrank();
+
+        assertEq(ERC20(paymentToken).balanceOf(CyberCorp(cyberCorp).companyPayable()) - companyPayableBalanceBefore, 100e6 - 0.25e6, "alice should receive payment minus fees");
         assertEq(ERC20(paymentToken).balanceOf(metalexSafe) - metalexSafeBalanceBefore, 0.25e6, "MetaLex should receive fees");
     }
 
