@@ -63,9 +63,15 @@ contract UpgradeDealManagerDependenciesScript is Script {
                 )
             )
         );
+        console.log("new RoundManagerFactory deployed at: %s", roundManagerFactory);
+
+        // Deploy CyberCertPrinter implementation
+        address cyberCertPrinterImpl = address(new CyberCertPrinter());
+        console.log("new CyberCertPrinter implementation deployed at: %s", cyberCertPrinterImpl);
 
         // Deploy CyberScrip implementation
-        address cyberCert20Implementation = address(new CyberScrip());
+        address cyberCert20Impl = address(new CyberScrip());
+        console.log("new CyberScrip implementation deployed at: %s", cyberCertPrinterImpl);
 
         //
         // Upgrade CybercorpFactory
@@ -78,7 +84,8 @@ contract UpgradeDealManagerDependenciesScript is Script {
         CyberCorpFactory(cyberCorpFactory).setCyberCorpSingleFactory(newCyberCorpSingleFactoryImpl);
         CyberCorpFactory(cyberCorpFactory).setIssuanceManagerFactory(newIssuanceManagerFactoryImpl);
         CyberCorpFactory(cyberCorpFactory).setRoundManagerFactory(roundManagerFactory);
-        CyberCorpFactory(cyberCorpFactory).setCyberCert20Implementation(cyberCert20Implementation);
+        CyberCorpFactory(cyberCorpFactory).setCyberCertPrinterImplementation(cyberCertPrinterImpl);
+        CyberCorpFactory(cyberCorpFactory).setCyberCert20Implementation(cyberCert20Impl);
 
         vm.stopBroadcast();
     }

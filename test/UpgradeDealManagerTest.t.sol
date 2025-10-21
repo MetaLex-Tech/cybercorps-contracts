@@ -34,11 +34,14 @@ contract UpgradeDealManagerTest is Test {
     // Known deployed DealManager @ Ethereum mainnet
     address[] knownDealManagers;
 
+    // Randomly generated to avoid contaminated common test addresses
+    uint256 privateKeySalt = 0xe6fc9058b04996425a6f0e6479e6e06f7177a6c61043b10857eb0a72339853e0;
+    
     uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
     address deployer = vm.addr(deployerPrivateKey);
-    uint256 alicePrivateKey = 0xa11ce;
+    uint256 alicePrivateKey = 0xa11ce + privateKeySalt;
     address alice = vm.addr(alicePrivateKey);
-    uint256 bobPrivateKey = 0xb0b;
+    uint256 bobPrivateKey = 0xb0b + privateKeySalt;
     address bob = vm.addr(bobPrivateKey);
 
     DealManagerFactory newDmFactory;
@@ -282,99 +285,99 @@ contract UpgradeDealManagerTest is Test {
         vm.stopPrank();
     }
 
-    // TODO WIP: this is failing atm probably due to incompatible version of CyberCorpFactory, IssuanceManagerFactory, etc.
-    //  Need a precise plan on how we are upgrading everything
-//    function test_enableFees() public {
-//        _upgradeFactoryAndLegacyDealManagers();
-//
-//        vm.startPrank(metalexSafe);
-//        newDmFactory.setPlatformPayable(address(metalexSafe));
-//        newDmFactory.setDefaultFeeRatio(25);
-//        vm.stopPrank();
-//
-//        vm.startPrank(alice);
-//        (
-//            address cyberCorp,
-//            address auth,
-//            address issuanceManager,
-//            address dm,
-//            address[] memory cyberCertPrinterAddr,
-//            bytes32 agreementId,
-//            uint256[] memory certIds
-//        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-//            block.timestamp,
-//            "TestCorp",
-//            "Limited Liability Company",
-//            "Juris",
-//            "Contact Details",
-//            "Dispute Res",
-//            alice,
-//            CompanyOfficer({
-//                eoa: alice,
-//                name: "Alice",
-//                contact: "test@example.com",
-//                title: "CEO"
-//            }),
-//            defaultCertData,
-//            templateId,
-//            defaultGlobalValues,
-//            defaultParties,
-//            100e6,
-//            defaultPartyValues,
-//            CyberAgreementUtils.signAgreementTypedData(
-//                vm,
-//                registry.DOMAIN_SEPARATOR(),
-//                registry.SIGNATUREDATA_TYPEHASH(),
-//                keccak256(abi.encode(
-//                    templateId,
-//                    block.timestamp,
-//                    defaultGlobalValues,
-//                    defaultParties
-//                )),
-//                contractUri,
-//                globalFields,
-//                partyFields,
-//                defaultGlobalValues,
-//                defaultPartyValues[0],
-//                alicePrivateKey
-//            ),
-//            defaultCertDetails,
-//            new address[](0),
-//            bytes32(0),
-//            block.timestamp + 1000000
-//        );
-//        vm.stopPrank();
-//
-//        deal(address(paymentToken), bob, 100e6);
-//        uint256 metalexSafeBalanceBefore = ERC20(paymentToken).balanceOf(metalexSafe);
-//
-//        vm.startPrank(bob);
-//        ERC20(paymentToken).approve(dm, 100e6);
-//        DealManager(dm).signAndFinalizeDeal(
-//            bob,
-//            agreementId,
-//            defaultPartyValues[1],
-//            CyberAgreementUtils.signAgreementTypedData(
-//                vm,
-//                registry.DOMAIN_SEPARATOR(),
-//                registry.SIGNATUREDATA_TYPEHASH(),
-//                agreementId,
-//                contractUri,
-//                globalFields,
-//                partyFields,
-//                defaultGlobalValues,
-//                defaultPartyValues[1],
-//                bobPrivateKey
-//            ),
-//            true,
-//            "Bob",
-//            ""
-//        );
-//        vm.stopPrank();
-//
-//        assertEq(ERC20(paymentToken).balanceOf(alice), 100e6 - 0.25e6, "alice should receive payment minus fees");
-//        assertEq(ERC20(paymentToken).balanceOf(metalexSafe) - metalexSafeBalanceBefore, 0.25e6, "MetaLex should receive fees");
-//    }
+    function test_enableFees() public {
+        _upgradeFactoryAndLegacyDealManagers();
+
+        vm.startPrank(metalexSafe);
+        newDmFactory.setPlatformPayable(address(metalexSafe));
+        newDmFactory.setDefaultFeeRatio(25);
+        vm.stopPrank();
+
+        vm.startPrank(alice);
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dm,
+            address rm,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 agreementId,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "TestCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            alice,
+            CompanyOfficer({
+                eoa: alice,
+                name: "Alice",
+                contact: "test@example.com",
+                title: "CEO"
+            }),
+            defaultCertData,
+            templateId,
+            defaultGlobalValues,
+            defaultParties,
+            100e6,
+            defaultPartyValues,
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                keccak256(abi.encode(
+                    templateId,
+                    block.timestamp,
+                    defaultGlobalValues,
+                    defaultParties
+                )),
+                contractUri,
+                globalFields,
+                partyFields,
+                defaultGlobalValues,
+                defaultPartyValues[0],
+                alicePrivateKey
+            ),
+            defaultCertDetails,
+            new address[](0),
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+        vm.stopPrank();
+
+        deal(address(paymentToken), bob, 100e6);
+        uint256 metalexSafeBalanceBefore = ERC20(paymentToken).balanceOf(metalexSafe);
+
+        vm.startPrank(bob);
+        ERC20(paymentToken).approve(dm, 100e6);
+
+        DealManager(dm).signAndFinalizeDeal(
+            bob,
+            agreementId,
+            defaultPartyValues[1],
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                contractUri,
+                globalFields,
+                partyFields,
+                defaultGlobalValues,
+                defaultPartyValues[1],
+                bobPrivateKey
+            ),
+            true,
+            "Bob",
+            ""
+        );
+        vm.stopPrank();
+
+        assertEq(ERC20(paymentToken).balanceOf(alice), 100e6 - 0.25e6, "alice should receive payment minus fees");
+        assertEq(ERC20(paymentToken).balanceOf(metalexSafe) - metalexSafeBalanceBefore, 0.25e6, "MetaLex should receive fees");
+    }
 
     function _upgradeFactoryAndLegacyDealManagers() internal {
         //
