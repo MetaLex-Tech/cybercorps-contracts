@@ -44,8 +44,6 @@ jobs:
           FOUNDRY_ETH_RPC_URL: "https://base-sepolia.g.alchemy.com/v2/${{ secrets.ALCHEMY_API_KEY }}"
           PRIVATE_KEY_MAIN: "${{ secrets.DEPLOYER_PRIVATE_KEY }}"
           TEST_KEY: "${{ secrets.DEPLOYER_PRIVATE_KEY }}"
-        # TODO skip UpgradeDealManagerTest for now because it depends on hard-coded addresses, but
-        #  somehow the CICD environment could not produce the same addresses as locally does
         run: |
-          forge test --via-ir -vvv --nmc UpgradeDealManagerTest
+          forge test --via-ir -vvv
         id: test
