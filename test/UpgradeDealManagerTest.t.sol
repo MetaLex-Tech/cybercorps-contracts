@@ -489,7 +489,7 @@ contract UpgradeDealManagerTest is Test {
         // Run scripts to deploy DealManagerFactory
         (newDmFactory, safeTx) = (new UpgradeDealManagerFactoryScript()).run();
         // Expect new factory to be deployed at a predetermined address because we will hard-code it to the DealManagerWithMigration contract
-        assertEq(address(newDmFactory), 0x424dc367e96fc30C23f6a289F4b5e25A7fC0F21d, "new DealManagerFactory address has changed, update it in DealManagerWithMigration");
+        assertEq(address(newDmFactory), 0xbc118292408Fa4DFE1f9D7736d211F41CFf54Cb6, "new DealManagerFactory address has changed, update it in DealManagerWithMigration");
 
         // Simulate MetaLeX Safe executing the Safe txs to replace DealManagerFactory
         vm.startPrank(metalexSafe);
