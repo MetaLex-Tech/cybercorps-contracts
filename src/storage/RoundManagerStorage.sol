@@ -352,10 +352,11 @@ library RoundManagerStorage {
                 );
         }
 
-        // Calculate units and investment USD
+        // Calculate units and investment USD based on usedAmount (rounded down to pricePerUnit)
         uint256 units = allocatedAmount / round.pricePerUnit;
+        uint256 usedAmount = units * round.pricePerUnit;
         uint8 paymentDecimals = IERC20Metadata(round.paymentToken).decimals();
-        uint256 investmentUSD = allocatedAmount / (10 ** paymentDecimals);
+        uint256 investmentUSD = usedAmount / (10 ** paymentDecimals);
 
         // Create certificate
         string memory officerName = round.officerName;
@@ -421,17 +422,17 @@ library RoundManagerStorage {
             );
         }
 
-        // Effect: Calculate refund amount and update escrowed amount
-        refund = escrow.buyerAssets[0].amount - allocatedAmount;
-        escrow.buyerAssets[0].amount = allocatedAmount;
+        // Effect: Calculate refund amount (includes any dust from unit rounding) and update escrowed amount
+        refund = escrow.buyerAssets[0].amount - usedAmount;
+        escrow.buyerAssets[0].amount = usedAmount;
 
         //if the round is public and the eoi submitter does not have a valid lexchex, mint it
         if (round.publicRound && !ILexChex(getLexChex()).hasValidLexCheX(escrow.counterParty)) {
             //mint lexchex if over 200k for individual or 1 million for corporate, account for decimals of the payment token
-            if (allocatedAmount >= 200000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && eoi.naturalPerson) {
+            if (usedAmount >= 200000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && eoi.naturalPerson) {
             (, tokenId) = ILexChexMinter(getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
             }
-            if (allocatedAmount >= 1000000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && !eoi.naturalPerson) {
+            if (usedAmount >= 1000000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && !eoi.naturalPerson) {
                     (, tokenId) = ILexChexMinter(getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
             }
         }

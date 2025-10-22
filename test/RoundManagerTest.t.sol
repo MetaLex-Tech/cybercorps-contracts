@@ -929,6 +929,125 @@ contract RoundManagerTest is Test {
         // Note: In a real test you'd need to properly mock the CertPrinter and verify its state
     }
 
+	function test_Allocate_RefundsDustAndUpdatesCertificateDetails() public {
+		// Submit EOI with a max that creates 5 USDC dust w.r.t. 10 USDC price per unit
+		vm.startPrank(investor);
+		(bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+			RoundManager(roundManager),
+			registry,
+			roundId,
+			1,
+			5_000 * 10 ** 6,
+			7_505 * 10 ** 6,
+			corpOwner,
+			investorPrivKey
+		);
+		vm.stopPrank();
+
+		uint256 balAfterSubmit = paymentToken.balanceOf(investor);
+
+		// Allocate requested amount; contract should round down and refund 5 USDC
+		vm.prank(corpOwner);
+		RoundManager(roundManager).allocate(agreementId, 7_505 * 10 ** 6);
+
+		uint256 balAfterAllocate = paymentToken.balanceOf(investor);
+		assertEq(balAfterAllocate - balAfterSubmit, 5 * 10 ** 6);
+
+		// Verify certificate details use usedAmount (rounded down) for units and USD
+		Escrow memory esc = RoundManager(roundManager).getEscrowDetails(agreementId);
+		assertGt(esc.corpAssets.length, 0);
+		Token memory corpToken = esc.corpAssets[0];
+		CertificateDetails memory details = CyberCertPrinter(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
+
+		uint256 expectedUnits = (7_505 * 10 ** 6) / PRICE_PER_UNIT; // floor -> 750
+		assertEq(details.unitsRepresented, expectedUnits);
+		uint256 expectedInvestmentUSD = (expectedUnits * PRICE_PER_UNIT) / (10 ** paymentToken.decimals());
+		assertEq(details.investmentAmountUSD, expectedInvestmentUSD);
+	}
+
+	function test_Allocate_EmitsRoundedAllocationAndPaysFeesOnUsedAmount() public {
+		// Submit EOI with dust
+		vm.startPrank(investor);
+		(bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+			RoundManager(roundManager),
+			registry,
+			roundId,
+			1,
+			5_000 * 10 ** 6,
+			7_505 * 10 ** 6,
+			corpOwner,
+			investorPrivKey
+		);
+		vm.stopPrank();
+
+		uint256 usedAmount = ((7_505 * 10 ** 6) / PRICE_PER_UNIT) * PRICE_PER_UNIT; // 7,500 USDC
+		uint256 fee = usedAmount * 25 / 10_000; // 0.25% default
+		uint256 corpBalBefore = paymentToken.balanceOf(corpOwner);
+
+		// Expect event with allocated (used) amount and totalRaised equal to used amount
+		vm.expectEmit(true, true, true, true);
+		emit RoundManager.AllocationMade(agreementId, roundId, investor, usedAmount, usedAmount, new uint256[](1));
+
+		vm.prank(corpOwner);
+		RoundManager(roundManager).allocate(agreementId, 7_505 * 10 ** 6);
+
+		uint256 corpBalAfter = paymentToken.balanceOf(corpOwner);
+		assertEq(corpBalAfter - corpBalBefore, usedAmount - fee);
+	}
+
+	function test_Allocate_FractionalUSD_DustRefundedAndUSDRoundedDown() public {
+		// Create a new round with pricePerUnit = 10.5 USDC to induce fractional USD dust
+		vm.startPrank(corpOwner);
+		bytes32 roundId105 = CyberCorpHelper.createRound(
+			RoundManager(roundManager),
+			address(paymentToken),
+			CyberCorpHelper.TEMPLATE_ID,
+			500_000 * 10 ** 6,
+			1 * 10 ** 6,
+			100_000 * 10 ** 6,
+			10_500_000, // 10.5 USDC with 6 decimals
+			VALUATION,
+			RoundType.FounderApproved,
+			corpOwnerPrivKey,
+			corp,
+			false
+		);
+		vm.stopPrank();
+
+		// Approve (investor was already funded in setUp)
+		vm.startPrank(investor);
+		paymentToken.approve(address(roundManager), type(uint256).max);
+
+		// Submit EOI with max 10.75 USDC to create both unit dust (0.25) and fractional USD dust (0.5 inside used)
+		(bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+			RoundManager(roundManager),
+			registry,
+			roundId105,
+			1,
+			1 * 10 ** 6,
+			10_750_000, // 10.75 USDC
+			corpOwner,
+			investorPrivKey
+		);
+		vm.stopPrank();
+
+		uint256 balAfterSubmit = paymentToken.balanceOf(investor);
+
+		// Allocate full requested; should allocate 1 unit (10.5 USDC), refund 0.25 USDC
+		vm.prank(corpOwner);
+		RoundManager(roundManager).allocate(agreementId, 10_750_000);
+
+		uint256 balAfterAllocate = paymentToken.balanceOf(investor);
+		assertEq(balAfterAllocate - balAfterSubmit, 250_000); // 0.25 USDC refund
+
+		// Certificate USD is rounded down from 10.5 to 10
+		Escrow memory esc = RoundManager(roundManager).getEscrowDetails(agreementId);
+		Token memory corpToken = esc.corpAssets[0];
+		CertificateDetails memory details = CyberCertPrinter(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
+		assertEq(details.unitsRepresented, 1);
+		assertEq(details.investmentAmountUSD, 10);
+	}
+
     function test_Allocate_InvalidAmount() public {
         // Submit EOI first
         vm.startPrank(investor);
