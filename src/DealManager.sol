@@ -139,11 +139,9 @@ contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAut
         if (_issuanceManager == address(0)) revert ZeroAddress();
 
         // Set storage values
-        LexScrowStorage.setCorp(_corp);
-        LexScrowStorage.setDealRegistry(_dealRegistry);
         DealManagerStorage.setIssuanceManager(_issuanceManager);
 
-        // Initialize LexScroWLite without setting storage
+        // Initialize LexScroWLite core addresses
         __LexScroWLite_init(_corp, _dealRegistry);
         DealManagerStorage.setUpgradeFactory(_upgradeFactory);
     }
