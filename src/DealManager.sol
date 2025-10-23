@@ -331,25 +331,20 @@ contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAut
         if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isFinalized(agreementId)) revert DealAlreadyFinalized();
         if(LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PENDING) revert DealNotPending();
 
-		string[] storage counterPartyCheck = DealManagerStorage.getCounterPartyValues(agreementId);
-		bool alreadySigned = ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).hasSigned(agreementId, signer);
-		if (alreadySigned) {
-			// Fetch values recorded in the registry and ensure consistency
+        string[] storage counterPartyCheck = DealManagerStorage.getCounterPartyValues(agreementId);
+        if(counterPartyCheck.length > 0) {
+            if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert CounterPartyValueMismatch();
+        } else {
+            DealManagerStorage.setCounterPartyValues(agreementId, partyValues);
+        }
+
+		if (!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).hasSigned(agreementId, signer)) {
+            // Not signed in registry yet; enforce local consistency and then sign
+            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
+		} else {
+            // Already signed in registry; fetch values recorded in the registry and ensure consistency
 			string[] memory registryValues = ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).getSignerValues(agreementId, signer);
 			if (keccak256(abi.encode(registryValues)) != keccak256(abi.encode(partyValues))) revert CounterPartyValueMismatch();
-			if (counterPartyCheck.length > 0) {
-				if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(registryValues))) revert CounterPartyValueMismatch();
-			} else {
-				DealManagerStorage.setCounterPartyValues(agreementId, registryValues);
-			}
-		} else {
-			// Not signed in registry yet; enforce local consistency and then sign
-			if (counterPartyCheck.length > 0) {
-				if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert CounterPartyValueMismatch();
-			} else {
-				DealManagerStorage.setCounterPartyValues(agreementId, partyValues);
-			}
-			ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
 		}
 
         updateEscrow(agreementId, signer, name);
