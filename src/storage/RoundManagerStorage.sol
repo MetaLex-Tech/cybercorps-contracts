@@ -329,7 +329,7 @@ library RoundManagerStorage {
         uint256 allocatedAmount
     )
     external // Use external library to save space
-    returns (uint256 tokenId, uint256[] memory certIds, uint256 refund) {
+    returns (uint256 tokenId, uint256[] memory certIds, uint256 usedAmount, uint256 refund) {
         tokenId = 0;
         bytes32 roundId = getAgreementToRound(agreementId);
         Round storage round = getRound(roundId);
@@ -354,7 +354,7 @@ library RoundManagerStorage {
 
         // Calculate units and investment USD based on usedAmount (rounded down to pricePerUnit)
         uint256 units = allocatedAmount / round.pricePerUnit;
-        uint256 usedAmount = units * round.pricePerUnit;
+        usedAmount = units * round.pricePerUnit;
         uint8 paymentDecimals = IERC20Metadata(round.paymentToken).decimals();
         uint256 investmentUSD = usedAmount / (10 ** paymentDecimals);
 

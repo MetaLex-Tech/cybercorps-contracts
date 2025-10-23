@@ -424,7 +424,7 @@ contract RoundManager is
         if (escrow.status != EscrowStatus.PAID) revert DealNotPaid();
         if (escrow.corpAssets.length > 0) revert AlreadyAllocated();
 
-        (uint256 tokenId, uint256[] memory certIds, uint256 refund) = RoundManagerStorage.allocate(
+        (uint256 tokenId, uint256[] memory certIds, uint256 usedAmount, uint256 refund) = RoundManagerStorage.allocate(
             LexScrowStorage.lexScrowStorage(),
             agreementId,
             allocatedAmount
@@ -439,7 +439,6 @@ contract RoundManager is
 
         // Effect: update raised amount to reflect only usedAmount (allocated rounded down to pricePerUnit)
         // refund was computed as (original escrowed amount - usedAmount), so usedAmount = original - refund
-        uint256 usedAmount = LexScrowStorage.getEscrow(agreementId).buyerAssets[0].amount;
         round.raised += usedAmount;
 
         if (refund > 0) {
