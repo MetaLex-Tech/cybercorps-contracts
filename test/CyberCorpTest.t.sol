@@ -73,16 +73,26 @@ import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {SAFTEExtension, SAFTEData} from "../src/storage/extensions/SAFTEExtension.sol";
 import {LeXcheX} from "../src/creds/lexchex.sol";
 import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
+import {LexScroWLite} from "../src/libs/LexScroWLite.sol";
 import {LexChexCondition} from "../src/libs/conditions/lexchexCondition.sol";
 import {LeXcheXUtils} from "./libs/LeXcheXUtils.sol";
 import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {ILegacyDealManagerFactory} from "../script/interfaces/ILegacyDealManagerFactory.sol";
+import {IERC721Errors} from "openzeppelin-contracts/interfaces/draft-IERC6093.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {ERC721EnumerableUpgradeable} from "openzeppelin-contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 
 contract RuggerImpl {
     function acceptDealManagerUpgrade(address dm, address newImpl) external {
         DealManager(dm).upgradeToAndCall(newImpl, "");
+    }
+}
+
+contract RugCyberCertPrinter is ERC721EnumerableUpgradeable {
+    // Burn token without any permission check
+    function burn(uint256 tokenId) external {
+        _burn(tokenId);
     }
 }
 
@@ -103,6 +113,14 @@ contract CyberCorpTest is Test {
     using ERC1967ProxyLib for address;
 
     //     Counter public counter;
+
+    // Randomly generated to avoid contaminated common test addresses
+    uint256 privateKeySalt = 0xe6fc9058b04996425a6f0e6479e6e06f7177a6c61043b10857eb0a72339853e0;
+
+    uint256 alicePrivateKey = 0xa11ce + privateKeySalt;
+    address alice = vm.addr(alicePrivateKey);
+    uint256 bobPrivateKey = 0xb0b + privateKeySalt;
+    address bob = vm.addr(bobPrivateKey);
 
     CyberCorpFactory cyberCorpFactory;
     CyberAgreementRegistry registry;
@@ -1213,7 +1231,7 @@ contract CyberCorpTest is Test {
         );
 
         // Try to sign and finalize with wrong passphrase
-        vm.expectRevert(); // Expect revert due to invalid secret
+        vm.expectRevert(CyberAgreementRegistry.InvalidSecret.selector); // Expect revert due to invalid secret
         dealManager.signAndFinalizeDeal(
             newPartyAddr,
             id,
@@ -1617,7 +1635,7 @@ contract CyberCorpTest is Test {
         vm.stopPrank();
 
         // Try to revoke after payment - should fail
-        vm.expectRevert();
+        vm.expectRevert(DealManager.CounterPartyValueMismatch.selector);
         IDealManager(dealManagerAddr).revokeDeal(id, testAddress, signature);
         vm.stopPrank();
     }
@@ -1924,16 +1942,8 @@ contract CyberCorpTest is Test {
         );
 
         // Try to finalize without payment - should fail
-        vm.expectRevert();
-        IDealManager(dealManagerAddr).finalizeDeal(
-            testAddress,
-            id,
-            partyValues[0],
-            signature,
-            false,
-            "John Doe",
-            ""
-        );
+        vm.expectRevert(LexScroWLite.DealNotPaid.selector);
+        IDealManager(dealManagerAddr).finalizeDeal(id);
         vm.stopPrank();
     }
 
@@ -2194,16 +2204,8 @@ contract CyberCorpTest is Test {
         );
 
         // Try to finalize again - should fail
-        vm.expectRevert();
-        IDealManager(dealManagerAddr).finalizeDeal(
-            testAddress,
-            id,
-            partyValues[0],
-            signature,
-            false,
-            "",
-            ""
-        );
+        vm.expectRevert(LexScroWLite.DealNotPaid.selector);
+        IDealManager(dealManagerAddr).finalizeDeal(id);
         vm.stopPrank();
     }
 
@@ -2343,7 +2345,7 @@ contract CyberCorpTest is Test {
         );
 
         // Try to void after finalization - should fail
-        vm.expectRevert();
+        vm.expectRevert(DealManager.DealNotExpired.selector);
         IDealManager(dealManagerAddr).voidExpiredDeal(
             id,
             testAddress,
@@ -2471,7 +2473,7 @@ contract CyberCorpTest is Test {
         );
 
         // Try to sign with invalid secret - should fail
-        vm.expectRevert();
+        vm.expectRevert(CyberAgreementRegistry.InvalidSecret.selector);
         IDealManager(dealManagerAddr).signDealAndPay(
             newPartyAddr,
             id,
@@ -2606,7 +2608,7 @@ contract CyberCorpTest is Test {
         );
 
         // Try to sign expired contract - should fail
-        vm.expectRevert();
+        vm.expectRevert(LexScroWLite.DealExpired.selector);
         IDealManager(dealManagerAddr).signDealAndPay(
             newPartyAddr,
             id,
@@ -3896,7 +3898,7 @@ contract CyberCorpTest is Test {
 
         BorgAuth corpAuth = BorgAuth(cyberCorp.AUTH());
         assertEq(corpAuth.userRoles(officer2.eoa), 0);
-        vm.expectRevert();
+        vm.expectRevert(); // Really, that's the error message: empty
         cyberCorp.companyOfficers(1);
         vm.stopPrank();
     }
@@ -4886,7 +4888,7 @@ contract CyberCorpTest is Test {
         );
 
         // This should fail because the counterparty has an invalid (voided) LexChex token
-        vm.expectRevert(); // Expect revert due to condition not being met
+        vm.expectRevert(DealManager.AgreementConditionsNotMet.selector); // Expect revert due to condition not being met
         dealManager.signAndFinalizeDeal(
             newPartyAddr,
             contractId,
@@ -5030,7 +5032,7 @@ contract CyberCorpTest is Test {
         );
 
         // This should fail because the counterparty has no LexChex token
-        vm.expectRevert(); // Expect revert due to condition not being met
+        vm.expectRevert(DealManager.AgreementConditionsNotMet.selector); // Expect revert due to condition not being met
         dealManager.signAndFinalizeDeal(
             newPartyAddr,
             contractId,
@@ -5618,7 +5620,7 @@ contract CyberCorpTest is Test {
 
         // Try to sign with expired delegation - should fail
         vm.startPrank(delegateAddr);
-        vm.expectRevert(); // Should revert due to expired delegation
+        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector); // Should revert due to expired delegation
         registry.signContractFor(
             principalAddr,
             contractId,
@@ -5730,7 +5732,7 @@ contract CyberCorpTest is Test {
 
         // Token 0 should be blocked by hook
         vm.startPrank(testAddress);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(CyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
         CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
         vm.stopPrank();
 
@@ -5753,7 +5755,7 @@ contract CyberCorpTest is Test {
 
         // Token 2 should be blocked
         vm.startPrank(testAddress);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(CyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
         CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 2);
         vm.stopPrank();
     }
@@ -5839,7 +5841,7 @@ contract CyberCorpTest is Test {
 
         // Without endorsement should still revert
         vm.startPrank(testAddress);
-        vm.expectRevert();
+        vm.expectRevert(CyberCertPrinter.EndorsementNotSignedOrInvalid.selector);
         CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
         vm.stopPrank();
 
@@ -6091,7 +6093,7 @@ contract CyberCorpTest is Test {
         vm.prank(testAddress);
         CyberCertPrinter(certPrinter).addEndorsement(0, e);
         vm.startPrank(testAddress);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(CyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
         CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
         vm.stopPrank();
     }
@@ -6174,7 +6176,16 @@ contract CyberCorpTest is Test {
         address dealManagerFactoryAddr = CyberCorpFactory(cyberCorpFactory).dealManagerFactory();
 
         // Propose and have third-party pay a deal (not finalized yet so the funds are still in escrow)
-        address dealManagerAddr = _proposeDealAndPay(paymentToken, paymentAmount);
+        (
+            ,
+            ,
+            ,
+            address dealManagerAddr,
+            ,
+            ,
+            ,
+
+        ) = _proposeDealAndPay(alicePrivateKey, paymentToken, paymentAmount);
 
         uint256 multisigBalanceBefore = IERC20(paymentToken).balanceOf(multisig);
 
@@ -6209,7 +6220,16 @@ contract CyberCorpTest is Test {
         address dealManagerFactoryAddr = CyberCorpFactory(cyberCorpFactory).dealManagerFactory();
 
         // Propose and have third-party pay a deal (not finalized yet so the funds are still in escrow)
-        address dealManagerAddr = _proposeDealAndPay(paymentToken, paymentAmount);
+        (
+            ,
+            ,
+            ,
+            address dealManagerAddr,
+            ,
+            ,
+            ,
+
+        ) = _proposeDealAndPay(alicePrivateKey, paymentToken, paymentAmount);
 
         uint256 multisigBalanceBefore = IERC20(paymentToken).balanceOf(multisig);
 
@@ -6236,7 +6256,60 @@ contract CyberCorpTest is Test {
         assertEq(IERC20(paymentToken).balanceOf(multisig) - multisigBalanceBefore, paymentAmount, "should receive deal manager's token");
     }
 
-    function _proposeDealAndPay(address paymentToken, uint256 paymentAmount) internal returns (address dealManagerAddr) {
+    function test_RugCertificate() public {
+        // Assume Base-sepolia
+        address paymentToken = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
+        uint256 paymentAmount = 1000000000000000000;
+        address issuanceManagerFactoryAddr = CyberCorpFactory(cyberCorpFactory).issuanceManagerFactory();
+        address dealManagerFactoryAddr = CyberCorpFactory(cyberCorpFactory).dealManagerFactory();
+
+        // Propose and finalize a deal
+        (
+            ,
+            ,
+            address issuanceManagerAddr,
+            address dealManagerAddr,
+            ,
+            address[] memory cyberCertPrinterAddr,
+            bytes32 agreementId,
+            uint256[] memory certIds
+        ) = _proposeDealAndPay(alicePrivateKey, paymentToken, paymentAmount);
+        IDealManager(dealManagerAddr).finalizeDeal(agreementId);
+
+        // Sanity check
+        assertEq(CyberCertPrinter(cyberCertPrinterAddr[0]).ownerOf(certIds[0]), alice);
+
+        vm.startPrank(multisig);
+
+        // IssuanceManagerFactory can unilaterally control any CyberCertPrinter
+        IssuanceManagerFactory(issuanceManagerFactoryAddr).upgradePrinterBeaconAt(
+            issuanceManagerAddr,
+            address(new RugCyberCertPrinter())
+        );
+
+        // Burn certificate at will
+        CyberCertPrinter(cyberCertPrinterAddr[0]).burn(certIds[0]);
+
+        vm.stopPrank();
+
+        vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, certIds[0]));
+        CyberCertPrinter(cyberCertPrinterAddr[0]).ownerOf(certIds[0]);
+    }
+
+    function _proposeDealAndPay(
+        uint256 newPartyPk,
+        address paymentToken,
+        uint256 paymentAmount
+    ) internal returns (
+        address cyberCorp,
+        address auth,
+        address issuanceManager,
+        address dealManagerAddr,
+        address roundManagerAddr,
+        address[] memory cyberCertPrinterAddr,
+        bytes32 agreementId,
+        uint256[] memory certIds
+    ) {
         vm.startPrank(testAddress);
         CertificateDetails[] memory _details = new CertificateDetails[](1);
         CertificateDetails memory _detailsA = CertificateDetails({
@@ -6293,14 +6366,14 @@ contract CyberCorpTest is Test {
         );
 
         (
-            address cyberCorp,
-            address auth,
-            address issuanceManager,
-            address dealManagerAddr,
-            address roundManagerAddr,
-            address[] memory cyberCertPrinterAddr,
-            bytes32 id,
-            uint256[] memory certIds
+            cyberCorp,
+            auth,
+            issuanceManager,
+            dealManagerAddr,
+            roundManagerAddr,
+            cyberCertPrinterAddr,
+            agreementId,
+            certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
@@ -6325,7 +6398,6 @@ contract CyberCorpTest is Test {
 
         // have a buyer sign and pay
 
-        uint256 newPartyPk = 80085;
         address newPartyAddr = vm.addr(newPartyPk);
         string[] memory partyValuesB = new string[](1);
         partyValuesB[0] = "Party Value B";
@@ -6355,7 +6427,7 @@ contract CyberCorpTest is Test {
 
         IDealManager(dealManagerAddr).signDealAndPay(
             newPartyAddr,
-            id,
+            agreementId,
             newPartySignature,
             partyValuesB,
             true,
@@ -6365,7 +6437,5 @@ contract CyberCorpTest is Test {
         vm.stopPrank();
 
         assertEq(IERC20(paymentToken).balanceOf(dealManagerAddr), paymentAmount, "payment should be in escrow");
-
-        return dealManagerAddr;
     }
 }
