@@ -4,12 +4,14 @@ pragma solidity ^0.8.28;
 import {Script} from "forge-std/Script.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {CyberScrip} from "../src/CyberScrip.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
-import {DealManagerFactory} from "../src/DealManagerFactory.sol";
+import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
+import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
@@ -54,6 +56,11 @@ contract BaseScript is Script {
         address cyberCertPrinterImplementation = address(
             new CyberCertPrinter{salt: salt}()
         );
+
+        address cyberCert20Implementation = address(
+            new CyberScrip{salt: salt}()
+        );
+
         CyberCertPrinter cyberCertPrinter = CyberCertPrinter(
             cyberCertPrinterImplementation
         );
@@ -67,7 +74,25 @@ contract BaseScript is Script {
         );
 
         address dealManagerFactory = address(
-            new DealManagerFactory{salt: salt}(address(auth))
+            new ERC1967Proxy{salt: salt}(
+                address(new DealManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    DealManagerFactory.initialize.selector,
+                    address(auth),
+                    address(new DealManager())
+                )
+            )
+        );
+
+        address roundManagerFactory = address(
+            new ERC1967Proxy{salt: salt}(
+                address(new RoundManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(auth),
+                    address(new RoundManager())
+                )
+            )
         );
 
         // Deploy upgradeable singletons
@@ -101,9 +126,11 @@ contract BaseScript is Script {
                         address(auth),
                         address(registry),
                         cyberCertPrinterImplementation,
+                        cyberCert20Implementation,
                         issuanceManagerFactory,
                         cyberCorpSingleFactory,
                         dealManagerFactory,
+                        roundManagerFactory,
                         uriBuilder
                     )
                 )
@@ -134,24 +161,31 @@ contract BaseScript is Script {
         );
 
         auth.updateRole(address(multisig), 200);
-        auth.zeroOwner();
+        if (deployerAddress != address(multisig)) {
+            auth.zeroOwner();
+        }
 
-        console.log("auth: ", address(auth));
+        console.log("auth: `%s`", address(auth));
         console.log(
-            "issuanceManagerFactory: ",
+            "issuanceManagerFactory: `%s`",
             address(issuanceManagerFactory)
         );
         console.log(
-            "cyberCorpSingleFactory: ",
+            "cyberCorpSingleFactory: `%s`",
             address(cyberCorpSingleFactory)
         );
-        console.log("dealManagerFactory: ", address(dealManagerFactory));
-        console.log("uriBuilder: ", address(uriBuilder));
+        console.log("dealManagerFactory: `%s`", address(dealManagerFactory));
+        console.log("roundManagerFactory: `%s`", address(roundManagerFactory));
+        console.log("uriBuilder: `%s`", address(uriBuilder));
         console.log(
-            "cyberCertPrinterImplementation: ",
+            "cyberCertPrinterImplementation: `%s`",
             address(cyberCertPrinterImplementation)
         );
-        console.log("CyberAgreementRegistry: ", address(registry));
-        console.log("CyberCorpFactory: ", address(cyberCorpFactory));
+        console.log(
+            "cyberScriptImplementation: `%s`",
+            address(cyberCert20Implementation)
+        );
+        console.log("CyberAgreementRegistry: `%s`", address(registry));
+        console.log("CyberCorpFactory: `%s`", address(cyberCorpFactory));
     }
 }

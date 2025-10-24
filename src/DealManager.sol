@@ -42,18 +42,24 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./libs/LexScroWLite.sol";
 import "./libs/auth.sol";
 import "./storage/DealManagerStorage.sol";
+import "./storage/DealManagerFactoryStorage.sol";
 import "./storage/BorgAuthStorage.sol";
 import "./interfaces/ICyberCorp.sol";
+import "./interfaces/IDealManagerFactory.sol";
 
 /// @title DealManager
 /// @notice Manages the lifecycle of deals between parties, including creation, signing, payment, and finalization for a CyberCorp
 /// @dev Implements UUPS upgradeable pattern and integrates with BorgAuth for access control
-contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
+contract DealManager is Initializable, UUPSUpgradeable, ReentrancyGuard, BorgAuthACL, LexScroWLite {
     using DealManagerStorage for DealManagerStorage.DealManagerData;
+
+    string public constant DEPLOY_VERSION = "1"; // For version-tracking on all deployment and future upgrades
 
     /// @notice Certificate data structure for creating new certificates
     struct CyberCertData {
@@ -75,6 +81,7 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
     error ConditionDoesNotExist();
     error NotUpgradeFactory();
     error DealNotExpired();
+    error NotRefImplementation();
 
     /// @notice Emitted when a new deal is proposed
     /// @param agreementId Unique identifier for the agreement
@@ -132,11 +139,9 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
         if (_issuanceManager == address(0)) revert ZeroAddress();
 
         // Set storage values
-        LexScrowStorage.setCorp(_corp);
-        LexScrowStorage.setDealRegistry(_dealRegistry);
         DealManagerStorage.setIssuanceManager(_issuanceManager);
 
-        // Initialize LexScroWLite without setting storage
+        // Initialize LexScroWLite core addresses
         __LexScroWLite_init(_corp, _dealRegistry);
         DealManagerStorage.setUpgradeFactory(_upgradeFactory);
     }
@@ -177,11 +182,11 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
         certIds = new uint256[](_certDetails.length);
         for(uint256 i = 0; i < _certDetails.length; i++) {
             certIds[i] = DealManagerStorage.getIssuanceManager().createCert(_certPrinterAddress[i], address(this), _certDetails[i]);
-            corpAssets[i] = Token(TokenType.ERC721, _certPrinterAddress[i], certIds[i], 1);
+            corpAssets[i] = Token(TokenType.ERC721, _certPrinterAddress[i], certIds[i], 1, false);
         }
 
         Token[] memory buyerAssets = new Token[](1);
-        buyerAssets[0] = Token(TokenType.ERC20, _paymentToken, 0, _paymentAmount);
+        buyerAssets[0] = Token(TokenType.ERC20, _paymentToken, 0, _paymentAmount, true); // Will be used as fee token
 
         Escrow memory newEscrow = Escrow({
             agreementId: agreementId,
@@ -300,7 +305,7 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
         }
         
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
-        updateEscrow(agreementId, msg.sender, name);
+        updateEscrow(agreementId, signer, name);
         handleCounterPartyPayment(agreementId);
     }
 
@@ -329,17 +334,21 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
         string[] storage counterPartyCheck = DealManagerStorage.getCounterPartyValues(agreementId);
         if(counterPartyCheck.length > 0) {
             if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert CounterPartyValueMismatch();
-        }
-        else {
+        } else {
             DealManagerStorage.setCounterPartyValues(agreementId, partyValues);
         }
-            
-        if(!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
-        
-        if(!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).hasSigned(agreementId, signer))
-            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
 
-        updateEscrow(agreementId, msg.sender, name);
+		if (!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).hasSigned(agreementId, signer)) {
+            // Not signed in registry yet; enforce local consistency and then sign
+            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
+		} else {
+            // Already signed in registry; fetch values recorded in the registry and ensure consistency
+			string[] memory registryValues = ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).getSignerValues(agreementId, signer);
+			if (keccak256(abi.encode(registryValues)) != keccak256(abi.encode(partyValues))) revert CounterPartyValueMismatch();
+		}
+
+        updateEscrow(agreementId, signer, name);
+        if(!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
         handleCounterPartyPayment(agreementId);
         finalizeDeal(agreementId);
     }
@@ -347,14 +356,18 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
     /// @notice Finalizes a deal
     /// @dev Checks signatures, conditions and finalizes the agreement
     /// @param agreementId Unique identifier for the agreement
-    function finalizeDeal(bytes32 agreementId) public {
+    function finalizeDeal(bytes32 agreementId) public nonReentrant {
+        // Check: status
         if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId)) revert DealVoided();
         if(LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PAID) revert DealNotPaid();
         if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isFinalized(agreementId)) revert DealAlreadyFinalized();
         if(!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).allPartiesSigned(agreementId)) revert DealNotFullySigned();
         if(!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
-        
+
+        // Effect: update status
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).finalizeContract(agreementId);
+
+        // Interaction: payments
         finalizeEscrow(agreementId);
         emit DealFinalized(
             agreementId,
@@ -370,9 +383,12 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
     /// @param agreementId Unique identifier for the agreement
     /// @param signer Address of the signer
     /// @param signature Signature of the signer
-    function voidExpiredDeal(bytes32 agreementId, address signer, bytes memory signature) public {
+    function voidExpiredDeal(bytes32 agreementId, address signer, bytes memory signature) public nonReentrant {
+        // Check: status
         Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
         if (block.timestamp <= deal.expiry) revert DealNotExpired();
+
+        // Effect: update status
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
         for(uint256 i = 0; i < deal.corpAssets.length; i++) {
             if(deal.corpAssets[i].tokenType == TokenType.ERC721) {
@@ -382,9 +398,12 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
                 );
             }
         }
-        if(deal.status == EscrowStatus.PAID) 
+
+        if(deal.status == EscrowStatus.PAID)
+            // Interaction: payment
             voidAndRefund(agreementId);
         else if(deal.status == EscrowStatus.PENDING)
+            // Effect: update status
             voidEscrow(agreementId);
     }
 
@@ -406,11 +425,24 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
     /// @param agreementId Unique identifier for the agreement
     /// @param signer Address of the signer
     /// @param signature Signature of the signer
-    function signToVoid(bytes32 agreementId, address signer, bytes memory signature) public {
+    function signToVoid(bytes32 agreementId, address signer, bytes memory signature) public nonReentrant {
+        // Check: status
         if(msg.sender != signer) revert CounterPartyValueMismatch();
+
+        // Effect: update status
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
         if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId) && LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PAID)
+            // Interaction: payment
             voidAndRefund(agreementId);
+    }
+
+    /// @notice Refund a voided deal
+    /// @dev Use this method to initiate refund if the deal agreement has been voided externally
+    /// (e.g. directly to CyberAgreementRegistry without being processed by Deal Manager)
+    /// @param agreementId Unique identifier for the agreement
+    function refundVoidedDeal(bytes32 agreementId) public nonReentrant {
+        // Interaction: Re-sync Deal Manager internal escrow to VOIDED, then refund
+        voidAndRefund(agreementId);
     }
 
     /// @notice Adds a condition to a deal
@@ -476,25 +508,7 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
         return DealManagerStorage.getCounterPartyValues(agreementId);
     }
 
-/*        uint256 salt,
-        string memory companyName,
-        string memory companyType,
-        string memory companyJurisdiction,
-        string memory companyContactDetails,
-        string memory defaultDisputeResolution,
-        address _companyPayable,
-        CompanyOfficer memory _officer,
-        CyberCertData[] memory _certData,
-        bytes32 _templateId,
-        string[] memory _globalValues,
-        address[] memory _parties,
-        uint256 _paymentAmount,
-        string[][] memory _partyValues,
-        bytes memory signature,
-        CertificateDetails[] memory _details,
-        address[] memory conditions,
-        bytes32 secretHash,
-        uint256 expiry*/
+
     /// @notice Creates an offer for an existing CyberCorp
     /// @dev Creates certificate printers and proposes a deal without deploying a new CyberCorp
     /// @param _certData Array of certificate data structures
@@ -569,5 +583,31 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite {
             secretHash,
             expiry
         );
+    }
+
+    /// @notice Compute fee based on ticket size
+    /// @dev Currently the factory owner (MetaLeX) unilaterally set the fee ratio;
+    /// in the future, it could be determined through a governance process.
+    /// @return Fee amount
+    function computeFee(uint256 size) public override view returns (uint256) {
+        return size * IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).getDefaultFeeRatio() / DealManagerFactoryStorage.BASIS_POINTS;
+    }
+
+    /// @notice Gets the payable address for the fees
+    /// @dev The factory owner (MetaLeX) unilaterally set the payable address
+    /// @return Payable address for the fees
+    function getPlatformPayable() public override view returns (address) {
+        return IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).getPlatformPayable();
+    }
+
+    /// @notice UUPS upgrade authorization
+    /// @dev MetaLeX releases new versions through the factory's reference implementation,
+    /// and the CyberCorp owner can decide if or when he wants to perform the upgrade
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {
+        if(IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).getRefImplementation() != newImplementation) {
+            revert NotRefImplementation();
+        }
     }
 }

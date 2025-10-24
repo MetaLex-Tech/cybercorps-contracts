@@ -114,6 +114,15 @@ interface ICyberAgreementRegistry {
         string memory secret 
     ) external;
 
+    function signContractWithEscrow(
+        address escrowSigner,
+        bytes32 contractId,
+        string[] memory partyValues,
+        bytes calldata signature,
+        bool fillUnallocated, // to fill a 0 address or not
+        string memory secret
+    ) external;
+
     //function voidContractFor(bytes32 contractId, address party, bytes calldata signature) public {
     function voidContractFor(
         bytes32 contractId,
@@ -157,6 +166,7 @@ interface ICyberAgreementRegistry {
         view
         returns (
             string memory legalContractUri,
+            string memory title,
             string[] memory globalFields,
             string[] memory signerFields
         );

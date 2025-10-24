@@ -44,6 +44,7 @@ pragma solidity ^0.8.18;
 import {Test, console} from "forge-std/Test.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCertPrinter, Endorsement} from "../src/CyberCertPrinter.sol";
+import {CyberScrip} from "../src/CyberScrip.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory, IssuanceManager} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
@@ -58,10 +59,12 @@ import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/Upgradeabl
 import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {CompanyOfficer} from "../src/storage/CyberCertPrinterStorage.sol";
+import {ToggleTransferHook} from "../src/hooks/transfer/ToggleTransferHook.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {DealManager} from "../src/DealManager.sol";
+import {RoundManager} from "../src/RoundManager.sol";
 import {Escrow} from "../src/storage/LexScrowStorage.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {TokenWarrantExtension, TokenWarrantData} from "../src/storage/extensions/TokenWarrantExtension.sol";
@@ -73,6 +76,8 @@ import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
 import {LexChexCondition} from "../src/libs/conditions/lexchexCondition.sol";
 import {LeXcheXUtils} from "./libs/LeXcheXUtils.sol";
 import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
+import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
+import {ILegacyDealManagerFactory} from "./interfaces/ILegacyDealManagerFactory.sol";
 
 contract CyberCorpTest is Test {
     using ERC1967ProxyLib for address;
@@ -165,6 +170,11 @@ contract CyberCorpTest is Test {
             cyberCertPrinterImplementation
         );
 
+        // Deploy CyberScrip implementation
+        address CyberScripImplementation = address(
+            new CyberScrip{salt: salt}()
+        );
+
         defaultLegends = new string[][](1);
         defaultLegends[0] = new string[](1);
         defaultLegends[0][0] = "Legend 1";
@@ -176,7 +186,14 @@ contract CyberCorpTest is Test {
         );
 
         address dealManagerFactory = address(
-            new DealManagerFactory{salt: salt}(address(auth))
+            new ERC1967Proxy{salt: salt}(
+                address(new DealManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    DealManagerFactory.initialize.selector,
+                    address(auth),
+                    address(new DealManager())
+                )
+            )
         );
 
         // Deploy upgradeable singletons
@@ -196,6 +213,18 @@ contract CyberCorpTest is Test {
                 address(auth))
         ));
 
+        // RoundManager via factory and initialize
+        address rmFactory = address(
+            new ERC1967Proxy{salt: salt}(
+                address(new RoundManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(auth),
+                    address(new RoundManager())
+                )
+            )
+        );
+
         cyberCorpFactory = CyberCorpFactory(address(new ERC1967Proxy{salt: salt}(
             address(new CyberCorpFactory{salt: salt}()),
             abi.encodeWithSelector(
@@ -203,14 +232,22 @@ contract CyberCorpTest is Test {
                 address(auth),
                 address(registry),
                 cyberCertPrinterImplementation,
+                CyberScripImplementation,
                 issuanceManagerFactory,
                 cyberCorpSingleFactory,
                 dealManagerFactory,
+                rmFactory,
                 uriBuilder
             )
         )));
         cyberCorpFactory.setStable(stable);
-
+        address upgradeOwner = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
+        address lxAuth = cyberCorpFactory.lexchexAuth();
+        vm.stopPrank();
+        vm.startPrank(upgradeOwner);
+        BorgAuth(lxAuth).updateRole(address(cyberCorpFactory), BorgAuth(lxAuth).OWNER_ROLE());
+        vm.stopPrank();
+        vm.startPrank(testAddress);
         string[] memory globalFieldsSafe = new string[](5);
         globalFieldsSafe[0] = "purchaseAmount";
         globalFieldsSafe[1] = "postMoneyValuationCap";
@@ -432,6 +469,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -618,6 +656,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -757,6 +796,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -963,6 +1003,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -1095,6 +1136,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -1230,6 +1272,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -1389,6 +1432,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -1485,6 +1529,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -1627,6 +1672,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -1731,6 +1777,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -1830,6 +1877,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -1931,6 +1979,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -2059,6 +2108,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -2207,6 +2257,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -2345,6 +2396,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -2475,6 +2527,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -2632,6 +2685,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -2705,9 +2759,9 @@ contract CyberCorpTest is Test {
             .tokenURI(0);
         console.log(certificateUri);
 
-        string memory certificateUriJson = CyberCertPrinter(cyberCertPrinterAddr[0])
+        /*string memory certificateUriJson = CyberCertPrinter(cyberCertPrinterAddr[0])
             .tokenURIJson(0);
-        console.log(certificateUriJson);
+        console.log(certificateUriJson);*/
 
         // Create a new recipient address
         address newRecipient = vm.addr(12345);
@@ -2869,6 +2923,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -3127,7 +3182,7 @@ contract CyberCorpTest is Test {
         );
 
         vm.startPrank(testAddress);
-        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address[] memory cyberCertPrinterAddr, bytes32 id, uint256[] memory certIds) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+        (address cyberCorp, address auth, address issuanceManager, address dealManagerAddr, address roundManagerAddr, address[] memory cyberCertPrinterAddr, bytes32 id, uint256[] memory certIds) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "CyberCorp",
             "Limited Liability Company",
@@ -3172,7 +3227,7 @@ contract CyberCorpTest is Test {
         assertEq(uriBuilder.securityClassToString(SecurityClass.SAFT), "SAFT");
     }
 
-    function testUpgradeDealManagerBeacon() public {
+    function testUpgradeDealManagerViaRefImplementation() public {
         CertificateDetails[] memory _details = new CertificateDetails[](1);
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "",
@@ -3243,6 +3298,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -3277,15 +3333,15 @@ contract CyberCorpTest is Test {
 
         // Non-owner should not be able to upgrade it
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
-        DealManagerFactory(factoryaddr).upgradeImplementation(newImplementation);
+        DealManagerFactory(factoryaddr).setRefImplementation(newImplementation);
 
         // Owner should be able to upgrade it
         console.log(
             DealManagerFactory(factoryaddr).AUTH().userRoles(address(multisig))
         );
         vm.prank(multisig);
-        DealManagerFactory(factoryaddr).upgradeImplementation(newImplementation);
-        assertEq(DealManagerFactory(factoryaddr).getBeaconImplementation(), newImplementation);
+        DealManagerFactory(factoryaddr).setRefImplementation(newImplementation);
+        assertEq(DealManagerFactory(factoryaddr).getRefImplementation(), newImplementation);
 
         // Verify the deal manager still works by checking the deal
         Escrow memory escrow = DealManager(dealManagerAddr).getEscrowDetails(
@@ -3293,10 +3349,6 @@ contract CyberCorpTest is Test {
         );
 
         console.log(escrow.counterParty);
-        assertEq(
-            DealManagerFactory(factoryaddr).getBeaconImplementation(),
-            newImplementation
-        );
     }
 
     function testUpgradeIssuanceManager() public {
@@ -3370,6 +3422,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -3510,6 +3563,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -3640,6 +3694,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -3793,7 +3848,8 @@ contract CyberCorpTest is Test {
             address cyberCorpAddr,
             address authAddr,
             address issuanceManager,
-            address dealManagerAddr
+            address dealManagerAddr,
+            address roundManagerAddr
         ) = cyberCorpFactory.deployCyberCorp(
             keccak256("OfficerRemoval"),
             "CyberCorp",
@@ -3832,15 +3888,15 @@ contract CyberCorpTest is Test {
     function testPrintCertificateSAFTEUri() public {
         vm.startPrank(testAddress);
         //bytes32 check = bytes32(bytes("nuvolari_safet"));
-        bytes32 check = bytes32(uint256(400));
+        bytes32 check = bytes32(bytes("ABV_safe_t"));
         console.logBytes32(check);
-        check = bytes32(uint256(11));
-        console.logBytes32(check);
-
-        check = bytes32(uint256(12));
+        check = bytes32(uint256(30));
         console.logBytes32(check);
 
-        check = bytes32(uint256(13));
+        check = bytes32(uint256(31));
+        console.logBytes32(check);
+
+        check = bytes32(uint256(32));
         console.logBytes32(check);
 
         bytes32 salt = bytes32(keccak256("TestSAFTE"));
@@ -3945,6 +4001,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -4047,7 +4104,8 @@ contract CyberCorpTest is Test {
             address cyberCorp,
             address auth,
             address issuanceManager,
-            address dealManagerAddr
+            address dealManagerAddr,
+            address roundManagerAddr
         ) = cyberCorpFactory.deployCyberCorp(
             keccak256("CreateOfferTest"),
             "TestCorp",
@@ -4206,7 +4264,8 @@ contract CyberCorpTest is Test {
             address cyberCorp,
             address auth,
             address issuanceManager,
-            address dealManagerAddr
+            address dealManagerAddr,
+            address roundManagerAddr
         ) = cyberCorpFactory.deployCyberCorp(
             keccak256("CreateOfferMultipleTest"),
             "MultiCertCorp",
@@ -4346,7 +4405,7 @@ contract CyberCorpTest is Test {
         console.log("Created agreement ID:", vm.toString(id));
     }
 
-    function testUpgradeDealManagerBeaconViaDeployedFactory() public {
+    function testUpgradeLegacyDealManagersViaBeacon() public {
         // First deploy a CyberCorp which will create a DealManager
         CertificateDetails[] memory _details = new CertificateDetails[](1);
         CertificateDetails memory _detailsA = CertificateDetails({
@@ -4372,7 +4431,8 @@ contract CyberCorpTest is Test {
             address cyberCorp,
             address auth,
             address issuanceManager,
-            address dealManagerAddr
+            address dealManagerAddr,
+            address roundManagerAddr
         ) = cyberCorpFactory.deployCyberCorp(
             keccak256("DealManagerUpgradeTest"),
             "TestCorp",
@@ -4389,9 +4449,9 @@ contract CyberCorpTest is Test {
         assertTrue(dealManagerAddr != address(0), "DealManager should be deployed");
         console.log("Deployed DealManager at:", dealManagerAddr);
 
-        // Get the deployed DealManagerFactory address
+        // Get the deployed DealManagerFactory address (legacy Beacon-based)
         address deployedFactoryAddr = 0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3;
-        DealManagerFactory deployedFactory = DealManagerFactory(deployedFactoryAddr);
+        ILegacyDealManagerFactory deployedFactory = ILegacyDealManagerFactory(deployedFactoryAddr);
 
         // Get the current beacon implementation
         address currentImplementation = deployedFactory.getBeaconImplementation();
@@ -4400,7 +4460,7 @@ contract CyberCorpTest is Test {
         // Deploy a new DealManager implementation using CREATE2
         bytes32 implementationSalt = bytes32(keccak256("NewDealManagerImplementation"));
         address newImplementation = address(new DealManager{salt: implementationSalt}());
-        console.log("New implementation deployed at:", newImplementation);
+        console.log("New implementation deployed at:", address(newImplementation));
 
         // Non-owner should not be able to upgrade it
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
@@ -4412,7 +4472,7 @@ contract CyberCorpTest is Test {
 
         // Verify the upgrade was successful
         address updatedImplementation = deployedFactory.getBeaconImplementation();
-        assertEq(updatedImplementation, newImplementation, "Beacon implementation should be updated");
+        assertEq(updatedImplementation, address(newImplementation), "Beacon implementation should be updated");
         console.log("Updated beacon implementation:", updatedImplementation);
 
         // Verify the existing DealManager still works by checking its state
@@ -4605,6 +4665,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -4752,6 +4813,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -4895,6 +4957,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -5143,6 +5206,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 dealId,
             uint256[] memory certIds
@@ -5301,6 +5365,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -5484,6 +5549,7 @@ contract CyberCorpTest is Test {
             address auth,
             address issuanceManager,
             address dealManagerAddr,
+            address roundManagerAddr,
             address[] memory cyberCertPrinterAddr,
             bytes32 id,
             uint256[] memory certIds
@@ -5548,6 +5614,238 @@ contract CyberCorpTest is Test {
         console.log("Current time:", block.timestamp);
     }
 
+    function testToggleTransferHookPerToken() public {
+        vm.startPrank(testAddress);
+        // Deploy a CyberCorp to obtain an issuance manager and printer
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
+            unitsRepresented: 0,
+            legalDetails: "",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        (
+            address cyberCorp,
+            address authAddr,
+            address issuanceManager,
+            address dealManagerAddr,
+            address roundManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("ToggleHookTest"),
+            "ToggleHookCorp",
+            "Limited Liability Company",
+            "Delaware",
+            "Contact Details",
+            "Dispute",
+            testAddress,
+            officer
+        );
+        vm.stopPrank();
+
+        // Create a certificate printer
+        string[] memory ledger = new string[](1);
+        ledger[0] = "Legend";
+        vm.prank(testAddress);
+        address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
+            ledger,
+            "Test Certificate",
+            "TEST",
+            "ipfs://test",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesPreSeed,
+            address(0)
+        );
+
+        // Deploy and initialize the toggle hook with the corp's AUTH used by issuanceManager
+        ToggleTransferHook hook = new ToggleTransferHook();
+        BorgAuth corpAuthForIssuance = IssuanceManager(issuanceManager).AUTH();
+        hook.initialize(address(corpAuthForIssuance));
+
+        // Attach the global hook via IssuanceManager (admin)
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).setGlobalRestrictionHook(certPrinter, address(hook));
+
+        // Enable global transferable on the printer (so hook decides allow/deny)
+        vm.prank(issuanceManager);
+        CyberCertPrinter(certPrinter).setGlobalTransferable(true);
+
+        // Configure hook: default off, tokenId 1 on
+        vm.startPrank(testAddress);
+        hook.setDefaultTransferable(false);
+        hook.setTokenTransferable(1, true);
+        vm.stopPrank();
+
+        // Mint 3 certificates to the owner (testAddress)
+        CertificateDetails memory cd = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
+            unitsRepresented: 1,
+            legalDetails: "",
+            extensionData: ""
+        });
+
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // tokenId 0
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // tokenId 1
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // tokenId 2
+
+        // Prepare recipient
+        address recipient = vm.addr(0xBEEF);
+
+        // Token 0 should be blocked by hook
+        vm.startPrank(testAddress);
+        vm.expectRevert();
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
+        vm.stopPrank();
+
+        // Token 1 should be allowed by hook, but endorsement is required by printer
+        vm.startPrank(testAddress);
+        Endorsement memory e = Endorsement({
+            endorser: testAddress,
+            timestamp: block.timestamp,
+            signatureHash: bytes("hook-test"),
+            registry: address(0),
+            agreementId: bytes32(0),
+            endorsee: recipient,
+            endorseeName: "Recipient"
+        });
+        CyberCertPrinter(certPrinter).addEndorsement(1, e);
+        vm.stopPrank();
+        vm.prank(testAddress);
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 1);
+        assertEq(CyberCertPrinter(certPrinter).ownerOf(1), recipient);
+
+        // Token 2 should be blocked
+        vm.startPrank(testAddress);
+        vm.expectRevert();
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 2);
+        vm.stopPrank();
+    }
+
+    function testPerTokenTransferabilityFlag() public {
+        vm.startPrank(testAddress);
+        // Deploy a CyberCorp to obtain an issuance manager and printer
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        CertificateDetails memory _detailsA = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
+            unitsRepresented: 1,
+            legalDetails: "",
+            extensionData: ""
+        });
+        _details[0] = _detailsA;
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        (
+            address cyberCorp,
+            address authAddr,
+            address issuanceManager,
+            address dealManagerAddr,
+            address roundManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("PerTokenFlag"),
+            "PerTokenCorp",
+            "Limited Liability Company",
+            "Delaware",
+            "Contact Details",
+            "Dispute",
+            testAddress,
+            officer
+        );
+        vm.stopPrank();
+
+        // Create a certificate printer and mint two certs to testAddress
+        string[] memory ledger = new string[](0);
+        vm.prank(testAddress);
+        address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
+            ledger,
+            "Test",
+            "TEST",
+            "ipfs://test",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesSeed,
+            address(0)
+        );
+
+        CertificateDetails memory cd = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
+            unitsRepresented: 1,
+            legalDetails: "",
+            extensionData: ""
+        });
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // tokenId 0
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // tokenId 1
+
+        address recipient = vm.addr(0xCAFE);
+
+        // Global off; token 0 off => revert
+        vm.startPrank(testAddress);
+        vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
+        vm.stopPrank();
+
+        // Enable token 0 only
+        vm.prank(issuanceManager);
+        CyberCertPrinter(certPrinter).setTokenTransferable(0, true);
+
+        // Without endorsement should still revert
+        vm.startPrank(testAddress);
+        vm.expectRevert();
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
+        vm.stopPrank();
+
+        // Add endorsement and transfer succeeds for token 0
+        Endorsement memory e = Endorsement({
+            endorser: testAddress,
+            timestamp: block.timestamp,
+            signatureHash: hex"01",
+            registry: address(0),
+            agreementId: bytes32(0),
+            endorsee: recipient,
+            endorseeName: "Recipient"
+        });
+        vm.prank(testAddress);
+        CyberCertPrinter(certPrinter).addEndorsement(0, e);
+        vm.prank(testAddress);
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
+        assertEq(CyberCertPrinter(certPrinter).ownerOf(0), recipient);
+
+        // Token 1 should remain blocked
+        vm.startPrank(testAddress);
+        vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, vm.addr(0xBEEF), 1);
+        vm.stopPrank();
+    }
+
     function testRevokeDelegation() public {
         uint256 principalPk = 55555;
         address principalAddr = vm.addr(principalPk);
@@ -5577,5 +5875,274 @@ contract CyberCorpTest is Test {
         console.log("Delegation revocation test completed successfully!");
         console.log("Principal:", principalAddr);
         console.log("Delegate:", delegateAddr);
+    }
+
+    function testGlobalTransferabilityEphemeral() public {
+        vm.startPrank(testAddress);
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        _details[0] = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
+            unitsRepresented: 1,
+            legalDetails: "",
+            extensionData: ""
+        });
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+        (
+            address cyberCorp,
+            address authAddr,
+            address issuanceManager,
+            address dealManagerAddr,
+            address roundManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("GlobalEphemeral"),
+            "Corp",
+            "LLC",
+            "DE",
+            "Contact",
+            "Dispute",
+            testAddress,
+            officer
+        );
+        vm.stopPrank();
+
+        // Create printer and mint two certs to testAddress
+        string[] memory ledger = new string[](0);
+        vm.prank(testAddress);
+        address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
+            ledger,
+            "Cert",
+            "CRT",
+            "ipfs://uri",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesSeed,
+            address(0)
+        );
+        CertificateDetails memory cd = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
+            unitsRepresented: 1,
+            legalDetails: "",
+            extensionData: ""
+        });
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // token 0
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // token 1
+
+        address recipient1 = vm.addr(0x1001);
+        address recipient2 = vm.addr(0x1002);
+
+        // Add endorsement for token 0 -> recipient1
+        Endorsement memory e0 = Endorsement({
+            endorser: testAddress,
+            timestamp: block.timestamp,
+            signatureHash: hex"01",
+            registry: address(0),
+            agreementId: bytes32(0),
+            endorsee: recipient1,
+            endorseeName: "R1"
+        });
+        vm.prank(testAddress);
+        CyberCertPrinter(certPrinter).addEndorsement(0, e0);
+
+        // Before enabling global: expect TokenNotTransferable
+        vm.startPrank(testAddress);
+        vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient1, 0);
+        vm.stopPrank();
+
+        // Turn global on, transfer succeeds
+        vm.prank(issuanceManager);
+        CyberCertPrinter(certPrinter).setGlobalTransferable(true);
+        vm.prank(testAddress);
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient1, 0);
+        assertEq(CyberCertPrinter(certPrinter).ownerOf(0), recipient1);
+
+        // Global off again
+        vm.prank(issuanceManager);
+        CyberCertPrinter(certPrinter).setGlobalTransferable(false);
+
+        // Verify token flag not persisted
+        bool persisted = CyberCertPrinter(certPrinter).isTokenTransferable(0);
+        assertEq(persisted, false);
+
+        // Add endorsement for token 1 -> recipient2 and ensure it still reverts due to global off and no per-token flag
+        Endorsement memory e1 = Endorsement({
+            endorser: testAddress,
+            timestamp: block.timestamp,
+            signatureHash: hex"02",
+            registry: address(0),
+            agreementId: bytes32(0),
+            endorsee: recipient2,
+            endorseeName: "R2"
+        });
+        vm.prank(testAddress);
+        CyberCertPrinter(certPrinter).addEndorsement(1, e1);
+        vm.startPrank(testAddress);
+        vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient2, 1);
+        vm.stopPrank();
+    }
+
+    function testPerTokenTransferabilityWithHookDenial() public {
+        vm.startPrank(testAddress);
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+        (
+            address cyberCorp,
+            address authAddr,
+            address issuanceManager,
+            address dealManagerAddr,
+            address roundManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("PerTokenHookDeny"),
+            "Corp",
+            "LLC",
+            "DE",
+            "Contact",
+            "Dispute",
+            testAddress,
+            officer
+        );
+        vm.stopPrank();
+
+        // Create printer and mint token 0
+        string[] memory ledger = new string[](0);
+        vm.prank(testAddress);
+        address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
+            ledger,
+            "Cert",
+            "CRT",
+            "ipfs://uri",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesSeed,
+            address(0)
+        );
+        CertificateDetails memory cd = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
+            unitsRepresented: 1,
+            legalDetails: "",
+            extensionData: ""
+        });
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // token 0
+
+        // Enable per-token transferability for token 0
+        vm.prank(issuanceManager);
+        CyberCertPrinter(certPrinter).setTokenTransferable(0, true);
+
+        // Install a denying global hook
+        ToggleTransferHook hook = new ToggleTransferHook();
+        BorgAuth corpAuth = IssuanceManager(issuanceManager).AUTH();
+        hook.initialize(address(corpAuth));
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).setGlobalRestrictionHook(certPrinter, address(hook));
+        vm.prank(testAddress);
+        hook.setDefaultTransferable(false);
+
+        // With endorsement, transfer should still be blocked by hook
+        address recipient = vm.addr(0x2222);
+        Endorsement memory e = Endorsement({
+            endorser: testAddress,
+            timestamp: block.timestamp,
+            signatureHash: hex"01",
+            registry: address(0),
+            agreementId: bytes32(0),
+            endorsee: recipient,
+            endorseeName: "R"
+        });
+        vm.prank(testAddress);
+        CyberCertPrinter(certPrinter).addEndorsement(0, e);
+        vm.startPrank(testAddress);
+        vm.expectRevert();
+        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
+        vm.stopPrank();
+    }
+
+    function testDealManagerExemptionWithEndorsement() public {
+        vm.startPrank(testAddress);
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+        (
+            address cyberCorp,
+            address authAddr,
+            address issuanceManager,
+            address dealManagerAddr,
+            address roundManagerAddr
+        ) = cyberCorpFactory.deployCyberCorp(
+            keccak256("DealMgrExempt"),
+            "Corp",
+            "LLC",
+            "DE",
+            "Contact",
+            "Dispute",
+            testAddress,
+            officer
+        );
+        vm.stopPrank();
+
+        // Create printer and mint token to dealManager
+        string[] memory ledger = new string[](0);
+        vm.prank(testAddress);
+        address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
+            ledger,
+            "Cert",
+            "CRT",
+            "ipfs://uri",
+            SecurityClass.SAFE,
+            SecuritySeries.SeriesSeed,
+            address(0)
+        );
+        CertificateDetails memory cd = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
+            unitsRepresented: 1,
+            legalDetails: "",
+            extensionData: ""
+        });
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).createCert(certPrinter, dealManagerAddr, cd); // token 0 owned by dealManager
+
+        // Add endorsement to recipient
+        address recipient = vm.addr(0x3333);
+        Endorsement memory e = Endorsement({
+            endorser: dealManagerAddr,
+            timestamp: block.timestamp,
+            signatureHash: hex"01",
+            registry: address(0),
+            agreementId: bytes32(0),
+            endorsee: recipient,
+            endorseeName: "R"
+        });
+        vm.prank(dealManagerAddr);
+        CyberCertPrinter(certPrinter).addEndorsement(0, e);
+
+        // With both global and token flags off, transfer from dealManager should succeed (exemption), subject to hooks/endorsement
+        vm.prank(dealManagerAddr);
+        CyberCertPrinter(certPrinter).transferFrom(dealManagerAddr, recipient, 0);
+        assertEq(CyberCertPrinter(certPrinter).ownerOf(0), recipient);
     }
 }

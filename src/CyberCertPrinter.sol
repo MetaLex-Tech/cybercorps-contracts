@@ -224,18 +224,20 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         
         // Skip restriction checks for minting (from == address(0)) and burning (to == address(0))
         if (from != address(0) && to != address(0)) {
-            // This is a transfer, check built-in transferability flag
-            if (!CyberCertPrinterStorage.cyberCertStorage().transferable && from != ICyberCorp(IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).CORP()).dealManager()) revert TokenNotTransferable();
+            // This is a transfer, check built-in transferability flag and per-token override
+            bool globalTransferable = CyberCertPrinterStorage.cyberCertStorage().transferable;
+            bool tokenTransferable = CyberCertPrinterStorage.isTokenTransferable(tokenId);
+            if (!globalTransferable && !tokenTransferable && from != ICyberCorp(IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).CORP()).dealManager() && from != ICyberCorp(IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).CORP()).roundManager()) revert TokenNotTransferable();
             
             // Check security type-specific hook if it exists
-            ITransferRestrictionHook typeHook = CyberCertPrinterStorage.cyberCertStorage().restrictionHooksById[tokenId];
+          /*  ITransferRestrictionHook typeHook = CyberCertPrinterStorage.cyberCertStorage().restrictionHooksById[tokenId];
             
             if (address(typeHook) != address(0)) {
                 (bool allowed, string memory reason) = typeHook.checkTransferRestriction(
                     from, to, tokenId, ""
                 );
                 if (!allowed) revert TransferRestricted(reason);
-            }
+            }*/
             
             // Check global hook if it exists
             if (address(CyberCertPrinterStorage.cyberCertStorage().globalRestrictionHook) != address(0)) {
@@ -340,7 +342,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         );
     }
 
-    // URI storage functionality
+   /* // URI storage functionality
     function tokenURIJson(uint256 tokenId) public view virtual returns (string memory) {
         if (!_exists(tokenId)) revert URIQueryForNonexistentToken();
 
@@ -375,7 +377,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
             address(this),
             address(s.extension)
         );
-    }
+    }*/
 
     // Public getters that directly access storage
     function defaultLegend() public view returns (string[] memory) {
@@ -478,6 +480,14 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
 
     function setExtension(uint256 tokenId, address extension) external onlyIssuanceManager {
         CyberCertPrinterStorage.cyberCertStorage().extension = extension;
+    }
+
+    function setTokenTransferable(uint256 tokenId, bool value) external onlyIssuanceManager {
+        CyberCertPrinterStorage.cyberCertStorage().tokenTransferable[tokenId] = value;
+    }
+
+    function isTokenTransferable(uint256 tokenId) external view returns (bool) {
+        return CyberCertPrinterStorage.cyberCertStorage().tokenTransferable[tokenId];
     }
 
 }

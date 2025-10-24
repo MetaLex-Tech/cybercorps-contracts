@@ -29,8 +29,7 @@ contract BaseScript is Script {
 
         address registry = address(CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134));
 
- /*string[] memory globalFieldsSafeT = new string[](17);
- /*string[] memory globalFieldsSafeT = new string[](17);
+        string[] memory globalFieldsSafeT = new string[](17);
         globalFieldsSafeT[0] = "purchaseAmount";
         globalFieldsSafeT[1] = "postMoneyValuationCap";
         globalFieldsSafeT[2] = "expirationTime";
@@ -49,15 +48,12 @@ contract BaseScript is Script {
         globalFieldsSafeT[15] = "minCompanyReserve";
         globalFieldsSafeT[16] = "tokenPremiumMultiplier";
 
-
         string[] memory partyFieldsSafeT = new string[](5);
         partyFieldsSafeT[0] = "name";
         partyFieldsSafeT[1] = "evmAddress";
         partyFieldsSafeT[2] = "contactDetails";
         partyFieldsSafeT[3] = "investorType";
         partyFieldsSafeT[4] = "investorJurisdiction";
-
-
 
         string[] memory globalFieldsSafe = new string[](5);
         globalFieldsSafe[0] = "purchaseAmount";
@@ -74,20 +70,20 @@ contract BaseScript is Script {
         partyFieldsSafe[3] = "investorType";
         partyFieldsSafe[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(20)), "MetaLeX cyberSAFE US style Reg D v 1.0", "ipfs://bafybeic242ypthamyr3kxnwk4x7sxj7s6svck4xfu3dzgttvic73lihy6m", globalFieldsSafe, partyFieldsSafe);
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(21)), "MetaLeX cyberSAFE + cyberTokenWarrant a16z US style reg D v 1.0", "ipfs://bafybeieozn5ur3gocmmleoph57oznz6acgzrclwkibyijjxv7nobt5tbxa", globalFieldsSafeT, partyFieldsSafeT);
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(22)), "MetaLeX cyberSAFE UK Cayman style Reg S v 1.0", "ipfs://bafybeigm77lgbd5wptji7hoeeqxedippdlvj4eaykgz5eb2bsw2ncboxcu", globalFieldsSafe, partyFieldsSafe);
-        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(23)), "MetaLeX cyberSAFE + cyberTokenWarrant a16z non-US Reg S v 1.0", "ipfs://bafybeieoahzrvqk3vggrv6zyljlgkrqn2ls5wgpbgp4w4ylenr2r2ftugm", globalFieldsSafeT, partyFieldsSafeT);
-        */
-         BorgAuth auth = BorgAuth(0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(bytes("ABV_safe_t")), "ABV_safe_t_testnet", "ipfs://bafybeia6l2w5kwr52w6khvhqkgg4n6poua5yjlwjmeqgb77iffh4xxpvdu", globalFieldsSafeT, partyFieldsSafeT);
+     //   CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(31)), "MetaLeX cyberTokenWarrant a16z jx-neutral-style-issuer Reg D raise", "ipfs://bafybeibojsh6f4wxj3gvwjbv7uvvurony7jumyqqi5i6rqsv7wcywdsi44", globalFieldsSafeT, partyFieldsSafeT);
+     //   CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(32)), "MetaLeX cyberSAFE jx-neutral-style Reg S raise", "ipfs://bafybeib5pqnqwbfdsnv4lqdkdglz2e4xqz2qklwdzzpbftydopzuqnri2a", globalFieldsSafe, partyFieldsSafe);
+     //   CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(34)), "MetaLeX cyberTokenWarrant a16z-jx-neutral-style-issuer Reg S raise", "ipfs://bafybeihi77o6kxeien3kbg2tquhmyg4bbxvbf2kjejjswk7akfzdfprwle", globalFieldsSafeT, partyFieldsSafeT);
+        
+        // BorgAuth auth = BorgAuth(0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01);
          
         //deploy saft data extension with create2
-        address safteExtension = address(new ERC1967Proxy{salt: salt}(
+  /*      address safteExtension = address(new ERC1967Proxy{salt: salt}(
            address(new SAFTEExtension{salt: salt}()),
            abi.encodeWithSelector(SAFTEExtension.initialize.selector, address(auth))
         ));
 
-         console.log("SAFTEExtension: ", address(safteExtension));
+         console.log("SAFTEExtension: ", address(safteExtension));*/
 
 /*| **globalFieldName** | **description**                    |
 |:--------------------|:-----------------------------------|
@@ -107,31 +103,26 @@ contract BaseScript is Script {
 | minCompanyReserve       | This is a number of tokens   |
 | tokenPremiumMultiplier  | */
 
-        string[] memory globalFieldsSafT = new string[](15);
-        globalFieldsSafT[0] = "purchaseAmount";
-        globalFieldsSafT[1] = "postMoneyValuationCap";
-        globalFieldsSafT[2] = "protocolUSDValuationAtTimeofInvestment";
-        globalFieldsSafT[3] = "expirationTime";
-        globalFieldsSafT[4] = "governingJurisdiction";
-         globalFieldsSafT[5] = "disputeResolution";
-        globalFieldsSafT[6] = "unlockStartTimeType";
-        globalFieldsSafT[7] = "unlockStartTime";
-        globalFieldsSafT[8] = "unlockingPeriod";
-        globalFieldsSafT[9] = "unlockingCliffPeriod";
-        globalFieldsSafT[10] = "unlockingCliffPercentage";
-        globalFieldsSafT[11] = "unlockingIntervalType";
-        globalFieldsSafT[12] = "tokenCalculationMethod";
-        globalFieldsSafT[13] = "minCompanyReserve";
-        globalFieldsSafT[14] = "tokenPremiumMultiplier";
+      /*["purchaseAmount", "protocolValuationCap", "governingJurisdiction", "disputeResolution", "unlockStartTimeType", "agreementExecutionTime", "unlockingPeriod", "unlockingCliffPeriod", "unlockingCliffPercentage", "unlockingIntervalType"]*/
+        string[] memory globalFieldsSafTt = new string[](10);
+        globalFieldsSafTt[0] = "purchaseAmount";
+        globalFieldsSafTt[1] = "protocolValuationCap";
+        globalFieldsSafTt[2] = "governingJurisdiction";
+        globalFieldsSafTt[3] = "disputeResolution";
+        globalFieldsSafTt[4] = "unlockStartTimeType";
+      globalFieldsSafTt[5] = "agreementExecutionTime";
+        globalFieldsSafTt[6] = "unlockingPeriod";
+        globalFieldsSafTt[7] = "unlockingCliffPeriod";
+        globalFieldsSafTt[8] = "unlockingCliffPercentage";
+        globalFieldsSafTt[9] = "unlockingIntervalType";
 
+        string[] memory partyFieldsSaftt = new string[](5);
+        partyFieldsSaftt[0] = "name";
+        partyFieldsSaftt[1] = "evmAddress";
+        partyFieldsSaftt[2] = "contactDetails";
+        partyFieldsSaftt[3] = "investorType";
+        partyFieldsSaftt[4] = "investorJurisdiction";
 
-        string[] memory partyFieldsSaft = new string[](5);
-        partyFieldsSaft[0] = "name";
-        partyFieldsSaft[1] = "evmAddress";
-        partyFieldsSaft[2] = "contactDetails";
-        partyFieldsSaft[3] = "investorType";
-        partyFieldsSaft[4] = "investorJurisdiction";
-
-        //CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(26)), "MetaLeX cyberSAFTE reg D v.1.0", "ipfs://bafybeidnjftuutxtrfovto533thugxbseezktmy3trj6kjh4fwedfm4l2y", globalFieldsSafT, partyFieldsSaft);
+       // CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(35)), "MetaLeX cyberSAFT Reg S raise", "ipfs://bafybeidquzma24o53tiys7kvspvx5izc7iru5n5dfgfwmxefi3qd67ou2y", globalFieldsSafTt, partyFieldsSaftt);
      }
 }

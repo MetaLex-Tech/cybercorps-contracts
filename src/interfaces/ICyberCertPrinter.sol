@@ -43,8 +43,9 @@ pragma solidity 0.8.28;
 
 import "./IIssuanceManager.sol";
 import "../CyberCorpConstants.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
-interface ICyberCertPrinter {
+interface ICyberCertPrinter is IERC721 {
     function initialize(
         string[] memory defaultLegend,
         string memory name,
@@ -55,6 +56,8 @@ interface ICyberCertPrinter {
         SecuritySeries _securitySeries,
         address _extension
     ) external;
+    function name() external view returns (string memory);
+    function symbol() external view returns (string memory);
     function updateIssuanceManager(address _issuanceManager) external;
     function updateDefaultLegend(string[] memory _ledger) external;
     function defaultLegend() external view returns (string[] memory);
@@ -121,4 +124,6 @@ interface ICyberCertPrinter {
         );
     function tokenURI(uint256 tokenId) external view returns (string memory);
     function totalSupply() external view returns (uint256);
+    function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256);
+    function setTokenTransferable(uint256 tokenId, bool value) external;
 }

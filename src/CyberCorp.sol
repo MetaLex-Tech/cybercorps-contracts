@@ -75,6 +75,9 @@ contract CyberCorp is Initializable, BorgAuthACL {
     /// @notice Array of company officers with their roles and details
     CompanyOfficer[] public companyOfficers;
 
+    /// @notice Address of the round manager contract
+    address public roundManager;
+
 
     event CyberCORPDetailsUpdated(string cyberCORPName, string cyberCORPType, string cyberCORPJurisdiction, string cyberCORPContactDetails, string defaultDisputeResolution);
     event OfficerAdded(address indexed officer, uint256 index);
@@ -106,7 +109,8 @@ contract CyberCorp is Initializable, BorgAuthACL {
         address _issuanceManager,
         address _companyPayable,
         CompanyOfficer memory _officer,
-        address _upgradeFactory
+        address _upgradeFactory,
+        address _roundManager
     ) public initializer {
         __BorgAuthACL_init(_auth);
 
@@ -119,6 +123,7 @@ contract CyberCorp is Initializable, BorgAuthACL {
         companyPayable = _companyPayable;
         companyOfficers.push(_officer);
         upgradeFactory = _upgradeFactory;
+        roundManager = _roundManager;
     }
 
     /// @notice Updates the corporation's basic details
@@ -156,6 +161,13 @@ contract CyberCorp is Initializable, BorgAuthACL {
     /// @param _dealManager New deal manager contract address
     function setDealManager(address _dealManager) external onlyOwner() {
         dealManager = _dealManager;
+    }
+
+    /// @notice Updates the round manager address
+    /// @dev Only callable by owner
+    /// @param _roundManager New round manager contract address
+    function setRoundManager(address _roundManager) external onlyOwner() {
+        roundManager = _roundManager;
     }
 
     /// @notice Checks if an address belongs to a company officer

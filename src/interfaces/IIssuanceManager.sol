@@ -66,7 +66,8 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
         address _CORP,
         address _CyberCertPrinterImplementation,
         address _uriBuilder,
-        address _upgradeFactory
+        address _upgradeFactory,
+        address _CyberScripImplementation
     ) external;
 
     function createCertPrinter(
@@ -158,6 +159,12 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
 
     function setGlobalRestrictionHook(
         address hookAddress
+    ) external;
+
+    function setTokenTransferable(
+        address certAddress,
+        uint256 tokenId,
+        bool value
     ) external;
 
     function restrictionHooksById(

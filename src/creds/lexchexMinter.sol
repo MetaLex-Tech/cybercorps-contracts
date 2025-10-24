@@ -212,6 +212,73 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
         emit MintCompleted(request.owner, tokenId, agreementId);
     }
 
+    /// @notice Admin-only path to mint for a user without an authority signature
+    /// @dev Mirrors requestMint but gated by onlyAdmin and skips _verifyAuthoritySignature
+    function requestMintFor(
+        MintRequest calldata request,
+        bytes32 _templateId,
+        uint256 _salt,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        string[][] memory _partyValues,
+        bytes memory agreementSignature
+    ) external onlyAdmin returns (bytes32 agreementId, uint256 tokenId) {
+        // 1. Handle payment using safeTransferFrom (if any)
+        if (request.mintPrice > 0) {
+            IERC20(request.paymentToken).safeTransferFrom(
+                msg.sender,
+                treasury,
+                request.mintPrice
+            );
+        }
+
+        // 2. Create accreditation struct (signature field can store empty bytes for admin path)
+        Accreditation memory acc = Accreditation({
+            agreementId: bytes32(0),
+            registryAddress: dealRegistry,
+            investorName: request.investorName,
+            investorType: request.investorType,
+            investorJurisdiction: request.investorJurisdiction,
+            investorContact: request.investorContact,
+            issuanceDate: block.timestamp,
+            expiryDate: request.expiry,
+            voided: "",
+            signature: "",
+            uuid: request.uuid
+        });
+
+        // 3. Create and sign agreement
+        agreementId = ICyberAgreementRegistry(dealRegistry).createContract(
+            _templateId,
+            _salt,
+            _globalValues,
+            _parties,
+            _partyValues,
+            bytes32(0),
+            address(this),
+            request.expiry
+        );
+
+        ICyberAgreementRegistry(dealRegistry).signContractFor(
+            request.owner,
+            agreementId,
+            _partyValues[0],
+            agreementSignature,
+            false,
+            ""
+        );
+
+        // 4. Update accreditation with agreement ID and mint
+        acc.agreementId = agreementId;
+        tokenId = LeXcheX(lexchex).mint(request.owner, acc);
+
+        // 5. Finalize the agreement
+        ICyberAgreementRegistry(dealRegistry).finalizeContract(agreementId);
+
+        emit MintRequested(request.owner, request.mintPrice, agreementId);
+        emit MintCompleted(request.owner, tokenId, agreementId);
+    }
+
     function requestRenewal(
         MintRequest calldata request,
         uint256 tokenId,
@@ -250,6 +317,46 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
         acc.signature = authoritySignature;
 
         // 4. Update LeXcheX
+        LeXcheX(lexchex).setAccreditation(tokenId, acc);
+
+        emit RenewalRequested(request.owner, request.mintPrice, acc.agreementId);
+        emit RenewalCompleted(request.owner, tokenId, acc.agreementId);
+    }
+
+    /// @notice Admin-only path to renew without an authority signature
+    /// @dev Mirrors requestRenewal but gated by onlyAdmin and skips _verifyAuthoritySignature
+    function requestRenewalFor(
+        MintRequest calldata request,
+        uint256 tokenId
+    ) external onlyAdmin {
+        // get the accreditation
+        Accreditation memory acc = LeXcheX(lexchex).accreditations(tokenId);
+
+        // Check that the accreditation exists
+        if(acc.issuanceDate == 0) {
+            revert AccreditationDoesNotExist();
+        }
+
+        // Check that the accreditation has not been voided
+        if(bytes(acc.voided).length > 0) {
+            revert AccreditationVoided();
+        }
+
+        // Handle payment using safeTransferFrom
+        if (request.mintPrice > 0) {
+            IERC20(request.paymentToken).safeTransferFrom(
+                msg.sender,
+                treasury,
+                request.mintPrice
+            );
+        }
+
+        // Renew the agreement
+        acc.expiryDate = request.expiry;
+        acc.issuanceDate = block.timestamp;
+        acc.signature = "";
+
+        // Update LeXcheX
         LeXcheX(lexchex).setAccreditation(tokenId, acc);
 
         emit RenewalRequested(request.owner, request.mintPrice, acc.agreementId);

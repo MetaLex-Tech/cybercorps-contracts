@@ -94,6 +94,8 @@ library CyberCertPrinterStorage {
         string[] defaultLegend;
         bool transferable;
         bool endorsementRequired;
+        // New variables must be appended below to preserve storage layout for upgrades
+        mapping(uint256 => bool) tokenTransferable;
         
     }
 
@@ -150,6 +152,14 @@ library CyberCertPrinterStorage {
 
     function setTransferable(bool _transferable) internal {
         cyberCertStorage().transferable = _transferable;
+    }
+
+    function setTokenTransferable(uint256 tokenId, bool value) internal {
+        cyberCertStorage().tokenTransferable[tokenId] = value;
+    }
+
+    function isTokenTransferable(uint256 tokenId) internal view returns (bool) {
+        return cyberCertStorage().tokenTransferable[tokenId];
     }
 
     function setRestrictionHook(uint256 tokenId, ITransferRestrictionHook hook) internal {

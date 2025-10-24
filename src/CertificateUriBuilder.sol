@@ -39,13 +39,14 @@ distributed, transmitted, sublicensed, sold, or otherwise used in any form or by
 mechanical, including photocopying, recording, or by any information storage and retrieval system, 
 except with the express prior written permission of the copyright holder.*/
 
-pragma solidity 0.8.28;
+pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./CyberCorpConstants.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
 import "./storage/extensions/ICertificateExtension.sol";
 import "./libs/auth.sol";
+import "./CertificateImageBuilder.sol";
 
 contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
 
@@ -72,6 +73,23 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         if (_class == SecurityClass.RestrictedStockUnit) return "RestrictedStockUnit";
         if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "RestrictedTokenPurchaseAgreement";
         if (_class == SecurityClass.RestrictedTokenUnit) return "RestrictedTokenUnit";
+        return "Unknown";
+    }
+
+    function securityClassToUnit(SecurityClass _class) public pure returns (string memory) {
+        if (_class == SecurityClass.SAFE) return "Dollars";
+        if (_class == SecurityClass.SAFT) return "Dollars";
+        if (_class == SecurityClass.SAFTE) return "Dollars";
+        if (_class == SecurityClass.TokenPurchaseAgreement) return "Tokens";
+        if (_class == SecurityClass.TokenWarrant) return "Tokens";
+        if (_class == SecurityClass.ConvertibleNote) return "Notes";
+        if (_class == SecurityClass.CommonStock) return "Shares";
+        if (_class == SecurityClass.StockOption) return "Shares";
+        if (_class == SecurityClass.PreferredStock) return "Shares";
+        if (_class == SecurityClass.RestrictedStockPurchaseAgreement) return "Units";
+        if (_class == SecurityClass.RestrictedStockUnit) return "Units";
+        if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "Units";
+        if (_class == SecurityClass.RestrictedTokenUnit) return "Units";
         return "Unknown";
     }
 
@@ -297,10 +315,21 @@ struct CertificateDetails {
         address extension
     ) public view returns (string memory) {
         // Start building the JSON string with ERC-721 metadata standard format
+        // Build on-chain SVG image using the image builder
+        string memory svg = CertificateImageBuilder.buildCertificateSVG(
+            cyberCORPName,
+            securityClassToString(securityType),
+            details.signingOfficerName,
+            details.signingOfficerTitle,
+            details.unitsRepresented,
+            details.issuerUSDValuationAtTimeOfInvestment
+        );
+        string memory imageDataUri = string(abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg))));
+
         string memory json = string(abi.encodePacked(
             '{"title": "MetaLeX Tokenized Certificate",',
             '"type": "', securityClassToString(securityType),
-            '", "image": "https://cybercorps.metalex.tech/certs/', uint256ToString(block.chainid), '/', addressToString(contractAddress), '/', uint256ToString(tokenId), '",',
+            '", "image": "', imageDataUri, '",',
             '"attributes": [', buildAttributes(owner, details),
             '],'
         ));
@@ -374,10 +403,21 @@ struct CertificateDetails {
         address extension
     ) public view returns (string memory) {
         // Start building the JSON string with ERC-721 metadata standard format
+        // Build on-chain SVG image using the image builder
+        string memory svg = CertificateImageBuilder.buildCertificateSVG(
+            cyberCORPName,
+            securityClassToString(securityType),
+            details.signingOfficerName,
+            details.signingOfficerTitle,
+            details.unitsRepresented,
+            details.issuerUSDValuationAtTimeOfInvestment
+        );
+        string memory imageDataUri = string(abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg))));
+
         string memory json = string(abi.encodePacked(
             '{"title": "MetaLeX Tokenized Certificate",',
             '"type": "', securityClassToString(securityType),
-            '", "image": "https://cybercorps.metalex.tech/certs/', uint256ToString(block.chainid), '/', addressToString(contractAddress), '/', uint256ToString(tokenId), '",',
+            '", "image": "', imageDataUri, '",',
             '"attributes": [', buildAttributes(owner, details),
             '],'
         ));
