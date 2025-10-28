@@ -497,7 +497,6 @@ contract UpgradeDealManagerTest is Test {
         vm.stopPrank();
 
         // Run scripts to upgrade all legacy DealManagers
-        // TODO should take a list of known DealManagers
         dmWithMigrationImpl = (new UpgradeLegacyDealManagersScript()).run();
     }
 }
