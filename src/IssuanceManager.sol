@@ -553,7 +553,11 @@ contract IssuanceManager is Initializable, BorgAuthACL {
             string(
                 abi.encodePacked("scrip", ICyberCertPrinter(certAddress).symbol())
             ),
-            typeRestrictionHooks
+            typeRestrictionHooks,
+            // TODO TBD: placeholder just to make tests work
+            true,
+            true,
+            true
         );
         IssuanceManagerStorage.setScripifiedCert(certAddress, newScrip);
         IssuanceManagerStorage.setCertToScripConditions(certAddress, certToScripConditions);

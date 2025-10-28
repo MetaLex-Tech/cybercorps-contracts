@@ -22,6 +22,7 @@ import {UpgradeableBeacon} from "openzeppelin-contracts/proxy/beacon/Upgradeable
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
+import {ERC20Upgradeable} from "openzeppelin-contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import {ERC721EnumerableUpgradeable} from "openzeppelin-contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 import {IERC721Errors} from "openzeppelin-contracts/interfaces/draft-IERC6093.sol";
 import {MockERC20} from "./mock/MockERC20.sol";
@@ -54,6 +55,13 @@ contract RugCyberCertPrinter is ERC721EnumerableUpgradeable {
     // Burn token without any permission check
     function burn(uint256 tokenId) external {
         _burn(tokenId);
+    }
+}
+
+contract RugCyberScrip is ERC20Upgradeable {
+    // Mint token without any permission check
+    function mint(address account, uint256 value) external {
+        _mint(account, value);
     }
 }
 
@@ -316,7 +324,8 @@ contract CyberCorpUpgradeabilityTest is Test {
         DealManager(dmAddr).finalizeDeal(agreementId);
     }
 
-    function test_RugCyberCertificatePrinter() public {
+    /// @dev TODO WIP: this is supposed to revert
+    function test_RevertIf_RugCyberCertificatePrinter() public {
         // Sanity check
         assertEq(CyberCertPrinter(cyberCertPrinterAddrs[0]).ownerOf(certIds[0]), alice);
 
@@ -337,59 +346,35 @@ contract CyberCorpUpgradeabilityTest is Test {
         CyberCertPrinter(cyberCertPrinterAddrs[0]).ownerOf(certIds[0]);
     }
 
-    // TODO merge the following two
-//    function test_RugCyberScrip() public {
-//        // Sanity check
-//        assertEq(CyberCertPrinter(cyberCertPrinterAddrs[0]).ownerOf(certIds[0]), alice);
-//
-//        vm.startPrank(metalex);
-//
-//        // IssuanceManagerFactory can unilaterally control any CyberCertPrinter
-//        imFactory.upgradePrinterBeaconAt(
-//            imAddr,
-//            address(new RugCyberCertPrinter())
-//        );
-//
-//        // Burn certificate at will
-//        CyberCertPrinter(cyberCertPrinterAddrs[0]).burn(certIds[0]);
-//
-//        vm.stopPrank();
-//
-//        vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, certIds[0]));
-//        CyberCertPrinter(cyberCertPrinterAddrs[0]).ownerOf(certIds[0]);
-//    }
+    /// @dev TODO WIP: this is supposed to revert
+    function test_RevertIf_RugCyberScrip() public {
+        // CyberCorpFactory does not utilize CyberScrip yet, so we will simulate it here
 
-//    function test_RugCyberScrip() public {
-//        // Assume Base-sepolia
-//        address paymentToken = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
-//        uint256 paymentAmount = 1000000000000000000;
-//        address issuanceManagerFactoryAddr = CyberCorpFactory(cyberCorpFactory).issuanceManagerFactory();
-//        address dealManagerFactoryAddr = CyberCorpFactory(cyberCorpFactory).dealManagerFactory();
-//
-//        // Propose and finalize a deal
-//        (
-//            ,
-//            ,
-//            address issuanceManagerAddr,
-//            address dealManagerAddr,
-//            ,
-//            address[] memory cyberCertPrinterAddr,
-//            bytes32 agreementId,
-//            uint256[] memory certIds
-//        ) = _proposeDealAndPay(alicePrivateKey, paymentToken, paymentAmount);
-//        IDealManager(dealManagerAddr).finalizeDeal(agreementId);
-//
-//        // CyberCorpFactory does not utilize CyberScrip yet, so we will simulate it here
-//
-//        CyberScrip cyberScrip = CyberScrip(
-//            IssuanceManager(issuanceManagerAddr).deployCyberScrip(
-//                makeAddr("MockCyberScripCert"), // certAddress
-//                new ITransferRestrictionHook[](0), // typeRestrictionHooks
-//                new ICondition[](0), // certToScripConditions
-//                new ICondition[](0) // scripToCertConditions
-//            )
-//        );
-//
-//        assertEq(cyberScrip.IssuanceManager(), issuanceManagerAddr);
-//    }
+        CyberScrip cyberScrip = CyberScrip(
+            TestIssuanceManager(imAddr).deployCyberScripPublic(
+                cyberCertPrinterAddrs[0], // certAddress
+                new ITransferRestrictionHook[](0), // typeRestrictionHooks
+                new ICondition[](0), // certToScripConditions
+                new ICondition[](0) // scripToCertConditions
+            )
+        );
+
+        assertEq(cyberScrip.IssuanceManager(), imAddr);
+
+        vm.startPrank(metalex);
+
+        // IssuanceManagerFactory can unilaterally control any CyberScrip
+        // TODO WIP: IssuanceManager hasn't implemented it yet
+        imFactory.upgradeScripBeaconAt(
+            imAddr,
+            address(new RugCyberScrip())
+        );
+
+        // Mint token at will
+        RugCyberScrip(address(cyberScrip)).mint(metalex, 100 ether);
+
+        vm.stopPrank();
+
+        assertEq(cyberScrip.balanceOf(metalex), 100 ether);
+    }
 }

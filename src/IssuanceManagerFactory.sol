@@ -117,4 +117,12 @@ contract IssuanceManagerFactory is BorgAuthACL {
     function upgradePrinterBeaconAt(address issuanceManager, address _newImplementation) external onlyOwner {
         IssuanceManager(issuanceManager).upgradeBeaconImplementation(_newImplementation);
     }
+
+    /// @notice Upgrades the implementation of the cyber scrip
+    /// @dev Only callable by upgrader role
+    /// TODO TBD: not sure if final design yet
+    /// @param _newImplementation Address of the new implementation
+    function upgradeScripBeaconAt(address issuanceManager, address _newImplementation) external onlyOwner {
+        IssuanceManager(issuanceManager).upgradeScripBeaconImplementation(_newImplementation);
+    }
 }
