@@ -4,8 +4,10 @@ pragma solidity ^0.8.28;
 import {Script} from "forge-std/Script.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {CyberScrip} from "../src/CyberScrip.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
@@ -63,14 +65,24 @@ contract BaseScript is Script {
         //use salt to deploy BorgAuth
         BorgAuth auth = new BorgAuth{salt: salt}(deployerAddress);
 
-        address issuanceManagerFactory = address(new IssuanceManagerFactory{salt: salt}(address(auth)));
-
-        address cyberCertPrinterImplementation = address(new CyberCertPrinter{salt: salt}());
-        CyberCertPrinter cyberCertPrinter = CyberCertPrinter(cyberCertPrinterImplementation);
+         address issuanceManagerImplementation = address(new IssuanceManager{salt: salt}());
+         address cyberCertPrinterImplementation = address(new CyberCertPrinter{salt: salt}());
+         address cyberScripImplementation = address(new CyberScrip{salt: salt}());
+         address issuanceManagerFactory = address(
+             new ERC1967Proxy{salt: salt}(
+                 address(new IssuanceManagerFactory{salt: salt}()),
+                 abi.encodeWithSelector(
+                     IssuanceManagerFactory.initialize.selector,
+                     address(auth),
+                     issuanceManagerImplementation,
+                     cyberCertPrinterImplementation,
+                     cyberScripImplementation
+                 )
+             )
+         );
 
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "";
-        //cyberCertPrinter.initialize(defaultLegend, "", "", "ipfs.io/ipfs/[cid]", address(0), SecurityClass.SAFE, SecuritySeries.SeriesPreSeed);
 
         address cyberCorpSingleFactory = address(new CyberCorpSingleFactory{salt: salt}(address(auth)));
 

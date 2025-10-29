@@ -135,9 +135,22 @@ library CyberCorpHelper {
             )
         );
 
-        issuanceManagerFactory = address(
-            new IssuanceManagerFactory{salt: SALT}(address(bootstrapAuth))
+        address issuanceManagerImpl = address(new IssuanceManager{salt: SALT}());
+        address certPrinterImpl = address(new CyberCertPrinter{salt: SALT}());
+        address cyberScripImpl = address(new CyberScrip{salt: SALT}());
+        address issuanceManagerFactory = address(
+            new ERC1967Proxy{salt: SALT}(
+                address(new IssuanceManagerFactory{salt: SALT}()),
+                abi.encodeWithSelector(
+                    IssuanceManagerFactory.initialize.selector,
+                    address(bootstrapAuth),
+                    issuanceManagerImpl,
+                    certPrinterImpl,
+                    cyberScripImpl
+                )
+            )
         );
+
         cyberCorpSingleFactory = address(
             new CyberCorpSingleFactory{salt: SALT}(address(bootstrapAuth))
         );
@@ -162,9 +175,6 @@ library CyberCorpHelper {
                 )
             )
         );
-
-        address certPrinterImpl = address(new CyberCertPrinter{salt: SALT}());
-        address cyberScripImpl = address(new CyberScrip{salt: SALT}());
 
         corpFactory = CyberCorpFactory(
             address(

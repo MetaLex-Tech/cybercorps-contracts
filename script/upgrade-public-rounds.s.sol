@@ -129,25 +129,27 @@ contract UpgradePublicRoundsScript is Script {
             registry
         );
 
-        // 5b) Upgrade IssuanceManager (Beacon via IssuanceManagerFactory)
-        address newIssuanceManagerImpl = address(new IssuanceManager{salt: salt}());
-        console.log("New IssuanceManager implementation:", newIssuanceManagerImpl);
-        IssuanceManagerFactory(issuanceManagerFactoryAddr).upgradeImplementation(newIssuanceManagerImpl);
-        console.log(
-            "IssuanceManager beacon implementation set to:",
-            IssuanceManagerFactory(issuanceManagerFactoryAddr).getBeaconImplementation()
-        );
+        // TODO WIP: must upgrade legacy issuance managers
+//        // 5b) Upgrade IssuanceManager (Beacon via IssuanceManagerFactory)
+//        address newIssuanceManagerImpl = address(new IssuanceManager{salt: salt}());
+//        console.log("New IssuanceManager implementation:", newIssuanceManagerImpl);
+//        IssuanceManagerFactory(issuanceManagerFactoryAddr).upgradeImplementation(newIssuanceManagerImpl);
+//        console.log(
+//            "IssuanceManager beacon implementation set to:",
+//            IssuanceManagerFactory(issuanceManagerFactoryAddr).getBeaconImplementation()
+//        );
 
-        //deploy CyberScrip implementation
-        address newCyberScripImpl = address(new CyberScrip{salt: salt}());
-        console.log("New CyberScrip implementation:", newCyberScripImpl);
-        CyberCorpFactory(cyberCorpFactoryProxyAddr).setCyberCert20Implementation(newCyberScripImpl);
+        // TODO WIP: should handle CyberScrip implementation along with new issuance manager factory
+//        //deploy CyberScrip implementation
+//        address newCyberScripImpl = address(new CyberScrip{salt: salt}());
+//        console.log("New CyberScrip implementation:", newCyberScripImpl);
+//        CyberCorpFactory(cyberCorpFactoryProxyAddr).setCyberCert20Implementation(newCyberScripImpl);
 
-
-        // 6) upgrade CyberCertPrinter
-        address newCyberCertPrinterImpl = address(new CyberCertPrinter{salt: salt}());
-        console.log("New CyberCertPrinter implementation:", newCyberCertPrinterImpl);
-        factoryProxy.setCyberCertPrinterImplementation(newCyberCertPrinterImpl);
+        // TODO WIP: should upgrade legacy cyber printers
+//        // 6) upgrade CyberCertPrinter
+//        address newCyberCertPrinterImpl = address(new CyberCertPrinter{salt: salt}());
+//        console.log("New CyberCertPrinter implementation:", newCyberCertPrinterImpl);
+//        factoryProxy.setCyberCertPrinterImplementation(newCyberCertPrinterImpl);
 
         vm.stopBroadcast();
 

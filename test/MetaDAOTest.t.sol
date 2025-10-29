@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import {MetaDAOFactory} from "../src/MetaDAOFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
 import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
@@ -70,8 +71,25 @@ contract MetaDAOTest is Test {
             )
         );
 
+        // Implementations
+        address issuanceManagerImpl = address(new IssuanceManager{salt: salt}());
+        address certPrinterImpl = address(new CyberCertPrinter{salt: salt}());
+        address cyberScripImpl = address(new CyberScrip{salt: salt}());
+
         // Factories
-        address issuanceManagerFactoryAddr = address(new IssuanceManagerFactory{salt: salt}(address(bootstrapAuth)));
+        address issuanceManagerFactoryAddr = address(
+            new ERC1967Proxy{salt: salt}(
+                address(new IssuanceManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    IssuanceManagerFactory.initialize.selector,
+                    address(bootstrapAuth),
+                    issuanceManagerImpl,
+                    certPrinterImpl,
+                    cyberScripImpl
+                )
+            )
+        );
+
         address cyberCorpSingleFactory = address(new CyberCorpSingleFactory{salt: salt}(address(bootstrapAuth)));
         address dealManagerFactory = address(
             new ERC1967Proxy{salt: salt}(
@@ -93,10 +111,6 @@ contract MetaDAOTest is Test {
                 )
             )
         );
-
-        // Implementations
-        address certPrinterImpl = address(new CyberCertPrinter{salt: salt}());
-        address cyberScripImpl = address(new CyberScrip{salt: salt}());
 
         // Stable token
         MockPaymentToken usdc = new MockPaymentToken();

@@ -42,23 +42,28 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "./libs/auth.sol";
-import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
-import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
-import "@openzeppelin/contracts/utils/Create2.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
+import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import "openzeppelin-contracts/utils/Create2.sol";
+import "openzeppelin-contracts/utils/Address.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/ICyberCertPrinter.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "./storage/IssuanceManagerStorage.sol";
 import "./interfaces/ITransferRestrictionHook.sol";
 import "./interfaces/ICyberScrip.sol";
 import "./RoundManager.sol";
 import "./interfaces/ICertificateConverter.sol";
+import "./interfaces/IIssuanceManagerFactory.sol";
+import "./storage/IssuanceManagerStorage.sol";
+import "./CyberCertPrinter.sol";
+import {CyberScrip} from "./CyberScrip.sol";
 
 /// @title IssuanceManager
 /// @notice Manages the issuance and lifecycle of digital certificates representing securities and more
 /// @dev Implements UUPS upgradeable pattern and BorgAuth access control
-contract IssuanceManager is Initializable, BorgAuthACL {
+contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     using IssuanceManagerStorage for IssuanceManagerStorage.IssuanceManagerData;
+
+    string public constant DEPLOY_VERSION = "1"; // For version-tracking on all deployment and future upgrades
 
     // IssuanceManager errors
     error CompanyDetailsNotSet();
@@ -68,6 +73,7 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     error NotUpgradeFactory();
     error ScripifiedCertNotAllowed();
     error ConditionCheckFailed();
+    error NotRefImplementation();
     
     event ScripifiedCert(
         address indexed certAddress,
@@ -383,18 +389,22 @@ contract IssuanceManager is Initializable, BorgAuthACL {
     /// @dev Internal function used by createCertPrinter
     /// @return bytecode The proxy contract creation bytecode
     function _getBytecode() private view returns (bytes memory bytecode) {
-        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
+        bytes memory sourceCodeBytes = type(ERC1967Proxy).creationCode;
         bytecode = abi.encodePacked(
             sourceCodeBytes,
-            abi.encode(IssuanceManagerStorage.getCyberCertPrinterBeacon(), "")
+            abi.encode(IIssuanceManagerFactory(
+                IssuanceManagerStorage.getUpgradeFactory()
+            ).getCyberCertPrinterRefImplementation(), "")
         );
     }
 
     function _getBytecodeScrip() private view returns (bytes memory bytecode) {
-        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
+        bytes memory sourceCodeBytes = type(ERC1967Proxy).creationCode;
         bytecode = abi.encodePacked(
             sourceCodeBytes,
-            abi.encode(IssuanceManagerStorage.getCyberScripBeacon(), "")
+            abi.encode(IIssuanceManagerFactory(
+                IssuanceManagerStorage.getUpgradeFactory()
+            ).getCyberScripRefImplementation(), "")
         );
     }
 
@@ -659,6 +669,28 @@ contract IssuanceManager is Initializable, BorgAuthACL {
             });
 
             createCertAndAssign(certAddress, msg.sender, details);
+        }
+    }
+
+    function upgradeCyberCertPrinterToAndCall(address proxy, address newImplementation, bytes memory data) external onlyOwner {
+        CyberCertPrinter(proxy).upgradeToAndCall(newImplementation, data);
+    }
+
+    function upgradeCyberScripToAndCall(address proxy, address newImplementation, bytes memory data) external onlyOwner {
+        CyberScrip(proxy).upgradeToAndCall(newImplementation, data);
+    }
+
+    /// @notice UUPS upgrade authorization
+    /// @dev MetaLeX releases new versions through the factory's reference implementation,
+    /// and the CyberCorp owner can decide if or when he wants to perform the upgrade
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {
+        if(
+            IIssuanceManagerFactory(
+                IssuanceManagerStorage.getUpgradeFactory()
+            ).getRefImplementation() != newImplementation) {
+            revert NotRefImplementation();
         }
     }
 }

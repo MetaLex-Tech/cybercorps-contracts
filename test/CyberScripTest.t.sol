@@ -49,7 +49,7 @@ contract CyberScripTest is Test {
         assertEq(cyberScrip.name(), "Test CyberScrip");
         assertEq(cyberScrip.symbol(), "TCS");
         assertEq(cyberScrip.certPrinter(), certPrinter);
-        assertEq(cyberScrip.IssuanceManager(), issuanceManager);
+        assertEq(cyberScrip.issuanceManager(), issuanceManager);
         assertEq(cyberScrip.balanceOf(user1), 1000 ether);
     }
 

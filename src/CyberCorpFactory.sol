@@ -77,7 +77,6 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     error DeploymentFailed();
 
     address public registryAddress;
-    address public cyberCertPrinterImplementation;
     address public issuanceManagerFactory;
     address public cyberCorpSingleFactory;
     address public cyberAgreementFactory;
@@ -85,7 +84,6 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     address public uriBuilder;
     address public stable; // = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;//base main net 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address public roundManagerFactory;
-    address public cyberCert20Implementation;
     address public lexchexAuth;
 
     // Upgrade notes: Reduced gap to account for new variables
@@ -152,18 +150,11 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         address oldRoundManagerFactory
     );
 
-    event CyberCertPrinterImplementationUpdated(
-        address indexed cyberCertPrinterImplementation,
-        address oldImplementation
-    );
-    
     event LexchexAuthUpdated(address indexed lexchexAuth, address oldLexchexAuth);
 
     function initialize(
         address _auth,
         address _registryAddress,
-        address _cyberCertPrinterImplementation,
-        address _cyberCert20Implementation,
         address _issuanceManagerFactory,
         address _cyberCorpSingleFactory,
         address _dealManagerFactory,
@@ -175,8 +166,6 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         __BorgAuthACL_init(_auth);
 
         registryAddress = _registryAddress;
-        cyberCertPrinterImplementation = _cyberCertPrinterImplementation;
-        cyberCert20Implementation = _cyberCert20Implementation;
         issuanceManagerFactory = _issuanceManagerFactory;
         cyberCorpSingleFactory = _cyberCorpSingleFactory;
         dealManagerFactory = _dealManagerFactory;
@@ -253,10 +242,10 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         IIssuanceManager(issuanceManagerAddress).initialize(
             authAddress,
             cyberCorpAddress,
-            cyberCertPrinterImplementation,
+            IIssuanceManagerFactory(issuanceManagerFactory).getCyberCertPrinterRefImplementation(),
             uriBuilder,
             issuanceManagerFactory,
-            cyberCert20Implementation
+            IIssuanceManagerFactory(issuanceManagerFactory).getCyberScripRefImplementation()
         );
 
         //update role for issuance manager
@@ -556,27 +545,6 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             roundManagerFactory,
             oldRoundManagerFactory
         );
-    }
-
-    event CyberCert20ImplementationUpdated(
-        address indexed cyberCert20Implementation,
-        address oldImplementation
-    );
-
-    function setCyberCert20Implementation(
-        address _cyberCert20Implementation
-    ) external onlyOwner {
-        address oldImplementation = cyberCert20Implementation;
-        cyberCert20Implementation = _cyberCert20Implementation;
-        emit CyberCert20ImplementationUpdated(cyberCert20Implementation, oldImplementation);
-    }
-
-    function setCyberCertPrinterImplementation(
-        address _cyberCertPrinterImplementation
-    ) external onlyOwner {
-        address oldImplementation = cyberCertPrinterImplementation;
-        cyberCertPrinterImplementation = _cyberCertPrinterImplementation;
-        emit CyberCertPrinterImplementationUpdated(cyberCertPrinterImplementation, oldImplementation);
     }
 
     function setLexchexAuth(address _lexchexAuth) external onlyOwner {

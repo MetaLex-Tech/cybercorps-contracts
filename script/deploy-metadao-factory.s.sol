@@ -7,6 +7,7 @@ import {console} from "forge-std/console.sol";
 import {MetaDAOFactory} from "../src/MetaDAOFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
 import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
@@ -65,9 +66,22 @@ contract DeployMetaDAOFactoryScript is Script {
             )
         );
 
+        address issuanceManagerImplementation = address(new IssuanceManager{salt: salt}());
+        address cyberCertPrinterImplementation = address(new CyberCertPrinter{salt: salt}());
+        address cyberCert20Implementation = address(new CyberScrip{salt: salt}());
         address issuanceManagerFactory = address(
-            new IssuanceManagerFactory{salt: salt}(address(auth))
+            new ERC1967Proxy{salt: salt}(
+                address(new IssuanceManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    IssuanceManagerFactory.initialize.selector,
+                    address(auth),
+                    issuanceManagerImplementation,
+                    cyberCertPrinterImplementation,
+                    cyberCert20Implementation
+                )
+            )
         );
+
         address cyberCorpSingleFactory = address(
             new CyberCorpSingleFactory{salt: salt}(address(auth))
         );
@@ -90,13 +104,6 @@ contract DeployMetaDAOFactoryScript is Script {
                     address(new RoundManager())
                 )
             )
-        );
-
-        address cyberCertPrinterImplementation = address(
-            new CyberCertPrinter{salt: salt}()
-        );
-        address cyberCert20Implementation = address(
-            new CyberScrip{salt: salt}()
         );
 
         MetaDAOFactory metaDAOFactory = MetaDAOFactory(

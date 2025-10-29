@@ -19,6 +19,7 @@ import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHo
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
+import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
 import {MockERC20} from "./mock/MockERC20.sol";
 import {Test, console2} from "forge-std/Test.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
@@ -31,10 +32,15 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 import {UpgradeableBeacon} from "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 
-contract RugCyberCorp {
+contract RugImplemantation is UUPSUpgradeable {
+    string public constant DEPLOY_VERSION = "ngmi";
+    
     function acceptDealManagerUpgrade(address dm, address newImpl) external {
         DealManager(dm).upgradeToAndCall(newImpl, "");
     }
+
+    // UUPS upgrade authorization
+    function _authorizeUpgrade(address newImplementation) internal override {}
 }
 
 contract DealManagerRugger is UUPSUpgradeable {
@@ -48,21 +54,33 @@ contract DealManagerRugger is UUPSUpgradeable {
     function _authorizeUpgrade(address newImplementation) internal override {}
 }
 
-contract RugCyberCertPrinter is ERC721EnumerableUpgradeable {
+contract RugCyberCertPrinter is ERC721EnumerableUpgradeable, UUPSUpgradeable {
+    string public constant DEPLOY_VERSION = "ngmi";
+
     // Burn token without any permission check
     function burn(uint256 tokenId) external {
         _burn(tokenId);
     }
+
+    // UUPS upgrade authorization
+    function _authorizeUpgrade(address newImplementation) internal override {}
 }
 
-contract RugCyberScrip is ERC20Upgradeable {
+contract RugCyberScrip is ERC20Upgradeable, UUPSUpgradeable {
+    string public constant DEPLOY_VERSION = "ngmi";
+
     // Mint token without any permission check
     function mint(address account, uint256 value) external {
         _mint(account, value);
     }
+
+    // UUPS upgrade authorization
+    function _authorizeUpgrade(address newImplementation) internal override {}
 }
 
 contract CyberCorpUpgradeabilityTest is Test {
+    using ERC1967ProxyLib for address;
+
     address public constant LEXCHEX_OWNER = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
     bytes32 public constant TEMPLATE_ID = keccak256("test template");
     uint256 public constant PAYMENT_AMOUNT = 100 ether;
@@ -124,7 +142,18 @@ contract CyberCorpUpgradeabilityTest is Test {
         cyberCorpSingleFactory = new CyberCorpSingleFactory(address(metalexAuth));
         vm.label(address(cyberCorpSingleFactory), "CyberCorpSingleFactory");
 
-        imFactory = new IssuanceManagerFactory(address(metalexAuth));
+        imFactory = IssuanceManagerFactory(address(
+            new ERC1967Proxy{salt: salt}(
+                address(new IssuanceManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    IssuanceManagerFactory.initialize.selector,
+                    address(metalexAuth),
+                    address(new IssuanceManager{salt: salt}()),
+                    address(new CyberCertPrinter()),
+                    address(new CyberScrip())
+                )
+            )
+        ));
         vm.label(address(imFactory), "IssuanceManagerFactory");
 
         dmFactory = DealManagerFactory(
@@ -159,8 +188,6 @@ contract CyberCorpUpgradeabilityTest is Test {
                         CyberCorpFactory.initialize.selector,
                         address(metalexAuth),
                         address(registry),
-                        new CyberCertPrinter(),
-                        new CyberScrip(),
                         address(imFactory),
                         address(cyberCorpSingleFactory),
                         address(dmFactory),
@@ -303,10 +330,10 @@ contract CyberCorpUpgradeabilityTest is Test {
         vm.startPrank(metalex);
 
         // Upgrade CyberCorp beacon to a corrupted implementation
-        address newCyberCorpImpl = address(new RugCyberCorp());
+        address newCyberCorpImpl = address(new RugImplemantation());
         cyberCorpSingleFactory.upgradeImplementation(newCyberCorpImpl);
 
-        RugCyberCorp corp = RugCyberCorp(DealManager(dmAddr).issuanceManager().CORP());
+        RugImplemantation corp = RugImplemantation(DealManager(dmAddr).issuanceManager().CORP());
 
         // Release corrupted DealManager
         address dealManagerRuggerImpl = address(new DealManagerRugger());
@@ -327,39 +354,44 @@ contract CyberCorpUpgradeabilityTest is Test {
         );
     }
 
-    /// @dev TODO WIP: this is supposed to revert
     function test_RevertIf_RugIssuanceManagerAfterPayment() public {
-        // Assume Base-sepolia
         uint256 multisigBalanceBefore = paymentToken.balanceOf(metalex);
 
         vm.startPrank(metalex);
 
-        // Upgrade IssuanceManager beacon to a corrupted implementation
-        address ruggerImpl = address(new RugCyberCorp());
-        imFactory.upgradeImplementation(ruggerImpl);
+        // Since all owner-role contracts (CyberCorp, IssuanceManager, DealManager, RoundManager) upgrades
+        // require company owner approval, MetaLeX is not able to unilaterally upgrading them and
+        // perform arbitrary operations
 
-        RugCyberCorp rugger = RugCyberCorp(address(DealManager(dmAddr).issuanceManager()));
+        address rugImpl = address(new RugImplemantation());
+        imFactory.setRefImplementation(rugImpl);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, BorgAuth(corpAuthAddr).OWNER_ROLE(), metalex));
+        IssuanceManager(imAddr).upgradeToAndCall(rugImpl, "");
+        assertNotEq(imAddr.getErc1967Implementation(vm), rugImpl);
 
-        // Release corrupted DealManager
-        address dealManagerRuggerImpl = address(new DealManagerRugger());
-        dmFactory.setRefImplementation(dealManagerRuggerImpl);
+        // Below demonstrates what could have happened if the unauthorized upgrade was allowed
 
-        // Use corrupted IssuanceManager to accept corrupted DealManager release
-        rugger.acceptDealManagerUpgrade(dmAddr, dealManagerRuggerImpl);
-
-        // Profit(?)
-        DealManagerRugger(dmAddr).showMeTheMoney(address(paymentToken));
+//        RugImplemantation rugger = RugImplemantation(address(DealManager(dmAddr).issuanceManager()));
+//
+//        // Release corrupted DealManager
+//        address dealManagerRuggerImpl = address(new DealManagerRugger());
+//        dmFactory.setRefImplementation(dealManagerRuggerImpl);
+//
+//        // Use corrupted IssuanceManager to accept corrupted DealManager release
+//        rugger.acceptDealManagerUpgrade(dmAddr, dealManagerRuggerImpl);
+//
+//        // Profit(?)
+//        DealManagerRugger(dmAddr).showMeTheMoney(address(paymentToken));
+//
+//        assertEq(
+//            paymentToken.balanceOf(metalex) - multisigBalanceBefore,
+//            PAYMENT_AMOUNT,
+//            "should receive deal manager's token"
+//        );
 
         vm.stopPrank();
-
-        assertEq(
-            paymentToken.balanceOf(metalex) - multisigBalanceBefore,
-            PAYMENT_AMOUNT,
-            "should receive deal manager's token"
-        );
     }
 
-    /// @dev TODO WIP: this is supposed to revert
     function test_RevertIf_RugCyberCertificatePrinter() public {
         // Finalize the deal so certificate is transferred to alice
         DealManager(dmAddr).finalizeDeal(agreementId);
@@ -369,19 +401,15 @@ contract CyberCorpUpgradeabilityTest is Test {
 
         vm.startPrank(metalex);
 
-        // IssuanceManagerFactory can unilaterally control any CyberCertPrinter
-        imFactory.upgradePrinterBeaconAt(imAddr, address(new RugCyberCertPrinter()));
-
-        // Burn certificate at will
-        CyberCertPrinter(cyberCertPrinterAddrs[0]).burn(certIds[0]);
+        // MetaLeX cannot unilaterally upgrade CyberCertPrinter implementation without company owner's consent
+        address rugImpl = address(new RugCyberCertPrinter());
+        imFactory.setCyberCertPrinterRefImplementation(rugImpl);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, BorgAuth(corpAuthAddr).OWNER_ROLE(), metalex));
+        IssuanceManager(imAddr).upgradeCyberCertPrinterToAndCall(cyberCertPrinterAddrs[0], rugImpl, "");
 
         vm.stopPrank();
-
-        vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, certIds[0]));
-        CyberCertPrinter(cyberCertPrinterAddrs[0]).ownerOf(certIds[0]);
     }
 
-    /// @dev TODO WIP: this is supposed to revert
     function test_RevertIf_RugCyberScrip() public {
         // Finalize the deal so certificate is transferred to alice
         DealManager(dmAddr).finalizeDeal(agreementId);
@@ -398,19 +426,17 @@ contract CyberCorpUpgradeabilityTest is Test {
                 )
         );
 
-        assertEq(cyberScrip.IssuanceManager(), imAddr);
+        // Sanity check
+        assertEq(cyberScrip.issuanceManager(), imAddr);
 
         vm.startPrank(metalex);
 
-        // IssuanceManagerFactory can unilaterally control any CyberScrip
-        // TODO WIP: IssuanceManager hasn't implemented it yet
-        imFactory.upgradeScripBeaconAt(imAddr, address(new RugCyberScrip()));
-
-        // Mint token at will
-        RugCyberScrip(address(cyberScrip)).mint(metalex, 100 ether);
+        // MetaLeX cannot unilaterally upgrade CyberScrip implementation without company owner's consent
+        address rugImpl = address(new RugCyberScrip());
+        imFactory.setCyberScripRefImplementation(rugImpl);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, BorgAuth(corpAuthAddr).OWNER_ROLE(), metalex));
+        IssuanceManager(imAddr).upgradeCyberScripToAndCall(address(cyberScrip), rugImpl, "");
 
         vm.stopPrank();
-
-        assertEq(cyberScrip.balanceOf(metalex), 100 ether);
     }
 }
