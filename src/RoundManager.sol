@@ -202,6 +202,7 @@ contract RoundManager is
         if (roundDraft.legalDetails.length != certData.length) revert InvalidCert();
         if (roundDraft.extensionData.length != certData.length) revert InvalidCert();
         if (roundDraft.escrowedSignature.length == 0) revert InvalidEscrowedSignature();
+        if (roundDraft.pricePerUnit == 0) revert InvalidAmount();
 
         address corp = LexScrowStorage.getCorp();
 
@@ -416,13 +417,14 @@ contract RoundManager is
         if (candidate < minRequired) {
             revert InvalidAllocation();
         }
+        // Do not round here; pass requested candidate and compute dust/refund in storage
         allocatedAmount = candidate;
 
         // Check: status
         if (escrow.status != EscrowStatus.PAID) revert DealNotPaid();
         if (escrow.corpAssets.length > 0) revert AlreadyAllocated();
 
-        (uint256 tokenId, uint256[] memory certIds, uint256 refund) = RoundManagerStorage.allocate(
+        (uint256 tokenId, uint256[] memory certIds, uint256 usedAmount, uint256 refund) = RoundManagerStorage.allocate(
             LexScrowStorage.lexScrowStorage(),
             agreementId,
             allocatedAmount
@@ -435,8 +437,9 @@ contract RoundManager is
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry())
             .finalizeContract(agreementId);
 
-        // Effect: update raised amount
-        round.raised += allocatedAmount;
+        // Effect: update raised amount to reflect only usedAmount (allocated rounded down to pricePerUnit)
+        // refund was computed as (original escrowed amount - usedAmount), so usedAmount = original - refund
+        round.raised += usedAmount;
 
         if (refund > 0) {
             // Interaction: Refund
@@ -449,7 +452,7 @@ contract RoundManager is
         // Interaction: Finalize escrow and payments
         finalizeEscrow(agreementId);
 
-        emit AllocationMade(agreementId, roundId, escrow.counterParty, allocatedAmount, round.raised, certIds);
+        emit AllocationMade(agreementId, roundId, escrow.counterParty, usedAmount, round.raised, certIds);
 
         return tokenId;
     }

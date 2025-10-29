@@ -139,11 +139,9 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
         if (_issuanceManager == address(0)) revert ZeroAddress();
 
         // Set storage values
-        LexScrowStorage.setCorp(_corp);
-        LexScrowStorage.setDealRegistry(_dealRegistry);
         DealManagerStorage.setIssuanceManager(_issuanceManager);
 
-        // Initialize LexScroWLite without setting storage
+        // Initialize LexScroWLite core addresses
         __LexScroWLite_init(_corp, _dealRegistry);
         DealManagerStorage.setUpgradeFactory(_upgradeFactory);
     }
@@ -336,14 +334,18 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
         string[] storage counterPartyCheck = DealManagerStorage.getCounterPartyValues(agreementId);
         if(counterPartyCheck.length > 0) {
             if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert CounterPartyValueMismatch();
-        }
-        else {
+        } else {
             DealManagerStorage.setCounterPartyValues(agreementId, partyValues);
-            
         }
-            
-        if(!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).hasSigned(agreementId, signer))
+
+		if (!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).hasSigned(agreementId, signer)) {
+            // Not signed in registry yet; enforce local consistency and then sign
             ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
+		} else {
+            // Already signed in registry; fetch values recorded in the registry and ensure consistency
+			string[] memory registryValues = ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).getSignerValues(agreementId, signer);
+			if (keccak256(abi.encode(registryValues)) != keccak256(abi.encode(partyValues))) revert CounterPartyValueMismatch();
+		}
 
         updateEscrow(agreementId, signer, name);
         if(!conditionCheck(agreementId)) revert AgreementConditionsNotMet();

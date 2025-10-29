@@ -441,6 +441,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             revert SignatureVerificationFailed();
         }
 
+        if(msg.sender != agreementData.finalizer && msg.sender != signer)
+            revert NotFinalizer();
+    
         if (partyValues.length != template.partyFields.length)
             revert MismatchedFieldsLength();
 
