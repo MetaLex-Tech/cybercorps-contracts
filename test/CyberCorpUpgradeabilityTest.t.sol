@@ -1,54 +1,51 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.28;
 
+import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
-import {BorgAuth} from "../src/libs/auth.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
-import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
-import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {DealManager} from "../src/DealManager.sol";
-import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
-import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
+import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
-import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
-import {Test, console2} from "forge-std/Test.sol";
-import {UpgradeableBeacon} from "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
-import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
-import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
+import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
-import {ERC20Upgradeable} from "openzeppelin-contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import {ERC721EnumerableUpgradeable} from "openzeppelin-contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
-import {IERC721Errors} from "openzeppelin-contracts/interfaces/draft-IERC6093.sol";
+import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
+import {BorgAuth} from "../src/libs/auth.sol";
+import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {MockERC20} from "./mock/MockERC20.sol";
+import {Test, console2} from "forge-std/Test.sol";
+import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {ERC20Upgradeable} from "openzeppelin-contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import {
+    ERC721EnumerableUpgradeable
+} from "openzeppelin-contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
+import {IERC721Errors} from "openzeppelin-contracts/interfaces/draft-IERC6093.sol";
+import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {UpgradeableBeacon} from "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
+import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 
-contract TestIssuanceManager is IssuanceManager {
-    // expose deployCyberScrip
-    function deployCyberScripPublic(
-        address certAddress,
-        ITransferRestrictionHook[] memory typeRestrictionHooks,
-        ICondition[] memory certToScripConditions,
-        ICondition[] memory scripToCertConditions
-    ) external returns (address) {
-        return deployCyberScrip(
-            certAddress,
-            typeRestrictionHooks,
-            certToScripConditions,
-            scripToCertConditions
-        );
+contract RugCyberCorp {
+    function acceptDealManagerUpgrade(address dm, address newImpl) external {
+        DealManager(dm).upgradeToAndCall(newImpl, "");
     }
 }
 
-contract TestIssuanceManagerFactory is IssuanceManagerFactory {
-    constructor(address _auth) IssuanceManagerFactory(_auth) {
-        // Overwrite the original IssuanceManagerFactory constructor so we can create a beacon with TestIssuanceManager instead
-        beacon = new UpgradeableBeacon(address(new TestIssuanceManager()), address(this));
+contract DealManagerRugger is UUPSUpgradeable {
+    string public constant DEPLOY_VERSION = "ngmi";
+
+    function showMeTheMoney(address token) external {
+        ERC20(token).transfer(msg.sender, ERC20(token).balanceOf(address(this)));
     }
+
+    // UUPS upgrade authorization
+    function _authorizeUpgrade(address newImplementation) internal override {}
 }
 
 contract RugCyberCertPrinter is ERC721EnumerableUpgradeable {
@@ -83,7 +80,10 @@ contract CyberCorpUpgradeabilityTest is Test {
 
     BorgAuth public metalexAuth;
     CyberCorpFactory public cyberCorpFactory;
+    CyberCorpSingleFactory public cyberCorpSingleFactory;
     IssuanceManagerFactory public imFactory;
+    DealManagerFactory public dmFactory;
+    RoundManagerFactory public rmFactory;
 
     address public cyberCorpAddr;
     address public corpAuthAddr;
@@ -105,72 +105,71 @@ contract CyberCorpUpgradeabilityTest is Test {
             address(
                 new ERC1967Proxy{salt: salt}(
                     address(new CyberAgreementRegistry{salt: salt}()),
-                    abi.encodeWithSelector(
-                        CyberAgreementRegistry.initialize.selector,
-                        address(metalexAuth)
-                    )
+                    abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(metalexAuth))
                 )
             )
         );
         vm.label(address(registry), "CyberAgreementRegistry");
 
-        CertificateUriBuilder uriBuilder = CertificateUriBuilder(address(
-            new ERC1967Proxy{salt: salt}(
-                address(new CertificateUriBuilder{salt: salt}()),
-                abi.encodeWithSelector(
-                    CertificateUriBuilder.initialize.selector,
-                    address(metalexAuth)
+        CertificateUriBuilder uriBuilder = CertificateUriBuilder(
+            address(
+                new ERC1967Proxy{salt: salt}(
+                    address(new CertificateUriBuilder{salt: salt}()),
+                    abi.encodeWithSelector(CertificateUriBuilder.initialize.selector, address(metalexAuth))
                 )
             )
-        ));
+        );
         vm.label(address(uriBuilder), "CertificateUriBuilder");
 
-        imFactory = IssuanceManagerFactory(address(new TestIssuanceManagerFactory(address(metalexAuth))));
+        cyberCorpSingleFactory = new CyberCorpSingleFactory(address(metalexAuth));
+        vm.label(address(cyberCorpSingleFactory), "CyberCorpSingleFactory");
 
-        CyberCertPrinter cyberCertPrinterImpl = new CyberCertPrinter();
-        CyberScrip cyberScripImpl = new CyberScrip();
+        imFactory = new IssuanceManagerFactory(address(metalexAuth));
+        vm.label(address(imFactory), "IssuanceManagerFactory");
 
-        DealManagerFactory dmFactory = DealManagerFactory(address(
-            new ERC1967Proxy{salt: salt}(
-                address(new DealManagerFactory{salt: salt}()),
-                abi.encodeWithSelector(
-                    DealManagerFactory.initialize.selector,
-                    address(metalexAuth),
-                    address(new DealManager())
+        dmFactory = DealManagerFactory(
+            address(
+                new ERC1967Proxy{salt: salt}(
+                    address(new DealManagerFactory{salt: salt}()),
+                    abi.encodeWithSelector(
+                        DealManagerFactory.initialize.selector, address(metalexAuth), address(new DealManager())
+                    )
                 )
             )
-        ));
+        );
         vm.label(address(dmFactory), "DealManagerFactory");
 
-        RoundManagerFactory rmFactory = RoundManagerFactory(address(
-            new ERC1967Proxy{salt: salt}(
-                address(new RoundManagerFactory{salt: salt}()),
-                abi.encodeWithSelector(
-                    RoundManagerFactory.initialize.selector,
-                    address(metalexAuth),
-                    address(new RoundManager())
+        rmFactory = RoundManagerFactory(
+            address(
+                new ERC1967Proxy{salt: salt}(
+                    address(new RoundManagerFactory{salt: salt}()),
+                    abi.encodeWithSelector(
+                        RoundManagerFactory.initialize.selector, address(metalexAuth), address(new RoundManager())
+                    )
                 )
             )
-        ));
+        );
         vm.label(address(rmFactory), "RoundManagerFactory");
 
-        cyberCorpFactory = CyberCorpFactory(address(
-            new ERC1967Proxy{salt: salt}(
-                address(new CyberCorpFactory{salt: salt}()),
-                abi.encodeWithSelector(
-                    CyberCorpFactory.initialize.selector,
-                    address(metalexAuth),
-                    address(registry),
-                    cyberCertPrinterImpl,
-                    cyberScripImpl,
-                    address(imFactory),
-                    new CyberCorpSingleFactory(address(metalexAuth)),
-                    address(dmFactory),
-                    address(rmFactory),
-                    address(uriBuilder)
+        cyberCorpFactory = CyberCorpFactory(
+            address(
+                new ERC1967Proxy{salt: salt}(
+                    address(new CyberCorpFactory{salt: salt}()),
+                    abi.encodeWithSelector(
+                        CyberCorpFactory.initialize.selector,
+                        address(metalexAuth),
+                        address(registry),
+                        new CyberCertPrinter(),
+                        new CyberScrip(),
+                        address(imFactory),
+                        address(cyberCorpSingleFactory),
+                        address(dmFactory),
+                        address(rmFactory),
+                        address(uriBuilder)
+                    )
                 )
             )
-        ));
+        );
         vm.label(address(cyberCorpFactory), "CyberCorpFactory");
 
         // Set payment token
@@ -193,13 +192,7 @@ contract CyberCorpUpgradeabilityTest is Test {
         string[] memory partyFields = new string[](1);
         partyFields[0] = "Party Field 1";
         vm.prank(metalex);
-        registry.createTemplate(
-            TEMPLATE_ID,
-            "Test Template",
-            templateUri,
-            globalFields,
-            partyFields
-        );
+        registry.createTemplate(TEMPLATE_ID, "Test Template", templateUri, globalFields, partyFields);
 
         // Simulate CyberCorp creation
 
@@ -236,62 +229,42 @@ contract CyberCorpUpgradeabilityTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Counter Party Value 1";
 
-        bytes32 expectedAgreementId = keccak256(
-            abi.encode(
-                TEMPLATE_ID,
-                uint256(salt),
-                globalValues,
-                parties
-            )
-        );
+        bytes32 expectedAgreementId = keccak256(abi.encode(TEMPLATE_ID, uint256(salt), globalValues, parties));
 
         vm.startPrank(corpOwner);
-        (
-            cyberCorpAddr,
-            corpAuthAddr,
-            imAddr,
-            dmAddr,
-            rmAddr,
-            cyberCertPrinterAddrs,
-            agreementId,
-            certIds
-        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
-            uint256(salt),
-            "CyberCorp",
-            "Limited Liability Company",
-            "Juris",
-            "Contact Details",
-            "Dispute Res",
-            corpOwner,
-            CompanyOfficer({
-                eoa: corpOwner,
-                name: "Mr. Robot",
-                contact: "robot@corp.com",
-                title: "CEO"
-            }),
-            certData,
-            TEMPLATE_ID,
-            globalValues,
-            parties,
-            PAYMENT_AMOUNT,
-            partyValues,
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                expectedAgreementId,
-                templateUri,
-                globalFields,
-                partyFields,
+        (cyberCorpAddr, corpAuthAddr, imAddr, dmAddr, rmAddr, cyberCertPrinterAddrs, agreementId, certIds) =
+            cyberCorpFactory.deployCyberCorpAndCreateOffer(
+                uint256(salt),
+                "CyberCorp",
+                "Limited Liability Company",
+                "Juris",
+                "Contact Details",
+                "Dispute Res",
+                corpOwner,
+                CompanyOfficer({eoa: corpOwner, name: "Mr. Robot", contact: "robot@corp.com", title: "CEO"}),
+                certData,
+                TEMPLATE_ID,
                 globalValues,
-                partyValues[0],
-                corpOwnerPrivateKey
-            ),
-            certDetails,
-            new address[](0), // conditions
-            bytes32(0), // secretHash
-            block.timestamp + 1000000
-        );
+                parties,
+                PAYMENT_AMOUNT,
+                partyValues,
+                CyberAgreementUtils.signAgreementTypedData(
+                    vm,
+                    registry.DOMAIN_SEPARATOR(),
+                    registry.SIGNATUREDATA_TYPEHASH(),
+                    expectedAgreementId,
+                    templateUri,
+                    globalFields,
+                    partyFields,
+                    globalValues,
+                    partyValues[0],
+                    corpOwnerPrivateKey
+                ),
+                certDetails,
+                new address[](0), // conditions
+                bytes32(0), // secretHash
+                block.timestamp + 1000000
+            );
         vm.stopPrank();
 
         // Simulate alice sign and pay
@@ -299,43 +272,105 @@ contract CyberCorpUpgradeabilityTest is Test {
         vm.startPrank(alice);
         paymentToken.mint(alice, PAYMENT_AMOUNT);
         paymentToken.approve(dmAddr, PAYMENT_AMOUNT);
-        DealManager(dmAddr).signDealAndPay(
-            alice,
-            agreementId,
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
+        DealManager(dmAddr)
+            .signDealAndPay(
+                alice,
                 agreementId,
-                templateUri,
-                globalFields,
-                partyFields,
-                globalValues,
+                CyberAgreementUtils.signAgreementTypedData(
+                    vm,
+                    registry.DOMAIN_SEPARATOR(),
+                    registry.SIGNATUREDATA_TYPEHASH(),
+                    agreementId,
+                    templateUri,
+                    globalFields,
+                    partyFields,
+                    globalValues,
+                    partyValues[1],
+                    alicePrivateKey
+                ),
                 partyValues[1],
-                alicePrivateKey
-            ),
-            partyValues[1],
-            true,
-            "Alice",
-            ""
-        );
+                true,
+                "Alice",
+                ""
+            );
+        vm.stopPrank();
+    }
+
+    /// @dev TODO WIP: this is supposed to revert
+    function test_RevertIf_RugCyberCorpAfterPayment() public {
+        uint256 multisigBalanceBefore = paymentToken.balanceOf(metalex);
+
+        vm.startPrank(metalex);
+
+        // Upgrade CyberCorp beacon to a corrupted implementation
+        address newCyberCorpImpl = address(new RugCyberCorp());
+        cyberCorpSingleFactory.upgradeImplementation(newCyberCorpImpl);
+
+        RugCyberCorp corp = RugCyberCorp(DealManager(dmAddr).issuanceManager().CORP());
+
+        // Release corrupted DealManager
+        address dealManagerRuggerImpl = address(new DealManagerRugger());
+        dmFactory.setRefImplementation(dealManagerRuggerImpl);
+
+        // Use corrupted CyberCorp to accept corrupted DealManager release
+        corp.acceptDealManagerUpgrade(dmAddr, dealManagerRuggerImpl);
+
+        // Profit(?)
+        DealManagerRugger(dmAddr).showMeTheMoney(address(paymentToken));
+
         vm.stopPrank();
 
-        DealManager(dmAddr).finalizeDeal(agreementId);
+        assertEq(
+            paymentToken.balanceOf(metalex) - multisigBalanceBefore,
+            PAYMENT_AMOUNT,
+            "should receive deal manager's token"
+        );
+    }
+
+    /// @dev TODO WIP: this is supposed to revert
+    function test_RevertIf_RugIssuanceManagerAfterPayment() public {
+        // Assume Base-sepolia
+        uint256 multisigBalanceBefore = paymentToken.balanceOf(metalex);
+
+        vm.startPrank(metalex);
+
+        // Upgrade IssuanceManager beacon to a corrupted implementation
+        address ruggerImpl = address(new RugCyberCorp());
+        imFactory.upgradeImplementation(ruggerImpl);
+
+        RugCyberCorp rugger = RugCyberCorp(address(DealManager(dmAddr).issuanceManager()));
+
+        // Release corrupted DealManager
+        address dealManagerRuggerImpl = address(new DealManagerRugger());
+        dmFactory.setRefImplementation(dealManagerRuggerImpl);
+
+        // Use corrupted IssuanceManager to accept corrupted DealManager release
+        rugger.acceptDealManagerUpgrade(dmAddr, dealManagerRuggerImpl);
+
+        // Profit(?)
+        DealManagerRugger(dmAddr).showMeTheMoney(address(paymentToken));
+
+        vm.stopPrank();
+
+        assertEq(
+            paymentToken.balanceOf(metalex) - multisigBalanceBefore,
+            PAYMENT_AMOUNT,
+            "should receive deal manager's token"
+        );
     }
 
     /// @dev TODO WIP: this is supposed to revert
     function test_RevertIf_RugCyberCertificatePrinter() public {
+        // Finalize the deal so certificate is transferred to alice
+        DealManager(dmAddr).finalizeDeal(agreementId);
+
         // Sanity check
         assertEq(CyberCertPrinter(cyberCertPrinterAddrs[0]).ownerOf(certIds[0]), alice);
 
         vm.startPrank(metalex);
 
         // IssuanceManagerFactory can unilaterally control any CyberCertPrinter
-        imFactory.upgradePrinterBeaconAt(
-            imAddr,
-            address(new RugCyberCertPrinter())
-        );
+        imFactory.upgradePrinterBeaconAt(imAddr, address(new RugCyberCertPrinter()));
 
         // Burn certificate at will
         CyberCertPrinter(cyberCertPrinterAddrs[0]).burn(certIds[0]);
@@ -348,15 +383,19 @@ contract CyberCorpUpgradeabilityTest is Test {
 
     /// @dev TODO WIP: this is supposed to revert
     function test_RevertIf_RugCyberScrip() public {
+        // Finalize the deal so certificate is transferred to alice
+        DealManager(dmAddr).finalizeDeal(agreementId);
+
         // CyberCorpFactory does not utilize CyberScrip yet, so we will simulate it here
 
         CyberScrip cyberScrip = CyberScrip(
-            TestIssuanceManager(imAddr).deployCyberScripPublic(
-                cyberCertPrinterAddrs[0], // certAddress
-                new ITransferRestrictionHook[](0), // typeRestrictionHooks
-                new ICondition[](0), // certToScripConditions
-                new ICondition[](0) // scripToCertConditions
-            )
+            IssuanceManager(imAddr)
+                .deployCyberScrip(
+                    cyberCertPrinterAddrs[0], // certAddress
+                    new ITransferRestrictionHook[](0), // typeRestrictionHooks
+                    new ICondition[](0), // certToScripConditions
+                    new ICondition[](0) // scripToCertConditions
+                )
         );
 
         assertEq(cyberScrip.IssuanceManager(), imAddr);
@@ -365,10 +404,7 @@ contract CyberCorpUpgradeabilityTest is Test {
 
         // IssuanceManagerFactory can unilaterally control any CyberScrip
         // TODO WIP: IssuanceManager hasn't implemented it yet
-        imFactory.upgradeScripBeaconAt(
-            imAddr,
-            address(new RugCyberScrip())
-        );
+        imFactory.upgradeScripBeaconAt(imAddr, address(new RugCyberScrip()));
 
         // Mint token at will
         RugCyberScrip(address(cyberScrip)).mint(metalex, 100 ether);

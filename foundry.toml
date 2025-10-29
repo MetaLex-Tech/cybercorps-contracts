@@ -6,4 +6,7 @@ optimizer = true
 optimizer_runs = 15
 fs_permissions = [{ access = "read", path = "./script/res" }]
 
+[fmt]
+sort_imports = true
+
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

@@ -541,7 +541,9 @@ contract IssuanceManager is Initializable, BorgAuthACL {
         ITransferRestrictionHook[] memory typeRestrictionHooks,
         ICondition[] memory certToScripConditions,
         ICondition[] memory scripToCertConditions
-    ) internal returns (address) {
+    // TODO TBD: changed to external for now but final design may change
+//    ) internal returns (address) {
+    ) external returns (address) {
         bytes32 salt = keccak256(abi.encodePacked(certAddress, address(this)));
         address newScrip = Create2.deploy(0, salt, _getBytecodeScrip());
         ICyberScrip(newScrip).initialize(
