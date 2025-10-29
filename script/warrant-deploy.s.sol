@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import {Script} from "forge-std/Script.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
+import {CyberCorp} from "../src/CyberCorp.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
@@ -84,7 +85,16 @@ contract BaseScript is Script {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "";
 
-        address cyberCorpSingleFactory = address(new CyberCorpSingleFactory{salt: salt}(address(auth)));
+         address cyberCorpSingleFactory = address(
+             new ERC1967Proxy{salt: salt}(
+                 address(new CyberCorpSingleFactory{salt: salt}()),
+                 abi.encodeWithSelector(
+                     CyberCorpSingleFactory.initialize.selector,
+                     address(auth),
+                     address(new CyberCorp())
+                 )
+             )
+         );
 
         address dealManagerFactory = address(
             new ERC1967Proxy{salt: salt}(

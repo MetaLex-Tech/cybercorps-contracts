@@ -26,7 +26,7 @@ o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o8888
 `88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
  `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P 
              .o..P'                                                                     888           
-             `Y8P'                                                                     o888o          
+             `Y8P'                                                                     o888o           
 _______________________________________________________________________________________________________
 
 All software, documentation and other files and information in this repository (collectively, the "Software")
@@ -41,12 +41,44 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import "../CyberCorpConstants.sol";
+import {CompanyOfficer} from "../CyberCorpConstants.sol";
 
-interface ICyberCorpSingleFactory {
-    function deployCyberCorpSingle(bytes32 salt) external returns (address cyberCorpAddress);
-    function initialize(address _auth, address _refImplementation) external;
+library CyberCorpStorage {
+    // Storage slot for our struct
+    bytes32 constant STORAGE_POSITION = keccak256("cybercorp.corp.storage.v1");
 
-    function getRefImplementation() external view returns(address);
-    function setRefImplementation(address _newImplementation) external;
+    // Main storage layout struct
+    struct StorageData {
+        // cyberCORP details
+        /// @notice Legal name of the entity, including designation (e.g., "Inc." or "LLC")
+        string cyberCORPName;
+        /// @notice Legal entity type (e.g., "corporation" or "limited liability company")
+        string cyberCORPType;
+        /// @notice Jurisdiction of incorporation (e.g., "Delaware")
+        string cyberCORPJurisdiction;
+        /// @notice Contact information for the corporation
+        string cyberCORPContactDetails;
+        /// @notice Default dispute resolution mechanism for agreements
+        string defaultDisputeResolution;
+        /// @notice Address that can receive payments on behalf of the company
+        address companyPayable;
+        /// @notice Address of the issuance manager contract
+        address issuanceManager;
+        /// @notice Address of the deal manager contract
+        address dealManager;
+        /// @notice Address of the factory (for upgrading purposes)
+        address upgradeFactory;
+        /// @notice Array of company officers with their roles and details
+        CompanyOfficer[] companyOfficers;
+        /// @notice Address of the round manager contract
+        address roundManager;
+    }
+
+    // Returns the storage layout
+    function getStorageData() internal pure returns (StorageData storage s) {
+        bytes32 position = STORAGE_POSITION;
+        assembly {
+            s.slot := position
+        }
+    }
 }

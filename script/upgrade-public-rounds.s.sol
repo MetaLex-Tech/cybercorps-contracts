@@ -103,17 +103,18 @@ contract UpgradePublicRoundsScript is Script {
             address(roundManagerFactory)
         );
 
-        // 4) Upgrade CyberCorp beacon via CyberCorpSingleFactory
-        CyberCorpSingleFactory ccSingleFactory = CyberCorpSingleFactory(
-            cyberCorpSingleFactoryAddr
-        );
-        address newCyberCorpImpl = address(new CyberCorp{salt: salt}());
-        console.log("New CyberCorp implementation:", newCyberCorpImpl);
-        ccSingleFactory.upgradeImplementation(newCyberCorpImpl);
-        console.log(
-            "CyberCorp beacon implementation set to:",
-            ccSingleFactory.getBeaconImplementation()
-        );
+        // TODO WIP: handle legacy CyberCorp upgrades
+//        // 4) Upgrade CyberCorp beacon via CyberCorpSingleFactory
+//        CyberCorpSingleFactory ccSingleFactory = CyberCorpSingleFactory(
+//            cyberCorpSingleFactoryAddr
+//        );
+//        address newCyberCorpImpl = address(new CyberCorp{salt: salt}());
+//        console.log("New CyberCorp implementation:", newCyberCorpImpl);
+//        ccSingleFactory.upgradeImplementation(newCyberCorpImpl);
+//        console.log(
+//            "CyberCorp beacon implementation set to:",
+//            ccSingleFactory.getBeaconImplementation()
+//        );
 
         // 5) upgrade CyberAgreementRegistry
         address newRegistryImpl = address(
@@ -154,8 +155,9 @@ contract UpgradePublicRoundsScript is Script {
         vm.stopBroadcast();
 
         console.log("CyberCorpFactory:", address(factoryProxy));
-        console.log("CyberCorpSingleFactory:", address(ccSingleFactory));
         console.log("RoundManagerFactory:", address(roundManagerFactory));
-        console.log("CyberCorp:", address(newCyberCorpImpl));
+        // TODO WIP
+//        console.log("CyberCorpSingleFactory:", address(ccSingleFactory));
+//        console.log("CyberCorp:", address(newCyberCorpImpl));
     }
 }

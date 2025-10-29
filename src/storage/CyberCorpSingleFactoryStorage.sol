@@ -26,7 +26,7 @@ o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o8888
 `88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
  `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P 
              .o..P'                                                                     888           
-             `Y8P'                                                                     o888o          
+             `Y8P'                                                                     o888o           
 _______________________________________________________________________________________________________
 
 All software, documentation and other files and information in this repository (collectively, the "Software")
@@ -41,12 +41,20 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import "../CyberCorpConstants.sol";
+library CyberCorpSingleFactoryStorage {
+    // Storage slot for our struct
+    bytes32 constant STORAGE_POSITION = keccak256("cybercorp.corp.single.factory.storage.v1");
 
-interface ICyberCorpSingleFactory {
-    function deployCyberCorpSingle(bytes32 salt) external returns (address cyberCorpAddress);
-    function initialize(address _auth, address _refImplementation) external;
+    // Main storage layout struct
+    struct StorageData {
+        address refImplementation; // implementation contract to use for new deployments
+    }
 
-    function getRefImplementation() external view returns(address);
-    function setRefImplementation(address _newImplementation) external;
+    // Returns the storage layout
+    function getStorageData() internal pure returns (StorageData storage s) {
+        bytes32 position = STORAGE_POSITION;
+        assembly {
+            s.slot := position
+        }
+    }
 }

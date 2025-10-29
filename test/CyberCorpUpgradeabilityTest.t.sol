@@ -7,6 +7,7 @@ import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
+import {CyberCorp} from "../src/CyberCorp.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {DealManager} from "../src/DealManager.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
@@ -139,7 +140,16 @@ contract CyberCorpUpgradeabilityTest is Test {
         );
         vm.label(address(uriBuilder), "CertificateUriBuilder");
 
-        cyberCorpSingleFactory = new CyberCorpSingleFactory(address(metalexAuth));
+        cyberCorpSingleFactory = CyberCorpSingleFactory(address(
+            new ERC1967Proxy{salt: salt}(
+                address(new CyberCorpSingleFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    CyberCorpSingleFactory.initialize.selector,
+                    address(metalexAuth),
+                    address(new CyberCorp())
+                )
+            )
+        ));
         vm.label(address(cyberCorpSingleFactory), "CyberCorpSingleFactory");
 
         imFactory = IssuanceManagerFactory(address(
@@ -323,35 +333,43 @@ contract CyberCorpUpgradeabilityTest is Test {
         vm.stopPrank();
     }
 
-    /// @dev TODO WIP: this is supposed to revert
     function test_RevertIf_RugCyberCorpAfterPayment() public {
         uint256 multisigBalanceBefore = paymentToken.balanceOf(metalex);
 
         vm.startPrank(metalex);
 
+        // Since all owner-role contracts (CyberCorp, IssuanceManager, DealManager, RoundManager) upgrades
+        // require company owner approval, MetaLeX is not able to unilaterally upgrading them and
+        // perform arbitrary operations
+
         // Upgrade CyberCorp beacon to a corrupted implementation
-        address newCyberCorpImpl = address(new RugImplemantation());
-        cyberCorpSingleFactory.upgradeImplementation(newCyberCorpImpl);
+        address rugImpl = address(new RugImplemantation());
+        cyberCorpSingleFactory.setRefImplementation(rugImpl);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, BorgAuth(corpAuthAddr).OWNER_ROLE(), metalex));
+        CyberCorp(cyberCorpAddr).upgradeToAndCall(rugImpl, "");
+        assertNotEq(cyberCorpAddr.getErc1967Implementation(vm), rugImpl);
 
-        RugImplemantation corp = RugImplemantation(DealManager(dmAddr).issuanceManager().CORP());
+        // Below demonstrates what could have happened if the unauthorized upgrade was allowed
 
-        // Release corrupted DealManager
-        address dealManagerRuggerImpl = address(new DealManagerRugger());
-        dmFactory.setRefImplementation(dealManagerRuggerImpl);
-
-        // Use corrupted CyberCorp to accept corrupted DealManager release
-        corp.acceptDealManagerUpgrade(dmAddr, dealManagerRuggerImpl);
-
-        // Profit(?)
-        DealManagerRugger(dmAddr).showMeTheMoney(address(paymentToken));
+//        RugImplemantation corp = RugImplemantation(DealManager(dmAddr).issuanceManager().CORP());
+//
+//        // Release corrupted DealManager
+//        address dealManagerRuggerImpl = address(new DealManagerRugger());
+//        dmFactory.setRefImplementation(dealManagerRuggerImpl);
+//
+//        // Use corrupted CyberCorp to accept corrupted DealManager release
+//        corp.acceptDealManagerUpgrade(dmAddr, dealManagerRuggerImpl);
+//
+//        // Profit(?)
+//        DealManagerRugger(dmAddr).showMeTheMoney(address(paymentToken));
+//
+//        assertEq(
+//            paymentToken.balanceOf(metalex) - multisigBalanceBefore,
+//            PAYMENT_AMOUNT,
+//            "should receive deal manager's token"
+//        );
 
         vm.stopPrank();
-
-        assertEq(
-            paymentToken.balanceOf(metalex) - multisigBalanceBefore,
-            PAYMENT_AMOUNT,
-            "should receive deal manager's token"
-        );
     }
 
     function test_RevertIf_RugIssuanceManagerAfterPayment() public {

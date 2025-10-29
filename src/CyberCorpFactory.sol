@@ -242,13 +242,11 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         IIssuanceManager(issuanceManagerAddress).initialize(
             authAddress,
             cyberCorpAddress,
-            IIssuanceManagerFactory(issuanceManagerFactory).getCyberCertPrinterRefImplementation(),
             uriBuilder,
-            issuanceManagerFactory,
-            IIssuanceManagerFactory(issuanceManagerFactory).getCyberScripRefImplementation()
+            issuanceManagerFactory
         );
 
-        //update role for issuance manager
+        // Initialize DealManager
         IDealManager(dealManagerAddress).initialize(
             authAddress,
             cyberCorpAddress,

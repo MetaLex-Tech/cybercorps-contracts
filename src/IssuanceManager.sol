@@ -109,34 +109,19 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     /// @notice Initializes the IssuanceManager contract
     /// @param _auth Address of the BorgAuth contract
     /// @param _CORP Address of the CyberCorp contract
-    /// @param _CyberCertPrinterImplementation Implementation address for CyberCertPrinter
     /// @param _uriBuilder Address of the json URI builder contract for certificate metadata
+    /// @param _upgradeFactory Address of the factory (for upgrading purposes)
     function initialize(
         address _auth,
         address _CORP,
-        address _CyberCertPrinterImplementation,
         address _uriBuilder,
-        address _upgradeFactory,
-        address _CyberScripImplementation
+        address _upgradeFactory
     ) external initializer {
         __BorgAuthACL_init(_auth);
 
         IssuanceManagerStorage.setCORP(_CORP);
         IssuanceManagerStorage.setUriBuilder(_uriBuilder);
-
-        UpgradeableBeacon beacon = new UpgradeableBeacon(
-            _CyberCertPrinterImplementation,
-            address(this)
-        );
-
-        UpgradeableBeacon beaconScrip = new UpgradeableBeacon(
-            _CyberScripImplementation,
-            address(this)
-        );
-
-        IssuanceManagerStorage.setCyberCertPrinterBeacon(beacon);
         IssuanceManagerStorage.setUpgradeFactory(_upgradeFactory);
-        IssuanceManagerStorage.setCyberScripBeacon(beaconScrip);
     }
 
     modifier onlyUpgradeFactory() {
@@ -358,37 +343,14 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         certificate.setGlobalTransferable(transferable);
     }
 
-    /// @notice Upgrades the implementation of the certificate printer
-    /// @dev Only callable by upgrader role
-    /// @param _newImplementation Address of the new implementation
-    function upgradeBeaconImplementation(
-        address _newImplementation
-    ) external onlyUpgradeFactory {
-        IssuanceManagerStorage.updateBeaconImplementation(_newImplementation);
-    }
-
-    /// @notice Gets the current implementation address of the certificate printer
-    /// @return address Current implementation address
-    function getBeaconImplementation() external view returns (address) {
-        return
-            IssuanceManagerStorage.getCyberCertPrinterBeacon().implementation();
-    }
-
-    function upgradeScripBeaconImplementation(
-        address _newImplementation
-    ) external onlyUpgradeFactory {
-        IssuanceManagerStorage.updateScripBeaconImplementation(_newImplementation);
-    }
-
-    function getScripBeaconImplementation() external view returns (address) {
-        return
-            IssuanceManagerStorage.getCyberScripBeacon().implementation();
-    }
-
     /// @notice Gets the bytecode for creating new certificate printer proxies
     /// @dev Internal function used by createCertPrinter
     /// @return bytecode The proxy contract creation bytecode
     function _getBytecode() private view returns (bytes memory bytecode) {
+        // TODO review needed: on a second thought, CyberCertPrinters and CyberScrips can still use BeaconProxy because
+        //  they are supposed to be under company owner's administration. Seems more convenient to upgrade all at once
+        //  per company owner's discretion.
+        // TODO review needed: is UpgradeableBeacon ownership transfer necessary?
         bytes memory sourceCodeBytes = type(ERC1967Proxy).creationCode;
         bytecode = abi.encodePacked(
             sourceCodeBytes,
@@ -432,16 +394,6 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     /// @return address The URI builder contract address
     function uriBuilder() external view returns (address) {
         return IssuanceManagerStorage.getUriBuilder();
-    }
-
-    /// @notice Gets the certificate printer beacon contract
-    /// @return UpgradeableBeacon The beacon contract
-    function CyberCertPrinterBeacon()
-        external
-        view
-        returns (UpgradeableBeacon)
-    {
-        return IssuanceManagerStorage.getCyberCertPrinterBeacon();
     }
 
     /// @notice Gets a certificate printer address by index

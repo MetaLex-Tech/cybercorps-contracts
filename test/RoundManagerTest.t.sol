@@ -152,7 +152,14 @@ library CyberCorpHelper {
         );
 
         cyberCorpSingleFactory = address(
-            new CyberCorpSingleFactory{salt: SALT}(address(bootstrapAuth))
+            new ERC1967Proxy{salt: SALT}(
+                address(new CyberCorpSingleFactory{salt: SALT}()),
+                abi.encodeWithSelector(
+                    CyberCorpSingleFactory.initialize.selector,
+                    address(bootstrapAuth),
+                    address(new CyberCorp())
+                )
+            )
         );
         dealManagerFactory = address(
             new ERC1967Proxy{salt: SALT}(
@@ -2036,7 +2043,7 @@ contract RoundManagerFCFSTest is Test {
     function setUp() public {
     }
 
-    function test_UpgradeSteps_RMFactory_CorpFactory_CorpBeacon() public {
+    function test_UpgradeSteps_RM_Corp_RefImplementation() public {
         address me = address(this);
         (
             ,
@@ -2066,8 +2073,9 @@ contract RoundManagerFCFSTest is Test {
         corpFactory.setRoundManagerFactory(address(rmFactory));
         assertEq(corpFactory.roundManagerFactory(), address(rmFactory));
 
-        CyberCorpSingleFactory(cyberCorpSingleFactory).upgradeImplementation(address(new CyberCorp()));
-        assertTrue(CyberCorpSingleFactory(cyberCorpSingleFactory).getBeaconImplementation() != address(0));
+        address newCorpImpl = address(new CyberCorp());
+        CyberCorpSingleFactory(cyberCorpSingleFactory).setRefImplementation(newCorpImpl);
+        assertEq(CyberCorpSingleFactory(cyberCorpSingleFactory).getRefImplementation(), newCorpImpl, "CyberCorp refImplementation should have been updated");
     }
 
     function test_UpgradedInfra_FCFS_AutoAllocates() public {
@@ -2097,7 +2105,9 @@ contract RoundManagerFCFSTest is Test {
         rmFactory.setRefImplementation(address(new RoundManager()));
         IUUPS(address(corpFactory)).upgradeToAndCall(address(new CyberCorpFactory()), "");
         corpFactory.setRoundManagerFactory(address(rmFactory));
-        CyberCorpSingleFactory(cyberCorpSingleFactory).upgradeImplementation(address(new CyberCorp()));
+
+        // Update CyberCorp reference implementation so all new deployment uses the new one
+        CyberCorpSingleFactory(cyberCorpSingleFactory).setRefImplementation(address(new CyberCorp()));
 
         // Deploy upgraded corp and round manager
         (address corp, , , , address roundManager) = CyberCorpHelper.deployCorp(corpFactory, "Upgraded Corp", me, me);

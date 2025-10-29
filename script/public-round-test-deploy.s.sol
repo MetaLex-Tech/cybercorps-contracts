@@ -10,6 +10,7 @@ import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
+import {CyberCorp} from "../src/CyberCorp.sol";
 import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
 import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
@@ -81,7 +82,14 @@ contract PublicRoundTestDeploy is Script {
         );
 
         address cyberCorpSingleFactory = address(
-            new CyberCorpSingleFactory{salt: salt}(address(auth))
+            new ERC1967Proxy{salt: salt}(
+                address(new CyberCorpSingleFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    CyberCorpSingleFactory.initialize.selector,
+                    address(auth),
+                    address(new CyberCorp())
+                )
+            )
         );
         address dealManagerFactory = address(
             new ERC1967Proxy{salt: salt}(

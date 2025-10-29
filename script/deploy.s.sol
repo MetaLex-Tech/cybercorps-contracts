@@ -9,6 +9,7 @@ import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
+import {CyberCorp} from "../src/CyberCorp.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
@@ -70,7 +71,14 @@ contract BaseScript is Script {
         defaultLegend[0] = "";
 
         address cyberCorpSingleFactory = address(
-            new CyberCorpSingleFactory{salt: salt}(address(auth))
+            new ERC1967Proxy{salt: salt}(
+                address(new CyberCorpSingleFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    CyberCorpSingleFactory.initialize.selector,
+                    address(auth),
+                    address(new CyberCorp())
+                )
+            )
         );
 
         address dealManagerFactory = address(

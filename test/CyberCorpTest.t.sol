@@ -182,7 +182,14 @@ contract CyberCorpTest is Test {
         defaultLegends[0][0] = "Legend 1";
 
         address cyberCorpSingleFactory = address(
-            new CyberCorpSingleFactory{salt: salt}(address(auth))
+            new ERC1967Proxy{salt: salt}(
+                address(new CyberCorpSingleFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    CyberCorpSingleFactory.initialize.selector,
+                    address(auth),
+                    address(new CyberCorp())
+                )
+            )
         );
 
         address dealManagerFactory = address(
@@ -3595,14 +3602,14 @@ contract CyberCorpTest is Test {
         address newImplementation = address(new CyberCorp());
         address factoryAddr = cyberCorpFactory.cyberCorpSingleFactory();
 
-        // Non-owner should not be able to upgrade it
+        // Non-owner should not be able to set reference implementation
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
-        CyberCorpSingleFactory(factoryAddr).upgradeImplementation(newImplementation);
+        CyberCorpSingleFactory(factoryAddr).setRefImplementation(newImplementation);
 
-        // Owner should be able to upgrade it
+        // Owner should be able to set reference implementation
         vm.prank(multisig);
-        CyberCorpSingleFactory(factoryAddr).upgradeImplementation(newImplementation);
-        assertEq(CyberCorpSingleFactory(factoryAddr).getBeaconImplementation(), newImplementation);
+        CyberCorpSingleFactory(factoryAddr).setRefImplementation(newImplementation);
+        assertEq(CyberCorpSingleFactory(factoryAddr).getRefImplementation(), newImplementation);
 
         //check the company name
         assertEq(CyberCorp(cyberCorp).cyberCORPName(), "CyberCorp");
