@@ -561,36 +561,55 @@ contract IssuanceManager is Initializable, BorgAuthACL {
         return newScrip;
     }
 
-    function scripifyCert(address certAddress, uint256 id) external {
-        address scripifiedCert = IssuanceManagerStorage
-            .getScripifiedCert(certAddress);
-        if (scripifiedCert == address(0))
-            revert ScripifiedCertNotAllowed();
+    /// @notice Convert a certificate into scrip tokens, partially or fully
+    /// @param certAddress Address of the certificate printer contract
+    /// @param id ID of the certificate to convert
+    /// @param amount Number of units to convert into scrip
+    function scripifyCert(address certAddress, uint256 id, uint256 amount) external {
+        if (amount == 0) revert ConditionCheckFailed();
+
+        address scripifiedCert = IssuanceManagerStorage.getScripifiedCert(certAddress);
+        if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
 
         // Check all cert-to-scrip conditions
         ICondition[] storage conditions = IssuanceManagerStorage.getCertToScripConditions(certAddress);
+        bytes4 selector3 = bytes4(keccak256("scripifyCert(address,uint256,uint256)"));
         for (uint i = 0; i < conditions.length; i++) {
             if (!conditions[i].checkCondition(
                 certAddress,
-                this.scripifyCert.selector,
-                abi.encode(id)
+                selector3,
+                abi.encode(id, amount)
             )) {
                 revert ConditionCheckFailed();
             }
         }
 
-        ICyberCertPrinter(certAddress).safeTransferFrom(
-            msg.sender,
-            address(this),
-            id
-        );
-        ICyberCertPrinter(certAddress).voidCert(id);
-        ICyberScrip(scripifiedCert).mint(
-            msg.sender,
-            ICyberCertPrinter(certAddress)
-                .getCertificateDetails(id)
-                .unitsRepresented
-        );
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        if (certificate.ownerOf(id) != msg.sender) revert ConditionCheckFailed();
+
+        CertificateDetails memory details = certificate.getCertificateDetails(id);
+        if (amount > details.unitsRepresented) revert ConditionCheckFailed();
+
+        if (amount == details.unitsRepresented) {
+            // Full conversion: transfer cert, void it, and mint full amount
+            certificate.safeTransferFrom(
+                msg.sender,
+                address(this),
+                id
+            );
+            certificate.voidCert(id);
+            ICyberScrip(scripifiedCert).mint(
+                msg.sender,
+                details.unitsRepresented
+            );
+            emit ScripifiedCert(certAddress, id, scripifiedCert);
+            return;
+        }
+
+        // Partial conversion: reduce units on the certificate and mint scrip for `amount`
+        details.unitsRepresented = details.unitsRepresented - amount;
+        certificate.updateCertificateDetails(id, details);
+        ICyberScrip(scripifiedCert).mint(msg.sender, amount);
         emit ScripifiedCert(certAddress, id, scripifiedCert);
     }
 
