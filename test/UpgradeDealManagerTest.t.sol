@@ -493,7 +493,7 @@ contract UpgradeDealManagerTest is Test {
         GnosisTransaction[] memory safeTxs;
         (newCyberCorpSingleFactory, newImFactory, newDmFactory, safeTxs) = (new UpgradeCyberCorpFactoriesScript()).run();
         // Expect new factory to be deployed at a predetermined address because we will hard-code it to the DealManagerWithMigration contract
-        assertEq(address(newDmFactory), 0x1173bD8Dd7e0d7aCBF49f4343c99B66755460Cf9, "new DealManagerFactory address has changed, update it in DealManagerWithMigration");
+        assertEq(address(newDmFactory), 0x06F086b47d10475FEF08c5708412118d73Eb88A7, "new DealManagerFactory address has changed, update it in DealManagerWithMigration");
 
         // Simulate MetaLeX Safe executing the Safe txs to replace DealManagerFactory
         vm.startPrank(metalexSafe);

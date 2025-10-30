@@ -3,14 +3,12 @@ pragma solidity 0.8.28;
 
 import "openzeppelin-contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
-import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "./interfaces/IIssuanceManagerFactory.sol";
 import "./interfaces/ITransferRestrictionHook.sol";
 import "./interfaces/ICyberCertPrinter.sol";
 import "./libs/auth.sol";
 import "./storage/CyberScripStorage.sol";
 
-contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL, UUPSUpgradeable {
+contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
     using CyberScripStorage for CyberScripStorage.StorageData;
     
     string public constant DEPLOY_VERSION = "1"; // For version-tracking on all deployment and future upgrades
@@ -19,7 +17,6 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL, UUPSUpgrade
     error NotIssuanceManager();
     error ComplianceFeatureDisabled();
     error AccountFrozen(address account);
-    error NotRefImplementation();
 
     event FreezeStatusUpdated(address indexed account, bool frozen);
     event ComplianceFeatureDisabledEvent(string feature);
@@ -162,25 +159,5 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL, UUPSUpgrade
 
     function frozen(address account) external returns (bool) {
         return CyberScripStorage.getStorageData().frozen[account];
-    }
-
-    // ========================
-    // UUPSUpgradeable
-    // ========================
-
-    /// @notice UUPS upgrade authorization
-    /// @dev MetaLeX releases new versions through the factory's reference implementation,
-    /// and the CyberCorp owner can decide if or when he wants to perform the upgrade
-    function _authorizeUpgrade(
-        address newImplementation
-    ) internal override onlyIssuanceManager {
-        if(
-            IIssuanceManagerFactory(
-                IIssuanceManager(
-                    CyberScripStorage.getStorageData().issuanceManager
-                ).getUpgradeFactory()
-            ).getCyberScripRefImplementation() != newImplementation) {
-            revert NotRefImplementation();
-        }
     }
 }

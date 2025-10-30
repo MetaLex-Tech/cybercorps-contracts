@@ -40,10 +40,8 @@ mechanical, including photocopying, recording, or by any information storage and
 except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
-import "openzeppelin-contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
-import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
-import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "./interfaces/IIssuanceManagerFactory.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./interfaces/ITransferRestrictionHook.sol";
 import "./storage/CyberCertPrinterStorage.sol";
@@ -51,7 +49,7 @@ import "./interfaces/IUriBuilder.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
 
 
-contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpgradeable {
+contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     using CyberCertPrinterStorage for CyberCertPrinterStorage.CyberCertStorage;
 
     string public constant DEPLOY_VERSION = "1"; // For version-tracking on all deployment and future upgrades
@@ -68,7 +66,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     error EndorsementNotSignedOrInvalid();
     error InvalidEndorsement();
     error InvalidLegendIndex();
-    error NotRefImplementation();
 
     //events
     event CertificateCreated(uint256 indexed tokenId, address indexed investor, uint256 amount, uint256 cap);
@@ -313,38 +310,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
     // URI storage functionality
     function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
         if (!_exists(tokenId)) revert URIQueryForNonexistentToken();
-
-        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
-        string[] memory certLegend = s.certLegend[tokenId];
-        ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
-
-        // Get registry and agreementId from first endorsement if it exists
-        address registry = address(0);
-        bytes32 agreementId = bytes32(0);
-        if (s.endorsements[tokenId].length > 0) {
-            Endorsement memory firstEndorsement = s.endorsements[tokenId][0];
-            registry = firstEndorsement.registry;
-            agreementId = firstEndorsement.agreementId;
-        }
-
-    return IUriBuilder(IIssuanceManager(s.issuanceManager).uriBuilder()).buildCertificateUri(   
-            corp.cyberCORPName(),
-            corp.cyberCORPType(),
-            corp.cyberCORPJurisdiction(),
-            corp.cyberCORPContactDetails(),
-            s.securityType,
-            s.securitySeries,
-            s.certificateUri,
-            certLegend,
-            s.certificateDetails[tokenId],
-            s.endorsements[tokenId],
-            s.owners[tokenId],
-            registry,
-            agreementId,
-            tokenId,
-            address(this),
-            address(s.extension)
-        );
+        return CyberCertPrinterStorage.tokenURI(tokenId);
     }
 
    /* // URI storage functionality
@@ -495,19 +461,4 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, UUPSUpg
         return CyberCertPrinterStorage.cyberCertStorage().tokenTransferable[tokenId];
     }
 
-    /// @notice UUPS upgrade authorization
-    /// @dev MetaLeX releases new versions through the factory's reference implementation,
-    /// and the CyberCorp owner can decide if or when he wants to perform the upgrade
-    function _authorizeUpgrade(
-        address newImplementation
-    ) internal override onlyIssuanceManager {
-        if(
-            IIssuanceManagerFactory(
-                IIssuanceManager(
-                    CyberCertPrinterStorage.cyberCertStorage().issuanceManager
-                ).getUpgradeFactory()
-            ).getCyberCertPrinterRefImplementation() != newImplementation) {
-            revert NotRefImplementation();
-        }
-    }
 }

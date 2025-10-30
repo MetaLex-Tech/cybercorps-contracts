@@ -51,6 +51,6 @@ contract DealManagerWithMigration is DealManager {
     /// @dev Since the migration target is predefined, it doesn't matter who called it or when it is called
     function migrateUpgradeFactory() public {
         // TODO Update to the new permanent address of DealManagerFactory
-        DealManagerStorage.setUpgradeFactory(0x1173bD8Dd7e0d7aCBF49f4343c99B66755460Cf9);
+        DealManagerStorage.setUpgradeFactory(0x06F086b47d10475FEF08c5708412118d73Eb88A7);
     }
 }
