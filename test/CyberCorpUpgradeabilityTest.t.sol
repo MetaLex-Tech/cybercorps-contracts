@@ -423,7 +423,7 @@ contract CyberCorpUpgradeabilityTest is Test {
         address rugImpl = address(new RugCyberCertPrinter());
         imFactory.setCyberCertPrinterRefImplementation(rugImpl);
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, BorgAuth(corpAuthAddr).OWNER_ROLE(), metalex));
-        IssuanceManager(imAddr).upgradeCyberCertPrinterToAndCall(cyberCertPrinterAddrs[0], rugImpl, "");
+        IssuanceManager(imAddr).upgradeCertPrinterBeaconImplementation(rugImpl);
 
         vm.stopPrank();
     }
@@ -453,7 +453,7 @@ contract CyberCorpUpgradeabilityTest is Test {
         address rugImpl = address(new RugCyberScrip());
         imFactory.setCyberScripRefImplementation(rugImpl);
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, BorgAuth(corpAuthAddr).OWNER_ROLE(), metalex));
-        IssuanceManager(imAddr).upgradeCyberScripToAndCall(address(cyberScrip), rugImpl, "");
+        IssuanceManager(imAddr).upgradeScripBeaconImplementation(rugImpl);
 
         vm.stopPrank();
     }

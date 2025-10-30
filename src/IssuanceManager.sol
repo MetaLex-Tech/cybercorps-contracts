@@ -42,7 +42,8 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "./libs/auth.sol";
-import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import "openzeppelin-contracts/proxy/beacon/BeaconProxy.sol";
+import "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "openzeppelin-contracts/utils/Create2.sol";
 import "openzeppelin-contracts/utils/Address.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -54,8 +55,6 @@ import "./RoundManager.sol";
 import "./interfaces/ICertificateConverter.sol";
 import "./interfaces/IIssuanceManagerFactory.sol";
 import "./storage/IssuanceManagerStorage.sol";
-import "./CyberCertPrinter.sol";
-import {CyberScrip} from "./CyberScrip.sol";
 
 /// @title IssuanceManager
 /// @notice Manages the issuance and lifecycle of digital certificates representing securities and more
@@ -119,9 +118,27 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     ) external initializer {
         __BorgAuthACL_init(_auth);
 
+        // Create beacons for CyberCertPrinter and CyberScrip
+        // Unlike IssuanceManager which is individually upgradeable, CyberCertPrinter and CyberScrip deployments are
+        // beacon proxies because they are managed by the same company owner and are expected to
+        // share the same implementation or upgraded to a new version all at the same time.
+        // Maintenance-wise, since IssuanceManager itself is upgradeable, we don't need to worry about beacon ownership transfers
+
+        UpgradeableBeacon beaconCertPrinter = new UpgradeableBeacon(
+            IIssuanceManagerFactory(_upgradeFactory).getCyberCertPrinterRefImplementation(),
+            address(this)
+        );
+
+        UpgradeableBeacon beaconScrip = new UpgradeableBeacon(
+            IIssuanceManagerFactory(_upgradeFactory).getCyberScripRefImplementation(),
+            address(this)
+        );
+
         IssuanceManagerStorage.setCORP(_CORP);
         IssuanceManagerStorage.setUriBuilder(_uriBuilder);
+        IssuanceManagerStorage.setCyberCertPrinterBeacon(beaconCertPrinter);
         IssuanceManagerStorage.setUpgradeFactory(_upgradeFactory);
+        IssuanceManagerStorage.setCyberScripBeacon(beaconScrip);
     }
 
     modifier onlyUpgradeFactory() {
@@ -162,7 +179,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
                 address(this)
             )
         );
-        address newCert = Create2.deploy(0, salt, _getBytecode());
+        address newCert = Create2.deploy(0, salt, _getBytecodeCertPrinter());
         IssuanceManagerStorage.addPrinter(newCert);
         ICyberCertPrinter(newCert).initialize(
             _ledger,
@@ -343,30 +360,64 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         certificate.setGlobalTransferable(transferable);
     }
 
+    /// @notice Upgrades the implementation of the certificate printer
+    /// @dev Only callable by company owner, only upgradeable to the current reference implementation
+    /// @param _newImplementation Address of the new implementation
+    function upgradeCertPrinterBeaconImplementation(
+        address _newImplementation
+    ) external onlyOwner {
+        if(
+            IIssuanceManagerFactory(
+                IssuanceManagerStorage.getUpgradeFactory()
+            ).getCyberCertPrinterRefImplementation() != _newImplementation) {
+            revert NotRefImplementation();
+        }
+        IssuanceManagerStorage.updateBeaconImplementation(_newImplementation);
+    }
+
+    /// @notice Gets the current implementation address of the certificate printer
+    /// @return address Current implementation address
+    function getBeaconImplementation() external view returns (address) {
+        return
+            IssuanceManagerStorage.getCyberCertPrinterBeacon().implementation();
+    }
+
+    /// @notice Upgrades the implementation of the scrip
+    /// @dev Only callable by company owner, only upgradeable to the current reference implementation
+    /// @param _newImplementation Address of the new implementation
+    function upgradeScripBeaconImplementation(
+        address _newImplementation
+    ) external onlyOwner {
+        if(
+            IIssuanceManagerFactory(
+                IssuanceManagerStorage.getUpgradeFactory()
+            ).getCyberScripRefImplementation() != _newImplementation) {
+            revert NotRefImplementation();
+        }
+        IssuanceManagerStorage.updateScripBeaconImplementation(_newImplementation);
+    }
+
+    function getScripBeaconImplementation() external view returns (address) {
+        return
+            IssuanceManagerStorage.getCyberScripBeacon().implementation();
+    }
+
     /// @notice Gets the bytecode for creating new certificate printer proxies
     /// @dev Internal function used by createCertPrinter
     /// @return bytecode The proxy contract creation bytecode
-    function _getBytecode() private view returns (bytes memory bytecode) {
-        // TODO review needed: on a second thought, CyberCertPrinters and CyberScrips can still use BeaconProxy because
-        //  they are supposed to be under company owner's administration. Seems more convenient to upgrade all at once
-        //  per company owner's discretion.
-        // TODO review needed: is UpgradeableBeacon ownership transfer necessary?
-        bytes memory sourceCodeBytes = type(ERC1967Proxy).creationCode;
+    function _getBytecodeCertPrinter() private view returns (bytes memory bytecode) {
+        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
         bytecode = abi.encodePacked(
             sourceCodeBytes,
-            abi.encode(IIssuanceManagerFactory(
-                IssuanceManagerStorage.getUpgradeFactory()
-            ).getCyberCertPrinterRefImplementation(), "")
+            abi.encode(IssuanceManagerStorage.getCyberCertPrinterBeacon(), "")
         );
     }
 
     function _getBytecodeScrip() private view returns (bytes memory bytecode) {
-        bytes memory sourceCodeBytes = type(ERC1967Proxy).creationCode;
+        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
         bytecode = abi.encodePacked(
             sourceCodeBytes,
-            abi.encode(IIssuanceManagerFactory(
-                IssuanceManagerStorage.getUpgradeFactory()
-            ).getCyberScripRefImplementation(), "")
+            abi.encode(IssuanceManagerStorage.getCyberScripBeacon(), "")
         );
     }
 
@@ -394,6 +445,26 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     /// @return address The URI builder contract address
     function uriBuilder() external view returns (address) {
         return IssuanceManagerStorage.getUriBuilder();
+    }
+
+    /// @notice Gets the certificate printer beacon contract
+    /// @return UpgradeableBeacon The beacon contract
+    function cyberCertPrinterBeacon()
+        external
+        view
+        returns (UpgradeableBeacon)
+    {
+        return IssuanceManagerStorage.getCyberCertPrinterBeacon();
+    }
+
+    /// @notice Gets the scrip beacon contract
+    /// @return UpgradeableBeacon The beacon contract
+    function cyberScripBeacon()
+    external
+    view
+    returns (UpgradeableBeacon)
+    {
+        return IssuanceManagerStorage.getCyberScripBeacon();
     }
 
     /// @notice Gets a certificate printer address by index
@@ -641,14 +712,6 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
 
             createCertAndAssign(certAddress, msg.sender, details);
         }
-    }
-
-    function upgradeCyberCertPrinterToAndCall(address proxy, address newImplementation, bytes memory data) external onlyOwner {
-        CyberCertPrinter(proxy).upgradeToAndCall(newImplementation, data);
-    }
-
-    function upgradeCyberScripToAndCall(address proxy, address newImplementation, bytes memory data) external onlyOwner {
-        CyberScrip(proxy).upgradeToAndCall(newImplementation, data);
     }
 
     /// @notice UUPS upgrade authorization
