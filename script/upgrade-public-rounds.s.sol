@@ -9,6 +9,8 @@ import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
+import {DealManagerFactory} from "../src/DealManagerFactory.sol";
+import {DealManager} from "../src/DealManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
@@ -16,6 +18,7 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
+import {ILegacyFactory} from "../script/interfaces/ILegacyFactory.sol";
 
 interface IUUPS {
     function upgradeTo(address newImplementation) external;
@@ -40,16 +43,22 @@ contract UpgradePublicRoundsScript is Script {
 
         // Required existing addresses
         address cyberCorpFactoryProxyAddr = 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2;
-        address cyberCorpSingleFactoryAddr = 0xc8e084D3f8B3b326FCc894C7afD28F4904196406;
-        address issuanceManagerFactoryAddr = 0xA32547aAdAA4975082D729c79e79dBaE4385EBCf;
+        address legacyCyberCorpSingleFactoryAddr = 0xc8e084D3f8B3b326FCc894C7afD28F4904196406;
+        address legacyIssuanceManagerFactoryAddr = 0xA32547aAdAA4975082D729c79e79dBaE4385EBCf;
         address registry = 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134;
+
+        CyberCorpFactory factoryProxy = CyberCorpFactory(
+            cyberCorpFactoryProxyAddr
+        );
 
         vm.startBroadcast(deployerPrivateKey);
 
-        // 1) Deploy RoundManagerFactory (uses existing AUTH from factory)
+        // Uses existing AUTH from factory
         address auth = address(
             CyberCorpFactory(cyberCorpFactoryProxyAddr).AUTH()
         );
+        vm.assertEq(address(auth), 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01, "should match universal AUTH address");
+
         address deployer = vm.addr(deployerPrivateKey);
         console.log("Deployer:", deployer);
         uint256 role = BorgAuth(auth).userRoles(deployer);
@@ -59,6 +68,8 @@ contract UpgradePublicRoundsScript is Script {
                 "Deployer is not AUTH owner; use the AUTH owner key to upgrade"
             );
         }
+
+        // 1) Deploy RoundManagerFactory
         RoundManagerFactory roundManagerFactory = RoundManagerFactory(address(
             new ERC1967Proxy{salt: salt}(
                 address(new RoundManagerFactory{salt: salt}()),
@@ -94,29 +105,135 @@ contract UpgradePublicRoundsScript is Script {
         );
 
         // 3) Set the RoundManagerFactory address in CyberCorpFactory
-        CyberCorpFactory factoryProxy = CyberCorpFactory(
-            cyberCorpFactoryProxyAddr
-        );
         factoryProxy.setRoundManagerFactory(address(roundManagerFactory));
         console.log(
             "CyberCorpFactory.roundManagerFactory set to:",
             address(roundManagerFactory)
         );
 
-        // TODO WIP: handle legacy CyberCorp upgrades
-//        // 4) Upgrade CyberCorp beacon via CyberCorpSingleFactory
-//        CyberCorpSingleFactory ccSingleFactory = CyberCorpSingleFactory(
-//            cyberCorpSingleFactoryAddr
-//        );
-//        address newCyberCorpImpl = address(new CyberCorp{salt: salt}());
-//        console.log("New CyberCorp implementation:", newCyberCorpImpl);
-//        ccSingleFactory.upgradeImplementation(newCyberCorpImpl);
-//        console.log(
-//            "CyberCorp beacon implementation set to:",
-//            ccSingleFactory.getBeaconImplementation()
-//        );
+        // 4) Deploy new CyberCorpSingleFactory
+        // Deploy new reference implementation
+        CyberCorp refCorp = new CyberCorp{salt: salt}(); // Use create2 here so it and hence the new factory has a stable address regardless of the deployer's state
+        console.log(
+            "New CyberCorp implementation: %s",
+            address(refCorp)
+        );
+        // Deploy new UUPSUpgradeable
+        CyberCorpSingleFactory newCyberCorpSingleFactory = CyberCorpSingleFactory(
+            address(
+                new ERC1967Proxy{salt: salt}(
+                    address(new CyberCorpSingleFactory{salt: salt}()),
+                    abi.encodeWithSelector(
+                        CyberCorpSingleFactory.initialize.selector,
+                        address(auth),
+                        address(refCorp)
+                    )
+                )
+            )
+        );
+        console.log(
+            "CyberCorpSingleFactory deployed:",
+            address(newCyberCorpSingleFactory)
+        );
+        // Replace the old one in CyberCorpFactory
+        factoryProxy.setCyberCorpSingleFactory(address(newCyberCorpSingleFactory));
+        // Verify the upgrade was successful
+        vm.assertEq(newCyberCorpSingleFactory.getRefImplementation(), address(refCorp), "unexpected CyberCorp reference implementation");
+        console.log(
+            "CyberCorpFactory.cyberCorpSingleFactory set to:",
+            address(newCyberCorpSingleFactory)
+        );
 
-        // 5) upgrade CyberAgreementRegistry
+        // 5) Deploy new IssuanceManagerFactory
+        // Deploy new reference implementations
+        IssuanceManager refIm = new IssuanceManager{salt: salt}();
+        CyberCertPrinter refCertPrinter = new CyberCertPrinter{salt: salt}();
+        CyberScrip refScrip = new CyberScrip{salt: salt}();
+        console.log(
+            "New IssuanceManager implementation:",
+            address(refIm)
+        );
+        console.log(
+            "New CyberCertPrinter implementation:",
+            address(refCertPrinter)
+        );
+        console.log(
+            "New CyberScrip implementation:",
+            address(refScrip)
+        );
+        // Deploy new UUPSUpgradeable
+        IssuanceManagerFactory newImFactory = IssuanceManagerFactory(
+            address(
+                new ERC1967Proxy{salt: salt}(
+                    address(new IssuanceManagerFactory{salt: salt}()),
+                    abi.encodeWithSelector(
+                        IssuanceManagerFactory.initialize.selector,
+                        address(auth),
+                        address(refIm),
+                        address(refCertPrinter),
+                        address(refScrip)
+                    )
+                )
+            )
+        );
+        console.log(
+            "IssuanceManagerFactory deployed:",
+            address(newImFactory)
+        );
+        // Replace the old one in CyberCorpFactory
+        factoryProxy.setIssuanceManagerFactory(address(newImFactory));
+        // Verify the upgrade was successful
+        vm.assertEq(newImFactory.getRefImplementation(), address(refIm), "unexpected IssuanceManager reference implementation");
+        console.log(
+            "CyberCorpFactory.issuanceManagerFactory set to:",
+            address(newImFactory)
+        );
+
+        // 6) Deploy new DealManagerFactory
+        // Deploy new reference implementation
+        DealManager refDm = new DealManager{salt: salt}(); // Use create2 here so it and hence the new factory has a stable address regardless of the deployer's state
+        console.log(
+            "New DealManager implementation:",
+            address(refDm)
+        );
+        // Deploy new UUPSUpgradeable
+        DealManagerFactory newDmFactory = DealManagerFactory(
+            address(
+                new ERC1967Proxy{salt: salt}(
+                    address(new DealManagerFactory{salt: salt}()),
+                    abi.encodeWithSelector(
+                        DealManagerFactory.initialize.selector,
+                        address(auth),
+                        address(refDm)
+                    )
+                )
+            )
+        );
+        console.log(
+            "DealManagerFactory deployed:",
+            address(newDmFactory)
+        );
+        // Replace the old one in CyberCorpFactory
+        factoryProxy.setDealManagerFactory(address(newDmFactory));
+        // Verify the upgrade was successful
+        vm.assertEq(newDmFactory.getRefImplementation(), address(refDm), "unexpected DealManager reference implementation");
+        console.log(
+            "CyberCorpFactory.dealManagerFactory set to:",
+            address(newDmFactory)
+        );
+
+        // 7) Upgrade CyberCorp beacon via CyberCorpSingleFactory
+        ILegacyFactory legacyCcSingleFactory = ILegacyFactory(
+            legacyCyberCorpSingleFactoryAddr
+        );
+        legacyCcSingleFactory.upgradeImplementation(address(refCorp));
+        vm.assertEq(legacyCcSingleFactory.getBeaconImplementation(), address(refCorp), "legacy CyberCorp beacon implementation should've set to the reference one");
+        console.log(
+            "CyberCorp beacon implementation set to:",
+            legacyCcSingleFactory.getBeaconImplementation()
+        );
+
+        // 8) upgrade CyberAgreementRegistry
         address newRegistryImpl = address(
             new CyberAgreementRegistry{salt: salt}()
         );
@@ -130,34 +247,20 @@ contract UpgradePublicRoundsScript is Script {
             registry
         );
 
-        // TODO WIP: must upgrade legacy issuance managers
-//        // 5b) Upgrade IssuanceManager (Beacon via IssuanceManagerFactory)
-//        address newIssuanceManagerImpl = address(new IssuanceManager{salt: salt}());
-//        console.log("New IssuanceManager implementation:", newIssuanceManagerImpl);
-//        IssuanceManagerFactory(issuanceManagerFactoryAddr).upgradeImplementation(newIssuanceManagerImpl);
-//        console.log(
-//            "IssuanceManager beacon implementation set to:",
-//            IssuanceManagerFactory(issuanceManagerFactoryAddr).getBeaconImplementation()
-//        );
-
-        // TODO WIP: should handle CyberScrip implementation along with new issuance manager factory
-//        //deploy CyberScrip implementation
-//        address newCyberScripImpl = address(new CyberScrip{salt: salt}());
-//        console.log("New CyberScrip implementation:", newCyberScripImpl);
-//        CyberCorpFactory(cyberCorpFactoryProxyAddr).setCyberCert20Implementation(newCyberScripImpl);
-
-        // TODO WIP: should upgrade legacy cyber printers
-//        // 6) upgrade CyberCertPrinter
-//        address newCyberCertPrinterImpl = address(new CyberCertPrinter{salt: salt}());
-//        console.log("New CyberCertPrinter implementation:", newCyberCertPrinterImpl);
-//        factoryProxy.setCyberCertPrinterImplementation(newCyberCertPrinterImpl);
+        // 9) Upgrade IssuanceManager (Beacon via IssuanceManagerFactory)
+        ILegacyFactory legacyIssuanceManagerFactory = ILegacyFactory(
+            legacyIssuanceManagerFactoryAddr
+        );
+        legacyIssuanceManagerFactory.upgradeImplementation(address(refIm));
+        vm.assertEq(legacyIssuanceManagerFactory.getBeaconImplementation(), address(refIm), "legacy IssuanceManager beacon implementation should've set to the reference one");
+        console.log(
+            "IssuanceManager beacon implementation set to:",
+            legacyIssuanceManagerFactory.getBeaconImplementation()
+        );
 
         vm.stopBroadcast();
 
         console.log("CyberCorpFactory:", address(factoryProxy));
         console.log("RoundManagerFactory:", address(roundManagerFactory));
-        // TODO WIP
-//        console.log("CyberCorpSingleFactory:", address(ccSingleFactory));
-//        console.log("CyberCorp:", address(newCyberCorpImpl));
     }
 }

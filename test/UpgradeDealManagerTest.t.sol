@@ -6,9 +6,8 @@ import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import {Initializable} from "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {UpgradePublicRoundsScript} from "../script/upgrade-public-rounds.s.sol";
-import {UpgradeCyberCorpFactoriesScript} from "../script/upgrade-cybercorp-factories.s.sol";
 import {UpgradeLegacyDealManagersScript} from "../script/upgrade-legacy-dealmanagers.s.sol";
-import {ILegacyDealManagerFactory} from "../script/interfaces/ILegacyDealManagerFactory.sol";
+import {ILegacyFactory} from "../script/interfaces/ILegacyFactory.sol";
 import {GnosisTransaction} from "../script/libs/safe.sol";
 import {KnownDealManagersLoader} from "../script/libs/KnownDealManagersLoader.sol";
 import {SecurityClass, SecuritySeries, CompanyOfficer} from "../src/CyberCorpConstants.sol";
@@ -30,7 +29,7 @@ contract UpgradeDealManagerTest is Test {
     // Universal registry address
     CyberAgreementRegistry registry = CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134);
     CyberCorpFactory cyberCorpFactory = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
-    ILegacyDealManagerFactory legacyDealManagerFactory = ILegacyDealManagerFactory(0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3);
+    ILegacyFactory legacyDealManagerFactory = ILegacyFactory(0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3);
 
     address paymentToken = 0x036CbD53842c5426634e7929541eC2318f3dCF7e; // USDC @ Base Sepolia
 
@@ -47,8 +46,6 @@ contract UpgradeDealManagerTest is Test {
     uint256 bobPrivateKey = 0xb0b + privateKeySalt;
     address bob = vm.addr(bobPrivateKey);
 
-    CyberCorpSingleFactory newCyberCorpSingleFactory;
-    IssuanceManagerFactory newImFactory;
     DealManagerFactory newDmFactory;
     DealManagerWithMigration dmWithMigrationImpl;
 
@@ -486,21 +483,20 @@ contract UpgradeDealManagerTest is Test {
         // Simulate upgrades
         //
 
-        // Upgrade all other breaking changes
+        // Simulate granting the test deployer admin access so it can perform upgrades
+        vm.startPrank(metalexSafe);
+        CyberAgreementRegistry(registry).AUTH().updateRole(
+            deployer,
+            CyberAgreementRegistry(registry).AUTH().OWNER_ROLE()
+        );
+        vm.stopPrank();
+
+        // Upgrade all factories and dependencies
         (new UpgradePublicRoundsScript()).run();
 
-        // Run scripts to upgrade all factories
-        GnosisTransaction[] memory safeTxs;
-        (newCyberCorpSingleFactory, newImFactory, newDmFactory, safeTxs) = (new UpgradeCyberCorpFactoriesScript()).run();
         // Expect new factory to be deployed at a predetermined address because we will hard-code it to the DealManagerWithMigration contract
+        newDmFactory = DealManagerFactory(cyberCorpFactory.dealManagerFactory());
         assertEq(address(newDmFactory), 0x06F086b47d10475FEF08c5708412118d73Eb88A7, "new DealManagerFactory address has changed, update it in DealManagerWithMigration");
-
-        // Simulate MetaLeX Safe executing the Safe txs to replace DealManagerFactory
-        vm.startPrank(metalexSafe);
-        for (uint256 i = 0; i < safeTxs.length; i++) {
-            (safeTxs[i].to).call{value: safeTxs[i].value}(safeTxs[i].data);
-        }
-        vm.stopPrank();
 
         // Run scripts to upgrade all legacy DealManagers
         dmWithMigrationImpl = (new UpgradeLegacyDealManagersScript()).run();

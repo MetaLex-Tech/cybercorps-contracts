@@ -6,7 +6,6 @@ import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import {CyberCorpHelper} from "../test/RoundManagerTest.t.sol";
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {UpgradePublicRoundsScript} from "../script/upgrade-public-rounds.s.sol";
-import {UpgradeCyberCorpFactoriesScript} from "../script/upgrade-cybercorp-factories.s.sol";
 import {GnosisTransaction} from "../script/libs/safe.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
@@ -60,17 +59,6 @@ contract UpgradePublicRoundsTest is Test {
         vm.stopPrank();
 
         (new UpgradePublicRoundsScript()).run();
-
-        // Run scripts to upgrade all factories
-        GnosisTransaction[] memory safeTxs;
-        (, , , safeTxs) = (new UpgradeCyberCorpFactoriesScript()).run();
-
-        // Simulate MetaLeX Safe executing the Safe txs to replace DealManagerFactory
-        vm.startPrank(metalexSafe);
-        for (uint256 i = 0; i < safeTxs.length; i++) {
-            (safeTxs[i].to).call{value: safeTxs[i].value}(safeTxs[i].data);
-        }
-        vm.stopPrank();
 
         cyberCorpSingleFactory = CyberCorpFactory(cyberCorpFactoryProxyAddr).cyberCorpSingleFactory();
         rmFactory = CyberCorpFactory(cyberCorpFactoryProxyAddr).roundManagerFactory();

@@ -78,7 +78,7 @@ import {LexChexCondition} from "../src/libs/conditions/lexchexCondition.sol";
 import {LeXcheXUtils} from "./libs/LeXcheXUtils.sol";
 import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
-import {ILegacyDealManagerFactory} from "../script/interfaces/ILegacyDealManagerFactory.sol";
+import {ILegacyFactory} from "../script/interfaces/ILegacyFactory.sol";
 
 contract CyberCorpTest is Test {
     using ERC1967ProxyLib for address;
@@ -4430,7 +4430,7 @@ contract CyberCorpTest is Test {
 
         // Get the deployed DealManagerFactory address (legacy Beacon-based)
         address deployedFactoryAddr = 0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3;
-        ILegacyDealManagerFactory deployedFactory = ILegacyDealManagerFactory(deployedFactoryAddr);
+        ILegacyFactory deployedFactory = ILegacyFactory(deployedFactoryAddr);
 
         // Get the current beacon implementation
         address currentImplementation = deployedFactory.getBeaconImplementation();

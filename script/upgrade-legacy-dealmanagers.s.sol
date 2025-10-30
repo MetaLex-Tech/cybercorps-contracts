@@ -21,7 +21,7 @@ import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {SAFTExtension} from "../src/storage/extensions/SAFTExtension.sol";
 import {DealManager} from "../src/DealManager.sol";
 import {DealManagerWithMigration} from "../src/DealManagerWithMigration.sol";
-import {ILegacyDealManagerFactory} from "./interfaces/ILegacyDealManagerFactory.sol";
+import {ILegacyFactory} from "./interfaces/ILegacyFactory.sol";
 import {KnownDealManagersLoader} from "./libs/KnownDealManagersLoader.sol";
 
 contract UpgradeLegacyDealManagersScript is Script {
@@ -33,7 +33,7 @@ contract UpgradeLegacyDealManagersScript is Script {
         // all existing DealManagerFactory addresses (https://dune.com/queries/5981894):
         // - 0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3
         // - 0x15A399Dee2b25C5a766cd9480a154B13d128E669 (deprecated, won't touch it)
-        ILegacyDealManagerFactory legacyDealManagerFactory = ILegacyDealManagerFactory(0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3);
+        ILegacyFactory legacyDealManagerFactory = ILegacyFactory(0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3);
 
         // Load all known deal managers
         address[] memory knownDealManagers = KnownDealManagersLoader.load(block.chainid);
