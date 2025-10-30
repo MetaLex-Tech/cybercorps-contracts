@@ -27,6 +27,8 @@ import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
 import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
 import {ILexChex} from "../src/interfaces/ILexChex.sol";
+import {RoundManagerUpgradeHelper} from "../src/helpers/RoundManagerUpgradeHelper.sol";
+
 // (no extra imports needed for fork-based test)
 
 // Import necessary types
@@ -109,7 +111,8 @@ library CyberCorpHelper {
         address cyberCorpSingleFactory,
         address dealManagerFactory,
         address roundManagerFactory,
-        address uriBuilder
+        address uriBuilder,
+        address helper
     ) {
         BorgAuth bootstrapAuth = new BorgAuth{salt: SALT}(owner);
 
@@ -134,6 +137,8 @@ library CyberCorpHelper {
                 )
             )
         );
+
+       
 
         issuanceManagerFactory = address(
             new IssuanceManagerFactory{salt: SALT}(address(bootstrapAuth))
@@ -162,6 +167,8 @@ library CyberCorpHelper {
                 )
             )
         );
+
+        helper = address(new RoundManagerUpgradeHelper{salt: SALT}(address(registry), address(roundManagerFactory)));
 
         address certPrinterImpl = address(new CyberCertPrinter{salt: SALT}());
         address cyberScripImpl = address(new CyberScrip{salt: SALT}());
@@ -613,6 +620,7 @@ contract RoundManagerTest is Test {
     address private roundManager;
     address private uriBuilder;
     address private rmFactory;
+    address private helper;
     string[] private testRoundPartyValues;
     // EIP-712 constants for RoundManager escrow signature
     bytes32 constant EIP712_DOMAIN_TYPEHASH = keccak256(
@@ -665,7 +673,8 @@ contract RoundManagerTest is Test {
             cyberCorpSingleFactory,
             dealManagerFactory,
             rmFactory,
-            uriBuilder
+            uriBuilder,
+            helper
         ) = CyberCorpHelper.deployRegistryAndFactories(owner);
 
         vm.startPrank(owner);
@@ -710,6 +719,17 @@ contract RoundManagerTest is Test {
         paymentToken.transfer(investor2, 1000000 * 10 ** 6);
         vm.prank(investor2);
         paymentToken.approve(address(roundManager), type(uint256).max);
+    }
+
+    function test_helperUpgrade() public {
+        address officer = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
+        address exampleCorp = 0xf18393487c6AE9cB75B6AD1715B72d75dEc4F669;
+        //generate salt
+        bytes32 salt = keccak256("test_helperUpgrade");
+        vm.startPrank(officer);
+        BorgAuth(CyberCorp(exampleCorp).AUTH()).updateRole(helper, BorgAuth(CyberCorp(exampleCorp).AUTH()).OWNER_ROLE());
+        address newRoundManager = RoundManagerUpgradeHelper(helper).upgradeCorp(exampleCorp, salt);
+        vm.stopPrank();
     }
 
     function test_RevertIf_CreateRound_InvalidSignature() public {
@@ -2035,7 +2055,7 @@ contract RoundManagerFCFSTest is Test {
             address cyberCorpSingleFactory,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
 
         address auth = address(corpFactory.AUTH());
@@ -2069,7 +2089,7 @@ contract RoundManagerFCFSTest is Test {
             address cyberCorpSingleFactory,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
@@ -2136,7 +2156,7 @@ contract RoundManagerFCFSTest is Test {
             ,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
 
         CyberCorpHelper.createTemplate(registry);
@@ -2224,7 +2244,7 @@ contract RoundManagerFCFSTest is Test {
             ,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
@@ -2324,7 +2344,7 @@ contract RoundManagerFCFSTest is Test {
             ,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
@@ -2394,7 +2414,7 @@ contract RoundManagerFCFSTest is Test {
             ,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
@@ -2473,7 +2493,7 @@ contract RoundManagerFCFSTest is Test {
             ,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
@@ -2608,7 +2628,7 @@ contract RoundManagerFCFSTest is Test {
             ,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
@@ -2703,7 +2723,7 @@ contract RoundManagerFCFSTest is Test {
             ,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
@@ -2856,7 +2876,7 @@ contract RoundManagerFCFSTest is Test {
             ,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
@@ -3078,7 +3098,7 @@ contract CyberCorpFactoryPublicRoundTest is Test {
             address cyberCorpSingleFactory,
             ,
             address rmFactory,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
