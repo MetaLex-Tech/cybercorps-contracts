@@ -13,6 +13,7 @@ import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
+import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
@@ -107,6 +108,17 @@ contract BaseScript is Script {
             )
         );
 
+         address roundManagerFactory = address(
+             new ERC1967Proxy{salt: salt}(
+                 address(new RoundManagerFactory{salt: salt}()),
+                 abi.encodeWithSelector(
+                     RoundManagerFactory.initialize.selector,
+                     address(auth),
+                     address(new RoundManager())
+                 )
+             )
+         );
+
         //address tokenWarrantExtension = address(new TokenWarrantExtension{salt: salt}());
 
         address registry = address(new ERC1967Proxy{salt: salt}(
@@ -126,7 +138,16 @@ contract BaseScript is Script {
 
         CyberCorpFactory cyberCorpFactory = CyberCorpFactory(address(new ERC1967Proxy{salt: salt}(
            address(new CyberCorpFactory{salt: salt}()),
-           abi.encodeWithSelector(CyberCorpFactory.initialize.selector, address(auth), address(registry), cyberCertPrinterImplementation, issuanceManagerFactory, cyberCorpSingleFactory, dealManagerFactory, uriBuilder)
+           abi.encodeWithSelector(
+               CyberCorpFactory.initialize.selector,
+               address(auth),
+               address(registry),
+               issuanceManagerFactory,
+               cyberCorpSingleFactory,
+               dealManagerFactory,
+               roundManagerFactory,
+               uriBuilder
+           )
         )));
         cyberCorpFactory.setStable(stable);
 

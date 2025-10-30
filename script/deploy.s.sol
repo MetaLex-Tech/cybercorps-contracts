@@ -133,8 +133,6 @@ contract BaseScript is Script {
                         CyberCorpFactory.initialize.selector,
                         address(auth),
                         address(registry),
-                        cyberCertPrinterImplementation,
-                        cyberCert20Implementation,
                         issuanceManagerFactory,
                         cyberCorpSingleFactory,
                         dealManagerFactory,

@@ -191,8 +191,6 @@ library CyberCorpHelper {
                         CyberCorpFactory.initialize.selector,
                         address(bootstrapAuth),
                         address(registry),
-                        certPrinterImpl,
-                        cyberScripImpl,
                         issuanceManagerFactory,
                         cyberCorpSingleFactory,
                         dealManagerFactory,

@@ -142,8 +142,6 @@ contract PublicRoundTestDeploy is Script {
                         CyberCorpFactory.initialize.selector,
                         address(auth),
                         address(registry),
-                        address(cyberCertPrinterImpl),
-                        address(cyberScripImpl),
                         address(issuanceManagerFactory),
                         address(cyberCorpSingleFactory),
                         address(dealManagerFactory),
