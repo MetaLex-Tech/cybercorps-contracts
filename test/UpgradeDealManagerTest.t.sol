@@ -489,7 +489,7 @@ contract UpgradeDealManagerTest is Test {
         // Upgrade all other breaking changes
         (new UpgradePublicRoundsScript()).run();
 
-        // Run scripts to deploy DealManagerFactory
+        // Run scripts to upgrade all factories
         GnosisTransaction[] memory safeTxs;
         (newCyberCorpSingleFactory, newImFactory, newDmFactory, safeTxs) = (new UpgradeCyberCorpFactoriesScript()).run();
         // Expect new factory to be deployed at a predetermined address because we will hard-code it to the DealManagerWithMigration contract
