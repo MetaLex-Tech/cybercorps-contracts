@@ -50,7 +50,6 @@ contract UpgradeLegacyDealManagersScript is Script {
         vm.assertEq(legacyDealManagerFactory.getBeaconImplementation(), address(dmWithMigrationImpl), "beacon implementation should be upgraded by now");
         console.log("New beacon implementation: %s for legacy DealManagerFactory: %s", address(dmWithMigrationImpl), address(legacyDealManagerFactory));
 
-        // TODO review needed: can we solve this with daisy-chain proxies?
         // This is the ugly part: One-time manual upgrade required for legacy DealManagers.
         // This section updates the `upgradeFactory` pointer to the new permanent factory address,
         // enabling access to updated fee-related methods. This migration is performed one-by-one

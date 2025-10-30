@@ -55,6 +55,8 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
 
     string public constant DEPLOY_VERSION = "1"; // For version-tracking on all deployment and future upgrades
 
+    // TODO handle migration of legacy CyberCorp slots
+
     event CyberCORPDetailsUpdated(string cyberCORPName, string cyberCORPType, string cyberCORPJurisdiction, string cyberCORPContactDetails, string defaultDisputeResolution);
     event OfficerAdded(address indexed officer, uint256 index);
     event OfficerRemoved(address indexed officer, uint256 index);

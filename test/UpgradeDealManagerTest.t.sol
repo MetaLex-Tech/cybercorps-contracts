@@ -6,13 +6,14 @@ import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import {Initializable} from "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {UpgradePublicRoundsScript} from "../script/upgrade-public-rounds.s.sol";
-import {UpgradeDealManagerFactoryScript} from "../script/upgrade-dealmanager-factory.s.sol";
+import {UpgradeCyberCorpFactoriesScript} from "../script/upgrade-cybercorp-factories.s.sol";
 import {UpgradeLegacyDealManagersScript} from "../script/upgrade-legacy-dealmanagers.s.sol";
 import {ILegacyDealManagerFactory} from "../script/interfaces/ILegacyDealManagerFactory.sol";
 import {GnosisTransaction} from "../script/libs/safe.sol";
 import {KnownDealManagersLoader} from "../script/libs/KnownDealManagersLoader.sol";
 import {SecurityClass, SecuritySeries, CompanyOfficer} from "../src/CyberCorpConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {DealManager} from "../src/DealManager.sol";
@@ -20,6 +21,7 @@ import {DealManagerWithMigration} from "../src/DealManagerWithMigration.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
+import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
 contract UpgradeDealManagerTest is Test {
@@ -45,9 +47,10 @@ contract UpgradeDealManagerTest is Test {
     uint256 bobPrivateKey = 0xb0b + privateKeySalt;
     address bob = vm.addr(bobPrivateKey);
 
+    CyberCorpSingleFactory newCyberCorpSingleFactory;
+    IssuanceManagerFactory newImFactory;
     DealManagerFactory newDmFactory;
     DealManagerWithMigration dmWithMigrationImpl;
-    GnosisTransaction safeTx;
 
     // Deal test related
     bytes32 templateId = bytes32(uint256(10000));
@@ -487,13 +490,16 @@ contract UpgradeDealManagerTest is Test {
         (new UpgradePublicRoundsScript()).run();
 
         // Run scripts to deploy DealManagerFactory
-        (newDmFactory, safeTx) = (new UpgradeDealManagerFactoryScript()).run();
+        GnosisTransaction[] memory safeTxs;
+        (newCyberCorpSingleFactory, newImFactory, newDmFactory, safeTxs) = (new UpgradeCyberCorpFactoriesScript()).run();
         // Expect new factory to be deployed at a predetermined address because we will hard-code it to the DealManagerWithMigration contract
-        assertEq(address(newDmFactory), 0xbc118292408Fa4DFE1f9D7736d211F41CFf54Cb6, "new DealManagerFactory address has changed, update it in DealManagerWithMigration");
+        assertEq(address(newDmFactory), 0x1173bD8Dd7e0d7aCBF49f4343c99B66755460Cf9, "new DealManagerFactory address has changed, update it in DealManagerWithMigration");
 
         // Simulate MetaLeX Safe executing the Safe txs to replace DealManagerFactory
         vm.startPrank(metalexSafe);
-        (safeTx.to).call{value: safeTx.value}(safeTx.data);
+        for (uint256 i = 0; i < safeTxs.length; i++) {
+            (safeTxs[i].to).call{value: safeTxs[i].value}(safeTxs[i].data);
+        }
         vm.stopPrank();
 
         // Run scripts to upgrade all legacy DealManagers
