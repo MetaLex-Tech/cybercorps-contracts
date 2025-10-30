@@ -93,6 +93,11 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         address party;
     }
 
+    struct Delegation { 
+        address delegate;
+        uint256 expiry;
+    }
+
     // Closed Agreement Data
     mapping(bytes32 => string[]) public closedAgreementValues;
 
@@ -105,8 +110,10 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     // A mapping connecting an address to all the agreements they are a party to
     mapping(address => bytes32[]) public agreementsForParty;
 
-    // Upgrade notes: Reduced gap to account for new variables (50 - 9 = 41)
-    uint256[41] private __gap;
+    mapping(address => Delegation) public delegations;
+
+    // Upgrade notes: Reduced gap to account for delegation mapping (41 - 1 = 40)
+    uint256[40] private __gap;
 
     event TemplateCreated(
         bytes32 indexed templateId,
@@ -143,6 +150,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     );
 
     event ContractFullySigned(bytes32 indexed contractId, uint256 timestamp);
+
+    event DelegationSet(address indexed delegator, address indexed delegate, uint256 expiry);
+    event DelegationRevoked(address indexed delegator, address indexed delegate);
 
     error TemplateAlreadyExists();
     error TemplateDoesNotExist();
@@ -263,13 +273,13 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             revert FirstPartyZeroAddress();
         }
 
-        for (uint256 i = 0; i < parties.length; i++) {
+        /*for (uint256 i = 0; i < parties.length; i++) {
             for (uint256 j = i + 1; j < parties.length; j++) {
                 if (parties[i] == parties[j]) {
                     revert DuplicateParty();
                 }
             }
-        }
+        }*/
 
         AgreementData storage agreementData = agreements[contractId];
         agreementData.templateId = templateId;
@@ -315,6 +325,58 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             fillUnallocated,
             secret
         );
+    }
+
+    function setDelegation(address delegate, uint256 expiry) external {
+        if (delegate == address(0)) revert("Cannot delegate to zero address");
+        if (delegate == msg.sender) revert("Cannot delegate to self");
+        if (expiry != 0 && expiry <= block.timestamp) revert("Expiry must be in the future");
+        
+        delegations[msg.sender] = Delegation({delegate: delegate, expiry: expiry});
+        emit DelegationSet(msg.sender, delegate, expiry);
+    }
+
+    /**
+     * @dev Revoke delegation for the caller
+     */
+    function revokeDelegation() external {
+        address delegate = delegations[msg.sender].delegate;
+        delete delegations[msg.sender];
+        emit DelegationRevoked(msg.sender, delegate);
+    }
+
+    /**
+     * @dev Get delegation info for a given address
+     * @param delegator The address to check for delegation
+     * @return delegate The delegate address
+     * @return expiry The expiry timestamp (0 if no expiry)
+     */
+    function getDelegation(address delegator) external view returns (address delegate, uint256 expiry) {
+        Delegation storage delegation = delegations[delegator];
+        return (delegation.delegate, delegation.expiry);
+    }
+
+    /**
+     * @dev Check if a delegation is valid (not expired)
+     * @param delegator The delegator address
+     * @return True if delegation exists and is not expired
+     */
+    function isValidDelegation(address delegator) external view returns (bool) {
+        Delegation storage delegation = delegations[delegator];
+        return delegation.delegate != address(0) && 
+               (delegation.expiry == 0 || delegation.expiry > block.timestamp);
+    }
+
+    /**
+     * @dev Check if an address is a valid delegate for a given delegator
+     * @param delegator The delegator address
+     * @param delegate The delegate address to check
+     * @return True if the delegate is valid and not expired
+     */
+    function isValidDelegate(address delegator, address delegate) external view returns (bool) {
+        Delegation storage delegation = delegations[delegator];
+        return delegation.delegate == delegate && 
+               (delegation.expiry == 0 || delegation.expiry > block.timestamp);
     }
 
     function signContractFor(
@@ -379,6 +441,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             revert SignatureVerificationFailed();
         }
 
+        if(msg.sender != agreementData.finalizer && msg.sender != signer)
+            revert NotFinalizer();
+    
         if (partyValues.length != template.partyFields.length)
             revert MismatchedFieldsLength();
 
@@ -389,6 +454,71 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         uint256 totalSignatures = ++agreementData.numSignatures;
 
         emit AgreementSigned(contractId, signer, timestamp);
+
+        if (totalSignatures == agreementData.parties.length) {
+            if (agreementData.finalizer == address(0)) {
+                agreementData.finalized = true;
+                emit ContractFinalized(contractId, msg.sender, timestamp);
+            }
+
+            emit ContractFullySigned(contractId, timestamp);
+        }
+    }
+
+    function signContractWithEscrow(
+        address escrowSigner,
+        bytes32 contractId,
+        string[] memory partyValues,
+        bytes calldata signature,
+        bool fillUnallocated, // to fill a 0 address or not
+        string memory secret
+    ) onlyFinalizer(contractId) external {
+        AgreementData storage agreementData = agreements[contractId];
+        Template memory template = templates[agreementData.templateId];
+        if (agreementData.parties.length == 0) revert ContractDoesNotExist();
+        if (agreementData.signedAt[escrowSigner] != 0) revert AlreadySigned();
+        if (isVoided(contractId)) revert ContractAlreadyVoided();
+        if (agreementData.finalized) revert ContractAlreadyFinalized();
+        if (agreementData.expiry > 0 && agreementData.expiry < block.timestamp)
+            revert ContractExpired();
+
+        if (!isParty(contractId, escrowSigner)) {
+            if (
+                agreementData.secretHash > 0 &&
+                keccak256(abi.encode(secret)) != agreementData.secretHash
+            ) revert InvalidSecret();
+            // Not a named party, so check if there's an open slot
+            uint256 firstOpenPartyIndex = getFirstOpenPartyIndex(contractId);
+            if (firstOpenPartyIndex == 0 || !fillUnallocated)
+                revert NotAParty();
+            // There is a spare slot, assign the sender to this slot.
+            agreementData.parties[firstOpenPartyIndex] = escrowSigner;
+            agreementsForParty[agreementData.parties[firstOpenPartyIndex]].push(
+                    contractId
+                );
+        }
+
+        //verify if the contract is closed
+        if (agreementData.partyValues[escrowSigner].length > 0) {
+            //check that the submitted partyValues match
+            if (
+                keccak256(abi.encode(agreementData.partyValues[escrowSigner])) !=
+                keccak256(abi.encode(partyValues))
+            ) {
+                revert ClosedAgreementPartyValueMismatch();
+            }
+        }
+
+        if (partyValues.length != template.partyFields.length)
+            revert MismatchedFieldsLength();
+
+        uint256 timestamp = block.timestamp;
+
+        agreementData.partyValues[escrowSigner] = partyValues;
+        agreementData.signedAt[escrowSigner] = timestamp;
+        uint256 totalSignatures = ++agreementData.numSignatures;
+
+        emit AgreementSigned(contractId, escrowSigner, timestamp);
 
         if (totalSignatures == agreementData.parties.length) {
             if (agreementData.finalizer == address(0)) {
@@ -412,13 +542,16 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         if (agreementData.finalized) revert ContractAlreadyFinalized();
 
         //verify the signature
-        if (
-            !_verifyVoidSignature(
-                party,
-                VoidSignatureData({contractId: contractId, party: party}),
-                signature
-            )
-        ) revert SignatureVerificationFailed();
+        if(msg.sender != agreementData.finalizer) 
+            if (
+                !_verifyVoidSignature(
+                    party,
+                    VoidSignatureData({contractId: contractId, party: party}),
+                    signature
+                )
+            ) {
+                    revert SignatureVerificationFailed();
+            }
 
         for (uint256 i = 0; i < agreementData.voidRequestedBy.length; i++) {
             if (agreementData.voidRequestedBy[i] == party)
@@ -591,12 +724,24 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         if (user == address(0)) {
             return false;
         }
+        
+        // Check direct party membership
         address[] memory parties = agreements[contractId].parties;
         for (uint256 i = 0; i < parties.length; i++) {
             if (parties[i] == user) {
                 return true;
             }
         }
+        
+        // Check if user is a delegate for any party
+        for (uint256 i = 0; i < parties.length; i++) {
+            Delegation storage delegation = delegations[parties[i]];
+            if (delegation.delegate == user && 
+                (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
+                return true;
+            }
+        }
+        
         return false;
     }
 
@@ -757,9 +902,20 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         // Recover the signer address
         address recoveredSigner = digest.recover(signature);
-
-        // Check if the recovered address matches the expected signer
-        return recoveredSigner == signer;
+        
+        // Check direct signature
+        if (recoveredSigner == signer) {
+            return true;
+        }
+        
+        // Check delegation signature
+        Delegation storage delegation = delegations[signer];
+        if (delegation.delegate == recoveredSigner && 
+            (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
+            return true;
+        }
+        
+        return false;
     }
 
     // Helper function to hash the typed data (SignatureData) according to EIP-712
@@ -797,20 +953,23 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         return keccak256(abi.encodePacked(hashes));
     }
 
-    // Helper function to convert bytes32 to string
-    function _bytes32ToString(
-        bytes32 _bytes32
-    ) internal pure returns (string memory) {
-        bytes memory bytesArray = new bytes(64);
-        for (uint256 i = 0; i < 32; i++) {
-            uint8 b = uint8(uint8(bytes1(bytes32(_bytes32) >> (8 * (31 - i)))));
-            bytesArray[i * 2] = bytes1(uint8(b / 16 + (b / 16 < 10 ? 48 : 87)));
-            bytesArray[i * 2 + 1] = bytes1(
-                uint8((b % 16) + (b % 16 < 10 ? 48 : 87))
-            );
-        }
-        return string(bytesArray);
+// Helper function to convert bytes32 to string
+function _bytes32ToString(bytes32 _bytes32) public pure returns (string memory) {
+    bytes memory bytesArray = new bytes(66); // 0x prefix + 64 hex chars
+    bytesArray[0] = "0";
+    bytesArray[1] = "x";
+
+    for (uint256 i = 0; i < 32; i++) {
+        uint8 byteValue = uint8(_bytes32[i]);
+        // High nibble (first hex char)
+        uint8 highNibble = (byteValue >> 4) & 0x0F;
+        bytesArray[2 + i * 2] = bytes1(highNibble < 10 ? 48 + highNibble : 87 + highNibble);
+        // Low nibble (second hex char)
+        uint8 lowNibble = byteValue & 0x0F;
+        bytesArray[3 + i * 2] = bytes1(lowNibble < 10 ? 48 + lowNibble : 87 + lowNibble);
     }
+    return string(bytesArray);
+}
 
     // Helper function to convert address to string
     function _addressToString(
@@ -874,9 +1033,20 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         // Recover the signer address
         address recoveredSigner = digest.recover(signature);
-
-        // Check if the recovered address matches the expected signer
-        return recoveredSigner == signer;
+        
+        // Check direct signature
+        if (recoveredSigner == signer) {
+            return true;
+        }
+        
+        // Check delegation signature
+        Delegation storage delegation = delegations[signer];
+        if (delegation.delegate == recoveredSigner && 
+            (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
+            return true;
+        }
+        
+        return false;
     }
 
     // Helper function to hash the typed data (VoidSignatureData) according to EIP-712

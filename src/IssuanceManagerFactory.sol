@@ -41,30 +41,41 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
+import "openzeppelin-contracts/utils/Create2.sol";
+import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "./IssuanceManager.sol";
-import "@openzeppelin/contracts/utils/Create2.sol";
-import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
-import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "./CyberCertPrinter.sol";
+import "./CyberScrip.sol";
 import "./libs/auth.sol";
+import "./storage/IssuanceManagerFactoryStorage.sol";
 
-contract IssuanceManagerFactory is BorgAuthACL {
+contract IssuanceManagerFactory is BorgAuthACL, UUPSUpgradeable {
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
-    
-    UpgradeableBeacon public beacon;
 
     event IssuanceManagerDeployed(address issuanceManager);
+    event RefImplementationSet(address refImplementation, string version);
+    event CyberCertPrinterRefImplementationSet(address refImplementation, string version);
+    event CyberScripRefImplementationSet(address refImplementation, string version);
 
-    constructor(address _auth) {
-        // Deploy the implementation contract and beacon
-        beacon = new UpgradeableBeacon(address(new IssuanceManager()), address(this));
-        initialize(_auth);
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
     }
 
-    function initialize(address _auth) public initializer {
+    function initialize(
+        address _auth,
+        address refImplementation,
+        address cyberCertPrinterRefImplementation,
+        address cyberScripRefImplementation
+    ) public initializer {
         // Initialize BorgAuthACL
         __BorgAuthACL_init(_auth);
+
+        IssuanceManagerFactoryStorage.getStorageData().refImplementation = refImplementation;
+        IssuanceManagerFactoryStorage.getStorageData().cyberCertPrinterRefImplementation = cyberCertPrinterRefImplementation;
+        IssuanceManagerFactoryStorage.getStorageData().cyberScripRefImplementation = cyberScripRefImplementation;
     }
 
     function deployIssuanceManager(bytes32 _salt) public returns (address) {
@@ -94,27 +105,53 @@ contract IssuanceManagerFactory is BorgAuthACL {
     /// @dev Internal function used by deployIssuanceManager
     /// @return bytecode The proxy contract creation bytecode
     function _getBytecode() private view returns (bytes memory bytecode) {
-        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
-        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(beacon, ""));
+        bytes memory sourceCodeBytes = type(ERC1967Proxy).creationCode;
+        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(IssuanceManagerFactoryStorage.getStorageData().refImplementation, ""));
     }
 
-    /// @notice Upgrades the implementation contract
+    /// @notice Get the reference implementation contract for the next deployments
+    /// @return Current reference implementation contract address
+    function getRefImplementation() public view returns(address) {
+        return IssuanceManagerFactoryStorage.getStorageData().refImplementation;
+    }
+
+    /// @notice Set the reference implementation contract for the next deployments
     /// @dev Only callable by addresses with the admin role
     /// @param _newImplementation Address of the new implementation
-    function upgradeImplementation(address _newImplementation) external onlyOwner {
-        UpgradeableBeacon(beacon).upgradeTo(_newImplementation);
+    function setRefImplementation(address _newImplementation) public onlyOwner {
+        IssuanceManagerFactoryStorage.getStorageData().refImplementation = _newImplementation;
+        emit RefImplementationSet(_newImplementation, IssuanceManager(_newImplementation).DEPLOY_VERSION());
     }
 
-    /// @notice Gets the current implementation address
-    /// @return The address of the current implementation contract
-    function getBeaconImplementation() external view returns (address) {
-        return UpgradeableBeacon(beacon).implementation();
+    /// @notice Get the reference implementation contract for the next `CyberCertPrinter` deployments
+    /// @return Current reference implementation contract address
+    function getCyberCertPrinterRefImplementation() external view returns(address) {
+        return IssuanceManagerFactoryStorage.getStorageData().cyberCertPrinterRefImplementation;
     }
 
-    /// @notice Upgrades the implementation of the certificate printer
-    /// @dev Only callable by upgrader role
+    /// @notice Set the reference implementation contract for the next `CyberCertPrinter` deployments
+    /// @dev Only callable by addresses with the admin role
     /// @param _newImplementation Address of the new implementation
-    function upgradePrinterBeaconAt(address issuanceManager, address _newImplementation) external onlyOwner {
-        IssuanceManager(issuanceManager).upgradeBeaconImplementation(_newImplementation);
+    function setCyberCertPrinterRefImplementation(address _newImplementation) public onlyOwner {
+        IssuanceManagerFactoryStorage.getStorageData().cyberCertPrinterRefImplementation = _newImplementation;
+        emit CyberCertPrinterRefImplementationSet(_newImplementation, CyberCertPrinter(_newImplementation).DEPLOY_VERSION());
     }
+
+    /// @notice Get the reference implementation contract for the next `CyberScrip` deployments
+    /// @return Current reference implementation contract address
+    function getCyberScripRefImplementation() external view returns(address) {
+        return IssuanceManagerFactoryStorage.getStorageData().cyberScripRefImplementation;
+    }
+
+    /// @notice Set the reference implementation contract for the next `CyberScrip` deployments
+    /// @dev Only callable by addresses with the admin role
+    /// @param _newImplementation Address of the new implementation
+    function setCyberScripRefImplementation(address _newImplementation) public onlyOwner {
+        IssuanceManagerFactoryStorage.getStorageData().cyberScripRefImplementation = _newImplementation;
+        emit CyberScripRefImplementationSet(_newImplementation, CyberScrip(_newImplementation).DEPLOY_VERSION());
+    }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {}
 }

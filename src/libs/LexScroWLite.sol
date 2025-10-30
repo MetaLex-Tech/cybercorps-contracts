@@ -42,6 +42,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -49,12 +50,12 @@ import "../interfaces/ICyberCorp.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICondition.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {LexScrowStorage, Escrow, Token, TokenType, EscrowStatus} from "../storage/LexScrowStorage.sol";
 
 
-abstract contract LexScroWLite is Initializable, ReentrancyGuard {
+abstract contract LexScroWLite is Initializable {
     using LexScrowStorage for LexScrowStorage.LexScrowData;
+    using SafeERC20 for IERC20;
 
     error DealExpired();
     error EscrowNotPending();
@@ -70,15 +71,25 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
     event DealVoidedAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
     event DealPaidAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
     event DealFinalizedAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
+    event FeeDistributed(bytes32 indexed agreementId, address indexed feeToken, uint256 totalFe);
 
     constructor() {
     }
 
+    /// @notice Initialize core addresses for the escrow subsystem
+    /// @param _corp Address of the `ICyberCorp` implementation
+    /// @param _dealRegistry Address of the `ICyberAgreementRegistry` implementation
     function __LexScroWLite_init(address _corp, address _dealRegistry) internal onlyInitializing {
         LexScrowStorage.setCorp(_corp);
         LexScrowStorage.setDealRegistry(_dealRegistry);
     }
 
+    /// @notice Create a new escrow record for an agreement
+    /// @param agreementId Unique identifier of the agreement
+    /// @param counterParty Counterparty/buyer address
+    /// @param corpAssets Assets the company will deliver upon finalization
+    /// @param buyerAssets Assets the counterparty will deliver into escrow
+    /// @param expiry Unix timestamp after which the deal is considered expired
     function createEscrow(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets, uint256 expiry) internal {
         bytes memory blankSignature = abi.encodePacked(bytes32(0));
         Escrow memory newEscrow = Escrow({
@@ -93,6 +104,10 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
         LexScrowStorage.setEscrow(agreementId, newEscrow);
     }
 
+    /// @notice Update escrow counterparty and add endorsement to corp ERC721 certificates
+    /// @param agreementId Unique identifier of the agreement
+    /// @param counterParty Counterparty/buyer address to set
+    /// @param buyerName Human-readable buyer name stored in endorsements
     function updateEscrow(bytes32 agreementId, address counterParty, string memory buyerName) internal {
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
         escrow.counterParty = counterParty;
@@ -113,6 +128,8 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
         }
     }
 
+    /// @notice Pull buyer assets into escrow and mark the escrow as PAID
+    /// @param agreementId Unique identifier of the agreement
     function handleCounterPartyPayment(bytes32 agreementId) internal {
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
         if(escrow.status != EscrowStatus.PENDING) revert EscrowNotPending();
@@ -120,7 +137,7 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
 
         for(uint256 i = 0; i < escrow.buyerAssets.length; i++) {
             if(escrow.buyerAssets[i].tokenType == TokenType.ERC20) {
-                IERC20(escrow.buyerAssets[i].tokenAddress).transferFrom(escrow.counterParty, address(this), escrow.buyerAssets[i].amount);
+                IERC20(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(escrow.counterParty, address(this), escrow.buyerAssets[i].amount);
             }
             else if(escrow.buyerAssets[i].tokenType == TokenType.ERC721) {
                 IERC721(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(escrow.counterParty, address(this), escrow.buyerAssets[i].tokenId);
@@ -134,15 +151,22 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
         escrow.status = EscrowStatus.PAID;
     }
 
-    function voidAndRefund(bytes32 agreementId) internal nonReentrant {
+    /// @notice Void a PAID escrow and refund all buyer assets
+    /// @dev External callers should implement reentrancy guards
+    /// @param agreementId Unique identifier of the agreement
+    function voidAndRefund(bytes32 agreementId) internal {
+        // Check: check status
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
         if(escrow.status != EscrowStatus.PAID) revert EscrowNotPaid();
         if(!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId)) revert DealNotVoided();
 
-        // Refund buyer assets first
+        // Effect: update status
+        voidEscrow(agreementId);
+
+        // Interaction: Refund buyer assets
         for(uint256 i = 0; i < escrow.buyerAssets.length; i++) {
             if(escrow.buyerAssets[i].tokenType == TokenType.ERC20) {
-                IERC20(escrow.buyerAssets[i].tokenAddress).transfer(escrow.counterParty, escrow.buyerAssets[i].amount);
+                IERC20(escrow.buyerAssets[i].tokenAddress).safeTransfer(escrow.counterParty, escrow.buyerAssets[i].amount);
             }
             else if(escrow.buyerAssets[i].tokenType == TokenType.ERC721) {
                 IERC721(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), escrow.counterParty, escrow.buyerAssets[i].tokenId);
@@ -151,25 +175,44 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
                 IERC1155(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), escrow.counterParty, escrow.buyerAssets[i].tokenId, escrow.buyerAssets[i].amount, "");
             }
         }
-
-        voidEscrow(agreementId);
     }
 
-    function finalizeEscrow(bytes32 agreementId) internal nonReentrant {
+    /// @notice Finalize a PAID escrow, transferring assets and distributing any fees
+    /// @dev External callers should implement reentrancy guards
+    /// @param agreementId Unique identifier of the agreement
+    function finalizeEscrow(bytes32 agreementId) internal {
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
 
-        // Check all conditions before proceeding
+        // Check: Check all conditions before proceeding
         if(block.timestamp > escrow.expiry) revert DealExpired();
         if(escrow.status != EscrowStatus.PAID) revert EscrowNotPaid();
 
-        // Update state before external calls
+        // Effect: Update state before external calls
         escrow.status = EscrowStatus.FINALIZED;
         emit DealFinalizedAt(agreementId, LexScrowStorage.getDealRegistry(), block.timestamp);
 
-        // Transfer buyer assets to company
+        // Interaction: Transfer buyer assets to company and collect fees
         for(uint256 i = 0; i < escrow.buyerAssets.length; i++) {
             if(escrow.buyerAssets[i].tokenType == TokenType.ERC20) {
-                IERC20(escrow.buyerAssets[i].tokenAddress).transfer(ICyberCorp(LexScrowStorage.getCorp()).companyPayable(), escrow.buyerAssets[i].amount);
+                uint256 amountToCompany = escrow.buyerAssets[i].amount;
+                uint256 fee = 0;
+
+                // Check: if the asset is fee token
+                if (escrow.buyerAssets[i].isFee) {
+                    // Effect: Calculate fees
+                    fee = computeFee(escrow.buyerAssets[i].amount);
+                    amountToCompany -= fee;
+
+                    emit FeeDistributed(agreementId, escrow.buyerAssets[i].tokenAddress, fee);
+                }
+
+                // Interaction: Distribute payment and fees
+                if (amountToCompany > 0) {
+                    IERC20(escrow.buyerAssets[i].tokenAddress).safeTransfer(ICyberCorp(LexScrowStorage.getCorp()).companyPayable(), amountToCompany);
+                }
+                if (fee > 0) {
+                    IERC20(escrow.buyerAssets[i].tokenAddress).safeTransfer(getPlatformPayable(), fee);
+                }
             }
             else if(escrow.buyerAssets[i].tokenType == TokenType.ERC721) {
                 IERC721(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), ICyberCorp(LexScrowStorage.getCorp()).companyPayable(), escrow.buyerAssets[i].tokenId);
@@ -179,10 +222,10 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
             }
         }
 
-        // Transfer corp assets to counter party
+        // Interaction: Transfer corp assets to counter party
         for(uint256 i = 0; i < escrow.corpAssets.length; i++) {
             if(escrow.corpAssets[i].tokenType == TokenType.ERC20) {
-                IERC20(escrow.corpAssets[i].tokenAddress).transfer(escrow.counterParty, escrow.corpAssets[i].amount);
+                IERC20(escrow.corpAssets[i].tokenAddress).safeTransfer(escrow.counterParty, escrow.corpAssets[i].amount);
             }
             else if(escrow.corpAssets[i].tokenType == TokenType.ERC721) {
                 IERC721(escrow.corpAssets[i].tokenAddress).safeTransferFrom(address(this), escrow.counterParty, escrow.corpAssets[i].tokenId);
@@ -193,6 +236,9 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
         }
     }
 
+    /// @notice Check all conditions attached to the escrow for the given agreement
+    /// @param agreementId Unique identifier of the agreement
+    /// @return True if all conditions pass, false otherwise
     function conditionCheck(bytes32 agreementId) public view returns (bool) {
         ICondition[] storage conditions = LexScrowStorage.getConditionsByEscrow(agreementId);
         //convert bytes32 to bytes
@@ -205,22 +251,48 @@ abstract contract LexScroWLite is Initializable, ReentrancyGuard {
         return true;
     }
 
+    /// @notice Mark an escrow as VOIDED and emit an event
+    /// @param agreementId Unique identifier of the agreement
     function voidEscrow(bytes32 agreementId) internal {
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
         escrow.status = EscrowStatus.VOIDED;
         emit DealVoidedAt(agreementId, LexScrowStorage.getDealRegistry(), block.timestamp);
     }
 
+    /// @notice Get escrow details for a given agreement id
+    /// @param agreementId Unique identifier of the agreement
+    /// @return Escrow struct containing current state
     function getEscrowDetails(bytes32 agreementId) public view returns (Escrow memory) {
         return LexScrowStorage.getEscrow(agreementId);
     }
 
-    //receiver erc721s
+    /// @notice Compute fee based on ticket size
+    /// @dev Child contract should implement the actual logic
+    /// @return Fee amount
+    function computeFee(uint256 size) public virtual view returns (uint256);
+
+    /// @notice Get the payable address for the fees
+    /// @dev Child contract should implement the actual logic
+    /// @return Payable address for the fees
+    function getPlatformPayable() public virtual view returns (address);
+
+    /// @notice ERC721 receiver hook for safe transfers into escrow
+    /// @param operator Address which initiated the transfer
+    /// @param from Previous owner of the token
+    /// @param tokenId Identifier of the token being transferred
+    /// @param data Additional data with no specified format
+    /// @return Selector to confirm the token transfer
     function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata data) external returns (bytes4) {
         return this.onERC721Received.selector;
     }
 
-    //receiver erc1155s
+    /// @notice ERC1155 receiver hook for safe transfers into escrow
+    /// @param operator Address which initiated the transfer
+    /// @param from Previous owner of the token(s)
+    /// @param tokenId Identifier of the token being transferred
+    /// @param amount Amount of tokens being transferred
+    /// @param data Additional data with no specified format
+    /// @return Selector to confirm the token transfer
     function onERC1155Received(address operator, address from, uint256 tokenId, uint256 amount, bytes calldata data) external returns (bytes4) {
         return this.onERC1155Received.selector;
     }

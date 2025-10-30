@@ -1,0 +1,96 @@
+//
+///*    .o.
+//     .888.
+//    .8"888.
+//   .8' `888.
+//  .88ooo8888.
+// .8'     `888.
+// o88o     o8888o
+//
+//
+//
+// ooo        ooooo               .             ooooo                  ooooooo  ooooo
+// `88.       .888'             .o8             `888'                   `8888    d8'
+//  888b     d'888   .ooooo.  .o888oo  .oooo.    888          .ooooo.     Y888..8P
+//  8 Y88. .P  888  d88' `88b   888   `P  )88b   888         d88' `88b     `8888'
+//  8  `888'   888  888ooo888   888    .oP"888   888         888ooo888    .8PY888.
+//  8    Y     888  888    .o   888 . d8(  888   888       o 888    .o   d8'  `888b
+// o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o88888o
+//
+//
+//
+//   .oooooo.                .o8                            .oooooo.
+//  d8P'  `Y8b              "888                           d8P'  `Y8b
+// 888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.
+// 888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b
+// 888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888
+// `88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o.
+//  `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P
+//              .o..P'                                                                     888
+//              `Y8P'                                                                     o888o
+// _______________________________________________________________________________________________________
+//
+// All software, documentation and other files and information in this repository (collectively, the "Software")
+// are copyright MetaLeX Labs, Inc., a Delaware corporation.
+//
+// All rights reserved.
+//
+// The Software is proprietary and shall not, in part or in whole, be used, copied, modified, merged, published,
+// distributed, transmitted, sublicensed, sold, or otherwise used in any form or by any means, electronic or
+// mechanical, including photocopying, recording, or by any information storage and retrieval system,
+// except with the express prior written permission of the copyright holder.*/
+
+pragma solidity 0.8.28;
+
+/// @title DealManagerFactoryStorage
+/// @notice Storage library for the DealManagerFactory contract that handles persistent data storage
+/// @dev Uses the unstructured storage pattern to manage factory-related data
+library DealManagerFactoryStorage {
+    // Storage slot for our struct
+    bytes32 constant STORAGE_POSITION = keccak256("cybercorp.deal.manager.factory.storage.v1");
+
+    uint256 public constant BASIS_POINTS = 10000; // 100%
+
+    /// @notice Main storage layout struct that holds all persisted data
+    /// @dev Uses unstructured storage pattern to avoid storage collisions
+    struct DealManagerFactoryData {
+        address refImplementation; // implementation contract to use for new deployments
+
+        address platformPayable; // Recipient of platform fees
+        uint256 defaultFeeRatio; // total fee as % of ticket size (BASIS_POINTS = 100%)
+    }
+
+    /// @notice Retrieves the storage reference for the DealManagerFactoryData struct
+    /// @dev Uses assembly to compute the storage position
+    /// @return ds Reference to the DealManagerFactoryData struct in storage
+    function dealManagerFactoryStorage() internal pure returns (DealManagerFactoryData storage ds) {
+        bytes32 position = STORAGE_POSITION;
+        assembly {
+            ds.slot := position
+        }
+    }
+
+    function getRefImplementation() internal view returns (address) {
+        return dealManagerFactoryStorage().refImplementation;
+    }
+
+    function getPlatformPayable() internal view returns (address) {
+        return dealManagerFactoryStorage().platformPayable;
+    }
+
+    function getDefaultFeeRatio() internal view returns (uint256) {
+        return dealManagerFactoryStorage().defaultFeeRatio;
+    }
+
+    function setRefImplementation(address newImplementation) internal {
+        dealManagerFactoryStorage().refImplementation = newImplementation;
+    }
+
+    function setPlatformPayable(address platformPayable) internal {
+        dealManagerFactoryStorage().platformPayable = platformPayable;
+    }
+
+    function setDefaultFeeRatio(uint256 feeRatio) internal {
+        dealManagerFactoryStorage().defaultFeeRatio = feeRatio;
+    }
+}

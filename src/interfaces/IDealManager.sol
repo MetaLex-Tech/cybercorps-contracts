@@ -70,7 +70,7 @@ interface IDealManager {
         CertificateDetails[] memory _certDetails,
         address proposer,
         bytes memory signature,
-        string[][] memory paryValues,
+        string[][] memory partyValues,
         address[] memory conditions,
         bytes32 secretHash,
         uint256 expiry
@@ -78,13 +78,7 @@ interface IDealManager {
 
 
     function finalizeDeal(
-        address signer,
-        bytes32 _agreementId,
-        string[] memory _partyValues,
-        bytes memory signature,
-        bool _fillUnallocated,
-        string memory buyerName,
-        string memory secret
+        bytes32 agreementId
     ) external;
 
     function signDealAndPay(

@@ -105,7 +105,7 @@ library DealManagerStorage {
         dealManagerStorage().upgradeFactory = _upgradeFactory;
     }
 
-    function getUpgradeFactory() external view returns (address) {
+    function getUpgradeFactory() internal view returns (address) {
         return dealManagerStorage().upgradeFactory;
     }
 } 

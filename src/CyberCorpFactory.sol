@@ -53,24 +53,43 @@ import "./interfaces/IDealManager.sol";
 import "./interfaces/ICyberCorpSingleFactory.sol";
 import "./interfaces/ICyberCertPrinter.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
+import {IRoundManager as IRoundManagerInterface} from "./interfaces/IRoundManager.sol";
+import {Round, RoundType} from "./libs/RoundLib.sol";
+import "./libs/RoundLib.sol";
+import {CyberCertData as RM_CyberCertData} from "./storage/RoundManagerStorage.sol";
+import "./interfaces/IRoundManagerFactory.sol";
 import "./CyberCorpConstants.sol";
 import "./libs/auth.sol";
 
+interface IRoundManagerInit {
+    function initialize(
+        address _auth,
+        address _corp,
+        address _dealRegistry,
+        address _issuanceManager,
+        address _upgradeFactory
+    ) external;
+}
+
 contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
+    using RoundLib for Round;
     error InvalidSalt();
     error DeploymentFailed();
 
     address public registryAddress;
-    address public cyberCertPrinterImplementation;
+    address public __cyberCertPrinterImplementation; // deprecated: kept to maintain slot consistency
     address public issuanceManagerFactory;
     address public cyberCorpSingleFactory;
     address public cyberAgreementFactory;
     address public dealManagerFactory;
     address public uriBuilder;
     address public stable; // = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;//base main net 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    address public roundManagerFactory;
+    address public __cyberCert20Implementation; // deprecated: kept to maintain slot consistency
+    address public lexchexAuth;
 
-    // Upgrade notes: Reduced gap to account for new variables (50 - 9 = 41)
-    uint256[41] private __gap;
+    // Upgrade notes: Reduced gap to account for new variables
+    uint256[38] private __gap;
 
     struct CyberCertData {
         string name;
@@ -107,6 +126,11 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         address oldDealFactory
     );
 
+    event RoundManagerDeployed(
+        address indexed cyberCorp,
+        address indexed roundManager
+    );
+
     //create an event when IssuanceManagerFactory is updated
     event IssuanceManagerFactoryUpdated(
         address indexed issuanceManagerFactory,
@@ -123,13 +147,20 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         address oldCyberAgreementFactory
     );
 
+    event RoundManagerFactoryUpdated(
+        address indexed roundManagerFactory,
+        address oldRoundManagerFactory
+    );
+
+    event LexchexAuthUpdated(address indexed lexchexAuth, address oldLexchexAuth);
+
     function initialize(
         address _auth,
         address _registryAddress,
-        address _cyberCertPrinterImplementation,
         address _issuanceManagerFactory,
         address _cyberCorpSingleFactory,
         address _dealManagerFactory,
+        address _roundManagerFactory,
         address _uriBuilder
     ) public initializer {
         __UUPSUpgradeable_init();
@@ -137,11 +168,16 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         __BorgAuthACL_init(_auth);
 
         registryAddress = _registryAddress;
-        cyberCertPrinterImplementation = _cyberCertPrinterImplementation;
         issuanceManagerFactory = _issuanceManagerFactory;
         cyberCorpSingleFactory = _cyberCorpSingleFactory;
         dealManagerFactory = _dealManagerFactory;
+        roundManagerFactory = _roundManagerFactory;
         uriBuilder = _uriBuilder;
+
+        // Set default LeXcheX AUTH if not already set
+        if (lexchexAuth == address(0)) {
+            lexchexAuth = 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2;
+        }
     }
 
     function deployCyberCorp(
@@ -159,7 +195,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             address cyberCorpAddress,
             address authAddress,
             address issuanceManagerAddress,
-            address dealManagerAddress
+            address dealManagerAddress,
+            address roundManagerAddress
         )
     {
         if (salt == bytes32(0)) revert InvalidSalt();
@@ -194,7 +231,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             issuanceManagerAddress,
             _companyPayable,
             _officer,
-            cyberCorpSingleFactory
+            cyberCorpSingleFactory,
+            address(0)
         );
 
         BorgAuth(authAddress).updateRole(cyberCorpAddress, 200);
@@ -206,12 +244,11 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         IIssuanceManager(issuanceManagerAddress).initialize(
             authAddress,
             cyberCorpAddress,
-            cyberCertPrinterImplementation,
             uriBuilder,
             issuanceManagerFactory
         );
 
-        //update role for issuance manager
+        // Initialize DealManager
         IDealManager(dealManagerAddress).initialize(
             authAddress,
             cyberCorpAddress,
@@ -219,8 +256,32 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             issuanceManagerAddress,
             dealManagerFactory
         );
+
+        roundManagerAddress = IRoundManagerFactory(roundManagerFactory).deployRoundManager(salt);
+
+        // Initialize RoundManager
+        IRoundManagerInit(roundManagerAddress).initialize(
+            authAddress,
+            cyberCorpAddress,
+            registryAddress,
+            issuanceManagerAddress,
+            roundManagerFactory
+        );
+
+        // Add newly created RoundManager as OWNER in LeXcheX AUTH
+        if (lexchexAuth != address(0)) {
+            BorgAuth(lexchexAuth).updateRole(
+                roundManagerAddress,
+                BorgAuth(lexchexAuth).OWNER_ROLE()
+            );
+        }
+
+        // Set RoundManager on the corp
+        ICyberCorp(cyberCorpAddress).setRoundManager(roundManagerAddress);
+
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
+        BorgAuth(authAddress).updateRole(roundManagerAddress, 99);
 
         emit CyberCorpDeployed(
             cyberCorpAddress,
@@ -233,6 +294,11 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             companyJurisdiction,
             defaultDisputeResolution,
             _companyPayable
+        );
+
+        emit RoundManagerDeployed(
+            cyberCorpAddress,
+            roundManagerAddress
         );
     }
 
@@ -263,6 +329,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             address authAddress,
             address issuanceManagerAddress,
             address dealManagerAddress,
+            address roundManagerAddress,
             address[] memory certPrinterAddress,
             bytes32 id,
             uint256[] memory certIds
@@ -278,7 +345,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             cyberCorpAddress,
             authAddress,
             issuanceManagerAddress,
-            dealManagerAddress
+            dealManagerAddress,
+            roundManagerAddress
         ) = deployCyberCorp(
             corpSalt,
             companyName,
@@ -291,12 +359,12 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         );
 
         certPrinterAddress = new address[](_certData.length);
-        //string[] memory defaultLegend = new string[](0);
+
         for (uint256 i = 0; i < _certData.length; i++) {
             ICyberCertPrinter certPrinter = ICyberCertPrinter(
                 IIssuanceManager(issuanceManagerAddress).createCertPrinter(
                     _certData[i].defaultLegend,
-                    _certData[i].name,
+                    string.concat(companyName, " ", _certData[i].name),
                     _certData[i].symbol,
                     _certData[i].uri,
                     _certData[i].securityClass,
@@ -325,6 +393,102 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             secretHash,
             expiry
         );
+    }
+
+    function deployCyberCorpAndCreateRound(
+        uint256 salt,
+        SecuritySeries seriesType,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        address _companyPayable,
+        CompanyOfficer memory _officer,
+        string[] memory legalDetails,
+        bytes[] memory extensionData,
+        RM_CyberCertData[] memory certData,
+        bytes32 templateId,
+        address paymentToken,
+        uint256 pricePerUnit,
+        uint256 valuation,
+        string[] memory roundPartyValues,
+        bytes memory escrowedSignature,
+        RoundType roundType,
+        address[] memory conditions,
+        uint256 raiseCap,
+        uint256 minTicket,
+        uint256 maxTicket,
+        uint256 startTime,
+        uint256 endTime,
+        bool publicRound
+    )
+        external
+        returns (
+            address cyberCorpAddress,
+            address authAddress,
+            address issuanceManagerAddress,
+            address dealManagerAddress,
+            address roundManagerAddress,
+            bytes32 roundId
+        )
+    {
+        bytes32 corpSalt = keccak256(abi.encodePacked(salt));
+
+        (
+            cyberCorpAddress,
+            authAddress,
+            issuanceManagerAddress,
+            dealManagerAddress,
+            roundManagerAddress
+        ) = deployCyberCorp(
+            corpSalt,
+            companyName,
+            companyType,
+            companyJurisdiction,
+            companyContactDetails,
+            defaultDisputeResolution,
+            _companyPayable,
+            _officer
+        );
+
+        // Deploy RoundManager via its factory
+        bytes32 rmSalt = keccak256(abi.encodePacked("round", salt));
+       
+
+        // Create round with provided round type using RoundLib
+        {
+            Round memory draft = RoundLib
+                .draft()
+                .setTickets(
+                    seriesType,
+                    roundType,
+                    publicRound,
+                    raiseCap,
+                    minTicket,
+                    maxTicket,
+                    paymentToken,
+                    pricePerUnit,
+                    valuation,
+                    startTime,
+                    endTime
+                )
+                .setAgreement(
+                    templateId,
+                    _officer.eoa,
+                    _officer.name,
+                    _officer.title,
+                    legalDetails,
+                    roundPartyValues,
+                    extensionData,
+                    conditions,
+                    escrowedSignature
+                );
+            roundId = IRoundManagerInterface(roundManagerAddress).createRound(
+                draft,
+                certData
+            );
+        }
     }
 
     function setStable(address _stable) external onlyOwner {
@@ -370,6 +534,23 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         address oldDealFactory = dealManagerFactory;
         dealManagerFactory = _dealManagerFactory;
         emit DealManagerFactoryUpdated(dealManagerFactory, oldDealFactory);
+    }
+
+    function setRoundManagerFactory(
+        address _roundManagerFactory
+    ) external onlyOwner {
+        address oldRoundManagerFactory = roundManagerFactory;
+        roundManagerFactory = _roundManagerFactory;
+        emit RoundManagerFactoryUpdated(
+            roundManagerFactory,
+            oldRoundManagerFactory
+        );
+    }
+
+    function setLexchexAuth(address _lexchexAuth) external onlyOwner {
+        address old = lexchexAuth;
+        lexchexAuth = _lexchexAuth;
+        emit LexchexAuthUpdated(lexchexAuth, old);
     }
 
     function _authorizeUpgrade(

@@ -42,14 +42,17 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "../CyberCorpConstants.sol";
+import "../interfaces/ICyberCorp.sol";
+import "../interfaces/IIssuanceManager.sol";
+import "../interfaces/IUriBuilder.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import "./extensions/ICertificateExtension.sol";
 
 struct CertificateDetails {
     string signingOfficerName;
     string signingOfficerTitle;
-    uint256 investmentAmount;
-    uint256 issuerUSDValuationAtTimeofInvestment;
+    uint256 investmentAmountUSD;
+    uint256 issuerUSDValuationAtTimeOfInvestment;
     uint256 unitsRepresented;
     string legalDetails;
     bytes extensionData;
@@ -94,6 +97,8 @@ library CyberCertPrinterStorage {
         string[] defaultLegend;
         bool transferable;
         bool endorsementRequired;
+        // New variables must be appended below to preserve storage layout for upgrades
+        mapping(uint256 => bool) tokenTransferable;
         
     }
 
@@ -103,6 +108,41 @@ library CyberCertPrinterStorage {
         assembly {
             s.slot := position
         }
+    }
+
+    // URI storage functionality
+    function tokenURI(uint256 tokenId) external view returns (string memory) {
+        CyberCertPrinterStorage.CyberCertStorage storage s = cyberCertStorage();
+        string[] memory certLegend = s.certLegend[tokenId];
+        ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
+
+        // Get registry and agreementId from first endorsement if it exists
+        address registry = address(0);
+        bytes32 agreementId = bytes32(0);
+        if (s.endorsements[tokenId].length > 0) {
+            Endorsement memory firstEndorsement = s.endorsements[tokenId][0];
+            registry = firstEndorsement.registry;
+            agreementId = firstEndorsement.agreementId;
+        }
+
+        return IUriBuilder(IIssuanceManager(s.issuanceManager).uriBuilder()).buildCertificateUri(
+            corp.cyberCORPName(),
+            corp.cyberCORPType(),
+            corp.cyberCORPJurisdiction(),
+            corp.cyberCORPContactDetails(),
+            s.securityType,
+            s.securitySeries,
+            s.certificateUri,
+            certLegend,
+            s.certificateDetails[tokenId],
+            s.endorsements[tokenId],
+            s.owners[tokenId],
+            registry,
+            agreementId,
+            tokenId,
+            address(this),
+            address(s.extension)
+        );
     }
 
     // Internal getters for complex types
@@ -150,6 +190,14 @@ library CyberCertPrinterStorage {
 
     function setTransferable(bool _transferable) internal {
         cyberCertStorage().transferable = _transferable;
+    }
+
+    function setTokenTransferable(uint256 tokenId, bool value) internal {
+        cyberCertStorage().tokenTransferable[tokenId] = value;
+    }
+
+    function isTokenTransferable(uint256 tokenId) internal view returns (bool) {
+        return cyberCertStorage().tokenTransferable[tokenId];
     }
 
     function setRestrictionHook(uint256 tokenId, ITransferRestrictionHook hook) internal {
