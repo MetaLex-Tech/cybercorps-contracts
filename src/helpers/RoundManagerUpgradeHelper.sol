@@ -88,7 +88,7 @@ contract RoundManagerUpgradeHelper {
     function upgradeCorp(address corp, bytes32 salt) external returns (address roundManager) {
         if (corp == address(0)) revert ZeroAddress();
         //if corp already has a round manager, revert
-      //  if (ICyberCorp(corp).roundManager() != address(0)) revert RoundManagerAlreadyExists();
+        if (ICyberCorp(corp).roundManager() != address(0)) revert RoundManagerAlreadyExists();
 
         // Read corp's AUTH and ensure the caller is authorized as OWNER
         address auth = ICyberCorpAuthReader(corp).AUTH();

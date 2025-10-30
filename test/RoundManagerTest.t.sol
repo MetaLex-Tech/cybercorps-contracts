@@ -722,6 +722,16 @@ contract RoundManagerTest is Test {
     }
 
     function test_helperUpgrade() public {
+        //upgrade cybercorpsinglefactory
+
+        //upgrade cybercorpsinglefactory
+        address deployer = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
+
+        vm.startPrank(deployer);
+        address cyberCorpSingleFactory = 0xc8e084D3f8B3b326FCc894C7afD28F4904196406;
+        CyberCorpSingleFactory(cyberCorpSingleFactory).upgradeImplementation(address(new CyberCorp()));
+        vm.stopPrank();
+
         address officer = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
         address exampleCorp = 0xf18393487c6AE9cB75B6AD1715B72d75dEc4F669;
         //generate salt
