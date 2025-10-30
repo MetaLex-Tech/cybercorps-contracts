@@ -9,6 +9,7 @@ import "../src/storage/RoundManagerStorage.sol";
 import "../src/CyberCorpConstants.sol";
 import "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import "../dependencies/openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
+import {ILegacyCyberCorpSingleFactory} from "../script/interfaces/ILegacyCyberCorpSingleFactory.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
@@ -736,13 +737,12 @@ contract RoundManagerTest is Test {
 
     function test_helperUpgrade() public {
         //upgrade cybercorpsinglefactory
-
-        //upgrade cybercorpsinglefactory
         address deployer = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
 
+        // Upgrade all legacy corps
         vm.startPrank(deployer);
         address cyberCorpSingleFactory = 0xc8e084D3f8B3b326FCc894C7afD28F4904196406;
-        CyberCorpSingleFactory(cyberCorpSingleFactory).upgradeImplementation(address(new CyberCorp()));
+        ILegacyCyberCorpSingleFactory(cyberCorpSingleFactory).upgradeImplementation(address(new CyberCorp()));
         vm.stopPrank();
 
         address officer = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;

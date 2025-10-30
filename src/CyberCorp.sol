@@ -45,17 +45,39 @@ import "./libs/auth.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/ICyberCorpSingleFactory.sol";
-import "./storage/CyberCorpStorage.sol";
 
 /// @title CyberCorp
 /// @notice Main contract representing a corporation's on-chain presence and management
 /// @dev Implements UUPS upgradeable pattern and BorgAuth access control
 contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
-    using CyberCorpStorage for CyberCorpStorage.StorageData;
-
     string public constant DEPLOY_VERSION = "1"; // For version-tracking on all deployment and future upgrades
 
-    // TODO handle migration of legacy CyberCorp slots
+    // cyberCORP details
+    /// @notice Legal name of the entity, including designation (e.g., "Inc." or "LLC")
+    string public cyberCORPName;
+    /// @notice Legal entity type (e.g., "corporation" or "limited liability company")
+    string public cyberCORPType;
+    /// @notice Jurisdiction of incorporation (e.g., "Delaware")
+    string public cyberCORPJurisdiction;
+    /// @notice Contact information for the corporation
+    string public cyberCORPContactDetails;
+    /// @notice Default dispute resolution mechanism for agreements
+    string public defaultDisputeResolution;
+    /// @notice Address that can receive payments on behalf of the company
+    address public companyPayable;
+    /// @notice Address of the issuance manager contract
+    address public issuanceManager;
+    /// @notice Address of the deal manager contract
+    address public dealManager;
+    /// @notice Implementation address for the CyberCertPrinter contract
+    address public cyberCertPrinterImplementation;
+
+    address public upgradeFactory;
+    /// @notice Array of company officers with their roles and details
+    CompanyOfficer[] public companyOfficers;
+
+    /// @notice Address of the round manager contract
+    address public roundManager;
 
     event CyberCORPDetailsUpdated(string cyberCORPName, string cyberCORPType, string cyberCORPJurisdiction, string cyberCORPContactDetails, string defaultDisputeResolution);
     event OfficerAdded(address indexed officer, uint256 index);
@@ -94,17 +116,16 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     ) public initializer {
         __BorgAuthACL_init(_auth);
 
-        CyberCorpStorage.StorageData storage s = CyberCorpStorage.getStorageData();
-        s.cyberCORPName = _cyberCORPName;
-        s.cyberCORPType = _cyberCORPType;
-        s.cyberCORPJurisdiction = _cyberCORPJurisdiction;
-        s.cyberCORPContactDetails = _cyberCORPContactDetails;
-        s.defaultDisputeResolution = _defaultDisputeResolution;
-        s.issuanceManager = _issuanceManager;
-        s.companyPayable = _companyPayable;
-        s.companyOfficers.push(_officer);
-        s.upgradeFactory = _upgradeFactory;
-        s.roundManager = _roundManager;
+        cyberCORPName = _cyberCORPName;
+        cyberCORPType = _cyberCORPType;
+        cyberCORPJurisdiction = _cyberCORPJurisdiction;
+        cyberCORPContactDetails = _cyberCORPContactDetails;
+        defaultDisputeResolution = _defaultDisputeResolution;
+        issuanceManager = _issuanceManager;
+        companyPayable = _companyPayable;
+        companyOfficers.push(_officer);
+        upgradeFactory = _upgradeFactory;
+        roundManager = _roundManager;
     }
 
     /// @notice Updates the corporation's basic details
@@ -121,35 +142,34 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         string memory _cyberCORPContactDetails,
         string memory _defaultDisputeResolution
     ) external onlyOwner() {
-        CyberCorpStorage.StorageData storage s = CyberCorpStorage.getStorageData();
-        s.cyberCORPName = _cyberCORPName;
-        s.cyberCORPType = _cyberCORPType;
-        s.cyberCORPJurisdiction = _cyberCORPJurisdiction;
-        s.cyberCORPContactDetails = _cyberCORPContactDetails;
-        s.defaultDisputeResolution = _defaultDisputeResolution;
+        cyberCORPName = _cyberCORPName;
+        cyberCORPType = _cyberCORPType;
+        cyberCORPJurisdiction = _cyberCORPJurisdiction;
+        cyberCORPContactDetails = _cyberCORPContactDetails;
+        defaultDisputeResolution = _defaultDisputeResolution;
 
-        emit CyberCORPDetailsUpdated(s.cyberCORPName, s.cyberCORPType, s.cyberCORPJurisdiction, s.cyberCORPContactDetails, s.defaultDisputeResolution);
+        emit CyberCORPDetailsUpdated(cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, defaultDisputeResolution);
     }
 
     /// @notice Updates the issuance manager address
     /// @dev Only callable by owner
     /// @param _issuanceManager New issuance manager contract address
     function setIssuanceManager(address _issuanceManager) external onlyOwner() {
-        CyberCorpStorage.getStorageData().issuanceManager = _issuanceManager;
+        issuanceManager = _issuanceManager;
     }
 
     /// @notice Updates the deal manager address
     /// @dev Only callable by owner
     /// @param _dealManager New deal manager contract address
     function setDealManager(address _dealManager) external onlyOwner() {
-        CyberCorpStorage.getStorageData().dealManager = _dealManager;
+        dealManager = _dealManager;
     }
 
     /// @notice Updates the round manager address
     /// @dev Only callable by owner
     /// @param _roundManager New round manager contract address
     function setRoundManager(address _roundManager) external onlyOwner() {
-        CyberCorpStorage.getStorageData().roundManager = _roundManager;
+        roundManager = _roundManager;
     }
 
     /// @notice Checks if an address belongs to a company officer
@@ -163,22 +183,20 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     /// @dev Only callable by owner, sets officer role to 200
     /// @param _officer Officer details including address and role
     function addOfficer(CompanyOfficer memory _officer) external onlyOwner() {
-        CyberCorpStorage.StorageData storage s = CyberCorpStorage.getStorageData();
-        s.companyOfficers.push(_officer);
+        companyOfficers.push(_officer);
         AUTH.updateRole(_officer.eoa, 200);
-        emit OfficerAdded(_officer.eoa, s.companyOfficers.length - 1);
+        emit OfficerAdded(_officer.eoa, companyOfficers.length - 1);
     }
 
     /// @notice Removes an officer by their address
     /// @dev Only callable by owner, revokes officer role
     /// @param _address Address of the officer to remove
     function removeOfficer(address _address) external onlyOwner() {
-        CyberCorpStorage.StorageData storage s = CyberCorpStorage.getStorageData();
         AUTH.updateRole(_address, 0);
-        for (uint256 i = 0; i < s.companyOfficers.length; i++) {
-            if (s.companyOfficers[i].eoa == _address) {
-                s.companyOfficers[i] = s.companyOfficers[s.companyOfficers.length - 1];
-                s.companyOfficers.pop();
+        for (uint256 i = 0; i < companyOfficers.length; i++) {
+            if (companyOfficers[i].eoa == _address) {
+                companyOfficers[i] = companyOfficers[companyOfficers.length - 1];
+                companyOfficers.pop();
                 emit OfficerRemoved(_address, i);
                 break;
             }
@@ -189,68 +207,18 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     /// @dev Only callable by owner, revokes officer role
     /// @param _index Index of the officer to remove
     function removeOfficerAt(uint256 _index) external onlyOwner() {
-        CyberCorpStorage.StorageData storage s = CyberCorpStorage.getStorageData();
-        require(_index < s.companyOfficers.length, "Index out of bounds");
-        address officerEOA = s.companyOfficers[_index].eoa;
+        require(_index < companyOfficers.length, "Index out of bounds");
+        address officerEOA = companyOfficers[_index].eoa;
         AUTH.updateRole(officerEOA, 0);
-        s.companyOfficers[_index] = s.companyOfficers[s.companyOfficers.length - 1];
-        s.companyOfficers.pop();
+        companyOfficers[_index] = companyOfficers[companyOfficers.length - 1];
+        companyOfficers.pop();
         emit OfficerRemoved(officerEOA, _index);
     }
 
     function setCompanyPayable(address _companyPayable) external onlyOwner() {
-        CyberCorpStorage.StorageData storage s = CyberCorpStorage.getStorageData();
-        address oldCompanyPayable = s.companyPayable;
-        s.companyPayable = _companyPayable;
-        emit CompanyPayableUpdated(s.companyPayable, oldCompanyPayable);
-    }
-
-    // ========================
-    // Getter / Setter
-    // ========================
-
-    function cyberCORPName() external returns (string memory) {
-        return CyberCorpStorage.getStorageData().cyberCORPName;
-    }
-
-    function cyberCORPType() external returns (string memory) {
-        return CyberCorpStorage.getStorageData().cyberCORPType;
-    }
-
-    function cyberCORPJurisdiction() external returns (string memory) {
-        return CyberCorpStorage.getStorageData().cyberCORPJurisdiction;
-    }
-
-    function cyberCORPContactDetails() external returns (string memory) {
-        return CyberCorpStorage.getStorageData().cyberCORPContactDetails;
-    }
-
-    function defaultDisputeResolution() external returns (string memory) {
-        return CyberCorpStorage.getStorageData().defaultDisputeResolution;
-    }
-
-    function companyPayable() external returns (address) {
-        return CyberCorpStorage.getStorageData().companyPayable;
-    }
-
-    function issuanceManager() external returns (address) {
-        return CyberCorpStorage.getStorageData().issuanceManager;
-    }
-
-    function dealManager() external returns (address) {
-        return CyberCorpStorage.getStorageData().dealManager;
-    }
-
-    function upgradeFactory() external returns (address) {
-        return CyberCorpStorage.getStorageData().upgradeFactory;
-    }
-
-    function companyOfficers(uint256 i) external returns (CompanyOfficer memory) {
-        return CyberCorpStorage.getStorageData().companyOfficers[i];
-    }
-
-    function roundManager() external returns (address) {
-        return CyberCorpStorage.getStorageData().roundManager;
+        address oldCompanyPayable = companyPayable;
+        companyPayable = _companyPayable;
+        emit CompanyPayableUpdated(companyPayable, oldCompanyPayable);
     }
 
     // ========================
@@ -264,9 +232,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         address newImplementation
     ) internal override onlyOwner {
         if(
-            ICyberCorpSingleFactory(
-                CyberCorpStorage.getStorageData().upgradeFactory
-            ).getRefImplementation() != newImplementation) {
+            ICyberCorpSingleFactory(upgradeFactory).getRefImplementation() != newImplementation) {
             revert NotRefImplementation();
         }
     }
