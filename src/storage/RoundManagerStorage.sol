@@ -250,13 +250,14 @@ library RoundManagerStorage {
         );
 
         // Emulates LexScroWLite.createEscrow() as we couldn't call it in a library
+        uint256 expiryForEscrow = round.allowTimedOffers ? eoi.expiry : round.endTime;
         ls.escrows[agreementId] = Escrow({
             agreementId: agreementId,
             counterParty: counterParty,
             corpAssets: corpAssets,
             buyerAssets: buyerAssets,
             signature: abi.encodePacked(bytes32(0)),
-            expiry: eoi.expiry,
+            expiry: expiryForEscrow,
             status: EscrowStatus.PENDING
         });
 
