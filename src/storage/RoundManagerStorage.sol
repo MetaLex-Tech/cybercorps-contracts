@@ -353,9 +353,10 @@ library RoundManagerStorage {
                 );
         }
 
-        // Calculate units and investment USD based on usedAmount (rounded down to pricePerUnit)
-        uint256 units = allocatedAmount / round.pricePerUnit;
-        usedAmount = units * round.pricePerUnit;
+        // Calculate units and investment USD using 18-decimal pricePerUnit scaling
+        // units and usedAmount are rounded down to preserve whole units
+        uint256 units = (allocatedAmount * 1e18) / round.pricePerUnit;
+        usedAmount = (units * round.pricePerUnit) / 1e18;
         uint8 paymentDecimals = IERC20Metadata(round.paymentToken).decimals();
         uint256 investmentUSD = usedAmount / (10 ** paymentDecimals);
 
