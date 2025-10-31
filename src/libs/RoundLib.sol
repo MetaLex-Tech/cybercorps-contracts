@@ -77,6 +77,7 @@ struct Round {
     string[] roundPartyValues;
     bytes escrowedSignature;
     bool publicRound;
+    bool allowTimedOffers; // if false, ignore EOI expiries and use round end
 }
 
 library RoundLib {

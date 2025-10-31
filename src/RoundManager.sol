@@ -362,8 +362,8 @@ contract RoundManager is
             eoi.maxAmount > round.maxTicket ||
             eoi.minAmount < round.minTicket
         ) revert InvalidAmount();
-        //check that the eoi expiry is in the future
-        if (eoi.expiry < block.timestamp) revert EOIExpired();
+        // If round uses timed offers, require EOI expiry in the future; otherwise ignore
+        if (round.allowTimedOffers && eoi.expiry < block.timestamp) revert EOIExpired();
 
         (agreementId, tokenId) = RoundManagerStorage.submitEOI(
             LexScrowStorage.lexScrowStorage(),
@@ -402,8 +402,10 @@ contract RoundManager is
         // Check: round validity
         if (round.id == bytes32(0)) revert InvalidRound();
 
-        // Check: eoi has not expired
+       // Check: eoi has not expired
         if (eoi.expiry < block.timestamp) revert EOIExpired();
+        // Check: offer has not expired based on escrow expiry (captures per-round setting)
+        if (escrow.expiry < block.timestamp) revert EOIExpired();
 
         uint256 remaining = round.raiseCap - round.raised;
         uint256 candidate = escrow.buyerAssets[0].amount;
