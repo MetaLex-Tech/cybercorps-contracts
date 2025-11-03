@@ -1,22 +1,22 @@
 ## Architectures
 
-- All MetaLeX-controlled contracts (shown in the diagram below as the `Metalex` box) are `UUPSUpgradeable` so they have permanent addresses and are upgradeable by MetaLeX
-  - Deployed instances include `CyberAgreementRegistry`, `CyberCorpFactory`, `CyberCorpSingleFactory`, `*ManagerFactory` and `CertificateUriBuilder`
-  - Permanent addresses allow us to provide a stable parameter lookup for all deployed instances (ex. reference implementations, fee ratios, etc.)
-- MetaLeX-controlled factory-deployed instances are `UUPSUpgradeable` as well, but owned instead by the corresponding company owners (shown in the diagram below as the `CorpA` and `CorpB` boxes)
-  - Deployed instances include `CyberCorp`, `*Manager`
+- All MetaLeX-controlled contracts are shown in the diagram below in the `Metalex` box
+  - Legacy architectures use beacon-proxy pattern so upgrades are unilateral
+  - V2 architectures migrate to `UUPSUpgradeable` pattern so company owners have more autonomy in upgrade cadence (i.e. co-approval)
+  - All future `CyberCorp` and `*ManagerFactory` deployments will use v2 architectures
+  - Legacy cyber corp deployments will continue using beacon-proxy pattern for receiving upgrades
+- V2 `CyberCorp`, `*Manager` are individually upgradeable and owned by the corresponding company owners (shown in the diagram as the `CorpA` box)
   - This allows a co-approval structure for future upgrades: MetaLeX can release new implementations 
-    but cannot unilaterally upgrade existing instances without corresponding company owner's approval and vice versa,
-    company owner cannot unilaterally upgrade them to arbitrary implementations outside MetaLeX-approved releases
+    but cannot unilaterally upgrade existing instances without corresponding company owner's approval; vice versa,
+    a company owner cannot unilaterally upgrade them to arbitrary implementations outside MetaLeX-approved releases
 - Factories can be nested. For example, individual company-owned `IssuanceManager` is also a factory 
   that deploys `CyberCertPrinter` and `CyberScrip`
-- `IssuanceManager`-deployed instances are `BeaconProxy` referencing a singular implementation (`UpgradeableBeacon`)
-  - Deployed instances include `CyberCertPrinter`, `CyberScrip`
-  - `IssuanceManager` is owned by the company owner, but the same co-approval structure applies to upgrading the deployed instances: MetaLeX can release new implementations
-    but cannot unilaterally upgrade existing instances without corresponding company owner's approval and vice versa,
+  - In v2, such instances will remain using beacon-proxy patterns because they are owned by the same company owner, and they are expected to upgrade together. 
+    Using beacon-proxy patterns will make upgrades simpler and can be done in batches
+  - The same co-approval structure still applies: MetaLeX can release new implementations
+    but cannot unilaterally upgrade existing instances without corresponding company owner's approval; vice versa,
     company owner cannot unilaterally upgrade them to arbitrary implementations outside MetaLeX-approved releases 
-  - Once co-approved, upgrades to the `UpgradeableBeacon` will apply to all deployed instances at once. 
-    This is designed so because the company has unilateral power over its deployment and does not need further individual co-approvals
+  - Once co-approved, upgrades to the `UpgradeableBeacon` will apply to all downstream `ProxyBeacon` instances at once
 
 ```mermaid
 classDiagram
@@ -36,6 +36,12 @@ classDiagram
         class CyberCorpFactory {
             <<UUPSUpgradeable>>
             +upgradeToAndCall()
+        }
+        
+        class RoundManagerFactory {
+            <<UUPSUpgradeable>>
+            +upgradeToAndCall()
+            +setRefImplementation()
         }
     
         class CyberCorpSingleFactory {
@@ -58,21 +64,35 @@ classDiagram
             +setRefImplementation()
         }
         
-        class RoundManagerFactory {
-            <<UUPSUpgradeable>>
-            +upgradeToAndCall()
-            +setRefImplementation()
+        class LegacyCyberCorpSingleFactory {
+            +upgradeImplementation()
+        }
+        
+        class LegacyDealManagerFactory {
+            +upgradeImplementation()
+        }
+        
+        class LegacyIssuanceManagerFactory {
+            +upgradeImplementation()
+            +upgradePrinterBeaconAt()
+        }
+        
+        class LegacyCyberCorpBeacon {
+            <<UpgradeableBeacon>>
+            +upgradeTo()
+        }
+        
+        class LegacyDealManagerBeacon {
+            <<UpgradeableBeacon>>
+            +upgradeTo()
+        }
+        
+        class LegacyIssuanceManagerBeacon {
+            <<UpgradeableBeacon>>
+            +upgradeTo()
         }    
     }
-    
-    namespace ReleaseV1 {
-        class CyberCorpImplV1
-        class IssuanceManagerImplV1
-        class DealManagerImplV1
-        class RoundManagerImplV1
-        class CyberCertPrinterImplV1
-    }
-    
+   
     namespace ReleaseV2 {
         class CyberCorpImplV2
         class IssuanceManagerImplV2
@@ -109,61 +129,71 @@ classDiagram
             <<UUPSUpgradeable>>
             +upgradeToAndCall()
         }        
-        class CyberCertPrinterA1            
-        class CyberCertPrinterA2            
-        class CyberScripA1            
+        class CyberCertPrinterA1 {
+            <<BeaconProxy>>
+        }            
+        class CyberCertPrinterA2 {
+            <<BeaconProxy>>
+        }            
+        class CyberScripA1 {
+            <<BeaconProxy>>
+        }            
     }
     
-    namespace CorpB {
+    namespace LegacyCorpB {
         class CyberCorpB {
-            <<UUPSUpgradeable>>
-            +upgradeToAndCall()
+            <<BeaconProxy>>
         }        
         class IssuanceManagerB {
-            <<UUPSUpgradeable>>
-            +upgradeToAndCall()
-            +upgradeCertPrinterBeaconImplementation()
-            +upgradeScripBeaconImplementation()
+            <<BeaconProxy>>
         }
         class CyberCertPrinterBeaconB {
             <<UpgradeableBeacon>>
             +upgradeTo()
         }        
         class DealManagerB {
-            <<UUPSUpgradeable>>
-            +upgradeToAndCall()
+            <<BeaconProxy>>
         }
-        class RoundManagerB {
-            <<UUPSUpgradeable>>
-            +upgradeToAndCall()
-        }        
-        class CyberCertPrinterB1
+        class CyberCertPrinterB1 {
+            <<BeaconProxy>>
+        }
     }
     
     %% Metalex
     
     CyberCorpFactory --> CyberAgreementRegistry : depend on
     CyberCorpFactory --> CertificateUriBuilder : depend on
-    CyberCorpFactory --> CyberCorpSingleFactory : depend on
-    CyberCorpFactory --> IssuanceManagerFactory : depend on
-    CyberCorpFactory --> DealManagerFactory : depend on
     CyberCorpFactory --> RoundManagerFactory : depend on
+    CyberCorpFactory --> CyberCorpSingleFactory : depend on
+    CyberCorpFactory --> DealManagerFactory : depend on
+    CyberCorpFactory --> IssuanceManagerFactory : depend on
     
     CyberCorpSingleFactory --> CyberCorpImplV2 : refImplementation
     
-    IssuanceManagerFactory --> CyberCertPrinterImplV2: cyberCertPrinterRefImplementation
     IssuanceManagerFactory --> CyberScripImplV2: cyberScripRefImplementation
     IssuanceManagerFactory --> IssuanceManagerImplV2: refImplementation
+    IssuanceManagerFactory --> CyberCertPrinterImplV2: cyberCertPrinterRefImplementation
     
     DealManagerFactory --> DealManagerImplV2: refImplementation
     RoundManagerFactory --> RoundManagerImplV2: refImplementation
     
-    %%CorpA
+    %% LegacyMetalex
+    
+    LegacyCyberCorpBeacon --> CyberCorpImplV2 : implementation
+    LegacyDealManagerBeacon --> DealManagerImplV2 : implementation
+    LegacyIssuanceManagerBeacon --> IssuanceManagerImplV2 : implementation
+
+    LegacyCyberCorpSingleFactory <-- LegacyCyberCorpBeacon: owned by    
+    LegacyDealManagerFactory <-- LegacyDealManagerBeacon: owned by    
+    LegacyIssuanceManagerFactory <-- LegacyIssuanceManagerBeacon: owned by
+    LegacyIssuanceManagerFactory <-- CyberCertPrinterBeaconB : upgraded by        
+    
+    %% CorpA
     
     CyberCorpImplV2 <-- CyberCorpA : implementation
     IssuanceManagerImplV2 <-- IssuanceManagerA : implementation
-    IssuanceManagerA <-- CyberCertPrinterBeaconA : owned by
     IssuanceManagerA <-- CyberScripBeaconA : owned by
+    IssuanceManagerA <-- CyberCertPrinterBeaconA : owned by
     CyberCertPrinterImplV2 <-- CyberCertPrinterBeaconA : implementation
     CyberScripImplV2 <-- CyberScripBeaconA : implementation
     DealManagerImplV2 <-- DealManagerA : implementation
@@ -172,13 +202,12 @@ classDiagram
     CyberCertPrinterBeaconA <-- CyberCertPrinterA2: beacon
     CyberScripBeaconA <-- CyberScripA1: beacon
         
-    %%CorpB
+    %% LegacyCorpB
     
-    CyberCorpImplV1 <-- CyberCorpB : implementation
-    IssuanceManagerImplV1 <-- IssuanceManagerB : implementation
+    LegacyCyberCorpBeacon <-- CyberCorpB : beacon
+    LegacyIssuanceManagerBeacon <-- IssuanceManagerB : beacon
     IssuanceManagerB <-- CyberCertPrinterBeaconB : owned by
-    CyberCertPrinterImplV1 <-- CyberCertPrinterBeaconB : implementation
+    CyberCertPrinterBeaconB --> CyberCertPrinterImplV2 : implementation
     CyberCertPrinterBeaconB <-- CyberCertPrinterB1: beacon    
-    DealManagerImplV1 <-- DealManagerB : implementation
-    RoundManagerImplV1 <-- RoundManagerB : implementation
+    LegacyDealManagerBeacon <-- DealManagerB : beacon
 ```
