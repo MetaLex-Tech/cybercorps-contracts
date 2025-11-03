@@ -50,8 +50,8 @@ contract MockPaymentToken is ERC20 {
     }
 }
 
-contract MockRoundManagerV2 is UUPSUpgradeable {
-    string public constant DEPLOY_VERSION = "2";
+contract MockRoundManagerVTest is UUPSUpgradeable {
+    string public constant DEPLOY_VERSION = "test";
 
     // UUPS upgrade authorization
     function _authorizeUpgrade(
@@ -1779,24 +1779,22 @@ contract RoundManagerTest is Test {
     }
 
     function test_UpgradeNextRoundManager() public {
-        assertEq(RoundManager(RoundManagerFactory(rmFactory).getRefImplementation()).DEPLOY_VERSION(), "1", "reference impl version should not be changed yet");
-
         vm.startPrank(owner);
-        RoundManagerFactory(rmFactory).setRefImplementation(address(new MockRoundManagerV2()));
+        RoundManagerFactory(rmFactory).setRefImplementation(address(new MockRoundManagerVTest()));
         vm.stopPrank();
-        assertEq(RoundManager(RoundManagerFactory(rmFactory).getRefImplementation()).DEPLOY_VERSION(), "2", "reference impl version should have changed");
+        assertEq(RoundManager(RoundManagerFactory(rmFactory).getRefImplementation()).DEPLOY_VERSION(), "test", "reference impl version should have changed");
 
         bytes32 salt = keccak256("test_UpgradeNextRounderManager");
         // Next deployment should emit events with version so indexer could be informed
         vm.expectEmit(true, true, true, true);
         emit RoundManagerFactory.RoundManagerDeployed(
             RoundManagerFactory(rmFactory).computeRoundManagerAddress(salt),
-            "2"
+            "test"
         );
         RoundManager nextRm = RoundManager(
             RoundManagerFactory(rmFactory).deployRoundManager(salt)
         );
-        assertEq(nextRm.DEPLOY_VERSION(), "2", "next deployment version should have changed");
+        assertEq(nextRm.DEPLOY_VERSION(), "test", "next deployment version should have changed");
     }
 
     function test_UpgradeExistingRoundManager() public {
@@ -1830,7 +1828,7 @@ contract RoundManagerTest is Test {
         // MetaLeX to release new RoundManager v2
 
         vm.startPrank(owner);
-        RoundManagerFactory(rmFactory).setRefImplementation(address(new MockRoundManagerV2()));
+        RoundManagerFactory(rmFactory).setRefImplementation(address(new MockRoundManagerVTest()));
         vm.stopPrank();
 
         // Corp2 owner decided to accept the upgrade
@@ -1839,14 +1837,14 @@ contract RoundManagerTest is Test {
         rm2.upgradeToAndCall(address(RoundManagerFactory(rmFactory).getRefImplementation()), "");
         vm.stopPrank();
 
-        assertEq(rm2.DEPLOY_VERSION(), "2", "Target RoundManager should be upgraded");
-        assertEq(rm1.DEPLOY_VERSION(), "1", "Other RoundManager should not be upgraded");
+        assertEq(rm2.DEPLOY_VERSION(), "test", "Target RoundManager should be upgraded");
+        assertNotEq(rm1.DEPLOY_VERSION(), "test", "Other RoundManager should not be upgraded");
     }
 
     function test_RevertIf_UpgradeNonFactoryOwner() public {
         // Non-MetaLeX admin should not be able to set new reference implementation
 
-        address newImplementation = address(new MockRoundManagerV2());
+        address newImplementation = address(new MockRoundManagerVTest());
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, BorgAuth(auth).OWNER_ROLE(), corpOwner));
         vm.prank(corpOwner);
         RoundManagerFactory(rmFactory).setRefImplementation(newImplementation);
@@ -1872,7 +1870,7 @@ contract RoundManagerTest is Test {
         // Corp owner can't upgrade to v2 without MetaLeX releasing it first
 
         vm.startPrank(corpOwner);
-        address nonOfficialRoundManager = address(new MockRoundManagerV2());
+        address nonOfficialRoundManager = address(new MockRoundManagerVTest());
         vm.expectRevert(
             abi.encodeWithSelector(RoundManager.NotRefImplementation.selector)
         );

@@ -52,7 +52,7 @@ import "./interfaces/ICyberAgreementRegistry.sol";
 contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     using CyberCertPrinterStorage for CyberCertPrinterStorage.CyberCertStorage;
 
-    string public constant DEPLOY_VERSION = "1"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "3"; // For version-tracking on all deployment and future upgrades
 
     // Custom errors
     error NotIssuanceManager();

@@ -47,8 +47,8 @@ import {RoundManager} from "../src/RoundManager.sol";
 import {RoundManagerFactory, RoundManagerFactoryStorage} from "../src/RoundManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
-contract MockRoundManagerV2 is UUPSUpgradeable {
-    string public constant DEPLOY_VERSION = "2";
+contract MockRoundManagerVTest is UUPSUpgradeable {
+    string public constant DEPLOY_VERSION = "test";
 
     // UUPS upgrade authorization
     function _authorizeUpgrade(
@@ -120,14 +120,14 @@ contract RoundManagerFactoryTest is Test {
 
         // MetaLeX to release new RoundManager v2
         vm.startPrank(owner);
-        RoundManagerFactory(rmFactory).setRefImplementation(address(new MockRoundManagerV2()));
+        RoundManagerFactory(rmFactory).setRefImplementation(address(new MockRoundManagerVTest()));
         vm.stopPrank();
 
         // Corp owner decided to accept the upgrade
         vm.startPrank(companyOwner);
         rm.upgradeToAndCall(RoundManagerFactory(rmFactory).getRefImplementation(), "");
         vm.stopPrank();
-        assertEq(rm.DEPLOY_VERSION(), "2", "RoundManager should be upgraded");
+        assertEq(rm.DEPLOY_VERSION(), "test", "RoundManager should be upgraded");
     }
 
     function test_RevertIf_UpgradeFactoryNonOwner() public {
@@ -138,11 +138,11 @@ contract RoundManagerFactoryTest is Test {
     }
 
     function test_SetRefImplementation() public  {
-        address newImplementation = address(new MockRoundManagerV2());
+        address newImplementation = address(new MockRoundManagerVTest());
         assertNotEq(rmFactory.getRefImplementation(), newImplementation, "Unexpected refImplementation before set");
 
         vm.expectEmit(true, true, true, true);
-        emit RoundManagerFactory.RefImplementationSet(newImplementation, "2");
+        emit RoundManagerFactory.RefImplementationSet(newImplementation, "test");
         vm.prank(owner);
         rmFactory.setRefImplementation(newImplementation);
         assertEq(rmFactory.getRefImplementation(), newImplementation, "Unexpected refImplementation after set");

@@ -47,8 +47,8 @@ import {DealManager} from "../src/DealManager.sol";
 import {DealManagerFactory, DealManagerFactoryStorage} from "../src/DealManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
-contract MockDealManagerV2 is UUPSUpgradeable {
-    string public constant DEPLOY_VERSION = "2";
+contract MockDealManagerVTest is UUPSUpgradeable {
+    string public constant DEPLOY_VERSION = "test";
 
     // UUPS upgrade authorization
     function _authorizeUpgrade(
@@ -120,14 +120,14 @@ contract DealManagerFactoryTest is Test {
 
         // MetaLeX to release new DealManager v2
         vm.startPrank(owner);
-        DealManagerFactory(dmFactory).setRefImplementation(address(new MockDealManagerV2()));
+        DealManagerFactory(dmFactory).setRefImplementation(address(new MockDealManagerVTest()));
         vm.stopPrank();
 
         // Corp owner decided to accept the upgrade
         vm.startPrank(companyOwner);
         dm.upgradeToAndCall(address(DealManagerFactory(dmFactory).getRefImplementation()), "");
         vm.stopPrank();
-        assertEq(dm.DEPLOY_VERSION(), "2", "DealManager should be upgraded");
+        assertEq(dm.DEPLOY_VERSION(), "test", "DealManager should be upgraded");
     }
 
     function test_RevertIf_UpgradeFactoryNonOwner() public {
@@ -138,11 +138,11 @@ contract DealManagerFactoryTest is Test {
     }
 
     function test_SetRefImplementation() public  {
-        address newImplementation = address(new MockDealManagerV2());
+        address newImplementation = address(new MockDealManagerVTest());
         assertNotEq(dmFactory.getRefImplementation(), newImplementation, "Unexpected refImplementation before set");
 
         vm.expectEmit(true, true, true, true);
-        emit DealManagerFactory.RefImplementationSet(newImplementation, "2");
+        emit DealManagerFactory.RefImplementationSet(newImplementation, "test");
         vm.prank(owner);
         dmFactory.setRefImplementation(newImplementation);
         assertEq(dmFactory.getRefImplementation(), newImplementation, "Unexpected refImplementation after set");

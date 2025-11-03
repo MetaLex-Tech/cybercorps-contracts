@@ -144,7 +144,7 @@ contract UpgradeDealManagerTest is Test {
         // Verify integrity
         for (uint256 i = 0; i < knownDealManagers.length; i++) {
             // New DealManager should implement new methods
-            assertEq(DealManager(knownDealManagers[i]).DEPLOY_VERSION(), "1", string(abi.encodePacked("unexpected DEPLOY_VERSION() for DealManager: ", vm.toString(knownDealManagers[i]))));
+            assertEq(DealManager(knownDealManagers[i]).DEPLOY_VERSION(), "3", string(abi.encodePacked("unexpected DEPLOY_VERSION() for DealManager: ", vm.toString(knownDealManagers[i]))));
             assertEq(DealManager(knownDealManagers[i]).computeFee(1 ether), 0 ether, "upgraded DealManager should support fee calculation with no fees");
             assertEq(DealManager(knownDealManagers[i]).getPlatformPayable(), address(0), "upgraded DealManager should support fee payable");
 
@@ -232,7 +232,7 @@ contract UpgradeDealManagerTest is Test {
         );
 
         // New DealManager should implement new methods
-        assertEq(dm.DEPLOY_VERSION(), "1", "unexpected DEPLOY_VERSION()");
+        assertEq(dm.DEPLOY_VERSION(), "3", "unexpected DEPLOY_VERSION()");
         assertEq(dm.computeFee(1 ether), 0 ether, "new DealManager should support fee calculation with no fees");
         assertEq(dm.getPlatformPayable(), address(0), "new DealManager should support fee payable");
     }
@@ -496,7 +496,7 @@ contract UpgradeDealManagerTest is Test {
 
         // Expect new factory to be deployed at a predetermined address because we will hard-code it to the DealManagerWithMigration contract
         newDmFactory = DealManagerFactory(cyberCorpFactory.dealManagerFactory());
-        assertEq(address(newDmFactory), 0x06F086b47d10475FEF08c5708412118d73Eb88A7, "new DealManagerFactory address has changed, update it in DealManagerWithMigration");
+        assertEq(address(newDmFactory), 0x894F1fB64BCf77e78C1bF830E83f02781ccF4F20, "new DealManagerFactory address has changed, update it in DealManagerWithMigration");
 
         // Run scripts to upgrade all legacy DealManagers
         dmWithMigrationImpl = (new UpgradeLegacyDealManagersScript()).run();

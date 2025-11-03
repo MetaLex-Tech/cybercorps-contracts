@@ -62,7 +62,7 @@ import "./storage/IssuanceManagerStorage.sol";
 contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     using IssuanceManagerStorage for IssuanceManagerStorage.IssuanceManagerData;
 
-    string public constant DEPLOY_VERSION = "1"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "3"; // For version-tracking on all deployment and future upgrades
 
     // IssuanceManager errors
     error CompanyDetailsNotSet();

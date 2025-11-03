@@ -7,10 +7,13 @@ import {CyberCorpHelper} from "../test/RoundManagerTest.t.sol";
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {UpgradePublicRoundsScript} from "../script/upgrade-public-rounds.s.sol";
 import {GnosisTransaction} from "../script/libs/safe.sol";
+import {ILegacyFactory} from "../script/interfaces/ILegacyFactory.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
+import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {LeXcheX} from "../src/creds/lexchex.sol";
@@ -62,6 +65,28 @@ contract UpgradePublicRoundsTest is Test {
 
         cyberCorpSingleFactory = CyberCorpFactory(cyberCorpFactoryProxyAddr).cyberCorpSingleFactory();
         rmFactory = CyberCorpFactory(cyberCorpFactoryProxyAddr).roundManagerFactory();
+    }
+
+    function test_SanityCheck() public {
+        // entire ecosystem (except the legacy deal managers and CyberCertPrinters, which we will upgrade them separately) should be in v3 by now
+
+        assertNotEq(CyberCorpFactory(cyberCorpFactoryProxyAddr).__cyberCertPrinterImplementation(), address(0), "the field cyberCertPrinterImplementation should have been deprecated");
+        assertNotEq(CyberCorpSingleFactory(cyberCorpSingleFactory).getRefImplementation(), address(0), "CyberCorpSingleFactory should have reference implementation");
+        assertNotEq(DealManagerFactory(CyberCorpFactory(cyberCorpFactoryProxyAddr).dealManagerFactory()).getRefImplementation(), address(0), "DealManagerFactory should have reference implementation");
+        assertNotEq(RoundManagerFactory(CyberCorpFactory(cyberCorpFactoryProxyAddr).roundManagerFactory()).getRefImplementation(), address(0), "RoundManagerFactory should have reference implementation");
+
+        IssuanceManagerFactory imFactory = IssuanceManagerFactory(CyberCorpFactory(cyberCorpFactoryProxyAddr).issuanceManagerFactory());
+        assertNotEq(imFactory.getRefImplementation(), address(0), "IssuanceManagerFactory should have reference implementation");
+        assertNotEq(imFactory.getCyberCertPrinterRefImplementation(), address(0), "IssuanceManagerFactory should have reference implementation for CyberCertPrinter");
+        assertNotEq(imFactory.getCyberScripRefImplementation(), address(0), "IssuanceManagerFactory should have reference implementation for CyberScrip");
+
+        // Legacy ecosystem should be partially upgraded
+
+        address legacyCyberCorpSingleFactoryAddr = 0xc8e084D3f8B3b326FCc894C7afD28F4904196406;
+        address legacyIssuanceManagerFactoryAddr = 0xA32547aAdAA4975082D729c79e79dBaE4385EBCf;
+
+        assertEq(ILegacyFactory(legacyCyberCorpSingleFactoryAddr).getBeaconImplementation(), CyberCorpSingleFactory(cyberCorpSingleFactory).getRefImplementation(), "Legacy CyberCorpSingleFactory beacon should upgrade to the same implementation");
+        assertEq(ILegacyFactory(legacyIssuanceManagerFactoryAddr).getBeaconImplementation(), imFactory.getRefImplementation(), "Legacy IssuanceManagerFactory beacon should upgrade to the same implementation");
     }
     
     function test_CreateCyberCorpAndRounds() public {
