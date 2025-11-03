@@ -27,10 +27,6 @@ classDiagram
             <<UUPSUpgradeable>>
             +upgradeToAndCall()
         }
-        class CertificateUriBuilder {
-            <<UUPSUpgradeable>>
-            +upgradeToAndCall()
-        }
         
         class CyberAgreementRegistry {
             <<UUPSUpgradeable>>
@@ -75,7 +71,6 @@ classDiagram
         class DealManagerImplV1
         class RoundManagerImplV1
         class CyberCertPrinterImplV1
-        class CyberScripImplV1
     }
     
     namespace ReleaseV2 {
@@ -83,6 +78,8 @@ classDiagram
         class IssuanceManagerImplV2
         class DealManagerImplV2
         class RoundManagerImplV2
+        class CyberCertPrinterImplV2
+        class CyberScripImplV2
     }
     
     namespace CorpA {
@@ -154,12 +151,12 @@ classDiagram
     
     CyberCorpSingleFactory --> CyberCorpImplV2 : refImplementation
     
-    IssuanceManagerFactory --> CyberCertPrinterImplV1: cyberCertPrinterRefImplementation
-    IssuanceManagerFactory --> CyberScripImplV1: cyberScripRefImplementation
-    IssuanceManagerFactory --> IssuanceManagerImplV1: refImplementation
+    IssuanceManagerFactory --> CyberCertPrinterImplV2: cyberCertPrinterRefImplementation
+    IssuanceManagerFactory --> CyberScripImplV2: cyberScripRefImplementation
+    IssuanceManagerFactory --> IssuanceManagerImplV2: refImplementation
     
-    DealManagerFactory --> DealManagerImplV1: refImplementation
-    RoundManagerFactory --> RoundManagerImplV1: refImplementation
+    DealManagerFactory --> DealManagerImplV2: refImplementation
+    RoundManagerFactory --> RoundManagerImplV2: refImplementation
     
     %%CorpA
     
@@ -167,8 +164,8 @@ classDiagram
     IssuanceManagerImplV2 <-- IssuanceManagerA : implementation
     IssuanceManagerA <-- CyberCertPrinterBeaconA : owned by
     IssuanceManagerA <-- CyberScripBeaconA : owned by
-    CyberCertPrinterImplV1 <-- CyberCertPrinterBeaconA : implementation
-    CyberScripImplV1 <-- CyberScripBeaconA : implementation
+    CyberCertPrinterImplV2 <-- CyberCertPrinterBeaconA : implementation
+    CyberScripImplV2 <-- CyberScripBeaconA : implementation
     DealManagerImplV2 <-- DealManagerA : implementation
     RoundManagerImplV2 <-- RoundManagerA : implementation    
     CyberCertPrinterBeaconA <-- CyberCertPrinterA1: beacon    
