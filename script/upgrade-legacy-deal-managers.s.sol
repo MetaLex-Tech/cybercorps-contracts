@@ -2,7 +2,7 @@
 pragma solidity ^0.8.18;
 
 import {Script} from "forge-std/Script.sol";
-import {Test, console} from "forge-std/Test.sol";
+import {Test, console2} from "forge-std/Test.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
@@ -15,28 +15,33 @@ import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
-import {console} from "forge-std/console.sol";
 import "../src/CyberCorpConstants.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {SAFTExtension} from "../src/storage/extensions/SAFTExtension.sol";
 import {DealManager} from "../src/DealManager.sol";
 import {DealManagerWithMigration} from "../src/DealManagerWithMigration.sol";
 import {ILegacyFactory} from "./interfaces/ILegacyFactory.sol";
-import {KnownDealManagersLoader} from "./libs/KnownDealManagersLoader.sol";
+import {KnownAddressesLoader} from "./libs/KnownAddressesLoader.sol";
 
 contract UpgradeLegacyDealManagersScript is Script {
     function run() public returns (DealManagerWithMigration) {
+        return run(type(uint256).max);
+    }
+
+    function run(uint256 maxCount) public returns (DealManagerWithMigration) {
         bytes32 salt = bytes32(keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3"));
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
 
-        // To upgrade the legacy beacon-based DealManagers, we must first identify
-        // all existing DealManagerFactory addresses (https://dune.com/queries/5981894):
+        CyberCorpFactory cyberCorpFactory = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
+
+        // To upgrade the legacy beacon-based DealManagers, we must enumerate all existing DealManager addresses
+        // and their corresponding factories (https://dune.com/queries/5981894):
         // - 0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3
         // - 0x15A399Dee2b25C5a766cd9480a154B13d128E669 (deprecated, won't touch it)
         ILegacyFactory legacyDealManagerFactory = ILegacyFactory(0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3);
 
         // Load all known deal managers
-        address[] memory knownDealManagers = KnownDealManagersLoader.load(block.chainid);
+        address[] memory knownDealManagers = KnownAddressesLoader.load(block.chainid, "/script/res/known-deal-managers.json", maxCount);
 
         vm.startBroadcast(deployerPrivateKey);
 
@@ -46,9 +51,13 @@ contract UpgradeLegacyDealManagersScript is Script {
 
         // Upgrade beacon implementation to the new implementation (with migration feature)
         DealManagerWithMigration dmWithMigrationImpl = new DealManagerWithMigration();
+
+        // Expect new factory to be deployed at a predetermined address because we will hard-code it to the migration contract
+        vm.assertEq(cyberCorpFactory.dealManagerFactory(), dmWithMigrationImpl.NEW_UPGRADE_FACTORY(), "new dealManagerFactory address has changed, update it in DealManagerWithMigration");
+
         legacyDealManagerFactory.upgradeImplementation(address(dmWithMigrationImpl));
         vm.assertEq(legacyDealManagerFactory.getBeaconImplementation(), address(dmWithMigrationImpl), "beacon implementation should be upgraded by now");
-        console.log("New beacon implementation: %s for legacy DealManagerFactory: %s", address(dmWithMigrationImpl), address(legacyDealManagerFactory));
+        console2.log("New beacon implementation: %s for legacy DealManagerFactory: %s", address(dmWithMigrationImpl), address(legacyDealManagerFactory));
 
         // This is the ugly part: One-time manual upgrade required for legacy DealManagers.
         // This section updates the `upgradeFactory` pointer to the new permanent factory address,
@@ -60,7 +69,7 @@ contract UpgradeLegacyDealManagersScript is Script {
         for (uint256 i = 0; i < knownDealManagers.length; i++) {
             DealManagerWithMigration(knownDealManagers[i]).migrateUpgradeFactory();
             vm.assertEq(DealManager(knownDealManagers[i]).getPlatformPayable(), address(0), "should be able to lookup fee payable now");
-            console.log("Migrated legacy DealManager: %s", knownDealManagers[i]);
+            console2.log("Migrated legacy DealManager: %s", knownDealManagers[i]);
         }
 
         vm.stopBroadcast();

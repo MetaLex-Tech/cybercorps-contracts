@@ -131,11 +131,17 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
 
     function getUpgradeFactory() external view returns (address);
 
-    function upgradeImplementation(
+    function upgradeCertPrinterBeaconImplementation(
         address _newImplementation
     ) external;
 
-    function getBeaconImplementation() external view returns (address);
+    function getCertPrinterBeaconImplementation() external view returns (address);
+
+    function upgradeScripBeaconImplementation(
+        address _newImplementation
+    ) external;
+
+    function getScripBeaconImplementation() external view returns (address);
 
     // Certificate Details Functions
     function getCertificateDetails(
@@ -181,4 +187,5 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
     function companyName() external view returns (string memory);
     function companyJurisdiction() external view returns (string memory);
     function AUTH() external view returns (address);
+    function DEPLOY_VERSION() external view returns (string memory);
 }

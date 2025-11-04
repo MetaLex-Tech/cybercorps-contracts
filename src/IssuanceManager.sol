@@ -372,12 +372,12 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             ).getCyberCertPrinterRefImplementation() != _newImplementation) {
             revert NotRefImplementation();
         }
-        IssuanceManagerStorage.updateBeaconImplementation(_newImplementation);
+        IssuanceManagerStorage.upgradeCertPrinterBeaconImplementation(_newImplementation);
     }
 
     /// @notice Gets the current implementation address of the certificate printer
     /// @return address Current implementation address
-    function getBeaconImplementation() external view returns (address) {
+    function getCertPrinterBeaconImplementation() external view returns (address) {
         return
             IssuanceManagerStorage.getCyberCertPrinterBeacon().implementation();
     }

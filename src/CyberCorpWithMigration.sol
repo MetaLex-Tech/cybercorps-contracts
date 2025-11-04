@@ -41,18 +41,17 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import {DealManager} from "./DealManager.sol";
-import {DealManagerStorage} from "./storage/DealManagerStorage.sol";
+import {CyberCorp} from "./CyberCorp.sol";
 
-contract DealManagerWithMigration is DealManager {
+contract CyberCorpWithMigration is CyberCorp {
 
-    address public constant NEW_UPGRADE_FACTORY = 0x4d8cB8D37FdF8a5454A35057d96a19DE78616D77;
+    address public constant NEW_UPGRADE_FACTORY = 0x2B8d5FB507bF6b19344aF658bA3636b13A8E4C46;
 
     // TODO TBD
-    /// @notice Migrate legacy contracts and set upgradeFactory to the known new contract (for fee dependencies)
+    /// @notice Migrate legacy contracts and set upgradeFactory to the known new contract (for reference implementation lookup)
     /// @dev Since the migration target is predefined, it doesn't matter who called it or when it is called
     function migrateUpgradeFactory() public {
-        // TODO Update to the new permanent address of DealManagerFactory
-        DealManagerStorage.setUpgradeFactory(NEW_UPGRADE_FACTORY);
+        // TODO Update to the new permanent address of CyberCorpSingleFactory
+        upgradeFactory = NEW_UPGRADE_FACTORY;
     }
 }

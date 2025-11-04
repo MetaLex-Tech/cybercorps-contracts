@@ -3472,7 +3472,7 @@ contract CyberCorpTest is Test {
 
         // Verify the IssuanceManager still works by checking the certificate printer
         assertEq(IssuanceManager(issuanceManager).printers(0), cyberCertPrinterAddr[0]);
-        assertEq(IssuanceManager(issuanceManager).getBeaconImplementation(), newCyberCertPrinterImpl);
+        assertEq(IssuanceManager(issuanceManager).getCertPrinterBeaconImplementation(), newCyberCertPrinterImpl);
     }
 
     function testUpgradeCyberCorpSingle() public {
@@ -3733,7 +3733,7 @@ contract CyberCorpTest is Test {
         vm.prank(testAddress);
         IssuanceManager(issuanceManager).upgradeCertPrinterBeaconImplementation(newCyberCertPrinterImpl);
 
-        assertEq(IssuanceManager(issuanceManager).getBeaconImplementation(), newCyberCertPrinterImpl);
+        assertEq(IssuanceManager(issuanceManager).getCertPrinterBeaconImplementation(), newCyberCertPrinterImpl);
 
         //check the security type
         assertEq(CyberCertPrinter(certPrinter).certificateUri(), "ipfs://test");

@@ -147,7 +147,7 @@ library IssuanceManagerStorage {
     }
 
     // Beacon upgrade function
-    function updateBeaconImplementation(address _newImplementation) internal {
+    function upgradeCertPrinterBeaconImplementation(address _newImplementation) internal {
         issuanceManagerStorage().cyberCertPrinterBeacon.upgradeTo(_newImplementation);
     }
 
