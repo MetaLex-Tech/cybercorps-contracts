@@ -354,11 +354,19 @@ library RoundManagerStorage {
         }
 
         // Calculate units with 1e18 pricePerUnit; convert token amounts <-> 1e18 as needed
+        // Since the entire process:
+        // 1. convert from payment decimals
+        // 2. round-down based on fractional units
+        // 3. convert to decimals
+        // is always rounding down, it is guaranteed that `usedAmount <= allocatedAmount` and the dust will be refunded
+
         uint8 paymentDecimals = IERC20Metadata(round.paymentToken).decimals();
         uint256 allocatedAmount1e18 = allocatedAmount;
         if (paymentDecimals < 18) {
             allocatedAmount1e18 = allocatedAmount * (10 ** (18 - paymentDecimals));
-        } 
+        } else if (paymentDecimals > 18) {
+            allocatedAmount1e18 = allocatedAmount / (10 ** (paymentDecimals - 18));
+        }
 
         // Support fractional units: 18-decimal units precision
         uint256 units = (allocatedAmount1e18 * 1e18) / round.pricePerUnit;
@@ -368,9 +376,14 @@ library RoundManagerStorage {
         uint256 usedAmountToken = usedAmount1e18;
         if (paymentDecimals < 18) {
             usedAmountToken = usedAmount1e18 / (10 ** (18 - paymentDecimals));
-        } 
+        } else if (paymentDecimals > 18) {
+            usedAmountToken = usedAmount1e18 * (10 ** (paymentDecimals - 18));
+        }
         usedAmount = usedAmountToken;
 
+        // Since the conversion from `usedAmount1e18` to `usedAmountToken` is always rounding down,
+        // it is guaranteed that `real(usedAmountToken) <= real(investmentUSD)`
+        // and the investor would never pay more than documented in the certificates
         uint256 investmentUSD = usedAmount1e18; // 18-decimal USD precision
 
         // Create certificate

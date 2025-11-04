@@ -49,6 +49,16 @@ contract MockPaymentToken is ERC20 {
     }
 }
 
+contract MockHDPaymentToken is ERC20 {
+    constructor() ERC20("Mock high-decimals USD", "HDUSD") {
+        _mint(msg.sender, 2000000 * 10 ** 24); // Mint 2M tokens with 24 decimals
+    }
+
+    function decimals() public pure override returns (uint8) {
+        return 24;
+    }
+}
+
 contract MockRoundManagerV2 is UUPSUpgradeable {
     string public constant DEPLOY_VERSION = "2";
 
@@ -638,7 +648,7 @@ contract RoundManagerTest is Test {
     uint256 public constant MAX_TICKET = 100000 * 10 ** 6; // 100,000 USDC
     uint256 public constant RAISE_CAP = 1000000 * 10 ** 6; // 1M USDC
     uint256 public constant PRICE_PER_UNIT = 10 * 10 ** 6; // 10 USDC per unit
-    uint256 public constant VALUATION = 10000000; // $10M valuation
+    uint256 public constant VALUATION = 10000000 * 10 ** 18; // $10M valuation
 
     function setUp() public {
         // Configs
@@ -1088,6 +1098,75 @@ contract RoundManagerTest is Test {
 		CertificateDetails memory details = CyberCertPrinter(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
         assertEq(details.unitsRepresented, 10500000000000000000);
 		assertEq(details.investmentAmountUSD, 10500000000000000000);
+	}
+
+    /// @notice allocate() should be able to handle rare high-decimals (>18) payment token so that
+    /// it wouldn't break certificate specs of 18-decimals for all numbers
+    function test_Allocate_HighDecimalsPayment() public {
+        // Create a high-decimal payment token
+        MockHDPaymentToken hdPaymentToken = new MockHDPaymentToken();
+
+        // Create a special round with this high-decimal payment token
+        vm.startPrank(corpOwner);
+        roundId = CyberCorpHelper.createRound(
+            RoundManager(roundManager),
+            address(hdPaymentToken),
+            CyberCorpHelper.TEMPLATE_ID,
+            1_000_000e24,
+            1_000e24,
+            100_000e24,
+            10e18,
+            10_000_000e18,
+            RoundType.FounderApproved,
+            corpOwnerPrivKey,
+            corp,
+            false
+        );
+        vm.stopPrank();
+
+        // Fund investor
+        hdPaymentToken.transfer(investor, 1_000_000e24);
+        vm.prank(investor);
+        hdPaymentToken.approve(address(roundManager), type(uint256).max);
+
+		// Submit EOI with a max that creates 5 USDC dust w.r.t. 10 USDC price per unit
+		vm.startPrank(investor);
+		(bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+			RoundManager(roundManager),
+			registry,
+			roundId,
+			1,
+			5_000e24,
+			7_505e24,
+			corpOwner,
+			investorPrivKey
+		);
+		vm.stopPrank();
+
+		uint256 balAfterSubmit = hdPaymentToken.balanceOf(investor);
+
+		vm.prank(corpOwner);
+		RoundManager(roundManager).allocate(agreementId, 7_505e24);
+
+        uint256 balAfterAllocate = hdPaymentToken.balanceOf(investor);
+        // With fractional units enabled and price in 18-dec, refund is any token rounding dust
+        uint8 tokenDecimals = hdPaymentToken.decimals();
+        uint256 downscale = 10 ** (tokenDecimals - 18);
+        uint256 allocatedToken = 7_505e24;
+        uint256 allocated1e18 = allocatedToken / downscale; // 7_505e18
+        uint256 units18 = (allocated1e18 * 1e18) / 10e18; // 750.5e18
+        uint256 used1e18 = (units18 * 10e18) / 1e18; // 7_505e18
+        uint256 usedToken = used1e18 * downscale; // 7_505e24
+        assertEq(balAfterAllocate - balAfterSubmit, allocatedToken - usedToken);
+
+		// Verify certificate details use usedAmount (rounded down) for units and USD
+		Escrow memory esc = RoundManager(roundManager).getEscrowDetails(agreementId);
+		assertGt(esc.corpAssets.length, 0);
+		Token memory corpToken = esc.corpAssets[0];
+		CertificateDetails memory details = CyberCertPrinter(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
+
+        assertEq(details.unitsRepresented, units18, "unitsRepresented should be in 18-decimals");
+        assertEq(details.investmentAmountUSD, used1e18, "investmentAmountUSD should be in 18-decimals");
 	}
 
     function test_Allocate_InvalidAmount() public {
