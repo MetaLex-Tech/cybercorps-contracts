@@ -41,8 +41,6 @@ contract UpgradeLegacyCyberCorpsTest is Test {
     uint256 legacyAddressesCount = 3; // Limit the number of legacy addresses we migrate during tests so it won't stress the RPC endpoints too much
 
     address[] knownCyberCorps;
-    address[] knownDealManagers;
-    address[] knownIssuanceManagers;
 
     // Randomly generated to avoid contaminated common test addresses
     uint256 privateKeySalt = 0xe6fc9058b04996425a6f0e6479e6e06f7177a6c61043b10857eb0a72339853e0;
@@ -78,8 +76,6 @@ contract UpgradeLegacyCyberCorpsTest is Test {
 
         // Load all known managers
         knownCyberCorps = KnownAddressesLoader.load(block.chainid, "/script/res/known-cyber-corps.json", legacyAddressesCount);
-        knownDealManagers = KnownAddressesLoader.load(block.chainid, "/script/res/known-deal-managers.json", legacyAddressesCount);
-        knownIssuanceManagers = KnownAddressesLoader.load(block.chainid, "/script/res/known-issuance-managers.json", legacyAddressesCount);
 
         // Simulate granting the test deployer admin access so it can perform upgrades
         vm.startPrank(metalexSafe);
@@ -168,60 +164,60 @@ contract UpgradeLegacyCyberCorpsTest is Test {
 
     function test_LegacyDealManagerIntegrity() public {
         // Snapshot slot contents before upgrade
-        BorgAuth[] memory expectedAuths = new BorgAuth[](knownDealManagers.length);
-        for (uint256 i = 0; i < knownDealManagers.length; i++) {
-            expectedAuths[i] = DealManager(knownDealManagers[i]).AUTH();
+        BorgAuth[] memory expectedAuths = new BorgAuth[](knownCyberCorps.length);
+        for (uint256 i = 0; i < knownCyberCorps.length; i++) {
+            expectedAuths[i] = DealManager(CyberCorp(knownCyberCorps[i]).dealManager()).AUTH();
         }
 
         // Perform upgrades
         _upgradeFactoryAndLegacyCyberCorps();
 
         // Verify integrity
-        for (uint256 i = 0; i < knownDealManagers.length; i++) {
+        for (uint256 i = 0; i < knownCyberCorps.length; i++) {
+            address dmAddr = CyberCorp(knownCyberCorps[i]).dealManager();
             // New DealManager should implement new methods
-            assertEq(DealManager(knownDealManagers[i]).DEPLOY_VERSION(), "3", string(abi.encodePacked("unexpected DEPLOY_VERSION() for DealManager: ", vm.toString(knownDealManagers[i]))));
-            assertEq(DealManager(knownDealManagers[i]).computeFee(1 ether), 0 ether, "upgraded DealManager should support fee calculation with no fees");
-            assertEq(DealManager(knownDealManagers[i]).getPlatformPayable(), address(0), "upgraded DealManager should support fee payable");
+            assertEq(DealManager(dmAddr).DEPLOY_VERSION(), "3", string(abi.encodePacked("unexpected DEPLOY_VERSION() for DealManager: ", vm.toString(dmAddr))));
+            assertEq(DealManager(dmAddr).computeFee(1 ether), 0 ether, "upgraded DealManager should support fee calculation with no fees");
+            assertEq(DealManager(dmAddr).getPlatformPayable(), address(0), "upgraded DealManager should support fee payable");
 
             // Check for slot conflicts
-            assertEq(address(DealManager(knownDealManagers[i]).AUTH()), address(expectedAuths[i]), string(abi.encodePacked("AUTH should not change for DealManager: ", vm.toString(knownDealManagers[i]))));
+            assertEq(address(DealManager(dmAddr).AUTH()), address(expectedAuths[i]), string(abi.encodePacked("AUTH should not change for DealManager: ", vm.toString(dmAddr))));
         }
     }
 
     function test_LegacyIssuanceManagerIntegrity() public {
         // Snapshot slot contents before upgrade
-        BorgAuth[] memory expectedAuths = new BorgAuth[](knownIssuanceManagers.length);
-        for (uint256 i = 0; i < knownIssuanceManagers.length; i++) {
-            expectedAuths[i] = BorgAuth(IIssuanceManager(knownIssuanceManagers[i]).AUTH());
+        BorgAuth[] memory expectedAuths = new BorgAuth[](knownCyberCorps.length);
+        for (uint256 i = 0; i < knownCyberCorps.length; i++) {
+            expectedAuths[i] = BorgAuth(IIssuanceManager(CyberCorp(knownCyberCorps[i]).issuanceManager()).AUTH());
         }
 
         // Perform upgrades
         _upgradeFactoryAndLegacyCyberCorps();
 
         // Verify integrity
-        for (uint256 i = 0; i < knownIssuanceManagers.length; i++) {
+        for (uint256 i = 0; i < knownCyberCorps.length; i++) {
+            address imAddr = CyberCorp(knownCyberCorps[i]).issuanceManager();
             // New IssuanceManager should implement new methods
-            assertEq(IIssuanceManager(knownIssuanceManagers[i]).DEPLOY_VERSION(), "3", string(abi.encodePacked("unexpected DEPLOY_VERSION() for IssuanceManager: ", vm.toString(knownIssuanceManagers[i]))));
-            assertNotEq(IssuanceManagerFactory(IIssuanceManager(knownIssuanceManagers[i]).getUpgradeFactory()).getRefImplementation(), address(0), "upgraded IssuanceManager should be able to find reference implementation");
+            assertEq(IIssuanceManager(imAddr).DEPLOY_VERSION(), "3", string(abi.encodePacked("unexpected DEPLOY_VERSION() for IssuanceManager: ", vm.toString(imAddr))));
+            assertNotEq(IssuanceManagerFactory(IIssuanceManager(imAddr).getUpgradeFactory()).getRefImplementation(), address(0), "upgraded IssuanceManager should be able to find reference implementation");
 
             // Check for slot conflicts
-            assertEq(address(IIssuanceManager(knownIssuanceManagers[i]).AUTH()), address(expectedAuths[i]), string(abi.encodePacked("AUTH should not change for IssuanceManager: ", vm.toString(knownIssuanceManagers[i]))));
+            assertEq(address(IIssuanceManager(imAddr).AUTH()), address(expectedAuths[i]), string(abi.encodePacked("AUTH should not change for IssuanceManager: ", vm.toString(imAddr))));
         }
     }
 
     function test_LegacyDealManagerProposeDeal() public {
         _upgradeFactoryAndLegacyCyberCorps();
 
-        // Test the first three known deal managers is enough
-        uint256 testLength = knownDealManagers.length > 3 ? 3 : knownDealManagers.length;
-        for (uint256 i = 0; i < testLength; i++) {
-
-            address cyberCorp = DealManager(knownDealManagers[i]).issuanceManager().CORP();
+        for (uint256 i = 0; i < knownCyberCorps.length; i++) {
+            address dmAddr = CyberCorp(knownCyberCorps[i]).dealManager();
+            address cyberCorp = DealManager(dmAddr).issuanceManager().CORP();
             vm.startPrank(cyberCorp);
 
             address[] memory certPrinterAddress = new address[](1);
             for (uint256 j = 0; j < defaultCertData.length; j++) {
-                certPrinterAddress[j] = IIssuanceManager(DealManager(knownDealManagers[i]).issuanceManager()).createCertPrinter(
+                certPrinterAddress[j] = IIssuanceManager(DealManager(dmAddr).issuanceManager()).createCertPrinter(
                     defaultCertData[j].defaultLegend,
                     string.concat("TestCorp", defaultCertData[j].name),
                     defaultCertData[j].symbol,
@@ -235,7 +231,7 @@ contract UpgradeLegacyCyberCorpsTest is Test {
             uint256 agreementSalt = block.timestamp + i;
 
             // Create and sign deal
-            DealManager(knownDealManagers[i]).proposeAndSignDeal(
+            DealManager(dmAddr).proposeAndSignDeal(
                 certPrinterAddress,
                 paymentToken,
                 100e6,
@@ -444,15 +440,13 @@ contract UpgradeLegacyCyberCorpsTest is Test {
         newDmFactory.setDefaultFeeRatio(25);
         vm.stopPrank();
 
-        // Test the first three known deal managers is enough
-        uint256 testLength = knownDealManagers.length > 3 ? 3 : knownDealManagers.length;
-
-        address cyberCorp = DealManager(knownDealManagers[0]).issuanceManager().CORP();
+        address dmAddr = CyberCorp(knownCyberCorps[0]).dealManager();
+        address cyberCorp = DealManager(dmAddr).issuanceManager().CORP();
         vm.startPrank(cyberCorp);
 
         address[] memory certPrinterAddress = new address[](1);
         for (uint256 j = 0; j < defaultCertData.length; j++) {
-            certPrinterAddress[j] = IIssuanceManager(DealManager(knownDealManagers[0]).issuanceManager()).createCertPrinter(
+            certPrinterAddress[j] = IIssuanceManager(DealManager(dmAddr).issuanceManager()).createCertPrinter(
                 defaultCertData[j].defaultLegend,
                 string.concat("TestCorp", defaultCertData[j].name),
                 defaultCertData[j].symbol,
@@ -466,7 +460,7 @@ contract UpgradeLegacyCyberCorpsTest is Test {
         uint256 agreementSalt = block.timestamp;
 
         // Create and sign deal
-        (bytes32 agreementId, ) = DealManager(knownDealManagers[0]).proposeAndSignDeal(
+        (bytes32 agreementId, ) = DealManager(dmAddr).proposeAndSignDeal(
             certPrinterAddress,
             paymentToken,
             100e6,
@@ -506,9 +500,9 @@ contract UpgradeLegacyCyberCorpsTest is Test {
         uint256 metalexSafeBalanceBefore = ERC20(paymentToken).balanceOf(metalexSafe);
 
         vm.startPrank(bob);
-        ERC20(paymentToken).approve(knownDealManagers[0], 100e6);
+        ERC20(paymentToken).approve(dmAddr, 100e6);
 
-        DealManager(knownDealManagers[0]).signAndFinalizeDeal(
+        DealManager(dmAddr).signAndFinalizeDeal(
             bob,
             agreementId,
             defaultPartyValues[1],
@@ -561,14 +555,15 @@ contract UpgradeLegacyCyberCorpsTest is Test {
         imWithMigrationImpl = (new UpgradeLegacyIssuanceManagersScript()).run(legacyAddressesCount);
 
         // Simulate all legacy corp owners accept the new CyberCorpPrinter
-        for (uint256 i = 0; i < knownIssuanceManagers.length; i++) {
+        for (uint256 i = 0; i < knownCyberCorps.length; i++) {
+            address imAddr = CyberCorp(knownCyberCorps[i]).issuanceManager();
             // Accept new CyberCertPrinter release
-            vm.startPrank(knownIssuanceManagers[i]);
-            IIssuanceManager(knownIssuanceManagers[i]).upgradeCertPrinterBeaconImplementation(
+            vm.startPrank(imAddr);
+            IIssuanceManager(imAddr).upgradeCertPrinterBeaconImplementation(
                 IssuanceManagerFactory(cyberCorpFactory.issuanceManagerFactory()).getCyberCertPrinterRefImplementation()
             );
             vm.stopPrank();
-            console2.log("CyberCertPrinter beacon implementation was accepted by IssuanceManager: %s", knownIssuanceManagers[i]);
+            console2.log("CyberCertPrinter beacon implementation was accepted by IssuanceManager: %s", imAddr);
         }
     }
 }

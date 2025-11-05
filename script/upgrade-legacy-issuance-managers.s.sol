@@ -21,6 +21,7 @@ import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IssuanceManagerWithMigration} from "../src/IssuanceManagerWithMigration.sol";
 import {ILegacyFactory} from "./interfaces/ILegacyFactory.sol";
 import {KnownAddressesLoader} from "./libs/KnownAddressesLoader.sol";
+import {CyberCorp} from "../src/CyberCorp.sol";
 
 contract UpgradeLegacyIssuanceManagersScript is Script {
     function run() public returns (IssuanceManagerWithMigration) {
@@ -40,7 +41,7 @@ contract UpgradeLegacyIssuanceManagersScript is Script {
         ILegacyFactory legacyImFactory = ILegacyFactory(0xA32547aAdAA4975082D729c79e79dBaE4385EBCf);
 
         // Load all known cyber corps
-        address[] memory knownIssuanceManagers = KnownAddressesLoader.load(block.chainid, "/script/res/known-issuance-managers.json", maxCount);
+        address[] memory knownCyberCorps = KnownAddressesLoader.load(block.chainid, "/script/res/known-cyber-corps.json", maxCount);
 
         vm.startBroadcast(deployerPrivateKey);
 
@@ -66,10 +67,11 @@ contract UpgradeLegacyIssuanceManagersScript is Script {
 
         // This is a ONE-TIME operation per legacy IssuanceManager's lifetime. Once updated,
         // the `upgradeFactory` is expected to remain permanent and unchanged for all following upgrades.
-        for (uint256 i = 0; i < knownIssuanceManagers.length; i++) {
-            IssuanceManagerWithMigration(knownIssuanceManagers[i]).migrateUpgradeFactory();
-            vm.assertNotEq(IssuanceManagerFactory(IssuanceManager(knownIssuanceManagers[i]).getUpgradeFactory()).getRefImplementation(), address(0), "should be able to lookup reference implementation now");
-            console2.log("Migrated legacy IssuanceManager: %s", knownIssuanceManagers[i]);
+        for (uint256 i = 0; i < knownCyberCorps.length; i++) {
+            address imAddr = CyberCorp(knownCyberCorps[i]).issuanceManager();
+            IssuanceManagerWithMigration(imAddr).migrateUpgradeFactory();
+            vm.assertNotEq(IssuanceManagerFactory(IssuanceManager(imAddr).getUpgradeFactory()).getRefImplementation(), address(0), "should be able to lookup reference implementation now");
+            console2.log("Migrated legacy IssuanceManager: %s", imAddr);
         }
 
         vm.stopBroadcast();

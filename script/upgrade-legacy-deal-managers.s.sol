@@ -22,6 +22,7 @@ import {DealManager} from "../src/DealManager.sol";
 import {DealManagerWithMigration} from "../src/DealManagerWithMigration.sol";
 import {ILegacyFactory} from "./interfaces/ILegacyFactory.sol";
 import {KnownAddressesLoader} from "./libs/KnownAddressesLoader.sol";
+import {CyberCorp} from "../src/CyberCorp.sol";
 
 contract UpgradeLegacyDealManagersScript is Script {
     function run() public returns (DealManagerWithMigration) {
@@ -40,8 +41,8 @@ contract UpgradeLegacyDealManagersScript is Script {
         // - 0x15A399Dee2b25C5a766cd9480a154B13d128E669 (deprecated, won't touch it)
         ILegacyFactory legacyDealManagerFactory = ILegacyFactory(0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3);
 
-        // Load all known deal managers
-        address[] memory knownDealManagers = KnownAddressesLoader.load(block.chainid, "/script/res/known-deal-managers.json", maxCount);
+        // Load all known cyber corps
+        address[] memory knownCyberCorps = KnownAddressesLoader.load(block.chainid, "/script/res/known-cyber-corps.json", maxCount);
 
         vm.startBroadcast(deployerPrivateKey);
 
@@ -66,10 +67,11 @@ contract UpgradeLegacyDealManagersScript is Script {
 
         // This is a ONE-TIME operation per legacy DealManager's lifetime. Once updated,
         // the `upgradeFactory` is expected to remain permanent and unchanged for all following upgrades.
-        for (uint256 i = 0; i < knownDealManagers.length; i++) {
-            DealManagerWithMigration(knownDealManagers[i]).migrateUpgradeFactory();
-            vm.assertEq(DealManager(knownDealManagers[i]).getPlatformPayable(), address(0), "should be able to lookup fee payable now");
-            console2.log("Migrated legacy DealManager: %s", knownDealManagers[i]);
+        for (uint256 i = 0; i < knownCyberCorps.length; i++) {
+            address dmAddr = CyberCorp(knownCyberCorps[i]).dealManager();
+            DealManagerWithMigration(dmAddr).migrateUpgradeFactory();
+            vm.assertEq(DealManager(dmAddr).getPlatformPayable(), address(0), "should be able to lookup fee payable now");
+            console2.log("Migrated legacy DealManager: %s", dmAddr);
         }
 
         vm.stopBroadcast();
