@@ -71,8 +71,6 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     error InvalidSalt();
 
     address public registryAddress;
-    address public cyberCertPrinterImplementation;
-    address public cyberCert20Implementation;
     address public issuanceManagerFactory;
     address public cyberCorpSingleFactory;
     address public dealManagerFactory;
@@ -93,7 +91,7 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     bool public parentCorpCreated;
 
     //adjust storage gap based on new variable
-    uint256[36] private __gap; // keep storage gap similar to CyberCorpFactory
+    uint256[38] private __gap; // keep storage gap similar to CyberCorpFactory
 
     struct CyberCertData {
         string name;
@@ -127,8 +125,6 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     function initialize(
         address _auth,
         address _registryAddress,
-        address _cyberCertPrinterImplementation,
-        address _cyberCert20Implementation,
         address _issuanceManagerFactory,
         address _cyberCorpSingleFactory,
         address _dealManagerFactory,
@@ -140,8 +136,6 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         __BorgAuthACL_init(_auth);
 
         registryAddress = _registryAddress;
-        cyberCertPrinterImplementation = _cyberCertPrinterImplementation;
-        cyberCert20Implementation = _cyberCert20Implementation;
         issuanceManagerFactory = _issuanceManagerFactory;
         cyberCorpSingleFactory = _cyberCorpSingleFactory;
         dealManagerFactory = _dealManagerFactory;
@@ -411,7 +405,7 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             block.timestamp + 7 days
         );
 
-        ICyberAgreementRegistry(registryAddress).signContractFor(deployer, agreementId, partyValuesOverride[0], signature, false, "");
+        ICyberAgreementRegistry(registryAddress).signContractFor(deployer, agreementId, partyValuesOverride[1], signature, false, "");
 
         ICyberAgreementRegistry(registryAddress).signContractWithEscrow(
             metaDAOOfficer.eoa,

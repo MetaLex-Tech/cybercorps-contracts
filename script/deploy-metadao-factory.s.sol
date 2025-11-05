@@ -19,8 +19,18 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract DeployMetaDAOFactoryScript is Script {
-    function run() public {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
+    function run() public returns (CyberAgreementRegistry registry, MetaDAOFactory metaDAOFactory) {
+        return run(
+            vm.envUint("PRIVATE_KEY_MAIN"), // deployerPrivateKey
+            // TODO: review needed: is this up to date?
+            0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C // multisig
+        );
+    }
+
+    function run(
+        uint256 deployerPrivateKey,
+        address multisig
+    ) public returns (CyberAgreementRegistry registry, MetaDAOFactory metaDAOFactory) {
         address deployerAddress = vm.addr(deployerPrivateKey);
         vm.startBroadcast(deployerPrivateKey);
 
@@ -42,8 +52,6 @@ contract DeployMetaDAOFactoryScript is Script {
         } else {
             revert("Unsupported chain ID");
         }
-
-        address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
 
         BorgAuth auth = new BorgAuth{salt: salt}(deployerAddress);
 
@@ -122,8 +130,6 @@ contract DeployMetaDAOFactoryScript is Script {
                         MetaDAOFactory.initialize.selector,
                         address(auth),
                         address(registry),
-                        cyberCertPrinterImplementation,
-                        cyberCert20Implementation,
                         address(issuanceManagerFactory),
                         address(cyberCorpSingleFactory),
                         address(dealManagerFactory),
@@ -179,7 +185,7 @@ contract DeployMetaDAOFactoryScript is Script {
         console.log("ParentRoundMgr:", parentRoundMgr);
 
         vm.stopBroadcast();
+
+        return (CyberAgreementRegistry(registry), metaDAOFactory);
     }
 }
-
-
