@@ -46,7 +46,7 @@ import {IssuanceManagerStorage} from "./storage/IssuanceManagerStorage.sol";
 
 contract IssuanceManagerWithMigration is IssuanceManager {
 
-    address public constant NEW_UPGRADE_FACTORY = 0x65838424070ED598Ab4FAc65B4D5d4970282B13a;
+    address public constant NEW_UPGRADE_FACTORY = 0x0eF512E53576b2758810af2093AcD9CE21AA9A3D;
 
     // TODO TBD
     /// @notice Migrate legacy contracts and set upgradeFactory to the known new contract (for reference implementation lookup)
