@@ -26,8 +26,11 @@ import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerWithMigration} from "../src/IssuanceManagerWithMigration.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
+import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
 
 contract UpgradeLegacyCyberCorpsTest is Test {
+    using ERC1967ProxyLib for address;
+    
     address metalexSafe = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
 
     // Universal registry address
@@ -35,6 +38,7 @@ contract UpgradeLegacyCyberCorpsTest is Test {
     CyberCorpFactory cyberCorpFactory = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
     ILegacyFactory legacyCyberCorpSingleFactory = ILegacyFactory(0xc8e084D3f8B3b326FCc894C7afD28F4904196406);
     ILegacyFactory legacyDealManagerFactory = ILegacyFactory(0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3);
+    ILegacyFactory legacyIssuanceManagerFactory = ILegacyFactory(0xA32547aAdAA4975082D729c79e79dBaE4385EBCf);
 
     address paymentToken = 0x036CbD53842c5426634e7929541eC2318f3dCF7e; // USDC @ Base Sepolia
 
@@ -138,6 +142,7 @@ contract UpgradeLegacyCyberCorpsTest is Test {
         // Script might've done it, but we'll do it again just in case
         assertEq(legacyCyberCorpSingleFactory.getBeaconImplementation(), address(cyberCorpWithMigrationImpl), "legacy CyberCorp beacon implementation should be upgraded by now");
         assertEq(legacyDealManagerFactory.getBeaconImplementation(), address(dmWithMigrationImpl), "legacy DealManager beacon implementation should be upgraded by now");
+        assertEq(legacyIssuanceManagerFactory.getBeaconImplementation(), address(imWithMigrationImpl), "legacy IssuanceManager beacon implementation should be upgraded by now");
         assertEq(cyberCorpFactory.dealManagerFactory(), address(newDmFactory), "CyberCorpFactory's DealManagerFactory should be updated by now");
     }
 
@@ -159,6 +164,9 @@ contract UpgradeLegacyCyberCorpsTest is Test {
 
             // Check for slot conflicts
             assertEq(address(CyberCorp(knownCyberCorps[i]).AUTH()), address(expectedAuths[i]), string(abi.encodePacked("AUTH should not change for CyberCorp: ", vm.toString(knownCyberCorps[i]))));
+
+            // Should still be able to verify that this legacy contract is a BeaconProxy (for front-end to differentiate legacy vs v3 contracts)
+            assertEq(knownCyberCorps[i].getErc1967Beacon(), legacyCyberCorpSingleFactory.beacon(), "should be able to get beacon address");
         }
     }
 
@@ -182,6 +190,9 @@ contract UpgradeLegacyCyberCorpsTest is Test {
 
             // Check for slot conflicts
             assertEq(address(DealManager(dmAddr).AUTH()), address(expectedAuths[i]), string(abi.encodePacked("AUTH should not change for DealManager: ", vm.toString(dmAddr))));
+
+            // Should still be able to verify that this legacy contract is a BeaconProxy (for front-end to differentiate legacy vs v3 contracts)
+            assertEq(dmAddr.getErc1967Beacon(), legacyDealManagerFactory.beacon(), "should be able to get beacon address");
         }
     }
 
@@ -204,6 +215,9 @@ contract UpgradeLegacyCyberCorpsTest is Test {
 
             // Check for slot conflicts
             assertEq(address(IIssuanceManager(imAddr).AUTH()), address(expectedAuths[i]), string(abi.encodePacked("AUTH should not change for IssuanceManager: ", vm.toString(imAddr))));
+
+            // Should still be able to verify that this legacy contract is a BeaconProxy (for front-end to differentiate legacy vs v3 contracts)
+            assertEq(imAddr.getErc1967Beacon(), legacyIssuanceManagerFactory.beacon(), "should be able to get beacon address");
         }
     }
 
@@ -293,7 +307,16 @@ contract UpgradeLegacyCyberCorpsTest is Test {
         _upgradeFactoryAndLegacyCyberCorps();
 
         vm.startPrank(alice);
-        cyberCorpFactory.deployCyberCorpAndCreateOffer(
+        (
+            address cyberCorpAddress,
+            ,
+            address issuanceManagerAddress,
+            address dealManagerAddress,
+            address roundManagerAddress,
+            address[] memory certPrinterAddress,
+            ,
+
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
             block.timestamp,
             "TestCorp",
             "Limited Liability Company",
@@ -336,6 +359,13 @@ contract UpgradeLegacyCyberCorpsTest is Test {
             block.timestamp + 1000000
         );
         vm.stopPrank();
+
+        // Verify that new deployments are UUPSUpgradeable (so front-end can differentiate from from legacy contracts)
+        assertEq(cyberCorpAddress.getErc1967Beacon(), address(0), "new CyberCorp should not be a BeaconProxy");
+        assertEq(issuanceManagerAddress.getErc1967Beacon(), address(0), "new IssuanceManager should not be a BeaconProxy");
+        assertEq(dealManagerAddress.getErc1967Beacon(), address(0), "new DealManager should not be a BeaconProxy");
+        assertEq(roundManagerAddress.getErc1967Beacon(), address(0), "new RoundManager should not be a BeaconProxy");
+        assertEq(certPrinterAddress[0].getErc1967Beacon(), IIssuanceManager(issuanceManagerAddress).cyberCertPrinterBeacon(), "new CyberCertPrinter should still be a BeaconProxy");
     }
 
     function test_EnableFeesNewCorp() public {

@@ -42,12 +42,21 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import {Vm} from "forge-std/Test.sol";
+import {ERC1967Utils} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Utils.sol";
 
 library ERC1967ProxyLib {
 
-    function getErc1967Implementation(address proxy, Vm vm) internal view returns (address) {
-        // Workaround since there is no public function to get the implementation address:
-        // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/acd4ff74de833399287ed6b31b4debf6b2b35527/contracts/proxy/ERC1967/ERC1967Proxy.sol#L35
-        return address(uint160(uint256(vm.load(proxy, 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc))));
+    Vm constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
+
+    /// @notice Workaround since there is no public function to get the implementation address:
+    /// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/acd4ff74de833399287ed6b31b4debf6b2b35527/contracts/proxy/ERC1967/ERC1967Proxy.sol#L35
+    function getErc1967Implementation(address proxy) internal view returns (address) {
+        return address(uint160(uint256(vm.load(proxy, ERC1967Utils.IMPLEMENTATION_SLOT))));
+    }
+
+    /// @notice Workaround since there is no public function to get the beacon address:
+    /// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/acd4ff74de833399287ed6b31b4debf6b2b35527/contracts/proxy/ERC1967/ERC1967Utils.sol#L126-L128
+    function getErc1967Beacon(address proxy) internal view returns (address) {
+        return address(uint160(uint256(vm.load(proxy, ERC1967Utils.BEACON_SLOT))));
     }
 }

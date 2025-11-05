@@ -188,4 +188,6 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
     function companyJurisdiction() external view returns (string memory);
     function AUTH() external view returns (address);
     function DEPLOY_VERSION() external view returns (string memory);
+    function cyberCertPrinterBeacon() external view returns (address);
+    function cyberScripBeacon() external view returns (address);
 }

@@ -347,7 +347,7 @@ contract CyberCorpUpgradeabilityTest is Test {
         cyberCorpSingleFactory.setRefImplementation(rugImpl);
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, BorgAuth(corpAuthAddr).OWNER_ROLE(), metalex));
         CyberCorp(cyberCorpAddr).upgradeToAndCall(rugImpl, "");
-        assertNotEq(cyberCorpAddr.getErc1967Implementation(vm), rugImpl);
+        assertNotEq(cyberCorpAddr.getErc1967Implementation(), rugImpl);
 
         // Below demonstrates what could have happened if the unauthorized upgrade was allowed
 
@@ -385,7 +385,7 @@ contract CyberCorpUpgradeabilityTest is Test {
         imFactory.setRefImplementation(rugImpl);
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, BorgAuth(corpAuthAddr).OWNER_ROLE(), metalex));
         IssuanceManager(imAddr).upgradeToAndCall(rugImpl, "");
-        assertNotEq(imAddr.getErc1967Implementation(vm), rugImpl);
+        assertNotEq(imAddr.getErc1967Implementation(), rugImpl);
 
         // Below demonstrates what could have happened if the unauthorized upgrade was allowed
 

@@ -3077,7 +3077,7 @@ contract CyberCorpTest is Test {
             newImplementation,
             ""
         );
-        assertEq(registryAddr.getErc1967Implementation(vm), newImplementation);
+        assertEq(registryAddr.getErc1967Implementation(), newImplementation);
 
         // Verify the registry still works by checking the template
         (
@@ -3105,7 +3105,7 @@ contract CyberCorpTest is Test {
         // Owner should be able to upgrade it
         vm.prank(multisig);
         cyberCorpFactory.upgradeToAndCall(newImplementation, "");
-        assertEq(address(cyberCorpFactory).getErc1967Implementation(vm), newImplementation);
+        assertEq(address(cyberCorpFactory).getErc1967Implementation(), newImplementation);
 
         // Verify the factory still works by checking the dependencies and creating a new corp
 
@@ -3210,7 +3210,7 @@ contract CyberCorpTest is Test {
         // Owner should be able to upgrade it
         vm.prank(multisig);
         uriBuilder.upgradeToAndCall(newImplementation, "");
-        assertEq(address(uriBuilder).getErc1967Implementation(vm), newImplementation);
+        assertEq(address(uriBuilder).getErc1967Implementation(), newImplementation);
 
         // Verify the URI builder still works
         assertEq(uriBuilder.securityClassToString(SecurityClass.SAFT), "SAFT");
