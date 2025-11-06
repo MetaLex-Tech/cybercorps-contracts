@@ -66,19 +66,17 @@ contract MetaDAOTest is Test {
         templateId = bytes32("TEST_TEMPLATE");
         globalFields = new string[](1);
         globalFields[0] = "Global Field";
-        partyFields = new string[](1);
-        partyFields[0] = "Party Field";
+        partyFields = new string[](2);
+        partyFields[0] = "Name";
+        partyFields[1] = "Title";
         vm.prank(metaDAO);
         registry.createTemplate(templateId, "MetaDAO", "ipfs://template", globalFields, partyFields);
     }
 
     function test_deployMetaDAOContractFor() public {
         // Parties and values
-        string[] memory globalValues = new string[](1);
-        globalValues[0] = "G";
-
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Officer";
+        string[] memory globalValues = _getDefaultGlobalValues();
+        string[][] memory partyValues = _getDefaultPartyValues();
 
         // Compute agreementId and signer signature for deployer (who will sign)
         uint256 saltUint = 1;
@@ -96,7 +94,7 @@ contract MetaDAOTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[1],
             founderPrivKey
         );
 
@@ -109,28 +107,27 @@ contract MetaDAOTest is Test {
             "contact",
             "arbitration",
             founder,
-            CompanyOfficer({
-                eoa: founder,
-                name: "Officer",
-                contact: "officer@example.com",
-                title: "CEO"
-            }),
+            _getDefaultCorpOfficer(),
             templateId,
             globalValues,
-            new string[][](0), // no-op
+            partyValues,
             signature,
             founder
         );
         vm.stopPrank();
+
+        address[] memory meetingNotesParties = new address[](1);
+        meetingNotesParties[0] = metaDAO;
+        _verifyContractStatus(
+            contractId,
+            keccak256(abi.encode(templateId, saltUint + 1, globalValues, meetingNotesParties))
+        );
     }
 
     function test_deployMetaDAOContractForOnBehalf() public {
         // Parties and values
-        string[] memory globalValues = new string[](1);
-        globalValues[0] = "G";
-
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Officer";
+        string[] memory globalValues = _getDefaultGlobalValues();
+        string[][] memory partyValues = _getDefaultPartyValues();
 
         // Compute agreementId and signer signature for deployer (who will sign)
         uint256 saltUint = 1;
@@ -148,7 +145,7 @@ contract MetaDAOTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[1],
             founderPrivKey
         );
 
@@ -162,28 +159,27 @@ contract MetaDAOTest is Test {
             "contact",
             "arbitration",
             founder,
-            CompanyOfficer({
-                eoa: founder,
-                name: "Officer",
-                contact: "officer@example.com",
-                title: "CEO"
-            }),
+            _getDefaultCorpOfficer(),
             templateId,
             globalValues,
-            new string[][](0), // no-op
+            partyValues,
             signature,
             founder
         );
         vm.stopPrank();
+
+        address[] memory meetingNotesParties = new address[](1);
+        meetingNotesParties[0] = metaDAO;
+        _verifyContractStatus(
+            contractId,
+            keccak256(abi.encode(templateId, saltUint + 1, globalValues, meetingNotesParties))
+        );
     }
 
     function test_RevertIf_deployMetaDAOContractForWrongSignature() public {
         // Parties and values
-        string[] memory globalValues = new string[](1);
-        globalValues[0] = "G";
-
-        string[] memory partyValues = new string[](1);
-        partyValues[0] = "Officer";
+        string[] memory globalValues = _getDefaultGlobalValues();
+        string[][] memory partyValues = _getDefaultPartyValues();
 
         // Compute agreementId and signer signature for deployer (who will sign)
         uint256 saltUint = 1;
@@ -201,7 +197,7 @@ contract MetaDAOTest is Test {
             globalFields,
             partyFields,
             globalValues,
-            partyValues,
+            partyValues[1],
             alicePrivKey // wrong signature
         );
 
@@ -216,19 +212,169 @@ contract MetaDAOTest is Test {
             "contact",
             "arbitration",
             founder,
-            CompanyOfficer({
-                eoa: founder,
-                name: "Officer",
-                contact: "officer@example.com",
-                title: "CEO"
-            }),
+            _getDefaultCorpOfficer(),
             templateId,
             globalValues,
-            new string[][](0), // no-op
+            partyValues,
             signature,
             founder
         );
         vm.stopPrank();
     }
-}
 
+    function test_RevertIf_deployMetaDAOContractForMismatchPartyValues() public {
+        // Parties and values
+        string[] memory globalValues = _getDefaultGlobalValues();
+        string[][] memory partyValues = _getDefaultPartyValues();
+
+        // Overwrite with incorrect founder name
+        partyValues[1][0] = "Alice";
+
+        // Compute agreementId and signer signature for deployer (who will sign)
+        uint256 saltUint = 1;
+        // Parties must match what factory will set: [metaDAOOfficer.eoa, deployer]
+        address[] memory parties = new address[](2);
+        parties[0] = metaDAO;
+        parties[1] = founder;
+        bytes32 contractId = keccak256(abi.encode(templateId, saltUint, globalValues, parties));
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs://template",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[1],
+            founderPrivKey
+        );
+
+        // alice should not be able temper with the party values
+        vm.startPrank(alice);
+        vm.expectRevert(MetaDAOFactory.PartyValuesMismatch.selector);
+        factory.deployMetaDAOContractFor(
+            saltUint,
+            "Corp Meta",
+            "corporation",
+            "DE",
+            "contact",
+            "arbitration",
+            founder,
+            _getDefaultCorpOfficer(),
+            templateId,
+            globalValues,
+            partyValues,
+            signature,
+            founder
+        );
+        vm.stopPrank();
+    }
+
+    function test_RevertIf_deployMetaDAOContractForMismatchOfficerValues() public {
+        // Parties and values
+        string[] memory globalValues = _getDefaultGlobalValues();
+        string[][] memory partyValues = _getDefaultPartyValues();
+
+        CompanyOfficer memory officer = _getDefaultCorpOfficer();
+        // Overwrite with incorrect officer EOA
+        officer.eoa = alice;
+
+        // Compute agreementId and signer signature for deployer (who will sign)
+        uint256 saltUint = 1;
+        // Parties must match what factory will set: [metaDAOOfficer.eoa, deployer]
+        address[] memory parties = new address[](2);
+        parties[0] = metaDAO;
+        parties[1] = founder;
+        bytes32 contractId = keccak256(abi.encode(templateId, saltUint, globalValues, parties));
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs://template",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[1],
+            founderPrivKey
+        );
+
+        // alice should not be able temper with the officer values
+        vm.startPrank(alice);
+        vm.expectRevert(MetaDAOFactory.OfficerValuesMismatch.selector);
+        factory.deployMetaDAOContractFor(
+            saltUint,
+            "Corp Meta",
+            "corporation",
+            "DE",
+            "contact",
+            "arbitration",
+            founder,
+            officer,
+            templateId,
+            globalValues,
+            partyValues,
+            signature,
+            founder
+        );
+        vm.stopPrank();
+    }
+
+    function _getDefaultGlobalValues() internal returns (string[] memory) {
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "G";
+        return globalValues;
+    }
+
+    function _getDefaultPartyValues() internal returns (string[][] memory) {
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](2);
+        partyValues[0][0] = "MetaDAO Officer";
+        partyValues[0][1] = "CEO";
+        partyValues[1] = new string[](2);
+        partyValues[1][0] = "Officer";
+        partyValues[1][1] = "CEO";
+        return partyValues;
+    }
+
+    function _getDefaultCorpOfficer() internal returns (CompanyOfficer memory) {
+        return CompanyOfficer({
+            eoa: founder,
+            name: "Officer",
+            contact: "officer@example.com",
+            title: "CEO"
+        });
+    }
+
+    function _verifyContractStatus(bytes32 agreementId, bytes32 meetingNotesId) internal {
+        // Verify agreement status
+        (
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            bool isAgreementComplete
+        ) = CyberAgreementRegistry(registry).getContractDetails(agreementId);
+        assertTrue(isAgreementComplete, "agreement should be complete");
+
+        (
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            bool isMeetingNotesComplete
+        ) = CyberAgreementRegistry(registry).getContractDetails(meetingNotesId);
+        assertTrue(isMeetingNotesComplete, "meeting notes should be complete");
+    }
+}
