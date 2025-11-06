@@ -54,6 +54,7 @@ import "./CyberCorpConstants.sol";
 import "./storage/CyberCertPrinterStorage.sol";
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
@@ -68,6 +69,8 @@ interface IRoundManagerInit {
 }
 
 contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
+    using Strings for string;
+    
     error InvalidSalt();
 
     address public registryAddress;
@@ -123,6 +126,9 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         address dealManager,
         address roundManager
     );
+
+    error PartyValuesMismatch();
+    error OfficerValuesMismatch();
 
     function initialize(
         address _auth,
@@ -353,11 +359,31 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             uint256[] memory certIds
         )
     {
+        // Check: validate key fields
+
+        // TODO WIP: revise it when template specs are finalized
+        if (_partyValues.length < 2
+            || _partyValues[0].length < 2
+            || _partyValues[1].length < 2
+            || !_partyValues[0][0].equal(metaDAOOfficer.name)
+            || !_partyValues[0][1].equal(metaDAOOfficer.title)
+            || !_partyValues[1][0].equal(_officer.name)
+            || !_partyValues[1][1].equal(_officer.title)
+        ) {
+            revert PartyValuesMismatch();
+        }
+
+        if (_officer.eoa != deployer) {
+            revert OfficerValuesMismatch();
+        }
+
+        // Effect: construct parties
+        address[] memory partiesOverride = new address[](2);
+        partiesOverride[0] = metaDAOOfficer.eoa;
+        partiesOverride[1] = deployer;
+
         //create bytes32 salt
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
-
-        //set this officer's eoa to the sender
-        _officer.eoa = deployer;
 
         (
             cyberCorpAddress,
@@ -376,61 +402,40 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             _officer
         );
 
-            address[] memory partiesOverride = new address[](2);
-            partiesOverride[0] = metaDAOOfficer.eoa;
-            partiesOverride[1] = deployer;
-
-        // Size party values to match template partyFields length to avoid OOB
-        (
-            ,
-            ,
-            ,
-            string[] memory templatePartyFields
-        ) = ICyberAgreementRegistry(registryAddress).getTemplateDetails(_templateId);
-        uint256 partyFieldCount = templatePartyFields.length;
-
-        string[][] memory partyValuesOverride = new string[][](2);
-        partyValuesOverride[0] = new string[](partyFieldCount);
-        partyValuesOverride[1] = new string[](partyFieldCount);
-        if (partyFieldCount > 0) {
-            partyValuesOverride[0][0] = metaDAOOfficer.name;
-            partyValuesOverride[1][0] = _officer.name;
-        }
-        if (partyFieldCount > 1) {
-            partyValuesOverride[0][1] = metaDAOOfficer.title;
-            partyValuesOverride[1][1] = _officer.title;
-        }
-
         //both parties sign one agreement
         bytes32 agreementId = ICyberAgreementRegistry(registryAddress).createContract(
             _templateId,
             salt,
             _globalValues,
             partiesOverride,
-            partyValuesOverride,
+            _partyValues,
             bytes32(0),
             address(this),
             block.timestamp + 7 days
         );
 
-        ICyberAgreementRegistry(registryAddress).signContractFor(deployer, agreementId, partyValuesOverride[1], signature, false, "");
+        ICyberAgreementRegistry(registryAddress).signContractFor(deployer, agreementId, _partyValues[1], signature, false, "");
 
         ICyberAgreementRegistry(registryAddress).signContractWithEscrow(
             metaDAOOfficer.eoa,
             agreementId,
-            partyValuesOverride[0],
+            _partyValues[0],
             metaDAOSignatureHash,
             false,
             ""
         );
 
-        //parent company sign the meeting notes
+        //parent company sign the meeting notes (single-party)
+        address[] memory meetingNotesParties = new address[](1);
+        meetingNotesParties[0] = partiesOverride[0];
+        string[][] memory meetingNotesPartyValues = new string[][](1);
+        meetingNotesPartyValues[0] = _partyValues[0];
         bytes32 meetingNotesId = ICyberAgreementRegistry(registryAddress).createContract(
             _templateId,
             salt+1,
             _globalValues,
-            partiesOverride,
-            partyValuesOverride,
+            meetingNotesParties,
+            meetingNotesPartyValues,
             bytes32(0),
             address(this),
             block.timestamp + 7 days
@@ -439,7 +444,7 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         ICyberAgreementRegistry(registryAddress).signContractWithEscrow(
             metaDAOOfficer.eoa,
             meetingNotesId,
-            partyValuesOverride[0],
+            meetingNotesPartyValues[0],
             metaDAOSignatureHash,
             false,
             ""
