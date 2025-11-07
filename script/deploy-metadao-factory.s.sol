@@ -143,9 +143,9 @@ contract DeployMetaDAOFactoryScript is Script {
 
         // Configure MetaDAO officer and escrowed signature BEFORE revoking deployer ownership
         metaDAOFactory.setMetaDAOOfficerEOA(multisig);
-        metaDAOFactory.setMetaDAOOfficerName("MetaDAO Officer");
-        metaDAOFactory.setMetaDAOOfficerContact("metadao@example.com");
-        metaDAOFactory.setMetaDAOOfficerTitle("CEO");
+        metaDAOFactory.setMetaDAOOfficerName("MetaDAO Officer"); // TODO TBD
+        metaDAOFactory.setMetaDAOOfficerContact("metadao@example.com"); // TODO TBD
+        metaDAOFactory.setMetaDAOOfficerTitle("CEO"); // TODO TBD
         // Example escrowed signature payload (bytes)
         metaDAOFactory.setMetaDAOSignatureHash(abi.encodePacked("EXAMPLE_META_ESCROW_SIG"));
 
@@ -162,6 +162,39 @@ contract DeployMetaDAOFactoryScript is Script {
             "contact@metadao.example",
             "arbitration",
             multisig
+        );
+
+        // Create templates
+
+        string[] memory globalFields = new string[](8);
+        globalFields[0] = "founderName";
+        globalFields[1] = "enterpriseName";
+        globalFields[2] = "companyName";
+        globalFields[3] = "companyType";
+        globalFields[4] = "companyJurisdiction";
+        globalFields[5] = "companyContactDetails";
+        globalFields[6] = "tokenSymbol";
+        globalFields[7] = "tokenName";
+        string[] memory partyFields = new string[](2);
+        partyFields[0] = "name";
+        partyFields[1] = "contactDetails";
+
+        // Create template for SegCo
+        CyberAgreementRegistry(registry).createTemplate(
+            bytes32(uint256(40)),
+            "MetaDAO Futarchy Governance SPC - Board Consent - Approval of SegCo v 1.0",
+            "ipfs://template", // TODO TBD
+            globalFields,
+            partyFields
+        );
+
+        // Create template for Board Consent
+        CyberAgreementRegistry(registry).createTemplate(
+            bytes32(uint256(41)),
+            "MetaDAO Futarchy Governance SPC - SegCo combined v 1.0",
+            "ipfs://template", // TODO TBD
+            globalFields,
+            partyFields
         );
 
         // Assign roles and revoke EOA ownership (after setup)

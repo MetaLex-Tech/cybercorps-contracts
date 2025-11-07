@@ -45,7 +45,8 @@ contract MetaDAOTest is Test {
     CyberAgreementRegistry public registry;
     MetaDAOFactory public factory;
 
-    bytes32 public templateId;
+    bytes32 public segCoTemplateId = bytes32(uint256(40));
+    bytes32 public boardConsentTemplateId = bytes32(uint256(41));
     string[] public globalFields;
     string[] public partyFields;
 
@@ -62,15 +63,18 @@ contract MetaDAOTest is Test {
             metaDAO
         );
 
-        // Create test template with 1 global + 1 party field
-        templateId = bytes32("TEST_TEMPLATE");
-        globalFields = new string[](1);
-        globalFields[0] = "Global Field";
+        globalFields = new string[](8);
+        globalFields[0] = "founderName";
+        globalFields[1] = "enterpriseName";
+        globalFields[2] = "companyName";
+        globalFields[3] = "companyType";
+        globalFields[4] = "companyJurisdiction";
+        globalFields[5] = "companyContactDetails";
+        globalFields[6] = "tokenSymbol";
+        globalFields[7] = "tokenName";
         partyFields = new string[](2);
-        partyFields[0] = "Name";
-        partyFields[1] = "Title";
-        vm.prank(metaDAO);
-        registry.createTemplate(templateId, "MetaDAO", "ipfs://template", globalFields, partyFields);
+        partyFields[0] = "name";
+        partyFields[1] = "contactDetails";
     }
 
     function test_deployMetaDAOContractFor() public {
@@ -84,7 +88,7 @@ contract MetaDAOTest is Test {
         address[] memory parties = new address[](2);
         parties[0] = metaDAO;
         parties[1] = founder;
-        bytes32 contractId = keccak256(abi.encode(templateId, saltUint, globalValues, parties));
+        bytes32 contractId = keccak256(abi.encode(segCoTemplateId, saltUint, globalValues, parties));
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
             registry.DOMAIN_SEPARATOR(),
@@ -108,7 +112,8 @@ contract MetaDAOTest is Test {
             "arbitration",
             founder,
             _getDefaultCorpOfficer(),
-            templateId,
+            segCoTemplateId,
+            boardConsentTemplateId,
             globalValues,
             partyValues,
             signature,
@@ -120,7 +125,7 @@ contract MetaDAOTest is Test {
         meetingNotesParties[0] = metaDAO;
         _verifyContractStatus(
             contractId,
-            keccak256(abi.encode(templateId, saltUint + 1, globalValues, meetingNotesParties))
+            keccak256(abi.encode(boardConsentTemplateId, saltUint, globalValues, meetingNotesParties))
         );
     }
 
@@ -135,7 +140,7 @@ contract MetaDAOTest is Test {
         address[] memory parties = new address[](2);
         parties[0] = metaDAO;
         parties[1] = founder;
-        bytes32 contractId = keccak256(abi.encode(templateId, saltUint, globalValues, parties));
+        bytes32 contractId = keccak256(abi.encode(segCoTemplateId, saltUint, globalValues, parties));
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
             registry.DOMAIN_SEPARATOR(),
@@ -160,7 +165,8 @@ contract MetaDAOTest is Test {
             "arbitration",
             founder,
             _getDefaultCorpOfficer(),
-            templateId,
+            segCoTemplateId,
+            boardConsentTemplateId,
             globalValues,
             partyValues,
             signature,
@@ -172,7 +178,7 @@ contract MetaDAOTest is Test {
         meetingNotesParties[0] = metaDAO;
         _verifyContractStatus(
             contractId,
-            keccak256(abi.encode(templateId, saltUint + 1, globalValues, meetingNotesParties))
+            keccak256(abi.encode(boardConsentTemplateId, saltUint, globalValues, meetingNotesParties))
         );
     }
 
@@ -187,7 +193,7 @@ contract MetaDAOTest is Test {
         address[] memory parties = new address[](2);
         parties[0] = metaDAO;
         parties[1] = founder;
-        bytes32 contractId = keccak256(abi.encode(templateId, saltUint, globalValues, parties));
+        bytes32 contractId = keccak256(abi.encode(segCoTemplateId, saltUint, globalValues, parties));
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
             registry.DOMAIN_SEPARATOR(),
@@ -213,7 +219,8 @@ contract MetaDAOTest is Test {
             "arbitration",
             founder,
             _getDefaultCorpOfficer(),
-            templateId,
+            segCoTemplateId,
+            boardConsentTemplateId,
             globalValues,
             partyValues,
             signature,
@@ -236,7 +243,7 @@ contract MetaDAOTest is Test {
         address[] memory parties = new address[](2);
         parties[0] = metaDAO;
         parties[1] = founder;
-        bytes32 contractId = keccak256(abi.encode(templateId, saltUint, globalValues, parties));
+        bytes32 contractId = keccak256(abi.encode(segCoTemplateId, saltUint, globalValues, parties));
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
             registry.DOMAIN_SEPARATOR(),
@@ -262,7 +269,8 @@ contract MetaDAOTest is Test {
             "arbitration",
             founder,
             _getDefaultCorpOfficer(),
-            templateId,
+            segCoTemplateId,
+            boardConsentTemplateId,
             globalValues,
             partyValues,
             signature,
@@ -286,7 +294,7 @@ contract MetaDAOTest is Test {
         address[] memory parties = new address[](2);
         parties[0] = metaDAO;
         parties[1] = founder;
-        bytes32 contractId = keccak256(abi.encode(templateId, saltUint, globalValues, parties));
+        bytes32 contractId = keccak256(abi.encode(segCoTemplateId, saltUint, globalValues, parties));
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
             registry.DOMAIN_SEPARATOR(),
@@ -312,7 +320,8 @@ contract MetaDAOTest is Test {
             "arbitration",
             founder,
             officer,
-            templateId,
+            segCoTemplateId,
+            boardConsentTemplateId,
             globalValues,
             partyValues,
             signature,
@@ -322,27 +331,34 @@ contract MetaDAOTest is Test {
     }
 
     function _getDefaultGlobalValues() internal returns (string[] memory) {
-        string[] memory globalValues = new string[](1);
-        globalValues[0] = "G";
+        string[] memory globalValues = new string[](8);
+        globalValues[0] = "Founder"; // founderName
+        globalValues[1] = "testcorp"; // enterpriseNAme
+        globalValues[2] = "testcorp S.P., a segregated portfolio of Futarchy Governance SPC"; // companyName
+        globalValues[3] = "Segregated Portfolio of Segregated Portfolio Company"; // companyType
+        globalValues[4] = "Cayman Islands"; // companyJurisdiction
+        globalValues[5] = "email@testcorp.com"; // companyContactDetails
+        globalValues[6] = "TESTCORP"; // tokenSymbol
+        globalValues[7] = "Test Corp"; // tokenName
         return globalValues;
     }
 
     function _getDefaultPartyValues() internal returns (string[][] memory) {
         string[][] memory partyValues = new string[][](2);
         partyValues[0] = new string[](2);
-        partyValues[0][0] = "MetaDAO Officer";
-        partyValues[0][1] = "CEO";
+        partyValues[0][0] = "MetaDAO Officer"; // name
+        partyValues[0][1] = "metadao@example.com"; // contactDetails
         partyValues[1] = new string[](2);
-        partyValues[1][0] = "Officer";
-        partyValues[1][1] = "CEO";
+        partyValues[1][0] = "Founder"; // name
+        partyValues[1][1] = "founder@example.com"; // contactDetails
         return partyValues;
     }
 
     function _getDefaultCorpOfficer() internal returns (CompanyOfficer memory) {
         return CompanyOfficer({
             eoa: founder,
-            name: "Officer",
-            contact: "officer@example.com",
+            name: "Founder",
+            contact: "founder@example.com",
             title: "CEO"
         });
     }

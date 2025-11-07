@@ -333,7 +333,8 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         string memory defaultDisputeResolution,
         address _companyPayable,
         CompanyOfficer memory _officer,
-        bytes32 _templateId,
+        bytes32 _segCoTemplateId,
+        bytes32 _boardConsentTempateId,
         string[] memory _globalValues,
         string[][] memory _partyValues,
         bytes memory signature,
@@ -353,14 +354,17 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     {
         // Check: validate key fields
 
-        // TODO WIP: revise it when template specs are finalized
         if (_partyValues.length < 2
             || _partyValues[0].length < 2
             || _partyValues[1].length < 2
             || !_partyValues[0][0].equal(metaDAOOfficer.name)
-            || !_partyValues[0][1].equal(metaDAOOfficer.title)
+            || !_partyValues[0][1].equal(metaDAOOfficer.contact)
             || !_partyValues[1][0].equal(_officer.name)
-            || !_partyValues[1][1].equal(_officer.title)
+            || !_partyValues[1][1].equal(_officer.contact)
+            || _globalValues[2].equal(companyName)
+            || _globalValues[3].equal(companyType)
+            || _globalValues[4].equal(companyJurisdiction)
+            || _globalValues[5].equal(companyContactDetails)
         ) {
             revert PartyValuesMismatch();
         }
@@ -396,7 +400,7 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
 
         //both parties sign one agreement
         bytes32 agreementId = ICyberAgreementRegistry(registryAddress).createContract(
-            _templateId,
+            _segCoTemplateId,
             salt,
             _globalValues,
             partiesOverride,
@@ -423,8 +427,8 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         string[][] memory meetingNotesPartyValues = new string[][](1);
         meetingNotesPartyValues[0] = _partyValues[0];
         bytes32 meetingNotesId = ICyberAgreementRegistry(registryAddress).createContract(
-            _templateId,
-            salt+1,
+            _boardConsentTempateId,
+            salt,
             _globalValues,
             meetingNotesParties,
             meetingNotesPartyValues,

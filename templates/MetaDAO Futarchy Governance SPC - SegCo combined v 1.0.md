@@ -24,7 +24,6 @@ combined doc: TBD (should be the uploaded "MetaDAO Draft 11.1 v5.1.docx")
 | **partyFieldName** | **description** |
 |:-------------------|:----------------|
 | name               |                 |
-| evmAddress         |                 |
 | contactDetails     |                 |
 
 ## Certificate Extension

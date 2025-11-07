@@ -24,7 +24,6 @@ combined doc: TBD (should be the uploaded "Board Consent - Approval of SegCo.doc
 | **partyFieldName** | **description** |
 |:-------------------|:----------------|
 | name               |                 |
-| evmAddress         |                 |
 | contactDetails     |                 |
 
 ## Certificate Extension
