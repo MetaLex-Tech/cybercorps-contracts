@@ -59,8 +59,9 @@ contract MetaDAOTest is Test {
 
         // Deploy MetaDAO factories with production scripts
         (registry, factory) = (new DeployMetaDAOFactoryScript()).run(
-            deployerPrivKey,
-            metaDAO
+            deployerPrivKey, // deployerPrivateKey
+            metaDAO, // multisig
+            hex"63f62ac9b08c813401a02a16a820a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1b" // metadaoEscrowSig
         );
 
         globalFields = new string[](8);

@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 
+import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {MetaDAOFactory} from "../src/MetaDAOFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
@@ -19,18 +20,45 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract DeployMetaDAOFactoryScript is Script {
-    function run() public returns (CyberAgreementRegistry registry, MetaDAOFactory metaDAOFactory) {
+    // Hard-coded since we don't have programmatic access to CyberAgreementRegistry's underlying types
+    string constant DOMAIN_SEPARATOR_TYPE = "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)";
+    string constant ESCROW_SIGNATUREDATA_TYPE = "EscrowSignatureData(string legalContractUri,string[] partyFields,string[] partyValues)";
+
+    struct DomainSeparator {
+        string name;
+        string version;
+        uint256 chainId;
+        address verifyingContract;
+    }
+
+    struct EscrowSignatureData {
+        string legalContractUri;
+        string[] partyFields;
+        string[] partyValues;
+    }
+
+    function run() public returns (
+        CyberAgreementRegistry registry, 
+        MetaDAOFactory metaDAOFactory
+    ) {
         return run(
             vm.envUint("PRIVATE_KEY_MAIN"), // deployerPrivateKey
             // TODO: review needed: is this up to date?
-            0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C // multisig
+            0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C, // multisig
+            "" // TBD: ask MetaDAO to sign
         );
     }
 
     function run(
         uint256 deployerPrivateKey,
-        address multisig
+        address multisig,
+        bytes memory metadaoEscrowSig
     ) public returns (CyberAgreementRegistry registry, MetaDAOFactory metaDAOFactory) {
+        // Other configs
+        string memory metaDAOOfficerName = "MetaDAO Officer"; // TODO TBD
+        string memory metaDAOOfficerContact = "metadao@example.com"; // TODO TBD
+        string memory metaDAOOfficerTitle = "CEO"; // TODO TBD
+
         address deployerAddress = vm.addr(deployerPrivateKey);
         vm.startBroadcast(deployerPrivateKey);
 
@@ -63,6 +91,40 @@ contract DeployMetaDAOFactoryScript is Script {
                     address(auth)
                 )
             )
+        );
+
+        // Create templates
+
+        string[] memory globalFields = new string[](8);
+        globalFields[0] = "founderName";
+        globalFields[1] = "enterpriseName";
+        globalFields[2] = "companyName";
+        globalFields[3] = "companyType";
+        globalFields[4] = "companyJurisdiction";
+        globalFields[5] = "companyContactDetails";
+        globalFields[6] = "tokenSymbol";
+        globalFields[7] = "tokenName";
+        string[] memory partyFields = new string[](2);
+        partyFields[0] = "name";
+        partyFields[1] = "contactDetails";
+
+        // Create template for SegCo
+        CyberAgreementRegistry(registry).createTemplate(
+            bytes32(uint256(40)),
+            "MetaDAO Futarchy Governance SPC - Board Consent - Approval of SegCo v 1.0",
+            "ipfs://template", // TODO TBD
+            globalFields,
+            partyFields
+        );
+
+        // Create template for Board Consent
+        string memory boardConsentUri = "ipfs://template"; // TODO TBD
+        CyberAgreementRegistry(registry).createTemplate(
+            bytes32(uint256(41)),
+            "MetaDAO Futarchy Governance SPC - SegCo combined v 1.0",
+            boardConsentUri,
+            globalFields,
+            partyFields
         );
 
         address uriBuilder = address(
@@ -143,11 +205,31 @@ contract DeployMetaDAOFactoryScript is Script {
 
         // Configure MetaDAO officer and escrowed signature BEFORE revoking deployer ownership
         metaDAOFactory.setMetaDAOOfficerEOA(multisig);
-        metaDAOFactory.setMetaDAOOfficerName("MetaDAO Officer"); // TODO TBD
-        metaDAOFactory.setMetaDAOOfficerContact("metadao@example.com"); // TODO TBD
-        metaDAOFactory.setMetaDAOOfficerTitle("CEO"); // TODO TBD
-        // Example escrowed signature payload (bytes)
-        metaDAOFactory.setMetaDAOSignatureHash(abi.encodePacked("EXAMPLE_META_ESCROW_SIG"));
+        metaDAOFactory.setMetaDAOOfficerName(metaDAOOfficerName);
+        metaDAOFactory.setMetaDAOOfficerContact(metaDAOOfficerContact);
+        metaDAOFactory.setMetaDAOOfficerTitle(metaDAOOfficerTitle);
+        
+        if (metadaoEscrowSig.length > 0) {
+            // If we have the signature to escrow, set it
+            metaDAOFactory.setMetaDAOSignatureHash(metadaoEscrowSig);
+
+        } else {
+            // Otherwise, output the typed data for MetaDAO to sign off-chain
+            string[] memory partyValues = new string[](2);
+            partyValues[0] = metaDAOOfficerName;
+            partyValues[1] = metaDAOOfficerContact;
+
+            console.log("Signature required: have MetaDAO sign the following EIP-712 typed data:");
+            console.log("  (can be signed with command `cast wallet sign --data '<paste json string here>'`)");
+            console.log("==== JSON data start ====");
+            console.log(_formatEscrowAgreementTypedDataJson(
+                CyberAgreementRegistry(registry),
+                boardConsentUri,
+                partyFields,
+                partyValues
+            ));
+            console.log("==== JSON data end ====");
+        }
 
         // Create the parent corp (one-time). Reverts if called again.
         (address parentCorp,
@@ -162,39 +244,6 @@ contract DeployMetaDAOFactoryScript is Script {
             "contact@metadao.example",
             "arbitration",
             multisig
-        );
-
-        // Create templates
-
-        string[] memory globalFields = new string[](8);
-        globalFields[0] = "founderName";
-        globalFields[1] = "enterpriseName";
-        globalFields[2] = "companyName";
-        globalFields[3] = "companyType";
-        globalFields[4] = "companyJurisdiction";
-        globalFields[5] = "companyContactDetails";
-        globalFields[6] = "tokenSymbol";
-        globalFields[7] = "tokenName";
-        string[] memory partyFields = new string[](2);
-        partyFields[0] = "name";
-        partyFields[1] = "contactDetails";
-
-        // Create template for SegCo
-        CyberAgreementRegistry(registry).createTemplate(
-            bytes32(uint256(40)),
-            "MetaDAO Futarchy Governance SPC - Board Consent - Approval of SegCo v 1.0",
-            "ipfs://template", // TODO TBD
-            globalFields,
-            partyFields
-        );
-
-        // Create template for Board Consent
-        CyberAgreementRegistry(registry).createTemplate(
-            bytes32(uint256(41)),
-            "MetaDAO Futarchy Governance SPC - SegCo combined v 1.0",
-            "ipfs://template", // TODO TBD
-            globalFields,
-            partyFields
         );
 
         // Assign roles and revoke EOA ownership (after setup)
@@ -220,5 +269,37 @@ contract DeployMetaDAOFactoryScript is Script {
         vm.stopBroadcast();
 
         return (CyberAgreementRegistry(registry), metaDAOFactory);
+    }
+
+    function _formatEscrowAgreementTypedDataJson(
+        CyberAgreementRegistry registry,
+        string memory contractUri,
+        string[] memory partyFields,
+        string[] memory partyValues
+    ) internal returns (string memory) {
+        string memory domainSeparatorJson = vm.serializeJsonType(
+            DOMAIN_SEPARATOR_TYPE,
+            abi.encode(DomainSeparator({
+                name: registry.name(),
+                version: registry.version(),
+                chainId: block.chainid,
+                verifyingContract: address(registry)
+            }))
+        );
+
+        string memory escrowSignatureDataJson = vm.serializeJsonType(
+            ESCROW_SIGNATUREDATA_TYPE,
+            abi.encode(EscrowSignatureData({
+                legalContractUri: contractUri,
+                partyFields: partyFields,
+                partyValues: partyValues
+            }))
+        );
+
+        // Build the json string with the temporary buffer at key "outputKey"
+        vm.serializeString("outputKey", "domain", domainSeparatorJson);
+        vm.serializeString("outputKey", "message", escrowSignatureDataJson);
+        vm.serializeString("outputKey", "primaryType", "EscrowSignatureData");
+        return vm.serializeString("outputKey", "types", "{\"EIP712Domain\":[{\"name\":\"name\",\"type\":\"string\"},{\"name\":\"version\",\"type\":\"string\"},{\"name\":\"chainId\",\"type\":\"uint256\"},{\"name\":\"verifyingContract\",\"type\":\"address\"}],\"EscrowSignatureData\":[{\"name\":\"legalContractUri\",\"type\":\"string\"},{\"name\":\"partyFields\",\"type\":\"string[]\"},{\"name\":\"partyValues\",\"type\":\"string[]\"}]}");
     }
 }
