@@ -1,6 +1,7 @@
 # Data Overview
 
-id: bytes32(uint256(40))
+id: keccak256(bytes("MetaDAO Futarchy Governance SPC - SegCo combined v 1.0"))
+0x8abfb04f4f2f932f7042d9ba274fa5c24462985f02463bad1c0ca90056187c44
 
 legalURI: TBD
 

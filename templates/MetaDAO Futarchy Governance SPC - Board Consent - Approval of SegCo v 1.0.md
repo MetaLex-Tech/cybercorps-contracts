@@ -1,6 +1,7 @@
 # Data Overview
 
-id: bytes32(uint256(41))
+id: keccak256(bytes("MetaDAO Futarchy Governance SPC - Board Consent - Approval of SegCo v 1.0"))
+0x419412d2908fe3853b7e75383a3ad8eab191f9ff2b5a626a7a476a3c52b9d337
 
 legalURI: TBD
 

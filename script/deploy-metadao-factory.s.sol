@@ -109,19 +109,21 @@ contract DeployMetaDAOFactoryScript is Script {
         partyFields[1] = "contactDetails";
 
         // Create template for SegCo
+        string memory segCoAgreementTitle = "MetaDAO Futarchy Governance SPC - Board Consent - Approval of SegCo v 1.0";
         CyberAgreementRegistry(registry).createTemplate(
-            bytes32(uint256(40)),
-            "MetaDAO Futarchy Governance SPC - Board Consent - Approval of SegCo v 1.0",
+            keccak256(bytes(segCoAgreementTitle)),
+            segCoAgreementTitle,
             "ipfs://template", // TODO TBD
             globalFields,
             partyFields
         );
 
         // Create template for Board Consent
+        string memory boardConsentTitle = "MetaDAO Futarchy Governance SPC - SegCo combined v 1.0";
         string memory boardConsentUri = "ipfs://template"; // TODO TBD
         CyberAgreementRegistry(registry).createTemplate(
-            bytes32(uint256(41)),
-            "MetaDAO Futarchy Governance SPC - SegCo combined v 1.0",
+            keccak256(bytes(boardConsentTitle)),
+            boardConsentTitle,
             boardConsentUri,
             globalFields,
             partyFields

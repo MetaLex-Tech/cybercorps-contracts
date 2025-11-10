@@ -45,8 +45,8 @@ contract MetaDAOTest is Test {
     CyberAgreementRegistry public registry;
     MetaDAOFactory public factory;
 
-    bytes32 public segCoTemplateId = bytes32(uint256(40));
-    bytes32 public boardConsentTemplateId = bytes32(uint256(41));
+    bytes32 public segCoTemplateId = keccak256(bytes("MetaDAO Futarchy Governance SPC - Board Consent - Approval of SegCo v 1.0"));
+    bytes32 public boardConsentTemplateId = keccak256(bytes("MetaDAO Futarchy Governance SPC - SegCo combined v 1.0"));
     string[] public globalFields;
     string[] public partyFields;
 
