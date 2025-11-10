@@ -124,7 +124,7 @@ contract MetaDAOTest is Test {
 
         address[] memory meetingNotesParties = new address[](1);
         meetingNotesParties[0] = metaDAO;
-        _verifyContractStatus(
+        _verifyContractsDefault(
             contractId,
             keccak256(abi.encode(boardConsentTemplateId, saltUint, globalValues, meetingNotesParties))
         );
@@ -177,7 +177,7 @@ contract MetaDAOTest is Test {
 
         address[] memory meetingNotesParties = new address[](1);
         meetingNotesParties[0] = metaDAO;
-        _verifyContractStatus(
+        _verifyContractsDefault(
             contractId,
             keccak256(abi.encode(boardConsentTemplateId, saltUint, globalValues, meetingNotesParties))
         );
@@ -361,34 +361,117 @@ contract MetaDAOTest is Test {
         });
     }
 
-    function _verifyContractStatus(bytes32 agreementId, bytes32 meetingNotesId) internal {
-        // Verify agreement status
-        (
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            bool isAgreementComplete
-        ) = CyberAgreementRegistry(registry).getContractDetails(agreementId);
-        assertTrue(isAgreementComplete, "agreement should be complete");
+    /// @notice This is to make sure contracts fields are created and signed with the expected values because
+    /// they are not strong typed and are error-prone to typos or out of sync across many iterations
+    /// @dev The test assumes all default values
+    function _verifyContractsDefault(bytes32 agreementId, bytes32 meetingNotesId) internal {
+        string[] memory expectedGlobalFields = new string[](8);
+        expectedGlobalFields[0] = "founderName";
+        expectedGlobalFields[1] = "enterpriseName";
+        expectedGlobalFields[2] = "companyName";
+        expectedGlobalFields[3] = "companyType";
+        expectedGlobalFields[4] = "companyJurisdiction";
+        expectedGlobalFields[5] = "companyContactDetails";
+        expectedGlobalFields[6] = "tokenSymbol";
+        expectedGlobalFields[7] = "tokenName";
 
+        string[] memory expectedGlobalValues = new string[](8);
+        expectedGlobalValues[0] = "Founder"; // founderName
+        expectedGlobalValues[1] = "testcorp"; // enterpriseNAme
+        expectedGlobalValues[2] = "testcorp S.P., a segregated portfolio of Futarchy Governance SPC"; // companyName
+        expectedGlobalValues[3] = "Segregated Portfolio of Segregated Portfolio Company"; // companyType
+        expectedGlobalValues[4] = "Cayman Islands"; // companyJurisdiction
+        expectedGlobalValues[5] = "email@testcorp.com"; // companyContactDetails
+        expectedGlobalValues[6] = "TESTCORP"; // tokenSymbol
+        expectedGlobalValues[7] = "Test Corp"; // tokenName
+
+        string[] memory expectedPartyFields = new string[](2);
+        expectedPartyFields[0] = "name";
+        expectedPartyFields[1] = "contactDetails";
+
+        {
+            address[] memory expectedParties = new address[](2);
+            expectedParties[0] = metaDAO;
+            expectedParties[1] = founder;
+
+            string[][] memory expectedPartyValues = new string[][](2);
+            expectedPartyValues[0] = new string[](2);
+            expectedPartyValues[0][0] = "MetaDAO Officer"; // name
+            expectedPartyValues[0][1] = "metadao@example.com"; // contactDetails
+            expectedPartyValues[1] = new string[](2);
+            expectedPartyValues[1][0] = "Founder"; // name
+            expectedPartyValues[1][1] = "founder@example.com"; // contactDetails
+
+            _verifyContractDetails(
+                "SegCo agreement",
+                agreementId,
+                "ipfs://", // TODO TBD
+                expectedGlobalFields,
+                expectedPartyFields,
+                expectedGlobalValues,
+                expectedParties,
+                expectedPartyValues,
+                2
+            );
+        }
+
+        {
+            address[] memory expectedParties = new address[](1);
+            expectedParties[0] = metaDAO;
+
+            string[][] memory expectedPartyValues = new string[][](1);
+            expectedPartyValues[0] = new string[](2);
+            expectedPartyValues[0][0] = "MetaDAO Officer"; // name
+            expectedPartyValues[0][1] = "metadao@example.com"; // contactDetails
+
+            _verifyContractDetails(
+                "Board consent",
+                meetingNotesId,
+                "ipfs://", // TODO TBD
+                expectedGlobalFields,
+                expectedPartyFields,
+                expectedGlobalValues,
+                expectedParties,
+                expectedPartyValues,
+                1
+            );
+        }
+    }
+
+    /// @dev Made a separate function to avoid stack-too-deep errors
+    function _verifyContractDetails(
+        string memory contractName,
+        bytes32 agreementId,
+        string memory expectedLegalContractUri,
+        string[] memory expectedGlobalFields,
+        string[] memory expectedPartyFields,
+        string[] memory expectedGlobalValues,
+        address[] memory expectedParties,
+        string[][] memory expectedPartyValues,
+        uint256 expectedNumSignatures
+    ) internal {
         (
             ,
+            string memory legalContractUri,
+            string[] memory globalFields,
+            string[] memory partyFields,
+            string[] memory globalValues,
+            address[] memory parties,
+            string[][] memory partyValues,
             ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            bool isMeetingNotesComplete
-        ) = CyberAgreementRegistry(registry).getContractDetails(meetingNotesId);
-        assertTrue(isMeetingNotesComplete, "meeting notes should be complete");
+            uint256 numSignatures,
+            bool isComplete
+        ) = CyberAgreementRegistry(registry).getContractDetails(agreementId);
+
+//            assertEq(legalContractUri, "ipfs://", string(abi.encodePacked(contractName, ": unexpected legal contract URI"))); // TODO TBD
+        assertEq(globalFields, expectedGlobalFields, string(abi.encodePacked(contractName, ": unexpected globalFields")));
+        assertEq(partyFields, expectedPartyFields, string(abi.encodePacked(contractName, ": unexpected partyFields")));
+        assertEq(globalValues, expectedGlobalValues, string(abi.encodePacked(contractName, ": unexpected globalValues")));
+        for (uint256 i = 0; i < partyValues.length; i++) {
+            assertEq(partyValues[i], expectedPartyValues[i], string(abi.encodePacked(contractName, ": unexpected partyValues")));
+        }
+        assertEq(parties, expectedParties, string(abi.encodePacked(contractName, ": unexpected parties")));
+        assertEq(numSignatures, expectedNumSignatures, string(abi.encodePacked(contractName, ": unexpected number of signatures")));
+        assertTrue(isComplete, string(abi.encodePacked(contractName, ": agreement should be complete")));
     }
 }
