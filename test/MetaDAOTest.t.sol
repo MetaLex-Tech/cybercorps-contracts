@@ -106,17 +106,17 @@ contract MetaDAOTest is Test {
         vm.startPrank(founder);
         factory.deployMetaDAOContractFor(
             saltUint,
-            "Corp Meta",
-            "corporation",
-            "DE",
-            "contact",
+            "testcorp S.P., a segregated portfolio of Futarchy Governance SPC",
+            "Segregated Portfolio of Segregated Portfolio Company",
+            "Cayman Islands",
+            "email@testcorp.com",
             "arbitration",
             founder,
             _getDefaultCorpOfficer(),
             segCoTemplateId,
             boardConsentTemplateId,
             globalValues,
-            partyValues,
+            partyValues[1],
             signature,
             founder
         );
@@ -159,17 +159,17 @@ contract MetaDAOTest is Test {
         vm.startPrank(alice);
         factory.deployMetaDAOContractFor(
             saltUint,
-            "Corp Meta",
-            "corporation",
-            "DE",
-            "contact",
+            "testcorp S.P., a segregated portfolio of Futarchy Governance SPC",
+            "Segregated Portfolio of Segregated Portfolio Company",
+            "Cayman Islands",
+            "email@testcorp.com",
             "arbitration",
             founder,
             _getDefaultCorpOfficer(),
             segCoTemplateId,
             boardConsentTemplateId,
             globalValues,
-            partyValues,
+            partyValues[1],
             signature,
             founder
         );
@@ -213,34 +213,31 @@ contract MetaDAOTest is Test {
         vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
         factory.deployMetaDAOContractFor(
             saltUint,
-            "Corp Meta",
-            "corporation",
-            "DE",
-            "contact",
+            "testcorp S.P., a segregated portfolio of Futarchy Governance SPC",
+            "Segregated Portfolio of Segregated Portfolio Company",
+            "Cayman Islands",
+            "email@testcorp.com",
             "arbitration",
             founder,
             _getDefaultCorpOfficer(),
             segCoTemplateId,
             boardConsentTemplateId,
             globalValues,
-            partyValues,
+            partyValues[1],
             signature,
             founder
         );
         vm.stopPrank();
     }
 
-    function test_RevertIf_deployMetaDAOContractForMismatchPartyValues() public {
+    function test_RevertIf_deployMetaDAOContractForMismatchGlobalValues() public {
         // Parties and values
         string[] memory globalValues = _getDefaultGlobalValues();
         string[][] memory partyValues = _getDefaultPartyValues();
 
-        // Overwrite with incorrect founder name
-        partyValues[1][0] = "Alice";
-
         // Compute agreementId and signer signature for deployer (who will sign)
         uint256 saltUint = 1;
-        // Parties must match what factory will set: [metaDAOOfficer.eoa, deployer]
+        // Parties must match what factory will set: [metaDAOOfficer.eoa, corpOfficer.eoa]
         address[] memory parties = new address[](2);
         parties[0] = metaDAO;
         parties[1] = founder;
@@ -258,22 +255,22 @@ contract MetaDAOTest is Test {
             founderPrivKey
         );
 
-        // alice should not be able temper with the party values
+        // alice should not be able temper with the field values
         vm.startPrank(alice);
-        vm.expectRevert(MetaDAOFactory.PartyValuesMismatch.selector);
+        vm.expectRevert(MetaDAOFactory.GlobalOrPartyValuesMismatch.selector);
         factory.deployMetaDAOContractFor(
             saltUint,
-            "Corp Meta",
-            "corporation",
-            "DE",
-            "contact",
+            "Alice's Company", // intentionally wrong company name
+            "Segregated Portfolio of Segregated Portfolio Company",
+            "Cayman Islands",
+            "email@testcorp.com",
             "arbitration",
             founder,
             _getDefaultCorpOfficer(),
             segCoTemplateId,
             boardConsentTemplateId,
             globalValues,
-            partyValues,
+            partyValues[1],
             signature,
             founder
         );
@@ -285,10 +282,6 @@ contract MetaDAOTest is Test {
         string[] memory globalValues = _getDefaultGlobalValues();
         string[][] memory partyValues = _getDefaultPartyValues();
 
-        CompanyOfficer memory officer = _getDefaultCorpOfficer();
-        // Overwrite with incorrect officer EOA
-        officer.eoa = alice;
-
         // Compute agreementId and signer signature for deployer (who will sign)
         uint256 saltUint = 1;
         // Parties must match what factory will set: [metaDAOOfficer.eoa, deployer]
@@ -309,22 +302,26 @@ contract MetaDAOTest is Test {
             founderPrivKey
         );
 
+        CompanyOfficer memory officer = _getDefaultCorpOfficer();
+        // Overwrite with incorrect officer EOA
+        officer.eoa = alice;
+
         // alice should not be able temper with the officer values
         vm.startPrank(alice);
         vm.expectRevert(MetaDAOFactory.OfficerValuesMismatch.selector);
         factory.deployMetaDAOContractFor(
             saltUint,
-            "Corp Meta",
-            "corporation",
-            "DE",
-            "contact",
+            "testcorp S.P., a segregated portfolio of Futarchy Governance SPC",
+            "Segregated Portfolio of Segregated Portfolio Company",
+            "Cayman Islands",
+            "email@testcorp.com",
             "arbitration",
             founder,
             officer,
             segCoTemplateId,
             boardConsentTemplateId,
             globalValues,
-            partyValues,
+            partyValues[1],
             signature,
             founder
         );
