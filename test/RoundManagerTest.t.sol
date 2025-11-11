@@ -60,6 +60,16 @@ contract MockHDPaymentToken is ERC20 {
     }
 }
 
+contract MockLDPaymentToken is ERC20 {
+    constructor() ERC20("Mock low-decimals USD", "LDUSD") {
+        _mint(msg.sender, 2000000); // Mint 2M tokens with 24 decimals
+    }
+
+    function decimals() public pure override returns (uint8) {
+        return 0;
+    }
+}
+
 contract MockRoundManagerVTest is UUPSUpgradeable {
     string public constant DEPLOY_VERSION = "test";
 
@@ -1181,6 +1191,69 @@ contract RoundManagerTest is Test {
 
         assertEq(details.unitsRepresented, units18, "unitsRepresented should be in 18-decimals");
         assertEq(details.investmentAmountUSD, used1e18, "investmentAmountUSD should be in 18-decimals");
+	}
+
+    function test_Allocate_LowDecimalsPayment() public {
+        // Create a high-decimal payment token
+        MockLDPaymentToken ldPaymentToken = new MockLDPaymentToken();
+
+        // Create a special round with this high-decimal payment token
+        vm.startPrank(corpOwner);
+        roundId = CyberCorpHelper.createRound(
+            RoundManager(roundManager),
+            address(ldPaymentToken),
+            CyberCorpHelper.TEMPLATE_ID,
+            1_000_000,
+            1_000,
+            100_000,
+            33e18,
+            10_000_000e18,
+            RoundType.FounderApproved,
+            corpOwnerPrivKey,
+            corp,
+            false
+        );
+        vm.stopPrank();
+
+        // Fund investor
+        ldPaymentToken.transfer(investor, 1_000_000);
+        vm.prank(investor);
+        ldPaymentToken.approve(address(roundManager), type(uint256).max);
+
+        uint256 balBeforeSubmit = ldPaymentToken.balanceOf(investor);
+
+		vm.startPrank(investor);
+		(bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+			RoundManager(roundManager),
+			registry,
+			roundId,
+			1,
+			1_000,
+			1_000,
+			corpOwner,
+			investorPrivKey
+		);
+		vm.stopPrank();
+
+		vm.prank(corpOwner);
+		RoundManager(roundManager).allocate(agreementId, 1_000);
+
+        uint256 balAfterAllocate = ldPaymentToken.balanceOf(investor);
+        // allocatedAmount = 1_000
+        // allocatedAmount1e18 = 1_000e18
+        // units1e18 = 1_000e18 * 1e18 / 33e18 = 30303030303030303030
+        // usedAmount1e18 = 30303030303030303030 * 33e18 / 1e18 = 999999999999999999990
+        // usedAmount = 999999999999999999990 / 1e18 = 999
+        assertEq(balBeforeSubmit - balAfterAllocate, 999);
+
+		// Verify certificate details use usedAmount (rounded down) for units and USD
+		Escrow memory esc = RoundManager(roundManager).getEscrowDetails(agreementId);
+		assertGt(esc.corpAssets.length, 0);
+		Token memory corpToken = esc.corpAssets[0];
+		CertificateDetails memory details = CyberCertPrinter(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
+
+        assertEq(details.unitsRepresented, 30303030303030303030, "unitsRepresented should be in 18-decimals");
+        assertEq(details.investmentAmountUSD, 999999999999999999990, "investmentAmountUSD should be in 18-decimals");
 	}
 
     /// @notice allocate() should handle edge cases when `usedAmount` drop below `minRequired` due to rounding error
