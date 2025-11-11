@@ -95,8 +95,8 @@ library RoundLib {
     /// @param minTicket Minimum investment per EOI
     /// @param maxTicket Maximum investment per EOI
     /// @param paymentToken Payment token address
-    /// @param pricePerUnit Price per unit in payment token decimals
-    /// @param valuation Valuation in USD
+    /// @param pricePerUnit Price per unit in USD (decimals = 18)
+    /// @param valuation Valuation in USD (decimals = 18)
     /// @param startTime Start timestamp
     /// @param endTime End timestamp
     /// @return Partially filled Round struct

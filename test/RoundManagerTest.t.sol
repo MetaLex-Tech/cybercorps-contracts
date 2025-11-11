@@ -661,8 +661,9 @@ contract RoundManagerTest is Test {
     uint256 public constant MIN_TICKET = 1000 * 10 ** 6; // 1,000 USDC
     uint256 public constant MAX_TICKET = 100000 * 10 ** 6; // 100,000 USDC
     uint256 public constant RAISE_CAP = 1000000 * 10 ** 6; // 1M USDC
-    uint256 public constant PRICE_PER_UNIT = 10 * 10 ** 6; // 10 USDC per unit
-    uint256 public constant VALUATION = 10000000 * 10 ** 18; // $10M valuation
+
+    uint256 public constant PRICE_PER_UNIT = 10 * 10 ** 18; // 10 USDC per unit (decimals = 18)
+    uint256 public constant VALUATION = 10000000 * 10 ** 18; // $10M valuation (decimals = 18)
 
     function setUp() public {
         // Configs
@@ -1181,6 +1182,217 @@ contract RoundManagerTest is Test {
         assertEq(details.unitsRepresented, units18, "unitsRepresented should be in 18-decimals");
         assertEq(details.investmentAmountUSD, used1e18, "investmentAmountUSD should be in 18-decimals");
 	}
+
+    /// @notice allocate() should handle edge cases when `usedAmount` drop below `minRequired` due to rounding error
+    /// For better UX, we allow such scenarios to pass so that users could invest at exactly the minimum amounts
+    /// @dev below tests the case when `minRequired` it determined by `minTicket`
+    function test_Allocate_MinAllocationRoundingMinTicket() public {
+        // Create a special round with `pricePerUnit` that causes rounding errors
+        vm.startPrank(corpOwner);
+        roundId = CyberCorpHelper.createRound(
+            RoundManager(roundManager),
+            address(paymentToken),
+            CyberCorpHelper.TEMPLATE_ID,
+            1_000_000e6,
+            1_000e6,
+            100_000e6,
+            33e18, // deliberately create rounding errors for `usedAmount` calculations
+            10_000_000e18,
+            RoundType.FounderApproved,
+            corpOwnerPrivKey,
+            corp,
+            false
+        );
+        vm.stopPrank();
+
+        uint256 investorBalanceBefore = paymentToken.balanceOf(investor);
+
+        // Submit EOI first
+        vm.startPrank(investor);
+        (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
+            roundId,
+            1,
+            1_000e6, // exactly `minTicket`
+            1_000e6,
+            corpOwner,
+            investorPrivKey
+        );
+        vm.stopPrank();
+
+        // Allocate at exact min. ticket should work
+        // allocatedAmount1e18 = 1_000e18
+        // units1e18 = 1_000e18 * 1e18 / 33e18 = 30303030303030303030
+        // usedAmount1e18 = 30303030303030303030 * 33e18 / 1e18 = 999999999999999999990
+        // usedAmount = 999999999999999999990 / 1e12 = 999999999
+        //
+        // since `minRequired` is tested against `allocateAmount` instead of `usedAmount`, above will pass
+
+        vm.expectEmit(true, true, true, true);
+        emit RoundManager.AllocationMade(
+            agreementId,
+            roundId,
+            investor,
+            1_000e6 - 1, // allocation amount would be slightly less than `minRequired` but we still let it pass
+            1_000e6 - 1,
+            new uint256[](1)
+        );
+        vm.prank(corpOwner);
+        RoundManager(roundManager).allocate(
+            agreementId,
+            1_000e6 // founder to allocate exactly `minTicket`, expecting it to work
+        );
+
+        assertEq(investorBalanceBefore - paymentToken.balanceOf(investor), 1_000e6 - 1, "investor should spend slightly less than minTicket due to rounding");
+    }
+
+    /// @notice allocate() should handle edge cases when `usedAmount` drop below `minRequired` due to rounding error
+    /// For better UX, we allow such scenarios to pass so that users could invest at exactly the minimum amounts
+    /// @dev below tests the case when `minRequired` it determined by `minAmount`
+    function test_Allocate_MinAllocationRoundingMinAmount() public {
+        // Create a special round with `pricePerUnit` that causes rounding errors
+        vm.startPrank(corpOwner);
+        roundId = CyberCorpHelper.createRound(
+            RoundManager(roundManager),
+            address(paymentToken),
+            CyberCorpHelper.TEMPLATE_ID,
+            1_000_000e6,
+            1_000e6,
+            100_000e6,
+            33e18, // deliberately create rounding errors for `usedAmount` calculations
+            10_000_000e18,
+            RoundType.FounderApproved,
+            corpOwnerPrivKey,
+            corp,
+            false
+        );
+        vm.stopPrank();
+
+        uint256 investorBalanceBefore = paymentToken.balanceOf(investor);
+
+        // Submit EOI first
+        vm.startPrank(investor);
+        (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
+            roundId,
+            1,
+            1_500e6, // expect to get this much
+            1_500e6,
+            corpOwner,
+            investorPrivKey
+        );
+        vm.stopPrank();
+
+        // Allocate at exact min. amount should work
+        // allocatedAmount1e18 = 1_500e18
+        // units1e18 = 1_500e18 * 1e18 / 33e18 = 45454545454545454545
+        // usedAmount1e18 = 45454545454545454545 * 33e18 / 1e18 = 1499999999999999999985
+        // usedAmount = 1499999999999999999985 / 1e12 = 1499999999
+        //
+        // since `minRequired` is tested against `allocateAmount` instead of `usedAmount`, above will pass
+
+        vm.expectEmit(true, true, true, true);
+        emit RoundManager.AllocationMade(
+            agreementId,
+            roundId,
+            investor,
+            1_500e6 - 1, // allocation amount would be slightly less than `minRequired` but we still let it pass
+            1_500e6 - 1,
+            new uint256[](1)
+        );
+        vm.prank(corpOwner);
+        RoundManager(roundManager).allocate(
+            agreementId,
+            1_500e6 // founder to allocate exactly `minAmount`, expecting it to work
+        );
+
+        assertEq(investorBalanceBefore - paymentToken.balanceOf(investor), 1_500e6 - 1, "investor should spend slightly less than minAmount due to rounding");
+    }
+
+    /// @notice allocate() should handle edge cases when `usedAmount` drop below `minRequired` due to rounding error
+    /// For better UX, we allow such scenarios to pass so that users could invest at exactly the minimum amounts
+    /// @dev below tests the case when `minRequired` it determined by round's remaining
+    function test_Allocate_MinAllocationRoundingRemaining() public {
+        // Create a special round with `pricePerUnit` that causes rounding errors
+        vm.startPrank(corpOwner);
+        roundId = CyberCorpHelper.createRound(
+            RoundManager(roundManager),
+            address(paymentToken),
+            CyberCorpHelper.TEMPLATE_ID,
+            1_500e6,
+            500e6,
+            100_000e6,
+            33e18, // deliberately create rounding errors for `usedAmount` calculations
+            10_000_000e18,
+            RoundType.FounderApproved,
+            corpOwnerPrivKey,
+            corp,
+            false
+        );
+        vm.stopPrank();
+
+        // Investor 1 invests 1000, actually used 999.999999 (round remaining 500.000001)
+        {
+            // Submit EOI first
+            vm.startPrank(investor);
+            (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+                RoundManager(roundManager),
+                registry,
+                roundId,
+                1,
+                1_000e6, // expect to get this much
+                1_000e6,
+                corpOwner,
+                investorPrivKey
+            );
+            vm.stopPrank();
+
+            // Allocate at exact min. amount should work
+            vm.prank(corpOwner);
+            RoundManager(roundManager).allocate(
+                agreementId,
+                1_000e6 // founder to allocate exactly `minAmount`, expecting it to work
+            );
+        }
+
+        Round memory round = RoundManager(roundManager).getRound(roundId);
+        uint256 remaining = round.raiseCap - round.raised;
+        assertEq(remaining, 1500e6 - (1000e6 - 1), "round remaining should have slightly more due to rounding errors");
+
+        // Investor 2 invest 1000, actually used 500
+        // allocatedAmount1e18 = 500.000001e18
+        // units1e18 = 500.000001e18 * 1e18 / 33e18 = 15151515181818181818
+        // usedAmount1e18 = 15151515181818181818 * 33e18 / 1e18 = 500000000999999999994
+        // usedAmount = 500000000999999999994 / 1e12 = 500000000
+        {
+            uint256 investor2BalanceBefore = paymentToken.balanceOf(investor2);
+
+            // Submit EOI first
+            vm.startPrank(investor2);
+            (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+                RoundManager(roundManager),
+                registry,
+                roundId,
+                1,
+                500e6,
+                1_000e6,
+                corpOwner,
+                investor2PrivKey
+            );
+            vm.stopPrank();
+
+            // Allocate remaining amount should work
+            vm.prank(corpOwner);
+            RoundManager(roundManager).allocate(
+                agreementId,
+                remaining
+            );
+
+            assertEq(investor2BalanceBefore - paymentToken.balanceOf(investor2), 500e6, "investor should spend slightly less than round remaining (500.000001) due to rounding error");
+        }
+    }
 
     function test_Allocate_InvalidAmount() public {
         // Submit EOI first
