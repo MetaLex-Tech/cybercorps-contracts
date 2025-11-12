@@ -45,8 +45,14 @@ contract MetaDAOTest is Test {
     CyberAgreementRegistry public registry;
     MetaDAOFactory public factory;
 
-    bytes32 public segCoTemplateId = keccak256(bytes("MetaDAO Futarchy Governance SPC - Board Consent - Approval of SegCo v 1.0"));
-    bytes32 public boardConsentTemplateId = keccak256(bytes("MetaDAO Futarchy Governance SPC - SegCo combined v 1.0"));
+    string public segCoTemplateTitle = "MetaDAO Futarchy Governance SPC - SegCo combined v 1.0";
+    bytes32 public segCoTemplateId = keccak256(bytes(segCoTemplateTitle));
+    string public segCoTemplateUri = "ipfs://bafybeifpvfwxfmobk7nhflsczqiynp3ca5urvyk3duh7s3rwptcnfzhuje";
+
+    string public boardConsentTemplateTitle = "MetaDAO Futarchy Governance SPC - Board Consent - Approval of SegCo v 1.0";
+    bytes32 public boardConsentTemplateId = keccak256(bytes(boardConsentTemplateTitle));
+    string public boardConsentTemplateUri = "ipfs://bafkreic7dscoigvwjc23vzvkmzophm34kpafu6nrctykq5bif63lqvpuoa";
+
     string[] public globalFields;
     string[] public partyFields;
 
@@ -78,6 +84,36 @@ contract MetaDAOTest is Test {
         partyFields[1] = "contactDetails";
     }
 
+    function test_metadata() public {
+        // Verify template for SegCo combined agreement
+        {
+            (
+                string memory legalContractUri,
+                string memory title,
+                string[] memory _globalFields,
+                string[] memory _partyFields
+            ) = registry.getTemplateDetails(segCoTemplateId);
+            assertEq(legalContractUri, segCoTemplateUri);
+            assertEq(title, segCoTemplateTitle);
+            assertEq(_globalFields, globalFields);
+            assertEq(_partyFields, partyFields);
+        }
+
+        // Verify template for Board Consent
+        {
+            (
+                string memory legalContractUri,
+                string memory title,
+                string[] memory _globalFields,
+                string[] memory _partyFields
+            ) = registry.getTemplateDetails(boardConsentTemplateId);
+            assertEq(legalContractUri, boardConsentTemplateUri);
+            assertEq(title, boardConsentTemplateTitle);
+            assertEq(_globalFields, globalFields);
+            assertEq(_partyFields, partyFields);
+        }
+    }
+
     function test_deployMetaDAOContractFor() public {
         // Parties and values
         string[] memory globalValues = _getDefaultGlobalValues();
@@ -95,7 +131,7 @@ contract MetaDAOTest is Test {
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
-            "ipfs://template",
+            segCoTemplateUri,
             globalFields,
             partyFields,
             globalValues,
@@ -147,7 +183,7 @@ contract MetaDAOTest is Test {
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
-            "ipfs://template",
+            segCoTemplateUri,
             globalFields,
             partyFields,
             globalValues,
@@ -200,7 +236,7 @@ contract MetaDAOTest is Test {
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
-            "ipfs://template",
+            segCoTemplateUri,
             globalFields,
             partyFields,
             globalValues,
@@ -247,7 +283,7 @@ contract MetaDAOTest is Test {
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
-            "ipfs://template",
+            segCoTemplateUri,
             globalFields,
             partyFields,
             globalValues,
@@ -294,7 +330,7 @@ contract MetaDAOTest is Test {
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
-            "ipfs://template",
+            segCoTemplateUri,
             globalFields,
             partyFields,
             globalValues,
@@ -405,7 +441,7 @@ contract MetaDAOTest is Test {
             _verifyContractDetails(
                 "SegCo agreement",
                 agreementId,
-                "ipfs://", // TODO TBD
+                segCoTemplateUri,
                 expectedGlobalFields,
                 expectedPartyFields,
                 expectedGlobalValues,
@@ -427,7 +463,7 @@ contract MetaDAOTest is Test {
             _verifyContractDetails(
                 "Board consent",
                 meetingNotesId,
-                "ipfs://", // TODO TBD
+                boardConsentTemplateUri,
                 expectedGlobalFields,
                 expectedPartyFields,
                 expectedGlobalValues,
@@ -463,7 +499,7 @@ contract MetaDAOTest is Test {
             bool isComplete
         ) = CyberAgreementRegistry(registry).getContractDetails(agreementId);
 
-//            assertEq(legalContractUri, "ipfs://", string(abi.encodePacked(contractName, ": unexpected legal contract URI"))); // TODO TBD
+        assertEq(legalContractUri, expectedLegalContractUri, string(abi.encodePacked(contractName, ": unexpected legal contract URI")));
         assertEq(globalFields, expectedGlobalFields, string(abi.encodePacked(contractName, ": unexpected globalFields")));
         assertEq(partyFields, expectedPartyFields, string(abi.encodePacked(contractName, ": unexpected partyFields")));
         assertEq(globalValues, expectedGlobalValues, string(abi.encodePacked(contractName, ": unexpected globalValues")));
