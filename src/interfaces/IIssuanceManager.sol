@@ -64,6 +64,7 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
     function initialize(
         address _auth,
         address _CORP,
+        address _cyberCertPrinter,
         address _uriBuilder,
         address _upgradeFactory
     ) external;

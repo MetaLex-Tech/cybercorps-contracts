@@ -18,6 +18,7 @@ import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {CompanyOfficer} from "../src/CyberCorpConstants.sol";
 
 contract DeployMetaDAOFactoryScript is Script {
     // Hard-coded since we don't have programmatic access to CyberAgreementRegistry's underlying types
@@ -42,19 +43,18 @@ contract DeployMetaDAOFactoryScript is Script {
         MetaDAOFactory metaDAOFactory
     ) {
         return run(
-            vm.envUint("PRIVATE_KEY_MAIN"), // deployerPrivateKey
             // TODO: review needed: is this up to date?
             0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C, // multisig
-            "" // TBD: ask MetaDAO to sign
+            hex"63f62ac9b08c813401a02a16a820a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1b" // metadaoEscrowSig 
         );
     }
 
     function run(
-        uint256 deployerPrivateKey,
         address multisig,
         bytes memory metadaoEscrowSig
     ) public returns (CyberAgreementRegistry registry, MetaDAOFactory metaDAOFactory) {
         // Other configs
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         string memory metaDAOOfficerName = "MetaDAO Officer"; // TODO TBD
         string memory metaDAOOfficerContact = "metadao@example.com"; // TODO TBD
         string memory metaDAOOfficerTitle = "CEO"; // TODO TBD
@@ -83,7 +83,7 @@ contract DeployMetaDAOFactoryScript is Script {
 
         BorgAuth auth = new BorgAuth{salt: salt}(deployerAddress);
 
-        address registry = address(
+        address registry = 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134;/*address(
             new ERC1967Proxy{salt: salt}(
                 address(new CyberAgreementRegistry{salt: salt}()),
                 abi.encodeWithSelector(
@@ -91,7 +91,7 @@ contract DeployMetaDAOFactoryScript is Script {
                     address(auth)
                 )
             )
-        );
+        );*/
 
         // Create templates
 
@@ -110,10 +110,11 @@ contract DeployMetaDAOFactoryScript is Script {
 
         // Create template for SegCo
         string memory segCoAgreementTitle = "MetaDAO Futarchy Governance SPC - SegCo combined v 1.0";
+        string memory segCoAgreementUri = "ipfs://bafybeifpvfwxfmobk7nhflsczqiynp3ca5urvyk3duh7s3rwptcnfzhuje";
         CyberAgreementRegistry(registry).createTemplate(
             keccak256(bytes(segCoAgreementTitle)),
             segCoAgreementTitle,
-            "ipfs://bafybeifpvfwxfmobk7nhflsczqiynp3ca5urvyk3duh7s3rwptcnfzhuje",
+            segCoAgreementUri,
             globalFields,
             partyFields
         );
@@ -129,7 +130,7 @@ contract DeployMetaDAOFactoryScript is Script {
             partyFields
         );
 
-        address uriBuilder = address(
+        address uriBuilder = 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3;/*address(
             new ERC1967Proxy{salt: salt}(
                 address(new CertificateUriBuilder{salt: salt}()),
                 abi.encodeWithSelector(
@@ -137,12 +138,12 @@ contract DeployMetaDAOFactoryScript is Script {
                     address(auth)
                 )
             )
-        );
+        );*/
 
-        address issuanceManagerImplementation = address(new IssuanceManager{salt: salt}());
-        address cyberCertPrinterImplementation = address(new CyberCertPrinter{salt: salt}());
-        address cyberCert20Implementation = address(new CyberScrip{salt: salt}());
-        address issuanceManagerFactory = address(
+       // address issuanceManagerImplementation = address(new IssuanceManager{salt: salt}());
+       // address cyberCertPrinterImplementation = address(new CyberCertPrinter{salt: salt}());
+       // address cyberCert20Implementation = address(new CyberScrip{salt: salt}());
+        address issuanceManagerFactory = 0xA32547aAdAA4975082D729c79e79dBaE4385EBCf;/*address(
             new ERC1967Proxy{salt: salt}(
                 address(new IssuanceManagerFactory{salt: salt}()),
                 abi.encodeWithSelector(
@@ -153,9 +154,9 @@ contract DeployMetaDAOFactoryScript is Script {
                     cyberCert20Implementation
                 )
             )
-        );
+        );*/
 
-        address cyberCorpSingleFactory = address(
+        address cyberCorpSingleFactory = 0xc8e084D3f8B3b326FCc894C7afD28F4904196406;/*address(
             new ERC1967Proxy{salt: salt}(
                 address(new CyberCorpSingleFactory{salt: salt}()),
                 abi.encodeWithSelector(
@@ -164,8 +165,9 @@ contract DeployMetaDAOFactoryScript is Script {
                     address(new CyberCorp())
                 )
             )
-        );
-        address dealManagerFactory = address(
+        );*/
+
+        address dealManagerFactory = 0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3;/*address(
             new ERC1967Proxy{salt: salt}(
                 address(new DealManagerFactory{salt: salt}()),
                 abi.encodeWithSelector(
@@ -174,8 +176,9 @@ contract DeployMetaDAOFactoryScript is Script {
                     address(new DealManager())
                 )
             )
-        );
-        address roundManagerFactory = address(
+        );*/
+
+        /*address roundManagerFactory = address(
             new ERC1967Proxy{salt: salt}(
                 address(new RoundManagerFactory{salt: salt}()),
                 abi.encodeWithSelector(
@@ -184,6 +187,12 @@ contract DeployMetaDAOFactoryScript is Script {
                     address(new RoundManager())
                 )
             )
+        );*/
+
+                //upgrade cyberagreementregistry
+        CyberAgreementRegistry(registry).upgradeToAndCall(
+            address(new CyberAgreementRegistry{salt: salt}()),
+            ""
         );
 
         MetaDAOFactory metaDAOFactory = MetaDAOFactory(
@@ -197,7 +206,7 @@ contract DeployMetaDAOFactoryScript is Script {
                         address(issuanceManagerFactory),
                         address(cyberCorpSingleFactory),
                         address(dealManagerFactory),
-                        address(roundManagerFactory),
+                        address(0),
                         address(uriBuilder),
                         address(stable)
                     )
@@ -250,7 +259,79 @@ contract DeployMetaDAOFactoryScript is Script {
 
         // Assign roles and revoke EOA ownership (after setup)
         auth.updateRole(address(multisig), auth.OWNER_ROLE());
-        auth.zeroOwner();
+
+        /* if (_partyValues.length < 2
+            || !_partyValues[0].equal(_officer.name)
+            || !_partyValues[1].equal(_officer.contact)
+            || !_globalValues[2].equal(companyName)
+            || !_globalValues[3].equal(companyType)
+            || !_globalValues[4].equal(companyJurisdiction)
+            || !_globalValues[5].equal(companyContactDetails)
+        ) {
+            revert GlobalOrPartyValuesMismatch();
+        }*/ 
+        
+        uint256 salta = 1;
+        string memory companyName = "MetaLeX MetaDAO";
+        string memory companyType = "corporation";
+        string memory companyJurisdiction = "DE";
+        string memory companyContactDetails = "contact@metadao.example";
+        string memory defaultDisputeResolution = "arbitration";
+        address _companyPayable = address(0);
+        CompanyOfficer memory _officer = CompanyOfficer({eoa: deployerAddress, name: metaDAOOfficerName, contact: metaDAOOfficerContact, title: metaDAOOfficerTitle});
+        bytes32 _segCoTemplateId = keccak256(bytes(segCoAgreementTitle));
+        bytes32 _boardConsentTempateId = keccak256(bytes(boardConsentTitle));
+        string[] memory _globalValues = new string[](8);
+        _globalValues[0] = "founderName";
+        _globalValues[1] = "enterpriseName";
+        _globalValues[2] = companyName;
+        _globalValues[3] = companyType;
+        _globalValues[4] = companyJurisdiction;
+        _globalValues[5] = companyContactDetails;
+        _globalValues[6] = "tokenSymbol";
+        _globalValues[7] = "tokenName";
+        string[] memory _partyValues = new string[](2);
+        _partyValues[0] = metaDAOOfficerName;
+        _partyValues[1] = metaDAOOfficerContact;
+        // Parties must match factory override: [metaDAOOfficer.eoa, deployer]
+        address[] memory parties = new address[](2);
+        parties[0] = multisig;
+        parties[1] = deployerAddress;
+        // Compute contractId and create EIP-712 signature for deployer
+        bytes32 contractId = keccak256(abi.encode(_segCoTemplateId, salta, _globalValues, parties));
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            CyberAgreementRegistry(registry).DOMAIN_SEPARATOR(),
+            CyberAgreementRegistry(registry).SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            segCoAgreementUri,
+            globalFields,
+            partyFields,
+            _globalValues,
+            _partyValues,
+            deployerPrivateKey
+        );
+        address deployer = deployerAddress;
+
+
+
+        metaDAOFactory.deployMetaDAOContractFor(
+            salta,
+            companyName,
+            companyType,
+            companyJurisdiction,
+            companyContactDetails,
+            defaultDisputeResolution,
+            _companyPayable,
+            _officer,
+            _segCoTemplateId,
+            _boardConsentTempateId,
+            _globalValues,
+            _partyValues,
+            signature,
+            deployer
+        );
+        //auth.zeroOwner();
 
         console.log("Auth:", address(auth));
         console.log("CyberAgreementRegistry:", address(registry));
@@ -258,15 +339,15 @@ contract DeployMetaDAOFactoryScript is Script {
         console.log("IssuanceManagerFactory:", address(issuanceManagerFactory));
         console.log("CyberCorpSingleFactory:", address(cyberCorpSingleFactory));
         console.log("DealManagerFactory:", address(dealManagerFactory));
-        console.log("RoundManagerFactory:", address(roundManagerFactory));
-        console.log("CyberCertPrinter Impl:", address(cyberCertPrinterImplementation));
-        console.log("CyberScrip Impl:", address(cyberCert20Implementation));
+       // console.log("RoundManagerFactory:", address(roundManagerFactory));
+        //console.log("CyberCertPrinter Impl:", address(cyberCertPrinterImplementation));
+       // console.log("CyberScrip Impl:", address(cyberCert20Implementation));
         console.log("MetaDAOFactory (proxy):", address(metaDAOFactory));
-        console.log("ParentCorp:", parentCorp);
-        console.log("ParentAuth:", parentAuth);
-        console.log("ParentIssuance:", parentIssuance);
-        console.log("ParentDealMgr:", parentDealMgr);
-        console.log("ParentRoundMgr:", parentRoundMgr);
+        //console.log("ParentCorp:", parentCorp);
+        //console.log("ParentAuth:", parentAuth);
+        //console.log("ParentIssuance:", parentIssuance);
+        //console.log("ParentDealMgr:", parentDealMgr);
+        //console.log("ParentRoundMgr:", parentRoundMgr);
 
         vm.stopBroadcast();
 

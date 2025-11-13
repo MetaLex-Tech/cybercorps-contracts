@@ -54,8 +54,7 @@ interface ICyberCorp {
         address _issuanceManager,
         address _companyPayable,
         CompanyOfficer memory _officer,
-        address _upgradeFactory,
-        address _roundManager 
+        address _upgradeFactory
     ) external;
     function cyberCORPName() external view returns (string memory);
     function cyberCORPJurisdiction() external view returns (string memory);

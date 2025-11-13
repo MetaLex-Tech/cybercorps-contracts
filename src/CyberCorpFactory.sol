@@ -231,8 +231,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             issuanceManagerAddress,
             _companyPayable,
             _officer,
-            cyberCorpSingleFactory,
-            address(0)
+            cyberCorpSingleFactory
         );
 
         BorgAuth(authAddress).updateRole(cyberCorpAddress, 200);
@@ -244,6 +243,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         IIssuanceManager(issuanceManagerAddress).initialize(
             authAddress,
             cyberCorpAddress,
+            address(0),
             uriBuilder,
             issuanceManagerFactory
         );

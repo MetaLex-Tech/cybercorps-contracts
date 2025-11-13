@@ -229,8 +229,7 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             issuanceManagerAddress,
             _companyPayable,
             _officer,
-            cyberCorpSingleFactory,
-            address(0)
+            cyberCorpSingleFactory
         );
 
         BorgAuth(authAddress).updateRole(cyberCorpAddress, 200);
@@ -238,10 +237,11 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         dealManagerAddress = IDealManagerFactory(dealManagerFactory)
             .deployDealManager(salt);
         ICyberCorp(cyberCorpAddress).setDealManager(dealManagerAddress);
-        // Initialize IssuanceManager
+
         IIssuanceManager(issuanceManagerAddress).initialize(
             authAddress,
             cyberCorpAddress,
+            address(0x016C3a68C3a82179B4e63871c7730aaA272c9638),
             uriBuilder,
             issuanceManagerFactory
         );
@@ -255,26 +255,11 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             dealManagerFactory
         );
 
-        roundManagerAddress = IRoundManagerFactory(roundManagerFactory).deployRoundManager(salt);
-
-        // Initialize RoundManager
-        IRoundManagerInit(roundManagerAddress).initialize(
-            authAddress,
-            cyberCorpAddress,
-            registryAddress,
-            issuanceManagerAddress,
-            roundManagerFactory
-        );
-
-        // Set RoundManager on the corp
-        ICyberCorp(cyberCorpAddress).setRoundManager(roundManagerAddress);
-
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
-        BorgAuth(authAddress).updateRole(roundManagerAddress, 99);
 
 //fix event
-        emit MetaCorpDeployed(cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress, roundManagerAddress, address(0), 0, _officer.eoa);
+        emit MetaCorpDeployed(cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress, address(0), address(0), 0, _officer.eoa);
     }
 
     // Admin-only, one-time creation of the MetaDAO parent corp
