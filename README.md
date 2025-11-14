@@ -48,3 +48,10 @@ A RPC endpoint is needed because certain tests depend on external contracts depl
 ```shell 
 $ forge test --via-ir --fork-url <your-base-sepolia-rpc-endpoint> -vvvv
 ```
+
+For testing MetaDAO deployment
+
+```shell
+# Forked at after template creation but before the deployment
+$ forge test --via-ir --fork-url <your-base-mainnet-rpc-endpoint> -vvvv --mc MetaDAOTest --fork-block-number 38148003
+```
