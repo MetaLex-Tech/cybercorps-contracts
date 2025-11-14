@@ -6,7 +6,6 @@ import {Test, console2} from "forge-std/Test.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
-import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
@@ -33,6 +32,7 @@ contract UpgradeLegacyCyberCorpsScript is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
 
         CyberCorpFactory cyberCorpFactory = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
+        CyberCorpSingleFactory cyberCorpSingleFactoryV2 = CyberCorpSingleFactory(cyberCorpFactory.cyberCorpSingleFactory()); // this is the v2 one (with reference implementation)
 
         // To upgrade the legacy beacon-based CyberCorps, we must enumerate all existing CyberCorp addresses
         // and their corresponding factories (https://dune.com/queries/6139033):
@@ -56,9 +56,10 @@ contract UpgradeLegacyCyberCorpsScript is Script {
         // Expect new factory to be deployed at a predetermined address because we will hard-code it to the migration contract
         vm.assertEq(cyberCorpFactory.cyberCorpSingleFactory(), cyberCorpWithMigrationImpl.NEW_UPGRADE_FACTORY(), "new cyberCorpSingleFactory address has changed, update it in CyberCorpWithMigration");
 
+        // Upgrade beacon to a special implementation with migration features
         legacyCyberCorpSingleFactory.upgradeImplementation(address(cyberCorpWithMigrationImpl));
-        vm.assertEq(legacyCyberCorpSingleFactory.getBeaconImplementation(), address(cyberCorpWithMigrationImpl), "beacon implementation should be upgraded by now");
-        console2.log("New beacon implementation: %s for legacy CyberCorpSingleFactory: %s", address(cyberCorpWithMigrationImpl), address(legacyCyberCorpSingleFactory));
+        vm.assertEq(legacyCyberCorpSingleFactory.getBeaconImplementation(), address(cyberCorpWithMigrationImpl), "beacon implementation should be upgraded with migration features by now");
+        console2.log("Set new beacon implementation (with migration features): %s for legacy CyberCorpSingleFactory: %s", address(cyberCorpWithMigrationImpl), address(legacyCyberCorpSingleFactory));
 
         // This is the ugly part: One-time manual upgrade required for legacy DealManagers.
         // This section updates the `upgradeFactory` pointer to the new permanent factory address,
@@ -72,6 +73,12 @@ contract UpgradeLegacyCyberCorpsScript is Script {
             vm.assertNotEq(CyberCorpSingleFactory(CyberCorp(knownCyberCorps[i]).upgradeFactory()).getRefImplementation(), address(0), "should be able to lookup reference implementation now");
             console2.log("Migrated legacy CyberCorp: %s", knownCyberCorps[i]);
         }
+
+        // Upgrade beacon to the normal implementation since migration is done
+        address refImplementation = cyberCorpSingleFactoryV2.getRefImplementation();
+        legacyCyberCorpSingleFactory.upgradeImplementation(refImplementation);
+        vm.assertEq(legacyCyberCorpSingleFactory.getBeaconImplementation(), refImplementation, "beacon implementation should be upgraded without migration features by now");
+        console2.log("Set new beacon implementation (without migration features): %s for legacy CyberCorpSingleFactory: %s", address(refImplementation), address(legacyCyberCorpSingleFactory));
 
         vm.stopBroadcast();
 

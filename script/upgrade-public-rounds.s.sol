@@ -233,7 +233,6 @@ contract UpgradePublicRoundsScript is Script {
             legacyCcSingleFactory.getBeaconImplementation()
         );
 
-        // TODO do we need this? CyberAgreementRegistry was not updated at all
         // 8) upgrade CyberAgreementRegistry
         address newRegistryImpl = address(
             new CyberAgreementRegistry{salt: salt}()

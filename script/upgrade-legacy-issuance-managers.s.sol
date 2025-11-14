@@ -33,6 +33,7 @@ contract UpgradeLegacyIssuanceManagersScript is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
 
         CyberCorpFactory cyberCorpFactory = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
+        IssuanceManagerFactory imFactoryV2 = IssuanceManagerFactory(cyberCorpFactory.issuanceManagerFactory()); // this is the v2 one (with reference implementation)
 
         // CyberCertPrinter beacons are owned by each individual IssuanceManagers, so to upgrade them we must
         // enumerate all existing IssuanceManager addresses and their corresponding factories (https://dune.com/queries/6129394):
@@ -56,9 +57,10 @@ contract UpgradeLegacyIssuanceManagersScript is Script {
         // Expect new factory to be deployed at a predetermined address because we will hard-code it to the migration contract
         vm.assertEq(cyberCorpFactory.issuanceManagerFactory(), imWithMigrationImpl.NEW_UPGRADE_FACTORY(), "new issuanceManagerFactory address has changed, update it in IssuanceManagerWithMigration");
 
+        // Upgrade beacon to a special implementation with migration features
         legacyImFactory.upgradeImplementation(address(imWithMigrationImpl));
-        vm.assertEq(legacyImFactory.getBeaconImplementation(), address(imWithMigrationImpl), "beacon implementation should be upgraded by now");
-        console2.log("New beacon implementation: %s for legacy IssuanceManagerFactory: %s", address(imWithMigrationImpl), address(legacyImFactory));
+        vm.assertEq(legacyImFactory.getBeaconImplementation(), address(imWithMigrationImpl), "beacon implementation should be upgraded with migration features by now");
+        console2.log("Set new beacon implementation (with migration features): %s for legacy IssuanceManagerFactory: %s", address(imWithMigrationImpl), address(legacyImFactory));
 
         // This is the ugly part: One-time manual upgrade required for legacy DealManagers.
         // This section updates the `upgradeFactory` pointer to the new permanent factory address,
@@ -71,8 +73,24 @@ contract UpgradeLegacyIssuanceManagersScript is Script {
             address imAddr = CyberCorp(knownCyberCorps[i]).issuanceManager();
             IssuanceManagerWithMigration(imAddr).migrateUpgradeFactory();
             vm.assertNotEq(IssuanceManagerFactory(IssuanceManager(imAddr).getUpgradeFactory()).getRefImplementation(), address(0), "should be able to lookup reference implementation now");
+            vm.assertEq(
+                IssuanceManager(imAddr).getCertPrinterBeaconImplementation(),
+                IssuanceManagerFactory(cyberCorpFactory.issuanceManagerFactory()).getCyberCertPrinterRefImplementation(),
+                "should point CyberCertPrinter implementation to reference now"
+            );
+            vm.assertEq(
+                IssuanceManager(imAddr).getScripBeaconImplementation(),
+                IssuanceManagerFactory(cyberCorpFactory.issuanceManagerFactory()).getCyberScripRefImplementation(),
+                "should point CyberScrip implementation to reference now"
+            );
             console2.log("Migrated legacy IssuanceManager: %s", imAddr);
         }
+
+        // Upgrade beacon to the normal implementation since migration is done
+        address refImplementation = imFactoryV2.getRefImplementation();
+        legacyImFactory.upgradeImplementation(refImplementation);
+        vm.assertEq(legacyImFactory.getBeaconImplementation(), refImplementation, "beacon implementation should be upgraded without migration features by now");
+        console2.log("Set new beacon implementation (without migration features): %s for legacy IssuanceManagerFactory: %s", address(refImplementation), address(legacyImFactory));
 
         vm.stopBroadcast();
 

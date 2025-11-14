@@ -56,11 +56,9 @@ contract UpgradeLegacyCyberCorpsTest is Test {
     uint256 bobPrivateKey = 0xb0b + privateKeySalt;
     address bob = vm.addr(bobPrivateKey);
 
+    CyberCorpSingleFactory newCyberCorpSingleFactory;
     DealManagerFactory newDmFactory;
-
-    CyberCorpWithMigration cyberCorpWithMigrationImpl;
-    DealManagerWithMigration dmWithMigrationImpl;
-    IssuanceManagerWithMigration imWithMigrationImpl;
+    IssuanceManagerFactory newImFactory;
 
     // Deal test related
     bytes32 templateId = bytes32(uint256(10000));
@@ -140,10 +138,21 @@ contract UpgradeLegacyCyberCorpsTest is Test {
         _upgradeFactoryAndLegacyCyberCorps();
 
         // Script might've done it, but we'll do it again just in case
-        assertEq(legacyCyberCorpSingleFactory.getBeaconImplementation(), address(cyberCorpWithMigrationImpl), "legacy CyberCorp beacon implementation should be upgraded by now");
-        assertEq(legacyDealManagerFactory.getBeaconImplementation(), address(dmWithMigrationImpl), "legacy DealManager beacon implementation should be upgraded by now");
-        assertEq(legacyIssuanceManagerFactory.getBeaconImplementation(), address(imWithMigrationImpl), "legacy IssuanceManager beacon implementation should be upgraded by now");
-        assertEq(cyberCorpFactory.dealManagerFactory(), address(newDmFactory), "CyberCorpFactory's DealManagerFactory should be updated by now");
+        assertEq(
+            legacyCyberCorpSingleFactory.getBeaconImplementation(),
+            newCyberCorpSingleFactory.getRefImplementation(),
+            "legacy CyberCorp beacon implementation should be upgraded by now"
+        );
+        assertEq(
+            legacyDealManagerFactory.getBeaconImplementation(),
+            newDmFactory.getRefImplementation(),
+            "legacy DealManager beacon implementation should be upgraded by now"
+        );
+        assertEq(
+            legacyIssuanceManagerFactory.getBeaconImplementation(),
+            newImFactory.getRefImplementation(),
+            "legacy IssuanceManager beacon implementation should be upgraded by now"
+        );
     }
 
     function test_LegacyCyberCorpIntegrity() public {
@@ -216,6 +225,9 @@ contract UpgradeLegacyCyberCorpsTest is Test {
             // Check for slot conflicts
             assertEq(address(IIssuanceManager(imAddr).AUTH()), address(expectedAuths[i]), string(abi.encodePacked("AUTH should not change for IssuanceManager: ", vm.toString(imAddr))));
 
+            // its beacon implementations should be upgraded to the reference implementations
+            _assertIssuanceManagerBeacons(imAddr);
+
             // Should still be able to verify that this legacy contract is a BeaconProxy (for front-end to differentiate legacy vs v3 contracts)
             assertEq(imAddr.getErc1967Beacon(), legacyIssuanceManagerFactory.beacon(), "should be able to get beacon address");
         }
@@ -245,7 +257,10 @@ contract UpgradeLegacyCyberCorpsTest is Test {
             uint256 agreementSalt = block.timestamp + i;
 
             // Create and sign deal
-            DealManager(dmAddr).proposeAndSignDeal(
+            (
+                bytes32 agreementId,
+                uint256[] memory certIds
+            ) = DealManager(dmAddr).proposeAndSignDeal(
                 certPrinterAddress,
                 paymentToken,
                 100e6,
@@ -279,6 +294,37 @@ contract UpgradeLegacyCyberCorpsTest is Test {
             );
 
             vm.stopPrank();
+
+            // Simulate counter-sign
+            deal(address(paymentToken), bob, 100e6);
+            uint256 companyPayableBalanceBefore = ERC20(paymentToken).balanceOf(CyberCorp(cyberCorp).companyPayable());
+
+            vm.startPrank(bob);
+            ERC20(paymentToken).approve(dmAddr, 100e6);
+
+            DealManager(dmAddr).signAndFinalizeDeal(
+                bob,
+                agreementId,
+                defaultPartyValues[1],
+                CyberAgreementUtils.signAgreementTypedData(
+                    vm,
+                    registry.DOMAIN_SEPARATOR(),
+                    registry.SIGNATUREDATA_TYPEHASH(),
+                    agreementId,
+                    contractUri,
+                    globalFields,
+                    partyFields,
+                    defaultGlobalValues,
+                    defaultPartyValues[1],
+                    bobPrivateKey
+                ),
+                true,
+                "Bob",
+                ""
+            );
+            vm.stopPrank();
+
+            assertEq(ERC20(paymentToken).balanceOf(CyberCorp(cyberCorp).companyPayable()) - companyPayableBalanceBefore, 100e6, "alice should receive payment minus fees");
         }
     }
 
@@ -573,16 +619,18 @@ contract UpgradeLegacyCyberCorpsTest is Test {
 
         // Upgrade all factories and dependencies
         (new UpgradePublicRoundsScript()).run();
+        newCyberCorpSingleFactory = CyberCorpSingleFactory(cyberCorpFactory.cyberCorpSingleFactory());
         newDmFactory = DealManagerFactory(cyberCorpFactory.dealManagerFactory());
+        newImFactory = IssuanceManagerFactory(cyberCorpFactory.issuanceManagerFactory());
 
         // Run scripts to upgrade all legacy CyberCorps
-        cyberCorpWithMigrationImpl = (new UpgradeLegacyCyberCorpsScript()).run(legacyAddressesCount);
+        (new UpgradeLegacyCyberCorpsScript()).run(legacyAddressesCount);
 
         // Run scripts to upgrade all legacy DealManagers
-        dmWithMigrationImpl = (new UpgradeLegacyDealManagersScript()).run(legacyAddressesCount);
+        (new UpgradeLegacyDealManagersScript()).run(legacyAddressesCount);
 
         // Run scripts to upgrade all legacy IssuanceManagers
-        imWithMigrationImpl = (new UpgradeLegacyIssuanceManagersScript()).run(legacyAddressesCount);
+        (new UpgradeLegacyIssuanceManagersScript()).run(legacyAddressesCount);
 
         // Simulate all legacy corp owners accept the new CyberCorpPrinter
         for (uint256 i = 0; i < knownCyberCorps.length; i++) {
@@ -595,5 +643,18 @@ contract UpgradeLegacyCyberCorpsTest is Test {
             vm.stopPrank();
             console2.log("CyberCertPrinter beacon implementation was accepted by IssuanceManager: %s", imAddr);
         }
+    }
+
+    function _assertIssuanceManagerBeacons(address imAddr) internal {
+        assertEq(
+            IIssuanceManager(imAddr).getCertPrinterBeaconImplementation(),
+            newImFactory.getCyberCertPrinterRefImplementation(),
+            string(abi.encodePacked("unexpected CertPrinterBeaconImplementation for IssuanceManager: ", vm.toString(imAddr)))
+        );
+        assertEq(
+            IIssuanceManager(imAddr).getScripBeaconImplementation(),
+            newImFactory.getCyberScripRefImplementation(),
+            string(abi.encodePacked("unexpected ScripBeaconImplementation for IssuanceManager: ", vm.toString(imAddr)))
+        );
     }
 }

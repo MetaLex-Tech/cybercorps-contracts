@@ -34,6 +34,7 @@ contract UpgradeLegacyDealManagersScript is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
 
         CyberCorpFactory cyberCorpFactory = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
+        DealManagerFactory dmFactoryV2 = DealManagerFactory(cyberCorpFactory.dealManagerFactory()); // this is the v2 one (with reference implementation)
 
         // To upgrade the legacy beacon-based DealManagers, we must enumerate all existing DealManager addresses
         // and their corresponding factories (https://dune.com/queries/5981894):
@@ -56,9 +57,10 @@ contract UpgradeLegacyDealManagersScript is Script {
         // Expect new factory to be deployed at a predetermined address because we will hard-code it to the migration contract
         vm.assertEq(cyberCorpFactory.dealManagerFactory(), dmWithMigrationImpl.NEW_UPGRADE_FACTORY(), "new dealManagerFactory address has changed, update it in DealManagerWithMigration");
 
+        // Upgrade beacon to a special implementation with migration features
         legacyDealManagerFactory.upgradeImplementation(address(dmWithMigrationImpl));
         vm.assertEq(legacyDealManagerFactory.getBeaconImplementation(), address(dmWithMigrationImpl), "beacon implementation should be upgraded by now");
-        console2.log("New beacon implementation: %s for legacy DealManagerFactory: %s", address(dmWithMigrationImpl), address(legacyDealManagerFactory));
+        console2.log("New beacon implementation (with migration features): %s for legacy DealManagerFactory: %s", address(dmWithMigrationImpl), address(legacyDealManagerFactory));
 
         // This is the ugly part: One-time manual upgrade required for legacy DealManagers.
         // This section updates the `upgradeFactory` pointer to the new permanent factory address,
@@ -73,6 +75,12 @@ contract UpgradeLegacyDealManagersScript is Script {
             vm.assertEq(DealManager(dmAddr).getPlatformPayable(), address(0), "should be able to lookup fee payable now");
             console2.log("Migrated legacy DealManager: %s", dmAddr);
         }
+
+        // Upgrade beacon to the normal implementation since migration is done
+        address refImplementation = dmFactoryV2.getRefImplementation();
+        legacyDealManagerFactory.upgradeImplementation(refImplementation);
+        vm.assertEq(legacyDealManagerFactory.getBeaconImplementation(), refImplementation, "beacon implementation should be upgraded without migration features by now");
+        console2.log("Set new beacon implementation (without migration features): %s for legacy DealManagerFactory: %s", address(refImplementation), address(legacyDealManagerFactory));
 
         vm.stopBroadcast();
 
