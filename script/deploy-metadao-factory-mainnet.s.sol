@@ -42,46 +42,31 @@ contract DeployMetaDAOFactoryScript is Script {
         CyberAgreementRegistry registry, 
         MetaDAOFactory metaDAOFactory
     ) {
-        return run(
-            // TODO: review needed: is this up to date?
-            0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C, // multisig
-            hex"63f62ac9b08c813401a02a16a820a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1b" // metadaoEscrowSig 
+        return runWithArgs(
+            vm.envUint("PRIVATE_KEY_MAIN"), // deployerPrivateKey
+            0x59026c9A3871505c8E5fb0B021e274a0B28547F6, // corpPayable
+            0x76A6168B69f8f1b27E06dC77a30F2D1C92733e7A, // officerAddress
+            hex"63f62ac9b08c813401a02a16a820a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1b" // metadaoEscrowSig
         );
     }
 
-    function run(
-        address multisig,
+    function runWithArgs(
+        uint256 deployerPrivateKey,
+        address corpPayable,
+        address officerAddress,
         bytes memory metadaoEscrowSig
     ) public returns (CyberAgreementRegistry registry, MetaDAOFactory metaDAOFactory) {
         // Other configs
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         string memory metaDAOOfficerName = "MetaDAO LLC, a Marshall Islands DAO limited liability company"; 
         string memory metaDAOOfficerContact = "market.governed.civilization@metadao.fi PO Box 852, Long Island Rd, Majuro, Marshall Islands MH 96960"; 
         string memory metaDAOOfficerTitle = "Director & Management Shareholder"; 
-        address corpPayable = 0x59026c9A3871505c8E5fb0B021e274a0B28547F6;
-        address officerAddress = 0x76A6168B69f8f1b27E06dC77a30F2D1C92733e7A;
 
         address deployerAddress = vm.addr(deployerPrivateKey);
         vm.startBroadcast(deployerPrivateKey);
 
         bytes32 salt = bytes32(keccak256("MetaDAOFactory.deploy.v1"));
 
-        uint256 currentChainId = block.chainid;
-        address stable;
-
-        if (currentChainId == 1) {
-            stable = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // Mainnet USDC
-        } else if (currentChainId == 42161) {
-            stable = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831; // Arbitrum USDC
-        } else if (currentChainId == 8453) {
-            stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e; // Base USDC
-        } else if (currentChainId == 84532) {
-            stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e; // Base Sepolia USDC
-        } else if (currentChainId == 11155111) {
-            stable = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238; // Sepolia USDC
-        } else {
-            revert("Unsupported chain ID");
-        }
+        address stable = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913; // USDC @ Base
 
         BorgAuth auth = new BorgAuth{salt: salt}(deployerAddress);
 
@@ -118,9 +103,9 @@ contract DeployMetaDAOFactoryScript is Script {
 
         address dealManagerFactory = 0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3;
 
+        // upgrade CyberAgreementRegistry
         address newAgreementRegistryImplementation = address(new CyberAgreementRegistry{salt: salt}());
-
-           
+        CyberAgreementRegistry(registry).upgradeToAndCall(newAgreementRegistryImplementation, "");
 
         MetaDAOFactory metaDAOFactory = MetaDAOFactory(
             address(
@@ -140,8 +125,6 @@ contract DeployMetaDAOFactoryScript is Script {
                 )
             )
         );
-
-        metaDAOFactory.setStable(0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913);
 
         // Configure MetaDAO officer and escrowed signature BEFORE revoking deployer ownership
         metaDAOFactory.setMetaDAOOfficerEOA(officerAddress);

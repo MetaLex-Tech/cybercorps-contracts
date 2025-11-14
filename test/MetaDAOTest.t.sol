@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import {DeployMetaDAOFactoryScript} from "../script/deploy-metadao-factory.s.sol";
+import {DeployMetaDAOFactoryScript} from "../script/deploy-metadao-factory-mainnet.s.sol";
 import {MetaDAOFactory} from "../src/MetaDAOFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
@@ -72,9 +72,10 @@ contract MetaDAOTest is Test {
         vm.stopPrank();
 
         // Deploy MetaDAO factories with production scripts
-        (registry, factory) = (new DeployMetaDAOFactoryScript()).run(
+        (registry, factory) = (new DeployMetaDAOFactoryScript()).runWithArgs(
             deployerPrivKey, // deployerPrivateKey
-            metaDAO, // multisig
+            metaDAO, // corpPayable
+            metaDAO, // officerAddress
             hex"63f62ac9b08c813401a02a16a820a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1b" // metadaoEscrowSig
         );
 
@@ -393,8 +394,8 @@ contract MetaDAOTest is Test {
     function _getDefaultPartyValues() internal returns (string[][] memory) {
         string[][] memory partyValues = new string[][](2);
         partyValues[0] = new string[](2);
-        partyValues[0][0] = "MetaDAO Officer"; // name
-        partyValues[0][1] = "metadao@example.com"; // contactDetails
+        partyValues[0][0] = "MetaDAO LLC, a Marshall Islands DAO limited liability company"; // name
+        partyValues[0][1] = "market.governed.civilization@metadao.fi PO Box 852, Long Island Rd, Majuro, Marshall Islands MH 96960"; // contactDetails
         partyValues[1] = new string[](2);
         partyValues[1][0] = "Founder"; // name
         partyValues[1][1] = "founder@example.com"; // contactDetails
@@ -445,8 +446,8 @@ contract MetaDAOTest is Test {
 
             string[][] memory expectedPartyValues = new string[][](2);
             expectedPartyValues[0] = new string[](2);
-            expectedPartyValues[0][0] = "MetaDAO Officer"; // name
-            expectedPartyValues[0][1] = "metadao@example.com"; // contactDetails
+            expectedPartyValues[0][0] = "MetaDAO LLC, a Marshall Islands DAO limited liability company"; // name
+            expectedPartyValues[0][1] = "market.governed.civilization@metadao.fi PO Box 852, Long Island Rd, Majuro, Marshall Islands MH 96960"; // contactDetails
             expectedPartyValues[1] = new string[](2);
             expectedPartyValues[1][0] = "Founder"; // name
             expectedPartyValues[1][1] = "founder@example.com"; // contactDetails
@@ -470,8 +471,8 @@ contract MetaDAOTest is Test {
 
             string[][] memory expectedPartyValues = new string[][](1);
             expectedPartyValues[0] = new string[](2);
-            expectedPartyValues[0][0] = "MetaDAO Officer"; // name
-            expectedPartyValues[0][1] = "metadao@example.com"; // contactDetails
+            expectedPartyValues[0][0] = "MetaDAO LLC, a Marshall Islands DAO limited liability company"; // name
+            expectedPartyValues[0][1] = "market.governed.civilization@metadao.fi PO Box 852, Long Island Rd, Majuro, Marshall Islands MH 96960"; // contactDetails
 
             _verifyContractDetails(
                 "Board consent",
