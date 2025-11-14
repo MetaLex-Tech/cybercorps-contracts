@@ -33,6 +33,9 @@ contract MockPaymentToken is ERC20 {
 }
 
 contract MetaDAOTest is Test {
+    address private metalex = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
+    address private coreAuth = 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01;
+
     uint256 private deployerPrivKey;
     address private deployer;
     uint256 private metaDAOPrivKey;
@@ -63,12 +66,22 @@ contract MetaDAOTest is Test {
         (founder, founderPrivKey) = makeAddrAndKey("founder");
         (alice, alicePrivKey) = makeAddrAndKey("alice");
 
+        // Simulate granting deployer admin permission
+        vm.startPrank(metalex);
+        BorgAuth(coreAuth).updateRole(deployer, BorgAuth(coreAuth).OWNER_ROLE());
+        vm.stopPrank();
+
         // Deploy MetaDAO factories with production scripts
         (registry, factory) = (new DeployMetaDAOFactoryScript()).run(
             deployerPrivKey, // deployerPrivateKey
             metaDAO, // multisig
             hex"63f62ac9b08c813401a02a16a820a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1b" // metadaoEscrowSig
         );
+
+        // Simulate disabling deployer admin permission after deployment
+        vm.startPrank(metalex);
+        BorgAuth(coreAuth).updateRole(deployer, 0);
+        vm.stopPrank();
 
         globalFields = new string[](8);
         globalFields[0] = "founderName";
@@ -120,7 +133,7 @@ contract MetaDAOTest is Test {
         string[][] memory partyValues = _getDefaultPartyValues();
 
         // Compute agreementId and signer signature for deployer (who will sign)
-        uint256 saltUint = 1;
+        uint256 saltUint = 100; // 1 has been used by the deploy scripts;
         // Parties must match what factory will set: [metaDAOOfficer.eoa, deployer]
         address[] memory parties = new address[](2);
         parties[0] = metaDAO;
@@ -172,7 +185,7 @@ contract MetaDAOTest is Test {
         string[][] memory partyValues = _getDefaultPartyValues();
 
         // Compute agreementId and signer signature for deployer (who will sign)
-        uint256 saltUint = 1;
+        uint256 saltUint = 100; // 1 has been used by the deploy scripts;
         // Parties must match what factory will set: [metaDAOOfficer.eoa, deployer]
         address[] memory parties = new address[](2);
         parties[0] = metaDAO;
@@ -225,7 +238,7 @@ contract MetaDAOTest is Test {
         string[][] memory partyValues = _getDefaultPartyValues();
 
         // Compute agreementId and signer signature for deployer (who will sign)
-        uint256 saltUint = 1;
+        uint256 saltUint = 100; // 1 has been used by the deploy scripts;
         // Parties must match what factory will set: [metaDAOOfficer.eoa, deployer]
         address[] memory parties = new address[](2);
         parties[0] = metaDAO;
@@ -272,7 +285,7 @@ contract MetaDAOTest is Test {
         string[][] memory partyValues = _getDefaultPartyValues();
 
         // Compute agreementId and signer signature for deployer (who will sign)
-        uint256 saltUint = 1;
+        uint256 saltUint = 100; // 1 has been used by the deploy scripts;
         // Parties must match what factory will set: [metaDAOOfficer.eoa, corpOfficer.eoa]
         address[] memory parties = new address[](2);
         parties[0] = metaDAO;
@@ -319,7 +332,7 @@ contract MetaDAOTest is Test {
         string[][] memory partyValues = _getDefaultPartyValues();
 
         // Compute agreementId and signer signature for deployer (who will sign)
-        uint256 saltUint = 1;
+        uint256 saltUint = 100; // 1 has been used by the deploy scripts;
         // Parties must match what factory will set: [metaDAOOfficer.eoa, deployer]
         address[] memory parties = new address[](2);
         parties[0] = metaDAO;

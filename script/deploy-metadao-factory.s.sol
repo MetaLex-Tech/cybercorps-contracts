@@ -42,19 +42,20 @@ contract DeployMetaDAOFactoryScript is Script {
         CyberAgreementRegistry registry, 
         MetaDAOFactory metaDAOFactory
     ) {
-        return run(
+        return runWithArgs(
+            vm.envUint("PRIVATE_KEY_MAIN"), // deployerPrivateKey
             // TODO: review needed: is this up to date?
             0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C, // multisig
             hex"63f62ac9b08c813401a02a16a820a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1b" // metadaoEscrowSig 
         );
     }
 
-    function run(
+    function runWithArgs(
+        uint256 deployerPrivateKey,
         address multisig,
         bytes memory metadaoEscrowSig
     ) public returns (CyberAgreementRegistry registry, MetaDAOFactory metaDAOFactory) {
         // Other configs
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         string memory metaDAOOfficerName = "MetaDAO Officer"; // TODO TBD
         string memory metaDAOOfficerContact = "metadao@example.com"; // TODO TBD
         string memory metaDAOOfficerTitle = "CEO"; // TODO TBD
