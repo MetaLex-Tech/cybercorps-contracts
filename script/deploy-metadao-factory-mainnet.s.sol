@@ -146,28 +146,6 @@ contract DeployMetaDAOFactoryScript is Script {
         metaDAOFactory.setMetaDAOOfficerName(metaDAOOfficerName);
         metaDAOFactory.setMetaDAOOfficerContact(metaDAOOfficerContact);
         metaDAOFactory.setMetaDAOOfficerTitle(metaDAOOfficerTitle);
-        
-        if (metadaoEscrowSig.length > 0) {
-            // If we have the signature to escrow, set it
-            metaDAOFactory.setMetaDAOSignatureHash(metadaoEscrowSig);
-
-        } else {
-            // Otherwise, output the typed data for MetaDAO to sign off-chain
-            string[] memory partyValues = new string[](2);
-            partyValues[0] = metaDAOOfficerName;
-            partyValues[1] = metaDAOOfficerContact;
-
-            console.log("Signature required: have MetaDAO sign the following EIP-712 typed data:");
-            console.log("  (can be signed with command `cast wallet sign --data '<paste json string here>'`)");
-            console.log("==== JSON data start ====");
-            console.log(_formatEscrowAgreementTypedDataJson(
-                CyberAgreementRegistry(registry),
-                boardConsentUri,
-                partyFields,
-                partyValues
-            ));
-            console.log("==== JSON data end ====");
-        }
 
         // Create the parent corp (one-time). Reverts if called again.
         (address parentCorp,
