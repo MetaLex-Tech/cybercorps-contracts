@@ -74,7 +74,7 @@ contract DeployMetaDAOFactoryScript is Script {
         } else if (currentChainId == 42161) {
             stable = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831; // Arbitrum USDC
         } else if (currentChainId == 8453) {
-            stable = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913; // Base USDC
+            stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e; // Base USDC
         } else if (currentChainId == 84532) {
             stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e; // Base Sepolia USDC
         } else if (currentChainId == 11155111) {
@@ -140,6 +140,8 @@ contract DeployMetaDAOFactoryScript is Script {
                 )
             )
         );
+
+        metaDAOFactory.setStable(0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913);
 
         // Configure MetaDAO officer and escrowed signature BEFORE revoking deployer ownership
         metaDAOFactory.setMetaDAOOfficerEOA(officerAddress);
