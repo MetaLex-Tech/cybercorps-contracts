@@ -42,16 +42,53 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import {CyberCorp} from "./CyberCorp.sol";
+import {CyberCorpFactory} from "./CyberCorpFactory.sol";
+import {BorgAuth} from "./libs/auth.sol";
+import {IRoundManagerFactory} from "./interfaces/IRoundManagerFactory.sol";
+import {IRoundManagerInit} from "./helpers/RoundManagerUpgradeHelper.sol";
 
 contract CyberCorpWithMigration is CyberCorp {
 
-    address public constant NEW_UPGRADE_FACTORY = 0x2B8d5FB507bF6b19344aF658bA3636b13A8E4C46;
+    address public constant NEW_UPGRADE_FACTORY = 0x2B8d5FB507bF6b19344aF658bA3636b13A8E4C46; // TODO TBD
+    CyberCorpFactory public constant CYBER_CORP_FACTORY = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
 
-    // TODO TBD
     /// @notice Migrate legacy contracts and set upgradeFactory to the known new contract (for reference implementation lookup)
     /// @dev Since the migration target is predefined, it doesn't matter who called it or when it is called
     function migrateUpgradeFactory() public {
-        // TODO Update to the new permanent address of CyberCorpSingleFactory
+        // Update to the new permanent address of CyberCorpSingleFactory
         upgradeFactory = NEW_UPGRADE_FACTORY;
+
+        // Deploy a new RoundManager if not setup yet
+        if (roundManager == address(0)) {
+            IRoundManagerFactory rmFactory = IRoundManagerFactory(CYBER_CORP_FACTORY.roundManagerFactory());
+
+            bytes32 salt = keccak256(abi.encodePacked("MetaLexCyberCorp.PublicRounds.migration.", address(this)));
+            roundManager = rmFactory.deployRoundManager(salt);
+
+            // Initialize RoundManager
+            IRoundManagerInit(roundManager).initialize(
+                address(AUTH),
+                address(this),
+                CYBER_CORP_FACTORY.registryAddress(),
+                issuanceManager,
+                address(rmFactory)
+            );
+
+            // Add newly created RoundManager as OWNER in LeXcheX AUTH
+            address lexchexAuth = CYBER_CORP_FACTORY.lexchexAuth();
+            if (lexchexAuth != address(0)) {
+                BorgAuth(lexchexAuth).updateRole(
+                    roundManager,
+                    BorgAuth(lexchexAuth).OWNER_ROLE()
+                );
+            }
+
+            AUTH.updateRole(roundManager, 99);
+
+            emit CyberCorpFactory.RoundManagerDeployed(
+                address(this),
+                roundManager
+            );
+        }
     }
 }
