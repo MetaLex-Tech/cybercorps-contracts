@@ -21,6 +21,7 @@ import {CyberCorpWithMigration} from "../src/CyberCorpWithMigration.sol";
 import {DealManager} from "../src/DealManager.sol";
 import {DealManagerWithMigration} from "../src/DealManagerWithMigration.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
+import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerWithMigration} from "../src/IssuanceManagerWithMigration.sol";
@@ -59,6 +60,7 @@ contract UpgradeLegacyCyberCorpsTest is Test {
     CyberCorpSingleFactory newCyberCorpSingleFactory;
     DealManagerFactory newDmFactory;
     IssuanceManagerFactory newImFactory;
+    RoundManagerFactory newRmFactory;
 
     // Deal test related
     bytes32 templateId = bytes32(uint256(10000));
@@ -173,6 +175,9 @@ contract UpgradeLegacyCyberCorpsTest is Test {
 
             // Check for slot conflicts
             assertEq(address(CyberCorp(knownCyberCorps[i]).AUTH()), address(expectedAuths[i]), string(abi.encodePacked("AUTH should not change for CyberCorp: ", vm.toString(knownCyberCorps[i]))));
+
+            // Should have RoundManager now
+            assertEq(CyberCorp(knownCyberCorps[i]).roundManager().getErc1967Implementation(), newRmFactory.getRefImplementation(), "should have up-to-date RoundManager");
 
             // Should still be able to verify that this legacy contract is a BeaconProxy (for front-end to differentiate legacy vs v3 contracts)
             assertEq(knownCyberCorps[i].getErc1967Beacon(), legacyCyberCorpSingleFactory.beacon(), "should be able to get beacon address");
@@ -622,6 +627,7 @@ contract UpgradeLegacyCyberCorpsTest is Test {
         newCyberCorpSingleFactory = CyberCorpSingleFactory(cyberCorpFactory.cyberCorpSingleFactory());
         newDmFactory = DealManagerFactory(cyberCorpFactory.dealManagerFactory());
         newImFactory = IssuanceManagerFactory(cyberCorpFactory.issuanceManagerFactory());
+        newRmFactory = RoundManagerFactory(cyberCorpFactory.roundManagerFactory());
 
         // Run scripts to upgrade all legacy CyberCorps
         (new UpgradeLegacyCyberCorpsScript()).run(legacyAddressesCount);
