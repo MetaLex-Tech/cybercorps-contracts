@@ -8,6 +8,7 @@ import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IIssuanceManagerFactory} from "../src/interfaces/IIssuanceManagerFactory.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 
 contract CyberCertPrinterForkTest is Test {
     // Fill these in with real values before running locally/CI
@@ -54,13 +55,14 @@ contract CyberCertPrinterForkTest is Test {
     function _snapshot(address printerAddr) internal view returns (PrinterSnapshot memory s) {
         ICyberCertPrinter printer = ICyberCertPrinter(printerAddr);
 
-        s.issuanceManager = IIssuanceManager(printer.issuanceManager());
-        s.securityType = printer.securityType();
-        s.securitySeries = printer.securitySeries();
-        s.certificateUri = printer.certificateUri();
-        s.transferable = printer.transferable();
-        s.endorsementRequired = printer.endorsementRequired();
-        s.defaultLegendHash = _hashStringArray(printer.defaultLegend());
+        s.issuanceManager = CyberCertPrinter(printerAddr).issuanceManager();
+        s.securityType = CyberCertPrinter(printerAddr).securityType();
+        s.securitySeries = CyberCertPrinter(printerAddr).securitySeries();
+        s.certificateUri = CyberCertPrinter(printerAddr).certificateUri();
+        s.transferable = CyberCertPrinter(printerAddr).transferable();
+        s.endorsementRequired = CyberCertPrinter(printerAddr).endorsementRequired();
+        s.defaultLegendHash = _hashStringArray(CyberCertPrinter(printerAddr).defaultLegend());
+
 
         uint256 supply = 0;
         // totalSupply is part of the ICyberCertPrinter interface
@@ -113,7 +115,7 @@ contract CyberCertPrinterForkTest is Test {
     function test_PrinterBeaconMatchesFactoryRefImplementation() public {
         for (uint256 i = 0; i < certPrinters.length; i++) {
             address printer = certPrinters[i];
-            address im = ICyberCertPrinter(printer).issuanceManager();
+            address im = CyberCertPrinter(printer).issuanceManager();
             address upgradeFactory = IIssuanceManager(im).getUpgradeFactory();
 
             address beaconImpl = IIssuanceManager(im).getCertPrinterBeaconImplementation();
