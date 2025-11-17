@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import {Test, console2} from "forge-std/Test.sol";
 import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import {Initializable} from "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {UpgradePublicRoundsScript} from "../script/upgrade-public-rounds.s.sol";
 import {UpgradeLegacyCyberCorpsScript} from "../script/upgrade-legacy-cybercorps.s.sol";
@@ -22,6 +23,7 @@ import {CyberCorpWithMigration} from "../src/CyberCorpWithMigration.sol";
 import {DealManager} from "../src/DealManager.sol";
 import {DealManagerWithMigration} from "../src/DealManagerWithMigration.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
+import {RoundManager} from "../src/RoundManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
@@ -29,6 +31,15 @@ import {IssuanceManagerWithMigration} from "../src/IssuanceManagerWithMigration.
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
+
+contract MockImplVTest is UUPSUpgradeable {
+    string public constant DEPLOY_VERSION = "test";
+
+    // UUPS upgrade authorization
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override {}
+}
 
 contract UpgradeLegacyCyberCorpsTest is Test {
     using ERC1967ProxyLib for address;
@@ -183,6 +194,14 @@ contract UpgradeLegacyCyberCorpsTest is Test {
             // Should still be able to verify that this legacy contract is a BeaconProxy (for front-end to differentiate legacy vs v3 contracts)
             assertEq(knownCyberCorps[i].getErc1967Beacon(), legacyCyberCorpSingleFactory.beacon(), "should be able to get beacon address");
         }
+
+        // Legacy CyberCorpSingleFactory should be able to unilaterally upgrade its beacon
+        vm.startPrank(metalexSafe);
+        legacyCyberCorpSingleFactory.upgradeImplementation(address(new MockImplVTest()));
+        vm.stopPrank();
+        for (uint256 i = 0; i < knownCyberCorps.length; i++) {
+            assertEq(CyberCorp(knownCyberCorps[i]).DEPLOY_VERSION(), "test", "CyberCorp should be upgraded again");
+        }
     }
 
     function test_LegacyDealManagerIntegrity() public {
@@ -208,6 +227,14 @@ contract UpgradeLegacyCyberCorpsTest is Test {
 
             // Should still be able to verify that this legacy contract is a BeaconProxy (for front-end to differentiate legacy vs v3 contracts)
             assertEq(dmAddr.getErc1967Beacon(), legacyDealManagerFactory.beacon(), "should be able to get beacon address");
+        }
+
+        // Legacy DealManagerFactory should be able to unilaterally upgrade its beacon
+        vm.startPrank(metalexSafe);
+        legacyDealManagerFactory.upgradeImplementation(address(new MockImplVTest()));
+        vm.stopPrank();
+        for (uint256 i = 0; i < knownCyberCorps.length; i++) {
+            assertEq(DealManager(CyberCorp(knownCyberCorps[i]).dealManager()).DEPLOY_VERSION(), "test", "DealManager should be upgraded again");
         }
     }
 
@@ -247,6 +274,14 @@ contract UpgradeLegacyCyberCorpsTest is Test {
 
             // Should still be able to verify that this legacy contract is a BeaconProxy (for front-end to differentiate legacy vs v3 contracts)
             assertEq(imAddr.getErc1967Beacon(), legacyIssuanceManagerFactory.beacon(), "should be able to get beacon address");
+        }
+
+        // Legacy IssuanceManagerFactory should be able to unilaterally upgrade its beacon
+        vm.startPrank(metalexSafe);
+        legacyIssuanceManagerFactory.upgradeImplementation(address(new MockImplVTest()));
+        vm.stopPrank();
+        for (uint256 i = 0; i < knownCyberCorps.length; i++) {
+            assertEq(IIssuanceManager(CyberCorp(knownCyberCorps[i]).issuanceManager()).DEPLOY_VERSION(), "test", "IssuanceManager should be upgraded again");
         }
     }
 
@@ -342,6 +377,31 @@ contract UpgradeLegacyCyberCorpsTest is Test {
             vm.stopPrank();
 
             assertEq(ERC20(paymentToken).balanceOf(CyberCorp(cyberCorp).companyPayable()) - companyPayableBalanceBefore, 100e6, "alice should receive payment minus fees");
+        }
+    }
+
+    /// @notice After migration, legacy Corp should have RoundManager retrofitted. Since the RoundManager is a new deployment,
+    /// it is of pure UUPSUpgradeable + ERC1967Proxy architecture and has the full upgrade-by-co-approval features.
+    /// We will verify the upgradeability here
+    function test_LegacyRetrofittedRoundManagerIntegrity() public {
+        // Perform upgrades
+        _upgradeFactoryAndLegacyCyberCorps();
+
+        // Verify integrity
+        for (uint256 i = 0; i < knownCyberCorps.length; i++) {
+            address rmAddr = CyberCorp(knownCyberCorps[i]).roundManager();
+            // New RoundManager should implement new methods
+            assertEq(RoundManager(rmAddr).DEPLOY_VERSION(), "3", string(abi.encodePacked("unexpected DEPLOY_VERSION() for RoundManager: ", vm.toString(rmAddr))));
+            assertEq(RoundManager(rmAddr).computeFee(1 ether), 0 ether, "upgraded RoundManager should support fee calculation with no fees");
+            assertEq(RoundManager(rmAddr).getPlatformPayable(), address(0), "upgraded RoundManager should support fee payable");
+
+            // Should be able to upgrade it by co-approval
+            address testNewRmImpl = address(new MockImplVTest());
+            vm.prank(metalexSafe);
+            newRmFactory.setRefImplementation(testNewRmImpl);
+            vm.prank(knownCyberCorps[i]);
+            RoundManager(rmAddr).upgradeToAndCall(testNewRmImpl, "");
+            assertEq(RoundManager(rmAddr).DEPLOY_VERSION(), "test", "RoundManager should be upgraded again");
         }
     }
 
