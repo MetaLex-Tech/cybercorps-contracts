@@ -5,7 +5,7 @@
   - V3 architectures migrate to `UUPSUpgradeable` pattern so company owners have more autonomy in upgrade cadence (i.e. co-approval)
   - All future `CyberCorp` and `*ManagerFactory` deployments will use v3 architectures
   - Legacy cyber corp deployments will continue using beacon-proxy pattern for receiving upgrades
-- V3 `CyberCorp`, `*Manager` are individually upgradeable and owned by the corresponding company owners (shown in the diagram as the `CorpA` box)
+- V3 `CyberCorp`, `*Manager` are individually upgradeable and owned by the corresponding company owners (shown in the diagram as the `CorpA_deployed_after_v3` box)
   - This allows a co-approval structure for future upgrades: MetaLeX can release new implementations 
     but cannot unilaterally upgrade existing instances without corresponding company owner's approval; vice versa,
     a company owner cannot unilaterally upgrade them to arbitrary implementations outside MetaLeX-approved releases
@@ -74,23 +74,7 @@ classDiagram
         
         class LegacyIssuanceManagerFactory {
             +upgradeImplementation()
-            +upgradePrinterBeaconAt()
-        }
-        
-        class LegacyCyberCorpBeacon {
-            <<UpgradeableBeacon>>
-            +upgradeTo()
-        }
-        
-        class LegacyDealManagerBeacon {
-            <<UpgradeableBeacon>>
-            +upgradeTo()
-        }
-        
-        class LegacyIssuanceManagerBeacon {
-            <<UpgradeableBeacon>>
-            +upgradeTo()
-        }    
+        }        
     }
    
     namespace ReleaseV3 {
@@ -102,7 +86,7 @@ classDiagram
         class CyberScripImplV3
     }
     
-    namespace CorpA {
+    namespace CorpA_deployed_after_v3 {
         class CyberCorpA {
             <<UUPSUpgradeable>>
             +upgradeToAndCall()
@@ -140,22 +124,49 @@ classDiagram
         }            
     }
     
-    namespace LegacyCorpB {
+    namespace MetalexLegacyBeacons {
+        class LegacyCyberCorpBeacon {
+            <<UpgradeableBeacon>>
+            +upgradeTo()
+        }
+        
+        class LegacyDealManagerBeacon {
+            <<UpgradeableBeacon>>
+            +upgradeTo()
+        }
+        
+        class LegacyIssuanceManagerBeacon {
+            <<UpgradeableBeacon>>
+            +upgradeTo()
+        }
+    }
+    
+    namespace LegacyCorpB_migrated_after_v3 {
         class CyberCorpB {
             <<BeaconProxy>>
         }        
         class IssuanceManagerB {
             <<BeaconProxy>>
+            +upgradeCertPrinterBeaconImplementation()
+            +upgradeScripBeaconImplementation()
+        }
+        class DealManagerB {
+            <<BeaconProxy>>
+        }
+        class RoundManagerB {
+            <<UUPSUpgradeable>>
+            +upgradeToAndCall()
         }
         class CyberCertPrinterBeaconB {
             <<UpgradeableBeacon>>
             +upgradeTo()
         }        
-        class DealManagerB {
-            <<BeaconProxy>>
-        }
         class CyberCertPrinterB1 {
             <<BeaconProxy>>
+        }
+        class CyberScripBeaconB {
+            <<UpgradeableBeacon>>
+            +upgradeTo()
         }
     }
     
@@ -163,51 +174,53 @@ classDiagram
     
     CyberCorpFactory --> CyberAgreementRegistry : depend on
     CyberCorpFactory --> CertificateUriBuilder : depend on
-    CyberCorpFactory --> RoundManagerFactory : depend on
     CyberCorpFactory --> CyberCorpSingleFactory : depend on
     CyberCorpFactory --> DealManagerFactory : depend on
     CyberCorpFactory --> IssuanceManagerFactory : depend on
+    CyberCorpFactory --> RoundManagerFactory : depend on
     
     CyberCorpSingleFactory --> CyberCorpImplV3 : refImplementation
     
-    IssuanceManagerFactory --> CyberScripImplV3: cyberScripRefImplementation
     IssuanceManagerFactory --> IssuanceManagerImplV3: refImplementation
     IssuanceManagerFactory --> CyberCertPrinterImplV3: cyberCertPrinterRefImplementation
+    IssuanceManagerFactory --> CyberScripImplV3: cyberScripRefImplementation
     
     DealManagerFactory --> DealManagerImplV3: refImplementation
-    RoundManagerFactory --> RoundManagerImplV3: refImplementation
+    RoundManagerFactory --> RoundManagerImplV3: refImplementation        
     
-    %% LegacyMetalex
-    
-    LegacyCyberCorpBeacon --> CyberCorpImplV3 : implementation
-    LegacyDealManagerBeacon --> DealManagerImplV3 : implementation
-    LegacyIssuanceManagerBeacon --> IssuanceManagerImplV3 : implementation
-
-    LegacyCyberCorpSingleFactory <-- LegacyCyberCorpBeacon: owned by    
-    LegacyDealManagerFactory <-- LegacyDealManagerBeacon: owned by    
-    LegacyIssuanceManagerFactory <-- LegacyIssuanceManagerBeacon: owned by
-    LegacyIssuanceManagerFactory <-- CyberCertPrinterBeaconB : upgraded by        
-    
-    %% CorpA
+    %% CorpA_deployed_after_v3
     
     CyberCorpImplV3 <-- CyberCorpA : implementation
     IssuanceManagerImplV3 <-- IssuanceManagerA : implementation
-    IssuanceManagerA <-- CyberScripBeaconA : owned by
     IssuanceManagerA <-- CyberCertPrinterBeaconA : owned by
+    IssuanceManagerA <-- CyberScripBeaconA : owned by
     CyberCertPrinterImplV3 <-- CyberCertPrinterBeaconA : implementation
     CyberScripImplV3 <-- CyberScripBeaconA : implementation
     DealManagerImplV3 <-- DealManagerA : implementation
-    RoundManagerImplV3 <-- RoundManagerA : implementation    
     CyberCertPrinterBeaconA <-- CyberCertPrinterA1: beacon    
     CyberCertPrinterBeaconA <-- CyberCertPrinterA2: beacon
     CyberScripBeaconA <-- CyberScripA1: beacon
-        
-    %% LegacyCorpB
+    RoundManagerImplV3 <-- RoundManagerA : implementation    
+    
+    %% LegacyMetalex
+    
+    LegacyCyberCorpSingleFactory <-- LegacyCyberCorpBeacon: owned by    
+    LegacyDealManagerFactory <-- LegacyDealManagerBeacon: owned by    
+    LegacyIssuanceManagerFactory <-- LegacyIssuanceManagerBeacon: owned by        
+    
+    CyberCorpImplV3 <-- LegacyCyberCorpBeacon : implementation
+    DealManagerImplV3 <-- LegacyDealManagerBeacon : implementation
+    IssuanceManagerImplV3 <-- LegacyIssuanceManagerBeacon : implementation
+
+    %% LegacyCorpB_migrated_after_v3
     
     LegacyCyberCorpBeacon <-- CyberCorpB : beacon
     LegacyIssuanceManagerBeacon <-- IssuanceManagerB : beacon
     IssuanceManagerB <-- CyberCertPrinterBeaconB : owned by
-    CyberCertPrinterBeaconB --> CyberCertPrinterImplV3 : implementation
-    CyberCertPrinterBeaconB <-- CyberCertPrinterB1: beacon    
+    IssuanceManagerB <-- CyberScripBeaconB : owned by
     LegacyDealManagerBeacon <-- DealManagerB : beacon
+    CyberCertPrinterImplV3 <-- CyberCertPrinterBeaconB : implementation
+    CyberCertPrinterBeaconB <-- CyberCertPrinterB1: beacon    
+    CyberScripImplV3 <-- CyberScripBeaconB : implementation        
+    RoundManagerImplV3 <-- RoundManagerB : implementation
 ```

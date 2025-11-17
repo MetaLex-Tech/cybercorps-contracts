@@ -10,6 +10,7 @@ import {UpgradeLegacyCyberCorpsScript} from "../script/upgrade-legacy-cybercorps
 import {UpgradeLegacyDealManagersScript} from "../script/upgrade-legacy-deal-managers.s.sol";
 import {UpgradeLegacyIssuanceManagersScript} from "../script/upgrade-legacy-issuance-managers.s.sol";
 import {ILegacyFactory} from "../script/interfaces/ILegacyFactory.sol";
+import {ILegacyIssuanceManagerFactory} from "../script/interfaces/ILegacyIssuanceManagerFactory.sol";
 import {GnosisTransaction} from "../script/libs/safe.sol";
 import {KnownAddressesLoader} from "../script/libs/KnownAddressesLoader.sol";
 import {SecurityClass, SecuritySeries, CompanyOfficer} from "../src/CyberCorpConstants.sol";
@@ -39,7 +40,7 @@ contract UpgradeLegacyCyberCorpsTest is Test {
     CyberCorpFactory cyberCorpFactory = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
     ILegacyFactory legacyCyberCorpSingleFactory = ILegacyFactory(0xc8e084D3f8B3b326FCc894C7afD28F4904196406);
     ILegacyFactory legacyDealManagerFactory = ILegacyFactory(0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3);
-    ILegacyFactory legacyIssuanceManagerFactory = ILegacyFactory(0xA32547aAdAA4975082D729c79e79dBaE4385EBCf);
+    ILegacyIssuanceManagerFactory legacyIssuanceManagerFactory = ILegacyIssuanceManagerFactory(0xA32547aAdAA4975082D729c79e79dBaE4385EBCf);
 
     address paymentToken = 0x036CbD53842c5426634e7929541eC2318f3dCF7e; // USDC @ Base Sepolia
 
@@ -197,7 +198,7 @@ contract UpgradeLegacyCyberCorpsTest is Test {
         // Verify integrity
         for (uint256 i = 0; i < knownCyberCorps.length; i++) {
             address dmAddr = CyberCorp(knownCyberCorps[i]).dealManager();
-            // New DealManager should implement new methods
+            // New DealManager should implement new methods                                                                                                                                                                                                                                     
             assertEq(DealManager(dmAddr).DEPLOY_VERSION(), "3", string(abi.encodePacked("unexpected DEPLOY_VERSION() for DealManager: ", vm.toString(dmAddr))));
             assertEq(DealManager(dmAddr).computeFee(1 ether), 0 ether, "upgraded DealManager should support fee calculation with no fees");
             assertEq(DealManager(dmAddr).getPlatformPayable(), address(0), "upgraded DealManager should support fee payable");
@@ -232,6 +233,17 @@ contract UpgradeLegacyCyberCorpsTest is Test {
 
             // its beacon implementations should be upgraded to the reference implementations
             _assertIssuanceManagerBeacons(imAddr);
+
+            // IssuanceManagerFactory should be no longer able to unilaterally upgrade CyberCertPrinter
+            vm.startPrank(metalexSafe);
+            // Because `upgradeBeaconImplementation()` is no longer implemented in the new IssuanceManager;
+            // furthermore, it will no longer allow the factory to unilaterally upgrade CyberCertPrinter
+            vm.expectRevert();
+            ILegacyIssuanceManagerFactory(legacyIssuanceManagerFactory).upgradePrinterBeaconAt(
+                imAddr,
+                address(0) // no-op
+            );
+            vm.stopPrank();
 
             // Should still be able to verify that this legacy contract is a BeaconProxy (for front-end to differentiate legacy vs v3 contracts)
             assertEq(imAddr.getErc1967Beacon(), legacyIssuanceManagerFactory.beacon(), "should be able to get beacon address");
