@@ -26,10 +26,10 @@ import {CyberCorp} from "../src/CyberCorp.sol";
 
 contract UpgradeLegacyDealManagersScript is Script {
     function run() public returns (DealManagerWithMigration) {
-        return run(type(uint256).max);
+        return runWithArgs(type(uint256).max);
     }
 
-    function run(uint256 maxCount) public returns (DealManagerWithMigration) {
+    function runWithArgs(uint256 maxCount) public returns (DealManagerWithMigration) {
         bytes32 salt = bytes32(keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3"));
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
 
