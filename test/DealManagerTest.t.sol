@@ -46,6 +46,7 @@ import {ERC20} from "../dependencies/openzeppelin-contracts/contracts/token/ERC2
 import {ERC721} from "../dependencies/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
 import {ERC721Enumerable} from "../dependencies/openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {IERC1967} from "../dependencies/openzeppelin-contracts/contracts/interfaces/IERC1967.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {DealManager, LexScroWLite} from "../src/DealManager.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
@@ -803,6 +804,8 @@ contract DealManagerTest is Test {
         // Corp2 owner decided to accept the upgrade
 
         vm.startPrank(companyOwner);
+        vm.expectEmit(true, true, true, true);
+        emit IERC1967.Upgraded(DealManagerFactory(dmFactory).getRefImplementation());
         dm2.upgradeToAndCall(DealManagerFactory(dmFactory).getRefImplementation(), "");
         vm.stopPrank();
 

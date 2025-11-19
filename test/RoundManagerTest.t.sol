@@ -9,6 +9,7 @@ import "../src/storage/RoundManagerStorage.sol";
 import "../src/CyberCorpConstants.sol";
 import "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import "../dependencies/openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
+import {IERC1967} from "../dependencies/openzeppelin-contracts/contracts/interfaces/IERC1967.sol";
 import {ILegacyFactory} from "../script/interfaces/ILegacyFactory.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
@@ -2210,6 +2211,8 @@ contract RoundManagerTest is Test {
         // Corp2 owner decided to accept the upgrade
 
         vm.startPrank(corpOwner);
+        vm.expectEmit(true, true, true, true);
+        emit IERC1967.Upgraded(DealManagerFactory(rmFactory).getRefImplementation());
         rm2.upgradeToAndCall(address(RoundManagerFactory(rmFactory).getRefImplementation()), "");
         vm.stopPrank();
 
