@@ -702,13 +702,13 @@ contract UpgradeLegacyCyberCorpsTest is Test {
         newRmFactory = RoundManagerFactory(cyberCorpFactory.roundManagerFactory());
 
         // Run scripts to upgrade all legacy CyberCorps
-        (new UpgradeLegacyCyberCorpsScript()).run(legacyAddressesCount);
+        (new UpgradeLegacyCyberCorpsScript()).runWithArgs(legacyAddressesCount);
 
         // Run scripts to upgrade all legacy DealManagers
-        (new UpgradeLegacyDealManagersScript()).run(legacyAddressesCount);
+        (new UpgradeLegacyDealManagersScript()).runWithArgs(legacyAddressesCount);
 
         // Run scripts to upgrade all legacy IssuanceManagers
-        (new UpgradeLegacyIssuanceManagersScript()).run(legacyAddressesCount);
+        (new UpgradeLegacyIssuanceManagersScript()).runWithArgs(legacyAddressesCount);
 
         // Simulate all legacy corp owners accept the new CyberCorpPrinter
         for (uint256 i = 0; i < knownCyberCorps.length; i++) {
