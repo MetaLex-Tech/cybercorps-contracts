@@ -32,7 +32,7 @@ contract UpgradePublicRoundsScript is Script {
     function run() public {
         // Config
         bytes32 salt = bytes32(
-            keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3")
+            keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3.0.1")
         );
         
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");

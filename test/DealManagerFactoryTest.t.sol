@@ -90,6 +90,23 @@ contract DealManagerFactoryTest is Test {
         );
     }
 
+    function test_initialize() public {
+        DealManager refImplementation = new DealManager();
+        DealManagerFactory factoryImpl = new DealManagerFactory();
+
+        // Should emit first reference implementation upon initialization
+        vm.expectEmit(true, true, true, true);
+        emit DealManagerFactory.RefImplementationSet(address(refImplementation), refImplementation.DEPLOY_VERSION());
+        new ERC1967Proxy(
+            address(factoryImpl),
+            abi.encodeWithSelector(
+                DealManagerFactory.initialize.selector,
+                address(bootstrapAuth),
+                address(refImplementation)
+            )
+        );
+    }
+
     function test_UpgradeFactory() public {
         // Upgrading DealManagerFactory should not impact existing deployments,
         // i.e. existing DealManager should still be able to find and upgrade to future releases

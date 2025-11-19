@@ -56,6 +56,8 @@ contract MockRoundManagerForConversion {
 contract MockCertPrinter {
     using IssuanceManagerStorage for IssuanceManagerStorage.IssuanceManagerData;
 
+    string public constant DEPLOY_VERSION = "test";
+
     mapping(uint256 => CertificateDetails) internal _details;
     mapping(uint256 => address) internal _owners;
     uint256 internal _total;

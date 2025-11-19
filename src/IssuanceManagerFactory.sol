@@ -76,6 +76,9 @@ contract IssuanceManagerFactory is BorgAuthACL, UUPSUpgradeable {
         IssuanceManagerFactoryStorage.getStorageData().refImplementation = refImplementation;
         IssuanceManagerFactoryStorage.getStorageData().cyberCertPrinterRefImplementation = cyberCertPrinterRefImplementation;
         IssuanceManagerFactoryStorage.getStorageData().cyberScripRefImplementation = cyberScripRefImplementation;
+        emit RefImplementationSet(refImplementation, IssuanceManager(refImplementation).DEPLOY_VERSION());
+        emit CyberCertPrinterRefImplementationSet(cyberCertPrinterRefImplementation, CyberCertPrinter(cyberCertPrinterRefImplementation).DEPLOY_VERSION());
+        emit CyberScripRefImplementationSet(cyberScripRefImplementation, CyberScrip(cyberScripRefImplementation).DEPLOY_VERSION());
     }
 
     function deployIssuanceManager(bytes32 _salt) public returns (address) {

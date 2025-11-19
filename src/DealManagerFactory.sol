@@ -73,6 +73,7 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
         __BorgAuthACL_init(_auth);
 
         DealManagerFactoryStorage.setRefImplementation(_refImplementation);
+        emit RefImplementationSet(_refImplementation, DealManager(_refImplementation).DEPLOY_VERSION());
     }
 
     function deployDealManager(bytes32 _salt) public returns (address) {

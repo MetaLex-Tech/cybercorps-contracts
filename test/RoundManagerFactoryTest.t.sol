@@ -90,6 +90,23 @@ contract RoundManagerFactoryTest is Test {
         );
     }
 
+    function test_initialize() public {
+        RoundManager refImplementation = new RoundManager();
+        RoundManagerFactory factoryImpl = new RoundManagerFactory();
+
+        // Should emit first reference implementation upon initialization
+        vm.expectEmit(true, true, true, true);
+        emit RoundManagerFactory.RefImplementationSet(address(refImplementation), refImplementation.DEPLOY_VERSION());
+        new ERC1967Proxy(
+            address(factoryImpl),
+            abi.encodeWithSelector(
+                RoundManagerFactory.initialize.selector,
+                address(bootstrapAuth),
+                address(refImplementation)
+            )
+        );
+    }
+
     function test_UpgradeFactory() public {
         // Upgrading RoundManagerFactory should not impact existing deployments,
         // i.e. existing RoundManager should still be able to find and upgrade to future releases

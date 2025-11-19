@@ -66,6 +66,7 @@ contract CyberCorpSingleFactory is BorgAuthACL, UUPSUpgradeable {
         __BorgAuthACL_init(_auth);
 
         CyberCorpSingleFactoryStorage.getStorageData().refImplementation = _refImplementation;
+        emit RefImplementationSet(_refImplementation, CyberCorp(_refImplementation).DEPLOY_VERSION());
     }
 
     function deployCyberCorpSingle(bytes32 _salt) public returns (address) {

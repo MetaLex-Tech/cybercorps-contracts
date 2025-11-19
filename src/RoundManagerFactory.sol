@@ -73,6 +73,7 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
         __BorgAuthACL_init(_auth);
 
         RoundManagerFactoryStorage.setRefImplementation(_refImplementation);
+        emit RefImplementationSet(_refImplementation, RoundManager(_refImplementation).DEPLOY_VERSION());
     }
 
     /// @notice Deploys a new RoundManager instance
