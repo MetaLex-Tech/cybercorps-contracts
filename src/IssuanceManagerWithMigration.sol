@@ -48,7 +48,7 @@ import {IIssuanceManagerFactory} from "./interfaces/IIssuanceManagerFactory.sol"
 
 contract IssuanceManagerWithMigration is IssuanceManager {
 
-    address public constant NEW_UPGRADE_FACTORY = 0x318F42C4AAAEc1B068D3C3e623A4672FeD72b4E5; // TODO TBD
+    address public constant NEW_UPGRADE_FACTORY = 0xbDD399ed00D56978a4c68E8813503b558B390fF7; // TODO TBD
 
     /// @notice Migrate legacy contracts and set upgradeFactory to the known new contract (for reference implementation lookup)
     /// Also migrate its beacons for CyberCertPrinter and CyberScrip to new reference implementations
@@ -57,19 +57,24 @@ contract IssuanceManagerWithMigration is IssuanceManager {
     function migrateUpgradeFactory() public {
         IssuanceManagerStorage.setUpgradeFactory(NEW_UPGRADE_FACTORY);
 
-        IssuanceManagerStorage.upgradeCertPrinterBeaconImplementation(IIssuanceManagerFactory(NEW_UPGRADE_FACTORY).getCyberCertPrinterRefImplementation());
+        address cyberCertPrinterRefImpl = IIssuanceManagerFactory(NEW_UPGRADE_FACTORY).getCyberCertPrinterRefImplementation();
+        IssuanceManagerStorage.upgradeCertPrinterBeaconImplementation(cyberCertPrinterRefImpl);
+        emit CertPrinterBeaconImplementationUpgraded(cyberCertPrinterRefImpl);
 
+        address cyberScripRefImpl = IIssuanceManagerFactory(NEW_UPGRADE_FACTORY).getCyberScripRefImplementation();
         if (address(IssuanceManagerStorage.getCyberScripBeacon()) == address(0)) {
             // Legacy contract does not have CyberScripBeacon set yet, create it for them
             UpgradeableBeacon beaconScrip = new UpgradeableBeacon(
-                IIssuanceManagerFactory(NEW_UPGRADE_FACTORY).getCyberScripRefImplementation(),
+                cyberScripRefImpl,
                 address(this)
             );
             IssuanceManagerStorage.setCyberScripBeacon(beaconScrip);
+            emit ScripBeaconImplementationUpgraded(cyberScripRefImpl);
 
         } else {
             // Legacy contract has CyberScripBeacon set, update it the regular way
-            IssuanceManagerStorage.updateScripBeaconImplementation(IIssuanceManagerFactory(NEW_UPGRADE_FACTORY).getCyberScripRefImplementation());
+            IssuanceManagerStorage.updateScripBeaconImplementation(cyberScripRefImpl);
+            emit ScripBeaconImplementationUpgraded(cyberScripRefImpl);
         }
     }
 }

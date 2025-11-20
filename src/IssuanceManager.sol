@@ -99,6 +99,8 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         string tokenURI
     );
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
+    event CertPrinterBeaconImplementationUpgraded(address implementation);
+    event ScripBeaconImplementationUpgraded(address implementation);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -124,15 +126,19 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         // share the same implementation or upgraded to a new version all at the same time.
         // Maintenance-wise, since IssuanceManager itself is upgradeable, we don't need to worry about beacon ownership transfers
 
+        address cyberCertPrinterRefImpl = IIssuanceManagerFactory(_upgradeFactory).getCyberCertPrinterRefImplementation();
         UpgradeableBeacon beaconCertPrinter = new UpgradeableBeacon(
-            IIssuanceManagerFactory(_upgradeFactory).getCyberCertPrinterRefImplementation(),
+            cyberCertPrinterRefImpl,
             address(this)
         );
+        emit CertPrinterBeaconImplementationUpgraded(cyberCertPrinterRefImpl);
 
+        address cyberScripRefImpl = IIssuanceManagerFactory(_upgradeFactory).getCyberScripRefImplementation();
         UpgradeableBeacon beaconScrip = new UpgradeableBeacon(
-            IIssuanceManagerFactory(_upgradeFactory).getCyberScripRefImplementation(),
+            cyberScripRefImpl,
             address(this)
         );
+        emit ScripBeaconImplementationUpgraded(cyberScripRefImpl);
 
         IssuanceManagerStorage.setCORP(_CORP);
         IssuanceManagerStorage.setUriBuilder(_uriBuilder);
@@ -373,6 +379,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             revert NotRefImplementation();
         }
         IssuanceManagerStorage.upgradeCertPrinterBeaconImplementation(_newImplementation);
+        emit CertPrinterBeaconImplementationUpgraded(_newImplementation);
     }
 
     /// @notice Gets the current implementation address of the certificate printer
@@ -395,6 +402,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             revert NotRefImplementation();
         }
         IssuanceManagerStorage.updateScripBeaconImplementation(_newImplementation);
+        emit ScripBeaconImplementationUpgraded(_newImplementation);
     }
 
     function getScripBeaconImplementation() external view returns (address) {
