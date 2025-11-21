@@ -217,6 +217,7 @@ contract UpgradePublicRoundsTest is Test {
                 maxTicket,
                 block.timestamp - 1,
                 block.timestamp + 14 days,
+                true,
                 true
             );
         }
@@ -277,6 +278,7 @@ contract UpgradePublicRoundsTest is Test {
                 maxTicket,
                 block.timestamp - 1,
                 block.timestamp + 21 days,
+                true,
                 true
             );
         }

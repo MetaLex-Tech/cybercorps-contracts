@@ -293,6 +293,7 @@ contract PublicRoundTestDeploy is Script {
                 10000000,
                 block.timestamp - 1,
                 block.timestamp + 21 days,
+                true,
                 true
             );
 

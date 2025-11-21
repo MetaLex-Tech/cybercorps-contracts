@@ -105,6 +105,7 @@ library RoundLib {
         SecuritySeries seriesType,
         RoundType roundType,
         bool publicRound,
+        bool allowTimedOffers,
         uint256 raiseCap,
         uint256 minTicket,
         uint256 maxTicket,
@@ -117,6 +118,7 @@ library RoundLib {
         round.seriesType = seriesType;
         round.roundType = roundType;
         round.publicRound = publicRound;
+        round.allowTimedOffers = allowTimedOffers;
         round.raiseCap = raiseCap;
         round.minTicket = minTicket;
         round.maxTicket = maxTicket;

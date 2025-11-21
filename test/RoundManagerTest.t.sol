@@ -346,6 +346,7 @@ library CyberCorpHelper {
                     SecuritySeries.SeriesSeed,
                     roundType,
                     publicRound,
+                    true,
                     raiseCap,
                     minTicket,
                     maxTicket,
@@ -816,6 +817,7 @@ contract RoundManagerTest is Test {
                     SecuritySeries.SeriesA,
                     RoundType.FounderApproved,
                     false,
+                    true,
                     RAISE_CAP,
                     MIN_TICKET,
                     MAX_TICKET,
@@ -1997,6 +1999,7 @@ contract RoundManagerTest is Test {
                     SecuritySeries.SeriesF,
                     RoundType.FounderApproved,
                     false,
+                    true,
                     100_000 * 10 ** 6,
                     1_000 * 10 ** 6,
                     50_000 * 10 ** 6,
@@ -2375,6 +2378,7 @@ contract RoundManagerTest is Test {
                     SecuritySeries.SeriesSeed,
                     RoundType.FCFS,
                     false,
+                    true,
                     RAISE_CAP,
                     MIN_TICKET,
                     MAX_TICKET,
@@ -2614,6 +2618,7 @@ contract RoundManagerFCFSTest is Test {
                 .setTickets(
                     SecuritySeries.SeriesPreSeed,
                     RoundType.FCFS,
+                    true,
                     true,
                     1,
                     1,
@@ -3602,6 +3607,7 @@ contract CyberCorpFactoryPublicRoundTest is Test {
             maxTicket,
             startTime,
             endTime,
+            true,
             true
         );
 
