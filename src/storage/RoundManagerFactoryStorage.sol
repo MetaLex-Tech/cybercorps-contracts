@@ -58,6 +58,7 @@ library RoundManagerFactoryStorage {
 
         address platformPayable; // Recipient of platform fees
         uint256 defaultFeeRatio; // total fee as % of ticket size (BASIS_POINTS = 100%)
+        mapping(address => bool) whitelistedTokens;
     }
 
     /// @notice Retrieves the storage reference for the RoundManagerFactoryData struct
@@ -92,5 +93,13 @@ library RoundManagerFactoryStorage {
 
     function setDefaultFeeRatio(uint256 feeRatio) internal {
         roundManagerFactoryStorage().defaultFeeRatio = feeRatio;
+    }
+
+    function isWhitelistedToken(address token) internal view returns (bool) {
+        return roundManagerFactoryStorage().whitelistedTokens[token];
+    }
+
+    function setWhitelistedToken(address token, bool status) internal {
+        roundManagerFactoryStorage().whitelistedTokens[token] = status;
     }
 }

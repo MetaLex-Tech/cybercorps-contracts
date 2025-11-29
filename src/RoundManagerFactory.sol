@@ -59,6 +59,7 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
 
     event RoundManagerDeployed(address roundManager, string version);
     event RefImplementationSet(address refImplementation, string version);
+    event TokenWhitelistUpdated(address token, bool isWhitelisted);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -152,6 +153,17 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
         }
 
         RoundManagerFactoryStorage.setDefaultFeeRatio(feeRatio);
+    }
+
+    /// @notice Check if a token is whitelisted for lexchex minting
+    function isWhitelistedToken(address token) external view returns (bool) {
+        return RoundManagerFactoryStorage.isWhitelistedToken(token);
+    }
+
+    /// @notice Update token whitelist status
+    function setWhitelistedToken(address token, bool isWhitelisted) external onlyOwner {
+        RoundManagerFactoryStorage.setWhitelistedToken(token, isWhitelisted);
+        emit TokenWhitelistUpdated(token, isWhitelisted);
     }
 
     function _authorizeUpgrade(

@@ -48,6 +48,7 @@ import "../interfaces/ICondition.sol";
 import "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/ILexChex.sol";
+import "../interfaces/IRoundManagerFactory.sol";
 import "../libs/EIP712Lib.sol";
 import "../libs/RoundLib.sol";
 import "../storage/LexScrowStorage.sol";
