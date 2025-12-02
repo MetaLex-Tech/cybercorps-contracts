@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 
 contract CyberAgreementRegistryTest is Test {
     address deployer;
@@ -24,7 +25,7 @@ contract CyberAgreementRegistryTest is Test {
     string[] testGlobalFields;
     string[] testPartyFields;
 
-function setUp() public {
+    function setUp() public {
         (deployer, deployerPrivateKey) = makeAddrAndKey("deployer");
         (alice, alicePrivateKey) = makeAddrAndKey("alice");
         (bob, bobPrivateKey) = makeAddrAndKey("bob");
@@ -59,6 +60,59 @@ function setUp() public {
         );
 
         vm.stopPrank();
+    }
+
+    /// @notice Should allow `signContractFor()` even if finalizer is not defined
+    function test_signContractForUndefinedFinalizer() public {
+        uint256 salt = uint256(keccak256("test_signContractForUndefinedFinalizer"));
+
+        address[] memory parties = new address[](1);
+        parties[0] = alice;
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "global value 0";
+
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = new string[](2);
+        partyValues[0][0] = "Alice";
+        partyValues[0][1] = "Test title";
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            salt,
+            globalValues,
+            parties,
+            partyValues,
+            "",
+            address(0),
+            block.timestamp + 10
+        );
+
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            agreementId,
+            testLegalDocUri,
+            testGlobalFields,
+            testPartyFields,
+            globalValues,
+            partyValues[0],
+            alicePrivateKey
+        );
+
+        vm.expectEmit(true, true, true, true);
+        emit CyberAgreementRegistry.AgreementSigned(agreementId, alice, block.timestamp);
+        vm.prank(bob);
+        registry.signContractFor(
+            alice,
+            agreementId,
+            partyValues[0],
+            signature,
+            false,
+            ""
+        );
     }
 
     /// @notice Should not allow escrow-sign when finalizer is undefined
