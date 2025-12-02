@@ -227,22 +227,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         string[] memory globalFields,
         string[] memory partyFields
     ) external onlyOwner {
-        if (bytes(templates[templateId].legalContractUri).length > 0) {
-            revert TemplateAlreadyExists();
-        }
-
-        if (bytes(title).length == 0) {
-            revert TitleEmpty();
-        }
-
-        templates[templateId] = Template({
-            legalContractUri: legalContractUri,
-            title: title,
-            globalFields: globalFields,
-            partyFields: partyFields
-        });
-
-        emit TemplateCreated(
+        _createTemplate(
             templateId,
             title,
             legalContractUri,
@@ -260,7 +245,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         bytes32 secretHash,
         address finalizer,
         uint256 expiry
-    ) external returns (bytes32 contractId) {
+    ) public returns (bytes32 contractId) {
         contractId = keccak256(
             abi.encode(templateId, salt, globalValues, parties)
         );
@@ -318,6 +303,37 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         }
     }
 
+    function createSimpleContract(
+        uint256 salt,
+        string memory legalContractUri,
+        address[] memory parties,
+        uint256 expiry
+    ) external returns (bytes32 contractId) {
+        // Use the URI as the salt of template ID
+        bytes32 templateId = keccak256(bytes(legalContractUri));
+        // Create the template if needed
+        if (bytes(templates[templateId].legalContractUri).length == 0) {
+            _createTemplate(
+                templateId,
+                legalContractUri, // use URI as title
+                legalContractUri,
+                new string[](0),
+                new string[](0)
+            );
+        }
+
+        return createContract(
+            templateId,
+            salt,
+            new string[](0), // no global fields
+            parties,
+            new string[][](parties.length), // no party fields
+            "",
+            address(0),
+            expiry
+        );
+    }
+
     function signContract(
         bytes32 contractId,
         string[] memory partyValues,
@@ -332,6 +348,17 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             signature,
             fillUnallocated,
             secret
+        );
+    }
+
+    function signSimpleContract(
+        bytes32 contractId,
+        bytes calldata signature
+    ) external {
+        signSimpleContractFor(
+            msg.sender,
+            contractId,
+            signature
         );
     }
 
@@ -475,6 +502,21 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
             emit ContractFullySigned(contractId, timestamp);
         }
+    }
+
+    function signSimpleContractFor(
+        address signer,
+        bytes32 contractId,
+        bytes calldata signature
+    ) public {
+        signContractFor(
+            signer,
+            contractId,
+            new string[](0),
+            signature,
+            false,
+            ""
+        );
     }
 
     function signContractWithEscrow(
@@ -902,6 +944,37 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         );
         json = string.concat(json, "}");
         return json;
+    }
+
+    function _createTemplate(
+        bytes32 templateId,
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields
+    ) internal {
+        if (bytes(templates[templateId].legalContractUri).length > 0) {
+            revert TemplateAlreadyExists();
+        }
+
+        if (bytes(title).length == 0) {
+            revert TitleEmpty();
+        }
+
+        templates[templateId] = Template({
+            legalContractUri: legalContractUri,
+            title: title,
+            globalFields: globalFields,
+            partyFields: partyFields
+        });
+
+        emit TemplateCreated(
+            templateId,
+            title,
+            legalContractUri,
+            globalFields,
+            partyFields
+        );
     }
 
     function _verifySignature(

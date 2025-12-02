@@ -62,6 +62,10 @@ contract CyberAgreementRegistryTest is Test {
         vm.stopPrank();
     }
 
+    //
+    // Regular contracts
+    //
+
     /// @notice Should allow `signContractFor()` even if finalizer is not defined
     function test_signContractForUndefinedFinalizer() public {
         uint256 salt = uint256(keccak256("test_signContractForUndefinedFinalizer"));
@@ -152,5 +156,170 @@ contract CyberAgreementRegistryTest is Test {
             false,
             ""
         );
+    }
+
+    //
+    // Simple contracts
+    //
+
+    /// @notice Should be able to create duplicate simple agreements as long as their salts are different.
+    /// The duplicate agreements should have the same template ID, too.
+    function test_createSimpleContractDuplicate() public {
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        string memory legalDocUri = "ipfs://my/legal/doc";
+
+        vm.startPrank(alice);
+
+        bytes32 agreementId0 = registry.createSimpleContract(
+            uint256(keccak256("test_createSimpleContractDifferentSalts.0")),
+            legalDocUri,
+            parties,
+            block.timestamp + 10
+        );
+        (bytes32 templateId0,,,,,,,,, ) = registry.getContractDetails(agreementId0);
+
+        bytes32 agreementId1 = registry.createSimpleContract(
+            uint256(keccak256("test_createSimpleContractDifferentSalts.1")),
+            legalDocUri,
+            parties,
+            block.timestamp + 10
+        );
+        (bytes32 templateId1,,,,,,,,, ) = registry.getContractDetails(agreementId1);
+
+        assertNotEq(agreementId0, agreementId1, "two agreements should have different IDs");
+        assertEq(templateId0, templateId1, "two agreements should share the same template");
+    }
+
+    /// @notice Parties should be able to sign a simple contract
+    function test_signSimpleContract() public {
+        uint256 salt = uint256(keccak256("test_signSimpleContract"));
+
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        string memory legalDocUri = "ipfs://my/legal/doc";
+
+        vm.startPrank(alice);
+
+        bytes32 agreementId = registry.createSimpleContract(
+            salt,
+            legalDocUri,
+            parties,
+            block.timestamp + 10
+        );
+        {
+            (string memory templateUri, ) = registry.templates(keccak256(bytes(legalDocUri)));
+            assertEq(templateUri, legalDocUri, "burner template should have been created");
+        }
+
+        registry.signSimpleContract(
+            agreementId,
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                legalDocUri,
+                new string[](0),
+                new string[](0),
+                new string[](0),
+                new string[](0),
+                alicePrivateKey
+            )
+        );
+        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
+
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+
+        registry.signSimpleContract(
+            agreementId,
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                legalDocUri,
+                new string[](0),
+                new string[](0),
+                new string[](0),
+                new string[](0),
+                bobPrivateKey
+            )
+        );
+        assertTrue(registry.hasSigned(agreementId, bob), "bob should have signed now");
+
+        vm.stopPrank();
+
+        assertTrue(registry.isFinalized(agreementId), "agreement should be finalized by now");
+    }
+
+    /// @notice Third-parties should be able to forward our signatures for a simple contract
+    function test_signSimpleContractFor() public {
+        uint256 salt = uint256(keccak256("test_signSimpleContractFor"));
+
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        string memory legalDocUri = "ipfs://my/legal/doc";
+
+        vm.startPrank(alice);
+        bytes32 agreementId = registry.createSimpleContract(
+            salt,
+            legalDocUri,
+            parties,
+            block.timestamp + 10
+        );
+        vm.stopPrank();
+
+        vm.startPrank(deployer);
+
+        // third-party to submit alice's signature for her
+        registry.signSimpleContractFor(
+            alice,
+            agreementId,
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                legalDocUri,
+                new string[](0),
+                new string[](0),
+                new string[](0),
+                new string[](0),
+                alicePrivateKey
+            )
+        );
+        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
+
+        // third-party to submit bob's signature for him
+        registry.signSimpleContractFor(
+            bob,
+            agreementId,
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                legalDocUri,
+                new string[](0),
+                new string[](0),
+                new string[](0),
+                new string[](0),
+                bobPrivateKey
+            )
+        );
+        assertTrue(registry.hasSigned(agreementId, bob), "bob should have signed now");
+
+        vm.stopPrank();
+
+        assertTrue(registry.isFinalized(agreementId), "agreement should be finalized by now");
     }
 }
