@@ -322,4 +322,240 @@ contract CyberAgreementRegistryTest is Test {
 
         assertTrue(registry.isFinalized(agreementId), "agreement should be finalized by now");
     }
+
+    function test_voidContractForSelf() public {
+        uint256 salt = uint256(keccak256("test_voidContractForSelf"));
+
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "global value 0";
+
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](2);
+        partyValues[0][0] = "Alice";
+        partyValues[0][1] = "Test title";
+        partyValues[1] = new string[](2);
+        partyValues[1][0] = "Bob";
+        partyValues[1][1] = "Test title 2";
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            salt,
+            globalValues,
+            parties,
+            partyValues,
+            "",
+            address(0),
+            block.timestamp + 10
+        );
+
+        vm.startPrank(alice);
+        registry.signContract(
+            agreementId,
+            partyValues[0],
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                testLegalDocUri,
+                testGlobalFields,
+                testPartyFields,
+                globalValues,
+                partyValues[0],
+                alicePrivateKey
+            ),
+            false,
+            ""
+        );
+        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
+
+        registry.voidContractFor(
+            agreementId,
+            alice,
+            CyberAgreementUtils.signVoidAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.VOIDSIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                alice,
+                alicePrivateKey
+            )
+        );
+        assertTrue(registry.isVoided(agreementId), "agreement should've been voided now");
+        vm.stopPrank();
+    }
+
+    function test_voidContractForOthers() public {
+        uint256 salt = uint256(keccak256("test_voidContractForOthers"));
+
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "global value 0";
+
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](2);
+        partyValues[0][0] = "Alice";
+        partyValues[0][1] = "Test title";
+        partyValues[1] = new string[](2);
+        partyValues[1][0] = "Bob";
+        partyValues[1][1] = "Test title 2";
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            salt,
+            globalValues,
+            parties,
+            partyValues,
+            "",
+            address(0),
+            block.timestamp + 10
+        );
+
+        vm.startPrank(alice);
+        registry.signContract(
+            agreementId,
+            partyValues[0],
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                testLegalDocUri,
+                testGlobalFields,
+                testPartyFields,
+                globalValues,
+                partyValues[0],
+                alicePrivateKey
+            ),
+            false,
+            ""
+        );
+        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        registry.voidContractFor(
+            agreementId,
+            alice,
+            CyberAgreementUtils.signVoidAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.VOIDSIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                alice,
+                alicePrivateKey
+            )
+        );
+        assertTrue(registry.isVoided(agreementId), "agreement should've been voided now");
+        vm.stopPrank();
+    }
+
+    function test_voidSimpleContractForSelf() public {
+        uint256 salt = uint256(keccak256("test_voidSimpleContractForSelf"));
+
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createSimpleContract(
+            salt,
+            testLegalDocUri,
+            parties,
+            block.timestamp + 10
+        );
+
+        vm.startPrank(alice);
+        registry.signSimpleContract(
+            agreementId,
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                testLegalDocUri,
+                new string[](0),
+                new string[](0),
+                new string[](0),
+                new string[](0),
+                alicePrivateKey
+            )
+        );
+        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
+
+        registry.voidContractFor(
+            agreementId,
+            alice,
+            CyberAgreementUtils.signVoidAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.VOIDSIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                alice,
+                alicePrivateKey
+            )
+        );
+        assertTrue(registry.isVoided(agreementId), "agreement should've been voided now");
+        vm.stopPrank();
+    }
+
+    function test_voidSimpleContractForOthers() public {
+        uint256 salt = uint256(keccak256("test_voidSimpleContractForOthers"));
+
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createSimpleContract(
+            salt,
+            testLegalDocUri,
+            parties,
+            block.timestamp + 10
+        );
+
+        vm.startPrank(alice);
+        registry.signSimpleContract(
+            agreementId,
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                testLegalDocUri,
+                new string[](0),
+                new string[](0),
+                new string[](0),
+                new string[](0),
+                alicePrivateKey
+            )
+        );
+        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        registry.voidContractFor(
+            agreementId,
+            alice,
+            CyberAgreementUtils.signVoidAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.VOIDSIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                alice,
+                alicePrivateKey
+            )
+        );
+        assertTrue(registry.isVoided(agreementId), "agreement should've been voided now");
+        vm.stopPrank();
+    }
 }

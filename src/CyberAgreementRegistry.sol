@@ -205,6 +205,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         );
     }
 
+    /// @notice allows only when finalizer is not defined, or msg.sender is the finalizer
     modifier onlyFinalizer(bytes32 contractId) {
         if (
             agreements[contractId].finalizer != msg.sender &&
@@ -213,13 +214,19 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         _;
     }
 
+    /// @notice allows only when finalizer is defined, and msg.sender is the finalizer
     modifier onlyDefinedFinalizer(bytes32 contractId) {
         if (
             agreements[contractId].finalizer == address(0)
         ) revert FinalizerNotDefined();
+        if (
+            agreements[contractId].finalizer != msg.sender
+        ) revert NotFinalizer();
         _;
     }
 
+    /// @notice Create a new agreement template. Only the owner can do it externally; however, the registry can
+    /// do it as well for just-in-time operations.
     function createTemplate(
         bytes32 templateId,
         string memory title,
@@ -303,6 +310,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         }
     }
 
+    /// @notice Create a simple agreement contract that:
+    /// - does not have global nor party fields (i.e. everything except the signer addresses are defined in the off-chain legal doc)
+    /// - create templates on-the-fly (so the proposer can do it in one tx)
     function createSimpleContract(
         uint256 salt,
         string memory legalContractUri,
@@ -519,6 +529,8 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         );
     }
 
+    /// @notice Sign a contract with escrow signatures. It relies on the finalizer to enforce proper access control.
+    /// As a result, the finalizer must be a predefined smart contract.
     function signContractWithEscrow(
         address escrowSigner,
         bytes32 contractId,
@@ -526,7 +538,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         bytes calldata signature,
         bool fillUnallocated, // to fill a 0 address or not
         string memory secret
-    ) onlyFinalizer(contractId) onlyDefinedFinalizer(contractId) external {
+    ) onlyDefinedFinalizer(contractId) external {
         AgreementData storage agreementData = agreements[contractId];
         Template memory template = templates[agreementData.templateId];
         if (agreementData.parties.length == 0) revert ContractDoesNotExist();
