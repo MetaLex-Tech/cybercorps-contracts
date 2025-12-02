@@ -174,6 +174,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     error ContractExpired();
     error InvalidSecret();
     error MismatchedPartyValuesLength();
+    error FinalizerNotDefined();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {}
@@ -209,6 +210,13 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             agreements[contractId].finalizer != msg.sender &&
             agreements[contractId].finalizer != address(0)
         ) revert NotFinalizer();
+        _;
+    }
+
+    modifier onlyDefinedFinalizer(bytes32 contractId) {
+        if (
+            agreements[contractId].finalizer == address(0)
+        ) revert FinalizerNotDefined();
         _;
     }
 
@@ -472,7 +480,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         bytes calldata signature,
         bool fillUnallocated, // to fill a 0 address or not
         string memory secret
-    ) onlyFinalizer(contractId) external {
+    ) onlyFinalizer(contractId) onlyDefinedFinalizer(contractId) external {
         AgreementData storage agreementData = agreements[contractId];
         Template memory template = templates[agreementData.templateId];
         if (agreementData.parties.length == 0) revert ContractDoesNotExist();
