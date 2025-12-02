@@ -3635,6 +3635,7 @@ contract RoundManagerFCFSTest is Test {
         );
 
         // SUBMIT EOI - Should succeed but NOT mint LexChex because token is not whitelisted
+        vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
         rmPub.submitEOI(
             pubRoundId,
             eoi,

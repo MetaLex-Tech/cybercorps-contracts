@@ -457,12 +457,15 @@ library RoundManagerStorage {
 
         //if the round is public and the eoi submitter does not have a valid lexchex, mint it
         if (round.publicRound && !ILexChex(getLexChex()).hasValidLexCheX(escrow.counterParty)) {
-            // mint lexchex if over 200k for individual or 1 million for corporate using 18-decimal precision
-            if (usedAmount1e18 >= 200000 * 1e18 && eoi.naturalPerson) {
-            (, tokenId) = ILexChexMinter(getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
-            }
-            if (usedAmount1e18 >= 1000000 * 1e18 && !eoi.naturalPerson) {
+            // Check if payment token is whitelisted
+            if (IRoundManagerFactory(getUpgradeFactory()).isWhitelistedToken(round.paymentToken)) {
+                // mint lexchex if over 200k for individual or 1 million for corporate using 18-decimal precision
+                if (usedAmount1e18 >= 200000 * 1e18 && eoi.naturalPerson) {
                     (, tokenId) = ILexChexMinter(getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
+                }
+                if (usedAmount1e18 >= 1000000 * 1e18 && !eoi.naturalPerson) {
+                    (, tokenId) = ILexChexMinter(getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
+                }
             }
         }
     }
