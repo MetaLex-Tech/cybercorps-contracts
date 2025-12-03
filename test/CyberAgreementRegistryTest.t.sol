@@ -137,7 +137,7 @@ contract CyberAgreementRegistryTest is Test {
         assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
     }
 
-    /// @notice Third-party should be able to prepare & sign a standalone agreement in one tx
+    /// @notice Third-party should be able to prepare & forward a pre-signed standalone agreement in one tx
     function test_createStandaloneContractAndSignFor() public {
         uint256 salt = uint256(keccak256("test_createStandaloneContractAndSignFor"));
 
@@ -177,6 +177,55 @@ contract CyberAgreementRegistryTest is Test {
 
         (string memory templateUri, ) = registry.templates(expectedStandaloneTemplateId);
         assertEq(templateUri, testLegalContractUri, "just-in-time template should have been created");
+
+        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
+    }
+
+    /// @notice Third-party should be able to prepare & sign a standalone agreement (on delegator's behalf) in one tx
+    function test_createStandaloneContractAndSignForDelegator() public {
+        uint256 salt = uint256(keccak256("test_createStandaloneContractAndSignForDelegator"));
+
+        // alice to delegate to bob
+
+        vm.prank(alice);
+        registry.setDelegation(bob, block.timestamp + 10);
+        assertTrue(registry.isValidDelegate(alice, bob), "alice should've delegated to bob");
+
+        // Bob to prepare and sign agreement as the delegate
+
+        bytes32 expectedAgreementId = keccak256(abi.encode(
+            expectedStandaloneTemplateId,
+            salt,
+            testGlobalValues,
+            testParties
+        ));
+
+        vm.startPrank(bob);
+        bytes32 agreementId = registry.createStandaloneContractAndSignFor(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields,
+            salt,
+            testGlobalValues,
+            testParties,
+            testPartyValues,
+            block.timestamp + 10,
+            alice, // on behalf of
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                expectedAgreementId,
+                testLegalContractUri,
+                testGlobalFields,
+                testPartyFields,
+                testGlobalValues,
+                testPartyValues[0],
+                bobPrivateKey // delegate's own private key
+            )
+        );
+        vm.stopPrank();
 
         assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
     }
