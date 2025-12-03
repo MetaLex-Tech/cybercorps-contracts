@@ -494,4 +494,114 @@ contract CyberAgreementRegistryTest is Test {
         assertTrue(registry.isVoided(agreementId), "agreement should've been voided now");
         vm.stopPrank();
     }
+
+    /// @notice A signer should be able to delegate to a third-party for signing (ex. multisig delegates to EOA)
+    function test_setDelegation() public {
+        uint256 salt = uint256(keccak256("test_setDelegation"));
+
+        vm.startPrank(alice);
+
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            salt,
+            testGlobalValues,
+            testParties,
+            testPartyValues,
+            "",
+            address(0), // finalizer undefined
+            block.timestamp + 10
+        );
+
+        // alice to delegate to bob
+        vm.expectEmit(true, true, true, true);
+        emit CyberAgreementRegistry.DelegationSet(alice, bob, block.timestamp + 10);
+        registry.setDelegation(bob, block.timestamp + 10);
+        assertTrue(registry.isValidDelegate(alice, bob), "alice should've delegated to bob");
+        (address delegate, uint256 expiry) = registry.getDelegation(alice);
+        assertEq(delegate, bob, "unexpected delegate");
+        assertEq(expiry, block.timestamp + 10, "unexpected delegation expiry");
+
+        vm.stopPrank();
+
+        // bob to sign for alice
+        vm.startPrank(bob);
+        registry.signContractFor(
+            alice,
+            agreementId,
+            testPartyValues[0],
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                testLegalContractUri,
+                testGlobalFields,
+                testPartyFields,
+                testGlobalValues,
+                testPartyValues[0],
+                bobPrivateKey
+            ),
+            false,
+            ""
+        );
+        vm.stopPrank();
+        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
+    }
+
+    /// @notice Should be able to revoke a delegation
+    function test_revokeDelegate() public {
+        uint256 salt = uint256(keccak256("test_revokeDelegate"));
+
+        vm.startPrank(alice);
+
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            salt,
+            testGlobalValues,
+            testParties,
+            testPartyValues,
+            "",
+            address(0), // finalizer undefined
+            block.timestamp + 10
+        );
+
+        // alice to delegate to bob but revoke immediately
+        registry.setDelegation(bob, block.timestamp + 10);
+
+        vm.expectEmit(true, true, true, true);
+        emit CyberAgreementRegistry.DelegationRevoked(alice, bob);
+        registry.revokeDelegation();
+
+        assertFalse(registry.isValidDelegate(alice, bob), "alice should not have delegated to bob");
+        (address delegate, uint256 expiry) = registry.getDelegation(alice);
+        assertEq(delegate, address(0), "unexpected delegate");
+        assertEq(expiry, 0, "unexpected delegation expiry");
+
+        vm.stopPrank();
+
+        // bob should not be able to sign for alice
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            agreementId,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields,
+            testGlobalValues,
+            testPartyValues[0],
+            bobPrivateKey
+        );
+        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        vm.startPrank(bob);
+        registry.signContractFor(
+            alice,
+            agreementId,
+            testPartyValues[0],
+            signature,
+            false,
+            ""
+        );
+        vm.stopPrank();
+    }
 }
