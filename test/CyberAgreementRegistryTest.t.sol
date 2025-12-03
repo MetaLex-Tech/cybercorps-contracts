@@ -19,11 +19,18 @@ contract CyberAgreementRegistryTest is Test {
     
     BorgAuth coreAuth;
     CyberAgreementRegistry registry;
-    
-    bytes32 testTemplateId = keccak256("test-template-id");
-    string testLegalDocUri = "ipfs://template";
+
+    string testTitle = "Test agreement";
+    string testLegalContractUri = "ipfs://template";
     string[] testGlobalFields;
     string[] testPartyFields;
+    string[] testGlobalValues;
+    address[] testParties;
+    string[][] testPartyValues;
+
+    bytes32 expectedStandaloneTemplateId;
+
+    bytes32 testTemplateId = keccak256("test-template-id");
 
     function setUp() public {
         (deployer, deployerPrivateKey) = makeAddrAndKey("deployer");
@@ -51,10 +58,35 @@ contract CyberAgreementRegistryTest is Test {
         testPartyFields = new string[](2);
         testPartyFields[0] = "Officer Name";
         testPartyFields[1] = "Officer Title";
+
+        testGlobalValues = new string[](1);
+        testGlobalValues[0] = "global value 0";
+
+        testParties = new address[](2);
+        testParties[0] = alice;
+        testParties[1] = bob;
+
+        testPartyValues = new string[][](2);
+        testPartyValues[0] = new string[](2);
+        testPartyValues[0][0] = "Alice";
+        testPartyValues[0][1] = "Test title";
+        testPartyValues[1] = new string[](2);
+        testPartyValues[1][0] = "Bob";
+        testPartyValues[1][1] = "Test title 2";
+
+        // Calculate the expected standalone template ID
+        expectedStandaloneTemplateId = keccak256(abi.encode(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields
+        ));
+
+        // Create a test template
         registry.createTemplate(
             testTemplateId,
             "Test",
-            testLegalDocUri,
+            testLegalContractUri,
             testGlobalFields,
             testPartyFields
         );
@@ -62,34 +94,243 @@ contract CyberAgreementRegistryTest is Test {
         vm.stopPrank();
     }
 
-    //
-    // Regular contracts
-    //
+    /// @notice Should be able to prepare & sign a standalone agreement in one tx
+    function test_createStandaloneContractAndSign() public {
+        uint256 salt = uint256(keccak256("test_createStandaloneContractAndSign"));
+
+        bytes32 expectedAgreementId = keccak256(abi.encode(
+            expectedStandaloneTemplateId,
+            salt,
+            testGlobalValues,
+            testParties
+        ));
+
+        vm.startPrank(alice);
+        bytes32 agreementId = registry.createStandaloneContractAndSign(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields,
+            salt,
+            testGlobalValues,
+            testParties,
+            testPartyValues,
+            block.timestamp + 10,
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                expectedAgreementId,
+                testLegalContractUri,
+                testGlobalFields,
+                testPartyFields,
+                testGlobalValues,
+                testPartyValues[0],
+                alicePrivateKey
+            )
+        );
+        vm.stopPrank();
+
+        (string memory templateUri, ) = registry.templates(expectedStandaloneTemplateId);
+        assertEq(templateUri, testLegalContractUri, "just-in-time template should have been created");
+
+        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
+    }
+
+    /// @notice Third-party should be able to prepare & sign a standalone agreement in one tx
+    function test_createStandaloneContractAndSignFor() public {
+        uint256 salt = uint256(keccak256("test_createStandaloneContractAndSignFor"));
+
+        bytes32 expectedAgreementId = keccak256(abi.encode(
+            expectedStandaloneTemplateId,
+            salt,
+            testGlobalValues,
+            testParties
+        ));
+
+        vm.startPrank(deployer); // third-party
+        bytes32 agreementId = registry.createStandaloneContractAndSignFor(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields,
+            salt,
+            testGlobalValues,
+            testParties,
+            testPartyValues,
+            block.timestamp + 10,
+            alice, // on behalf of
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                expectedAgreementId,
+                testLegalContractUri,
+                testGlobalFields,
+                testPartyFields,
+                testGlobalValues,
+                testPartyValues[0],
+                alicePrivateKey
+            )
+        );
+        vm.stopPrank();
+
+        (string memory templateUri, ) = registry.templates(expectedStandaloneTemplateId);
+        assertEq(templateUri, testLegalContractUri, "just-in-time template should have been created");
+
+        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
+    }
+
+    /// @notice Should be able to create duplicate simple agreements as long as their salts are different.
+    /// The duplicate agreements should have the same template ID, too.
+    function test_test_createStandaloneContractAndSignDuplicate() public {
+        vm.startPrank(alice);
+
+        uint256 salt0 = uint256(keccak256("test_createSimpleContractDifferentSalts.0"));
+        bytes32 expectedAgreementId0 = keccak256(abi.encode(
+            expectedStandaloneTemplateId,
+            salt0,
+            testGlobalValues,
+            testParties
+        ));
+        bytes32 agreementId0 = registry.createStandaloneContractAndSign(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields,
+            salt0,
+            testGlobalValues,
+            testParties,
+            testPartyValues,
+            block.timestamp + 10,
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                expectedAgreementId0,
+                testLegalContractUri,
+                testGlobalFields,
+                testPartyFields,
+                testGlobalValues,
+                testPartyValues[0],
+                alicePrivateKey
+            )
+        );
+        (bytes32 templateId0,,,,,,,,, ) = registry.getContractDetails(agreementId0);
+
+        uint256 salt1 = uint256(keccak256("test_createSimpleContractDifferentSalts.1"));
+        bytes32 expectedAgreementId1 = keccak256(abi.encode(
+            expectedStandaloneTemplateId,
+            salt1,
+            testGlobalValues,
+            testParties
+        ));
+        bytes32 agreementId1 = registry.createStandaloneContractAndSign(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields,
+            salt1,
+            testGlobalValues,
+            testParties,
+            testPartyValues,
+            block.timestamp + 10,
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                expectedAgreementId1,
+                testLegalContractUri,
+                testGlobalFields,
+                testPartyFields,
+                testGlobalValues,
+                testPartyValues[0],
+                alicePrivateKey
+            )
+        );
+        (bytes32 templateId1,,,,,,,,, ) = registry.getContractDetails(agreementId1);
+
+        assertNotEq(agreementId0, agreementId1, "two agreements should have different IDs");
+        assertEq(templateId0, templateId1, "two agreements should share the same template");
+    }
+
+    /// @notice Contract should automatically finalize if (1) all parties are signed, and (2) finalizer is undefined
+    function test_signContractAndFinalize() public {
+        uint256 salt = uint256(keccak256("test_signContractAndFinalize"));
+
+        bytes32 expectedAgreementId = keccak256(abi.encode(
+            expectedStandaloneTemplateId,
+            salt,
+            testGlobalValues,
+            testParties
+        ));
+
+        vm.startPrank(alice);
+        bytes32 agreementId = registry.createStandaloneContractAndSign(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields,
+            salt,
+            testGlobalValues,
+            testParties,
+            testPartyValues,
+            block.timestamp + 10,
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                expectedAgreementId,
+                testLegalContractUri,
+                testGlobalFields,
+                testPartyFields,
+                testGlobalValues,
+                testPartyValues[0],
+                alicePrivateKey
+            )
+        );
+        vm.stopPrank();
+        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
+
+        vm.startPrank(bob);
+        registry.signContract(
+            agreementId,
+            testPartyValues[1],
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                expectedAgreementId,
+                testLegalContractUri,
+                testGlobalFields,
+                testPartyFields,
+                testGlobalValues,
+                testPartyValues[1],
+                bobPrivateKey
+            ),
+            false,
+            "" // secret
+        );
+        vm.stopPrank();
+        assertTrue(registry.hasSigned(agreementId, bob), "bob should have signed now");
+
+        assertTrue(registry.isFinalized(agreementId), "agreement should be finalized by now");
+    }
 
     /// @notice Should allow `signContractFor()` even if finalizer is not defined
+    /// This is for simple standalone cases to work because the finalizer would be undefined
     function test_signContractForUndefinedFinalizer() public {
         uint256 salt = uint256(keccak256("test_signContractForUndefinedFinalizer"));
-
-        address[] memory parties = new address[](1);
-        parties[0] = alice;
-
-        string[] memory globalValues = new string[](1);
-        globalValues[0] = "global value 0";
-
-        string[][] memory partyValues = new string[][](1);
-        partyValues[0] = new string[](2);
-        partyValues[0][0] = "Alice";
-        partyValues[0][1] = "Test title";
 
         vm.prank(alice);
         bytes32 agreementId = registry.createContract(
             testTemplateId,
             salt,
-            globalValues,
-            parties,
-            partyValues,
+            testGlobalValues,
+            testParties,
+            testPartyValues,
             "",
-            address(0),
+            address(0), // finalizer undefined
             block.timestamp + 10
         );
 
@@ -98,11 +339,11 @@ contract CyberAgreementRegistryTest is Test {
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             agreementId,
-            testLegalDocUri,
+            testLegalContractUri,
             testGlobalFields,
             testPartyFields,
-            globalValues,
-            partyValues[0],
+            testGlobalValues,
+            testPartyValues[0],
             alicePrivateKey
         );
 
@@ -112,7 +353,7 @@ contract CyberAgreementRegistryTest is Test {
         registry.signContractFor(
             alice,
             agreementId,
-            partyValues[0],
+            testPartyValues[0],
             signature,
             false,
             ""
@@ -123,254 +364,64 @@ contract CyberAgreementRegistryTest is Test {
     function test_RevertIf_signContractWithEscrowUndefinedFinalizer() public {
         uint256 salt = uint256(keccak256("test_RevertIf_signContractWithEscrowUndefinedFinalizer"));
 
-        address[] memory parties = new address[](1);
-        parties[0] = alice;
-
-        string[] memory globalValues = new string[](1);
-        globalValues[0] = "global value 0";
-
-        string[][] memory partyValues = new string[][](1);
-        partyValues[0] = new string[](2);
-        partyValues[0][0] = "Alice";
-        partyValues[0][1] = "Test title";
-
         vm.prank(alice);
         bytes32 agreementId = registry.createContract(
             testTemplateId,
             salt,
-            globalValues,
-            parties,
-            partyValues,
+            testGlobalValues,
+            testParties,
+            testPartyValues,
             "",
-            address(0),
+            address(0), // finalizer undefined
             block.timestamp + 10
         );
 
+        // Bob should not be able to fake alice's escrow signature
         vm.expectRevert(CyberAgreementRegistry.FinalizerNotDefined.selector);
         vm.prank(bob);
         registry.signContractWithEscrow(
             alice,
             agreementId,
-            partyValues[0],
+            testPartyValues[0],
             "",
             false,
             ""
         );
-    }
-
-    //
-    // Simple contracts
-    //
-
-    /// @notice Should be able to create duplicate simple agreements as long as their salts are different.
-    /// The duplicate agreements should have the same template ID, too.
-    function test_createSimpleContractDuplicate() public {
-        address[] memory parties = new address[](2);
-        parties[0] = alice;
-        parties[1] = bob;
-
-        string memory legalDocUri = "ipfs://my/legal/doc";
-
-        vm.startPrank(alice);
-
-        bytes32 agreementId0 = registry.createSimpleContract(
-            uint256(keccak256("test_createSimpleContractDifferentSalts.0")),
-            legalDocUri,
-            parties,
-            block.timestamp + 10
-        );
-        (bytes32 templateId0,,,,,,,,, ) = registry.getContractDetails(agreementId0);
-
-        bytes32 agreementId1 = registry.createSimpleContract(
-            uint256(keccak256("test_createSimpleContractDifferentSalts.1")),
-            legalDocUri,
-            parties,
-            block.timestamp + 10
-        );
-        (bytes32 templateId1,,,,,,,,, ) = registry.getContractDetails(agreementId1);
-
-        assertNotEq(agreementId0, agreementId1, "two agreements should have different IDs");
-        assertEq(templateId0, templateId1, "two agreements should share the same template");
-    }
-
-    /// @notice Parties should be able to sign a simple contract
-    function test_signSimpleContract() public {
-        uint256 salt = uint256(keccak256("test_signSimpleContract"));
-
-        address[] memory parties = new address[](2);
-        parties[0] = alice;
-        parties[1] = bob;
-
-        string memory legalDocUri = "ipfs://my/legal/doc";
-
-        vm.startPrank(alice);
-
-        bytes32 agreementId = registry.createSimpleContract(
-            salt,
-            legalDocUri,
-            parties,
-            block.timestamp + 10
-        );
-        {
-            (string memory templateUri, ) = registry.templates(keccak256(bytes(legalDocUri)));
-            assertEq(templateUri, legalDocUri, "burner template should have been created");
-        }
-
-        registry.signSimpleContract(
-            agreementId,
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                agreementId,
-                legalDocUri,
-                new string[](0),
-                new string[](0),
-                new string[](0),
-                new string[](0),
-                alicePrivateKey
-            )
-        );
-        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
-
-        vm.stopPrank();
-
-        vm.startPrank(bob);
-
-        registry.signSimpleContract(
-            agreementId,
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                agreementId,
-                legalDocUri,
-                new string[](0),
-                new string[](0),
-                new string[](0),
-                new string[](0),
-                bobPrivateKey
-            )
-        );
-        assertTrue(registry.hasSigned(agreementId, bob), "bob should have signed now");
-
-        vm.stopPrank();
-
-        assertTrue(registry.isFinalized(agreementId), "agreement should be finalized by now");
-    }
-
-    /// @notice Third-parties should be able to forward our signatures for a simple contract
-    function test_signSimpleContractFor() public {
-        uint256 salt = uint256(keccak256("test_signSimpleContractFor"));
-
-        address[] memory parties = new address[](2);
-        parties[0] = alice;
-        parties[1] = bob;
-
-        string memory legalDocUri = "ipfs://my/legal/doc";
-
-        vm.startPrank(alice);
-        bytes32 agreementId = registry.createSimpleContract(
-            salt,
-            legalDocUri,
-            parties,
-            block.timestamp + 10
-        );
-        vm.stopPrank();
-
-        vm.startPrank(deployer);
-
-        // third-party to submit alice's signature for her
-        registry.signSimpleContractFor(
-            alice,
-            agreementId,
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                agreementId,
-                legalDocUri,
-                new string[](0),
-                new string[](0),
-                new string[](0),
-                new string[](0),
-                alicePrivateKey
-            )
-        );
-        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
-
-        // third-party to submit bob's signature for him
-        registry.signSimpleContractFor(
-            bob,
-            agreementId,
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                agreementId,
-                legalDocUri,
-                new string[](0),
-                new string[](0),
-                new string[](0),
-                new string[](0),
-                bobPrivateKey
-            )
-        );
-        assertTrue(registry.hasSigned(agreementId, bob), "bob should have signed now");
-
-        vm.stopPrank();
-
-        assertTrue(registry.isFinalized(agreementId), "agreement should be finalized by now");
     }
 
     function test_voidContractForSelf() public {
         uint256 salt = uint256(keccak256("test_voidContractForSelf"));
 
-        address[] memory parties = new address[](2);
-        parties[0] = alice;
-        parties[1] = bob;
-
-        string[] memory globalValues = new string[](1);
-        globalValues[0] = "global value 0";
-
-        string[][] memory partyValues = new string[][](2);
-        partyValues[0] = new string[](2);
-        partyValues[0][0] = "Alice";
-        partyValues[0][1] = "Test title";
-        partyValues[1] = new string[](2);
-        partyValues[1][0] = "Bob";
-        partyValues[1][1] = "Test title 2";
-
-        vm.prank(alice);
-        bytes32 agreementId = registry.createContract(
-            testTemplateId,
+        bytes32 expectedAgreementId = keccak256(abi.encode(
+            expectedStandaloneTemplateId,
             salt,
-            globalValues,
-            parties,
-            partyValues,
-            "",
-            address(0),
-            block.timestamp + 10
-        );
+            testGlobalValues,
+            testParties
+        ));
 
         vm.startPrank(alice);
-        registry.signContract(
-            agreementId,
-            partyValues[0],
+        bytes32 agreementId = registry.createStandaloneContractAndSign(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields,
+            salt,
+            testGlobalValues,
+            testParties,
+            testPartyValues,
+            block.timestamp + 10,
             CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 registry.DOMAIN_SEPARATOR(),
                 registry.SIGNATUREDATA_TYPEHASH(),
-                agreementId,
-                testLegalDocUri,
+                expectedAgreementId,
+                testLegalContractUri,
                 testGlobalFields,
                 testPartyFields,
-                globalValues,
-                partyValues[0],
+                testGlobalValues,
+                testPartyValues[0],
                 alicePrivateKey
-            ),
-            false,
-            ""
+            )
         );
         assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
 
@@ -393,149 +444,34 @@ contract CyberAgreementRegistryTest is Test {
     function test_voidContractForOthers() public {
         uint256 salt = uint256(keccak256("test_voidContractForOthers"));
 
-        address[] memory parties = new address[](2);
-        parties[0] = alice;
-        parties[1] = bob;
-
-        string[] memory globalValues = new string[](1);
-        globalValues[0] = "global value 0";
-
-        string[][] memory partyValues = new string[][](2);
-        partyValues[0] = new string[](2);
-        partyValues[0][0] = "Alice";
-        partyValues[0][1] = "Test title";
-        partyValues[1] = new string[](2);
-        partyValues[1][0] = "Bob";
-        partyValues[1][1] = "Test title 2";
-
-        vm.prank(alice);
-        bytes32 agreementId = registry.createContract(
-            testTemplateId,
+        bytes32 expectedAgreementId = keccak256(abi.encode(
+            expectedStandaloneTemplateId,
             salt,
-            globalValues,
-            parties,
-            partyValues,
-            "",
-            address(0),
-            block.timestamp + 10
-        );
+            testGlobalValues,
+            testParties
+        ));
 
         vm.startPrank(alice);
-        registry.signContract(
-            agreementId,
-            partyValues[0],
+        bytes32 agreementId = registry.createStandaloneContractAndSign(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields,
+            salt,
+            testGlobalValues,
+            testParties,
+            testPartyValues,
+            block.timestamp + 10,
             CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 registry.DOMAIN_SEPARATOR(),
                 registry.SIGNATUREDATA_TYPEHASH(),
-                agreementId,
-                testLegalDocUri,
+                expectedAgreementId,
+                testLegalContractUri,
                 testGlobalFields,
                 testPartyFields,
-                globalValues,
-                partyValues[0],
-                alicePrivateKey
-            ),
-            false,
-            ""
-        );
-        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
-        vm.stopPrank();
-
-        vm.startPrank(bob);
-        registry.voidContractFor(
-            agreementId,
-            alice,
-            CyberAgreementUtils.signVoidAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.VOIDSIGNATUREDATA_TYPEHASH(),
-                agreementId,
-                alice,
-                alicePrivateKey
-            )
-        );
-        assertTrue(registry.isVoided(agreementId), "agreement should've been voided now");
-        vm.stopPrank();
-    }
-
-    function test_voidSimpleContractForSelf() public {
-        uint256 salt = uint256(keccak256("test_voidSimpleContractForSelf"));
-
-        address[] memory parties = new address[](2);
-        parties[0] = alice;
-        parties[1] = bob;
-
-        vm.prank(alice);
-        bytes32 agreementId = registry.createSimpleContract(
-            salt,
-            testLegalDocUri,
-            parties,
-            block.timestamp + 10
-        );
-
-        vm.startPrank(alice);
-        registry.signSimpleContract(
-            agreementId,
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                agreementId,
-                testLegalDocUri,
-                new string[](0),
-                new string[](0),
-                new string[](0),
-                new string[](0),
-                alicePrivateKey
-            )
-        );
-        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
-
-        registry.voidContractFor(
-            agreementId,
-            alice,
-            CyberAgreementUtils.signVoidAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.VOIDSIGNATUREDATA_TYPEHASH(),
-                agreementId,
-                alice,
-                alicePrivateKey
-            )
-        );
-        assertTrue(registry.isVoided(agreementId), "agreement should've been voided now");
-        vm.stopPrank();
-    }
-
-    function test_voidSimpleContractForOthers() public {
-        uint256 salt = uint256(keccak256("test_voidSimpleContractForOthers"));
-
-        address[] memory parties = new address[](2);
-        parties[0] = alice;
-        parties[1] = bob;
-
-        vm.prank(alice);
-        bytes32 agreementId = registry.createSimpleContract(
-            salt,
-            testLegalDocUri,
-            parties,
-            block.timestamp + 10
-        );
-
-        vm.startPrank(alice);
-        registry.signSimpleContract(
-            agreementId,
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                agreementId,
-                testLegalDocUri,
-                new string[](0),
-                new string[](0),
-                new string[](0),
-                new string[](0),
+                testGlobalValues,
+                testPartyValues[0],
                 alicePrivateKey
             )
         );

@@ -225,7 +225,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         _;
     }
 
-    /// @notice Create a new agreement template. Only the owner can do it externally; however, the registry can
+    /// @notice Create a new agreement template. Only the owner can do it externally; however, the registry itself can
     /// do it as well for just-in-time operations.
     function createTemplate(
         bytes32 templateId,
@@ -310,37 +310,91 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         }
     }
 
-    /// @notice Create a simple agreement contract that:
-    /// - does not have global nor party fields (i.e. everything except the signer addresses are defined in the off-chain legal doc)
-    /// - create templates on-the-fly (so the proposer can do it in one tx)
-    function createSimpleContract(
-        uint256 salt,
+    /// @notice See `createStandaloneContractAndSignFor()`
+    function createStandaloneContractAndSign(
+        string memory title,
         string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields,
+        uint256 salt,
+        string[] memory globalValues,
         address[] memory parties,
-        uint256 expiry
+        string[][] memory partyValues,
+        uint256 expiry,
+        bytes calldata signature
     ) external returns (bytes32 contractId) {
-        // Use the URI as the salt of template ID
-        bytes32 templateId = keccak256(bytes(legalContractUri));
+        return createStandaloneContractAndSignFor(
+            title,
+            legalContractUri,
+            globalFields,
+            partyFields,
+            salt,
+            globalValues,
+            parties,
+            partyValues,
+            expiry,
+            msg.sender, // signer
+            signature
+        );
+    }
+
+    /// @notice Create a standalone agreement that:
+    /// - Proposer can prepare & sign an agreement in one tx. For single-party agreements that means one tx and done
+    /// - Standalone means it creates its own template just-in-time if needed. No more waiting for admin to create the template for you
+    /// - Takes `salt` so agreement IDs are deterministic. You can also create identical agreements with distinct IDs if needed
+    ///
+    /// Note `finalizer` is intentionally fixed at `address(0)` because other values require
+    /// tighter integration with vetted smart contracts, which does not fit our use cases here
+    function createStandaloneContractAndSignFor(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        uint256 expiry,
+        address signer,
+        bytes calldata signature
+    ) public returns (bytes32 contractId) {
+        // Derive template ID
+        bytes32 templateId = keccak256(abi.encode(
+            title,
+            legalContractUri,
+            globalFields,
+            partyFields
+        ));
+
         // Create the template if needed
         if (bytes(templates[templateId].legalContractUri).length == 0) {
             _createTemplate(
                 templateId,
-                legalContractUri, // use URI as title
+                title,
                 legalContractUri,
-                new string[](0),
-                new string[](0)
+                globalFields,
+                partyFields
             );
         }
 
-        return createContract(
+        contractId = createContract(
             templateId,
             salt,
-            new string[](0), // no global fields
+            globalValues,
             parties,
-            new string[][](parties.length), // no party fields
-            "",
-            address(0),
+            partyValues,
+            "", // secretHash
+            address(0), // fixed finalizer, see notice above
             expiry
+        );
+
+        signContractFor(
+            signer,
+            contractId,
+            partyValues[0], // proposer
+            signature,
+            false, // proposer should explicitly add himself to the parties
+            "" // secret
         );
     }
 
@@ -358,17 +412,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             signature,
             fillUnallocated,
             secret
-        );
-    }
-
-    function signSimpleContract(
-        bytes32 contractId,
-        bytes calldata signature
-    ) external {
-        signSimpleContractFor(
-            msg.sender,
-            contractId,
-            signature
         );
     }
 
@@ -487,8 +530,8 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         }
 
         if(
-            agreementData.finalizer != msg.sender &&
-            agreementData.finalizer != address(0) &&
+            address(0) != agreementData.finalizer && // if finalizer is undefined, as long as the signature is valid we still allow it
+            msg.sender != agreementData.finalizer &&
             msg.sender != signer
         )
             revert NotFinalizer();
@@ -514,23 +557,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         }
     }
 
-    function signSimpleContractFor(
-        address signer,
-        bytes32 contractId,
-        bytes calldata signature
-    ) public {
-        signContractFor(
-            signer,
-            contractId,
-            new string[](0),
-            signature,
-            false,
-            ""
-        );
-    }
-
     /// @notice Sign a contract with escrow signatures. It relies on the finalizer to enforce proper access control.
-    /// As a result, the finalizer must be a predefined smart contract.
+    /// As a result, the finalizer is required to be a predefined smart contract.
+    /// @dev See `test_RevertIf_signContractWithEscrowUndefinedFinalizer` for how it prevent exploits
     function signContractWithEscrow(
         address escrowSigner,
         bytes32 contractId,
