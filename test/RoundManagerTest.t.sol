@@ -682,6 +682,12 @@ contract RoundManagerTest is Test {
     uint256 public constant VALUATION = 10000000 * 10 ** 18; // $10M valuation (decimals = 18)
 
     function setUp() public {
+        // For future-proof: some networks may have upgraded already. In such case we will roll back to a known block before the upgrades
+        if (block.chainid == 84532) {
+            console2.log("Existing deployment has been upgraded, rolling back to a known block before it...");
+            vm.rollFork(33920951);
+        }
+
         // Configs
 
         testRoundPartyValues = new string[](2);
