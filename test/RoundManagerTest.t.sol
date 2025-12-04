@@ -122,7 +122,8 @@ library CyberCorpHelper {
     );
 
     address constant LEXCHEX_CONDITION_ADDRESS = 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42;
-    address constant LEXCHEX_MINTER_ADDRESS = 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960;
+    address constant LEXCHEX_MINTER_ADDRESS = 0x2e46c601062f01f0eD098E0b252211b5d54C496a;
+    address constant LEXCHEX_ADDRESS = 0x123E895e0e1a4e39b2E0488DB904AD37C7A62EeD;
     address constant UPGRADE_OWNER = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
 
     bytes32 constant SALT = keccak256("CyberCorpHelper");
@@ -211,6 +212,10 @@ library CyberCorpHelper {
                 )
             )
         );
+
+        RoundManagerFactory(roundManagerFactory).setLexChex(LEXCHEX_CONDITION_ADDRESS);
+        RoundManagerFactory(roundManagerFactory).setLexChexCondition(LEXCHEX_MINTER_ADDRESS);
+        RoundManagerFactory(roundManagerFactory).setLexChexMinter(LEXCHEX_MINTER_ADDRESS);
 
         helper = address(new RoundManagerUpgradeHelper{salt: SALT}(address(registry), address(roundManagerFactory)));
 

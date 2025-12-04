@@ -25,7 +25,7 @@ import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
 
 contract BaseScript is Script {
      function run() public {
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.2"));
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3.0.1"));
         address deployerAddress = vm.addr(vm.envUint("PRIVATE_KEY_MAIN"));
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         vm.startBroadcast(deployerPrivateKey);
@@ -33,9 +33,9 @@ contract BaseScript is Script {
   LexchexMinter:  0x2e46c601062f01f0eD098E0b252211b5d54C496a*/
 
 
-        address registry = address(CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134));
-      address deployedLexChexAddr = 0x123E895e0e1a4e39b2E0488DB904AD37C7A62EeD;
-      address deployedLexChexMinterAddr = 0x2e46c601062f01f0eD098E0b252211b5d54C496a;
+      address registry = address(CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134));
+      address deployedLexChexAddr = 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62;
+      address deployedLexChexMinterAddr = 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960;
       LeXcheX deployedLexChex = LeXcheX(deployedLexChexAddr);
       LeXcheXMinter deployedLexChexMinter = LeXcheXMinter(deployedLexChexMinterAddr);
 

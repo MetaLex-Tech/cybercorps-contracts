@@ -539,27 +539,18 @@ library RoundManagerStorage {
         return roundManagerStorage().upgradeFactory;
     }
 
-    function setLexChex(address _lexChex) internal {
-        roundManagerStorage().lexChex = _lexChex;
-    }
 
     function getLexChex() internal view returns (address) {
-        return roundManagerStorage().lexChex;
+        return IRoundManagerFactory(getUpgradeFactory()).getLexChex();
     }
 
-    function setLexChexCondition(address _lexChexCondition) internal {
-        roundManagerStorage().lexChexCondition = _lexChexCondition;
-    }
 
     function getLexChexCondition() internal view returns (address) {
-        return roundManagerStorage().lexChexCondition;
+        return IRoundManagerFactory(getUpgradeFactory()).getLexChexCondition();
     }
 
-    function setLexChexMinter(address _lexChexMinter) internal {
-        roundManagerStorage().lexChexMinter = _lexChexMinter;
-    }
 
     function getLexChexMinter() internal view returns (address) {
-        return roundManagerStorage().lexChexMinter;
+        return IRoundManagerFactory(getUpgradeFactory()).getLexChexMinter();
     }
 }

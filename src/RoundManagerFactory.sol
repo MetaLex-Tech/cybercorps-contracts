@@ -166,6 +166,42 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
         emit TokenWhitelistUpdated(token, isWhitelisted);
     }
 
+    /// @notice Get the LexChex contract address
+    function getLexChex() external view returns (address) {
+        return RoundManagerFactoryStorage.getLexChex();
+    }
+
+    /// @notice Get the LexChex condition contract address
+    function getLexChexCondition() external view returns (address) {
+        return RoundManagerFactoryStorage.getLexChexCondition();
+    }
+
+    /// @notice Get the LexChex minter contract address
+    function getLexChexMinter() external view returns (address) {
+        return RoundManagerFactoryStorage.getLexChexMinter();
+    }
+
+    /// @notice Set the LexChex contract address
+    /// @dev Only callable by addresses with the admin role
+    /// @param _lexChex Address of the LexChex contract
+    function setLexChex(address _lexChex) external onlyOwner {
+        RoundManagerFactoryStorage.setLexChex(_lexChex);
+    }
+
+    /// @notice Set the LexChex condition contract address
+    /// @dev Only callable by addresses with the admin role
+    /// @param _lexChexCondition Address of the LexChex condition contract
+    function setLexChexCondition(address _lexChexCondition) external onlyOwner {
+        RoundManagerFactoryStorage.setLexChexCondition(_lexChexCondition);
+    }
+
+    /// @notice Set the LexChex minter contract address
+    /// @dev Only callable by addresses with the admin role
+    /// @param _lexChexMinter Address of the LexChex minter contract
+    function setLexChexMinter(address _lexChexMinter) external onlyOwner {
+        RoundManagerFactoryStorage.setLexChexMinter(_lexChexMinter);
+    }
+
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyOwner {}

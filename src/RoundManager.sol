@@ -172,17 +172,7 @@ contract RoundManager is
         RoundManagerStorage.setIssuanceManager(_issuanceManager);
         RoundManagerStorage.setUpgradeFactory(_upgradeFactory);
 
-        // Default LeXcheX config
-        RoundManagerStorage.setLexChex(address(0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62));
-        RoundManagerStorage.setLexChexCondition(address(0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42));
-        RoundManagerStorage.setLexChexMinter(address(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960));
         // No persistent DOMAIN_SEPARATOR; compute dynamically to avoid storage costs
-    }
-
-    /// @notice Sets the LeXcheX AUTH address
-    function setLexChex(address _lexchex) external onlyOwner {
-        if (_lexchex == address(0)) revert ZeroAddress();
-        RoundManagerStorage.setLexChex(_lexchex);
     }
 
     /// @notice Gets the LeXcheX AUTH address

@@ -45,6 +45,7 @@ contract UpgradePublicRoundsScript is Script {
         address cyberCorpFactoryProxyAddr = 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2;
         address legacyCyberCorpSingleFactoryAddr = 0xc8e084D3f8B3b326FCc894C7afD28F4904196406;
         address legacyIssuanceManagerFactoryAddr = 0xA32547aAdAA4975082D729c79e79dBaE4385EBCf;
+        address deployedLexChexAddr = 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2;
         address registry = 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134;
 
         CyberCorpFactory factoryProxy = CyberCorpFactory(
@@ -221,6 +222,8 @@ contract UpgradePublicRoundsScript is Script {
             "CyberCorpFactory.dealManagerFactory set to:",
             address(newDmFactory)
         );
+
+        factoryProxy.setLexChex(deployedLexChexAddr);
 
         // 7) Upgrade CyberCorp beacon via CyberCorpSingleFactory
         ILegacyFactory legacyCcSingleFactory = ILegacyFactory(

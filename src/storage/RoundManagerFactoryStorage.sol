@@ -59,6 +59,10 @@ library RoundManagerFactoryStorage {
         address platformPayable; // Recipient of platform fees
         uint256 defaultFeeRatio; // total fee as % of ticket size (BASIS_POINTS = 100%)
         mapping(address => bool) whitelistedTokens;
+
+        address lexChex; // LexChex contract address
+        address lexChexCondition; // LexChex condition contract address
+        address lexChexMinter; // LexChex minter contract address
     }
 
     /// @notice Retrieves the storage reference for the RoundManagerFactoryData struct
@@ -101,5 +105,29 @@ library RoundManagerFactoryStorage {
 
     function setWhitelistedToken(address token, bool status) internal {
         roundManagerFactoryStorage().whitelistedTokens[token] = status;
+    }
+
+    function getLexChex() internal view returns (address) {
+        return roundManagerFactoryStorage().lexChex;
+    }
+
+    function getLexChexCondition() internal view returns (address) {
+        return roundManagerFactoryStorage().lexChexCondition;
+    }
+
+    function getLexChexMinter() internal view returns (address) {
+        return roundManagerFactoryStorage().lexChexMinter;
+    }
+
+    function setLexChex(address _lexChex) internal {
+        roundManagerFactoryStorage().lexChex = _lexChex;
+    }
+
+    function setLexChexCondition(address _lexChexCondition) internal {
+        roundManagerFactoryStorage().lexChexCondition = _lexChexCondition;
+    }
+
+    function setLexChexMinter(address _lexChexMinter) internal {
+        roundManagerFactoryStorage().lexChexMinter = _lexChexMinter;
     }
 }
