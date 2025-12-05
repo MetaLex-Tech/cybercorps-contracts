@@ -30,7 +30,7 @@ contract UpgradeLegacyDealManagersScript is Script {
     }
 
     function runWithArgs(uint256 maxCount) public returns (DealManagerWithMigration) {
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3.0.1"));
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3.0.2"));
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
 
         CyberCorpFactory cyberCorpFactory = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);

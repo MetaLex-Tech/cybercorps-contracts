@@ -456,7 +456,7 @@ library RoundManagerStorage {
         escrow.buyerAssets[0].amount = usedAmountToken;
 
         //if the round is public and the eoi submitter does not have a valid lexchex, mint it
-        if (round.publicRound && !ILexChex(getLexChex()).hasValidLexCheX(escrow.counterParty)) {
+        if (!ILexChex(getLexChex()).hasValidLexCheX(escrow.counterParty)) {
             // Check if payment token is whitelisted
             if (IRoundManagerFactory(getUpgradeFactory()).isWhitelistedToken(round.paymentToken)) {
                 // mint lexchex if over 200k for individual or 1 million for corporate using 18-decimal precision
