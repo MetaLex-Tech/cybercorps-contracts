@@ -3,6 +3,8 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {DeployDevArbitraryLegalDocSignerRegistryScript} from "../script/deploy-dev-arbitrary-legal-doc-signer-registry.s.sol";
+import {SimulateDevAgreementsScript} from "../script/simulate-dev-agreements.s.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
@@ -14,6 +16,8 @@ contract CyberAgreementRegistryTest is Test {
     uint256 alicePrivateKey;
     address bob;
     uint256 bobPrivateKey;
+    address chad;
+    uint256 chadPrivateKey;
 
     bytes32 coreSalt = keccak256("CyberAgreementRegistryTest");
     
@@ -36,22 +40,23 @@ contract CyberAgreementRegistryTest is Test {
         (deployer, deployerPrivateKey) = makeAddrAndKey("deployer");
         (alice, alicePrivateKey) = makeAddrAndKey("alice");
         (bob, bobPrivateKey) = makeAddrAndKey("bob");
+        (chad, chadPrivateKey) = makeAddrAndKey("chad");
+
+        (coreAuth, registry) = (new DeployDevArbitraryLegalDocSignerRegistryScript()).runWithArgs(
+            coreSalt,
+            deployerPrivateKey
+        );
+
+        // TODO test: not used, just dry run
+        (new SimulateDevAgreementsScript()).runWithArgs(
+            registry,
+            uint256(keccak256("CyberAgreementRegistryTest.SimulateDevAgreementsScript")),
+            alicePrivateKey,
+            bobPrivateKey,
+            chadPrivateKey
+        );
 
         vm.startPrank(deployer);
-
-        coreAuth = new BorgAuth{salt: coreSalt}(deployer);
-
-        registry = CyberAgreementRegistry(
-            address(
-                new ERC1967Proxy{salt: coreSalt}(
-                    address(new CyberAgreementRegistry{salt: coreSalt}()),
-                    abi.encodeWithSelector(
-                        CyberAgreementRegistry.initialize.selector,
-                        address(coreAuth)
-                    )
-                )
-            )
-        );
 
         testGlobalFields = new string[](1);
         testGlobalFields[0] = "Global Field";
