@@ -32,7 +32,7 @@ contract UpgradePublicRoundsScript is Script {
     function run() public {
         // Config
         bytes32 salt = bytes32(
-            keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3.0.1")
+            keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3.0.2")
         );
         
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
@@ -46,6 +46,23 @@ contract UpgradePublicRoundsScript is Script {
         address legacyCyberCorpSingleFactoryAddr = 0xc8e084D3f8B3b326FCc894C7afD28F4904196406;
         address legacyIssuanceManagerFactoryAddr = 0xA32547aAdAA4975082D729c79e79dBaE4385EBCf;
         address registry = 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134;
+        address deployedLexChexAddrAuth = 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2;
+
+        address stable;
+        uint256 currentChainId = block.chainid;
+        if (currentChainId == 1) {
+            stable = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // Mainnet
+        } else if (currentChainId == 42161) {
+            stable = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831; // Arbitrum
+        } else if (currentChainId == 8453) {
+            stable = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913; // Base
+        } else if (currentChainId == 84532) {
+            stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e; // Base Sepolia
+        } else if (currentChainId == 11155111) {
+            stable = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238; // Sepolia
+        } else {
+            revert("Unsupported chain ID"); // Handle unsupported chains
+        }
 
         CyberCorpFactory factoryProxy = CyberCorpFactory(
             cyberCorpFactoryProxyAddr
@@ -84,6 +101,8 @@ contract UpgradePublicRoundsScript is Script {
             "RoundManagerFactory deployed:",
             address(roundManagerFactory)
         );
+
+        roundManagerFactory.setWhitelistedToken(stable, true);
 
         // 2) Upgrade CyberCorpFactory (UUPS)
         address newCyberCorpFactoryImpl = address(
@@ -215,6 +234,11 @@ contract UpgradePublicRoundsScript is Script {
         );
         // Replace the old one in CyberCorpFactory
         factoryProxy.setDealManagerFactory(address(newDmFactory));
+        factoryProxy.setLexchexAuth(deployedLexChexAddrAuth);
+
+        //add CyberCorpFactory as owner on lexchex auth
+        BorgAuth(deployedLexChexAddrAuth).updateRole(address(factoryProxy), BorgAuth(deployedLexChexAddrAuth).OWNER_ROLE());
+
         // Verify the upgrade was successful
         vm.assertEq(newDmFactory.getRefImplementation(), address(refDm), "unexpected DealManager reference implementation");
         console.log(
