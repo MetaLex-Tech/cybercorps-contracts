@@ -9,7 +9,7 @@ contract SimulateDevAgreementsScript is Script {
 
     // Agreement configs
     string testTitle = "Test agreement";
-    string testLegalContractUri = "ipfs://template";
+    string testLegalContractUri = "ipfs://bafkreidefnk2tf6req4tn3bya7pkfkt45i6cppmannb5fz7ncv6mfg6vj4";
     string[] testGlobalFields;
     string[] testPartyFields;
     string[] testGlobalValues;
@@ -19,7 +19,7 @@ contract SimulateDevAgreementsScript is Script {
     function run() public {
         runWithArgs(
             CyberAgreementRegistry(0x4bd6B665118dAfdf06Bd4201f0b0b6373f3D02E4),
-            uint256(keccak256("SimulateDevAgreementsScript")), // salt
+            uint256(keccak256("SimulateDevAgreementsScript.dev1")), // salt
             vm.envUint("PRIVATE_KEY_MAIN"), // proposerPrivateKey
             vm.envUint("PRIVATE_KEY_COUNTER_PARTY_SIGNED"), // counterPartySignedPrivateKey
             vm.envUint("PRIVATE_KEY_COUNTER_PARTY_PENDING") // counterPartyPendingPrivateKey
