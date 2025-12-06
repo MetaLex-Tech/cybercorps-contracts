@@ -14,6 +14,8 @@ contract CyberAgreementRegistryTest is Test {
     uint256 alicePrivateKey;
     address bob;
     uint256 bobPrivateKey;
+    address chad;
+    uint256 chadPrivateKey;
 
     bytes32 coreSalt = keccak256("CyberAgreementRegistryTest");
     
@@ -36,6 +38,7 @@ contract CyberAgreementRegistryTest is Test {
         (deployer, deployerPrivateKey) = makeAddrAndKey("deployer");
         (alice, alicePrivateKey) = makeAddrAndKey("alice");
         (bob, bobPrivateKey) = makeAddrAndKey("bob");
+        (chad, chadPrivateKey) = makeAddrAndKey("chad");
 
         vm.startPrank(deployer);
 
@@ -364,6 +367,140 @@ contract CyberAgreementRegistryTest is Test {
         assertTrue(registry.hasSigned(agreementId, bob), "bob should have signed now");
 
         assertTrue(registry.isFinalized(agreementId), "agreement should be finalized by now");
+    }
+
+    /// @notice Should fill unallocated slots if it's an open agreement
+    function test_signContractFillUnallocated() public {
+        uint256 salt = uint256(keccak256("test_signContractFillUnallocated"));
+
+        // Alice to create an open agreement
+
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = testPartyValues[0]; // alice's test values
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            salt,
+            testGlobalValues,
+            parties, // open agreement
+            partyValues,
+            "",
+            address(0), // finalizer undefined
+            block.timestamp + 10
+        );
+
+        // bob to fill the unallocated slot
+
+        {
+            bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                testLegalContractUri,
+                testGlobalFields,
+                testPartyFields,
+                testGlobalValues,
+                testPartyValues[1], // bob's test values
+                bobPrivateKey
+            );
+
+                vm.prank(bob);
+                registry.signContract(
+                    agreementId,
+                    testPartyValues[1], // bob's test values
+                    signature,
+                    true, // fillUnallocated
+                    ""
+                );
+
+                assertTrue(registry.hasSigned(agreementId, bob), "bob should have signed now");
+        }
+
+        // since all unallocated slots are filled, chad should not be able to sign
+
+        {
+            bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                testLegalContractUri,
+                testGlobalFields,
+                testPartyFields,
+                testGlobalValues,
+                testPartyValues[1], // reuse bob's test values. It does not matter
+                chadPrivateKey
+            );
+
+            vm.expectRevert(CyberAgreementRegistry.NotAParty.selector);
+            vm.prank(chad);
+            registry.signContract(
+                agreementId,
+                testPartyValues[1], // reuse bob's test values. It does not matter
+                signature,
+                true, // fillUnallocated
+                ""
+            );
+        }
+    }
+
+    /// @notice Should not be able to fill unallocated slots if it's a closed agreement
+    function test_RevertIf_signContractFillUnallocatedClosed() public {
+        uint256 salt = uint256(keccak256("test_RevertIf_signContractFillUnallocatedClosed"));
+
+        // Alice to create a closed agreement
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            salt,
+            testGlobalValues,
+            testParties,
+            testPartyValues,
+            "",
+            address(0), // finalizer undefined
+            block.timestamp + 10
+        );
+
+        // chad should not be able to fill the slot because he's not a party
+
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            agreementId,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields,
+            testGlobalValues,
+            testPartyValues[1], // reuse bob's test values. It does not matter
+            bobPrivateKey
+        );
+
+        vm.expectRevert(CyberAgreementRegistry.NotAParty.selector);
+        vm.prank(chad);
+        registry.signContract(
+            agreementId,
+            testPartyValues[1], // bob's test values
+            signature,
+            false, // fillUnallocated
+            ""
+        );
+
+        // using `fallUnallocated = true` should not work either
+        vm.expectRevert(CyberAgreementRegistry.NotAParty.selector);
+        vm.prank(chad);
+        registry.signContract(
+            agreementId,
+            testPartyValues[1], // bob's test values
+            signature,
+            true, // fillUnallocated
+            ""
+        );
     }
 
     /// @notice Should allow `signContractFor()` even if finalizer is not defined
