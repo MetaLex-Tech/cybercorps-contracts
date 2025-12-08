@@ -20,6 +20,7 @@ import {LeXcheX} from "../src/creds/lexchex.sol";
 import {CyberCertData, RoundType} from "../src/interfaces/IRoundManager.sol";
 import {EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
+import {BorgAuth} from "../src/libs/auth.sol";
 
 contract UpgradePublicRoundsTest is Test {
     address metalexSafe = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
@@ -28,6 +29,7 @@ contract UpgradePublicRoundsTest is Test {
     address cyberCorpFactoryProxyAddr = 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2;
     address usdc = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
     address registry = 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134;
+    address deployedLexChexAddrAuth = 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2;
     address cyberCorpSingleFactory;
     address rmFactory;
     address lexchex = 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62;
@@ -65,6 +67,10 @@ contract UpgradePublicRoundsTest is Test {
             deployer,
             CyberAgreementRegistry(registry).AUTH().OWNER_ROLE()
         );
+        BorgAuth(deployedLexChexAddrAuth).updateRole(
+            deployer,
+            BorgAuth(deployedLexChexAddrAuth).OWNER_ROLE()
+        ); // so deployer can grant cyberCorpFactory permissions to it
         vm.stopPrank();
 
         (new UpgradePublicRoundsScript()).run();

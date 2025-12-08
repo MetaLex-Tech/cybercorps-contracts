@@ -49,6 +49,7 @@ contract UpgradeLegacyCyberCorpsTest is Test {
     // Universal registry address
     CyberAgreementRegistry registry = CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134);
     CyberCorpFactory cyberCorpFactory = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
+    BorgAuth deployedLexChexAddrAuth = BorgAuth(0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2);
     ILegacyFactory legacyCyberCorpSingleFactory = ILegacyFactory(0xc8e084D3f8B3b326FCc894C7afD28F4904196406);
     ILegacyFactory legacyDealManagerFactory = ILegacyFactory(0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3);
     ILegacyIssuanceManagerFactory legacyIssuanceManagerFactory = ILegacyIssuanceManagerFactory(0xA32547aAdAA4975082D729c79e79dBaE4385EBCf);
@@ -102,6 +103,7 @@ contract UpgradeLegacyCyberCorpsTest is Test {
         // Simulate granting the test deployer admin access so it can perform upgrades
         vm.startPrank(metalexSafe);
         registry.AUTH().updateRole(deployer, registry.AUTH().OWNER_ROLE());
+        deployedLexChexAddrAuth.updateRole(deployer, deployedLexChexAddrAuth.OWNER_ROLE()); // so deployer can grant cyberCorpFactory permissions to it
         vm.stopPrank();
 
         //

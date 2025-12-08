@@ -49,7 +49,7 @@ import {IRoundManagerInit} from "./helpers/RoundManagerUpgradeHelper.sol";
 
 contract CyberCorpWithMigration is CyberCorp {
 
-    address public constant NEW_UPGRADE_FACTORY = 0x41649e32f2681C8DD7B3f39E20544968e89b37b2; // TODO TBD
+    address public constant NEW_UPGRADE_FACTORY = 0x50C26cd5750aBbb81A97276A521D70606f4bAFee; // TODO TBD
     CyberCorpFactory public constant CYBER_CORP_FACTORY = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
 
     /// @notice Migrate legacy contracts and set upgradeFactory to the known new contract (for reference implementation lookup)
@@ -60,35 +60,12 @@ contract CyberCorpWithMigration is CyberCorp {
 
         // Deploy a new RoundManager if not setup yet
         if (roundManager == address(0)) {
-            IRoundManagerFactory rmFactory = IRoundManagerFactory(CYBER_CORP_FACTORY.roundManagerFactory());
-
+            // Ask CyberCorpFactory to prepare one for us
             bytes32 salt = keccak256(abi.encodePacked("MetaLexCyberCorp.PublicRounds.migration.", address(this)));
-            roundManager = rmFactory.deployRoundManager(salt);
+            roundManager = CYBER_CORP_FACTORY.deployAndInitializeRoundManager(salt, address(this));
 
-            // Initialize RoundManager
-            IRoundManagerInit(roundManager).initialize(
-                address(AUTH),
-                address(this),
-                CYBER_CORP_FACTORY.registryAddress(),
-                issuanceManager,
-                address(rmFactory)
-            );
-
-            // Add newly created RoundManager as OWNER in LeXcheX AUTH
-            address lexchexAuth = CYBER_CORP_FACTORY.lexchexAuth();
-            if (lexchexAuth != address(0)) {
-                BorgAuth(lexchexAuth).updateRole(
-                    roundManager,
-                    BorgAuth(lexchexAuth).OWNER_ROLE()
-                );
-            }
-
+            // Authorize the round manager
             AUTH.updateRole(roundManager, 99);
-
-            emit CyberCorpFactory.RoundManagerDeployed(
-                address(this),
-                roundManager
-            );
         }
     }
 }
