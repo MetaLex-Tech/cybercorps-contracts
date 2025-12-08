@@ -317,9 +317,10 @@ library RoundManagerStorage {
         }
 
         //add lexchex if public round
-        if (round.publicRound && getLexChexCondition() != address(0)) {
+        //Commenting this out as we are letting our front end handle this
+        /*if (round.publicRound && getLexChexCondition() != address(0)) {
             ls.conditionsByEscrow[agreementId].push(ICondition(getLexChexCondition()));
-        }
+        }*/
     }
 
     /// @notice Allocates an amount to an EOI and finalizes the deal

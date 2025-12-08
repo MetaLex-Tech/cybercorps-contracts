@@ -375,6 +375,91 @@ library CyberCorpHelper {
         );
     }
 
+    function CreateLexChexRound(
+        RoundManager rm,
+        address paymentToken,
+        bytes32 templateId,
+        uint256 raiseCap,
+        uint256 minTicket,
+        uint256 maxTicket,
+        uint256 pricePerUnit,
+        uint256 valuation,
+        RoundType roundType,
+        uint256 officerPrivKey,
+        address companyAddress,
+        bool publicRound
+    ) internal returns (bytes32) {
+        address officerEOA = vm.addr(officerPrivKey);
+
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Legend";
+        CyberCertData[]
+        memory certData = new CyberCertData[](1);
+        certData[0] = CyberCertData({
+            name: "Equity",
+            symbol: "EQ",
+            uri: "ipfs://eq",
+            securityClass: SecurityClass.CommonStock,
+            securitySeries: SecuritySeries.NA,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+
+        string[] memory roundPartyValues = new string[](2);
+        roundPartyValues[0] = "Alice Officer";
+        roundPartyValues[1] = "CEO";
+
+        (bytes memory escrowedSig, ) = CyberCorpHelper.computeEscrowSignature(
+            address(rm),
+            SecuritySeries.SeriesSeed,
+            raiseCap,
+            minTicket,
+            maxTicket,
+            roundType,
+            block.timestamp,
+            block.timestamp + 30 days,
+            templateId,
+            paymentToken,
+            pricePerUnit,
+            valuation,
+            officerPrivKey,
+            companyAddress
+        );
+
+        address[] memory conditions = new address[](1);
+        conditions[0] = 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42;
+
+        return rm.createRound(
+            RoundLib.draft()
+                .setTickets(
+                    SecuritySeries.SeriesSeed,
+                    roundType,
+                    publicRound,
+                    true,
+                    raiseCap,
+                    minTicket,
+                    maxTicket,
+                    paymentToken,
+                    pricePerUnit,
+                    valuation,
+                    block.timestamp,
+                    block.timestamp + 30 days
+                )
+                .setAgreement(
+                    templateId,
+                    officerEOA,
+                    "Officer",
+                    "CEO",
+                    new string[](certData.length),
+                    roundPartyValues,
+                    new bytes[](certData.length),
+                    conditions,
+                    escrowedSig
+                ),
+            certData
+        );
+    }
+
     function submitEOI(
         RoundManager rm,
         CyberAgreementRegistry registry,
@@ -3039,6 +3124,7 @@ contract RoundManagerFCFSTest is Test {
     }
 
     function test_RevertIf_FCFS_SubmitEOI_FailLexChexCondition() public {
+        // This test uses CreateLexChexRound to include the LexChex condition
         address me = address(this);
         (
             CyberAgreementRegistry registry,
@@ -3067,7 +3153,7 @@ contract RoundManagerFCFSTest is Test {
         uint256 officerPrivKey = 0xAA04;
         address officerEOA = vm.addr(officerPrivKey);
 
-        bytes32 roundId = CyberCorpHelper.createRound(
+        bytes32 roundId = CyberCorpHelper.CreateLexChexRound(
             rm,
             address(usdc),
             CyberCorpHelper.TEMPLATE_ID,
@@ -3165,7 +3251,7 @@ contract RoundManagerFCFSTest is Test {
         address officerEOA = vm.addr(officerPrivKey);
 
         // Create a public FCFS round with maxTicket above 200k
-        bytes32 roundId = CyberCorpHelper.createRound(
+        bytes32 roundId = CyberCorpHelper.CreateLexChexRound(
             rm,
             address(usdc),
             CyberCorpHelper.TEMPLATE_ID,
@@ -3185,6 +3271,10 @@ contract RoundManagerFCFSTest is Test {
         uint256 investorPrivKey = 0xC0FFEE;
         address investor = vm.addr(investorPrivKey);
         usdc.transfer(investor, 300_000 * (10 ** usdc.decimals()));
+
+                //white list the mock payment token MockPaymentToken: [0x27cc01A4676C73fe8b6d0933Ac991BfF1D77C4da]
+        RoundManagerFactory(0x9eE0EDbca232f3b741Ef02A2A1482588a6494763).setWhitelistedToken(address(0x27cc01A4676C73fe8b6d0933Ac991BfF1D77C4da), true);
+       
         vm.startPrank(investor);
         usdc.approve(address(rm), type(uint256).max);
 
@@ -3199,8 +3289,7 @@ contract RoundManagerFCFSTest is Test {
             naturalPerson: true,
             lexchexDetails: CyberCorpHelper.emptyLex()
         });
-
-        // Attach a valid LeXcheX mint payload aligned to template 400 so auto-mint can succeed
+         // Attach a valid LeXcheX mint payload aligned to template 400 so auto-mint can succeed
         {
             LeXcheXMinter minter = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
             CyberAgreementRegistry lxRegistry = CyberAgreementRegistry(minter.dealRegistry());
@@ -3287,6 +3376,7 @@ contract RoundManagerFCFSTest is Test {
     }
 
       function test_FCFS_PublicRound_UnderIndividualOver200k_LexChexRequired() public {
+        // This test uses CreateLexChexRound to include the LexChex condition
         address me = address(this);
         (
             CyberAgreementRegistry registry,
@@ -3318,7 +3408,7 @@ contract RoundManagerFCFSTest is Test {
         address officerEOA = vm.addr(officerPrivKey);
 
         // Create a public FCFS round with maxTicket above 200k
-        bytes32 roundId = CyberCorpHelper.createRound(
+        bytes32 roundId = CyberCorpHelper.CreateLexChexRound(
             rm,
             address(usdc),
             CyberCorpHelper.TEMPLATE_ID,
@@ -3505,6 +3595,7 @@ contract RoundManagerFCFSTest is Test {
     }
 
     function test_FCFS_PublicRound_LexChexMinting_Whitelist() public {
+        // This test uses CreateLexChexRound to include the LexChex condition
         address me = address(this);
         (
             CyberAgreementRegistry registry,
@@ -3537,7 +3628,7 @@ contract RoundManagerFCFSTest is Test {
         CyberCorp(corpPub).setDealManager(address(rmPub));
 
         // Create Public FCFS Round
-        bytes32 pubRoundId = CyberCorpHelper.createRound(
+        bytes32 pubRoundId = CyberCorpHelper.CreateLexChexRound(
             rmPub,
             address(usdc),
             CyberCorpHelper.TEMPLATE_ID,
