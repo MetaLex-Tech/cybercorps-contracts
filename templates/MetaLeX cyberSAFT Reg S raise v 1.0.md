@@ -16,7 +16,7 @@ SAFT alone: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeieqiarv2
 | governingJurisdiction       |          |
 | disputeResolution   |         |
 | unlockStartTimeType |"agreementStartTime" \|"tgeTime" \| "setTime"        |
-| agreementExecutionTime       | only set if using `setTime` for `unlockStartTimeType` |
+| unlockStartTime       | only set if using `setTime` for `unlockStartTimeType` |
 | unlockingPeriod       | Duration in `unlockingInvervalType` units  |
 | unlockingCliffPeriod       | Duration in `unlockingIntervalType`, first tokens unlocked at `unlockingStartTime` + `unlockingCliffPeriod`  |
 | unlockingCliffPercentage       | e.g. "10.5%" |

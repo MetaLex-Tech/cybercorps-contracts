@@ -18,7 +18,7 @@ Github: https://github.com/MetaLex-Tech/publicDocs/blob/main/cyberKs/cyberSAFT/M
 | governingJurisdiction       |          |
 | disputeResolution   |         |
 | unlockStartTimeType |"agreementStartTime" \|"tgeTime" \| "setTime"        |
-| agreementExecutionTime       | only set if using `setTime` for `unlockStartTimeType` |
+| unlockStartTime       | only set if using `setTime` for `unlockStartTimeType` |
 | unlockingPeriod       | Duration in `unlockingInvervalType` units  |
 | unlockingCliffPeriod       | Duration in `unlockingIntervalType`, first tokens unlocked at `unlockingStartTime` + `unlockingCliffPeriod`  |
 | unlockingCliffPercentage       | e.g. "10.5%" |

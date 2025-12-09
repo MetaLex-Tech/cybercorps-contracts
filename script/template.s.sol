@@ -110,7 +110,7 @@ contract BaseScript is Script {
         globalFieldsSafTt[2] = "governingJurisdiction";
         globalFieldsSafTt[3] = "disputeResolution";
         globalFieldsSafTt[4] = "unlockStartTimeType";
-      globalFieldsSafTt[5] = "agreementExecutionTime";
+      globalFieldsSafTt[5] = "unlockStartTime";
         globalFieldsSafTt[6] = "unlockingPeriod";
         globalFieldsSafTt[7] = "unlockingCliffPeriod";
         globalFieldsSafTt[8] = "unlockingCliffPercentage";
