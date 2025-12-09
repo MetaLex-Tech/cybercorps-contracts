@@ -30,10 +30,15 @@ interface IUUPS {
 
 contract UpgradeRoundManagerTokenWhitelistScript is Script {
     function run() public {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
+        runWithArgs(
+            vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
+        );
+    }
 
+    function runWithArgs(uint256 deployerPrivateKey) public {
         vm.startBroadcast(deployerPrivateKey);
-           bytes32 salt = bytes32(
+
+        bytes32 salt = bytes32(
             keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3.0.2")
         );
 
