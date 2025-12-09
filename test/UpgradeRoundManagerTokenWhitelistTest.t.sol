@@ -14,7 +14,7 @@ import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
-import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
+import {LeXcheXMinter, LeXcheX} from "../src/creds/lexchexMinter.sol";
 import {CyberCertData, EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {RoundLib, Round, RoundType} from "../src/libs/RoundLib.sol";
@@ -322,6 +322,8 @@ contract UpgradeRoundManagerTokenWhitelistTest is Test {
                 bytes32(0)
             );
             vm.stopPrank();
+
+            assertEq(LeXcheX(CyberCorpHelper.LEXCHEX_ADDRESS).balanceOf(bob), 1, "LexChex should be minted for bob");
         }
     }
 }

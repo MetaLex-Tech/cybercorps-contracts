@@ -54,13 +54,6 @@ contract UpgradePublicRoundsTest is Test {
     bytes32 templateId = bytes32(uint256(20000));
     
     function setUp() public {
-        // TODO deprecated
-//        // For future-proof: some networks may have upgraded already. In such case we will roll back to a known block before the upgrades
-//        if (block.chainid == 84532) {
-//            console2.log("Existing deployment has been upgraded, rolling back to a known block before it...");
-//            vm.rollFork(33920951);
-//        }
-
         vm.label(deployer, "deployer");
         vm.label(companyOwner, "companyOwner");
         vm.label(alice, "alice");
@@ -701,6 +694,8 @@ contract UpgradePublicRoundsTest is Test {
             bytes32(0)
         );
         vm.stopPrank();
+
+        assertEq(LeXcheX(CyberCorpHelper.LEXCHEX_ADDRESS).balanceOf(bob), 1, "LexChex should be minted for bob");
     }
 
     function _computeEOISignature(

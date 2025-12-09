@@ -3246,7 +3246,6 @@ contract RoundManagerFCFSTest is Test {
         CyberCorp(corp).setDealManager(address(rm));
 
         MockPaymentToken usdc = new MockPaymentToken();
-        vm.label(address(usdc), "MockPaymentToken");
 
         // Prepare officer identity for the round
         uint256 officerPrivKey = 0xBEEF01;
