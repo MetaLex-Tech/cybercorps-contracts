@@ -47,6 +47,7 @@ contract UpgradePublicRoundsScript is Script {
         address legacyIssuanceManagerFactoryAddr = 0xA32547aAdAA4975082D729c79e79dBaE4385EBCf;
         address registry = 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134;
         address deployedLexChexAddrAuth = 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2;
+        address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
 
         address stable;
         uint256 currentChainId = block.chainid;
@@ -235,7 +236,11 @@ contract UpgradePublicRoundsScript is Script {
         // Replace the old one in CyberCorpFactory
         factoryProxy.setDealManagerFactory(address(newDmFactory));
         factoryProxy.setLexchexAuth(deployedLexChexAddrAuth);
-        factoryProxy.setDefaultFeeRatio(30);
+        roundManagerFactory.setDefaultFeeRatio(30);
+        roundManagerFactory.setPlatformPayable(multisig);
+        newDmFactory.setDefaultFeeRatio(30);
+        newDmFactory.setPlatformPayable(multisig);
+
         //add CyberCorpFactory as owner on lexchex auth
         BorgAuth(deployedLexChexAddrAuth).updateRole(address(factoryProxy), BorgAuth(deployedLexChexAddrAuth).OWNER_ROLE());
 

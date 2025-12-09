@@ -31,6 +31,7 @@ interface IUUPS {
 contract AddTestWhitelistScript is Script {
     function run() public {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
+        address deployer = vm.addr(deployerPrivateKey);
 
         vm.startBroadcast(deployerPrivateKey);
            bytes32 salt = bytes32(
@@ -42,8 +43,9 @@ contract AddTestWhitelistScript is Script {
         address registry = 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134;
         address deployedLexChexAddrAuth = 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2;
 
-        RoundManagerFactory(0x9E2A3a07711Ce4b5A2F4D62a5c8f8B5307Af9C34).setWhitelistedToken(0xdfbD1a4AD9C6D752231f83d390471d8029843dFF, true);
-       RoundManagerFactory(0x9E2A3a07711Ce4b5A2F4D62a5c8f8B5307Af9C34).setDefaultFeeRatio(30);
+       //RoundManagerFactory(0x9E2A3a07711Ce4b5A2F4D62a5c8f8B5307Af9C34).setWhitelistedToken(0xdfbD1a4AD9C6D752231f83d390471d8029843dFF, true);
+       //RoundManagerFactory(0x9E2A3a07711Ce4b5A2F4D62a5c8f8B5307Af9C34).setDefaultFeeRatio(30);
+       RoundManagerFactory(0x9E2A3a07711Ce4b5A2F4D62a5c8f8B5307Af9C34).setPlatformPayable(deployer);
     }
 
 
