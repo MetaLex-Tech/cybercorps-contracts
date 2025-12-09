@@ -123,6 +123,7 @@ library CyberCorpHelper {
 
     address constant LEXCHEX_CONDITION_ADDRESS = 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42;
     address constant LEXCHEX_MINTER_ADDRESS = 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960;
+    address constant LEXCHEX_ADDRESS = 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62;
     address constant UPGRADE_OWNER = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
 
     bytes32 constant SALT = keccak256("CyberCorpHelper");
@@ -3227,7 +3228,7 @@ contract RoundManagerFCFSTest is Test {
             ,
             ,
             ,
-            ,
+            address rmFactoryAddr,
             ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
@@ -3245,6 +3246,7 @@ contract RoundManagerFCFSTest is Test {
         CyberCorp(corp).setDealManager(address(rm));
 
         MockPaymentToken usdc = new MockPaymentToken();
+        vm.label(address(usdc), "MockPaymentToken");
 
         // Prepare officer identity for the round
         uint256 officerPrivKey = 0xBEEF01;
@@ -3272,8 +3274,8 @@ contract RoundManagerFCFSTest is Test {
         address investor = vm.addr(investorPrivKey);
         usdc.transfer(investor, 300_000 * (10 ** usdc.decimals()));
 
-                //white list the mock payment token MockPaymentToken: [0x27cc01A4676C73fe8b6d0933Ac991BfF1D77C4da]
-        RoundManagerFactory(0x9eE0EDbca232f3b741Ef02A2A1482588a6494763).setWhitelistedToken(address(0x27cc01A4676C73fe8b6d0933Ac991BfF1D77C4da), true);
+        //white list the mock payment token MockPaymentToken: [0x27cc01A4676C73fe8b6d0933Ac991BfF1D77C4da]
+        RoundManagerFactory(rmFactoryAddr).setWhitelistedToken(address(usdc), true);
        
         vm.startPrank(investor);
         usdc.approve(address(rm), type(uint256).max);
@@ -3373,6 +3375,8 @@ contract RoundManagerFCFSTest is Test {
             bytes32(0)
         );
         vm.stopPrank();
+
+        assertEq(ILexChex(CyberCorpHelper.LEXCHEX_ADDRESS).balanceOf(investor), 1, "LexChex should be minted for the investor");
     }
 
       function test_FCFS_PublicRound_UnderIndividualOver200k_LexChexRequired() public {
@@ -3746,9 +3750,7 @@ contract RoundManagerFCFSTest is Test {
         vm.stopPrank();
 
         // Check LexChex balance
-        ILexChex lexchex = ILexChex(0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62);
-        assertEq(lexchex.balanceOf(inv1), 0, "LexChex should not be minted for non-whitelisted token");
-
+        assertEq(ILexChex(CyberCorpHelper.LEXCHEX_ADDRESS).balanceOf(inv1), 0, "LexChex should not be minted for non-whitelisted token");
 
         // PART 2: Whitelist Token
         vm.prank(me);
@@ -3842,7 +3844,7 @@ contract RoundManagerFCFSTest is Test {
         );
         vm.stopPrank();
 
-        assertEq(lexchex.balanceOf(inv2), 1, "LexChex SHOULD be minted for whitelisted token");
+        assertEq(ILexChex(CyberCorpHelper.LEXCHEX_ADDRESS).balanceOf(inv2), 1, "LexChex SHOULD be minted for whitelisted token");
     }
 }
 
