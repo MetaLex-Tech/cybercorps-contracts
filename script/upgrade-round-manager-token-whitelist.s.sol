@@ -30,14 +30,10 @@ interface IUUPS {
 
 contract UpgradeRoundManagerTokenWhitelistScript is Script {
     function run() public {
-        runWithArgs(
-            vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
-        );
-    }
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
 
-    function runWithArgs(uint256 deployerPrivateKey) public {
-        // Config
-        bytes32 salt = bytes32(
+        vm.startBroadcast(deployerPrivateKey);
+           bytes32 salt = bytes32(
             keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3.0.2")
         );
 
@@ -65,8 +61,6 @@ contract UpgradeRoundManagerTokenWhitelistScript is Script {
         CyberCorpFactory factoryProxy = CyberCorpFactory(
             cyberCorpFactoryProxyAddr
         );
-
-        vm.startBroadcast(deployerPrivateKey);
 
         // Uses existing AUTH from factory
         address auth = address(
@@ -121,4 +115,6 @@ contract UpgradeRoundManagerTokenWhitelistScript is Script {
         console.log("CyberCorpFactory:", address(factoryProxy));
         console.log("RoundManagerFactory:", address(roundManagerFactory));
     }
+
+
 }

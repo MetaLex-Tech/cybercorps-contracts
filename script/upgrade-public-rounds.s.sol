@@ -235,7 +235,7 @@ contract UpgradePublicRoundsScript is Script {
         // Replace the old one in CyberCorpFactory
         factoryProxy.setDealManagerFactory(address(newDmFactory));
         factoryProxy.setLexchexAuth(deployedLexChexAddrAuth);
-
+        factoryProxy.setDefaultFeeRatio(30);
         //add CyberCorpFactory as owner on lexchex auth
         BorgAuth(deployedLexChexAddrAuth).updateRole(address(factoryProxy), BorgAuth(deployedLexChexAddrAuth).OWNER_ROLE());
 
@@ -281,6 +281,25 @@ contract UpgradePublicRoundsScript is Script {
             "IssuanceManager beacon implementation set to:",
             legacyIssuanceManagerFactory.getBeaconImplementation()
         );
+
+        //update templates
+
+        string[] memory globalFieldsSafe = new string[](5);
+        globalFieldsSafe[0] = "purchaseAmount";
+        globalFieldsSafe[1] = "postMoneyValuationCap";
+        globalFieldsSafe[2] = "expirationTime";
+        globalFieldsSafe[3] = "governingJurisdiction";
+        globalFieldsSafe[4] = "disputeResolution";
+
+
+        string[] memory partyFieldsSafe = new string[](5);
+        partyFieldsSafe[0] = "name";
+        partyFieldsSafe[1] = "evmAddress";
+        partyFieldsSafe[2] = "contactDetails";
+        partyFieldsSafe[3] = "investorType";
+        partyFieldsSafe[4] = "investorJurisdiction";
+
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(50)), "SAFE", "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi", globalFieldsSafe, partyFieldsSafe);
 
         vm.stopBroadcast();
 
