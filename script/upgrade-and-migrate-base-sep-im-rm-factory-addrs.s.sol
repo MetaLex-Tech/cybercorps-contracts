@@ -76,7 +76,7 @@ contract UpgradeAndMigrateBaseSepImRmFactoryAddrsScript is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        // Replace CyberCorpFactory's IssuanceManagerFactory with the newly deployed ones
+        // 1) Replace CyberCorpFactory's IssuanceManagerFactory with the newly deployed ones
         // Set new IssuanceManager's reference implementation to the old one since they are functionally identical
         address refIm = deprecatingImFactory.getRefImplementation();
         imFactory.setRefImplementation(refIm);
@@ -85,17 +85,16 @@ contract UpgradeAndMigrateBaseSepImRmFactoryAddrsScript is Script {
         vm.assertEq(imFactory.getRefImplementation(), refIm, "unexpected IssuanceManager reference implementation");
         console2.log("CyberCorpFactory.issuanceManagerFactory set to: %s", address(imFactory));
 
-        // Replace CyberCorpFactory's RoundManagerFactory with the newly deployed ones
+        // 2) Replace CyberCorpFactory's RoundManagerFactory with the newly deployed ones
         cyberCorpFactory.setRoundManagerFactory(address(rmFactory));
         vm.assertEq(cyberCorpFactory.roundManagerFactory(), address(rmFactory), "unexpected RoundManagerFactory");
         console2.log("CyberCorpFactory.roundManagerFactory set to: %s", address(rmFactory));
 
         // Load all known cyber corps
         address[] memory knownLegacyCyberCorps = KnownAddressesLoader.load(block.chainid, "/script/res/known-cyber-corps.json", maxCount);
-        // TODO WIP
-//        address[] memory knownDevV3CyberCorps = KnownAddressesLoader.load(block.chainid, "/script/res/known-dev-v3-cyber-corps.json", maxCount);
+        address[] memory knownDevV3CyberCorps = KnownAddressesLoader.load(block.chainid, "/script/res/known-cyber-corps-v3-dev.json", maxCount);
 
-        // Deploy temporary contracts for migration
+        // 3) Deploy temporary contracts for migration
 
         IssuanceManagerWithFactoryMigration imWithMigrationImpl = new IssuanceManagerWithFactoryMigration();
         RoundManagerWithFactoryMigration rmWithMigrationImpl = new RoundManagerWithFactoryMigration();
@@ -112,17 +111,20 @@ contract UpgradeAndMigrateBaseSepImRmFactoryAddrsScript is Script {
             string(abi.encodePacked("RoundManagerWithFactoryMigration.NEW_UPGRADE_FACTORY should point to the current factory"))
         );
 
-        // Upgrade issuance manager beacon to a special implementation with migration features
+        // 4a) Upgrade issuance manager beacon to a special implementation with migration features
         legacyImFactory.upgradeImplementation(address(imWithMigrationImpl));
         vm.assertEq(legacyImFactory.getBeaconImplementation(), address(imWithMigrationImpl), "beacon implementation should be upgraded with migration features by now");
         console2.log("Set new beacon implementation (with migration features): %s for legacy IssuanceManagerFactory: %s", address(imWithMigrationImpl), address(legacyImFactory));
 
-        // Set the reference implementation on the deprecating RoundManagerFactory (so the corps can accept it)
+        // 4b) Set the reference implementation on the deprecating IssuanceManagerFactory (so the dev-v3 corps can accept it)
+        deprecatingImFactory.setRefImplementation(address(imWithMigrationImpl));
+
+        // 4c) Set the reference implementation on the deprecating RoundManagerFactory (so the corps can accept it)
         deprecatingRmFactory.setRefImplementation(address(rmWithMigrationImpl));
 
         vm.stopBroadcast();
 
-        // Migrate each legacy corp one-by-one
+        // 5) Migrate each legacy corp one-by-one
         for (uint256 i = 0; i < knownLegacyCyberCorps.length; i++) {
             CyberCorp corp = CyberCorp(knownLegacyCyberCorps[i]);
 
@@ -175,15 +177,68 @@ contract UpgradeAndMigrateBaseSepImRmFactoryAddrsScript is Script {
             console2.log("Migrated legacy CyberCorp: %s", address(corp));
         }
 
-        // Revert to the normal implementation since migration is done
+        // 6) Migrate each dev-v3 corp one-by-one
+        for (uint256 i = 0; i < knownDevV3CyberCorps.length; i++) {
+            CyberCorp corp = CyberCorp(knownDevV3CyberCorps[i]);
+
+            // Sanity check: all other factories should match
+            vm.assertEq(
+                corp.upgradeFactory(),
+                address(cyberCorpSingleFactory),
+                string(abi.encodePacked("legacy cyberCorp: ", vm.toString(address(corp)), " should point to the current CyberCorpSingleFactory"))
+            );
+            vm.assertEq(
+                _getDealManagerUpgradeFactory(corp.dealManager()),
+                address(dmFactory),
+                string(abi.encodePacked("legacy cyberCorp: ", vm.toString(address(corp)), " should point to the current DealManagerFactory"))
+            );
+
+            // TODO WIP: simulate co-approval for now, in production we should use `corpOwnerPrivateKeyLookup`
+//            vm.startBroadcast(corpOwnerPrivateKeyLookup[corp.companyPayable()]);
+            vm.startPrank(corp.companyPayable());
+
+            // Migrate legacy corp's IssuanceManager (UUPSUpgradeable-based, need co-approval)
+            // Accept round manager upgrade to the temporary implementation with migration feature
+            IssuanceManagerWithFactoryMigration im = IssuanceManagerWithFactoryMigration(corp.issuanceManager());
+            im.upgradeToAndCall(
+                address(imWithMigrationImpl),
+                abi.encodeWithSelector(im.migrateUpgradeFactory.selector) // perform migration atomically
+            );
+            vm.assertEq(
+                im.getUpgradeFactory(),
+                address(imFactory),
+                string(abi.encodePacked("legacy cyberCorp: ", vm.toString(address(corp)), " should point to the current IssuanceManagerFactory after migration"))
+            );
+
+            // Migrate legacy corp's RoundManager (UUPSUpgradeable-based, need co-approval)
+            // Accept round manager upgrade to the temporary implementation with migration feature
+            RoundManagerWithFactoryMigration rm = RoundManagerWithFactoryMigration(corp.roundManager());
+            rm.upgradeToAndCall(
+                address(rmWithMigrationImpl),
+                abi.encodeWithSelector(rm.migrateUpgradeFactory.selector) // perform migration atomically
+            );
+            vm.assertEq(
+                rm.getUpgradeFactory(),
+                address(rmFactory),
+                string(abi.encodePacked("legacy cyberCorp: ", vm.toString(address(corp)), " should point to the current RoundManagerFactory after migration"))
+            );
+
+//            vm.stopBroadcast();
+            vm.stopPrank();
+
+            console2.log("Migrated dev-v3 CyberCorp: %s", address(corp));
+        }
+
+        // 7a) Revert to the normal implementation since migration is done
         vm.startBroadcast(deployerPrivateKey);
 
         address imRefImpl = imFactory.getRefImplementation();
         legacyImFactory.upgradeImplementation(imRefImpl);
         vm.assertEq(legacyImFactory.getBeaconImplementation(), imRefImpl, "beacon implementation should be upgraded without migration features by now");
-        console2.log("Set new beacon implementation (without migration features): %s for legacy CyberCorpSingleFactory: %s", address(imRefImpl), address(legacyImFactory));
+        console2.log("Set new beacon implementation (without migration features): %s for legacy IssuanceManagerFactory: %s", address(imRefImpl), address(legacyImFactory));
 
-        // No need to revert deprecatingRmFactory.refImplementation() since it is deprecating
+        // 7b) No need to revert deprecatingImFactory.refImplementation() since it is deprecating
+        // 7c) No need to revert deprecatingRmFactory.refImplementation() since it is deprecating
 
         vm.stopBroadcast();
     }
