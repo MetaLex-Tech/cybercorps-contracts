@@ -46,7 +46,7 @@ import {DealManagerStorage} from "./storage/DealManagerStorage.sol";
 
 contract DealManagerWithMigration is DealManager {
 
-    address public constant NEW_UPGRADE_FACTORY = 0xE893Df5f06d6f99Efaa1AE1b9dd2785F72D09756;
+    address public constant NEW_UPGRADE_FACTORY = 0x3982b078f2ac306219c9540Ebc908360a960C251;
 
     // TODO TBD
     /// @notice Migrate legacy contracts and set upgradeFactory to the known new contract (for fee dependencies)

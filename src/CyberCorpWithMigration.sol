@@ -49,7 +49,7 @@ import {IRoundManagerInit} from "./helpers/RoundManagerUpgradeHelper.sol";
 
 contract CyberCorpWithMigration is CyberCorp {
 
-    address public constant NEW_UPGRADE_FACTORY = 0x50C26cd5750aBbb81A97276A521D70606f4bAFee; // TODO TBD
+    address public constant NEW_UPGRADE_FACTORY = 0xBE0D3D13AA07501beAC9b72dE9e9292E66C7A5C4; // TODO TBD
     CyberCorpFactory public constant CYBER_CORP_FACTORY = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
 
     /// @notice Migrate legacy contracts and set upgradeFactory to the known new contract (for reference implementation lookup)

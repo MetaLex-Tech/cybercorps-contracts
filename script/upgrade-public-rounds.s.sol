@@ -288,7 +288,7 @@ contract UpgradePublicRoundsScript is Script {
         );
 
         //update templates
-
+/*
         string[] memory globalFieldsSafe = new string[](5);
         globalFieldsSafe[0] = "purchaseAmount";
         globalFieldsSafe[1] = "postMoneyValuationCap";
@@ -330,7 +330,6 @@ contract UpgradePublicRoundsScript is Script {
         CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(52)), "cySPA + REG D SAFE + REG D TOKEN WARRANT", "IPFS://bafybeiapw7thrkzymtnhilmr5sjl7sm55yc42d2zxl66u6tdutfvm55t2y", globalFieldsSafeTokenWarrant, partyFields);
         CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(53)), "cySPA + REG S SAFE + REG S TOKEN WARRANT", "IPFS://bafybeianosjn74ldjexzmwcji6nl3l24ikwazd64uei625nszysqfwla2i", globalFieldsSafeTokenWarrant, partyFields);
 
-        //make an array for this: ["purchaseAmount", "postMoneyValuationCap", "protocolUSDValuationAtTimeofInvestment", "expirationTime", "governingJurisdiction", "disputeResolution", "unlockStartTimeType", "unlockStartTime", "unlockingPeriod", "unlockingCliffPeriod", "unlockingCliffPercentage", "unlockingIntervalType", "tokenCalculationMethod", "minCompanyReserve", "tokenPremiumMultiplier"]*/
         string[] memory globalFieldsSafte = new string[](15);
         globalFieldsSafte[0] = "purchaseAmount";
         globalFieldsSafte[1] = "postMoneyValuationCap";
@@ -365,7 +364,7 @@ contract UpgradePublicRoundsScript is Script {
 
         CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(56)), "cySPA + REG D SAFT", "IPFS://bafybeidfbgwv35cu22ouwdpmho35gicfnkno2em7ngjn4mbhbiogvvaf7i", globalFieldsSaft, partyFields);
         CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(57)), "cySPA + REG S SAFT", "IPFS://bafybeibjm2mss4ctfsyajehtwnmje3aa2agif5n47i575pxdejrk7dee5m", globalFieldsSaft, partyFields);
-
+        */
         vm.stopBroadcast();
 
         console.log("CyberCorpFactory:", address(factoryProxy));
