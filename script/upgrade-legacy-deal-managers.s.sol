@@ -33,6 +33,7 @@ contract UpgradeLegacyDealManagersScript is Script {
         bytes32 salt = bytes32(keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3.0.2"));
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
 
+        address metalexSafe = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
         CyberCorpFactory cyberCorpFactory = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
         DealManagerFactory dmFactoryV2 = DealManagerFactory(cyberCorpFactory.dealManagerFactory()); // this is the v2 one (with reference implementation)
 
@@ -72,7 +73,7 @@ contract UpgradeLegacyDealManagersScript is Script {
         for (uint256 i = 0; i < knownCyberCorps.length; i++) {
             address dmAddr = CyberCorp(knownCyberCorps[i]).dealManager();
             DealManagerWithMigration(dmAddr).migrateUpgradeFactory();
-            vm.assertEq(DealManager(dmAddr).getPlatformPayable(), address(0), "should be able to lookup fee payable now");
+            vm.assertEq(DealManager(dmAddr).getPlatformPayable(), metalexSafe, string(abi.encodePacked("DealManager: ", vm.toString(dmAddr), "should be able to lookup fee payable now")));
             console2.log("Migrated legacy DealManager: %s", dmAddr);
         }
 

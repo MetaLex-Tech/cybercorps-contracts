@@ -48,7 +48,7 @@ import {IIssuanceManagerFactory} from "./interfaces/IIssuanceManagerFactory.sol"
 
 contract IssuanceManagerWithMigration is IssuanceManager {
 
-    address public constant NEW_UPGRADE_FACTORY = 0x208CaD16ABB4d3718132d38c2DF5BcfcDed97AC0; // TODO TBD
+    address public constant NEW_UPGRADE_FACTORY = 0xb7eD604CDcAD8e4936B36ff161af2Ec45F0E66c6; // TODO TBD
 
     /// @notice Migrate legacy contracts and set upgradeFactory to the known new contract (for reference implementation lookup)
     /// Also migrate its beacons for CyberCertPrinter and CyberScrip to new reference implementations

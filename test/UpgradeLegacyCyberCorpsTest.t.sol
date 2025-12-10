@@ -227,8 +227,8 @@ contract UpgradeLegacyCyberCorpsTest is Test {
             address dmAddr = CyberCorp(knownCyberCorps[i]).dealManager();
             // New DealManager should implement new methods                                                                                                                                                                                                                                     
             assertEq(DealManager(dmAddr).DEPLOY_VERSION(), "3", string(abi.encodePacked("unexpected DEPLOY_VERSION() for DealManager: ", vm.toString(dmAddr))));
-            assertEq(DealManager(dmAddr).computeFee(1 ether), 0 ether, "upgraded DealManager should support fee calculation with no fees");
-            assertEq(DealManager(dmAddr).getPlatformPayable(), address(0), "upgraded DealManager should support fee payable");
+            assertEq(DealManager(dmAddr).computeFee(1 ether), 0.003 ether, "upgraded DealManager should support fee calculation");
+            assertEq(DealManager(dmAddr).getPlatformPayable(), metalexSafe, "upgraded DealManager should support fee payable");
 
             // Check for slot conflicts
             assertEq(address(DealManager(dmAddr).AUTH()), address(expectedAuths[i]), string(abi.encodePacked("AUTH should not change for DealManager: ", vm.toString(dmAddr))));
@@ -384,7 +384,7 @@ contract UpgradeLegacyCyberCorpsTest is Test {
             );
             vm.stopPrank();
 
-            assertEq(ERC20(paymentToken).balanceOf(CyberCorp(cyberCorp).companyPayable()) - companyPayableBalanceBefore, 100e6, "alice should receive payment minus fees");
+            assertEq(ERC20(paymentToken).balanceOf(CyberCorp(cyberCorp).companyPayable()) - companyPayableBalanceBefore, 100e6 - 0.3e6, "alice should receive payment minus fees");
         }
     }
 
@@ -400,8 +400,8 @@ contract UpgradeLegacyCyberCorpsTest is Test {
             address rmAddr = CyberCorp(knownCyberCorps[i]).roundManager();
             // New RoundManager should implement new methods
             assertEq(RoundManager(rmAddr).DEPLOY_VERSION(), "3", string(abi.encodePacked("unexpected DEPLOY_VERSION() for RoundManager: ", vm.toString(rmAddr))));
-            assertEq(RoundManager(rmAddr).computeFee(1 ether), 0 ether, "upgraded RoundManager should support fee calculation with no fees");
-            assertEq(RoundManager(rmAddr).getPlatformPayable(), address(0), "upgraded RoundManager should support fee payable");
+            assertEq(RoundManager(rmAddr).computeFee(1 ether), 0.003 ether, "upgraded RoundManager should support fee calculation with no fees");
+            assertEq(RoundManager(rmAddr).getPlatformPayable(), metalexSafe, "upgraded RoundManager should support fee payable");
 
             // Should be able to upgrade it by co-approval
             address testNewRmImpl = address(new MockImplVTest());
@@ -430,8 +430,8 @@ contract UpgradeLegacyCyberCorpsTest is Test {
 
         // New DealManager should implement new methods
         assertEq(dm.DEPLOY_VERSION(), "3", "unexpected DEPLOY_VERSION()");
-        assertEq(dm.computeFee(1 ether), 0 ether, "new DealManager should support fee calculation with no fees");
-        assertEq(dm.getPlatformPayable(), address(0), "new DealManager should support fee payable");
+        assertEq(dm.computeFee(1 ether), 0.003 ether, "new DealManager should support fee calculation with no fees");
+        assertEq(dm.getPlatformPayable(), metalexSafe, "new DealManager should support fee payable");
     }
 
     function test_DeployNewCyberCorp() public {
