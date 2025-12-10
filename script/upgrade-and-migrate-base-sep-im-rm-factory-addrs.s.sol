@@ -28,7 +28,7 @@ import {DealManager} from "../src/DealManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {RoundManagerWithFactoryMigration} from "../src/RoundManagerWithFactoryMigration.sol";
 
-contract MigrateBaseSepImRmFactoryAddrsScript is Script {
+contract UpgradeAndMigrateBaseSepImRmFactoryAddrsScript is Script {
     mapping(address => uint256) private corpOwnerPrivateKeyLookup;
 
     function run() public {
@@ -60,22 +60,40 @@ contract MigrateBaseSepImRmFactoryAddrsScript is Script {
         console2.log("loaded corp owners: %d", corpOwnerPrivateKeys.length);
 
         CyberCorpFactory cyberCorpFactory = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
-        RoundManagerFactory deprecatingRmFactory = RoundManagerFactory(0x9E2A3a07711Ce4b5A2F4D62a5c8f8B5307Af9C34); // deprecated develop-version of v3 RoundManagerFactory
-
-        // Get the current factory addresses
         CyberCorpSingleFactory cyberCorpSingleFactory = CyberCorpSingleFactory(cyberCorpFactory.cyberCorpSingleFactory());
-        IssuanceManagerFactory imFactory = IssuanceManagerFactory(cyberCorpFactory.issuanceManagerFactory());
         DealManagerFactory dmFactory = DealManagerFactory(cyberCorpFactory.dealManagerFactory());
-        RoundManagerFactory rmFactory = RoundManagerFactory(cyberCorpFactory.roundManagerFactory());
 
+        // Legacy corp's IssuanceManagerFactory (for upgrading beacons)
         ILegacyFactory legacyImFactory = ILegacyFactory(0xA32547aAdAA4975082D729c79e79dBaE4385EBCf);
+
+        // Deprecated develop-version of v3 RoundManagerFactory (we need it later for providing reference implementation with migration features)
+        IssuanceManagerFactory deprecatingImFactory = IssuanceManagerFactory(0xbbD386D237f3b407E6511A52488850b1Da0cCad2);
+        RoundManagerFactory deprecatingRmFactory = RoundManagerFactory(0x9E2A3a07711Ce4b5A2F4D62a5c8f8B5307Af9C34);
+
+        // Newly deployed factories that we want to use
+        IssuanceManagerFactory imFactory = IssuanceManagerFactory(0xD353972D7955F421d94d0eA8c42c88c417F7155A);
+        RoundManagerFactory rmFactory = RoundManagerFactory(0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9);
+
+        vm.startBroadcast(deployerPrivateKey);
+
+        // Replace CyberCorpFactory's IssuanceManagerFactory with the newly deployed ones
+        // Set new IssuanceManager's reference implementation to the old one since they are functionally identical
+        address refIm = deprecatingImFactory.getRefImplementation();
+        imFactory.setRefImplementation(refIm);
+        cyberCorpFactory.setIssuanceManagerFactory(address(imFactory));
+        vm.assertEq(cyberCorpFactory.issuanceManagerFactory(), address(imFactory), "unexpected IssuanceManagerFactory");
+        vm.assertEq(imFactory.getRefImplementation(), refIm, "unexpected IssuanceManager reference implementation");
+        console2.log("CyberCorpFactory.issuanceManagerFactory set to: %s", address(imFactory));
+
+        // Replace CyberCorpFactory's RoundManagerFactory with the newly deployed ones
+        cyberCorpFactory.setRoundManagerFactory(address(rmFactory));
+        vm.assertEq(cyberCorpFactory.roundManagerFactory(), address(rmFactory), "unexpected RoundManagerFactory");
+        console2.log("CyberCorpFactory.roundManagerFactory set to: %s", address(rmFactory));
 
         // Load all known cyber corps
         address[] memory knownLegacyCyberCorps = KnownAddressesLoader.load(block.chainid, "/script/res/known-cyber-corps.json", maxCount);
         // TODO WIP
 //        address[] memory knownDevV3CyberCorps = KnownAddressesLoader.load(block.chainid, "/script/res/known-dev-v3-cyber-corps.json", maxCount);
-
-        vm.startBroadcast(deployerPrivateKey);
 
         // Deploy temporary contracts for migration
 

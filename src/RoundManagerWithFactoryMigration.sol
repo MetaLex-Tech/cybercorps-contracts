@@ -48,7 +48,7 @@ import {IRoundManagerFactory} from "./interfaces/IRoundManagerFactory.sol";
 
 contract RoundManagerWithFactoryMigration is RoundManager {
 
-    address public constant NEW_UPGRADE_FACTORY = 0xb1914126c0a559F03e321C2d7Ad452D502808285; // TODO TBD
+    address public constant NEW_UPGRADE_FACTORY = 0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9;
 
     /// @notice Migrate legacy contracts and set upgradeFactory to the known new contract (for reference implementation lookup)
     /// @dev Since the migration target is predefined, it doesn't matter who called it or when it is called

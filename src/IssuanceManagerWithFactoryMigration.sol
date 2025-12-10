@@ -48,7 +48,7 @@ import {IIssuanceManagerFactory} from "./interfaces/IIssuanceManagerFactory.sol"
 
 contract IssuanceManagerWithFactoryMigration is IssuanceManager {
 
-    address public constant NEW_UPGRADE_FACTORY = 0xfC115b93116fc501ceDD8C9CfcD816a77d7558d7; // TODO TBD
+    address public constant NEW_UPGRADE_FACTORY = 0xD353972D7955F421d94d0eA8c42c88c417F7155A;
 
     /// @notice Migrate legacy contracts and set upgradeFactory to the known new contract (for reference implementation lookup)
     /// @dev Since the migration target is predefined, it doesn't matter who called it or when it is called

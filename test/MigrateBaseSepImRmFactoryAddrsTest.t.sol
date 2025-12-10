@@ -7,7 +7,7 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 import {CyberCorpHelper} from "../test/RoundManagerTest.t.sol";
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {UpgradePublicRoundsBaseSepoliaScript} from "../script/upgrade-public-rounds-base-sep.s.sol";
-import {MigrateBaseSepImRmFactoryAddrsScript} from "../script/migrate-base-sep-im-rm-factory-addrs.s.sol";
+import {UpgradeAndMigrateBaseSepImRmFactoryAddrsScript} from "../script/upgrade-and-migrate-base-sep-im-rm-factory-addrs.s.sol";
 import {GnosisTransaction} from "../script/libs/safe.sol";
 import {ILegacyFactory} from "../script/interfaces/ILegacyFactory.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
@@ -77,7 +77,7 @@ contract MigrateBaseSepImRmFactoryAddrsTest is Test {
         console2.log("newRmFactory:", address(newRmFactory));
 
         // simulate migrations
-        (new MigrateBaseSepImRmFactoryAddrsScript()).runWithArgs(
+        (new UpgradeAndMigrateBaseSepImRmFactoryAddrsScript()).runWithArgs(
             deployerPrivateKey,
             new uint256[](0), // TODO WIP
             3
