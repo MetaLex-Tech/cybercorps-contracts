@@ -67,20 +67,11 @@ contract MigrateBaseSepImRmFactoryAddrsTest is Test {
         ); // so deployer can grant cyberCorpFactory permissions to it
         vm.stopPrank();
 
-        // simulate real deployer deploys IssuanceManagerFactory and RoundManagerFactory on base-sepolia
-        (
-            IssuanceManagerFactory newImFactory,
-            RoundManagerFactory newRmFactory
-        ) = (new UpgradePublicRoundsBaseSepoliaScript()).runWithArgs(deployerPrivateKey);
-
-        console2.log("newImFactory:", address(newImFactory));
-        console2.log("newRmFactory:", address(newRmFactory));
-
         // simulate migrations
         (new UpgradeAndMigrateBaseSepImRmFactoryAddrsScript()).runWithArgs(
             deployerPrivateKey,
-            new uint256[](0), // TODO WIP
-            3
+            vm.envUint("CORP_OWNER_PKS", ","), // deployer is also the test corp owner
+            4
         );
 
         // Revoke deployer admin access
@@ -92,90 +83,4 @@ contract MigrateBaseSepImRmFactoryAddrsTest is Test {
 
     function test_SanityCheck() public {
     }
-
-    // TODO deprecated
-//    function _simulateRealBaseSepoliaRedeployment() internal {
-//        address realDeployer = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
-//        vm.label(realDeployer, "realDeployer");
-//
-//        bytes32 salt = bytes32(
-//            keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3.0.1")
-//        );
-//
-//        address auth = address(cyberCorpFactory.AUTH());
-//
-//        vm.startPrank(realDeployer);
-//
-//        // 1) Deploy RoundManagerFactory
-//        RoundManagerFactory roundManagerFactory = RoundManagerFactory(address(
-//            new ERC1967Proxy{salt: salt}(
-//                address(new RoundManagerFactory{salt: salt}()),
-//                abi.encodeWithSelector(
-//                    RoundManagerFactory.initialize.selector,
-//                    address(auth),
-//                    address(new RoundManager{salt: salt}())
-//                )
-//            )
-//        ));
-//        console2.log(
-//            "RoundManagerFactory deployed:",
-//            address(roundManagerFactory)
-//        );
-//
-//        roundManagerFactory.setWhitelistedToken(address(usdc), true);
-//
-//        // 2) Set the RoundManagerFactory address in CyberCorpFactory
-//        cyberCorpFactory.setRoundManagerFactory(address(roundManagerFactory));
-//        console2.log(
-//            "CyberCorpFactory.roundManagerFactory set to:",
-//            address(roundManagerFactory)
-//        );
-//
-//        // 3) Deploy new IssuanceManagerFactory
-//        // Deploy new reference implementations
-//        IssuanceManager refIm = new IssuanceManager{salt: salt}();
-//        CyberCertPrinter refCertPrinter = new CyberCertPrinter{salt: salt}();
-//        CyberScrip refScrip = new CyberScrip{salt: salt}();
-//        console2.log(
-//            "New IssuanceManager implementation:",
-//            address(refIm)
-//        );
-//        console2.log(
-//            "New CyberCertPrinter implementation:",
-//            address(refCertPrinter)
-//        );
-//        console2.log(
-//            "New CyberScrip implementation:",
-//            address(refScrip)
-//        );
-//        // Deploy new UUPSUpgradeable
-//        IssuanceManagerFactory newImFactory = IssuanceManagerFactory(
-//            address(
-//                new ERC1967Proxy{salt: salt}(
-//                    address(new IssuanceManagerFactory{salt: salt}()),
-//                    abi.encodeWithSelector(
-//                        IssuanceManagerFactory.initialize.selector,
-//                        address(auth),
-//                        address(refIm),
-//                        address(refCertPrinter),
-//                        address(refScrip)
-//                    )
-//                )
-//            )
-//        );
-//        console2.log(
-//            "IssuanceManagerFactory deployed:",
-//            address(newImFactory)
-//        );
-//        // Replace the old one in CyberCorpFactory
-//        cyberCorpFactory.setIssuanceManagerFactory(address(newImFactory));
-//        // Verify the upgrade was successful
-//        vm.assertEq(newImFactory.getRefImplementation(), address(refIm), "unexpected IssuanceManager reference implementation");
-//        console2.log(
-//            "CyberCorpFactory.issuanceManagerFactory set to:",
-//            address(newImFactory)
-//        );
-//
-//        vm.stopPrank();
-//    }
 }

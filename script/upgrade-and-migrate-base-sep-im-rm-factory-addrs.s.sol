@@ -34,7 +34,7 @@ contract UpgradeAndMigrateBaseSepImRmFactoryAddrsScript is Script {
     function run() public {
         runWithArgs(
             vm.envUint("PRIVATE_KEY_MAIN"), // deployerPrivateKey
-            new uint256[](0), // corpOwnerPrivateKeys
+            vm.envUint("CORP_OWNER_PKS", ","), // corpOwnerPrivateKeys
             type(uint256).max // maxCount
         );
     }
@@ -128,6 +128,13 @@ contract UpgradeAndMigrateBaseSepImRmFactoryAddrsScript is Script {
         for (uint256 i = 0; i < knownLegacyCyberCorps.length; i++) {
             CyberCorp corp = CyberCorp(knownLegacyCyberCorps[i]);
 
+            // If we don't have the corp owner's private key, we will skip migrating the corp completely so it does not stuck in an intermediate state
+            uint256 corpOwnerPrivateKey = corpOwnerPrivateKeyLookup[corp.companyPayable()];
+            if (corpOwnerPrivateKey == 0) {
+                console2.log("private key not found for legacy corp owner: %s, skipping corp: %s", corp.companyPayable(), address(corp));
+                continue;
+            }
+
             // Sanity check: all other factories should match
             vm.assertEq(
                 corp.upgradeFactory(),
@@ -154,10 +161,7 @@ contract UpgradeAndMigrateBaseSepImRmFactoryAddrsScript is Script {
             vm.stopBroadcast();
 
             // Migrate legacy corp's RoundManager (UUPSUpgradeable-based, need co-approval)
-
-            // TODO WIP: simulate co-approval for now, in production we should use `corpOwnerPrivateKeyLookup`
-//            vm.startBroadcast(corpOwnerPrivateKeyLookup[corp.companyPayable()]);
-            vm.startPrank(corp.companyPayable());
+            vm.startBroadcast(corpOwnerPrivateKey);
 
             // Accept round manager upgrade to the temporary implementation with migration feature
             RoundManagerWithFactoryMigration rm = RoundManagerWithFactoryMigration(corp.roundManager());
@@ -171,8 +175,7 @@ contract UpgradeAndMigrateBaseSepImRmFactoryAddrsScript is Script {
                 string(abi.encodePacked("legacy cyberCorp: ", vm.toString(address(corp)), " should point to the current RoundManagerFactory after migration"))
             );
 
-//            vm.stopBroadcast();
-            vm.stopPrank();
+            vm.stopBroadcast();
 
             console2.log("Migrated legacy CyberCorp: %s", address(corp));
         }
@@ -180,6 +183,13 @@ contract UpgradeAndMigrateBaseSepImRmFactoryAddrsScript is Script {
         // 6) Migrate each dev-v3 corp one-by-one
         for (uint256 i = 0; i < knownDevV3CyberCorps.length; i++) {
             CyberCorp corp = CyberCorp(knownDevV3CyberCorps[i]);
+
+            // If we don't have the corp owner's private key, we will skip migrating the corp completely so it does not stuck in an intermediate state
+            uint256 corpOwnerPrivateKey = corpOwnerPrivateKeyLookup[corp.companyPayable()];
+            if (corpOwnerPrivateKey == 0) {
+                console2.log("private key not found for dev-v3 corp owner: %s, skipping corp: %s", corp.companyPayable(), address(corp));
+                continue;
+            }
 
             // Sanity check: all other factories should match
             vm.assertEq(
@@ -192,10 +202,8 @@ contract UpgradeAndMigrateBaseSepImRmFactoryAddrsScript is Script {
                 address(dmFactory),
                 string(abi.encodePacked("legacy cyberCorp: ", vm.toString(address(corp)), " should point to the current DealManagerFactory"))
             );
-
-            // TODO WIP: simulate co-approval for now, in production we should use `corpOwnerPrivateKeyLookup`
-//            vm.startBroadcast(corpOwnerPrivateKeyLookup[corp.companyPayable()]);
-            vm.startPrank(corp.companyPayable());
+            
+            vm.startBroadcast(corpOwnerPrivateKey);
 
             // Migrate legacy corp's IssuanceManager (UUPSUpgradeable-based, need co-approval)
             // Accept round manager upgrade to the temporary implementation with migration feature
@@ -223,8 +231,7 @@ contract UpgradeAndMigrateBaseSepImRmFactoryAddrsScript is Script {
                 string(abi.encodePacked("legacy cyberCorp: ", vm.toString(address(corp)), " should point to the current RoundManagerFactory after migration"))
             );
 
-//            vm.stopBroadcast();
-            vm.stopPrank();
+            vm.stopBroadcast();
 
             console2.log("Migrated dev-v3 CyberCorp: %s", address(corp));
         }
