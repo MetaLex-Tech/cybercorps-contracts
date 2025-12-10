@@ -71,6 +71,10 @@ interface IRoundManagerInit {
     ) external;
 }
 
+interface ICyberCorpLocal {
+    function issuanceManager() external view returns (address);
+}
+
 contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     using RoundLib for Round;
     error InvalidSalt();
@@ -492,7 +496,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             address(BorgAuthACL(cyberCorpAddress).AUTH()),
             cyberCorpAddress,
             registryAddress,
-            ICyberCorp(cyberCorpAddress).issuanceManager(),
+            ICyberCorpLocal(cyberCorpAddress).issuanceManager(),
             roundManagerFactory
         );
 

@@ -32,7 +32,7 @@ contract UpgradePublicRoundsScript is Script {
     function run() public {
         // Config
         bytes32 salt = bytes32(
-            keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3.0.2")
+            keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3.0.1")
         );
         
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
@@ -94,7 +94,7 @@ contract UpgradePublicRoundsScript is Script {
                 abi.encodeWithSelector(
                     RoundManagerFactory.initialize.selector,
                     address(auth),
-                    address(new RoundManager())
+                    address(new RoundManager{salt: salt}())
                 )
             )
         ));
@@ -365,9 +365,6 @@ contract UpgradePublicRoundsScript is Script {
 
         CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(56)), "cySPA + REG D SAFT", "IPFS://bafybeidfbgwv35cu22ouwdpmho35gicfnkno2em7ngjn4mbhbiogvvaf7i", globalFieldsSaft, partyFields);
         CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(57)), "cySPA + REG S SAFT", "IPFS://bafybeibjm2mss4ctfsyajehtwnmje3aa2agif5n47i575pxdejrk7dee5m", globalFieldsSaft, partyFields);
-
-
-
 
         vm.stopBroadcast();
 

@@ -29,7 +29,7 @@ contract BaseScript is Script {
 
         address registry = address(CyberAgreementRegistry(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134));
 
-              string[] memory globalFieldsSafe = new string[](5);
+        string[] memory globalFieldsSafe = new string[](5);
         globalFieldsSafe[0] = "purchaseAmount";
         globalFieldsSafe[1] = "postMoneyValuationCap";
         globalFieldsSafe[2] = "expirationTime";
