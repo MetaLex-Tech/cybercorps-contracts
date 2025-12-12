@@ -288,7 +288,7 @@ contract UpgradePublicRoundsScript is Script {
         );
 
         //update templates
-/*
+
         string[] memory globalFieldsSafe = new string[](5);
         globalFieldsSafe[0] = "purchaseAmount";
         globalFieldsSafe[1] = "postMoneyValuationCap";
@@ -364,7 +364,7 @@ contract UpgradePublicRoundsScript is Script {
 
         CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(56)), "cySPA + REG D SAFT", "IPFS://bafybeidfbgwv35cu22ouwdpmho35gicfnkno2em7ngjn4mbhbiogvvaf7i", globalFieldsSaft, partyFields);
         CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(57)), "cySPA + REG S SAFT", "IPFS://bafybeibjm2mss4ctfsyajehtwnmje3aa2agif5n47i575pxdejrk7dee5m", globalFieldsSaft, partyFields);
-        */
+        
         vm.stopBroadcast();
 
         console.log("CyberCorpFactory:", address(factoryProxy));

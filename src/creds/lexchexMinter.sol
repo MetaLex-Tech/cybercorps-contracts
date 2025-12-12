@@ -212,7 +212,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
         emit MintCompleted(request.owner, tokenId, agreementId);
     }
 
-    /// @notice Admin-only path to mint for a user without an authority signature
+    /// @notice Admin-only path to mint for autominting with certain conditions in investing
     /// @dev Mirrors requestMint but gated by onlyAdmin and skips _verifyAuthoritySignature
     function requestMintFor(
         MintRequest calldata request,
@@ -247,6 +247,10 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
             uuid: request.uuid
         });
 
+        //if expiryDate is > 90 days, cap at 90 days from now
+        if(request.expiry > block.timestamp + 90 days) 
+            request.expiry = block.timestamp + 90 days;
+        
         // 3. Create and sign agreement
         agreementId = ICyberAgreementRegistry(dealRegistry).createContract(
             _templateId,
@@ -277,6 +281,34 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         emit MintRequested(request.owner, request.mintPrice, agreementId);
         emit MintCompleted(request.owner, tokenId, agreementId);
+    }
+
+    /// @notice Admin-only direct mint without creating an agreement
+    /// @dev Simplest path for admin-approved accreditations - mints directly with agreementId = 0
+    function adminMintFor(
+        MintRequest calldata request
+    ) external onlyAdmin returns (uint256 tokenId) {
+
+        // Create accreditation struct without agreement
+        Accreditation memory acc = Accreditation({
+            agreementId: bytes32(0), // No agreement for admin direct mints
+            registryAddress: dealRegistry,
+            investorName: request.investorName,
+            investorType: request.investorType,
+            investorJurisdiction: request.investorJurisdiction,
+            investorContact: request.investorContact,
+            issuanceDate: block.timestamp,
+            expiryDate: request.expiry,
+            voided: "",
+            signature: "",
+            uuid: request.uuid
+        });
+
+        // Mint directly
+        tokenId = LeXcheX(lexchex).mint(request.owner, acc);
+
+        emit MintRequested(request.owner, request.mintPrice, bytes32(0));
+        emit MintCompleted(request.owner, tokenId, bytes32(0));
     }
 
     function requestRenewal(
