@@ -48,6 +48,7 @@ import "../interfaces/ICondition.sol";
 import "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/ILexChex.sol";
+import "../interfaces/IRoundManagerFactory.sol";
 import "../libs/EIP712Lib.sol";
 import "../libs/RoundLib.sol";
 import "../storage/LexScrowStorage.sol";
@@ -250,13 +251,14 @@ library RoundManagerStorage {
         );
 
         // Emulates LexScroWLite.createEscrow() as we couldn't call it in a library
+        uint256 expiryForEscrow = round.allowTimedOffers ? eoi.expiry : round.endTime;
         ls.escrows[agreementId] = Escrow({
             agreementId: agreementId,
             counterParty: counterParty,
             corpAssets: corpAssets,
             buyerAssets: buyerAssets,
             signature: abi.encodePacked(bytes32(0)),
-            expiry: eoi.expiry,
+            expiry: expiryForEscrow,
             status: EscrowStatus.PENDING
         });
 
@@ -315,9 +317,10 @@ library RoundManagerStorage {
         }
 
         //add lexchex if public round
-        if (round.publicRound && getLexChexCondition() != address(0)) {
+        //Commenting this out as we are letting our front end handle this
+        /*if (round.publicRound && getLexChexCondition() != address(0)) {
             ls.conditionsByEscrow[agreementId].push(ICondition(getLexChexCondition()));
-        }
+        }*/
     }
 
     /// @notice Allocates an amount to an EOI and finalizes the deal
@@ -352,11 +355,38 @@ library RoundManagerStorage {
                 );
         }
 
-        // Calculate units and investment USD based on usedAmount (rounded down to pricePerUnit)
-        uint256 units = allocatedAmount / round.pricePerUnit;
-        usedAmount = units * round.pricePerUnit;
+        // Calculate units with 1e18 pricePerUnit; convert token amounts <-> 1e18 as needed
+        // Since the entire process:
+        // 1. convert from payment decimals
+        // 2. round-down based on fractional units
+        // 3. convert to decimals
+        // is always rounding down, it is guaranteed that `usedAmount <= allocatedAmount` and the dust will be refunded
+
         uint8 paymentDecimals = IERC20Metadata(round.paymentToken).decimals();
-        uint256 investmentUSD = usedAmount / (10 ** paymentDecimals);
+        uint256 allocatedAmount1e18 = allocatedAmount;
+        if (paymentDecimals < 18) {
+            allocatedAmount1e18 = allocatedAmount * (10 ** (18 - paymentDecimals));
+        } else if (paymentDecimals > 18) {
+            allocatedAmount1e18 = allocatedAmount / (10 ** (paymentDecimals - 18));
+        }
+
+        // Support fractional units: 18-decimal units precision
+        uint256 units = (allocatedAmount1e18 * 1e18) / round.pricePerUnit;
+        uint256 usedAmount1e18 = (units * round.pricePerUnit) / 1e18;
+
+        // Convert used amount back to token units for escrow/refunds/raised
+        uint256 usedAmountToken = usedAmount1e18;
+        if (paymentDecimals < 18) {
+            usedAmountToken = usedAmount1e18 / (10 ** (18 - paymentDecimals));
+        } else if (paymentDecimals > 18) {
+            usedAmountToken = usedAmount1e18 * (10 ** (paymentDecimals - 18));
+        }
+        usedAmount = usedAmountToken;
+
+        // Since the conversion from `usedAmount1e18` to `usedAmountToken` is always rounding down,
+        // it is guaranteed that `real(usedAmountToken) <= real(investmentUSD)`
+        // and the investor would never pay more than documented in the certificates
+        uint256 investmentUSD = usedAmount1e18; // 18-decimal USD precision
 
         // Create certificate
         string memory officerName = round.officerName;
@@ -423,17 +453,20 @@ library RoundManagerStorage {
         }
 
         // Effect: Calculate refund amount (includes any dust from unit rounding) and update escrowed amount
-        refund = escrow.buyerAssets[0].amount - usedAmount;
-        escrow.buyerAssets[0].amount = usedAmount;
+        refund = escrow.buyerAssets[0].amount - usedAmountToken;
+        escrow.buyerAssets[0].amount = usedAmountToken;
 
         //if the round is public and the eoi submitter does not have a valid lexchex, mint it
-        if (round.publicRound && !ILexChex(getLexChex()).hasValidLexCheX(escrow.counterParty)) {
-            //mint lexchex if over 200k for individual or 1 million for corporate, account for decimals of the payment token
-            if (usedAmount >= 200000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && eoi.naturalPerson) {
-            (, tokenId) = ILexChexMinter(getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
-            }
-            if (usedAmount >= 1000000 * (10 ** IERC20Metadata(round.paymentToken).decimals()) && !eoi.naturalPerson) {
+        if (!ILexChex(getLexChex()).hasValidLexCheX(escrow.counterParty)) {
+            // Check if payment token is whitelisted
+            if (IRoundManagerFactory(getUpgradeFactory()).isWhitelistedToken(round.paymentToken)) {
+                // mint lexchex if over 200k for individual or 1 million for corporate using 18-decimal precision
+                if (usedAmount1e18 >= 200000 * 1e18 && eoi.naturalPerson) {
                     (, tokenId) = ILexChexMinter(getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
+                }
+                if (usedAmount1e18 >= 1000000 * 1e18 && !eoi.naturalPerson) {
+                    (, tokenId) = ILexChexMinter(getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
+                }
             }
         }
     }

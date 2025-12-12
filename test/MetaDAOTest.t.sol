@@ -2,10 +2,13 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
+import {DeployMetaDAOFactoryScript} from "../script/deploy-metadao-factory.s.sol";
 import {MetaDAOFactory} from "../src/MetaDAOFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
+import {CyberCorp} from "../src/CyberCorp.sol";
 import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
 import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
@@ -30,208 +33,481 @@ contract MockPaymentToken is ERC20 {
 }
 
 contract MetaDAOTest is Test {
-    uint256 private ownerPrivKey;
-    address private owner;
-    uint256 private investorPrivKey;
-    address private investor;
+    uint256 private deployerPrivKey;
+    address private deployer;
+    uint256 private metaDAOPrivKey;
+    address private metaDAO;
+    uint256 private founderPrivKey;
+    address private founder;
+    uint256 private alicePrivKey;
+    address private alice;
 
-    function test_deployCyberCorpAndCreateOffer_Reverts_NotFinalizer() public {
+    CyberAgreementRegistry public registry;
+    MetaDAOFactory public factory;
+
+    string public segCoTemplateTitle = "MetaDAO Futarchy Governance SPC - SegCo combined v 1.0";
+    bytes32 public segCoTemplateId = keccak256(bytes(segCoTemplateTitle));
+    string public segCoTemplateUri = "ipfs://bafybeifpvfwxfmobk7nhflsczqiynp3ca5urvyk3duh7s3rwptcnfzhuje";
+
+    string public boardConsentTemplateTitle = "MetaDAO Futarchy Governance SPC - Board Consent - Approval of SegCo v 1.0";
+    bytes32 public boardConsentTemplateId = keccak256(bytes(boardConsentTemplateTitle));
+    string public boardConsentTemplateUri = "ipfs://bafkreic7dscoigvwjc23vzvkmzophm34kpafu6nrctykq5bif63lqvpuoa";
+
+    string[] public globalFields;
+    string[] public partyFields;
+
+    function setUp() public {
         // Keys
-        ownerPrivKey = 0xA0A0;
-        owner = vm.addr(ownerPrivKey);
-        investorPrivKey = 0xB0B0;
-        investor = vm.addr(investorPrivKey);
-        vm.startPrank(owner);
-        // Bootstrap auth
-        bytes32 salt = keccak256(abi.encodePacked("metadao-infra", owner));
-        BorgAuth bootstrapAuth = new BorgAuth{salt: salt}(owner);
+        (deployer, deployerPrivKey) = makeAddrAndKey("deployer");
+        (metaDAO, metaDAOPrivKey) = makeAddrAndKey("metaDAO");
+        (founder, founderPrivKey) = makeAddrAndKey("founder");
+        (alice, alicePrivKey) = makeAddrAndKey("alice");
 
-        // Registry (proxy)
-        CyberAgreementRegistry registry = CyberAgreementRegistry(
-            address(
-                new ERC1967Proxy{salt: salt}(
-                    address(new CyberAgreementRegistry{salt: salt}()),
-                    abi.encodeWithSelector(
-                        CyberAgreementRegistry.initialize.selector,
-                        address(bootstrapAuth)
-                    )
-                )
-            )
+        // Deploy MetaDAO factories with production scripts
+        (registry, factory) = (new DeployMetaDAOFactoryScript()).run(
+            deployerPrivKey, // deployerPrivateKey
+            metaDAO, // multisig
+            hex"63f62ac9b08c813401a02a16a820a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1b" // metadaoEscrowSig
         );
 
-        // UriBuilder (proxy)
-        address uriBuilder = address(
-            new ERC1967Proxy{salt: salt}(
-                address(new CertificateUriBuilder{salt: salt}()),
-                abi.encodeWithSelector(
-                    CertificateUriBuilder.initialize.selector,
-                    address(bootstrapAuth)
-                )
-            )
-        );
+        globalFields = new string[](8);
+        globalFields[0] = "founderName";
+        globalFields[1] = "enterpriseName";
+        globalFields[2] = "companyName";
+        globalFields[3] = "companyType";
+        globalFields[4] = "companyJurisdiction";
+        globalFields[5] = "companyContactDetails";
+        globalFields[6] = "tokenSymbol";
+        globalFields[7] = "tokenName";
+        partyFields = new string[](2);
+        partyFields[0] = "name";
+        partyFields[1] = "contactDetails";
+    }
 
-        // Factories
-        address issuanceManagerFactoryAddr = address(new IssuanceManagerFactory{salt: salt}(address(bootstrapAuth)));
-        address cyberCorpSingleFactory = address(new CyberCorpSingleFactory{salt: salt}(address(bootstrapAuth)));
-        address dealManagerFactory = address(
-            new ERC1967Proxy{salt: salt}(
-                address(new DealManagerFactory{salt: salt}()),
-                abi.encodeWithSelector(
-                    DealManagerFactory.initialize.selector,
-                    address(bootstrapAuth),
-                    address(new DealManager())
-                )
-            )
-        );
-        address roundManagerFactory = address(
-            new ERC1967Proxy{salt: salt}(
-                address(new RoundManagerFactory{salt: salt}()),
-                abi.encodeWithSelector(
-                    RoundManagerFactory.initialize.selector,
-                    address(bootstrapAuth),
-                    address(new RoundManager())
-                )
-            )
-        );
+    function test_metadata() public {
+        // Verify template for SegCo combined agreement
+        {
+            (
+                string memory legalContractUri,
+                string memory title,
+                string[] memory _globalFields,
+                string[] memory _partyFields
+            ) = registry.getTemplateDetails(segCoTemplateId);
+            assertEq(legalContractUri, segCoTemplateUri);
+            assertEq(title, segCoTemplateTitle);
+            assertEq(_globalFields, globalFields);
+            assertEq(_partyFields, partyFields);
+        }
 
-        // Implementations
-        address certPrinterImpl = address(new CyberCertPrinter{salt: salt}());
-        address cyberScripImpl = address(new CyberScrip{salt: salt}());
+        // Verify template for Board Consent
+        {
+            (
+                string memory legalContractUri,
+                string memory title,
+                string[] memory _globalFields,
+                string[] memory _partyFields
+            ) = registry.getTemplateDetails(boardConsentTemplateId);
+            assertEq(legalContractUri, boardConsentTemplateUri);
+            assertEq(title, boardConsentTemplateTitle);
+            assertEq(_globalFields, globalFields);
+            assertEq(_partyFields, partyFields);
+        }
+    }
 
-        // Stable token
-        MockPaymentToken usdc = new MockPaymentToken();
-
-        // MetaDAOFactory (proxy)
-        MetaDAOFactory factory = MetaDAOFactory(
-            address(
-                new ERC1967Proxy{salt: salt}(
-                    address(new MetaDAOFactory{salt: salt}()),
-                    abi.encodeWithSelector(
-                        MetaDAOFactory.initialize.selector,
-                        address(bootstrapAuth),
-                        address(registry),
-                        certPrinterImpl,
-                        cyberScripImpl,
-                        issuanceManagerFactoryAddr,
-                        cyberCorpSingleFactory,
-                        dealManagerFactory,
-                        roundManagerFactory,
-                        uriBuilder,
-                        address(usdc)
-                    )
-                )
-            )
-        );
-
-        // Set up MetaDAO owner and officer on factory
-        uint256 metaDAOPrivKey = 0xD00D;
-        address metaDAO = vm.addr(metaDAOPrivKey);
-
-        BorgAuth(address(factory.AUTH())).updateRole(metaDAO, 99);
-        vm.stopPrank();
-        CompanyOfficer memory metaOfficer = CompanyOfficer({
-            eoa: metaDAO,
-            name: "Officer",
-            contact: "metadao@example.com",
-            title: "CEO"
-        });
-        vm.prank(metaDAO);
-        factory.setMetaDAOOfficer(metaOfficer);
-        vm.prank(metaDAO);
-        factory.setMetaDAOSignatureHash(abi.encodePacked("META_ESCROW_SIG"));
-
-        // Template with 1 global + 1 party field
-        bytes32 templateId = bytes32("TEST_TEMPLATE");
-        string[] memory globalFields = new string[](1);
-        globalFields[0] = "Global Field";
-        string[] memory partyFields = new string[](1);
-        partyFields[0] = "Party Field";
-        vm.prank(owner);
-        registry.createTemplate(templateId, "MetaDAO", "ipfs://template", globalFields, partyFields);
-
-        // Officer
-        CompanyOfficer memory officer = CompanyOfficer({
-            eoa: owner,
-            name: "Officer",
-            contact: "officer@example.com",
-            title: "CEO"
-        });
-
-        // Cert data
-        MetaDAOFactory.CyberCertData[] memory certData = new MetaDAOFactory.CyberCertData[](1);
-        string[] memory defaultLegend = new string[](1);
-        defaultLegend[0] = "Legend";
-        certData[0] = MetaDAOFactory.CyberCertData({
-            name: "Equity",
-            symbol: "EQ",
-            uri: "ipfs://eq",
-            securityClass: SecurityClass.CommonStock,
-            securitySeries: SecuritySeries.NA,
-            extension: address(0),
-            defaultLegend: defaultLegend
-        });
-
-        // Certificate details
-        CertificateDetails[] memory details = new CertificateDetails[](1);
-        details[0] = CertificateDetails({
-            signingOfficerName: "Officer",
-            signingOfficerTitle: "CEO",
-            investmentAmountUSD: 10_000 * 10 ** usdc.decimals(),
-            issuerUSDValuationAtTimeOfInvestment: 10_000_000,
-            unitsRepresented: 0,
-            legalDetails: "",
-            extensionData: ""
-        });
-
+    function test_deployMetaDAOContractFor() public {
         // Parties and values
-        address[] memory parties = new address[](2);
-        parties[0] = owner;    // corp
-        parties[1] = investor; // buyer
-
-        string[] memory globalValues = new string[](1);
-        globalValues[0] = "G";
-
-        string[][] memory partyValues = new string[][](1);
-        partyValues[0] = new string[](1);
-        partyValues[0][0] = "Officer";
+        string[] memory globalValues = _getDefaultGlobalValues();
+        string[][] memory partyValues = _getDefaultPartyValues();
 
         // Compute agreementId and signer signature for deployer (who will sign)
         uint256 saltUint = 1;
-        uint256 deployerPrivKey = 0xA1A1;
-        address deployer = vm.addr(deployerPrivKey);
         // Parties must match what factory will set: [metaDAOOfficer.eoa, deployer]
+        address[] memory parties = new address[](2);
         parties[0] = metaDAO;
-        parties[1] = deployer;
-        bytes32 contractId = keccak256(abi.encode(templateId, saltUint, globalValues, parties));
+        parties[1] = founder;
+        bytes32 contractId = keccak256(abi.encode(segCoTemplateId, saltUint, globalValues, parties));
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
             contractId,
-            "ipfs://template",
+            segCoTemplateUri,
             globalFields,
             partyFields,
             globalValues,
-            partyValues[0],
-            deployerPrivKey
+            partyValues[1],
+            founderPrivKey
         );
 
-        vm.prank(deployer);
+        vm.startPrank(founder);
         factory.deployMetaDAOContractFor(
             saltUint,
-            "Corp Meta",
-            "corporation",
-            "DE",
-            "contact",
+            "testcorp S.P., a segregated portfolio of Futarchy Governance SPC",
+            "Segregated Portfolio of Segregated Portfolio Company",
+            "Cayman Islands",
+            "email@testcorp.com",
             "arbitration",
-            deployer,
-            officer,
-            templateId,
+            founder,
+            _getDefaultCorpOfficer(),
+            segCoTemplateId,
+            boardConsentTemplateId,
             globalValues,
-            partyValues,
+            partyValues[1],
             signature,
-            deployer // deployer param
+            founder
+        );
+        vm.stopPrank();
+
+        address[] memory meetingNotesParties = new address[](1);
+        meetingNotesParties[0] = metaDAO;
+        _verifyContractsDefault(
+            contractId,
+            keccak256(abi.encode(boardConsentTemplateId, saltUint, globalValues, meetingNotesParties))
         );
     }
-}
 
+    function test_deployMetaDAOContractForOnBehalf() public {
+        // Parties and values
+        string[] memory globalValues = _getDefaultGlobalValues();
+        string[][] memory partyValues = _getDefaultPartyValues();
+
+        // Compute agreementId and signer signature for deployer (who will sign)
+        uint256 saltUint = 1;
+        // Parties must match what factory will set: [metaDAOOfficer.eoa, deployer]
+        address[] memory parties = new address[](2);
+        parties[0] = metaDAO;
+        parties[1] = founder;
+        bytes32 contractId = keccak256(abi.encode(segCoTemplateId, saltUint, globalValues, parties));
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            segCoTemplateUri,
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[1],
+            founderPrivKey
+        );
+
+        // deploy on behalf of founder should also work as long as the signature is correct
+        vm.startPrank(alice);
+        factory.deployMetaDAOContractFor(
+            saltUint,
+            "testcorp S.P., a segregated portfolio of Futarchy Governance SPC",
+            "Segregated Portfolio of Segregated Portfolio Company",
+            "Cayman Islands",
+            "email@testcorp.com",
+            "arbitration",
+            founder,
+            _getDefaultCorpOfficer(),
+            segCoTemplateId,
+            boardConsentTemplateId,
+            globalValues,
+            partyValues[1],
+            signature,
+            founder
+        );
+        vm.stopPrank();
+
+        address[] memory meetingNotesParties = new address[](1);
+        meetingNotesParties[0] = metaDAO;
+        _verifyContractsDefault(
+            contractId,
+            keccak256(abi.encode(boardConsentTemplateId, saltUint, globalValues, meetingNotesParties))
+        );
+    }
+
+    function test_RevertIf_deployMetaDAOContractForWrongSignature() public {
+        // Parties and values
+        string[] memory globalValues = _getDefaultGlobalValues();
+        string[][] memory partyValues = _getDefaultPartyValues();
+
+        // Compute agreementId and signer signature for deployer (who will sign)
+        uint256 saltUint = 1;
+        // Parties must match what factory will set: [metaDAOOfficer.eoa, deployer]
+        address[] memory parties = new address[](2);
+        parties[0] = metaDAO;
+        parties[1] = founder;
+        bytes32 contractId = keccak256(abi.encode(segCoTemplateId, saltUint, globalValues, parties));
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            segCoTemplateUri,
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[1],
+            alicePrivKey // wrong signature
+        );
+
+        // alice should not be able to deploy with her own signature on behalf of founder
+        vm.startPrank(alice);
+        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        factory.deployMetaDAOContractFor(
+            saltUint,
+            "testcorp S.P., a segregated portfolio of Futarchy Governance SPC",
+            "Segregated Portfolio of Segregated Portfolio Company",
+            "Cayman Islands",
+            "email@testcorp.com",
+            "arbitration",
+            founder,
+            _getDefaultCorpOfficer(),
+            segCoTemplateId,
+            boardConsentTemplateId,
+            globalValues,
+            partyValues[1],
+            signature,
+            founder
+        );
+        vm.stopPrank();
+    }
+
+    function test_RevertIf_deployMetaDAOContractForMismatchGlobalValues() public {
+        // Parties and values
+        string[] memory globalValues = _getDefaultGlobalValues();
+        string[][] memory partyValues = _getDefaultPartyValues();
+
+        // Compute agreementId and signer signature for deployer (who will sign)
+        uint256 saltUint = 1;
+        // Parties must match what factory will set: [metaDAOOfficer.eoa, corpOfficer.eoa]
+        address[] memory parties = new address[](2);
+        parties[0] = metaDAO;
+        parties[1] = founder;
+        bytes32 contractId = keccak256(abi.encode(segCoTemplateId, saltUint, globalValues, parties));
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            segCoTemplateUri,
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[1],
+            founderPrivKey
+        );
+
+        // alice should not be able temper with the field values
+        vm.startPrank(alice);
+        vm.expectRevert(MetaDAOFactory.GlobalOrPartyValuesMismatch.selector);
+        factory.deployMetaDAOContractFor(
+            saltUint,
+            "Alice's Company", // intentionally wrong company name
+            "Segregated Portfolio of Segregated Portfolio Company",
+            "Cayman Islands",
+            "email@testcorp.com",
+            "arbitration",
+            founder,
+            _getDefaultCorpOfficer(),
+            segCoTemplateId,
+            boardConsentTemplateId,
+            globalValues,
+            partyValues[1],
+            signature,
+            founder
+        );
+        vm.stopPrank();
+    }
+
+    function test_RevertIf_deployMetaDAOContractForMismatchOfficerValues() public {
+        // Parties and values
+        string[] memory globalValues = _getDefaultGlobalValues();
+        string[][] memory partyValues = _getDefaultPartyValues();
+
+        // Compute agreementId and signer signature for deployer (who will sign)
+        uint256 saltUint = 1;
+        // Parties must match what factory will set: [metaDAOOfficer.eoa, deployer]
+        address[] memory parties = new address[](2);
+        parties[0] = metaDAO;
+        parties[1] = founder;
+        bytes32 contractId = keccak256(abi.encode(segCoTemplateId, saltUint, globalValues, parties));
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            segCoTemplateUri,
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[1],
+            founderPrivKey
+        );
+
+        CompanyOfficer memory officer = _getDefaultCorpOfficer();
+        // Overwrite with incorrect officer EOA
+        officer.eoa = alice;
+
+        // alice should not be able temper with the officer values
+        vm.startPrank(alice);
+        vm.expectRevert(MetaDAOFactory.OfficerValuesMismatch.selector);
+        factory.deployMetaDAOContractFor(
+            saltUint,
+            "testcorp S.P., a segregated portfolio of Futarchy Governance SPC",
+            "Segregated Portfolio of Segregated Portfolio Company",
+            "Cayman Islands",
+            "email@testcorp.com",
+            "arbitration",
+            founder,
+            officer,
+            segCoTemplateId,
+            boardConsentTemplateId,
+            globalValues,
+            partyValues[1],
+            signature,
+            founder
+        );
+        vm.stopPrank();
+    }
+
+    function _getDefaultGlobalValues() internal returns (string[] memory) {
+        string[] memory globalValues = new string[](8);
+        globalValues[0] = "Founder"; // founderName
+        globalValues[1] = "testcorp"; // enterpriseNAme
+        globalValues[2] = "testcorp S.P., a segregated portfolio of Futarchy Governance SPC"; // companyName
+        globalValues[3] = "Segregated Portfolio of Segregated Portfolio Company"; // companyType
+        globalValues[4] = "Cayman Islands"; // companyJurisdiction
+        globalValues[5] = "email@testcorp.com"; // companyContactDetails
+        globalValues[6] = "TESTCORP"; // tokenSymbol
+        globalValues[7] = "Test Corp"; // tokenName
+        return globalValues;
+    }
+
+    function _getDefaultPartyValues() internal returns (string[][] memory) {
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](2);
+        partyValues[0][0] = "MetaDAO Officer"; // name
+        partyValues[0][1] = "metadao@example.com"; // contactDetails
+        partyValues[1] = new string[](2);
+        partyValues[1][0] = "Founder"; // name
+        partyValues[1][1] = "founder@example.com"; // contactDetails
+        return partyValues;
+    }
+
+    function _getDefaultCorpOfficer() internal returns (CompanyOfficer memory) {
+        return CompanyOfficer({
+            eoa: founder,
+            name: "Founder",
+            contact: "founder@example.com",
+            title: "CEO"
+        });
+    }
+
+    /// @notice This is to make sure contracts fields are created and signed with the expected values because
+    /// they are not strong typed and are error-prone to typos or out of sync across many iterations
+    /// @dev The test assumes all default values
+    function _verifyContractsDefault(bytes32 agreementId, bytes32 meetingNotesId) internal {
+        string[] memory expectedGlobalFields = new string[](8);
+        expectedGlobalFields[0] = "founderName";
+        expectedGlobalFields[1] = "enterpriseName";
+        expectedGlobalFields[2] = "companyName";
+        expectedGlobalFields[3] = "companyType";
+        expectedGlobalFields[4] = "companyJurisdiction";
+        expectedGlobalFields[5] = "companyContactDetails";
+        expectedGlobalFields[6] = "tokenSymbol";
+        expectedGlobalFields[7] = "tokenName";
+
+        string[] memory expectedGlobalValues = new string[](8);
+        expectedGlobalValues[0] = "Founder"; // founderName
+        expectedGlobalValues[1] = "testcorp"; // enterpriseNAme
+        expectedGlobalValues[2] = "testcorp S.P., a segregated portfolio of Futarchy Governance SPC"; // companyName
+        expectedGlobalValues[3] = "Segregated Portfolio of Segregated Portfolio Company"; // companyType
+        expectedGlobalValues[4] = "Cayman Islands"; // companyJurisdiction
+        expectedGlobalValues[5] = "email@testcorp.com"; // companyContactDetails
+        expectedGlobalValues[6] = "TESTCORP"; // tokenSymbol
+        expectedGlobalValues[7] = "Test Corp"; // tokenName
+
+        string[] memory expectedPartyFields = new string[](2);
+        expectedPartyFields[0] = "name";
+        expectedPartyFields[1] = "contactDetails";
+
+        {
+            address[] memory expectedParties = new address[](2);
+            expectedParties[0] = metaDAO;
+            expectedParties[1] = founder;
+
+            string[][] memory expectedPartyValues = new string[][](2);
+            expectedPartyValues[0] = new string[](2);
+            expectedPartyValues[0][0] = "MetaDAO Officer"; // name
+            expectedPartyValues[0][1] = "metadao@example.com"; // contactDetails
+            expectedPartyValues[1] = new string[](2);
+            expectedPartyValues[1][0] = "Founder"; // name
+            expectedPartyValues[1][1] = "founder@example.com"; // contactDetails
+
+            _verifyContractDetails(
+                "SegCo agreement",
+                agreementId,
+                segCoTemplateUri,
+                expectedGlobalFields,
+                expectedPartyFields,
+                expectedGlobalValues,
+                expectedParties,
+                expectedPartyValues,
+                2
+            );
+        }
+
+        {
+            address[] memory expectedParties = new address[](1);
+            expectedParties[0] = metaDAO;
+
+            string[][] memory expectedPartyValues = new string[][](1);
+            expectedPartyValues[0] = new string[](2);
+            expectedPartyValues[0][0] = "MetaDAO Officer"; // name
+            expectedPartyValues[0][1] = "metadao@example.com"; // contactDetails
+
+            _verifyContractDetails(
+                "Board consent",
+                meetingNotesId,
+                boardConsentTemplateUri,
+                expectedGlobalFields,
+                expectedPartyFields,
+                expectedGlobalValues,
+                expectedParties,
+                expectedPartyValues,
+                1
+            );
+        }
+    }
+
+    /// @dev Made a separate function to avoid stack-too-deep errors
+    function _verifyContractDetails(
+        string memory contractName,
+        bytes32 agreementId,
+        string memory expectedLegalContractUri,
+        string[] memory expectedGlobalFields,
+        string[] memory expectedPartyFields,
+        string[] memory expectedGlobalValues,
+        address[] memory expectedParties,
+        string[][] memory expectedPartyValues,
+        uint256 expectedNumSignatures
+    ) internal {
+        (
+            ,
+            string memory legalContractUri,
+            string[] memory globalFields,
+            string[] memory partyFields,
+            string[] memory globalValues,
+            address[] memory parties,
+            string[][] memory partyValues,
+            ,
+            uint256 numSignatures,
+            bool isComplete
+        ) = CyberAgreementRegistry(registry).getContractDetails(agreementId);
+
+        assertEq(legalContractUri, expectedLegalContractUri, string(abi.encodePacked(contractName, ": unexpected legal contract URI")));
+        assertEq(globalFields, expectedGlobalFields, string(abi.encodePacked(contractName, ": unexpected globalFields")));
+        assertEq(partyFields, expectedPartyFields, string(abi.encodePacked(contractName, ": unexpected partyFields")));
+        assertEq(globalValues, expectedGlobalValues, string(abi.encodePacked(contractName, ": unexpected globalValues")));
+        for (uint256 i = 0; i < partyValues.length; i++) {
+            assertEq(partyValues[i], expectedPartyValues[i], string(abi.encodePacked(contractName, ": unexpected partyValues")));
+        }
+        assertEq(parties, expectedParties, string(abi.encodePacked(contractName, ": unexpected parties")));
+        assertEq(numSignatures, expectedNumSignatures, string(abi.encodePacked(contractName, ": unexpected number of signatures")));
+        assertTrue(isComplete, string(abi.encodePacked(contractName, ": agreement should be complete")));
+    }
+}

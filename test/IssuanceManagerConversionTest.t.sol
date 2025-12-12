@@ -5,7 +5,9 @@ import "forge-std/Test.sol";
 import "../src/IssuanceManager.sol";
 import "../src/CyberScrip.sol";
 import "../src/libs/auth.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {IssuanceManager} from "../src/IssuanceManager.sol";
 
 contract MockRoundManagerForConversion {
     bool public exists;
@@ -54,6 +56,8 @@ contract MockRoundManagerForConversion {
 contract MockCertPrinter {
     using IssuanceManagerStorage for IssuanceManagerStorage.IssuanceManagerData;
 
+    string public constant DEPLOY_VERSION = "test";
+
     mapping(uint256 => CertificateDetails) internal _details;
     mapping(uint256 => address) internal _owners;
     uint256 internal _total;
@@ -98,6 +102,8 @@ contract MockCertPrinter {
 }
 
 contract IssuanceManagerConversionTest is Test {
+    bytes32 salt = bytes32(keccak256("IssuanceManagerConversionTest"));
+
     IssuanceManager public issuanceManager;
     MockCertPrinter public safePrinter;
     MockCertPrinter public equityPrinter;
@@ -114,20 +120,27 @@ contract IssuanceManagerConversionTest is Test {
         // Auth
         auth = new BorgAuth(owner);
 
+        IssuanceManagerFactory imFactory = IssuanceManagerFactory(address(
+            new ERC1967Proxy{salt: salt}(
+                address(new IssuanceManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    IssuanceManagerFactory.initialize.selector,
+                    address(auth),
+                    new IssuanceManager(),
+                    new MockCertPrinter(),
+                    new CyberScrip()
+                )
+            )
+        ));
+
         // IssuanceManager via proxy (implementation disables initializers in constructor)
-        IssuanceManager impl = new IssuanceManager();
-        MockCertPrinter implCert = new MockCertPrinter();
-        CyberScrip implScrip = new CyberScrip();
-        bytes memory initData = abi.encodeWithSelector(
-            IssuanceManager.initialize.selector,
+        issuanceManager = IssuanceManager(imFactory.deployIssuanceManager(salt));
+        issuanceManager.initialize(
             address(auth),
             address(0xC0DE),
-            address(implCert),
             address(0xBEEF),
-            address(0xFACADE),
-            address(implScrip)
+            address(imFactory)
         );
-        issuanceManager = IssuanceManager(address(new ERC1967Proxy(address(impl), initData)));
 
         // Deploy printers and initialize with issuanceManager as controller
         safePrinter = new MockCertPrinter();

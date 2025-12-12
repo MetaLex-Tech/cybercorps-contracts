@@ -52,6 +52,8 @@ import "./interfaces/ICyberAgreementRegistry.sol";
 contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     using CyberCertPrinterStorage for CyberCertPrinterStorage.CyberCertStorage;
 
+    string public constant DEPLOY_VERSION = "3"; // For version-tracking on all deployment and future upgrades
+
     // Custom errors
     error NotIssuanceManager();
     error TokenNotTransferable();
@@ -252,7 +254,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
             if(from == ownerAddress) {
                 if(!CyberCertPrinterStorage.cyberCertStorage().endorsementRequired) {
                         emit CertificateAssigned(tokenId, to, "", IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName());
-                        CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails("", to);  
+                        CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails("", to);
                 }
                 else if(CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId].length > 0) {
                     Endorsement memory endorsement = CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId][CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId].length - 1];
@@ -308,38 +310,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     // URI storage functionality
     function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
         if (!_exists(tokenId)) revert URIQueryForNonexistentToken();
-
-        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
-        string[] memory certLegend = s.certLegend[tokenId];
-        ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
-
-        // Get registry and agreementId from first endorsement if it exists
-        address registry = address(0);
-        bytes32 agreementId = bytes32(0);
-        if (s.endorsements[tokenId].length > 0) {
-            Endorsement memory firstEndorsement = s.endorsements[tokenId][0];
-            registry = firstEndorsement.registry;
-            agreementId = firstEndorsement.agreementId;
-        }
-
-    return IUriBuilder(IIssuanceManager(s.issuanceManager).uriBuilder()).buildCertificateUri(   
-            corp.cyberCORPName(),
-            corp.cyberCORPType(),
-            corp.cyberCORPJurisdiction(),
-            corp.cyberCORPContactDetails(),
-            s.securityType,
-            s.securitySeries,
-            s.certificateUri,
-            certLegend,
-            s.certificateDetails[tokenId],
-            s.endorsements[tokenId],
-            s.owners[tokenId],
-            registry,
-            agreementId,
-            tokenId,
-            address(this),
-            address(s.extension)
-        );
+        return CyberCertPrinterStorage.tokenURI(tokenId);
     }
 
    /* // URI storage functionality

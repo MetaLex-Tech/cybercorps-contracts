@@ -71,13 +71,18 @@ interface IRoundManagerInit {
     ) external;
 }
 
+interface ICyberCorpLocal {
+    function issuanceManager() external view returns (address);
+}
+
 contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     using RoundLib for Round;
     error InvalidSalt();
     error DeploymentFailed();
+    error RoundManagerAlreadyExists();
 
     address public registryAddress;
-    address public cyberCertPrinterImplementation;
+    address public __cyberCertPrinterImplementation; // deprecated: kept to maintain slot consistency
     address public issuanceManagerFactory;
     address public cyberCorpSingleFactory;
     address public cyberAgreementFactory;
@@ -85,7 +90,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
     address public uriBuilder;
     address public stable; // = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;//base main net 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address public roundManagerFactory;
-    address public cyberCert20Implementation;
+    address public __cyberCert20Implementation; // deprecated: kept to maintain slot consistency
     address public lexchexAuth;
 
     // Upgrade notes: Reduced gap to account for new variables
@@ -152,18 +157,11 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         address oldRoundManagerFactory
     );
 
-    event CyberCertPrinterImplementationUpdated(
-        address indexed cyberCertPrinterImplementation,
-        address oldImplementation
-    );
-    
     event LexchexAuthUpdated(address indexed lexchexAuth, address oldLexchexAuth);
 
     function initialize(
         address _auth,
         address _registryAddress,
-        address _cyberCertPrinterImplementation,
-        address _cyberCert20Implementation,
         address _issuanceManagerFactory,
         address _cyberCorpSingleFactory,
         address _dealManagerFactory,
@@ -175,8 +173,6 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         __BorgAuthACL_init(_auth);
 
         registryAddress = _registryAddress;
-        cyberCertPrinterImplementation = _cyberCertPrinterImplementation;
-        cyberCert20Implementation = _cyberCert20Implementation;
         issuanceManagerFactory = _issuanceManagerFactory;
         cyberCorpSingleFactory = _cyberCorpSingleFactory;
         dealManagerFactory = _dealManagerFactory;
@@ -253,13 +249,11 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         IIssuanceManager(issuanceManagerAddress).initialize(
             authAddress,
             cyberCorpAddress,
-            cyberCertPrinterImplementation,
             uriBuilder,
-            issuanceManagerFactory,
-            cyberCert20Implementation
+            issuanceManagerFactory
         );
 
-        //update role for issuance manager
+        // Initialize DealManager
         IDealManager(dealManagerAddress).initialize(
             authAddress,
             cyberCorpAddress,
@@ -268,24 +262,13 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             dealManagerFactory
         );
 
-        roundManagerAddress = IRoundManagerFactory(roundManagerFactory).deployRoundManager(salt);
+        // Deploy and initialize RoundManager
+        roundManagerAddress = deployAndInitializeRoundManager(salt, cyberCorpAddress);
 
-        // Initialize RoundManager
-        IRoundManagerInit(roundManagerAddress).initialize(
-            authAddress,
-            cyberCorpAddress,
-            registryAddress,
-            issuanceManagerAddress,
-            roundManagerFactory
-        );
-
-        // Add newly created RoundManager as OWNER in LeXcheX AUTH
-        if (lexchexAuth != address(0)) {
-            BorgAuth(lexchexAuth).updateRole(
-                roundManagerAddress,
-                BorgAuth(lexchexAuth).OWNER_ROLE()
-            );
-        }
+        // Authorize peripheral contracts for the cyber corp. It is ok to do it here on behalf of the corp
+        // because the corp has just been created by us.
+        // In contrast, if any of the peripheral contract is being retrofitted to an existing corp,
+        // they would have to authorize it themselves for security reasons.
 
         // Set RoundManager on the corp
         ICyberCorp(cyberCorpAddress).setRoundManager(roundManagerAddress);
@@ -305,11 +288,6 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             companyJurisdiction,
             defaultDisputeResolution,
             _companyPayable
-        );
-
-        emit RoundManagerDeployed(
-            cyberCorpAddress,
-            roundManagerAddress
         );
     }
 
@@ -432,7 +410,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         uint256 maxTicket,
         uint256 startTime,
         uint256 endTime,
-        bool publicRound
+        bool publicRound,
+        bool allowTimedOffers
     )
         external
         returns (
@@ -475,6 +454,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
                     seriesType,
                     roundType,
                     publicRound,
+                    allowTimedOffers,
                     raiseCap,
                     minTicket,
                     maxTicket,
@@ -500,6 +480,40 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
                 certData
             );
         }
+    }
+
+    /// @notice Deploy, initialize and grant LeXCheX access to a new RoundManager for the given cyber corp
+    /// @dev For security, the cyber corp is expected to authorize the created RoundManager itself
+    function deployAndInitializeRoundManager(bytes32 salt, address cyberCorpAddress) public returns (address) {
+        if (ICyberCorp(cyberCorpAddress).roundManager() != address(0)) {
+            revert RoundManagerAlreadyExists();
+        }
+
+        address roundManagerAddress = IRoundManagerFactory(roundManagerFactory).deployRoundManager(salt);
+
+        // Initialize RoundManager
+        IRoundManagerInit(roundManagerAddress).initialize(
+            address(BorgAuthACL(cyberCorpAddress).AUTH()),
+            cyberCorpAddress,
+            registryAddress,
+            ICyberCorpLocal(cyberCorpAddress).issuanceManager(),
+            roundManagerFactory
+        );
+
+        // Add newly created RoundManager as OWNER in LeXcheX AUTH
+        if (lexchexAuth != address(0)) {
+            BorgAuth(lexchexAuth).updateRole(
+                roundManagerAddress,
+                BorgAuth(lexchexAuth).OWNER_ROLE()
+            );
+        }
+
+        emit RoundManagerDeployed(
+            cyberCorpAddress,
+            roundManagerAddress
+        );
+
+        return roundManagerAddress;
     }
 
     function setStable(address _stable) external onlyOwner {
@@ -556,27 +570,6 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
             roundManagerFactory,
             oldRoundManagerFactory
         );
-    }
-
-    event CyberCert20ImplementationUpdated(
-        address indexed cyberCert20Implementation,
-        address oldImplementation
-    );
-
-    function setCyberCert20Implementation(
-        address _cyberCert20Implementation
-    ) external onlyOwner {
-        address oldImplementation = cyberCert20Implementation;
-        cyberCert20Implementation = _cyberCert20Implementation;
-        emit CyberCert20ImplementationUpdated(cyberCert20Implementation, oldImplementation);
-    }
-
-    function setCyberCertPrinterImplementation(
-        address _cyberCertPrinterImplementation
-    ) external onlyOwner {
-        address oldImplementation = cyberCertPrinterImplementation;
-        cyberCertPrinterImplementation = _cyberCertPrinterImplementation;
-        emit CyberCertPrinterImplementationUpdated(cyberCertPrinterImplementation, oldImplementation);
     }
 
     function setLexchexAuth(address _lexchexAuth) external onlyOwner {

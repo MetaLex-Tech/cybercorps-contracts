@@ -46,6 +46,7 @@ import {ERC20} from "../dependencies/openzeppelin-contracts/contracts/token/ERC2
 import {ERC721} from "../dependencies/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
 import {ERC721Enumerable} from "../dependencies/openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {IERC1967} from "../dependencies/openzeppelin-contracts/contracts/interfaces/IERC1967.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {DealManager, LexScroWLite} from "../src/DealManager.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
@@ -187,8 +188,8 @@ contract CyberCorpMock {
     }
 }
 
-contract MockDealManagerV2 is UUPSUpgradeable {
-    string public constant DEPLOY_VERSION = "2";
+contract MockDealManagerVTest is UUPSUpgradeable {
+    string public constant DEPLOY_VERSION = "test";
 
     // UUPS upgrade authorization
     function _authorizeUpgrade(
@@ -748,24 +749,22 @@ contract DealManagerTest is Test {
     }
 
     function test_UpgradeNextDealManager() public {
-        assertEq(DealManager(DealManagerFactory(dmFactory).getRefImplementation()).DEPLOY_VERSION(), "1", "reference impl version should not be changed yet");
-
         vm.startPrank(owner);
-        DealManagerFactory(dmFactory).setRefImplementation(address(new MockDealManagerV2()));
+        DealManagerFactory(dmFactory).setRefImplementation(address(new MockDealManagerVTest()));
         vm.stopPrank();
-        assertEq(DealManager(DealManagerFactory(dmFactory).getRefImplementation()).DEPLOY_VERSION(), "2", "reference impl version should have changed");
+        assertEq(DealManager(DealManagerFactory(dmFactory).getRefImplementation()).DEPLOY_VERSION(), "test", "reference impl version should have changed");
 
         bytes32 salt = keccak256("test_UpgradeNextDealerManager");
         // Next deployment should emit events with version so indexer could be informed
         vm.expectEmit(true, true, true, true);
         emit DealManagerFactory.DealManagerDeployed(
             DealManagerFactory(dmFactory).computeDealManagerAddress(salt),
-            "2"
+            "test"
         );
         DealManager nextRm = DealManager(
             DealManagerFactory(dmFactory).deployDealManager(salt)
         );
-        assertEq(nextRm.DEPLOY_VERSION(), "2", "next deployment version should have changed");
+        assertEq(nextRm.DEPLOY_VERSION(), "test", "next deployment version should have changed");
     }
 
     function test_UpgradeExistingDealManager() public {
@@ -799,23 +798,46 @@ contract DealManagerTest is Test {
         // MetaLeX to release new DealManager v2
 
         vm.startPrank(owner);
-        DealManagerFactory(dmFactory).setRefImplementation(address(new MockDealManagerV2()));
+        DealManagerFactory(dmFactory).setRefImplementation(address(new MockDealManagerVTest()));
         vm.stopPrank();
 
         // Corp2 owner decided to accept the upgrade
 
         vm.startPrank(companyOwner);
+        vm.expectEmit(true, true, true, true);
+        emit IERC1967.Upgraded(DealManagerFactory(dmFactory).getRefImplementation());
         dm2.upgradeToAndCall(DealManagerFactory(dmFactory).getRefImplementation(), "");
         vm.stopPrank();
 
-        assertEq(dm2.DEPLOY_VERSION(), "2", "Target DealManager should be upgraded");
-        assertEq(dm1.DEPLOY_VERSION(), "1", "Other DealManager should not be upgraded");
+        assertEq(dm2.DEPLOY_VERSION(), "test", "Target DealManager should be upgraded");
+        assertNotEq(dm1.DEPLOY_VERSION(), "test", "Other DealManager should not be upgraded");
+    }
+
+      function test_forkedSepoliaDealManager() public {
+        address sepDmFactoryAddr = 0x3982b078f2ac306219c9540Ebc908360a960C251;
+        address sepDmAddr = 0xeAb084914b434059C340fb8C3ebEAe9b04A14929;
+
+        // Deploy existing DealManagers
+        DealManager sepDm = DealManager(sepDmAddr);
+
+        vm.startPrank(0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B);
+        DealManagerFactory(sepDmFactoryAddr).setRefImplementation(address(new MockDealManagerVTest()));
+        vm.stopPrank();
+
+        // Corp2 owner decided to accept the upgrade
+
+        vm.startPrank(0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B);
+        address toUpgrade = DealManagerFactory(sepDmFactoryAddr).getRefImplementation();
+        sepDm.upgradeToAndCall(toUpgrade, "");
+        vm.stopPrank();
+
+        assertEq(sepDm.DEPLOY_VERSION(), "test", "Target DealManager should be upgraded");
     }
 
     function test_RevertIf_UpgradeNonFactoryOwner() public {
         // Non-MetaLeX admin should not be able to set new reference implementation
 
-        address newImplementation = address(new MockDealManagerV2());
+        address newImplementation = address(new MockDealManagerVTest());
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, bootstrapAuth.OWNER_ROLE(), companyOwner));
         vm.prank(companyOwner);
         DealManagerFactory(dmFactory).setRefImplementation(newImplementation);
@@ -841,7 +863,7 @@ contract DealManagerTest is Test {
         // Corp owner can't upgrade to v2 without MetaLeX releasing it first
 
         vm.startPrank(companyOwner);
-        address nonOfficialDealManager = address(new MockDealManagerV2());
+        address nonOfficialDealManager = address(new MockDealManagerVTest());
         vm.expectRevert(
             abi.encodeWithSelector(DealManager.NotRefImplementation.selector)
         );

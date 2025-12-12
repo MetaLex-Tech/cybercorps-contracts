@@ -12,7 +12,11 @@ interface ICyberScrip is IERC20 {
         address _issuanceManager,
         string calldata _name,
         string calldata _symbol,
-        ITransferRestrictionHook[] calldata _typeRestrictionHook
+        ITransferRestrictionHook[] calldata _typeRestrictionHook,
+        // TODO TBD: not sure if final design yet
+        bool _enableForceTransfer,
+        bool _enableForceBurn,
+        bool _enableFreeze
     ) external;
 
     function setRestrictionHook(ITransferRestrictionHook[] calldata _typeRestrictionHook) external;

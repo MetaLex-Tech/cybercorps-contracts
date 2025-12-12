@@ -48,4 +48,6 @@ interface IRoundManagerFactory {
 
     function getDefaultFeeRatio() external view returns (uint256);
     function getPlatformPayable() external view returns (address);
+    function isWhitelistedToken(address token) external view returns (bool);
+    function setWhitelistedToken(address token, bool isWhitelisted) external;
 }

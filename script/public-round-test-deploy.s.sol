@@ -8,7 +8,9 @@ import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpCon
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
+import {CyberCorp} from "../src/CyberCorp.sol";
 import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
 import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
@@ -63,11 +65,31 @@ contract PublicRoundTestDeploy is Script {
         BorgAuth auth = new BorgAuth{salt: salt}(deployer);
 
         // Factories + Implementations
+        address issuanceManagerImpl = address(new IssuanceManager{salt: salt}());
+        address cyberCertPrinterImpl = address(new CyberCertPrinter{salt: salt}());
+        address cyberScripImpl = address(new CyberScrip{salt: salt}());
         address issuanceManagerFactory = address(
-            new IssuanceManagerFactory{salt: salt}(address(auth))
+            new ERC1967Proxy{salt: salt}(
+                address(new IssuanceManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    IssuanceManagerFactory.initialize.selector,
+                    address(auth),
+                    issuanceManagerImpl,
+                    cyberCertPrinterImpl,
+                    cyberScripImpl
+                )
+            )
         );
+
         address cyberCorpSingleFactory = address(
-            new CyberCorpSingleFactory{salt: salt}(address(auth))
+            new ERC1967Proxy{salt: salt}(
+                address(new CyberCorpSingleFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    CyberCorpSingleFactory.initialize.selector,
+                    address(auth),
+                    address(new CyberCorp())
+                )
+            )
         );
         address dealManagerFactory = address(
             new ERC1967Proxy{salt: salt}(
@@ -89,12 +111,6 @@ contract PublicRoundTestDeploy is Script {
                 )
             )
         );
-
-        // Implementations
-        address cyberCertPrinterImpl = address(
-            new CyberCertPrinter{salt: salt}()
-        );
-        address cyberScripImpl = address(new CyberScrip{salt: salt}());
 
         // Upgradeable singletons
         address registry = address(
@@ -126,8 +142,6 @@ contract PublicRoundTestDeploy is Script {
                         CyberCorpFactory.initialize.selector,
                         address(auth),
                         address(registry),
-                        address(cyberCertPrinterImpl),
-                        address(cyberScripImpl),
                         address(issuanceManagerFactory),
                         address(cyberCorpSingleFactory),
                         address(dealManagerFactory),
@@ -279,6 +293,7 @@ contract PublicRoundTestDeploy is Script {
                 10000000,
                 block.timestamp - 1,
                 block.timestamp + 21 days,
+                true,
                 true
             );
 

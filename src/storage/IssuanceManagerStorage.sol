@@ -41,7 +41,7 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "../interfaces/ICondition.sol";
 
 library IssuanceManagerStorage {
@@ -50,12 +50,12 @@ library IssuanceManagerStorage {
 
     // Main storage layout struct
     struct IssuanceManagerData {
-        UpgradeableBeacon CyberCertPrinterBeacon;
+        UpgradeableBeacon cyberCertPrinterBeacon;
         address CORP;
         address uriBuilder;
         address upgradeFactory;
         address[] printers;
-        UpgradeableBeacon CyberScripBeacon;
+        UpgradeableBeacon cyberScripBeacon;
         mapping(address => address) scripifiedCert;
         mapping(address => ICondition[]) certToScripConditions;
         mapping(address => ICondition[]) scripToCertConditions;
@@ -79,7 +79,7 @@ library IssuanceManagerStorage {
     }
 
     function getCyberCertPrinterBeacon() internal view returns (UpgradeableBeacon) {
-        return issuanceManagerStorage().CyberCertPrinterBeacon;
+        return issuanceManagerStorage().cyberCertPrinterBeacon;
     }
 
     function getPrinters() internal view returns (address[] storage) {
@@ -104,15 +104,15 @@ library IssuanceManagerStorage {
     }
 
     function setCyberScripBeacon(UpgradeableBeacon _beacon) internal {
-        issuanceManagerStorage().CyberScripBeacon = _beacon;
+        issuanceManagerStorage().cyberScripBeacon = _beacon;
     }
 
     function getCyberScripBeacon() internal view returns (UpgradeableBeacon) {
-        return issuanceManagerStorage().CyberScripBeacon;
+        return issuanceManagerStorage().cyberScripBeacon;
     }
 
     function setCyberCertPrinterBeacon(UpgradeableBeacon _beacon) internal {
-        issuanceManagerStorage().CyberCertPrinterBeacon = _beacon;
+        issuanceManagerStorage().cyberCertPrinterBeacon = _beacon;
     }
 
     function addPrinter(address _printer) internal {
@@ -147,12 +147,12 @@ library IssuanceManagerStorage {
     }
 
     // Beacon upgrade function
-    function updateBeaconImplementation(address _newImplementation) internal {
-        issuanceManagerStorage().CyberCertPrinterBeacon.upgradeTo(_newImplementation);
+    function upgradeCertPrinterBeaconImplementation(address _newImplementation) internal {
+        issuanceManagerStorage().cyberCertPrinterBeacon.upgradeTo(_newImplementation);
     }
 
     function updateScripBeaconImplementation(address _newImplementation) internal {
-        issuanceManagerStorage().CyberScripBeacon.upgradeTo(_newImplementation);
+        issuanceManagerStorage().cyberScripBeacon.upgradeTo(_newImplementation);
     }
 
     function getScripifiedCert(address certAddress) internal view returns (address) {
@@ -184,4 +184,4 @@ library IssuanceManagerStorage {
             issuanceManagerStorage().certToScripConditions[certAddress].push(conditions[i]);
         }
     }
-} 
+}

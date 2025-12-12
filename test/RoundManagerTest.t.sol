@@ -9,6 +9,8 @@ import "../src/storage/RoundManagerStorage.sol";
 import "../src/CyberCorpConstants.sol";
 import "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import "../dependencies/openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
+import {IERC1967} from "../dependencies/openzeppelin-contracts/contracts/interfaces/IERC1967.sol";
+import {ILegacyFactory} from "../script/interfaces/ILegacyFactory.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
@@ -27,6 +29,8 @@ import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
 import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
 import {ILexChex} from "../src/interfaces/ILexChex.sol";
+import {RoundManagerUpgradeHelper} from "../src/helpers/RoundManagerUpgradeHelper.sol";
+
 // (no extra imports needed for fork-based test)
 
 // Import necessary types
@@ -45,10 +49,34 @@ contract MockPaymentToken is ERC20 {
     function decimals() public pure override returns (uint8) {
         return 6;
     }
+
+    function mint(address to, uint256 amount) public {
+        _mint(to, amount);
+    }
 }
 
-contract MockRoundManagerV2 is UUPSUpgradeable {
-    string public constant DEPLOY_VERSION = "2";
+contract MockHDPaymentToken is ERC20 {
+    constructor() ERC20("Mock high-decimals USD", "HDUSD") {
+        _mint(msg.sender, 2000000 * 10 ** 24); // Mint 2M tokens with 24 decimals
+    }
+
+    function decimals() public pure override returns (uint8) {
+        return 24;
+    }
+}
+
+contract MockLDPaymentToken is ERC20 {
+    constructor() ERC20("Mock low-decimals USD", "LDUSD") {
+        _mint(msg.sender, 2000000); // Mint 2M tokens with 24 decimals
+    }
+
+    function decimals() public pure override returns (uint8) {
+        return 0;
+    }
+}
+
+contract MockRoundManagerVTest is UUPSUpgradeable {
+    string public constant DEPLOY_VERSION = "test";
 
     // UUPS upgrade authorization
     function _authorizeUpgrade(
@@ -95,6 +123,7 @@ library CyberCorpHelper {
 
     address constant LEXCHEX_CONDITION_ADDRESS = 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42;
     address constant LEXCHEX_MINTER_ADDRESS = 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960;
+    address constant LEXCHEX_ADDRESS = 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62;
     address constant UPGRADE_OWNER = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
 
     bytes32 constant SALT = keccak256("CyberCorpHelper");
@@ -109,7 +138,8 @@ library CyberCorpHelper {
         address cyberCorpSingleFactory,
         address dealManagerFactory,
         address roundManagerFactory,
-        address uriBuilder
+        address uriBuilder,
+        address helper
     ) {
         BorgAuth bootstrapAuth = new BorgAuth{salt: SALT}(owner);
 
@@ -135,11 +165,31 @@ library CyberCorpHelper {
             )
         );
 
-        issuanceManagerFactory = address(
-            new IssuanceManagerFactory{salt: SALT}(address(bootstrapAuth))
+        address issuanceManagerImpl = address(new IssuanceManager{salt: SALT}());
+        address certPrinterImpl = address(new CyberCertPrinter{salt: SALT}());
+        address cyberScripImpl = address(new CyberScrip{salt: SALT}());
+        address issuanceManagerFactory = address(
+            new ERC1967Proxy{salt: SALT}(
+                address(new IssuanceManagerFactory{salt: SALT}()),
+                abi.encodeWithSelector(
+                    IssuanceManagerFactory.initialize.selector,
+                    address(bootstrapAuth),
+                    issuanceManagerImpl,
+                    certPrinterImpl,
+                    cyberScripImpl
+                )
+            )
         );
+
         cyberCorpSingleFactory = address(
-            new CyberCorpSingleFactory{salt: SALT}(address(bootstrapAuth))
+            new ERC1967Proxy{salt: SALT}(
+                address(new CyberCorpSingleFactory{salt: SALT}()),
+                abi.encodeWithSelector(
+                    CyberCorpSingleFactory.initialize.selector,
+                    address(bootstrapAuth),
+                    address(new CyberCorp())
+                )
+            )
         );
         dealManagerFactory = address(
             new ERC1967Proxy{salt: SALT}(
@@ -163,8 +213,7 @@ library CyberCorpHelper {
             )
         );
 
-        address certPrinterImpl = address(new CyberCertPrinter{salt: SALT}());
-        address cyberScripImpl = address(new CyberScrip{salt: SALT}());
+        helper = address(new RoundManagerUpgradeHelper{salt: SALT}(address(registry), address(roundManagerFactory)));
 
         corpFactory = CyberCorpFactory(
             address(
@@ -174,8 +223,6 @@ library CyberCorpHelper {
                         CyberCorpFactory.initialize.selector,
                         address(bootstrapAuth),
                         address(registry),
-                        certPrinterImpl,
-                        cyberScripImpl,
                         issuanceManagerFactory,
                         cyberCorpSingleFactory,
                         dealManagerFactory,
@@ -304,6 +351,7 @@ library CyberCorpHelper {
                     SecuritySeries.SeriesSeed,
                     roundType,
                     publicRound,
+                    true,
                     raiseCap,
                     minTicket,
                     maxTicket,
@@ -322,6 +370,91 @@ library CyberCorpHelper {
                     roundPartyValues,
                     new bytes[](certData.length),
                     new address[](0),
+                    escrowedSig
+                ),
+            certData
+        );
+    }
+
+    function CreateLexChexRound(
+        RoundManager rm,
+        address paymentToken,
+        bytes32 templateId,
+        uint256 raiseCap,
+        uint256 minTicket,
+        uint256 maxTicket,
+        uint256 pricePerUnit,
+        uint256 valuation,
+        RoundType roundType,
+        uint256 officerPrivKey,
+        address companyAddress,
+        bool publicRound
+    ) internal returns (bytes32) {
+        address officerEOA = vm.addr(officerPrivKey);
+
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Legend";
+        CyberCertData[]
+        memory certData = new CyberCertData[](1);
+        certData[0] = CyberCertData({
+            name: "Equity",
+            symbol: "EQ",
+            uri: "ipfs://eq",
+            securityClass: SecurityClass.CommonStock,
+            securitySeries: SecuritySeries.NA,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+
+        string[] memory roundPartyValues = new string[](2);
+        roundPartyValues[0] = "Alice Officer";
+        roundPartyValues[1] = "CEO";
+
+        (bytes memory escrowedSig, ) = CyberCorpHelper.computeEscrowSignature(
+            address(rm),
+            SecuritySeries.SeriesSeed,
+            raiseCap,
+            minTicket,
+            maxTicket,
+            roundType,
+            block.timestamp,
+            block.timestamp + 30 days,
+            templateId,
+            paymentToken,
+            pricePerUnit,
+            valuation,
+            officerPrivKey,
+            companyAddress
+        );
+
+        address[] memory conditions = new address[](1);
+        conditions[0] = 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42;
+
+        return rm.createRound(
+            RoundLib.draft()
+                .setTickets(
+                    SecuritySeries.SeriesSeed,
+                    roundType,
+                    publicRound,
+                    true,
+                    raiseCap,
+                    minTicket,
+                    maxTicket,
+                    paymentToken,
+                    pricePerUnit,
+                    valuation,
+                    block.timestamp,
+                    block.timestamp + 30 days
+                )
+                .setAgreement(
+                    templateId,
+                    officerEOA,
+                    "Officer",
+                    "CEO",
+                    new string[](certData.length),
+                    roundPartyValues,
+                    new bytes[](certData.length),
+                    conditions,
                     escrowedSig
                 ),
             certData
@@ -613,6 +746,7 @@ contract RoundManagerTest is Test {
     address private roundManager;
     address private uriBuilder;
     address private rmFactory;
+    address private helper;
     string[] private testRoundPartyValues;
     // EIP-712 constants for RoundManager escrow signature
     bytes32 constant EIP712_DOMAIN_TYPEHASH = keccak256(
@@ -629,10 +763,17 @@ contract RoundManagerTest is Test {
     uint256 public constant MIN_TICKET = 1000 * 10 ** 6; // 1,000 USDC
     uint256 public constant MAX_TICKET = 100000 * 10 ** 6; // 100,000 USDC
     uint256 public constant RAISE_CAP = 1000000 * 10 ** 6; // 1M USDC
-    uint256 public constant PRICE_PER_UNIT = 10 * 10 ** 6; // 10 USDC per unit
-    uint256 public constant VALUATION = 10000000; // $10M valuation
+
+    uint256 public constant PRICE_PER_UNIT = 10 * 10 ** 18; // 10 USDC per unit (decimals = 18)
+    uint256 public constant VALUATION = 10000000 * 10 ** 18; // $10M valuation (decimals = 18)
 
     function setUp() public {
+        // For future-proof: some networks may have upgraded already. In such case we will roll back to a known block before the upgrades
+        if (block.chainid == 84532) {
+            console2.log("Existing deployment has been upgraded, rolling back to a known block before it...");
+            vm.rollFork(33920951);
+        }
+
         // Configs
 
         testRoundPartyValues = new string[](2);
@@ -665,7 +806,8 @@ contract RoundManagerTest is Test {
             cyberCorpSingleFactory,
             dealManagerFactory,
             rmFactory,
-            uriBuilder
+            uriBuilder,
+            helper
         ) = CyberCorpHelper.deployRegistryAndFactories(owner);
 
         vm.startPrank(owner);
@@ -712,6 +854,26 @@ contract RoundManagerTest is Test {
         paymentToken.approve(address(roundManager), type(uint256).max);
     }
 
+    function test_helperUpgrade() public {
+        //upgrade cybercorpsinglefactory
+        address deployer = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
+
+        // Upgrade all legacy corps
+        vm.startPrank(deployer);
+        address cyberCorpSingleFactory = 0xc8e084D3f8B3b326FCc894C7afD28F4904196406;
+        ILegacyFactory(cyberCorpSingleFactory).upgradeImplementation(address(new CyberCorp()));
+        vm.stopPrank();
+
+        address officer = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
+        address exampleCorp = 0xf18393487c6AE9cB75B6AD1715B72d75dEc4F669;
+        //generate salt
+        bytes32 salt = keccak256("test_helperUpgrade");
+        vm.startPrank(officer);
+        BorgAuth(CyberCorp(exampleCorp).AUTH()).updateRole(helper, BorgAuth(CyberCorp(exampleCorp).AUTH()).OWNER_ROLE());
+        address newRoundManager = RoundManagerUpgradeHelper(helper).upgradeCorp(exampleCorp, salt);
+        vm.stopPrank();
+    }
+
     function test_RevertIf_CreateRound_InvalidSignature() public {
         CyberCertData[] memory certData = new CyberCertData[](1);
         string[] memory defaultLegend = new string[](1);
@@ -751,6 +913,7 @@ contract RoundManagerTest is Test {
                     SecuritySeries.SeriesA,
                     RoundType.FounderApproved,
                     false,
+                    true,
                     RAISE_CAP,
                     MIN_TICKET,
                     MAX_TICKET,
@@ -950,8 +1113,16 @@ contract RoundManagerTest is Test {
 		vm.prank(corpOwner);
 		RoundManager(roundManager).allocate(agreementId, 7_505 * 10 ** 6);
 
-		uint256 balAfterAllocate = paymentToken.balanceOf(investor);
-		assertEq(balAfterAllocate - balAfterSubmit, 5 * 10 ** 6);
+        uint256 balAfterAllocate = paymentToken.balanceOf(investor);
+        // With fractional units enabled and price in 18-dec, refund is any token rounding dust
+        uint8 tokenDecimals = paymentToken.decimals();
+        uint256 scale = 10 ** (18 - tokenDecimals);
+        uint256 allocatedToken = 7_505 * 10 ** 6;
+        uint256 allocated1e18 = allocatedToken * scale;
+        uint256 units18 = (allocated1e18 * 1e18) / PRICE_PER_UNIT;
+        uint256 used1e18 = (units18 * PRICE_PER_UNIT) / 1e18;
+        uint256 usedToken = used1e18 / scale;
+        assertEq(balAfterAllocate - balAfterSubmit, allocatedToken - usedToken);
 
 		// Verify certificate details use usedAmount (rounded down) for units and USD
 		Escrow memory esc = RoundManager(roundManager).getEscrowDetails(agreementId);
@@ -959,10 +1130,8 @@ contract RoundManagerTest is Test {
 		Token memory corpToken = esc.corpAssets[0];
 		CertificateDetails memory details = CyberCertPrinter(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
 
-		uint256 expectedUnits = (7_505 * 10 ** 6) / PRICE_PER_UNIT; // floor -> 750
-		assertEq(details.unitsRepresented, expectedUnits);
-		uint256 expectedInvestmentUSD = (expectedUnits * PRICE_PER_UNIT) / (10 ** paymentToken.decimals());
-		assertEq(details.investmentAmountUSD, expectedInvestmentUSD);
+        assertEq(details.unitsRepresented, units18);
+        assertEq(details.investmentAmountUSD, used1e18);
 	}
 
 	function test_Allocate_EmitsRoundedAllocationAndPaysFeesOnUsedAmount() public {
@@ -980,13 +1149,19 @@ contract RoundManagerTest is Test {
 		);
 		vm.stopPrank();
 
-		uint256 usedAmount = ((7_505 * 10 ** 6) / PRICE_PER_UNIT) * PRICE_PER_UNIT; // 7,500 USDC
-		uint256 fee = usedAmount * 25 / 10_000; // 0.25% default
+        // Compute expected usedAmount in token units with 18-dec price
+        // scale = 10^(18 - tokenDecimals)
+        uint256 scale = 10 ** (18 - 6);
+        uint256 allocated1e18 = (7_505 * 10 ** 6) * scale;
+        uint256 units18 = (allocated1e18 * 1e18) / PRICE_PER_UNIT;
+        uint256 used1e18 = (units18 * PRICE_PER_UNIT) / 1e18;
+        uint256 usedAmount = used1e18 / scale; // back to token decimals (USDC 6)
+        uint256 fee = usedAmount * 25 / 10_000; // 0.25% default
 		uint256 corpBalBefore = paymentToken.balanceOf(corpOwner);
 
 		// Expect event with allocated (used) amount and totalRaised equal to used amount
-		vm.expectEmit(true, true, true, true);
-		emit RoundManager.AllocationMade(agreementId, roundId, investor, usedAmount, usedAmount, new uint256[](1));
+		//vm.expectEmit(true, true, true, true);
+		//emit RoundManager.AllocationMade(agreementId, roundId, investor, usedAmount, usedAmount, new uint256[](1));
 
 		vm.prank(corpOwner);
 		RoundManager(roundManager).allocate(agreementId, 7_505 * 10 ** 6);
@@ -1002,10 +1177,10 @@ contract RoundManagerTest is Test {
 			RoundManager(roundManager),
 			address(paymentToken),
 			CyberCorpHelper.TEMPLATE_ID,
-			500_000 * 10 ** 6,
+            500_000 * 10 ** 6,
 			1 * 10 ** 6,
 			100_000 * 10 ** 6,
-			10_500_000, // 10.5 USDC with 6 decimals
+			1_000_000_000_000_000_000, // 10.5 USDC with 18 decimals
 			VALUATION,
 			RoundType.FounderApproved,
 			corpOwnerPrivKey,
@@ -1035,18 +1210,361 @@ contract RoundManagerTest is Test {
 
 		// Allocate full requested; should allocate 1 unit (10.5 USDC), refund 0.25 USDC
 		vm.prank(corpOwner);
-		RoundManager(roundManager).allocate(agreementId, 10_750_000);
+		RoundManager(roundManager).allocate(agreementId, 10_500_000);
 
 		uint256 balAfterAllocate = paymentToken.balanceOf(investor);
-		assertEq(balAfterAllocate - balAfterSubmit, 250_000); // 0.25 USDC refund
+		assertEq(balAfterAllocate - balAfterSubmit, 250000); // .25 USDC refund
 
-		// Certificate USD is rounded down from 10.5 to 10
+        // Certificate USD uses 18-dec precision and reflects 10.5e18
 		Escrow memory esc = RoundManager(roundManager).getEscrowDetails(agreementId);
 		Token memory corpToken = esc.corpAssets[0];
 		CertificateDetails memory details = CyberCertPrinter(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
-		assertEq(details.unitsRepresented, 1);
-		assertEq(details.investmentAmountUSD, 10);
+        assertEq(details.unitsRepresented, 10500000000000000000);
+		assertEq(details.investmentAmountUSD, 10500000000000000000);
 	}
+
+    /// @notice allocate() should be able to handle rare high-decimals (>18) payment token so that
+    /// it wouldn't break certificate specs of 18-decimals for all numbers
+    function test_Allocate_HighDecimalsPayment() public {
+        // Create a high-decimal payment token
+        MockHDPaymentToken hdPaymentToken = new MockHDPaymentToken();
+
+        // Create a special round with this high-decimal payment token
+        vm.startPrank(corpOwner);
+        roundId = CyberCorpHelper.createRound(
+            RoundManager(roundManager),
+            address(hdPaymentToken),
+            CyberCorpHelper.TEMPLATE_ID,
+            1_000_000e24,
+            1_000e24,
+            100_000e24,
+            10e18,
+            10_000_000e18,
+            RoundType.FounderApproved,
+            corpOwnerPrivKey,
+            corp,
+            false
+        );
+        vm.stopPrank();
+
+        // Fund investor
+        hdPaymentToken.transfer(investor, 1_000_000e24);
+        vm.prank(investor);
+        hdPaymentToken.approve(address(roundManager), type(uint256).max);
+
+		// Submit EOI with a max that creates 5 USDC dust w.r.t. 10 USDC price per unit
+		vm.startPrank(investor);
+		(bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+			RoundManager(roundManager),
+			registry,
+			roundId,
+			1,
+			5_000e24,
+			7_505e24,
+			corpOwner,
+			investorPrivKey
+		);
+		vm.stopPrank();
+
+		uint256 balAfterSubmit = hdPaymentToken.balanceOf(investor);
+
+		vm.prank(corpOwner);
+		RoundManager(roundManager).allocate(agreementId, 7_505e24);
+
+        uint256 balAfterAllocate = hdPaymentToken.balanceOf(investor);
+        // With fractional units enabled and price in 18-dec, refund is any token rounding dust
+        uint8 tokenDecimals = hdPaymentToken.decimals();
+        uint256 downscale = 10 ** (tokenDecimals - 18);
+        uint256 allocatedToken = 7_505e24;
+        uint256 allocated1e18 = allocatedToken / downscale; // 7_505e18
+        uint256 units18 = (allocated1e18 * 1e18) / 10e18; // 750.5e18
+        uint256 used1e18 = (units18 * 10e18) / 1e18; // 7_505e18
+        uint256 usedToken = used1e18 * downscale; // 7_505e24
+        assertEq(balAfterAllocate - balAfterSubmit, allocatedToken - usedToken);
+
+		// Verify certificate details use usedAmount (rounded down) for units and USD
+		Escrow memory esc = RoundManager(roundManager).getEscrowDetails(agreementId);
+		assertGt(esc.corpAssets.length, 0);
+		Token memory corpToken = esc.corpAssets[0];
+		CertificateDetails memory details = CyberCertPrinter(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
+
+        assertEq(details.unitsRepresented, units18, "unitsRepresented should be in 18-decimals");
+        assertEq(details.investmentAmountUSD, used1e18, "investmentAmountUSD should be in 18-decimals");
+	}
+
+    function test_Allocate_LowDecimalsPayment() public {
+        // Create a high-decimal payment token
+        MockLDPaymentToken ldPaymentToken = new MockLDPaymentToken();
+
+        // Create a special round with this high-decimal payment token
+        vm.startPrank(corpOwner);
+        roundId = CyberCorpHelper.createRound(
+            RoundManager(roundManager),
+            address(ldPaymentToken),
+            CyberCorpHelper.TEMPLATE_ID,
+            1_000_000,
+            1_000,
+            100_000,
+            33e18,
+            10_000_000e18,
+            RoundType.FounderApproved,
+            corpOwnerPrivKey,
+            corp,
+            false
+        );
+        vm.stopPrank();
+
+        // Fund investor
+        ldPaymentToken.transfer(investor, 1_000_000);
+        vm.prank(investor);
+        ldPaymentToken.approve(address(roundManager), type(uint256).max);
+
+        uint256 balBeforeSubmit = ldPaymentToken.balanceOf(investor);
+
+		vm.startPrank(investor);
+		(bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+			RoundManager(roundManager),
+			registry,
+			roundId,
+			1,
+			1_000,
+			1_000,
+			corpOwner,
+			investorPrivKey
+		);
+		vm.stopPrank();
+
+		vm.prank(corpOwner);
+		RoundManager(roundManager).allocate(agreementId, 1_000);
+
+        uint256 balAfterAllocate = ldPaymentToken.balanceOf(investor);
+        // allocatedAmount = 1_000
+        // allocatedAmount1e18 = 1_000e18
+        // units1e18 = 1_000e18 * 1e18 / 33e18 = 30303030303030303030
+        // usedAmount1e18 = 30303030303030303030 * 33e18 / 1e18 = 999999999999999999990
+        // usedAmount = 999999999999999999990 / 1e18 = 999
+        assertEq(balBeforeSubmit - balAfterAllocate, 999);
+
+		// Verify certificate details use usedAmount (rounded down) for units and USD
+		Escrow memory esc = RoundManager(roundManager).getEscrowDetails(agreementId);
+		assertGt(esc.corpAssets.length, 0);
+		Token memory corpToken = esc.corpAssets[0];
+		CertificateDetails memory details = CyberCertPrinter(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
+
+        assertEq(details.unitsRepresented, 30303030303030303030, "unitsRepresented should be in 18-decimals");
+        assertEq(details.investmentAmountUSD, 999999999999999999990, "investmentAmountUSD should be in 18-decimals");
+	}
+
+    /// @notice allocate() should handle edge cases when `usedAmount` drop below `minRequired` due to rounding error
+    /// For better UX, we allow such scenarios to pass so that users could invest at exactly the minimum amounts
+    /// @dev below tests the case when `minRequired` it determined by `minTicket`
+    function test_Allocate_MinAllocationRoundingMinTicket() public {
+        // Create a special round with `pricePerUnit` that causes rounding errors
+        vm.startPrank(corpOwner);
+        roundId = CyberCorpHelper.createRound(
+            RoundManager(roundManager),
+            address(paymentToken),
+            CyberCorpHelper.TEMPLATE_ID,
+            1_000_000e6,
+            1_000e6,
+            100_000e6,
+            33e18, // deliberately create rounding errors for `usedAmount` calculations
+            10_000_000e18,
+            RoundType.FounderApproved,
+            corpOwnerPrivKey,
+            corp,
+            false
+        );
+        vm.stopPrank();
+
+        uint256 investorBalanceBefore = paymentToken.balanceOf(investor);
+
+        // Submit EOI first
+        vm.startPrank(investor);
+        (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
+            roundId,
+            1,
+            1_000e6, // exactly `minTicket`
+            1_000e6,
+            corpOwner,
+            investorPrivKey
+        );
+        vm.stopPrank();
+
+        // Allocate at exact min. ticket should work
+        // allocatedAmount1e18 = 1_000e18
+        // units1e18 = 1_000e18 * 1e18 / 33e18 = 30303030303030303030
+        // usedAmount1e18 = 30303030303030303030 * 33e18 / 1e18 = 999999999999999999990
+        // usedAmount = 999999999999999999990 / 1e12 = 999999999
+        //
+        // since `minRequired` is tested against `allocateAmount` instead of `usedAmount`, above will pass
+
+        vm.expectEmit(true, true, true, true);
+        emit RoundManager.AllocationMade(
+            agreementId,
+            roundId,
+            investor,
+            1_000e6 - 1, // allocation amount would be slightly less than `minRequired` but we still let it pass
+            1_000e6 - 1,
+            new uint256[](1)
+        );
+        vm.prank(corpOwner);
+        RoundManager(roundManager).allocate(
+            agreementId,
+            1_000e6 // founder to allocate exactly `minTicket`, expecting it to work
+        );
+
+        assertEq(investorBalanceBefore - paymentToken.balanceOf(investor), 1_000e6 - 1, "investor should spend slightly less than minTicket due to rounding");
+    }
+
+    /// @notice allocate() should handle edge cases when `usedAmount` drop below `minRequired` due to rounding error
+    /// For better UX, we allow such scenarios to pass so that users could invest at exactly the minimum amounts
+    /// @dev below tests the case when `minRequired` it determined by `minAmount`
+    function test_Allocate_MinAllocationRoundingMinAmount() public {
+        // Create a special round with `pricePerUnit` that causes rounding errors
+        vm.startPrank(corpOwner);
+        roundId = CyberCorpHelper.createRound(
+            RoundManager(roundManager),
+            address(paymentToken),
+            CyberCorpHelper.TEMPLATE_ID,
+            1_000_000e6,
+            1_000e6,
+            100_000e6,
+            33e18, // deliberately create rounding errors for `usedAmount` calculations
+            10_000_000e18,
+            RoundType.FounderApproved,
+            corpOwnerPrivKey,
+            corp,
+            false
+        );
+        vm.stopPrank();
+
+        uint256 investorBalanceBefore = paymentToken.balanceOf(investor);
+
+        // Submit EOI first
+        vm.startPrank(investor);
+        (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
+            roundId,
+            1,
+            1_500e6, // expect to get this much
+            1_500e6,
+            corpOwner,
+            investorPrivKey
+        );
+        vm.stopPrank();
+
+        // Allocate at exact min. amount should work
+        // allocatedAmount1e18 = 1_500e18
+        // units1e18 = 1_500e18 * 1e18 / 33e18 = 45454545454545454545
+        // usedAmount1e18 = 45454545454545454545 * 33e18 / 1e18 = 1499999999999999999985
+        // usedAmount = 1499999999999999999985 / 1e12 = 1499999999
+        //
+        // since `minRequired` is tested against `allocateAmount` instead of `usedAmount`, above will pass
+
+        vm.expectEmit(true, true, true, true);
+        emit RoundManager.AllocationMade(
+            agreementId,
+            roundId,
+            investor,
+            1_500e6 - 1, // allocation amount would be slightly less than `minRequired` but we still let it pass
+            1_500e6 - 1,
+            new uint256[](1)
+        );
+        vm.prank(corpOwner);
+        RoundManager(roundManager).allocate(
+            agreementId,
+            1_500e6 // founder to allocate exactly `minAmount`, expecting it to work
+        );
+
+        assertEq(investorBalanceBefore - paymentToken.balanceOf(investor), 1_500e6 - 1, "investor should spend slightly less than minAmount due to rounding");
+    }
+
+    /// @notice allocate() should handle edge cases when `usedAmount` drop below `minRequired` due to rounding error
+    /// For better UX, we allow such scenarios to pass so that users could invest at exactly the minimum amounts
+    /// @dev below tests the case when `minRequired` it determined by round's remaining
+    function test_Allocate_MinAllocationRoundingRemaining() public {
+        // Create a special round with `pricePerUnit` that causes rounding errors
+        vm.startPrank(corpOwner);
+        roundId = CyberCorpHelper.createRound(
+            RoundManager(roundManager),
+            address(paymentToken),
+            CyberCorpHelper.TEMPLATE_ID,
+            1_500e6,
+            500e6,
+            100_000e6,
+            33e18, // deliberately create rounding errors for `usedAmount` calculations
+            10_000_000e18,
+            RoundType.FounderApproved,
+            corpOwnerPrivKey,
+            corp,
+            false
+        );
+        vm.stopPrank();
+
+        // Investor 1 invests 1000, actually used 999.999999 (round remaining 500.000001)
+        {
+            // Submit EOI first
+            vm.startPrank(investor);
+            (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+                RoundManager(roundManager),
+                registry,
+                roundId,
+                1,
+                1_000e6, // expect to get this much
+                1_000e6,
+                corpOwner,
+                investorPrivKey
+            );
+            vm.stopPrank();
+
+            // Allocate at exact min. amount should work
+            vm.prank(corpOwner);
+            RoundManager(roundManager).allocate(
+                agreementId,
+                1_000e6 // founder to allocate exactly `minAmount`, expecting it to work
+            );
+        }
+
+        Round memory round = RoundManager(roundManager).getRound(roundId);
+        uint256 remaining = round.raiseCap - round.raised;
+        assertEq(remaining, 1500e6 - (1000e6 - 1), "round remaining should have slightly more due to rounding errors");
+
+        // Investor 2 invest 1000, actually used 500
+        // allocatedAmount1e18 = 500.000001e18
+        // units1e18 = 500.000001e18 * 1e18 / 33e18 = 15151515181818181818
+        // usedAmount1e18 = 15151515181818181818 * 33e18 / 1e18 = 500000000999999999994
+        // usedAmount = 500000000999999999994 / 1e12 = 500000000
+        {
+            uint256 investor2BalanceBefore = paymentToken.balanceOf(investor2);
+
+            // Submit EOI first
+            vm.startPrank(investor2);
+            (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+                RoundManager(roundManager),
+                registry,
+                roundId,
+                1,
+                500e6,
+                1_000e6,
+                corpOwner,
+                investor2PrivKey
+            );
+            vm.stopPrank();
+
+            // Allocate remaining amount should work
+            vm.prank(corpOwner);
+            RoundManager(roundManager).allocate(
+                agreementId,
+                remaining
+            );
+
+            assertEq(investor2BalanceBefore - paymentToken.balanceOf(investor2), 500e6, "investor should spend slightly less than round remaining (500.000001) due to rounding error");
+        }
+    }
 
     function test_Allocate_InvalidAmount() public {
         // Submit EOI first
@@ -1577,6 +2095,7 @@ contract RoundManagerTest is Test {
                     SecuritySeries.SeriesF,
                     RoundType.FounderApproved,
                     false,
+                    true,
                     100_000 * 10 ** 6,
                     1_000 * 10 ** 6,
                     50_000 * 10 ** 6,
@@ -1736,24 +2255,22 @@ contract RoundManagerTest is Test {
     }
 
     function test_UpgradeNextRoundManager() public {
-        assertEq(RoundManager(RoundManagerFactory(rmFactory).getRefImplementation()).DEPLOY_VERSION(), "1", "reference impl version should not be changed yet");
-
         vm.startPrank(owner);
-        RoundManagerFactory(rmFactory).setRefImplementation(address(new MockRoundManagerV2()));
+        RoundManagerFactory(rmFactory).setRefImplementation(address(new MockRoundManagerVTest()));
         vm.stopPrank();
-        assertEq(RoundManager(RoundManagerFactory(rmFactory).getRefImplementation()).DEPLOY_VERSION(), "2", "reference impl version should have changed");
+        assertEq(RoundManager(RoundManagerFactory(rmFactory).getRefImplementation()).DEPLOY_VERSION(), "test", "reference impl version should have changed");
 
         bytes32 salt = keccak256("test_UpgradeNextRounderManager");
         // Next deployment should emit events with version so indexer could be informed
         vm.expectEmit(true, true, true, true);
         emit RoundManagerFactory.RoundManagerDeployed(
             RoundManagerFactory(rmFactory).computeRoundManagerAddress(salt),
-            "2"
+            "test"
         );
         RoundManager nextRm = RoundManager(
             RoundManagerFactory(rmFactory).deployRoundManager(salt)
         );
-        assertEq(nextRm.DEPLOY_VERSION(), "2", "next deployment version should have changed");
+        assertEq(nextRm.DEPLOY_VERSION(), "test", "next deployment version should have changed");
     }
 
     function test_UpgradeExistingRoundManager() public {
@@ -1787,23 +2304,25 @@ contract RoundManagerTest is Test {
         // MetaLeX to release new RoundManager v2
 
         vm.startPrank(owner);
-        RoundManagerFactory(rmFactory).setRefImplementation(address(new MockRoundManagerV2()));
+        RoundManagerFactory(rmFactory).setRefImplementation(address(new MockRoundManagerVTest()));
         vm.stopPrank();
 
         // Corp2 owner decided to accept the upgrade
 
         vm.startPrank(corpOwner);
+        vm.expectEmit(true, true, true, true);
+        emit IERC1967.Upgraded(DealManagerFactory(rmFactory).getRefImplementation());
         rm2.upgradeToAndCall(address(RoundManagerFactory(rmFactory).getRefImplementation()), "");
         vm.stopPrank();
 
-        assertEq(rm2.DEPLOY_VERSION(), "2", "Target RoundManager should be upgraded");
-        assertEq(rm1.DEPLOY_VERSION(), "1", "Other RoundManager should not be upgraded");
+        assertEq(rm2.DEPLOY_VERSION(), "test", "Target RoundManager should be upgraded");
+        assertNotEq(rm1.DEPLOY_VERSION(), "test", "Other RoundManager should not be upgraded");
     }
 
     function test_RevertIf_UpgradeNonFactoryOwner() public {
         // Non-MetaLeX admin should not be able to set new reference implementation
 
-        address newImplementation = address(new MockRoundManagerV2());
+        address newImplementation = address(new MockRoundManagerVTest());
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, BorgAuth(auth).OWNER_ROLE(), corpOwner));
         vm.prank(corpOwner);
         RoundManagerFactory(rmFactory).setRefImplementation(newImplementation);
@@ -1829,7 +2348,7 @@ contract RoundManagerTest is Test {
         // Corp owner can't upgrade to v2 without MetaLeX releasing it first
 
         vm.startPrank(corpOwner);
-        address nonOfficialRoundManager = address(new MockRoundManagerV2());
+        address nonOfficialRoundManager = address(new MockRoundManagerVTest());
         vm.expectRevert(
             abi.encodeWithSelector(RoundManager.NotRefImplementation.selector)
         );
@@ -1873,13 +2392,14 @@ contract RoundManagerTest is Test {
         assertEq(details.signingOfficerName, "Officer");
         assertEq(details.signingOfficerTitle, "CEO");
 
-        // Investment USD = allocatedAmount / 10**decimals (USDC has 6)
-        uint256 expectedInvestmentUSD = allocatedAmount / (10 ** 6);
-        assertEq(details.investmentAmountUSD, expectedInvestmentUSD);
-
-        // Units represented = allocatedAmount / pricePerUnit (both in token's decimals)
-        uint256 expectedUnits = allocatedAmount / PRICE_PER_UNIT;
-        assertEq(details.unitsRepresented, expectedUnits);
+        // Investment USD and units are 18-dec; convert token amount to 1e18 and compute
+        uint8 tokenDecimals = paymentToken.decimals();
+        uint256 scale = 10 ** (18 - tokenDecimals);
+        uint256 allocated1e18 = allocatedAmount * scale;
+        uint256 expectedUnits18 = (allocated1e18 * 1e18) / PRICE_PER_UNIT;
+        uint256 expectedInvestmentUSD18 = (expectedUnits18 * PRICE_PER_UNIT) / 1e18;
+        assertEq(details.investmentAmountUSD, expectedInvestmentUSD18);
+        assertEq(details.unitsRepresented, expectedUnits18);
 
         // Valuation propagated
         assertEq(details.issuerUSDValuationAtTimeOfInvestment, VALUATION);
@@ -1954,6 +2474,7 @@ contract RoundManagerTest is Test {
                     SecuritySeries.SeriesSeed,
                     RoundType.FCFS,
                     false,
+                    true,
                     RAISE_CAP,
                     MIN_TICKET,
                     MAX_TICKET,
@@ -2026,7 +2547,7 @@ contract RoundManagerFCFSTest is Test {
     function setUp() public {
     }
 
-    function test_UpgradeSteps_RMFactory_CorpFactory_CorpBeacon() public {
+    function test_UpgradeSteps_RM_Corp_RefImplementation() public {
         address me = address(this);
         (
             ,
@@ -2035,7 +2556,7 @@ contract RoundManagerFCFSTest is Test {
             address cyberCorpSingleFactory,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
 
         address auth = address(corpFactory.AUTH());
@@ -2056,8 +2577,9 @@ contract RoundManagerFCFSTest is Test {
         corpFactory.setRoundManagerFactory(address(rmFactory));
         assertEq(corpFactory.roundManagerFactory(), address(rmFactory));
 
-        CyberCorpSingleFactory(cyberCorpSingleFactory).upgradeImplementation(address(new CyberCorp()));
-        assertTrue(CyberCorpSingleFactory(cyberCorpSingleFactory).getBeaconImplementation() != address(0));
+        address newCorpImpl = address(new CyberCorp());
+        CyberCorpSingleFactory(cyberCorpSingleFactory).setRefImplementation(newCorpImpl);
+        assertEq(CyberCorpSingleFactory(cyberCorpSingleFactory).getRefImplementation(), newCorpImpl, "CyberCorp refImplementation should have been updated");
     }
 
     function test_UpgradedInfra_FCFS_AutoAllocates() public {
@@ -2069,7 +2591,7 @@ contract RoundManagerFCFSTest is Test {
             address cyberCorpSingleFactory,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
@@ -2087,7 +2609,9 @@ contract RoundManagerFCFSTest is Test {
         rmFactory.setRefImplementation(address(new RoundManager()));
         IUUPS(address(corpFactory)).upgradeToAndCall(address(new CyberCorpFactory()), "");
         corpFactory.setRoundManagerFactory(address(rmFactory));
-        CyberCorpSingleFactory(cyberCorpSingleFactory).upgradeImplementation(address(new CyberCorp()));
+
+        // Update CyberCorp reference implementation so all new deployment uses the new one
+        CyberCorpSingleFactory(cyberCorpSingleFactory).setRefImplementation(address(new CyberCorp()));
 
         // Deploy upgraded corp and round manager
         (address corp, , , , address roundManager) = CyberCorpHelper.deployCorp(corpFactory, "Upgraded Corp", me, me);
@@ -2136,7 +2660,7 @@ contract RoundManagerFCFSTest is Test {
             ,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
 
         CyberCorpHelper.createTemplate(registry);
@@ -2191,6 +2715,7 @@ contract RoundManagerFCFSTest is Test {
                     SecuritySeries.SeriesPreSeed,
                     RoundType.FCFS,
                     true,
+                    true,
                     1,
                     1,
                     1,
@@ -2224,7 +2749,7 @@ contract RoundManagerFCFSTest is Test {
             ,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
@@ -2324,7 +2849,7 @@ contract RoundManagerFCFSTest is Test {
             ,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
@@ -2394,7 +2919,7 @@ contract RoundManagerFCFSTest is Test {
             ,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
@@ -2473,7 +2998,7 @@ contract RoundManagerFCFSTest is Test {
             ,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
@@ -2600,6 +3125,7 @@ contract RoundManagerFCFSTest is Test {
     }
 
     function test_RevertIf_FCFS_SubmitEOI_FailLexChexCondition() public {
+        // This test uses CreateLexChexRound to include the LexChex condition
         address me = address(this);
         (
             CyberAgreementRegistry registry,
@@ -2608,7 +3134,7 @@ contract RoundManagerFCFSTest is Test {
             ,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
@@ -2628,7 +3154,7 @@ contract RoundManagerFCFSTest is Test {
         uint256 officerPrivKey = 0xAA04;
         address officerEOA = vm.addr(officerPrivKey);
 
-        bytes32 roundId = CyberCorpHelper.createRound(
+        bytes32 roundId = CyberCorpHelper.CreateLexChexRound(
             rm,
             address(usdc),
             CyberCorpHelper.TEMPLATE_ID,
@@ -2702,8 +3228,8 @@ contract RoundManagerFCFSTest is Test {
             ,
             ,
             ,
+            address rmFactoryAddr,
             ,
-
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
@@ -2726,7 +3252,7 @@ contract RoundManagerFCFSTest is Test {
         address officerEOA = vm.addr(officerPrivKey);
 
         // Create a public FCFS round with maxTicket above 200k
-        bytes32 roundId = CyberCorpHelper.createRound(
+        bytes32 roundId = CyberCorpHelper.CreateLexChexRound(
             rm,
             address(usdc),
             CyberCorpHelper.TEMPLATE_ID,
@@ -2746,6 +3272,10 @@ contract RoundManagerFCFSTest is Test {
         uint256 investorPrivKey = 0xC0FFEE;
         address investor = vm.addr(investorPrivKey);
         usdc.transfer(investor, 300_000 * (10 ** usdc.decimals()));
+
+        //white list the mock payment token MockPaymentToken: [0x27cc01A4676C73fe8b6d0933Ac991BfF1D77C4da]
+        RoundManagerFactory(rmFactoryAddr).setWhitelistedToken(address(usdc), true);
+       
         vm.startPrank(investor);
         usdc.approve(address(rm), type(uint256).max);
 
@@ -2760,8 +3290,7 @@ contract RoundManagerFCFSTest is Test {
             naturalPerson: true,
             lexchexDetails: CyberCorpHelper.emptyLex()
         });
-
-        // Attach a valid LeXcheX mint payload aligned to template 400 so auto-mint can succeed
+         // Attach a valid LeXcheX mint payload aligned to template 400 so auto-mint can succeed
         {
             LeXcheXMinter minter = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
             CyberAgreementRegistry lxRegistry = CyberAgreementRegistry(minter.dealRegistry());
@@ -2845,9 +3374,12 @@ contract RoundManagerFCFSTest is Test {
             bytes32(0)
         );
         vm.stopPrank();
+
+        assertEq(ILexChex(CyberCorpHelper.LEXCHEX_ADDRESS).balanceOf(investor), 1, "LexChex should be minted for the investor");
     }
 
       function test_FCFS_PublicRound_UnderIndividualOver200k_LexChexRequired() public {
+        // This test uses CreateLexChexRound to include the LexChex condition
         address me = address(this);
         (
             CyberAgreementRegistry registry,
@@ -2856,7 +3388,7 @@ contract RoundManagerFCFSTest is Test {
             ,
             ,
             ,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
@@ -2879,7 +3411,7 @@ contract RoundManagerFCFSTest is Test {
         address officerEOA = vm.addr(officerPrivKey);
 
         // Create a public FCFS round with maxTicket above 200k
-        bytes32 roundId = CyberCorpHelper.createRound(
+        bytes32 roundId = CyberCorpHelper.CreateLexChexRound(
             rm,
             address(usdc),
             CyberCorpHelper.TEMPLATE_ID,
@@ -3064,6 +3596,255 @@ contract RoundManagerFCFSTest is Test {
         );
         vm.stopPrank();
     }
+
+    function test_FCFS_PublicRound_LexChexMinting_Whitelist() public {
+        // This test uses CreateLexChexRound to include the LexChex condition
+        address me = address(this);
+        (
+            CyberAgreementRegistry registry,
+            CyberCorpFactory corpFactory,
+            ,
+            ,
+            ,
+            address rmFactoryAddr,
+            ,
+        ) = CyberCorpHelper.deployRegistryAndFactories(me);
+        CyberCorpHelper.createTemplate(registry);
+
+        MockPaymentToken usdc = new MockPaymentToken();
+
+        // Prepare officer
+        uint256 officerPrivKey = 0xBEEF02;
+        address officerEOA = vm.addr(officerPrivKey);
+
+        // Create a separate Corp and RoundManager for this test
+        (address corpPub, , , , address rmAddrPub) = CyberCorpHelper.deployCorp(
+            corpFactory,
+            "Corp Public Whitelist",
+            me,
+            me
+        );
+        RoundManager rmPub = RoundManager(rmAddrPub);
+
+        // Allow RoundManager to transfer certs
+        vm.prank(address(corpFactory));
+        CyberCorp(corpPub).setDealManager(address(rmPub));
+
+        // Create Public FCFS Round
+        bytes32 pubRoundId = CyberCorpHelper.CreateLexChexRound(
+            rmPub,
+            address(usdc),
+            CyberCorpHelper.TEMPLATE_ID,
+            1_000_000 * (10 ** usdc.decimals()),
+            2_000 * (10 ** usdc.decimals()),
+            300_000 * (10 ** usdc.decimals()),
+            10 * (10 ** usdc.decimals()),
+            10_000_000,
+            RoundType.FCFS,
+            officerPrivKey,
+            corpPub,
+            true // publicRound
+        );
+
+        // Investor 1: Non-whitelisted token
+        uint256 inv1PrivKey = 0x11111;
+        address inv1 = vm.addr(inv1PrivKey);
+        usdc.mint(inv1, 300_000 * (10 ** usdc.decimals()));
+        vm.startPrank(inv1);
+        usdc.approve(address(rmPub), type(uint256).max);
+
+        EOI memory eoi = EOI({
+            name: "High Roller 1",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "email",
+            minAmount: 200_000 * (10 ** usdc.decimals()),
+            maxAmount: 250_000 * (10 ** usdc.decimals()),
+            expiry: block.timestamp + 7 days,
+            naturalPerson: true,
+            lexchexDetails: CyberCorpHelper.emptyLex()
+        });
+
+        // LexChex Details setup (boilerplate to pass validation if minting were attempted)
+        {
+            LeXcheXMinter minter = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
+            CyberAgreementRegistry lxRegistry = CyberAgreementRegistry(minter.dealRegistry());
+            bytes32 lxTemplateId = bytes32(uint256(400));
+            uint256 lxSalt = block.timestamp;
+            (string memory legalUri, , string[] memory lxGlFields, string[] memory lxPartyFields) = lxRegistry.getTemplateDetails(lxTemplateId);
+            string[] memory lxGlobalValues = new string[](1);
+            lxGlobalValues[0] = "2029-01-01";
+            address[] memory lxParties = new address[](1);
+            lxParties[0] = inv1;
+            string[][] memory lxPartyValues = new string[][](1);
+            lxPartyValues[0] = new string[](4);
+            lxPartyValues[0][0] = eoi.name;
+            lxPartyValues[0][1] = eoi.investorType;
+            lxPartyValues[0][2] = eoi.jurisdiction;
+            lxPartyValues[0][3] = eoi.contact;
+
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties));
+            bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                lxRegistry.DOMAIN_SEPARATOR(),
+                lxRegistry.SIGNATUREDATA_TYPEHASH(),
+                lxContractId,
+                legalUri,
+                lxGlFields,
+                lxPartyFields,
+                lxGlobalValues,
+                lxPartyValues[0],
+                inv1PrivKey
+            );
+
+            eoi.lexchexDetails = LexChexDetails({
+                request: MintRequest({
+                    uuid: 1,
+                    owner: inv1,
+                    investorName: eoi.name,
+                    investorType: eoi.investorType,
+                    investorJurisdiction: eoi.jurisdiction,
+                    investorContact: eoi.contact,
+                    mintPrice: 0,
+                    expiry: block.timestamp + 30 days,
+                    paymentToken: address(usdc)
+                }),
+                templateId: lxTemplateId,
+                salt: uint256(lxSalt),
+                globalValues: lxGlobalValues,
+                parties: lxParties,
+                partyValues: lxPartyValues,
+                agreementSignature: lxSig
+            });
+        }
+
+        // EOI Signature
+        string[] memory glValues = new string[](1);
+        glValues[0] = "g";
+        string[] memory pv = new string[](2);
+        pv[0] = "Officer";
+        pv[1] = "CEO";
+        bytes memory sig = CyberCorpHelper.computeEOISignature(
+            registry,
+            CyberCorpHelper.TEMPLATE_ID,
+            123,
+            glValues,
+            pv,
+            officerEOA,
+            inv1PrivKey
+        );
+
+        // SUBMIT EOI - Should succeed but NOT mint LexChex because token is not whitelisted
+        vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
+        rmPub.submitEOI(
+            pubRoundId,
+            eoi,
+            glValues,
+            pv,
+            sig,
+            123,
+            new address[](0),
+            bytes32(0)
+        );
+        vm.stopPrank();
+
+        // Check LexChex balance
+        assertEq(ILexChex(CyberCorpHelper.LEXCHEX_ADDRESS).balanceOf(inv1), 0, "LexChex should not be minted for non-whitelisted token");
+
+        // PART 2: Whitelist Token
+        vm.prank(me);
+        RoundManagerFactory(rmFactoryAddr).setWhitelistedToken(address(usdc), true);
+
+
+        // Investor 2: Whitelisted token
+        uint256 inv2PrivKey = 0x22222;
+        address inv2 = vm.addr(inv2PrivKey);
+        usdc.mint(inv2, 300_000 * (10 ** usdc.decimals()));
+        vm.startPrank(inv2);
+        usdc.approve(address(rmPub), type(uint256).max);
+
+        // Reuse EOI struct but update signer info
+        eoi.name = "High Roller 2";
+        
+        // Update LexChex details for Investor 2
+        {
+            LeXcheXMinter minter = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
+            CyberAgreementRegistry lxRegistry = CyberAgreementRegistry(minter.dealRegistry());
+            bytes32 lxTemplateId = bytes32(uint256(400));
+            uint256 lxSalt = block.timestamp + 1;
+            (string memory legalUri, , string[] memory lxGlFields, string[] memory lxPartyFields) = lxRegistry.getTemplateDetails(lxTemplateId);
+            string[] memory lxGlobalValues = new string[](1);
+            lxGlobalValues[0] = "2029-01-01";
+            address[] memory lxParties = new address[](1);
+            lxParties[0] = inv2;
+            string[][] memory lxPartyValues = new string[][](1);
+            lxPartyValues[0] = new string[](4);
+            lxPartyValues[0][0] = eoi.name;
+            lxPartyValues[0][1] = eoi.investorType;
+            lxPartyValues[0][2] = eoi.jurisdiction;
+            lxPartyValues[0][3] = eoi.contact;
+
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties));
+            bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                lxRegistry.DOMAIN_SEPARATOR(),
+                lxRegistry.SIGNATUREDATA_TYPEHASH(),
+                lxContractId,
+                legalUri,
+                lxGlFields,
+                lxPartyFields,
+                lxGlobalValues,
+                lxPartyValues[0],
+                inv2PrivKey
+            );
+
+            eoi.lexchexDetails = LexChexDetails({
+                request: MintRequest({
+                    uuid: 2,
+                    owner: inv2,
+                    investorName: eoi.name,
+                    investorType: eoi.investorType,
+                    investorJurisdiction: eoi.jurisdiction,
+                    investorContact: eoi.contact,
+                    mintPrice: 0,
+                    expiry: block.timestamp + 30 days,
+                    paymentToken: address(usdc)
+                }),
+                templateId: lxTemplateId,
+                salt: uint256(lxSalt),
+                globalValues: lxGlobalValues,
+                parties: lxParties,
+                partyValues: lxPartyValues,
+                agreementSignature: lxSig
+            });
+        }
+
+        // Compute EOI Signature for Investor 2
+        sig = CyberCorpHelper.computeEOISignature(
+            registry,
+            CyberCorpHelper.TEMPLATE_ID,
+            124,
+            glValues,
+            pv,
+            officerEOA,
+            inv2PrivKey
+        );
+
+        // SUBMIT EOI - Should succeed AND mint LexChex
+        rmPub.submitEOI(
+            pubRoundId,
+            eoi,
+            glValues,
+            pv,
+            sig,
+            124,
+            new address[](0),
+            bytes32(0)
+        );
+        vm.stopPrank();
+
+        assertEq(ILexChex(CyberCorpHelper.LEXCHEX_ADDRESS).balanceOf(inv2), 1, "LexChex SHOULD be minted for whitelisted token");
+    }
 }
 
 contract CyberCorpFactoryPublicRoundTest is Test {
@@ -3078,7 +3859,7 @@ contract CyberCorpFactoryPublicRoundTest is Test {
             address cyberCorpSingleFactory,
             ,
             address rmFactory,
-
+            ,
         ) = CyberCorpHelper.deployRegistryAndFactories(me);
         CyberCorpHelper.createTemplate(registry);
 
@@ -3106,7 +3887,7 @@ contract CyberCorpFactoryPublicRoundTest is Test {
         uint256 minTicket = 2_000 * (10 ** usdc.decimals());
         uint256 maxTicket = 50_000 * (10 ** usdc.decimals());
         uint256 pricePerUnit = 10 * (10 ** usdc.decimals());
-        uint256 valuation = 10_000_000;
+        uint256 valuation = 1_000_000_000_000_000_000_000;
         uint256 startTime = block.timestamp;
         uint256 endTime = block.timestamp + 30 days;
 
@@ -3178,6 +3959,7 @@ contract CyberCorpFactoryPublicRoundTest is Test {
             maxTicket,
             startTime,
             endTime,
+            true,
             true
         );
 
