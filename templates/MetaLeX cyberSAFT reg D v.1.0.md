@@ -17,7 +17,7 @@ Github: https://github.com/MetaLex-Tech/publicDocs/blob/main/cyberKs/cyberSAFT/M
 | protocolValuationCap       |          |
 | governingJurisdiction       |          |
 | disputeResolution   |         |
-| unlockStartTimeType |"agreementStartTime" \|"tgeTime" \| "setTime"        |
+| unlockStartTimeType |"agreementExecutionTime" \|"tgeTime" \| "setTime"        |
 | unlockStartTime       | only set if using `setTime` for `unlockStartTimeType` |
 | unlockingPeriod       | Duration in `unlockingInvervalType` units  |
 | unlockingCliffPeriod       | Duration in `unlockingIntervalType`, first tokens unlocked at `unlockingStartTime` + `unlockingCliffPeriod`  |
