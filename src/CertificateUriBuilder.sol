@@ -204,6 +204,7 @@ struct CertificateDetails {
         address ownerAddress;
     }
 
+
     function buildAttributes(
         OwnerDetails memory owner,
         CertificateDetails memory details
@@ -316,14 +317,18 @@ struct CertificateDetails {
     ) public view returns (string memory) {
         // Start building the JSON string with ERC-721 metadata standard format
         // Build on-chain SVG image using the image builder
-        string memory svg = CertificateImageBuilder.buildCertificateSVG(
-            cyberCORPName,
-            securityClassToString(securityType),
-            details.signingOfficerName,
-            details.signingOfficerTitle,
-            details.unitsRepresented,
-            details.issuerUSDValuationAtTimeOfInvestment
-        );
+        CertificateSVGParams memory svgParams = CertificateSVGParams({
+            corpName: cyberCORPName,
+            securityType: securityType,
+            officerName: details.signingOfficerName,
+            officerTitle: details.signingOfficerTitle,
+            units: details.unitsRepresented,
+            valuation: details.issuerUSDValuationAtTimeOfInvestment,
+            jurisdiction: cyberCORPJurisdiction,
+            ownerName: owner.name,
+            tokenId: tokenId
+        });
+        string memory svg = CertificateImageBuilder.buildCertificateSVG(svgParams);
         string memory imageDataUri = string(abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg))));
 
         string memory json = string(abi.encodePacked(
@@ -404,14 +409,18 @@ struct CertificateDetails {
     ) public view returns (string memory) {
         // Start building the JSON string with ERC-721 metadata standard format
         // Build on-chain SVG image using the image builder
-        string memory svg = CertificateImageBuilder.buildCertificateSVG(
-            cyberCORPName,
-            securityClassToString(securityType),
-            details.signingOfficerName,
-            details.signingOfficerTitle,
-            details.unitsRepresented,
-            details.issuerUSDValuationAtTimeOfInvestment
-        );
+        CertificateSVGParams memory svgParams = CertificateSVGParams({
+            corpName: cyberCORPName,
+            securityType: securityType,
+            officerName: details.signingOfficerName,
+            officerTitle: details.signingOfficerTitle,
+            units: details.unitsRepresented,
+            valuation: details.issuerUSDValuationAtTimeOfInvestment,
+            jurisdiction: cyberCORPJurisdiction,
+            ownerName: owner.name,
+            tokenId: tokenId
+        });
+        string memory svg = CertificateImageBuilder.buildCertificateSVG(svgParams);
         string memory imageDataUri = string(abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg))));
 
         string memory json = string(abi.encodePacked(

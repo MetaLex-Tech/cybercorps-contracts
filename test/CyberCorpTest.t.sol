@@ -2608,7 +2608,7 @@ contract CyberCorpTest is Test {
 
         CertificateDetails[] memory _details = new CertificateDetails[](1);
         CertificateDetails memory _detailsA = CertificateDetails({
-            signingOfficerName: "Gabe",
+            signingOfficerName: "Gabriel Shapiro",
             signingOfficerTitle: "CEO",
             investmentAmountUSD: 100000,
             issuerUSDValuationAtTimeOfInvestment: 100000000,
@@ -2652,9 +2652,9 @@ contract CyberCorpTest is Test {
 
         string[][] memory partyValues = new string[][](1);
         partyValues[0] = new string[](5);
-        partyValues[0][0] = "Gabe";
+        partyValues[0][0] = "Gabriel Shaprio";
         partyValues[0][1] = "0xDEADBABE12345678909876543210866666666666";
-        partyValues[0][2] = "@Gabe";
+        partyValues[0][2] = "@gabe";
         partyValues[0][3] = "Limited Liability Company";
         partyValues[0][4] = "Deleware";
 
@@ -2691,7 +2691,7 @@ contract CyberCorpTest is Test {
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
                 block.timestamp,
-                "CyberCorp",
+                "Test CyberCorp, LLC",
                 "Limited Liability Company",
                 "Juris",
                 "Contact Details",
