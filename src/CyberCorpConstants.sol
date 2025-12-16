@@ -107,6 +107,19 @@ enum UnlockingIntervalType {
     monthly
 }
 
+struct CertificateSVGParams {
+    string corpName;
+    SecurityClass securityType;
+    SecuritySeries securitySeries;
+    string officerName;
+    string officerTitle;
+    uint256 units;
+    uint256 valuation;
+    string jurisdiction;
+    string ownerName;
+    uint256 tokenId;
+}
+
 
 
 

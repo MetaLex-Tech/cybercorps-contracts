@@ -43,18 +43,7 @@ pragma solidity ^0.8.28;
 
 import "./CyberCorpConstants.sol";
 import "./creds/storage/lexchexStorage.sol";
-
-struct CertificateSVGParams {
-    string corpName;
-    SecurityClass securityType;
-    string officerName;
-    string officerTitle;
-    uint256 units;
-    uint256 valuation;
-    string jurisdiction;
-    string ownerName;
-    uint256 tokenId;
-}
+import "./CertificateImageContentBuilder.sol";
 
 /// @title CertificateImageBuilder
 /// @notice Minimal SVG builder used by CertificateUriBuilder; mirrors LeXcheX styling
@@ -70,18 +59,13 @@ library CertificateImageBuilder {
     }
 
     function buildCertificateSVG(
-        CertificateSVGParams memory params
+        CertificateSVGParams memory params,
+        uint256 timestamp
     ) internal view returns (string memory) {
-        string memory securityType = _securityClassToString(params.securityType);
-        string memory unitType = _securityClassToUnit(params.securityType);
-        // Get current timestamp for date
-        uint256 timestamp = block.timestamp;
-        (string memory day, string memory month, string memory year) = _getDateComponents(timestamp);
-
         return string(abi.encodePacked(
             _getSVGHeader(),
             _getSVGBackground(),
-            _getSVGContent(params, securityType, unitType, day, month, year),
+            CertificateImageContentBuilder.buildSVGContent(params, timestamp),
             _getSVGFooter()
         ));
     }
@@ -136,64 +120,6 @@ library CertificateImageBuilder {
         ));
     }
 
-    function _getSVGContent(
-        CertificateSVGParams memory params,
-        string memory securityType,
-        string memory unitType,
-        string memory day,
-        string memory month,
-        string memory year
-    ) private pure returns (string memory) {
-        return string(abi.encodePacked(
-            '<defs>',
-            '<radialGradient id="paint0_radial_23552_60894" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(512 512) rotate(90) scale(512)">',
-            '<stop stop-color="#DAFF00"/><stop offset="1" stop-color="#191A18"/></radialGradient>',
-            '<radialGradient id="paint1_radial_23552_60894" cx="0" cy="0" r="1" gradientTransform="matrix(-0.0961874 -88.2743 380.979 -0.400474 534.169 323.929)" gradientUnits="userSpaceOnUse">',
-            '<stop stop-color="#DAFF00"/><stop offset="1" stop-color="#DAFF00" stop-opacity="0"/></radialGradient>',
-            '<linearGradient id="paint2_linear_23552_60894" x1="80" y1="284.5" x2="944" y2="284.5" gradientUnits="userSpaceOnUse">',
-            '<stop stop-color="#DAFF00" stop-opacity="0"/><stop offset="0.524038" stop-color="#DAFF00"/><stop offset="1" stop-color="#DAFF00" stop-opacity="0"/></linearGradient>',
-            '<radialGradient id="paint3_radial_23552_60894" cx="0" cy="0" r="1" gradientTransform="matrix(0.0961936 71.6814 -380.979 0.32523 489.831 835.982)" gradientUnits="userSpaceOnUse">',
-            '<stop stop-color="#DAFF00"/><stop offset="1" stop-color="#DAFF00" stop-opacity="0"/></radialGradient>',
-            '<linearGradient id="paint4_linear_23552_60894" x1="944" y1="868" x2="80" y2="868" gradientUnits="userSpaceOnUse">',
-            '<stop stop-color="#DAFF00" stop-opacity="0"/><stop offset="0.524038" stop-color="#DAFF00"/><stop offset="1" stop-color="#DAFF00" stop-opacity="0"/></linearGradient>',
-            '<clipPath id="clip0_23552_60894"><rect width="1024" height="1024" fill="white"/></clipPath></defs>',
-            '<text x="290" y="250" font-size="53" font-family="system-ui" fill="#f2f2f2">', params.corpName, '</text>',
-            '<text x="133" y="159" font-size="11" font-family="system-ui" fill="#f2f2f2">Token ID</text>',
-            '<text x="130" y="198" font-size="35" font-family="system-ui" fill="#f2f2f2">#', _uintToString(params.tokenId), '</text>',
-            '<text x="855" y="158" font-size="11" font-family="system-ui" fill="#f2f2f2">', unitType, '</text>',
-            '<text x="850" y="198" font-size="35" font-family="system-ui" fill="#f2f2f2">', _uintToString(params.units), '</text>',
-            '<text x="210" y="298" font-size="20" font-family="system-ui" fill="#f2f2f2">The Corporation is Authorized to Issue ', _uintToString(params.units), ' ', unitType, ' of ', securityType, '</text>',
-            '<text x="300" y="328" font-size="20" font-family="system-ui" fill="#f2f2f2">Incorporated Under the Laws of ', params.jurisdiction, '</text>',
-            '<text x="150" y="418" font-weight="600" font-size="20" font-family="system-ui" fill="#f2f2f2">This Certifies That</text>',
-            '<line x1="330" x2="635" y1="425" y2="425" stroke-width="2" stroke="#333423"/>',
-            '<text x="360" y="418" font-size="20" font-family="system-ui" fill="#DAFF00">', params.ownerName, '</text>',
-            '<text x="650" y="418" font-size="20" font-family="system-ui" fill="#9A9A98">is the registred holder of</text>',
-            '<text x="180" y="463" font-size="20" font-family="system-ui" fill="#DAFF00">', _uintToString(params.units), '</text>',
-            '<line x1="150" x2="295" y1="468" y2="468" stroke-width="2" stroke="#333423"/>',
-            '<text x="380" y="463" font-size="20" font-family="system-ui" fill="#DAFF00">', unitType, '</text>',
-            '<line x1="320" x2="555" y1="468" y2="468" stroke-width="2" stroke="#333423"/>',
-            '<text x="640" y="463" font-size="20" font-family="system-ui" fill="#DAFF00">', params.corpName, '</text>',
-            '<line x1="620" x2="875" y1="468" y2="468" stroke-width="2" stroke="#333423"/>',
-            '<text x="580" y="463" font-size="20" font-family="system-ui" fill="#9A9A98">of</text>',
-            '<text x="150" y="518" font-size="20" font-family="system-ui" fill="#9A9A98">transferable only on the books of the Corporation by the holder hereof in person or by</text>',
-            '<text x="150" y="545" font-size="20" font-family="system-ui" fill="#9A9A98">Attorney upon surrender of this Certificate properly endorsed.</text>',
-            '<text x="150" y="590" font-weight="600" font-size="20" font-family="system-ui" fill="#f2f2f2">In Witness Whereof</text>',
-            '<text x="331" y="590" font-size="20" font-family="system-ui" fill="#9A9A98">, the said Corporation has caused this Certificate to be signed by its</text>',
-            '<text x="150" y="618" font-size="20" font-family="system-ui" fill="#9A9A98">duly authorized officers and its Corporate Seal to be hereunto affixed.</text>',
-            '<text x="150" y="663" font-size="20" font-family="system-ui" fill="#9A9A98">This</text>',
-            '<text x="280" y="663" font-size="20" font-family="system-ui" fill="#DAFF00">', day, '</text>',
-            '<line x1="200" x2="370" y1="668" y2="668" stroke-width="2" stroke="#333423"/>',
-            '<text x="390" y="663" font-size="20" font-family="system-ui" fill="#9A9A98">day of</text>',
-            '<text x="520" y="663" font-size="20" font-family="system-ui" fill="#DAFF00">', month, '</text>',
-            '<line x1="465" x2="665" y1="668" y2="668" stroke-width="2" stroke="#333423"/>',
-            '<text x="690" y="663" font-size="20" font-family="system-ui" fill="#9A9A98">A.D.</text>',
-            '<text x="800" y="663" font-size="20" font-family="system-ui" fill="#DAFF00">', year, '</text>',
-            '<line x1="745" x2="895" y1="668" y2="668" stroke-width="2" stroke="#333423"/>',
-            '<text x="220" y="730" font-size="20" font-family="system-ui" fill="#DAFF00">', params.officerName, '</text>',
-            '<text x="267" y="754" font-size="11" font-family="system-ui" fill="#f2f2f2">', params.officerTitle, '</text>'
-        ));
-    }
-
     function _getSVGFooter() private pure returns (string memory) {
         return '</svg>';
     }
@@ -212,6 +138,7 @@ library CertificateImageBuilder {
         return string(abi.encodePacked(
             '<path d="M899 1020L883 1020L899 996L899 1020Z" fill="#F2F2F2" fill-opacity="0.01"/>',
             '<rect width="105" height="24.0001" transform="matrix(1 0 0 -1 899 1020)" fill="#F2F2F2" fill-opacity="0.01"/>',
+            '<path d="M909.11 1011.5L907.89 1011.5L907.89 1004.41L909.11 1004.41L909.11 1011.5ZM911.878 1008.69L911.878 1011.5L910.718 1011.5L910.718 1006.63L911.848 1006.63L911.848 1007.28C912.168 1006.72 912.748 1006.49 913.288 1006.49C914.478 1006.49 915.048 1007.35 915.048 1008.42L915.048 1011.5L913.888 1011.5L913.888 1008.62C913.888 1008.02 913.618 1007.54 912.888 1007.54C912.228 1007.54 911.878 1008.05 911.878 1008.69ZM924.412 1007.55C923.702 1007.55 923.072 1008.08 923.072 1009.06C923.072 1010.04 923.702 1010.59 924.432 1010.59C925.192 1010.59 925.542 1010.06 925.652 1009.69L926.672 1010.06C926.442 1010.82 925.712 1011.65 924.432 1011.65C923.002 1011.65 921.912 1010.54 921.912 1009.06C921.912 1007.56 923.002 1006.48 924.402 1006.48C925.712 1006.48 926.432 1007.3 926.632 1008.08L925.592 1008.46C925.482 1008.03 925.152 1007.55 924.412 1007.55ZM929.92 1010.61C930.64 1010.61 931.28 1010.08 931.28 1009.06C931.28 1008.05 930.64 1007.53 929.92 1007.53C929.21 1007.53 928.56 1008.05 928.56 1009.06C928.56 1010.07 929.21 1010.61 929.92 1010.61ZM929.92 1006.48C931.38 1006.48 932.45 1007.57 932.45 1009.06C932.45 1010.56 931.38 1011.65 929.92 1011.65C928.47 1011.65 927.4 1010.56 927.4 1009.06C927.4 1007.57 928.47 1006.48 929.92 1006.48ZM934.429 1009.05C934.429 1009.98 934.949 1010.6 935.739 1010.6C936.499 1010.6 937.029 1009.97 937.029 1009.04C937.029 1008.11 936.509 1007.53 935.749 1007.53C934.989 1007.53 934.429 1008.12 934.429 1009.05ZM938.149 1004.26L938.149 1010.61C938.149 1011.05 938.189 1011.42 938.199 1011.5L937.089 1011.5C937.069 1011.39 937.039 1011.07 937.039 1010.87C936.809 1011.28 936.299 1011.62 935.609 1011.62C934.209 1011.62 933.269 1010.52 933.269 1009.05C933.269 1007.65 934.219 1006.5 935.589 1006.5C936.439 1006.5 936.869 1006.89 937.019 1007.2L937.019 1004.26L938.149 1004.26ZM940.465 1008.53L942.855 1008.53C942.835 1007.96 942.455 1007.45 941.655 1007.45C940.925 1007.45 940.505 1008.01 940.465 1008.53ZM942.985 1009.8L943.965 1010.11C943.705 1010.96 942.935 1011.65 941.765 1011.65C940.445 1011.65 939.275 1010.69 939.275 1009.04C939.275 1007.5 940.415 1006.48 941.645 1006.48C943.145 1006.48 944.025 1007.47 944.025 1009.01C944.025 1009.2 944.005 1009.36 943.995 1009.38L940.435 1009.38C940.465 1010.12 941.045 1010.65 941.765 1010.65C942.465 1010.65 942.825 1010.28 942.985 1009.8ZM953.783 1006.63L954.983 1006.63L956.133 1010L957.103 1006.63L958.283 1006.63L956.723 1011.5L955.563 1011.5L954.353 1008L953.173 1011.5L951.983 1011.5L950.403 1006.63L951.643 1006.63L952.633 1010L953.783 1006.63ZM960.016 1008.53L962.406 1008.53C962.386 1007.96 962.006 1007.45 961.206 1007.45C960.476 1007.45 960.056 1008.01 960.016 1008.53ZM962.536 1009.8L963.516 1010.11C963.256 1010.96 962.486 1011.65 961.316 1011.65C959.996 1011.65 958.826 1010.69 958.826 1009.04C958.826 1007.5 959.966 1006.48 961.196 1006.48C962.696 1006.48 963.576 1007.47 963.576 1009.01C963.576 1009.2 963.556 1009.36 963.546 1009.38L959.986 1009.38C960.016 1010.12 960.596 1010.65 961.316 1010.65C962.016 1010.65 962.376 1010.28 962.536 1009.8ZM972.014 1005.14L972.014 1006.63L973.024 1006.63L973.024 1007.66L972.014 1007.66L972.014 1009.92C972.014 1010.35 972.204 1010.53 972.634 1010.53C972.794 1010.53 972.984 1010.5 973.034 1010.49L973.034 1011.45C972.964 1011.48 972.744 1011.56 972.324 1011.56C971.424 1011.56 970.864 1011.02 970.864 1010.11L970.864 1007.66L969.964 1007.66L969.964 1006.63L970.214 1006.63C970.734 1006.63 970.964 1006.3 970.964 1005.87L970.964 1005.14L972.014 1005.14ZM976.986 1006.6L976.986 1007.78C976.856 1007.76 976.726 1007.75 976.606 1007.75C975.706 1007.75 975.296 1008.27 975.296 1009.18L975.296 1011.5L974.136 1011.5L974.136 1006.63L975.266 1006.63L975.266 1007.41C975.496 1006.88 976.036 1006.57 976.676 1006.57C976.816 1006.57 976.936 1006.59 976.986 1006.6ZM981.076 1010.96C980.836 1011.4 980.266 1011.64 979.696 1011.64C978.536 1011.64 977.856 1010.78 977.856 1009.7L977.856 1006.63L979.016 1006.63L979.016 1009.49C979.016 1010.09 979.296 1010.6 979.996 1010.6C980.666 1010.6 981.016 1010.15 981.016 1009.51L981.016 1006.63L982.176 1006.63L982.176 1010.61C982.176 1011.01 982.206 1011.32 982.226 1011.5L981.116 1011.5C981.096 1011.39 981.076 1011.16 981.076 1010.96ZM983.278 1010.18L984.288 1009.9C984.328 1010.34 984.658 1010.73 985.278 1010.73C985.758 1010.73 986.008 1010.47 986.008 1010.17C986.008 1009.91 985.828 1009.71 985.438 1009.63L984.718 1009.47C983.858 1009.28 983.408 1008.72 983.408 1008.05C983.408 1007.2 984.188 1006.48 985.198 1006.48C986.558 1006.48 986.998 1007.36 987.078 1007.84L986.098 1008.12C986.058 1007.84 985.848 1007.39 985.198 1007.39C984.788 1007.39 984.498 1007.65 984.498 1007.95C984.498 1008.21 984.688 1008.4 984.988 1008.46L985.728 1008.61C986.648 1008.81 987.128 1009.37 987.128 1010.09C987.128 1010.83 986.528 1011.65 985.288 1011.65C983.878 1011.65 983.338 1010.73 983.278 1010.18ZM989.797 1005.14L989.797 1006.63L990.807 1006.63L990.807 1007.66L989.797 1007.66L989.797 1009.92C989.797 1010.35 989.987 1010.53 990.417 1010.53C990.577 1010.53 990.767 1010.5 990.817 1010.49L990.817 1011.45C990.747 1011.48 990.527 1011.56 990.107 1011.56C989.207 1011.56 988.647 1011.02 988.647 1010.11L988.647 1007.66L987.747 1007.66L987.747 1006.63L987.997 1006.63C988.517 1006.63 988.747 1006.3 988.747 1005.87L988.747 1005.14L989.797 1005.14Z" fill="#F2F2F2" fill-opacity="0.06"/>',
             '<path d="M1004 1020L1020 1020L1004 996L1004 1020Z" fill="#F2F2F2" fill-opacity="0.01"/>',
             '<path d="M773.429 1020L757.429 1020L773.429 996L773.429 1020Z" fill="#F2F2F2" fill-opacity="0.01"/>',
             '<rect width="105" height="24.0001" transform="matrix(1 0 0 -1 773.429 1020)" fill="#F2F2F2" fill-opacity="0.01"/>',
@@ -299,75 +226,6 @@ library CertificateImageBuilder {
         return string(abi.encodePacked(_uintToString(month), '/', _uintToString(day), '/', _uintToString(year)));
     }
 
-    function _getDateComponents(uint256 timestamp) private pure returns (string memory day, string memory month, string memory year) {
-        uint256 dayNum = ((timestamp / 86400) % 31) + 1;
-        uint256 monthNum = ((timestamp / 2629743) % 12) + 1;
-        uint256 yearNum = (timestamp / 31556926) + 1970;
-
-        day = _uintToString(dayNum);
-        month = _getMonthName(monthNum);
-        year = _uintToString(yearNum);
-    }
-
-    function _getMonthName(uint256 month) private pure returns (string memory) {
-        if (month == 1) return "January";
-        if (month == 2) return "February";
-        if (month == 3) return "March";
-        if (month == 4) return "April";
-        if (month == 5) return "May";
-        if (month == 6) return "June";
-        if (month == 7) return "July";
-        if (month == 8) return "August";
-        if (month == 9) return "September";
-        if (month == 10) return "October";
-        if (month == 11) return "November";
-        if (month == 12) return "December";
-        return "Unknown";
-    }
-
-    function _securityClassToString(SecurityClass _class) private pure returns (string memory) {
-        if (_class == SecurityClass.SAFE) return "SAFE";
-        if (_class == SecurityClass.SAFT) return "SAFT";
-        if (_class == SecurityClass.SAFTE) return "SAFTE";
-        if (_class == SecurityClass.TokenPurchaseAgreement) return "TokenPurchaseAgreement";
-        if (_class == SecurityClass.TokenWarrant) return "TokenWarrant";
-        if (_class == SecurityClass.ConvertibleNote) return "ConvertibleNote";
-        if (_class == SecurityClass.CommonStock) return "CommonStock";
-        if (_class == SecurityClass.StockOption) return "StockOption";
-        if (_class == SecurityClass.PreferredStock) return "PreferredStock";
-        if (_class == SecurityClass.RestrictedStockPurchaseAgreement) return "RestrictedStockPurchaseAgreement";
-        if (_class == SecurityClass.RestrictedStockUnit) return "RestrictedStockUnit";
-        if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "RestrictedTokenPurchaseAgreement";
-        if (_class == SecurityClass.RestrictedTokenUnit) return "RestrictedTokenUnit";
-        return "Unknown";
-    }
-
-    function _securityClassToUnit(SecurityClass _class) private pure returns (string memory) {
-        if (_class == SecurityClass.SAFE) return "Dollars";
-        if (_class == SecurityClass.SAFT) return "Dollars";
-        if (_class == SecurityClass.SAFTE) return "Dollars";
-        if (_class == SecurityClass.TokenPurchaseAgreement) return "Tokens";
-        if (_class == SecurityClass.TokenWarrant) return "Tokens";
-        if (_class == SecurityClass.ConvertibleNote) return "Notes";
-        if (_class == SecurityClass.CommonStock) return "Shares";
-        if (_class == SecurityClass.StockOption) return "Shares";
-        if (_class == SecurityClass.PreferredStock) return "Shares";
-        if (_class == SecurityClass.RestrictedStockPurchaseAgreement) return "Units";
-        if (_class == SecurityClass.RestrictedStockUnit) return "Units";
-        if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "Units";
-        if (_class == SecurityClass.RestrictedTokenUnit) return "Units";
-        return "Unknown";
-    }
-
-    function _bytes32ToHexString(bytes32 value) private pure returns (string memory) {
-        bytes memory str = new bytes(64);
-        for (uint256 i = 0; i < 32; i++) {
-            str[i * 2] = bytes1(uint8(uint256(uint8(value[i] >> 4)) + (uint256(uint8(value[i] >> 4)) < 10 ? 48 : 87)));
-            str[i * 2 + 1] = bytes1(uint8(uint256(uint8(value[i] & 0x0f)) + (uint256(uint8(value[i] & 0x0f)) < 10 ? 48 : 87)));
-        }
-        return string(abi.encodePacked("0x", string(str)));
-    }
-
     function _uintToString(uint256 _i) private pure returns (string memory) {
         if (_i == 0) return "0";
         uint256 j = _i;
@@ -385,6 +243,13 @@ library CertificateImageBuilder {
         }
         return string(bstr);
     }
+
+    function _bytes32ToHexString(bytes32 value) private pure returns (string memory) {
+        bytes memory str = new bytes(64);
+        for (uint256 i = 0; i < 32; i++) {
+            str[i * 2] = bytes1(uint8(uint256(uint8(value[i] >> 4)) + (uint256(uint8(value[i] >> 4)) < 10 ? 48 : 87)));
+            str[i * 2 + 1] = bytes1(uint8(uint256(uint8(value[i] & 0x0f)) + (uint256(uint8(value[i] & 0x0f)) < 10 ? 48 : 87)));
+        }
+        return string(abi.encodePacked("0x", string(str)));
+    }
 }
-
-

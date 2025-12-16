@@ -2601,6 +2601,7 @@ contract CyberCorpTest is Test {
 
     //create test to print certificateuri
     function testPrintCertificateUri() public {
+        vm.warp(block.timestamp - 3000000);
         vm.startPrank(testAddress);
         CyberCorpFactory cyberCorpFactoryLive = CyberCorpFactory(
             0x2aDA6E66a92CbF283B9F2f4f095Fe705faD357B8
@@ -2647,16 +2648,16 @@ contract CyberCorpTest is Test {
         globalValues[0] = "100000";
         globalValues[1] = "100000000";
         globalValues[2] = "12/1/2025";
-        globalValues[3] = "Deleware";
+        globalValues[3] = "Delaware";
         globalValues[4] = "Binding Arbitration";
 
         string[][] memory partyValues = new string[][](1);
         partyValues[0] = new string[](5);
-        partyValues[0][0] = "Gabriel Shaprio";
+        partyValues[0][0] = "Gabriel Shapiro";
         partyValues[0][1] = "0xDEADBABE12345678909876543210866666666666";
         partyValues[0][2] = "@gabe";
         partyValues[0][3] = "Limited Liability Company";
-        partyValues[0][4] = "Deleware";
+        partyValues[0][4] = "Delaware";
 
         bytes32 contractId = keccak256(
             abi.encode(
@@ -2693,7 +2694,7 @@ contract CyberCorpTest is Test {
                 block.timestamp,
                 "Test CyberCorp, LLC",
                 "Limited Liability Company",
-                "Juris",
+                "Delaware",
                 "Contact Details",
                 "Dispute Res",
                 testAddress,
@@ -2719,7 +2720,7 @@ contract CyberCorpTest is Test {
         partyValuesB[1] = "0xC0FFEEBABE12345678909876543210866666666666";
         partyValuesB[2] = "@0xPrepop";
         partyValuesB[3] = "Limited Liability Company";
-        partyValuesB[4] = "Deleware";
+        partyValuesB[4] = "Delaware";
 
         vm.startPrank(newPartyAddr);
         bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
@@ -2750,11 +2751,18 @@ contract CyberCorpTest is Test {
             partyValuesB,
             newPartySignature,
             true,
-            "John Doe",
+            "Mr. Prepop",
             ""
         );
         vm.stopPrank();
-        console.log("printer addr length:", cyberCertPrinterAddr.length);
+        vm.warp(block.timestamp + 3000000);
+                string memory endorseeName = CyberCertPrinter(cyberCertPrinterAddr[0]).getEndorsementHistory(0, 0).endorseeName;
+        console.log("endorsee name:", endorseeName);
+       // console.log("printer addr length:", cyberCertPrinterAddr.length);
+
+        //print endorsee name
+
+
         string memory certificateUri = CyberCertPrinter(cyberCertPrinterAddr[0])
             .tokenURI(0);
         console.log(certificateUri);
@@ -2881,7 +2889,7 @@ contract CyberCorpTest is Test {
         globalValues[0] = "100000";
         globalValues[1] = "100000000";
         globalValues[2] = "12/1/2025";
-        globalValues[3] = "Deleware";
+        globalValues[3] = "Delaware";
         globalValues[4] = "Binding Arbitration";
 
         string[][] memory partyValues = new string[][](1);
@@ -2890,7 +2898,7 @@ contract CyberCorpTest is Test {
         partyValues[0][1] = "0xDEADBABE12345678909876543210866666666666";
         partyValues[0][2] = "@Gabe";
         partyValues[0][3] = "Limited Liability Company";
-        partyValues[0][4] = "Deleware";
+        partyValues[0][4] = "Delaware";
 
         bytes32 contractId = keccak256(
             abi.encode(
@@ -2957,7 +2965,7 @@ contract CyberCorpTest is Test {
         partyValuesB[1] = "0xC0FFEEBABE12345678909876543210866666666666";
         partyValuesB[2] = "@0xPrepop";
         partyValuesB[3] = "Limited Liability Company";
-        partyValuesB[4] = "Deleware";
+        partyValuesB[4] = "Delaware";
 
         vm.startPrank(newPartyAddr);
         bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
@@ -3962,7 +3970,7 @@ contract CyberCorpTest is Test {
         globalValues[0] = "100000";
         globalValues[1] = "100000000";
         globalValues[2] = "12/1/2025";
-        globalValues[3] = "Deleware";
+        globalValues[3] = "Delaware";
         globalValues[4] = "Binding Arbitration";
 
         string[][] memory partyValues = new string[][](1);
@@ -3971,7 +3979,7 @@ contract CyberCorpTest is Test {
         partyValues[0][1] = "0xDEADBABE12345678909876543210866666666666";
         partyValues[0][2] = "@Gabe";
         partyValues[0][3] = "Limited Liability Company";
-        partyValues[0][4] = "Deleware";
+        partyValues[0][4] = "Delaware";
 
         bytes32 contractId = keccak256(
             abi.encode(
@@ -4035,7 +4043,7 @@ contract CyberCorpTest is Test {
         partyValuesB[1] = "0xC0FFEEBABE12345678909876543210866666666666";
         partyValuesB[2] = "@0xPrepop";
         partyValuesB[3] = "Limited Liability Company";
-        partyValuesB[4] = "Deleware";
+        partyValuesB[4] = "Delaware";
 
         vm.startPrank(newPartyAddr);
         bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(

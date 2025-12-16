@@ -205,6 +205,42 @@ struct CertificateDetails {
     }
 
 
+    /// @notice Fetches the last signed timestamp from the registry for a given agreement
+    /// @param registry The registry contract address
+    /// @param agreementId The agreement ID
+    /// @return timestamp The last signed timestamp, or block.timestamp if unavailable
+    function _getAgreementTimestamp(address registry, bytes32 agreementId) internal view returns (uint256 timestamp) {
+        if (registry == address(0) || agreementId == bytes32(0)) {
+            return block.timestamp;
+        }
+        
+        try ICyberAgreementRegistry(registry).getContractDetails(agreementId) returns (
+            bytes32,
+            string memory,
+            string[] memory,
+            string[] memory,
+            string[] memory,
+            address[] memory,
+            string[][] memory,
+            uint256[] memory signedAt,
+            uint256,
+            bool,
+            bytes32
+        ) {
+            // Use the last signature timestamp
+            if (signedAt.length > 0) {
+                uint256 lastTimestamp = signedAt[signedAt.length - 1];
+                if (lastTimestamp > 0) {
+                    return lastTimestamp;
+                }
+            }
+        } catch {
+            // If the call fails, fall through to return block.timestamp
+        }
+        
+        return block.timestamp;
+    }
+
     function buildAttributes(
         OwnerDetails memory owner,
         CertificateDetails memory details
@@ -317,9 +353,14 @@ struct CertificateDetails {
     ) public view returns (string memory) {
         // Start building the JSON string with ERC-721 metadata standard format
         // Build on-chain SVG image using the image builder
+        
+        // Fetch timestamp from registry in scoped block to reduce stack pressure
+        uint256 certTimestamp = _getAgreementTimestamp(registry, agreementId);
+
         CertificateSVGParams memory svgParams = CertificateSVGParams({
             corpName: cyberCORPName,
             securityType: securityType,
+            securitySeries: securitySeries,
             officerName: details.signingOfficerName,
             officerTitle: details.signingOfficerTitle,
             units: details.unitsRepresented,
@@ -328,7 +369,8 @@ struct CertificateDetails {
             ownerName: owner.name,
             tokenId: tokenId
         });
-        string memory svg = CertificateImageBuilder.buildCertificateSVG(svgParams);
+
+        string memory svg = CertificateImageBuilder.buildCertificateSVG(svgParams, certTimestamp);
         string memory imageDataUri = string(abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg))));
 
         string memory json = string(abi.encodePacked(
@@ -409,9 +451,14 @@ struct CertificateDetails {
     ) public view returns (string memory) {
         // Start building the JSON string with ERC-721 metadata standard format
         // Build on-chain SVG image using the image builder
+
+        // Fetch timestamp from registry in scoped block to reduce stack pressure
+        uint256 certTimestamp = _getAgreementTimestamp(registry, agreementId);
+
         CertificateSVGParams memory svgParams = CertificateSVGParams({
             corpName: cyberCORPName,
             securityType: securityType,
+            securitySeries: securitySeries,
             officerName: details.signingOfficerName,
             officerTitle: details.signingOfficerTitle,
             units: details.unitsRepresented,
@@ -420,7 +467,8 @@ struct CertificateDetails {
             ownerName: owner.name,
             tokenId: tokenId
         });
-        string memory svg = CertificateImageBuilder.buildCertificateSVG(svgParams);
+
+        string memory svg = CertificateImageBuilder.buildCertificateSVG(svgParams, certTimestamp);
         string memory imageDataUri = string(abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg))));
 
         string memory json = string(abi.encodePacked(
