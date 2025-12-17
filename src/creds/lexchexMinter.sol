@@ -246,10 +246,11 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
             signature: "",
             uuid: request.uuid
         });
+        uint256 expiry = request.expiry;
 
         //if expiryDate is > 90 days, cap at 90 days from now
-        if(request.expiry > block.timestamp + 90 days) 
-            request.expiry = block.timestamp + 90 days;
+        if(expiry > block.timestamp + 90 days) 
+            expiry = block.timestamp + 90 days;
         
         // 3. Create and sign agreement
         agreementId = ICyberAgreementRegistry(dealRegistry).createContract(
@@ -260,7 +261,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
             _partyValues,
             bytes32(0),
             address(this),
-            request.expiry
+            expiry
         );
 
         ICyberAgreementRegistry(dealRegistry).signContractFor(
