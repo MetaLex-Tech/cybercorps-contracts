@@ -63,7 +63,7 @@ contract CertificateImageBuilderContract is ICertificateImageBuilder {
     }
 
     function _getSVGHeader() private pure returns (string memory) {
-        return '<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#clip0_23552_60894)"><rect width="1024" height="1024" fill="#141413"/>';
+        return '<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#clip0_23552_60894)"><rect width="1024" height="1024" fill="#141413"/>';
     }
 
     function _getSVGBackground() private pure returns (string memory) {
@@ -85,6 +85,7 @@ contract CertificateImageBuilderContract is ICertificateImageBuilder {
         return string(abi.encodePacked(
             _getTopDecorations(),
             _getMidDecorations(),
+            _generateBottomDecorations(),
             '</g>'
         ));
     }
@@ -127,6 +128,32 @@ contract CertificateImageBuilderContract is ICertificateImageBuilder {
             '<path d="M944 922L80 922L80 814L944 814L944 922Z" fill="url(#paint3_radial_23552_60894)" fill-opacity="0.1"/>',
             '<path d="M80 814L80 815L944 815L944 814L944 813L80 813L80 814Z" fill="url(#paint4_linear_23552_60894)" mask="url(#path-23-inside-2_23552_60894)"/>'
         ));
+    }
+
+    /// @notice Generates bottom decorations using SVG pattern for size optimization
+    /// @dev Uses a single pattern definition that tiles across the bottom row
+    function _generateBottomDecorations() private pure returns (string memory) {
+        return string(abi.encodePacked(
+            _getBottomPattern(),
+            '<rect x="0" y="996" width="1024" height="24" fill="url(#bottomDecorPattern)"/>'
+        ));
+    }
+
+    /// @notice Defines the repeating pattern for bottom decorations
+    function _getBottomPattern() private pure returns (string memory) {
+        return string(abi.encodePacked(
+            '<defs><pattern id="bottomDecorPattern" patternUnits="userSpaceOnUse" width="128" height="24" x="0" y="996">',
+            '<path d="M16 24L0 24L16 0L16 24Z" fill="#F2F2F2" fill-opacity="0.01"/>',
+            '<rect width="105" height="24" transform="matrix(1 0 0 -1 16 24)" fill="#F2F2F2" fill-opacity="0.01"/>',
+            _getBottomPatternText(),
+            '<path d="M121 24L137 24L121 0L121 24Z" fill="#F2F2F2" fill-opacity="0.01"/>',
+            '</pattern></defs>'
+        ));
+    }
+
+    /// @notice The "In code we trust" text paths for the bottom pattern
+    function _getBottomPatternText() private pure returns (string memory) {
+        return '<path d="M26.11 15.5L24.89 15.5L24.89 8.41L26.11 8.41L26.11 15.5ZM28.878 12.69L28.878 15.5L27.718 15.5L27.718 10.63L28.848 10.63L28.848 11.28C29.168 10.72 29.748 10.49 30.288 10.49C31.478 10.49 32.048 11.35 32.048 12.42L32.048 15.5L30.888 15.5L30.888 12.62C30.888 12.02 30.618 11.54 29.888 11.54C29.228 11.54 28.878 12.05 28.878 12.69ZM45.412 11.55C44.702 11.55 44.072 12.08 44.072 13.06C44.072 14.04 44.702 14.59 45.432 14.59C46.192 14.59 46.542 14.06 46.652 13.69L47.672 14.06C47.442 14.82 46.712 15.65 45.432 15.65C44.002 15.65 42.912 14.54 42.912 13.06C42.912 11.56 44.002 10.48 45.402 10.48C46.712 10.48 47.432 11.3 47.632 12.08L46.592 12.46C46.482 12.03 46.152 11.55 45.412 11.55ZM50.92 14.61C51.64 14.61 52.28 14.08 52.28 13.06C52.28 12.05 51.64 11.53 50.92 11.53C50.21 11.53 49.56 12.05 49.56 13.06C49.56 14.07 50.21 14.61 50.92 14.61ZM50.92 10.48C52.38 10.48 53.45 11.57 53.45 13.06C53.45 14.56 52.38 15.65 50.92 15.65C49.47 15.65 48.4 14.56 48.4 13.06C48.4 11.57 49.47 10.48 50.92 10.48ZM55.429 13.05C55.429 13.98 55.949 14.6 56.739 14.6C57.499 14.6 58.029 13.97 58.029 13.04C58.029 12.11 57.509 11.53 56.749 11.53C55.989 11.53 55.429 12.12 55.429 13.05ZM59.149 8.26L59.149 14.61C59.149 15.05 59.189 15.42 59.199 15.5L58.089 15.5C58.069 15.39 58.039 15.07 58.039 14.87C57.809 15.28 57.299 15.62 56.609 15.62C55.209 15.62 54.269 14.52 54.269 13.05C54.269 11.65 55.219 10.5 56.589 10.5C57.439 10.5 57.869 10.89 58.019 11.2L58.019 8.26L59.149 8.26ZM61.465 12.53L63.855 12.53C63.835 11.96 63.455 11.45 62.655 11.45C61.925 11.45 61.505 12.01 61.465 12.53ZM63.985 13.8L64.965 14.11C64.705 14.96 63.935 15.65 62.765 15.65C61.445 15.65 60.275 14.69 60.275 13.04C60.275 11.5 61.415 10.48 62.645 10.48C64.145 10.48 65.025 11.47 65.025 13.01C65.025 13.2 65.005 13.36 64.995 13.38L61.435 13.38C61.465 14.12 62.045 14.65 62.765 14.65C63.465 14.65 63.825 14.28 63.985 13.8ZM74.783 10.63L75.983 10.63L77.133 14L78.103 10.63L79.283 10.63L77.723 15.5L76.563 15.5L75.353 12L74.173 15.5L72.983 15.5L71.403 10.63L72.643 10.63L73.633 14L74.783 10.63ZM81.016 12.53L83.406 12.53C83.386 11.96 83.006 11.45 82.206 11.45C81.476 11.45 81.056 12.01 81.016 12.53ZM83.536 13.8L84.516 14.11C84.256 14.96 83.486 15.65 82.316 15.65C80.996 15.65 79.826 14.69 79.826 13.04C79.826 11.5 80.966 10.48 82.196 10.48C83.696 10.48 84.576 11.47 84.576 13.01C84.576 13.2 84.556 13.36 84.546 13.38L80.986 13.38C81.016 14.12 81.596 14.65 82.316 14.65C83.016 14.65 83.376 14.28 83.536 13.8ZM93.014 9.14L93.014 10.63L94.024 10.63L94.024 11.66L93.014 11.66L93.014 13.92C93.014 14.35 93.204 14.53 93.634 14.53C93.794 14.53 93.984 14.5 94.034 14.49L94.034 15.45C93.964 15.48 93.744 15.56 93.324 15.56C92.424 15.56 91.864 15.02 91.864 14.11L91.864 11.66L90.964 11.66L90.964 10.63L91.214 10.63C91.734 10.63 91.964 10.3 91.964 9.87L91.964 9.14L93.014 9.14ZM97.986 10.6L97.986 11.78C97.856 11.76 97.726 11.75 97.606 11.75C96.706 11.75 96.296 12.27 96.296 13.18L96.296 15.5L95.136 15.5L95.136 10.63L96.266 10.63L96.266 11.41C96.496 10.88 97.036 10.57 97.676 10.57C97.816 10.57 97.936 10.59 97.986 10.6ZM102.076 14.96C101.836 15.4 101.266 15.64 100.696 15.64C99.536 15.64 98.856 14.78 98.856 13.7L98.856 10.63L100.016 10.63L100.016 13.49C100.016 14.09 100.296 14.6 100.996 14.6C101.666 14.6 102.016 14.15 102.016 13.51L102.016 10.63L103.176 10.63L103.176 14.61C103.176 15.01 103.206 15.32 103.226 15.5L102.116 15.5C102.096 15.39 102.076 15.16 102.076 14.96ZM104.278 14.18L105.288 13.9C105.328 14.34 105.658 14.73 106.278 14.73C106.758 14.73 107.008 14.47 107.008 14.17C107.008 13.91 106.828 13.71 106.438 13.63L105.718 13.47C104.858 13.28 104.408 12.72 104.408 12.05C104.408 11.2 105.188 10.48 106.198 10.48C107.558 10.48 107.998 11.36 108.078 11.84L107.098 12.12C107.058 11.84 106.848 11.39 106.198 11.39C105.788 11.39 105.498 11.65 105.498 11.95C105.498 12.21 105.688 12.4 105.988 12.46L106.728 12.61C107.648 12.81 108.128 13.37 108.128 14.09C108.128 14.83 107.528 15.65 106.288 15.65C104.878 15.65 104.338 14.73 104.278 14.18ZM110.797 9.14L110.797 10.63L111.807 10.63L111.807 11.66L110.797 11.66L110.797 13.92C110.797 14.35 110.987 14.53 111.417 14.53C111.577 14.53 111.767 14.5 111.817 14.49L111.817 15.45C111.747 15.48 111.527 15.56 111.107 15.56C110.207 15.56 109.647 15.02 109.647 14.11L109.647 11.66L108.747 11.66L108.747 10.63L108.997 10.63C109.517 10.63 109.747 10.3 109.747 9.87L109.747 9.14L110.797 9.14Z" fill="#F2F2F2" fill-opacity="0.06"/>';
     }
 
     function _buildSVGContent(
@@ -354,14 +381,9 @@ contract CertificateImageBuilderContract is ICertificateImageBuilder {
         if (_class == SecurityClass.SAFTE) return "Simple Agreement for Future Tokens or Equity";
         if (_class == SecurityClass.TokenPurchaseAgreement) return "Token Purchase Agreement";
         if (_class == SecurityClass.TokenWarrant) return "Token Warrant";
-        if (_class == SecurityClass.ConvertibleNote) return "Convertible Note";
         if (_class == SecurityClass.CommonStock) return "Common Stock";
         if (_class == SecurityClass.StockOption) return "Stock Option";
         if (_class == SecurityClass.PreferredStock) return "Preferred Stock";
-        if (_class == SecurityClass.RestrictedStockPurchaseAgreement) return "Restricted Stock Purchase Agreement";
-        if (_class == SecurityClass.RestrictedStockUnit) return "Restricted Stock Unit";
-        if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "Restricted Token Purchase Agreement";
-        if (_class == SecurityClass.RestrictedTokenUnit) return "Restricted Token Unit";
         return "Unknown";
     }
 
