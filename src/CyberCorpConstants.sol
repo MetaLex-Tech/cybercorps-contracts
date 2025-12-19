@@ -118,6 +118,7 @@ struct CertificateSVGParams {
     string jurisdiction;
     string ownerName;
     uint256 tokenId;
+    string certificateUri;
 }
 
 

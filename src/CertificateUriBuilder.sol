@@ -367,7 +367,8 @@ struct CertificateDetails {
             valuation: details.issuerUSDValuationAtTimeOfInvestment,
             jurisdiction: cyberCORPJurisdiction,
             ownerName: owner.name,
-            tokenId: tokenId
+            tokenId: tokenId,
+            certificateUri: certificateUri
         });
 
         string memory svg = CertificateImageBuilder.buildCertificateSVG(svgParams, certTimestamp);
@@ -465,7 +466,8 @@ struct CertificateDetails {
             valuation: details.issuerUSDValuationAtTimeOfInvestment,
             jurisdiction: cyberCORPJurisdiction,
             ownerName: owner.name,
-            tokenId: tokenId
+            tokenId: tokenId,
+            certificateUri: certificateUri
         });
 
         string memory svg = CertificateImageBuilder.buildCertificateSVG(svgParams, certTimestamp);

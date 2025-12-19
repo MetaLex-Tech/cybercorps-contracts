@@ -75,16 +75,16 @@ library CertificateImageContentBuilder {
         if (_class == SecurityClass.SAFE) return "SAFE";
         if (_class == SecurityClass.SAFT) return "SAFT";
         if (_class == SecurityClass.SAFTE) return "SAFTE";
-        if (_class == SecurityClass.TokenPurchaseAgreement) return "TokenPurchaseAgreement";
-        if (_class == SecurityClass.TokenWarrant) return "TokenWarrant";
-        if (_class == SecurityClass.ConvertibleNote) return "ConvertibleNote";
-        if (_class == SecurityClass.CommonStock) return "CommonStock";
-        if (_class == SecurityClass.StockOption) return "StockOption";
-        if (_class == SecurityClass.PreferredStock) return "PreferredStock";
-        if (_class == SecurityClass.RestrictedStockPurchaseAgreement) return "RestrictedStockPurchaseAgreement";
-        if (_class == SecurityClass.RestrictedStockUnit) return "RestrictedStockUnit";
-        if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "RestrictedTokenPurchaseAgreement";
-        if (_class == SecurityClass.RestrictedTokenUnit) return "RestrictedTokenUnit";
+        if (_class == SecurityClass.TokenPurchaseAgreement) return "Token Purchase Agreement";
+        if (_class == SecurityClass.TokenWarrant) return "Token Warrant";
+        if (_class == SecurityClass.ConvertibleNote) return "Convertible Note";
+        if (_class == SecurityClass.CommonStock) return "Common Stock";
+        if (_class == SecurityClass.StockOption) return "Stock Option";
+        if (_class == SecurityClass.PreferredStock) return "Preferred Stock";
+        if (_class == SecurityClass.RestrictedStockPurchaseAgreement) return "Restricted Stock Purchase Agreement";
+        if (_class == SecurityClass.RestrictedStockUnit) return "Restricted Stock Unit";
+        if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "Restricted Token Purchase Agreement";
+        if (_class == SecurityClass.RestrictedTokenUnit) return "Restricted Token Unit";
         return "Unknown";
     }
 
@@ -133,6 +133,32 @@ library CertificateImageContentBuilder {
 
     function _isDollarBased(SecurityClass _class) private pure returns (bool) {
         return _class == SecurityClass.SAFE || _class == SecurityClass.SAFT || _class == SecurityClass.SAFTE;
+    }
+
+    function _isConvertible(SecurityClass _class) private pure returns (bool) {
+        return _class == SecurityClass.SAFE || 
+               _class == SecurityClass.SAFT || 
+               _class == SecurityClass.SAFTE || 
+               _class == SecurityClass.ConvertibleNote ||
+               _class == SecurityClass.TokenWarrant ||
+               _class == SecurityClass.TokenPurchaseAgreement;
+    }
+
+    function _getSecurityFullName(SecurityClass _class) private pure returns (string memory) {
+        if (_class == SecurityClass.SAFE) return "Simple Agreement for Future Equity";
+        if (_class == SecurityClass.SAFT) return "Simple Agreement for Future Tokens";
+        if (_class == SecurityClass.SAFTE) return "Simple Agreement for Future Tokens or Equity";
+        if (_class == SecurityClass.TokenPurchaseAgreement) return "Token Purchase Agreement";
+        if (_class == SecurityClass.TokenWarrant) return "Token Warrant";
+        if (_class == SecurityClass.ConvertibleNote) return "Convertible Note";
+        if (_class == SecurityClass.CommonStock) return "Common Stock";
+        if (_class == SecurityClass.StockOption) return "Stock Option";
+        if (_class == SecurityClass.PreferredStock) return "Preferred Stock";
+        if (_class == SecurityClass.RestrictedStockPurchaseAgreement) return "Restricted Stock Purchase Agreement";
+        if (_class == SecurityClass.RestrictedStockUnit) return "Restricted Stock Unit";
+        if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "Restricted Token Purchase Agreement";
+        if (_class == SecurityClass.RestrictedTokenUnit) return "Restricted Token Unit";
+        return "Unknown";
     }
 
     function _getDateComponents(uint256 timestamp) private pure returns (string memory day, string memory month, string memory year) {
@@ -200,20 +226,67 @@ library CertificateImageContentBuilder {
             formattedUnits = string(abi.encodePacked("$", formattedUnits));
         }
 
-        // Center calculation note:
-        // Page width: 1024
-        // Page center: 512
-        // Top Left Box (Token ID): x=80, width=144. Center = 80 + 72 = 152
-        // Top Right Box (Units): x=800, width=144. Center = 800 + 72 = 872
-        
+        string memory middleSection;
+        if (_isConvertible(params.securityType)) {
+            middleSection = _buildMiddleConvertible(params, formattedUnits);
+        } else {
+            middleSection = _buildMiddleShares(params, unitType, formattedUnits);
+        }
+
+        return string(abi.encodePacked(
+            _buildHeader(params, securityType, formattedUnits),
+            middleSection,
+            _buildFooter(params, day, month, year)
+        ));
+    }
+
+    function _buildHeader(
+        CertificateSVGParams memory params,
+        string memory securityType,
+        string memory formattedUnits
+    ) private pure returns (string memory) {
         return string(abi.encodePacked(
             '<text x="512" y="250" font-size="53" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">', params.corpName, '</text>',
             '<text x="152" y="159" font-size="11" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">Token ID</text>',
             '<text x="152" y="198" font-size="35" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">#', _uintToString(params.tokenId), '</text>',
-            '<text x="872" y="158" font-size="11" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">', unitType, '</text>',
+            '<text x="872" y="158" font-size="11" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">', _getBaseUnit(params.securityType), '</text>',
             '<text x="872" y="198" font-size="35" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">', formattedUnits, '</text>',
-            '<text x="512" y="298" font-size="20" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">The Corporation is Authorized to Issue ', formattedUnits, ' ', unitType, ' of ', securityType, '</text>',
-            '<text x="512" y="328" font-size="20" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">Incorporated Under the Laws of ', params.jurisdiction, '</text>',
+            '<text x="512" y="308" font-size="25" font-family="system-ui" text-anchor="middle" fill="#DAFF00">', _securitySeriesToString(params.securitySeries), ' ', securityType, '</text>'
+        ));
+    }
+
+    function _buildMiddleConvertible(
+        CertificateSVGParams memory params,
+        string memory formattedUnits
+    ) private pure returns (string memory) {
+        string memory securityFullName = _getSecurityFullName(params.securityType);
+        return string(abi.encodePacked(
+            '<text x="150" y="418" font-weight="600" font-size="18" font-family="system-ui" fill="#f2f2f2">This Certifies that </text>',
+            '<text x="420" y="418" font-size="18" font-family="system-ui" text-anchor="middle" fill="#DAFF00">', params.ownerName, '</text>',
+            '<line x1="310" x2="520" y1="423" y2="423" stroke-width="2" stroke="#333423"/>',
+            '<line x1="760" x2="870" y1="418" y2="418" stroke-width="2" stroke="#333423"/>',
+            '<text x="540" y="418" font-size="18" font-family="system-ui" fill="#9A9A98">is the registered holder of</text>',
+            '<text x="810" y="414" font-size="18" font-family="system-ui" text-anchor="middle" fill="#DAFF00">1</text>',
+            '<text x="330" y="450" font-size="18" font-family="system-ui" text-anchor="middle" fill="#DAFF00">', securityFullName, '</text>',
+            '<line x1="150" x2="510" y1="455" y2="455" stroke-width="2" stroke="#333423"/>',
+            '<text x="520" y="450" font-size="18" font-family="system-ui" fill="#9A9A98">of</text>',
+            '<text x="630" y="450" font-size="18" font-family="system-ui" fill="#DAFF00">', params.corpName, '</text>',
+            '<line x1="550" x2="870" y1="455" y2="455" stroke-width="2" stroke="#333423"/>',
+            '<text x="150" y="482" font-size="18" font-family="system-ui" fill="#9A9A98">purchased from the said Entity for</text>',
+            '<text x="490" y="482" font-size="18" font-family="system-ui" fill="#DAFF00">', formattedUnits, '</text>',
+            '<line x1="450" x2="600" y1="487" y2="487" stroke-width="2" stroke="#333423"/>',
+            '<text x="610" y="482" font-size="18" font-family="system-ui" fill="#9A9A98">and transferable only in </text>',
+            '<text x="150" y="514" font-size="18" font-family="system-ui" fill="#9A9A98">accordance with the terms and conditions thereof and any other applicable agreements</text>',
+            '<text x="150" y="546" font-size="18" font-family="system-ui" fill="#9A9A98"> between or involving or applicable to the said Entity and the said registered Holder.</text>'
+        ));
+    }
+
+    function _buildMiddleShares(
+        CertificateSVGParams memory params,
+        string memory unitType,
+        string memory formattedUnits
+    ) private pure returns (string memory) {
+        return string(abi.encodePacked(
             '<text x="235" y="418" font-weight="600" font-size="20" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">This Certifies That</text>',
             '<line x1="330" x2="635" y1="425" y2="425" stroke-width="2" stroke="#333423"/>',
             '<text x="482.5" y="418" font-size="20" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', params.ownerName, '</text>',
@@ -224,23 +297,34 @@ library CertificateImageContentBuilder {
             '<line x1="320" x2="555" y1="468" y2="468" stroke-width="2" stroke="#333423"/>',
             '<text x="747.5" y="463" font-size="20" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', params.corpName, '</text>',
             '<line x1="620" x2="875" y1="468" y2="468" stroke-width="2" stroke="#333423"/>',
-            '<text x="580" y="463" font-size="20" font-family="system-ui" fill="#9A9A98" >of</text>',
-            '<text x="150" y="518" font-size="20" font-family="system-ui" fill="#9A9A98" >transferable only on the books of the Corporation by the holder hereof in person or by</text>',
-            '<text x="150" y="545" font-size="20" font-family="system-ui" fill="#9A9A98" >Attorney upon surrender of this Certificate properly endorsed.</text>',
-            '<text x="150" y="590" font-weight="600" font-size="20" font-family="system-ui" fill="#f2f2f2" >In Witness Whereof</text>',
-            '<text x="327" y="590" font-size="20" font-family="system-ui" fill="#9A9A98" >, the said Corporation has caused this Certificate to be signed by its</text>',
-            '<text x="150" y="618" font-size="20" font-family="system-ui" fill="#9A9A98" >duly authorized officers and its Corporate Seal to be hereunto affixed.</text>',
-            '<text x="175" y="663" font-size="20" font-family="system-ui" fill="#9A9A98" text-anchor="middle">This</text>',
-            '<text x="285" y="663" font-size="20" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', day, '</text>',
-            '<line x1="200" x2="370" y1="668" y2="668" stroke-width="2" stroke="#333423"/>',
-            '<text x="417.5" y="663" font-size="20" font-family="system-ui" fill="#9A9A98" text-anchor="middle">day of</text>',
-            '<text x="565" y="663" font-size="20" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', month, '</text>',
-            '<line x1="465" x2="665" y1="668" y2="668" stroke-width="2" stroke="#333423"/>',
-            '<text x="705" y="663" font-size="20" font-family="system-ui" fill="#9A9A98" text-anchor="middle">A.D.</text>',
-            '<text x="820" y="663" font-size="20" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', year, '</text>',
-            '<line x1="745" x2="895" y1="668" y2="668" stroke-width="2" stroke="#333423"/>',
-            '<text x="295" y="730" font-size="20" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', params.officerName, '</text>',
-            '<text x="285" y="754" font-size="11" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">', params.officerTitle, '</text>'
+            '<text x="580" y="463" font-size="20" font-family="system-ui" fill="#9A9A98">of</text>',
+            '<text x="150" y="518" font-size="20" font-family="system-ui" fill="#9A9A98">transferable only on the books of the Corporation by the holder hereof in person or by</text>',
+            '<text x="150" y="545" font-size="20" font-family="system-ui" fill="#9A9A98">Attorney upon surrender of this Certificate properly endorsed.</text>'
+        ));
+    }
+
+    function _buildFooter(
+        CertificateSVGParams memory params,
+        string memory day,
+        string memory month,
+        string memory year
+    ) private pure returns (string memory) {
+        return string(abi.encodePacked(
+            '<text x="150" y="590" font-weight="600" font-size="18" font-family="system-ui" fill="#f2f2f2">In Witness Whereof</text>',
+            '<text x="310" y="590" font-size="18" font-family="system-ui" fill="#9A9A98">, the said Entity has caused this Certificate to be signed by its duly</text>',
+            '<text x="150" y="620" font-size="18" font-family="system-ui" fill="#9A9A98">authorized officer(s)</text>',
+            '<text x="175" y="675" font-size="18" font-family="system-ui" fill="#9A9A98" text-anchor="middle">This</text>',
+            '<text x="285" y="675" font-size="18" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', day, '</text>',
+            '<line x1="200" x2="370" y1="680" y2="680" stroke-width="2" stroke="#333423"/>',
+            '<text x="417.5" y="675" font-size="18" font-family="system-ui" fill="#9A9A98" text-anchor="middle">day of</text>',
+            '<text x="565" y="675" font-size="18" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', month, '</text>',
+            '<line x1="465" x2="675" y1="680" y2="680" stroke-width="2" stroke="#333423"/>',
+            '<text x="705" y="675" font-size="18" font-family="system-ui" fill="#9A9A98" text-anchor="middle">A.D.</text>',
+            '<text x="820" y="675" font-size="18" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', year, '</text>',
+            '<line x1="745" x2="895" y1="680" y2="680" stroke-width="2" stroke="#333423"/>',
+            '<text x="285" y="736" font-size="18" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', params.officerName, '</text>',
+            '<text x="283" y="753" font-size="11" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">', params.officerTitle, '</text>',
+            '<text x="512" y="850" font-size="11" font-family="system-ui" fill="#9A9A98" text-anchor="middle">Link to full certificate: ', params.certificateUri, '</text>'
         ));
     }
 

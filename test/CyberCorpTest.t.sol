@@ -2617,6 +2617,7 @@ contract CyberCorpTest is Test {
             legalDetails: "Legal Details",
             extensionData: ""
         });
+
         _details[0] = _detailsA;
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -2681,6 +2682,19 @@ contract CyberCorpTest is Test {
             testPrivateKey
         );
 
+        CyberCorpFactory.CyberCertData[] memory _certData = new CyberCorpFactory.CyberCertData[](1);
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Legend 1";
+        _certData[0] = CyberCorpFactory.CyberCertData({
+            name: "Cert Name 1",
+            symbol: "Cert Symbol 1",
+            uri: "https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeiafzkynirjta4pd3g365qv6ttlz3pkeqcquhbald7nqqfmm5vpfua",
+            securityClass: SecurityClass.SAFE,
+            securitySeries: SecuritySeries.SeriesPreSeed,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+
         (
             address cyberCorp,
             address auth,
@@ -2699,7 +2713,7 @@ contract CyberCorpTest is Test {
                 "Dispute Res",
                 testAddress,
                 officer,
-                certData,
+                _certData,
                 bytes32(uint256(2)),
                 globalValues,
                 parties,
@@ -3468,8 +3482,8 @@ contract CyberCorpTest is Test {
                 "Test Certificate",
                 "TEST",
                 "ipfs://test",
-                SecurityClass.SAFE,
-                SecuritySeries.SeriesPreSeed,
+                SecurityClass.SAFT,
+                SecuritySeries.SeriesSeed,
                 address(0)
             );
 
