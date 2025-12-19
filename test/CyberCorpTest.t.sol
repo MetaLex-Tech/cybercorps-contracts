@@ -61,6 +61,7 @@ import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {CompanyOfficer} from "../src/storage/CyberCertPrinterStorage.sol";
 import {ToggleTransferHook} from "../src/hooks/transfer/ToggleTransferHook.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
+import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {DealManager} from "../src/DealManager.sol";
@@ -206,12 +207,19 @@ contract CyberCorpTest is Test {
             )
         )));
 
+        // Deploy the CertificateImageBuilderContract (standalone contract for SVG generation)
+        address imageBuilder = address(new CertificateImageBuilderContract{salt: salt}());
+
+        // Deploy CertificateUriBuilder proxy
         address uriBuilder = address(new ERC1967Proxy{salt: salt}(
             address(new CertificateUriBuilder{salt: salt}()),
             abi.encodeWithSelector(
                 CertificateUriBuilder.initialize.selector,
                 address(auth))
         ));
+
+        // Set the image builder on the CertificateUriBuilder
+        CertificateUriBuilder(uriBuilder).setImageBuilder(imageBuilder);
 
         // RoundManager via factory and initialize
         address rmFactory = address(
@@ -3234,6 +3242,9 @@ contract CyberCorpTest is Test {
         // Deploy new implementation
         address newImplementation = address(new CertificateUriBuilder());
 
+        // Deploy new image builder contract
+        address newImageBuilder = address(new CertificateImageBuilderContract());
+
         // Upgrade to new implementation without initialization data
 
         // Non-owner should not be able to upgrade it
@@ -3244,6 +3255,11 @@ contract CyberCorpTest is Test {
         vm.prank(multisig);
         uriBuilder.upgradeToAndCall(newImplementation, "");
         assertEq(address(uriBuilder).getErc1967Implementation(vm), newImplementation);
+
+        // Set the new image builder (required for the new architecture)
+        vm.prank(multisig);
+        uriBuilder.setImageBuilder(newImageBuilder);
+        assertEq(uriBuilder.imageBuilder(), newImageBuilder);
 
         // Verify the URI builder still works
         assertEq(uriBuilder.securityClassToString(SecurityClass.SAFT), "SAFT");

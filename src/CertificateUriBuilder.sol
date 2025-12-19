@@ -44,18 +44,33 @@ pragma solidity ^0.8.28;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./CyberCorpConstants.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
+import "./interfaces/ICertificateImageBuilder.sol";
 import "./storage/extensions/ICertificateExtension.sol";
 import "./libs/auth.sol";
-import "./CertificateImageBuilder.sol";
 
 contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
 
-    // Upgrade notes: Reduced gap to account for new variables (50 - 1 = 49)
-    uint256[49] private __gap;
+    /// @notice Address of the external image builder contract
+    address public imageBuilder;
+
+    /// @notice Emitted when the image builder is updated
+    event ImageBuilderUpdated(address indexed oldBuilder, address indexed newBuilder);
+
+    // Upgrade notes: Reduced gap to account for new variables (50 - 2 = 48)
+    uint256[48] private __gap;
 
     function initialize(address _auth) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
+    }
+
+    /// @notice Sets the image builder contract address
+    /// @param _imageBuilder The address of the CertificateImageBuilderContract
+    function setImageBuilder(address _imageBuilder) external onlyOwner {
+        require(_imageBuilder != address(0), "Invalid image builder address");
+        address oldBuilder = imageBuilder;
+        imageBuilder = _imageBuilder;
+        emit ImageBuilderUpdated(oldBuilder, _imageBuilder);
     }
 
     // Helper function to convert SecurityClass enum to string
@@ -371,7 +386,7 @@ struct CertificateDetails {
             certificateUri: certificateUri
         });
 
-        string memory svg = CertificateImageBuilder.buildCertificateSVG(svgParams, certTimestamp);
+        string memory svg = ICertificateImageBuilder(imageBuilder).buildCertificateSVG(svgParams, certTimestamp);
         string memory imageDataUri = string(abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg))));
 
         string memory json = string(abi.encodePacked(
@@ -470,7 +485,7 @@ struct CertificateDetails {
             certificateUri: certificateUri
         });
 
-        string memory svg = CertificateImageBuilder.buildCertificateSVG(svgParams, certTimestamp);
+        string memory svg = ICertificateImageBuilder(imageBuilder).buildCertificateSVG(svgParams, certTimestamp);
         string memory imageDataUri = string(abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg))));
 
         string memory json = string(abi.encodePacked(
