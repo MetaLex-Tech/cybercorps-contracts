@@ -168,6 +168,28 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         return string(bstr);
     }
 
+    /// @notice Converts 18-decimal value to string with 2 decimal places (cents)
+    /// @param value The 18-decimal value (e.g., 100000.50 * 1e18)
+    /// @return The formatted string with 2 decimals (e.g., "100000.50")
+    function from18DecimalsToString(uint256 value) public pure returns (string memory) {
+        // Divide by 1e16 to get value in cents (2 decimal places)
+        uint256 valueInCents = value / 1e16;
+        uint256 wholePart = valueInCents / 100;
+        uint256 centsPart = valueInCents % 100;
+        
+        string memory wholeStr = uint256ToString(wholePart);
+        
+        // Format cents with leading zero if needed
+        string memory centsStr;
+        if (centsPart < 10) {
+            centsStr = string(abi.encodePacked("0", uint256ToString(centsPart)));
+        } else {
+            centsStr = uint256ToString(centsPart);
+        }
+        
+        return string(abi.encodePacked(wholeStr, ".", centsStr));
+    }
+
     // Helper function to convert bytes32 to string
     function bytes32ToString(bytes32 _bytes32) public pure returns (string memory) {
         bytes memory bytesArray = new bytes(64);
@@ -258,13 +280,52 @@ struct CertificateDetails {
 
     function buildAttributes(
         OwnerDetails memory owner,
-        CertificateDetails memory details
+        CertificateDetails memory details,
+        string memory cyberCORPName,
+        string memory cyberCORPType,
+        string memory cyberCORPJurisdiction,
+        string memory cyberCORPContactDetails,
+        SecurityClass securityType,
+        SecuritySeries securitySeries,
+        string memory certificateUri
+    ) internal pure returns (string memory) {
+        return string(abi.encodePacked(
+            _buildAttributesPart1(owner, details, cyberCORPName, cyberCORPType),
+            _buildAttributesPart2(cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri)
+        ));
+    }
+
+    function _buildAttributesPart1(
+        OwnerDetails memory owner,
+        CertificateDetails memory details,
+        string memory cyberCORPName,
+        string memory cyberCORPType
     ) internal pure returns (string memory) {
         return string(abi.encodePacked(
             '{"trait_type": "CurrentOwner", "value": "', addressToString(owner.ownerAddress),
-            '"}, {"trait_type": "investmentAmount", "value": "', uint256ToString(details.investmentAmountUSD),
-            '"}, {"trait_type": "unitsRepresented", "value": "', uint256ToString(details.unitsRepresented),
+            '"}, {"trait_type": "CurrentOwnerName", "value": "', owner.name,
+            '"}, {"trait_type": "investmentAmount", "value": "', from18DecimalsToString(details.investmentAmountUSD),
+            '"}, {"trait_type": "unitsRepresented", "value": "', from18DecimalsToString(details.unitsRepresented),
             '"}, {"trait_type": "issuerUSDValuationAtTimeOfInvestment", "value": "', uint256ToString(details.issuerUSDValuationAtTimeOfInvestment),
+            '"}, {"trait_type": "cyberCORPName", "value": "', cyberCORPName,
+            '"}, {"trait_type": "cyberCORPType", "value": "', cyberCORPType,
+            '"}'
+        ));
+    }
+
+    function _buildAttributesPart2(
+        string memory cyberCORPJurisdiction,
+        string memory cyberCORPContactDetails,
+        SecurityClass securityType,
+        SecuritySeries securitySeries,
+        string memory certificateUri
+    ) internal pure returns (string memory) {
+        return string(abi.encodePacked(
+            ', {"trait_type": "cyberCORPJurisdiction", "value": "', cyberCORPJurisdiction,
+            '"}, {"trait_type": "cyberCORPContactDetails", "value": "', cyberCORPContactDetails,
+            '"}, {"trait_type": "securityType", "value": "', securityClassToString(securityType),
+            '"}, {"trait_type": "securitySeries", "value": "', securitySeriesToString(securitySeries),
+            '"}, {"trait_type": "certificateUri", "value": "', certificateUri,
             '"}'
         ));
     }
@@ -393,7 +454,7 @@ struct CertificateDetails {
             '{"title": "MetaLeX Tokenized Certificate",',
             '"type": "', securityClassToString(securityType),
             '", "image": "', imageDataUri, '",',
-            '"attributes": [', buildAttributes(owner, details),
+            '"attributes": [', buildAttributes(owner, details, cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri),
             '],'
         ));
 
@@ -414,9 +475,9 @@ struct CertificateDetails {
         json = string.concat(json, 
             ', "signingOfficerName": "', details.signingOfficerName,
             '", "signingOfficerTitle": "', details.signingOfficerTitle,
-            '", "investmentAmountUSD": "', uint256ToString(details.investmentAmountUSD),
+            '", "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD),
             '", "issuerUSDValuationAtTimeOfInvestment": "', uint256ToString(details.issuerUSDValuationAtTimeOfInvestment),
-            '", "unitsRepresented": "', uint256ToString(details.unitsRepresented),
+            '", "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented),
             '", "legalDetails": "', details.legalDetails,
             '"'
         );
@@ -447,7 +508,7 @@ struct CertificateDetails {
         return json;
     }
 
-        function buildCertificateUriNotEncoded(
+    function buildCertificateUriNotEncoded(
         string memory cyberCORPName,
         string memory cyberCORPType,
         string memory cyberCORPJurisdiction,
@@ -492,7 +553,7 @@ struct CertificateDetails {
             '{"title": "MetaLeX Tokenized Certificate",',
             '"type": "', securityClassToString(securityType),
             '", "image": "', imageDataUri, '",',
-            '"attributes": [', buildAttributes(owner, details),
+            '"attributes": [', buildAttributes(owner, details, cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri),
             '],'
         ));
 
@@ -513,9 +574,9 @@ struct CertificateDetails {
         json = string.concat(json, 
             ', "signingOfficerName": "', details.signingOfficerName,
             '", "signingOfficerTitle": "', details.signingOfficerTitle,
-            '", "investmentAmountUSD": "', uint256ToString(details.investmentAmountUSD),
+            '", "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD),
             '", "issuerUSDValuationAtTimeOfInvestment": "', uint256ToString(details.issuerUSDValuationAtTimeOfInvestment),
-            '", "unitsRepresented": "', uint256ToString(details.unitsRepresented),
+            '", "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented),
             '", "legalDetails": "', details.legalDetails,
             '"'
         );

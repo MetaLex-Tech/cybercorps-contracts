@@ -2609,7 +2609,7 @@ contract CyberCorpTest is Test {
 
     //create test to print certificateuri
     function testPrintCertificateUri() public {
-        vm.warp(block.timestamp - 3000000);
+      //  vm.warp(block.timestamp - 3000000);
         vm.startPrank(testAddress);
         CyberCorpFactory cyberCorpFactoryLive = CyberCorpFactory(
             0x2aDA6E66a92CbF283B9F2f4f095Fe705faD357B8
@@ -2619,9 +2619,9 @@ contract CyberCorpTest is Test {
         CertificateDetails memory _detailsA = CertificateDetails({
             signingOfficerName: "Gabriel Shapiro",
             signingOfficerTitle: "CEO",
-            investmentAmountUSD: 100000,
-            issuerUSDValuationAtTimeOfInvestment: 100000000,
-            unitsRepresented: 100000,
+            investmentAmountUSD: 10000000000000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000000000000000,
+            unitsRepresented: 10000000000000000,
             legalDetails: "Legal Details",
             extensionData: ""
         });

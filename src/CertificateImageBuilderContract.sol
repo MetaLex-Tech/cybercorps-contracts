@@ -228,8 +228,8 @@ contract CertificateImageBuilderContract is ICertificateImageBuilder {
             '<text x="630" y="450" font-size="18" font-family="system-ui" fill="#DAFF00">', params.corpName, '</text>',
             '<line x1="550" x2="870" y1="455" y2="455" stroke-width="2" stroke="#333423"/>',
             '<text x="150" y="482" font-size="18" font-family="system-ui" fill="#9A9A98">purchased from the said Entity for</text>',
-            '<text x="490" y="482" font-size="18" font-family="system-ui" fill="#DAFF00">', formattedUnits, '</text>',
-            '<line x1="450" x2="600" y1="487" y2="487" stroke-width="2" stroke="#333423"/>',
+            '<text x="515" y="482" font-size="18" font-family="system-ui" text-anchor="middle" fill="#DAFF00">', formattedUnits, '</text>',
+            '<line x1="430" x2="600" y1="487" y2="487" stroke-width="2" stroke="#333423"/>',
             '<text x="610" y="482" font-size="18" font-family="system-ui" fill="#9A9A98">and transferable only in </text>',
             '<text x="150" y="514" font-size="18" font-family="system-ui" fill="#9A9A98">accordance with the terms and conditions thereof and any other applicable agreements</text>',
             '<text x="150" y="546" font-size="18" font-family="system-ui" fill="#9A9A98"> between or involving or applicable to the said Entity and the said registered Holder.</text>'
@@ -300,12 +300,73 @@ contract CertificateImageBuilderContract is ICertificateImageBuilder {
     }
 
     // Helper functions
+
     function _formatUnits(uint256 units, SecurityClass securityType) private pure returns (string memory) {
-        string memory formattedUnits = _uintToString(units);
+        // Convert from 18 decimals to display with 2 decimal places (cents)
+        string memory formattedUnits = _format18DecimalsWithCents(units);
         if (_isDollarBased(securityType)) {
             return string(abi.encodePacked("$", formattedUnits));
         }
         return formattedUnits;
+    }
+
+    /// @notice Formats an 18-decimal value with 2 decimal places (e.g., 1000.50)
+    /// @param value The 18-decimal value
+    /// @return Formatted string with commas and 2 decimal places
+    function _format18DecimalsWithCents(uint256 value) private pure returns (string memory) {
+        // Divide by 1e16 to get value in cents (2 decimal places)
+        uint256 valueInCents = value / 1e16;
+        uint256 wholePart = valueInCents / 100;
+        uint256 centsPart = valueInCents % 100;
+        
+        string memory wholeStr = _formatNumberWithCommas(wholePart);
+        
+        // Format cents with leading zero if needed
+        string memory centsStr;
+        if (centsPart < 10) {
+            centsStr = string(abi.encodePacked("0", _uintToString(centsPart)));
+        } else {
+            centsStr = _uintToString(centsPart);
+        }
+        
+        return string(abi.encodePacked(wholeStr, ".", centsStr));
+    }
+
+    /// @notice Formats a number with commas as thousand separators (e.g., 1,000,000)
+    function _formatNumberWithCommas(uint256 _i) private pure returns (string memory) {
+        if (_i == 0) return "0";
+        
+        // First get the plain number string
+        uint256 j = _i;
+        uint256 digitCount;
+        while (j != 0) {
+            digitCount++;
+            j /= 10;
+        }
+        
+        // Calculate how many commas we need
+        uint256 commaCount = (digitCount - 1) / 3;
+        uint256 totalLength = digitCount + commaCount;
+        
+        bytes memory result = new bytes(totalLength);
+        uint256 pos = totalLength;
+        uint256 digitsSinceComma = 0;
+        
+        while (_i != 0) {
+            // Add comma before every 3rd digit (except at the start)
+            if (digitsSinceComma == 3) {
+                pos--;
+                result[pos] = ",";
+                digitsSinceComma = 0;
+            }
+            
+            pos--;
+            result[pos] = bytes1(uint8(48 + (_i % 10)));
+            _i /= 10;
+            digitsSinceComma++;
+        }
+        
+        return string(result);
     }
 
     function _isDollarBased(SecurityClass _class) private pure returns (bool) {
@@ -327,14 +388,9 @@ contract CertificateImageBuilderContract is ICertificateImageBuilder {
         if (_class == SecurityClass.SAFTE) return "SAFTE";
         if (_class == SecurityClass.TokenPurchaseAgreement) return "Token Purchase Agreement";
         if (_class == SecurityClass.TokenWarrant) return "Token Warrant";
-        if (_class == SecurityClass.ConvertibleNote) return "Convertible Note";
         if (_class == SecurityClass.CommonStock) return "Common Stock";
         if (_class == SecurityClass.StockOption) return "Stock Option";
         if (_class == SecurityClass.PreferredStock) return "Preferred Stock";
-        if (_class == SecurityClass.RestrictedStockPurchaseAgreement) return "Restricted Stock Purchase Agreement";
-        if (_class == SecurityClass.RestrictedStockUnit) return "Restricted Stock Unit";
-        if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "Restricted Token Purchase Agreement";
-        if (_class == SecurityClass.RestrictedTokenUnit) return "Restricted Token Unit";
         return "Unknown";
     }
 
@@ -369,9 +425,6 @@ contract CertificateImageBuilderContract is ICertificateImageBuilder {
     }
 
     function _buildUnitType(SecurityClass _class, SecuritySeries _series) private pure returns (string memory) {
-        if (_class == SecurityClass.SAFE || _class == SecurityClass.SAFT || _class == SecurityClass.SAFTE) {
-            return string(abi.encodePacked("Dollars of the ", _securitySeriesToString(_series), " ", _securityClassToString(_class)));
-        }
         return _getBaseUnit(_class);
     }
 
