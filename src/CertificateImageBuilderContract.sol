@@ -370,7 +370,7 @@ contract CertificateImageBuilderContract is ICertificateImageBuilder {
     }
 
     function _isDollarBased(SecurityClass _class) private pure returns (bool) {
-        return _class == SecurityClass.SAFE || _class == SecurityClass.SAFT || _class == SecurityClass.SAFTE;
+        return _class == SecurityClass.SAFE || _class == SecurityClass.SAFT || _class == SecurityClass.SAFTE || _class == SecurityClass.TokenWarrant;
     }
 
     function _isConvertible(SecurityClass _class) private pure returns (bool) {

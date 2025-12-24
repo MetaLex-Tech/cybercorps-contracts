@@ -216,6 +216,21 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         return string(hexString);
     }
 
+    /// @notice Removes the first 7 characters from a string (e.g., strips "ipfs://")
+    /// @param str The original string
+    /// @return The string with first 7 characters removed
+    function stripIpfsPrefix(string memory str) public pure returns (string memory) {
+        bytes memory strBytes = bytes(str);
+        if (strBytes.length <= 7) {
+            return "";
+        }
+        bytes memory result = new bytes(strBytes.length - 7);
+        for (uint i = 7; i < strBytes.length; i++) {
+            result[i - 7] = strBytes[i];
+        }
+        return string(result);
+    }
+
 struct CertificateDetails {
     string signingOfficerName;
     string signingOfficerTitle;
@@ -304,9 +319,9 @@ struct CertificateDetails {
         return string(abi.encodePacked(
             '{"trait_type": "CurrentOwner", "value": "', addressToString(owner.ownerAddress),
             '"}, {"trait_type": "CurrentOwnerName", "value": "', owner.name,
-            '"}, {"trait_type": "investmentAmount", "value": "', from18DecimalsToString(details.investmentAmountUSD),
+            '"}, {"trait_type": "investmentAmount", "value": "$', from18DecimalsToString(details.investmentAmountUSD),
             '"}, {"trait_type": "unitsRepresented", "value": "', from18DecimalsToString(details.unitsRepresented),
-            '"}, {"trait_type": "issuerUSDValuationAtTimeOfInvestment", "value": "', uint256ToString(details.issuerUSDValuationAtTimeOfInvestment),
+            '"}, {"trait_type": "issuerUSDValuationAtTimeOfInvestment", "value": "$', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
             '"}, {"trait_type": "cyberCORPName", "value": "', cyberCORPName,
             '"}, {"trait_type": "cyberCORPType", "value": "', cyberCORPType,
             '"}'
@@ -325,7 +340,7 @@ struct CertificateDetails {
             '"}, {"trait_type": "cyberCORPContactDetails", "value": "', cyberCORPContactDetails,
             '"}, {"trait_type": "securityType", "value": "', securityClassToString(securityType),
             '"}, {"trait_type": "securitySeries", "value": "', securitySeriesToString(securitySeries),
-            '"}, {"trait_type": "certificateUri", "value": "', certificateUri,
+            '"}, {"trait_type": "certificateUri", "value": "https://ipfs.io/ipfs/', stripIpfsPrefix(certificateUri),
             '"}'
         ));
     }
@@ -476,7 +491,7 @@ struct CertificateDetails {
             ', "signingOfficerName": "', details.signingOfficerName,
             '", "signingOfficerTitle": "', details.signingOfficerTitle,
             '", "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD),
-            '", "issuerUSDValuationAtTimeOfInvestment": "', uint256ToString(details.issuerUSDValuationAtTimeOfInvestment),
+            '", "issuerUSDValuationAtTimeOfInvestment": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
             '", "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented),
             '", "legalDetails": "', details.legalDetails,
             '"'
@@ -575,7 +590,7 @@ struct CertificateDetails {
             ', "signingOfficerName": "', details.signingOfficerName,
             '", "signingOfficerTitle": "', details.signingOfficerTitle,
             '", "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD),
-            '", "issuerUSDValuationAtTimeOfInvestment": "', uint256ToString(details.issuerUSDValuationAtTimeOfInvestment),
+            '", "issuerUSDValuationAtTimeOfInvestment": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
             '", "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented),
             '", "legalDetails": "', details.legalDetails,
             '"'

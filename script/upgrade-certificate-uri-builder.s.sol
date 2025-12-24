@@ -12,8 +12,8 @@ import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderCon
 contract UpgradeCertificateUriBuilder is Script {
     function run() public {
         // Use different salts for different contracts to avoid CREATE2 collision
-        bytes32 imageBuilderSalt = bytes32(keccak256("MetaLexCyberCorpImageBuilderV1.1"));
-        bytes32 implementationSalt = bytes32(keccak256("MetaLexCyberCorpUriBuilderV2.4"));
+        bytes32 imageBuilderSalt = bytes32(keccak256("MetaLexCyberCorpImageBuilderV1.2"));
+        bytes32 implementationSalt = bytes32(keccak256("MetaLexCyberCorpUriBuilderV2.5"));
         
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         address deployer = vm.addr(deployerPrivateKey);
