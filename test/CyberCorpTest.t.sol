@@ -61,6 +61,7 @@ import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {CompanyOfficer} from "../src/storage/CyberCertPrinterStorage.sol";
 import {ToggleTransferHook} from "../src/hooks/transfer/ToggleTransferHook.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
+import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {DealManager} from "../src/DealManager.sol";
@@ -213,12 +214,19 @@ contract CyberCorpTest is Test {
             )
         )));
 
+        // Deploy the CertificateImageBuilderContract (standalone contract for SVG generation)
+        address imageBuilder = address(new CertificateImageBuilderContract{salt: salt}());
+
+        // Deploy CertificateUriBuilder proxy
         address uriBuilder = address(new ERC1967Proxy{salt: salt}(
             address(new CertificateUriBuilder{salt: salt}()),
             abi.encodeWithSelector(
                 CertificateUriBuilder.initialize.selector,
                 address(auth))
         ));
+
+        // Set the image builder on the CertificateUriBuilder
+        CertificateUriBuilder(uriBuilder).setImageBuilder(imageBuilder);
 
         // RoundManager via factory and initialize
         address rmFactory = address(
@@ -2590,6 +2598,7 @@ contract CyberCorpTest is Test {
 
     //create test to print certificateuri
     function testPrintCertificateUri() public {
+      //  vm.warp(block.timestamp - 3000000);
         vm.startPrank(testAddress);
         CyberCorpFactory cyberCorpFactoryLive = CyberCorpFactory(
             0x2aDA6E66a92CbF283B9F2f4f095Fe705faD357B8
@@ -2597,14 +2606,15 @@ contract CyberCorpTest is Test {
 
         CertificateDetails[] memory _details = new CertificateDetails[](1);
         CertificateDetails memory _detailsA = CertificateDetails({
-            signingOfficerName: "Gabe",
+            signingOfficerName: "Gabriel Shapiro",
             signingOfficerTitle: "CEO",
-            investmentAmountUSD: 100000,
-            issuerUSDValuationAtTimeOfInvestment: 100000000,
-            unitsRepresented: 100000,
+            investmentAmountUSD: 10000000000000000,
+            issuerUSDValuationAtTimeOfInvestment: 10000000000000000000,
+            unitsRepresented: 10000000000000000,
             legalDetails: "Legal Details",
             extensionData: ""
         });
+
         _details[0] = _detailsA;
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: testAddress,
@@ -2636,16 +2646,16 @@ contract CyberCorpTest is Test {
         globalValues[0] = "100000";
         globalValues[1] = "100000000";
         globalValues[2] = "12/1/2025";
-        globalValues[3] = "Deleware";
+        globalValues[3] = "Delaware";
         globalValues[4] = "Binding Arbitration";
 
         string[][] memory partyValues = new string[][](1);
         partyValues[0] = new string[](5);
-        partyValues[0][0] = "Gabe";
+        partyValues[0][0] = "Gabriel Shapiro";
         partyValues[0][1] = "0xDEADBABE12345678909876543210866666666666";
-        partyValues[0][2] = "@Gabe";
+        partyValues[0][2] = "@gabe";
         partyValues[0][3] = "Limited Liability Company";
-        partyValues[0][4] = "Deleware";
+        partyValues[0][4] = "Delaware";
 
         bytes32 contractId = keccak256(
             abi.encode(
@@ -2669,6 +2679,19 @@ contract CyberCorpTest is Test {
             testPrivateKey
         );
 
+        CyberCorpFactory.CyberCertData[] memory _certData = new CyberCorpFactory.CyberCertData[](1);
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Legend 1";
+        _certData[0] = CyberCorpFactory.CyberCertData({
+            name: "Cert Name 1",
+            symbol: "Cert Symbol 1",
+            uri: "https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeiafzkynirjta4pd3g365qv6ttlz3pkeqcquhbald7nqqfmm5vpfua",
+            securityClass: SecurityClass.SAFE,
+            securitySeries: SecuritySeries.SeriesPreSeed,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+
         (
             address cyberCorp,
             address auth,
@@ -2680,14 +2703,14 @@ contract CyberCorpTest is Test {
             uint256[] memory certIds
         ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
                 block.timestamp,
-                "CyberCorp",
+                "Test CyberCorp, LLC",
                 "Limited Liability Company",
-                "Juris",
+                "Delaware",
                 "Contact Details",
                 "Dispute Res",
                 testAddress,
                 officer,
-                certData,
+                _certData,
                 bytes32(uint256(2)),
                 globalValues,
                 parties,
@@ -2708,7 +2731,7 @@ contract CyberCorpTest is Test {
         partyValuesB[1] = "0xC0FFEEBABE12345678909876543210866666666666";
         partyValuesB[2] = "@0xPrepop";
         partyValuesB[3] = "Limited Liability Company";
-        partyValuesB[4] = "Deleware";
+        partyValuesB[4] = "Delaware";
 
         vm.startPrank(newPartyAddr);
         bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
@@ -2739,11 +2762,18 @@ contract CyberCorpTest is Test {
             partyValuesB,
             newPartySignature,
             true,
-            "John Doe",
+            "Mr. Prepop",
             ""
         );
         vm.stopPrank();
-        console.log("printer addr length:", cyberCertPrinterAddr.length);
+        vm.warp(block.timestamp + 3000000);
+                string memory endorseeName = CyberCertPrinter(cyberCertPrinterAddr[0]).getEndorsementHistory(0, 0).endorseeName;
+        console.log("endorsee name:", endorseeName);
+       // console.log("printer addr length:", cyberCertPrinterAddr.length);
+
+        //print endorsee name
+
+
         string memory certificateUri = CyberCertPrinter(cyberCertPrinterAddr[0])
             .tokenURI(0);
         console.log(certificateUri);
@@ -2870,7 +2900,7 @@ contract CyberCorpTest is Test {
         globalValues[0] = "100000";
         globalValues[1] = "100000000";
         globalValues[2] = "12/1/2025";
-        globalValues[3] = "Deleware";
+        globalValues[3] = "Delaware";
         globalValues[4] = "Binding Arbitration";
 
         string[][] memory partyValues = new string[][](1);
@@ -2879,7 +2909,7 @@ contract CyberCorpTest is Test {
         partyValues[0][1] = "0xDEADBABE12345678909876543210866666666666";
         partyValues[0][2] = "@Gabe";
         partyValues[0][3] = "Limited Liability Company";
-        partyValues[0][4] = "Deleware";
+        partyValues[0][4] = "Delaware";
 
         bytes32 contractId = keccak256(
             abi.encode(
@@ -2946,7 +2976,7 @@ contract CyberCorpTest is Test {
         partyValuesB[1] = "0xC0FFEEBABE12345678909876543210866666666666";
         partyValuesB[2] = "@0xPrepop";
         partyValuesB[3] = "Limited Liability Company";
-        partyValuesB[4] = "Deleware";
+        partyValuesB[4] = "Delaware";
 
         vm.startPrank(newPartyAddr);
         bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(
@@ -3201,6 +3231,9 @@ contract CyberCorpTest is Test {
         // Deploy new implementation
         address newImplementation = address(new CertificateUriBuilder());
 
+        // Deploy new image builder contract
+        address newImageBuilder = address(new CertificateImageBuilderContract());
+
         // Upgrade to new implementation without initialization data
 
         // Non-owner should not be able to upgrade it
@@ -3211,6 +3244,11 @@ contract CyberCorpTest is Test {
         vm.prank(multisig);
         uriBuilder.upgradeToAndCall(newImplementation, "");
         assertEq(address(uriBuilder).getErc1967Implementation(), newImplementation);
+
+        // Set the new image builder (required for the new architecture)
+        vm.prank(multisig);
+        uriBuilder.setImageBuilder(newImageBuilder);
+        assertEq(uriBuilder.imageBuilder(), newImageBuilder);
 
         // Verify the URI builder still works
         assertEq(uriBuilder.securityClassToString(SecurityClass.SAFT), "SAFT");
@@ -3943,7 +3981,7 @@ contract CyberCorpTest is Test {
         globalValues[0] = "100000";
         globalValues[1] = "100000000";
         globalValues[2] = "12/1/2025";
-        globalValues[3] = "Deleware";
+        globalValues[3] = "Delaware";
         globalValues[4] = "Binding Arbitration";
 
         string[][] memory partyValues = new string[][](1);
@@ -3952,7 +3990,7 @@ contract CyberCorpTest is Test {
         partyValues[0][1] = "0xDEADBABE12345678909876543210866666666666";
         partyValues[0][2] = "@Gabe";
         partyValues[0][3] = "Limited Liability Company";
-        partyValues[0][4] = "Deleware";
+        partyValues[0][4] = "Delaware";
 
         bytes32 contractId = keccak256(
             abi.encode(
@@ -4016,7 +4054,7 @@ contract CyberCorpTest is Test {
         partyValuesB[1] = "0xC0FFEEBABE12345678909876543210866666666666";
         partyValuesB[2] = "@0xPrepop";
         partyValuesB[3] = "Limited Liability Company";
-        partyValuesB[4] = "Deleware";
+        partyValuesB[4] = "Delaware";
 
         vm.startPrank(newPartyAddr);
         bytes memory newPartySignature = CyberAgreementUtils.signAgreementTypedData(

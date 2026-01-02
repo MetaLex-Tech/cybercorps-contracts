@@ -44,18 +44,33 @@ pragma solidity ^0.8.28;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./CyberCorpConstants.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
+import "./interfaces/ICertificateImageBuilder.sol";
 import "./storage/extensions/ICertificateExtension.sol";
 import "./libs/auth.sol";
-import "./CertificateImageBuilder.sol";
 
 contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
 
-    // Upgrade notes: Reduced gap to account for new variables (50 - 1 = 49)
-    uint256[49] private __gap;
+    /// @notice Address of the external image builder contract
+    address public imageBuilder;
+
+    /// @notice Emitted when the image builder is updated
+    event ImageBuilderUpdated(address indexed oldBuilder, address indexed newBuilder);
+
+    // Upgrade notes: Reduced gap to account for new variables (50 - 2 = 48)
+    uint256[48] private __gap;
 
     function initialize(address _auth) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
+    }
+
+    /// @notice Sets the image builder contract address
+    /// @param _imageBuilder The address of the CertificateImageBuilderContract
+    function setImageBuilder(address _imageBuilder) external onlyOwner {
+        require(_imageBuilder != address(0), "Invalid image builder address");
+        address oldBuilder = imageBuilder;
+        imageBuilder = _imageBuilder;
+        emit ImageBuilderUpdated(oldBuilder, _imageBuilder);
     }
 
     // Helper function to convert SecurityClass enum to string
@@ -153,6 +168,28 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         return string(bstr);
     }
 
+    /// @notice Converts 18-decimal value to string with 2 decimal places (cents)
+    /// @param value The 18-decimal value (e.g., 100000.50 * 1e18)
+    /// @return The formatted string with 2 decimals (e.g., "100000.50")
+    function from18DecimalsToString(uint256 value) public pure returns (string memory) {
+        // Divide by 1e16 to get value in cents (2 decimal places)
+        uint256 valueInCents = value / 1e16;
+        uint256 wholePart = valueInCents / 100;
+        uint256 centsPart = valueInCents % 100;
+        
+        string memory wholeStr = uint256ToString(wholePart);
+        
+        // Format cents with leading zero if needed
+        string memory centsStr;
+        if (centsPart < 10) {
+            centsStr = string(abi.encodePacked("0", uint256ToString(centsPart)));
+        } else {
+            centsStr = uint256ToString(centsPart);
+        }
+        
+        return string(abi.encodePacked(wholeStr, ".", centsStr));
+    }
+
     // Helper function to convert bytes32 to string
     function bytes32ToString(bytes32 _bytes32) public pure returns (string memory) {
         bytes memory bytesArray = new bytes(64);
@@ -177,6 +214,21 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         }
         
         return string(hexString);
+    }
+
+    /// @notice Removes the first 7 characters from a string (e.g., strips "ipfs://")
+    /// @param str The original string
+    /// @return The string with first 7 characters removed
+    function stripIpfsPrefix(string memory str) public pure returns (string memory) {
+        bytes memory strBytes = bytes(str);
+        if (strBytes.length <= 7) {
+            return "";
+        }
+        bytes memory result = new bytes(strBytes.length - 7);
+        for (uint i = 7; i < strBytes.length; i++) {
+            result[i - 7] = strBytes[i];
+        }
+        return string(result);
     }
 
 struct CertificateDetails {
@@ -204,15 +256,91 @@ struct CertificateDetails {
         address ownerAddress;
     }
 
+
+    /// @notice Fetches the last signed timestamp from the registry for a given agreement
+    /// @param registry The registry contract address
+    /// @param agreementId The agreement ID
+    /// @return timestamp The last signed timestamp, or block.timestamp if unavailable
+    function _getAgreementTimestamp(address registry, bytes32 agreementId) internal view returns (uint256 timestamp) {
+        if (registry == address(0) || agreementId == bytes32(0)) {
+            return block.timestamp;
+        }
+        
+        try ICyberAgreementRegistry(registry).getContractDetails(agreementId) returns (
+            bytes32,
+            string memory,
+            string[] memory,
+            string[] memory,
+            string[] memory,
+            address[] memory,
+            string[][] memory,
+            uint256[] memory signedAt,
+            uint256,
+            bool,
+            bytes32
+        ) {
+            // Use the last signature timestamp
+            if (signedAt.length > 0) {
+                uint256 lastTimestamp = signedAt[signedAt.length - 1];
+                if (lastTimestamp > 0) {
+                    return lastTimestamp;
+                }
+            }
+        } catch {
+            // If the call fails, fall through to return block.timestamp
+        }
+        
+        return block.timestamp;
+    }
+
     function buildAttributes(
         OwnerDetails memory owner,
-        CertificateDetails memory details
+        CertificateDetails memory details,
+        string memory cyberCORPName,
+        string memory cyberCORPType,
+        string memory cyberCORPJurisdiction,
+        string memory cyberCORPContactDetails,
+        SecurityClass securityType,
+        SecuritySeries securitySeries,
+        string memory certificateUri
+    ) internal pure returns (string memory) {
+        return string(abi.encodePacked(
+            _buildAttributesPart1(owner, details, cyberCORPName, cyberCORPType),
+            _buildAttributesPart2(cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri)
+        ));
+    }
+
+    function _buildAttributesPart1(
+        OwnerDetails memory owner,
+        CertificateDetails memory details,
+        string memory cyberCORPName,
+        string memory cyberCORPType
     ) internal pure returns (string memory) {
         return string(abi.encodePacked(
             '{"trait_type": "CurrentOwner", "value": "', addressToString(owner.ownerAddress),
-            '"}, {"trait_type": "investmentAmount", "value": "', uint256ToString(details.investmentAmountUSD),
-            '"}, {"trait_type": "unitsRepresented", "value": "', uint256ToString(details.unitsRepresented),
-            '"}, {"trait_type": "issuerUSDValuationAtTimeOfInvestment", "value": "', uint256ToString(details.issuerUSDValuationAtTimeOfInvestment),
+            '"}, {"trait_type": "CurrentOwnerName", "value": "', owner.name,
+            '"}, {"trait_type": "investmentAmount", "value": "$', from18DecimalsToString(details.investmentAmountUSD),
+            '"}, {"trait_type": "unitsRepresented", "value": "', from18DecimalsToString(details.unitsRepresented),
+            '"}, {"trait_type": "issuerUSDValuationAtTimeOfInvestment", "value": "$', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
+            '"}, {"trait_type": "cyberCORPName", "value": "', cyberCORPName,
+            '"}, {"trait_type": "cyberCORPType", "value": "', cyberCORPType,
+            '"}'
+        ));
+    }
+
+    function _buildAttributesPart2(
+        string memory cyberCORPJurisdiction,
+        string memory cyberCORPContactDetails,
+        SecurityClass securityType,
+        SecuritySeries securitySeries,
+        string memory certificateUri
+    ) internal pure returns (string memory) {
+        return string(abi.encodePacked(
+            ', {"trait_type": "cyberCORPJurisdiction", "value": "', cyberCORPJurisdiction,
+            '"}, {"trait_type": "cyberCORPContactDetails", "value": "', cyberCORPContactDetails,
+            '"}, {"trait_type": "securityType", "value": "', securityClassToString(securityType),
+            '"}, {"trait_type": "securitySeries", "value": "', securitySeriesToString(securitySeries),
+            '"}, {"trait_type": "certificateUri", "value": "https://ipfs.io/ipfs/', stripIpfsPrefix(certificateUri),
             '"}'
         ));
     }
@@ -316,21 +444,32 @@ struct CertificateDetails {
     ) public view returns (string memory) {
         // Start building the JSON string with ERC-721 metadata standard format
         // Build on-chain SVG image using the image builder
-        string memory svg = CertificateImageBuilder.buildCertificateSVG(
-            cyberCORPName,
-            securityClassToString(securityType),
-            details.signingOfficerName,
-            details.signingOfficerTitle,
-            details.unitsRepresented,
-            details.issuerUSDValuationAtTimeOfInvestment
-        );
+        
+        // Fetch timestamp from registry in scoped block to reduce stack pressure
+        uint256 certTimestamp = _getAgreementTimestamp(registry, agreementId);
+
+        CertificateSVGParams memory svgParams = CertificateSVGParams({
+            corpName: cyberCORPName,
+            securityType: securityType,
+            securitySeries: securitySeries,
+            officerName: details.signingOfficerName,
+            officerTitle: details.signingOfficerTitle,
+            units: details.unitsRepresented,
+            valuation: details.issuerUSDValuationAtTimeOfInvestment,
+            jurisdiction: cyberCORPJurisdiction,
+            ownerName: owner.name,
+            tokenId: tokenId,
+            certificateUri: certificateUri
+        });
+
+        string memory svg = ICertificateImageBuilder(imageBuilder).buildCertificateSVG(svgParams, certTimestamp);
         string memory imageDataUri = string(abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg))));
 
         string memory json = string(abi.encodePacked(
             '{"title": "MetaLeX Tokenized Certificate",',
             '"type": "', securityClassToString(securityType),
             '", "image": "', imageDataUri, '",',
-            '"attributes": [', buildAttributes(owner, details),
+            '"attributes": [', buildAttributes(owner, details, cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri),
             '],'
         ));
 
@@ -351,9 +490,9 @@ struct CertificateDetails {
         json = string.concat(json, 
             ', "signingOfficerName": "', details.signingOfficerName,
             '", "signingOfficerTitle": "', details.signingOfficerTitle,
-            '", "investmentAmountUSD": "', uint256ToString(details.investmentAmountUSD),
-            '", "issuerUSDValuationAtTimeOfInvestment": "', uint256ToString(details.issuerUSDValuationAtTimeOfInvestment),
-            '", "unitsRepresented": "', uint256ToString(details.unitsRepresented),
+            '", "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD),
+            '", "issuerUSDValuationAtTimeOfInvestment": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
+            '", "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented),
             '", "legalDetails": "', details.legalDetails,
             '"'
         );
@@ -384,7 +523,7 @@ struct CertificateDetails {
         return json;
     }
 
-        function buildCertificateUriNotEncoded(
+    function buildCertificateUriNotEncoded(
         string memory cyberCORPName,
         string memory cyberCORPType,
         string memory cyberCORPJurisdiction,
@@ -404,21 +543,32 @@ struct CertificateDetails {
     ) public view returns (string memory) {
         // Start building the JSON string with ERC-721 metadata standard format
         // Build on-chain SVG image using the image builder
-        string memory svg = CertificateImageBuilder.buildCertificateSVG(
-            cyberCORPName,
-            securityClassToString(securityType),
-            details.signingOfficerName,
-            details.signingOfficerTitle,
-            details.unitsRepresented,
-            details.issuerUSDValuationAtTimeOfInvestment
-        );
+
+        // Fetch timestamp from registry in scoped block to reduce stack pressure
+        uint256 certTimestamp = _getAgreementTimestamp(registry, agreementId);
+
+        CertificateSVGParams memory svgParams = CertificateSVGParams({
+            corpName: cyberCORPName,
+            securityType: securityType,
+            securitySeries: securitySeries,
+            officerName: details.signingOfficerName,
+            officerTitle: details.signingOfficerTitle,
+            units: details.unitsRepresented,
+            valuation: details.issuerUSDValuationAtTimeOfInvestment,
+            jurisdiction: cyberCORPJurisdiction,
+            ownerName: owner.name,
+            tokenId: tokenId,
+            certificateUri: certificateUri
+        });
+
+        string memory svg = ICertificateImageBuilder(imageBuilder).buildCertificateSVG(svgParams, certTimestamp);
         string memory imageDataUri = string(abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg))));
 
         string memory json = string(abi.encodePacked(
             '{"title": "MetaLeX Tokenized Certificate",',
             '"type": "', securityClassToString(securityType),
             '", "image": "', imageDataUri, '",',
-            '"attributes": [', buildAttributes(owner, details),
+            '"attributes": [', buildAttributes(owner, details, cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri),
             '],'
         ));
 
@@ -439,9 +589,9 @@ struct CertificateDetails {
         json = string.concat(json, 
             ', "signingOfficerName": "', details.signingOfficerName,
             '", "signingOfficerTitle": "', details.signingOfficerTitle,
-            '", "investmentAmountUSD": "', uint256ToString(details.investmentAmountUSD),
-            '", "issuerUSDValuationAtTimeOfInvestment": "', uint256ToString(details.issuerUSDValuationAtTimeOfInvestment),
-            '", "unitsRepresented": "', uint256ToString(details.unitsRepresented),
+            '", "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD),
+            '", "issuerUSDValuationAtTimeOfInvestment": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
+            '", "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented),
             '", "legalDetails": "', details.legalDetails,
             '"'
         );

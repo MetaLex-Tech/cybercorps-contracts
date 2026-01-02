@@ -406,18 +406,18 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             salt,
             _globalValues,
             partiesOverride,
-            partyValuesOverride,
+            _partyValues,
             bytes32(0),
             address(this),
             block.timestamp + 7 days
         );
 
-        ICyberAgreementRegistry(registryAddress).signContractFor(deployer, agreementId, partyValuesOverride[1], signature, false, "");
+        ICyberAgreementRegistry(registryAddress).signContractFor(deployer, agreementId, _partyValues[1], signature, false, "");
 
         ICyberAgreementRegistry(registryAddress).signContractWithEscrow(
             metaDAOOfficer.eoa,
             agreementId,
-            partyValuesOverride[0],
+            _partyValues[0],
             metaDAOSignatureHash,
             false,
             ""

@@ -39,90 +39,20 @@ distributed, transmitted, sublicensed, sold, or otherwise used in any form or by
 mechanical, including photocopying, recording, or by any information storage and retrieval system, 
 except with the express prior written permission of the copyright holder.*/
 
-pragma solidity 0.8.28;
+pragma solidity ^0.8.28;
 
-enum SecurityClass {
-    SAFE,
-    SAFT,
-    SAFTE,
-    TokenPurchaseAgreement,
-    TokenWarrant,
-    ConvertibleNote,
-    CommonStock,
-    StockOption,
-    PreferredStock,
-    RestrictedStockPurchaseAgreement,
-    RestrictedStockUnit,
-    RestrictedTokenPurchaseAgreement,
-    RestrictedTokenUnit
+import "../CyberCorpConstants.sol";
+
+/// @title ICertificateImageBuilder
+/// @notice Interface for the certificate image builder contract
+interface ICertificateImageBuilder {
+    /// @notice Builds a certificate SVG image
+    /// @param params The certificate parameters
+    /// @param timestamp The timestamp for the certificate date
+    /// @return The complete SVG string
+    function buildCertificateSVG(
+        CertificateSVGParams calldata params,
+        uint256 timestamp
+    ) external pure returns (string memory);
 }
-
-enum SecuritySeries {
-    SeriesPreSeed,
-    SeriesSeed,
-    SeriesA,
-    SeriesB,
-    SeriesC,
-    SeriesD,
-    SeriesE,
-    SeriesF,
-    NA
-}
-
-enum SecurityStatus {
-    Unassigned,
-    Assigned,
-    Void
-}
-
-struct CompanyOfficer {
-    address eoa;
-    string name;
-    string contact;
-    string title;
-}
-
-enum ExercisePriceMethod {
-    perToken,
-    perWarrant
-}
-
-enum TokenCalculationMethod {
-    equityProRataToCompanyReserve,
-    equityProRataToTokenSupply,
-    dollarProRataToProtocolVal
-}
-
-enum UnlockStartTimeType {
-    tokenWarrantTime,
-    tgeTime,
-    setTime
-}
-
-enum UnlockingIntervalType {
-    blockly,
-    secondly,
-    hourly,
-    daily,
-    monthly
-}
-
-struct CertificateSVGParams {
-    string corpName;
-    SecurityClass securityType;
-    SecuritySeries securitySeries;
-    string officerName;
-    string officerTitle;
-    uint256 units;
-    uint256 valuation;
-    string jurisdiction;
-    string ownerName;
-    uint256 tokenId;
-    string certificateUri;
-}
-
-
-
-
-
 
