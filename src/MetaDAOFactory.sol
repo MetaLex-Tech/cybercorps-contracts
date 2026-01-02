@@ -68,10 +68,15 @@ interface IRoundManagerInit {
     ) external;
 }
 
+interface ICyberCorpLocal {
+    function issuanceManager() external view returns (address);
+}
+
 contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     using Strings for string;
     
     error InvalidSalt();
+    error RoundManagerAlreadyExists();
 
     address public registryAddress;
     address public issuanceManagerFactory;
@@ -125,6 +130,29 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         address roundManager
     );
 
+    event IssuanceManagerFactoryUpdated(
+        address indexed issuanceManagerFactory,
+        address oldIssuanceFactory
+    );
+
+    event CyberCorpSingleFactoryUpdated(
+        address indexed cyberCorpSingleFactory,
+        address oldCyberCorpFactory
+    );
+
+    event DealManagerFactoryUpdated(
+        address indexed dealManagerFactory,
+        address oldDealFactory
+    );
+
+    event RoundManagerFactoryUpdated(
+        address indexed roundManagerFactory,
+        address oldRoundManagerFactory
+    );
+
+    event UriBuilderUpdated(address indexed uriBuilder, address oldUriBuilder);
+    event RegistryAddressUpdated(address indexed registryAddress, address oldRegistryAddress);
+
     error GlobalOrPartyValuesMismatch();
     error OfficerValuesMismatch();
 
@@ -176,6 +204,42 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
 
     function setMetaDAOOfficerTitle(string memory _title) public onlyOwner {
         metaDAOOfficer.title = _title;
+    }
+
+    function setIssuanceManagerFactory(address _issuanceManagerFactory) external onlyOwner {
+        address old = issuanceManagerFactory;
+        issuanceManagerFactory = _issuanceManagerFactory;
+        emit IssuanceManagerFactoryUpdated(_issuanceManagerFactory, old);
+    }
+
+    function setCyberCorpSingleFactory(address _cyberCorpSingleFactory) external onlyOwner {
+        address old = cyberCorpSingleFactory;
+        cyberCorpSingleFactory = _cyberCorpSingleFactory;
+        emit CyberCorpSingleFactoryUpdated(_cyberCorpSingleFactory, old);
+    }
+
+    function setDealManagerFactory(address _dealManagerFactory) external onlyOwner {
+        address old = dealManagerFactory;
+        dealManagerFactory = _dealManagerFactory;
+        emit DealManagerFactoryUpdated(_dealManagerFactory, old);
+    }
+
+    function setRoundManagerFactory(address _roundManagerFactory) external onlyOwner {
+        address old = roundManagerFactory;
+        roundManagerFactory = _roundManagerFactory;
+        emit RoundManagerFactoryUpdated(_roundManagerFactory, old);
+    }
+
+    function setUriBuilder(address _uriBuilder) external onlyOwner {
+        address old = uriBuilder;
+        uriBuilder = _uriBuilder;
+        emit UriBuilderUpdated(_uriBuilder, old);
+    }
+
+    function setRegistryAddress(address _registryAddress) external onlyOwner {
+        address old = registryAddress;
+        registryAddress = _registryAddress;
+        emit RegistryAddressUpdated(_registryAddress, old);
     }
 
     function deployMetaCorp(
@@ -238,7 +302,7 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         dealManagerAddress = IDealManagerFactory(dealManagerFactory)
             .deployDealManager(salt);
         ICyberCorp(cyberCorpAddress).setDealManager(dealManagerAddress);
-        // Initialize IssuanceManager
+
         IIssuanceManager(issuanceManagerAddress).initialize(
             authAddress,
             cyberCorpAddress,
@@ -255,25 +319,9 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             dealManagerFactory
         );
 
-        roundManagerAddress = IRoundManagerFactory(roundManagerFactory).deployRoundManager(salt);
-
-        // Initialize RoundManager
-        IRoundManagerInit(roundManagerAddress).initialize(
-            authAddress,
-            cyberCorpAddress,
-            registryAddress,
-            issuanceManagerAddress,
-            roundManagerFactory
-        );
-
-        // Set RoundManager on the corp
-        ICyberCorp(cyberCorpAddress).setRoundManager(roundManagerAddress);
-
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
-        BorgAuth(authAddress).updateRole(roundManagerAddress, 99);
 
-//fix event
         emit MetaCorpDeployed(cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress, roundManagerAddress, address(0), 0, _officer.eoa);
     }
 

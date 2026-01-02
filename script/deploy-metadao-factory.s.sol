@@ -62,7 +62,7 @@ contract DeployMetaDAOFactoryScript is Script {
         address deployerAddress = vm.addr(deployerPrivateKey);
         vm.startBroadcast(deployerPrivateKey);
 
-        bytes32 salt = bytes32(keccak256("MetaDAOFactory.deploy.v1"));
+        bytes32 salt = bytes32(keccak256("MetaDAOFactory.deploy.v2"));
 
         uint256 currentChainId = block.chainid;
         address stable;

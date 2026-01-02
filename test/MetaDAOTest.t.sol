@@ -63,12 +63,14 @@ contract MetaDAOTest is Test {
         (founder, founderPrivKey) = makeAddrAndKey("founder");
         (alice, alicePrivKey) = makeAddrAndKey("alice");
 
-        // Deploy MetaDAO factories with production scripts
+        /*// Deploy MetaDAO factories with production scripts
         (registry, factory) = (new DeployMetaDAOFactoryScript()).run(
             deployerPrivKey, // deployerPrivateKey
             metaDAO, // multisig
             hex"63f62ac9b08c813401a02a16a820a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1b" // metadaoEscrowSig
-        );
+        );*/
+        registry = CyberAgreementRegistry(address(0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134));
+        factory = MetaDAOFactory(address(0x734aE2b36f663D0F4233Ce4a02c13b5EB8ec959D));
 
         globalFields = new string[](8);
         globalFields[0] = "founderName";
