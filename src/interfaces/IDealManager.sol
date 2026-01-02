@@ -78,13 +78,7 @@ interface IDealManager {
 
 
     function finalizeDeal(
-        address signer,
-        bytes32 _agreementId,
-        string[] memory _partyValues,
-        bytes memory signature,
-        bool _fillUnallocated,
-        string memory buyerName,
-        string memory secret
+        bytes32 agreementId
     ) external;
 
     function signDealAndPay(

@@ -95,8 +95,8 @@ library RoundLib {
     /// @param minTicket Minimum investment per EOI
     /// @param maxTicket Maximum investment per EOI
     /// @param paymentToken Payment token address
-    /// @param pricePerUnit Price per unit in payment token decimals
-    /// @param valuation Valuation in USD
+    /// @param pricePerUnit Price per unit in USD (decimals = 18)
+    /// @param valuation Valuation in USD (decimals = 18)
     /// @param startTime Start timestamp
     /// @param endTime End timestamp
     /// @return Partially filled Round struct
@@ -105,6 +105,7 @@ library RoundLib {
         SecuritySeries seriesType,
         RoundType roundType,
         bool publicRound,
+        bool allowTimedOffers,
         uint256 raiseCap,
         uint256 minTicket,
         uint256 maxTicket,
@@ -117,6 +118,7 @@ library RoundLib {
         round.seriesType = seriesType;
         round.roundType = roundType;
         round.publicRound = publicRound;
+        round.allowTimedOffers = allowTimedOffers;
         round.raiseCap = raiseCap;
         round.minTicket = minTicket;
         round.maxTicket = maxTicket;

@@ -42,15 +42,16 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "./libs/auth.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
-import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
-import "./interfaces/IIssuanceManager.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "./interfaces/ICyberCorpSingleFactory.sol";
 
 /// @title CyberCorp
 /// @notice Main contract representing a corporation's on-chain presence and management
 /// @dev Implements UUPS upgradeable pattern and BorgAuth access control
-contract CyberCorp is Initializable, BorgAuthACL {
+contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
+    string public constant DEPLOY_VERSION = "3"; // For version-tracking on all deployment and future upgrades
+
     // cyberCORP details
     /// @notice Legal name of the entity, including designation (e.g., "Inc." or "LLC")
     string public cyberCORPName;
@@ -78,11 +79,12 @@ contract CyberCorp is Initializable, BorgAuthACL {
     /// @notice Address of the round manager contract
     address public roundManager;
 
-
     event CyberCORPDetailsUpdated(string cyberCORPName, string cyberCORPType, string cyberCORPJurisdiction, string cyberCORPContactDetails, string defaultDisputeResolution);
     event OfficerAdded(address indexed officer, uint256 index);
     event OfficerRemoved(address indexed officer, uint256 index);
     event CompanyPayableUpdated(address indexed companyPayable, address indexed oldCompanyPayable);
+
+    error NotRefImplementation();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -217,5 +219,21 @@ contract CyberCorp is Initializable, BorgAuthACL {
         address oldCompanyPayable = companyPayable;
         companyPayable = _companyPayable;
         emit CompanyPayableUpdated(companyPayable, oldCompanyPayable);
+    }
+
+    // ========================
+    // UUPSUpgradeable
+    // ========================
+
+    /// @notice UUPS upgrade authorization
+    /// @dev MetaLeX releases new versions through the factory's reference implementation,
+    /// and the CyberCorp owner can decide if or when he wants to perform the upgrade
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {
+        if(
+            ICyberCorpSingleFactory(upgradeFactory).getRefImplementation() != newImplementation) {
+            revert NotRefImplementation();
+        }
     }
 }

@@ -48,6 +48,7 @@ import "../interfaces/ICondition.sol";
 import "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/ILexChex.sol";
+import "../interfaces/IRoundManagerFactory.sol";
 import "../libs/EIP712Lib.sol";
 import "../libs/RoundLib.sol";
 import "../storage/LexScrowStorage.sol";
@@ -316,9 +317,10 @@ library RoundManagerStorage {
         }
 
         //add lexchex if public round
-        if (round.publicRound && getLexChexCondition() != address(0)) {
+        //Commenting this out as we are letting our front end handle this
+        /*if (round.publicRound && getLexChexCondition() != address(0)) {
             ls.conditionsByEscrow[agreementId].push(ICondition(getLexChexCondition()));
-        }
+        }*/
     }
 
     /// @notice Allocates an amount to an EOI and finalizes the deal
@@ -455,13 +457,16 @@ library RoundManagerStorage {
         escrow.buyerAssets[0].amount = usedAmountToken;
 
         //if the round is public and the eoi submitter does not have a valid lexchex, mint it
-        if (round.publicRound && !ILexChex(getLexChex()).hasValidLexCheX(escrow.counterParty)) {
-            // mint lexchex if over 200k for individual or 1 million for corporate using 18-decimal precision
-            if (usedAmount1e18 >= 200000 * 1e18 && eoi.naturalPerson) {
-            (, tokenId) = ILexChexMinter(getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
-            }
-            if (usedAmount1e18 >= 1000000 * 1e18 && !eoi.naturalPerson) {
+        if (!ILexChex(getLexChex()).hasValidLexCheX(escrow.counterParty)) {
+            // Check if payment token is whitelisted
+            if (IRoundManagerFactory(getUpgradeFactory()).isWhitelistedToken(round.paymentToken)) {
+                // mint lexchex if over 200k for individual or 1 million for corporate using 18-decimal precision
+                if (usedAmount1e18 >= 200000 * 1e18 && eoi.naturalPerson) {
                     (, tokenId) = ILexChexMinter(getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
+                }
+                if (usedAmount1e18 >= 1000000 * 1e18 && !eoi.naturalPerson) {
+                    (, tokenId) = ILexChexMinter(getLexChexMinter()).requestMintFor(eoi.lexchexDetails.request, eoi.lexchexDetails.templateId, eoi.lexchexDetails.salt, eoi.lexchexDetails.globalValues, eoi.lexchexDetails.parties, eoi.lexchexDetails.partyValues, eoi.lexchexDetails.agreementSignature);
+                }
             }
         }
     }

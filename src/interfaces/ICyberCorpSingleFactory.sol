@@ -45,5 +45,8 @@ import "../CyberCorpConstants.sol";
 
 interface ICyberCorpSingleFactory {
     function deployCyberCorpSingle(bytes32 salt) external returns (address cyberCorpAddress);
-    function initialize(address _auth) external;
+    function initialize(address _auth, address _refImplementation) external;
+
+    function getRefImplementation() external view returns(address);
+    function setRefImplementation(address _newImplementation) external;
 }

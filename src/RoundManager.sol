@@ -63,16 +63,16 @@ import "./interfaces/ILexChex.sol";
 /// @dev Implements UUPS upgradeable pattern and integrates with BorgAuth for access control
 contract RoundManager is
     Initializable,
-    UUPSUpgradeable,
-    ReentrancyGuard,
     BorgAuthACL,
-    LexScroWLite
+    LexScroWLite,
+    UUPSUpgradeable,
+    ReentrancyGuard
 {
     using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
     using LexScrowStorage for LexScrowStorage.LexScrowData;
     using SafeERC20 for IERC20;
 
-    string public constant DEPLOY_VERSION = "1"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "3"; // For version-tracking on all deployment and future upgrades
 
     error InvalidRound();
     error RoundNotOpen();
@@ -308,6 +308,16 @@ contract RoundManager is
         emit RoundClosed(roundId, block.timestamp);
     }
 
+    function getRound(
+        bytes32 roundId
+    )
+        external
+        view
+        returns (Round memory)
+    {
+        return RoundManagerStorage.getRound(roundId);
+    }
+
     function getRoundPriceInfo(
         bytes32 roundId
     )
@@ -416,6 +426,11 @@ contract RoundManager is
             candidate = remaining;
         }
         uint256 minRequired = round.minTicket > eoi.minAmount ? round.minTicket : eoi.minAmount;
+        // We check `candidate` instead of the actual `usedAmount` against `minRequired` to provide a better user experience.
+        // When `pricePerUnit` is not exactly 1e18, rounding errors can cause `usedAmount` to be slightly less than `candidate`.
+        // In a normal scenario a user is likely to set `candidate` exactly to `minRequired` and expect the transaction to succeed;
+        // however, if we checked `usedAmount` instead against `minRequired` and rounding pushed it just below the threshold,
+        // the transaction would fail unexpectedly and cause confusion.
         if (candidate < minRequired) {
             revert InvalidAllocation();
         }

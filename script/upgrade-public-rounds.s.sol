@@ -9,18 +9,16 @@ import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
+import {DealManagerFactory} from "../src/DealManagerFactory.sol";
+import {DealManager} from "../src/DealManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CyberCertData, RoundType} from "../src/interfaces/IRoundManager.sol";
-import {EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
-import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
-import {Vm} from "forge-std/Test.sol";
-import "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
+import {ILegacyFactory} from "../script/interfaces/ILegacyFactory.sol";
 
 interface IUUPS {
     function upgradeTo(address newImplementation) external;
@@ -34,7 +32,7 @@ contract UpgradePublicRoundsScript is Script {
     function run() public {
         // Config
         bytes32 salt = bytes32(
-            keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3")
+            keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3.0.1")
         );
         
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
@@ -45,17 +43,40 @@ contract UpgradePublicRoundsScript is Script {
 
         // Required existing addresses
         address cyberCorpFactoryProxyAddr = 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2;
-        address cyberCorpSingleFactoryAddr = 0xc8e084D3f8B3b326FCc894C7afD28F4904196406;
-        address issuanceManagerFactoryAddr = 0xA32547aAdAA4975082D729c79e79dBaE4385EBCf;
-        address usdc = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
+        address legacyCyberCorpSingleFactoryAddr = 0xc8e084D3f8B3b326FCc894C7afD28F4904196406;
+        address legacyIssuanceManagerFactoryAddr = 0xA32547aAdAA4975082D729c79e79dBaE4385EBCf;
         address registry = 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134;
+        address deployedLexChexAddrAuth = 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2;
+        address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
+
+        address stable;
+        uint256 currentChainId = block.chainid;
+        if (currentChainId == 1) {
+            stable = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // Mainnet
+        } else if (currentChainId == 42161) {
+            stable = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831; // Arbitrum
+        } else if (currentChainId == 8453) {
+            stable = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913; // Base
+        } else if (currentChainId == 84532) {
+            stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e; // Base Sepolia
+        } else if (currentChainId == 11155111) {
+            stable = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238; // Sepolia
+        } else {
+            revert("Unsupported chain ID"); // Handle unsupported chains
+        }
+
+        CyberCorpFactory factoryProxy = CyberCorpFactory(
+            cyberCorpFactoryProxyAddr
+        );
 
         vm.startBroadcast(deployerPrivateKey);
 
-        // 1) Deploy RoundManagerFactory (uses existing AUTH from factory)
+        // Uses existing AUTH from factory
         address auth = address(
             CyberCorpFactory(cyberCorpFactoryProxyAddr).AUTH()
         );
+        vm.assertEq(address(auth), 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01, "should match universal AUTH address");
+
         address deployer = vm.addr(deployerPrivateKey);
         console.log("Deployer:", deployer);
         uint256 role = BorgAuth(auth).userRoles(deployer);
@@ -65,13 +86,15 @@ contract UpgradePublicRoundsScript is Script {
                 "Deployer is not AUTH owner; use the AUTH owner key to upgrade"
             );
         }
+
+        // 1) Deploy RoundManagerFactory
         RoundManagerFactory roundManagerFactory = RoundManagerFactory(address(
             new ERC1967Proxy{salt: salt}(
                 address(new RoundManagerFactory{salt: salt}()),
                 abi.encodeWithSelector(
                     RoundManagerFactory.initialize.selector,
                     address(auth),
-                    address(new RoundManager())
+                    address(new RoundManager{salt: salt}())
                 )
             )
         ));
@@ -79,6 +102,8 @@ contract UpgradePublicRoundsScript is Script {
             "RoundManagerFactory deployed:",
             address(roundManagerFactory)
         );
+
+        roundManagerFactory.setWhitelistedToken(stable, true);
 
         // 2) Upgrade CyberCorpFactory (UUPS)
         address newCyberCorpFactoryImpl = address(
@@ -100,28 +125,144 @@ contract UpgradePublicRoundsScript is Script {
         );
 
         // 3) Set the RoundManagerFactory address in CyberCorpFactory
-        CyberCorpFactory factoryProxy = CyberCorpFactory(
-            cyberCorpFactoryProxyAddr
-        );
         factoryProxy.setRoundManagerFactory(address(roundManagerFactory));
         console.log(
             "CyberCorpFactory.roundManagerFactory set to:",
             address(roundManagerFactory)
         );
 
-        // 4) Upgrade CyberCorp beacon via CyberCorpSingleFactory
-        CyberCorpSingleFactory ccSingleFactory = CyberCorpSingleFactory(
-            cyberCorpSingleFactoryAddr
-        );
-        address newCyberCorpImpl = address(new CyberCorp{salt: salt}());
-        console.log("New CyberCorp implementation:", newCyberCorpImpl);
-        ccSingleFactory.upgradeImplementation(newCyberCorpImpl);
+        // 4) Deploy new CyberCorpSingleFactory
+        // Deploy new reference implementation
+        CyberCorp refCorp = new CyberCorp{salt: salt}(); // Use create2 here so it and hence the new factory has a stable address regardless of the deployer's state
         console.log(
-            "CyberCorp beacon implementation set to:",
-            ccSingleFactory.getBeaconImplementation()
+            "New CyberCorp implementation: %s",
+            address(refCorp)
+        );
+        // Deploy new UUPSUpgradeable
+        CyberCorpSingleFactory newCyberCorpSingleFactory = CyberCorpSingleFactory(
+            address(
+                new ERC1967Proxy{salt: salt}(
+                    address(new CyberCorpSingleFactory{salt: salt}()),
+                    abi.encodeWithSelector(
+                        CyberCorpSingleFactory.initialize.selector,
+                        address(auth),
+                        address(refCorp)
+                    )
+                )
+            )
+        );
+        console.log(
+            "CyberCorpSingleFactory deployed:",
+            address(newCyberCorpSingleFactory)
+        );
+        // Replace the old one in CyberCorpFactory
+        factoryProxy.setCyberCorpSingleFactory(address(newCyberCorpSingleFactory));
+        // Verify the upgrade was successful
+        vm.assertEq(newCyberCorpSingleFactory.getRefImplementation(), address(refCorp), "unexpected CyberCorp reference implementation");
+        console.log(
+            "CyberCorpFactory.cyberCorpSingleFactory set to:",
+            address(newCyberCorpSingleFactory)
         );
 
-        // 5) upgrade CyberAgreementRegistry
+        // 5) Deploy new IssuanceManagerFactory
+        // Deploy new reference implementations
+        IssuanceManager refIm = new IssuanceManager{salt: salt}();
+        CyberCertPrinter refCertPrinter = new CyberCertPrinter{salt: salt}();
+        CyberScrip refScrip = new CyberScrip{salt: salt}();
+        console.log(
+            "New IssuanceManager implementation:",
+            address(refIm)
+        );
+        console.log(
+            "New CyberCertPrinter implementation:",
+            address(refCertPrinter)
+        );
+        console.log(
+            "New CyberScrip implementation:",
+            address(refScrip)
+        );
+        // Deploy new UUPSUpgradeable
+        IssuanceManagerFactory newImFactory = IssuanceManagerFactory(
+            address(
+                new ERC1967Proxy{salt: salt}(
+                    address(new IssuanceManagerFactory{salt: salt}()),
+                    abi.encodeWithSelector(
+                        IssuanceManagerFactory.initialize.selector,
+                        address(auth),
+                        address(refIm),
+                        address(refCertPrinter),
+                        address(refScrip)
+                    )
+                )
+            )
+        );
+        console.log(
+            "IssuanceManagerFactory deployed:",
+            address(newImFactory)
+        );
+        // Replace the old one in CyberCorpFactory
+        factoryProxy.setIssuanceManagerFactory(address(newImFactory));
+        // Verify the upgrade was successful
+        vm.assertEq(newImFactory.getRefImplementation(), address(refIm), "unexpected IssuanceManager reference implementation");
+        console.log(
+            "CyberCorpFactory.issuanceManagerFactory set to:",
+            address(newImFactory)
+        );
+
+        // 6) Deploy new DealManagerFactory
+        // Deploy new reference implementation
+        DealManager refDm = new DealManager{salt: salt}(); // Use create2 here so it and hence the new factory has a stable address regardless of the deployer's state
+        console.log(
+            "New DealManager implementation:",
+            address(refDm)
+        );
+        // Deploy new UUPSUpgradeable
+        DealManagerFactory newDmFactory = DealManagerFactory(
+            address(
+                new ERC1967Proxy{salt: salt}(
+                    address(new DealManagerFactory{salt: salt}()),
+                    abi.encodeWithSelector(
+                        DealManagerFactory.initialize.selector,
+                        address(auth),
+                        address(refDm)
+                    )
+                )
+            )
+        );
+        console.log(
+            "DealManagerFactory deployed:",
+            address(newDmFactory)
+        );
+        // Replace the old one in CyberCorpFactory
+        factoryProxy.setDealManagerFactory(address(newDmFactory));
+        factoryProxy.setLexchexAuth(deployedLexChexAddrAuth);
+        roundManagerFactory.setDefaultFeeRatio(30);
+        roundManagerFactory.setPlatformPayable(multisig);
+        newDmFactory.setDefaultFeeRatio(30);
+        newDmFactory.setPlatformPayable(multisig);
+
+        //add CyberCorpFactory as owner on lexchex auth
+        BorgAuth(deployedLexChexAddrAuth).updateRole(address(factoryProxy), BorgAuth(deployedLexChexAddrAuth).OWNER_ROLE());
+
+        // Verify the upgrade was successful
+        vm.assertEq(newDmFactory.getRefImplementation(), address(refDm), "unexpected DealManager reference implementation");
+        console.log(
+            "CyberCorpFactory.dealManagerFactory set to:",
+            address(newDmFactory)
+        );
+
+        // 7) Upgrade CyberCorp beacon via CyberCorpSingleFactory
+        ILegacyFactory legacyCcSingleFactory = ILegacyFactory(
+            legacyCyberCorpSingleFactoryAddr
+        );
+        legacyCcSingleFactory.upgradeImplementation(address(refCorp));
+        vm.assertEq(legacyCcSingleFactory.getBeaconImplementation(), address(refCorp), "legacy CyberCorp beacon implementation should've set to the reference one");
+        console.log(
+            "CyberCorp beacon implementation set to:",
+            legacyCcSingleFactory.getBeaconImplementation()
+        );
+
+        // 8) upgrade CyberAgreementRegistry
         address newRegistryImpl = address(
             new CyberAgreementRegistry{salt: salt}()
         );
@@ -135,7 +276,19 @@ contract UpgradePublicRoundsScript is Script {
             registry
         );
 
-        // Add SAFE template (id 1) using SAFE fields from template.s.sol
+        // 9) Upgrade IssuanceManager (Beacon via IssuanceManagerFactory)
+        ILegacyFactory legacyIssuanceManagerFactory = ILegacyFactory(
+            legacyIssuanceManagerFactoryAddr
+        );
+        legacyIssuanceManagerFactory.upgradeImplementation(address(refIm));
+        vm.assertEq(legacyIssuanceManagerFactory.getBeaconImplementation(), address(refIm), "legacy IssuanceManager beacon implementation should've set to the reference one");
+        console.log(
+            "IssuanceManager beacon implementation set to:",
+            legacyIssuanceManagerFactory.getBeaconImplementation()
+        );
+
+        //update templates
+
         string[] memory globalFieldsSafe = new string[](5);
         globalFieldsSafe[0] = "purchaseAmount";
         globalFieldsSafe[1] = "postMoneyValuationCap";
@@ -143,343 +296,78 @@ contract UpgradePublicRoundsScript is Script {
         globalFieldsSafe[3] = "governingJurisdiction";
         globalFieldsSafe[4] = "disputeResolution";
 
-        string[] memory partyFieldsSafe = new string[](5);
-        partyFieldsSafe[0] = "name";
-        partyFieldsSafe[1] = "evmAddress";
-        partyFieldsSafe[2] = "contactDetails";
-        partyFieldsSafe[3] = "investorType";
-        partyFieldsSafe[4] = "investorJurisdiction";
 
-        CyberAgreementRegistry(registry).createTemplate(
-            bytes32(uint256(1)),
-            "SAFE",
-            "https://ipfs.io/ipfs/bafybeih5wvr7zfw76plnb66teaa66rtgoikhhcqh55oecuoxtuw5c3dooi",
-            globalFieldsSafe,
-            partyFieldsSafe
-        );
+        string[] memory partyFields = new string[](5);
+        partyFields[0] = "name";
+        partyFields[1] = "evmAddress";
+        partyFields[2] = "contactDetails";
+        partyFields[3] = "investorType";
+        partyFields[4] = "investorJurisdiction";
 
-        // 5b) Upgrade IssuanceManager (Beacon via IssuanceManagerFactory)
-        address newIssuanceManagerImpl = address(new IssuanceManager{salt: salt}());
-        console.log("New IssuanceManager implementation:", newIssuanceManagerImpl);
-        IssuanceManagerFactory(issuanceManagerFactoryAddr).upgradeImplementation(newIssuanceManagerImpl);
-        console.log(
-            "IssuanceManager beacon implementation set to:",
-            IssuanceManagerFactory(issuanceManagerFactoryAddr).getBeaconImplementation()
-        );
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(50)), "cySPA + Reg D SAFE", "IPFS://bafybeics3btqftkfnzchtisazgvlvtq3xok6rrdvhjyhdvr7lhoa6snjxe", globalFieldsSafe, partyFields);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(51)), "cySPA + REG S SAFE", "IPFS://bafybeidwqou5x4amvsidepwbuqpwarowv3vce473jpqcgejvbf4g2xxdee", globalFieldsSafe, partyFields);
 
-        //deploy CyberScrip implementation
-        address newCyberScripImpl = address(new CyberScrip{salt: salt}());
-        console.log("New CyberScrip implementation:", newCyberScripImpl);
-        CyberCorpFactory(cyberCorpFactoryProxyAddr).setCyberCert20Implementation(newCyberScripImpl);
+        string[] memory globalFieldsSafeTokenWarrant = new string[](17);
+        globalFieldsSafeTokenWarrant[0] = "purchaseAmount";
+        globalFieldsSafeTokenWarrant[1] = "postMoneyValuationCap";
+        globalFieldsSafeTokenWarrant[2] = "expirationTime";
+        globalFieldsSafeTokenWarrant[3] = "governingJurisdiction";
+        globalFieldsSafeTokenWarrant[4] = "disputeResolution";
+        globalFieldsSafeTokenWarrant[5] = "exercisePriceMethod";
+        globalFieldsSafeTokenWarrant[6] = "exercisePrice";
+        globalFieldsSafeTokenWarrant[7] = "unlockStartTimeType";
+        globalFieldsSafeTokenWarrant[8] = "unlockStartTime";
+        globalFieldsSafeTokenWarrant[9] = "unlockingPeriod";
+        globalFieldsSafeTokenWarrant[10] = "latestExpirationTime";
+        globalFieldsSafeTokenWarrant[11] = "unlockingCliffPeriod";
+        globalFieldsSafeTokenWarrant[12] = "unlockingCliffPercentage";
+        globalFieldsSafeTokenWarrant[13] = "unlockingIntervalType";
+        globalFieldsSafeTokenWarrant[14] = "tokenCalculationMethod";
+        globalFieldsSafeTokenWarrant[15] = "minCompanyReserve";
+        globalFieldsSafeTokenWarrant[16] = "tokenPremiumMultiplier";
 
 
-        // 6) upgrade CyberCertPrinter
-        address newCyberCertPrinterImpl = address(new CyberCertPrinter{salt: salt}());
-        console.log("New CyberCertPrinter implementation:", newCyberCertPrinterImpl);
-        factoryProxy.setCyberCertPrinterImplementation(newCyberCertPrinterImpl);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(52)), "cySPA + REG D SAFE + REG D TOKEN WARRANT", "IPFS://bafybeiapw7thrkzymtnhilmr5sjl7sm55yc42d2zxl66u6tdutfvm55t2y", globalFieldsSafeTokenWarrant, partyFields);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(53)), "cySPA + REG S SAFE + REG S TOKEN WARRANT", "IPFS://bafybeianosjn74ldjexzmwcji6nl3l24ikwazd64uei625nszysqfwla2i", globalFieldsSafeTokenWarrant, partyFields);
 
+        string[] memory globalFieldsSafte = new string[](15);
+        globalFieldsSafte[0] = "purchaseAmount";
+        globalFieldsSafte[1] = "postMoneyValuationCap";
+        globalFieldsSafte[2] = "protocolUSDValuationAtTimeofInvestment";
+        globalFieldsSafte[3] = "expirationTime";
+        globalFieldsSafte[4] = "governingJurisdiction";
+        globalFieldsSafte[5] = "disputeResolution";
+        globalFieldsSafte[6] = "unlockStartTimeType";
+        globalFieldsSafte[7] = "unlockStartTime";
+        globalFieldsSafte[8] = "unlockingPeriod";
+        globalFieldsSafte[9] = "unlockingCliffPeriod";
+        globalFieldsSafte[10] = "unlockingCliffPercentage";
+        globalFieldsSafte[11] = "unlockingIntervalType";
+        globalFieldsSafte[12] = "tokenCalculationMethod";
+        globalFieldsSafte[13] = "minCompanyReserve";
+        globalFieldsSafte[14] = "tokenPremiumMultiplier";
+
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(54)), "cySPA + REG D SAFTE ", "IPFS://bafybeidb2ebvu7uxt6m2ukrdnytzpwrb4ihcncbx2v4qohe5xao3xr3m7e", globalFieldsSafte, partyFields);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(55)), "cySPA + REG S SAFTE ", "IPFS://bafybeideutuq3r3v66rdcvzar5heefyark24urc3ix44tvvjpo2ntvkc7i", globalFieldsSafte, partyFields);
+
+        string[] memory globalFieldsSaft = new string[](10);
+        globalFieldsSaft[0] = "purchaseAmount";
+        globalFieldsSaft[1] = "protocolValuationCap";
+        globalFieldsSaft[2] = "governingJurisdiction";
+        globalFieldsSaft[3] = "disputeResolution";
+        globalFieldsSaft[4] = "unlockStartTimeType";
+        globalFieldsSaft[5] = "unlockStartTime";
+        globalFieldsSaft[6] = "unlockingPeriod";
+        globalFieldsSaft[7] = "unlockingCliffPeriod";
+        globalFieldsSaft[8] = "unlockingCliffPercentage";
+        globalFieldsSaft[9] = "unlockingIntervalType";
+
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(56)), "cySPA + REG D SAFT", "IPFS://bafybeidfbgwv35cu22ouwdpmho35gicfnkno2em7ngjn4mbhbiogvvaf7i", globalFieldsSaft, partyFields);
+        CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(57)), "cySPA + REG S SAFT", "IPFS://bafybeibjm2mss4ctfsyajehtwnmje3aa2agif5n47i575pxdejrk7dee5m", globalFieldsSaft, partyFields);
+        
+        vm.stopBroadcast();
 
         console.log("CyberCorpFactory:", address(factoryProxy));
-        console.log("CyberCorpSingleFactory:", address(ccSingleFactory));
         console.log("RoundManagerFactory:", address(roundManagerFactory));
-        console.log("CyberCorp:", address(newCyberCorpImpl));
-
-        CompanyOfficer memory officer = CompanyOfficer({
-            eoa: deployer,
-            name: "CEO",
-            contact: "ceo@cybercorp.com",
-            title: "1234567890"
-        });
-
-        CyberCertData[] memory certData = new CyberCertData[](1);
-
-        certData[0] = CyberCertData({
-            name: "CyberCorp",
-            symbol: "CC",
-            uri: "ipfs://bafkreigz4o4kqxmkcln2742v47hms7eacd7v3c43lvr7k7i5h6e7nfl77i",
-            securityClass: SecurityClass.SAFE,
-            securitySeries: SecuritySeries.SeriesA,
-            extension: address(0),
-            defaultLegend: new string[](0)
-        });
-
-        string[] memory roundPartyValues = new string[](5);
-        roundPartyValues[0] = "Alice Officer";
-        roundPartyValues[1] = "CEO";
-        roundPartyValues[2] = "Alice Officer";
-        roundPartyValues[3] = "CEO";
-        roundPartyValues[4] = "Alice Officer";
-
-        bytes memory escrowedSig = hex"01";
-
-        string[] memory legalDetails = new string[](1);
-        legalDetails[0] = "Legal Details";
-        bytes[] memory extensionData = new bytes[](1);
-        extensionData[0] = "";
-
-        //test deploy a new CyberCorp and start a public round using the factory
-        (
-            address cyberCorp,
-            address autha,
-            address issuance,
-            address dealManager,
-            address roundManager,
-            bytes32 roundId
-        ) = CyberCorpFactory(cyberCorpFactoryProxyAddr)
-                .deployCyberCorpAndCreateRound(
-                    block.timestamp,
-                    SecuritySeries.SeriesA,
-                    "CyberCorp",
-                    "Limited Liability Company",
-                    "Juris",
-                    "Contact Details",
-                    "Dispute Res",
-                    address(deployer),
-                    officer,
-                    legalDetails,
-                    extensionData,
-                    certData,
-                    0x0000000000000000000000000000000000000000000000000000000000000020,
-                    address(usdc),
-                    1000,
-                    1000000000000000,
-                    roundPartyValues,
-                    escrowedSig,
-                    RoundType.FCFS,
-                    new address[](0),
-                    100000000000,
-                    1,
-                    10000000,
-                    block.timestamp - 1,
-                    block.timestamp + 14 days,
-                    true
-                );
-
-        // Example public round using SAFE template id 1
-        (
-            address cyberCorp2,
-            address auth2,
-            address issuance2,
-            address dealManager2,
-            address roundManager2,
-            bytes32 roundId2
-        ) = CyberCorpFactory(cyberCorpFactoryProxyAddr)
-                .deployCyberCorpAndCreateRound(
-                    block.timestamp + 1,
-                    SecuritySeries.SeriesA,
-                    "SafeCorp",
-                    "Limited Liability Company",
-                    "Juris",
-                    "Contact",
-                    "Dispute",
-                    address(deployer),
-                    officer,
-                    legalDetails,
-                    extensionData,
-                    certData,
-                    bytes32(uint256(1)),
-                    address(usdc),
-                    1000,
-                    1000000000000000,
-                    roundPartyValues,
-                    escrowedSig,
-                    RoundType.FCFS,
-                    new address[](0),
-                    100000000000,
-                    1,
-                    10000000,
-                    block.timestamp - 1,
-                    block.timestamp + 21 days,
-                    true
-                );
-        console.log("SAFE Template Round cyberCorp:", cyberCorp2);
-        console.log("SAFE Template Round roundManager:", roundManager2);
-        console.logBytes32(roundId2);
-        vm.stopBroadcast();
-
-        vm.startBroadcast(testPrivateKey);
-        EOI memory eoi = EOI({
-            name: "Investor 1",
-            investorType: "Individual",
-            jurisdiction: "US",
-            contact: "email",
-            minAmount: 1,
-            maxAmount: 1,
-            expiry: block.timestamp + 7 days,
-            naturalPerson: false,
-            lexchexDetails: LexChexDetails({
-                request: MintRequest({
-                    uuid: 0,
-                    owner: address(0),
-                    investorName: "",
-                    investorType: "",
-                    investorJurisdiction: "",
-                    investorContact: "",
-                    mintPrice: 0,
-                    expiry: 0,
-                    paymentToken: address(0)
-                }),
-                templateId: bytes32(0),
-                salt: 0,
-                globalValues: new string[](0),
-                parties: new address[](0),
-                partyValues: new string[][](0),
-                agreementSignature: ""
-            })
-        });
-
-        address[] memory parties = new address[](2);
-        parties[0] = deployer;
-        parties[1] = testDeployer;
-
-        //get the template data for templateID 0x0000000000000000000000000000000000000000000000000000000000000020
-        (
-            string memory legalUri,
-            ,
-            string[] memory globalFields,
-            string[] memory partyFields
-        ) = CyberAgreementRegistry(registry).getTemplateDetails(
-                0x0000000000000000000000000000000000000000000000000000000000000020
-            );
-
-        bytes32 contractId = keccak256(
-            abi.encode(
-                0x0000000000000000000000000000000000000000000000000000000000000020,
-                block.timestamp,
-                roundPartyValues,
-                parties
-            )
-        );
-
-        bytes memory signature = _computeEOISignature(
-            vm,
-            CyberAgreementRegistry(registry),
-            0x0000000000000000000000000000000000000000000000000000000000000020,
-            block.timestamp,
-            roundPartyValues,
-            roundPartyValues,
-            deployer,
-            testPrivateKey
-        );
-
-        /*        bytes32 roundId,
-        EOI memory eoi,
-        string[] memory globalValues,
-        string[] memory partyValues,
-        bytes memory signature,
-        uint256 salt,
-        address[] memory conditions,
-        bytes32 secretHash,
-        uint256 expiry,
-        string memory name*/
-        ERC20(payable(usdc)).approve(address(roundManager), type(uint256).max);
-        RoundManager(roundManager).submitEOI(
-            roundId,
-            eoi,
-            roundPartyValues,
-            roundPartyValues,
-            signature,
-            block.timestamp,
-            new address[](0),
-            bytes32(0)
-        );
-        vm.stopBroadcast();
-
-        // Submit EOI from another address for SAFE template round (roundId2)
-        uint256 testPrivateKey2 = vm.envUint("TEST_KEY_2");
-        address testDeployer2 = vm.addr(testPrivateKey2);
-        vm.startBroadcast(testPrivateKey2);
-        EOI memory eoi2 = EOI({
-            name: "Investor 2",
-            investorType: "Individual",
-            jurisdiction: "US",
-            contact: "email2",
-            minAmount: 1,
-            maxAmount: 1,
-            expiry: block.timestamp + 7 days,
-            naturalPerson: false,
-            lexchexDetails: LexChexDetails({
-                request: MintRequest({
-                    uuid: 0,
-                    owner: address(0),
-                    investorName: "",
-                    investorType: "",
-                    investorJurisdiction: "",
-                    investorContact: "",
-                    mintPrice: 0,
-                    expiry: 0,
-                    paymentToken: address(0)
-                }),
-                templateId: bytes32(0),
-                salt: 0,
-                globalValues: new string[](0),
-                parties: new address[](0),
-                partyValues: new string[][](0),
-                agreementSignature: ""
-            })
-        });
-
-        // Build signature for template id 1
-        bytes memory signature2 = _computeEOISignature(
-            vm,
-            CyberAgreementRegistry(registry),
-            bytes32(uint256(1)),
-            block.timestamp,
-            roundPartyValues,
-            roundPartyValues,
-            deployer,
-            testPrivateKey2
-        );
-
-        ERC20(payable(usdc)).approve(address(roundManager2), type(uint256).max);
-        RoundManager(roundManager2).submitEOI(
-            roundId2,
-            eoi2,
-            roundPartyValues,
-            roundPartyValues,
-            signature2,
-            block.timestamp,
-            new address[](0),
-            bytes32(0)
-        );
-        vm.stopBroadcast();
-    }
-
-    function _computeEOISignature(
-        Vm vm,
-        CyberAgreementRegistry registry,
-        bytes32 templateId,
-        uint256 salt,
-        string[] memory globalValues,
-        string[] memory partyValues,
-        address authorityOfficer,
-        uint256 signerPrivKey
-    ) internal view returns (bytes memory) {
-        (
-            string memory legalUri,
-            ,
-            string[] memory glFields,
-            string[] memory partyFields
-        ) = registry.getTemplateDetails(templateId);
-        address signer = vm.addr(signerPrivKey);
-        address[] memory parties = new address[](2);
-        parties[0] = authorityOfficer;
-        parties[1] = signer;
-        bytes32 contractId = keccak256(
-            abi.encode(templateId, salt, globalValues, parties)
-        );
-        return
-            CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                contractId,
-                legalUri,
-                glFields,
-                partyFields,
-                globalValues,
-                partyValues,
-                signerPrivKey
-            );
     }
 }

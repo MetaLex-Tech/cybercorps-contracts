@@ -316,7 +316,7 @@ contract LexChexTest is Test {
         // Owner should be able to upgrade it
         vm.prank(owner);
         lexchex.upgradeToAndCall(newImplementation, "");
-        assertEq(address(lexchex).getErc1967Implementation(vm), newImplementation);
+        assertEq(address(lexchex).getErc1967Implementation(), newImplementation);
 
         // Verify the existing states
         assertEq(lexchex.totalSupply(), 1, "Total supply should be the same after upgrade");

@@ -807,7 +807,7 @@ contract LexChexMinterTest is Test {
         // Owner should be able to upgrade it
         vm.prank(owner);
         lexchexMinter.upgradeToAndCall(newImplementation, "");
-        assertEq(address(lexchexMinter).getErc1967Implementation(vm), newImplementation);
+        assertEq(address(lexchexMinter).getErc1967Implementation(), newImplementation);
 
         // Verify requestMint() should still work
         testRequestMint();

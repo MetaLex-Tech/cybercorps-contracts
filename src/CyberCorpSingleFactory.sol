@@ -41,30 +41,32 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts/utils/Create2.sol";
-import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
-import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "openzeppelin-contracts/utils/Create2.sol";
+import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./CyberCorp.sol";
-import "./libs/auth.sol";   
+import "./storage/CyberCorpSingleFactoryStorage.sol";
+import "./libs/auth.sol";
 
-contract CyberCorpSingleFactory is BorgAuthACL {
+contract CyberCorpSingleFactory is BorgAuthACL, UUPSUpgradeable {
     error InvalidSalt();
     error DeploymentFailed();
     error ZeroAddress();
     
-    UpgradeableBeacon public beacon;
-
     event CyberCorpDeployed(address cyberCorp);
+    event RefImplementationSet(address refImplementation, string version);
 
-    constructor(address _auth) {
-        // Deploy the implementation contract and beacon
-        beacon = new UpgradeableBeacon(address(new CyberCorp()), address(this));
-        initialize(_auth);
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
     }
 
-    function initialize(address _auth) public initializer {
+    function initialize(address _auth, address _refImplementation) public initializer {
         // Initialize BorgAuthACL
         __BorgAuthACL_init(_auth);
+
+        CyberCorpSingleFactoryStorage.getStorageData().refImplementation = _refImplementation;
+        emit RefImplementationSet(_refImplementation, CyberCorp(_refImplementation).DEPLOY_VERSION());
     }
 
     function deployCyberCorpSingle(bytes32 _salt) public returns (address) {
@@ -94,20 +96,38 @@ contract CyberCorpSingleFactory is BorgAuthACL {
     /// @dev Internal function used by deployCyberCorpSingle
     /// @return bytecode The proxy contract creation bytecode
     function _getBytecode() private view returns (bytes memory bytecode) {
-        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
-        bytecode = abi.encodePacked(sourceCodeBytes, abi.encode(beacon, ""));
+        bytes memory sourceCodeBytes = type(ERC1967Proxy).creationCode;
+        bytecode = abi.encodePacked(
+            sourceCodeBytes,
+            abi.encode(CyberCorpSingleFactoryStorage.getStorageData().refImplementation, "")
+        );
     }
 
-    /// @notice Upgrades the implementation contract
+    // ========================
+    // Getter / Setter
+    // ========================
+
+    /// @notice Get the reference implementation contract for the next deployments
+    /// @return Current reference implementation contract address
+    function getRefImplementation() public view returns(address) {
+        return CyberCorpSingleFactoryStorage.getStorageData().refImplementation;
+    }
+
+    /// @notice Set the reference implementation contract for the next deployments
     /// @dev Only callable by addresses with the admin role
     /// @param _newImplementation Address of the new implementation
-    function upgradeImplementation(address _newImplementation) external onlyOwner {
-        UpgradeableBeacon(beacon).upgradeTo(_newImplementation);
+    function setRefImplementation(address _newImplementation) public onlyOwner {
+        CyberCorpSingleFactoryStorage.getStorageData().refImplementation = _newImplementation;
+        emit RefImplementationSet(_newImplementation, CyberCorp(_newImplementation).DEPLOY_VERSION());
     }
 
-    /// @notice Gets the current implementation address
-    /// @return The address of the current implementation contract
-    function getBeaconImplementation() external view returns (address) {
-        return UpgradeableBeacon(beacon).implementation();
-    }
+    // ========================
+    // UUPSUpgradeable
+    // ========================
+
+    /// @notice UUPS upgrade authorization
+    /// @dev Only owner can upgrade its implementation
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {}
 }

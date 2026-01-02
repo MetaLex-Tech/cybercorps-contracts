@@ -2,6 +2,7 @@
 pragma solidity 0.8.28;
 
 import "forge-std/Test.sol";
+import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "../test/mock/TestableCyberScrip.sol";
 import "../test/mock/MockTransferHook.sol";
 
@@ -29,17 +30,22 @@ contract CyberScripTest is Test {
         hooks[0] = ITransferRestrictionHook(address(mockHook));
 
         // Deploy CyberScrip (testable)
-        cyberScrip = new TestableCyberScrip();
-        cyberScrip.initialize(
-            certPrinter,
-            issuanceManager,
-            "Test CyberScrip",
-            "TCS",
-            hooks,
-            true,
-            true,
-            true
-        );
+        cyberScrip = TestableCyberScrip(address(
+            new ERC1967Proxy(
+                address(new TestableCyberScrip()),
+                abi.encodeWithSelector(
+                    CyberScrip.initialize.selector,
+                    certPrinter,
+                    issuanceManager,
+                    "Test CyberScrip",
+                    "TCS",
+                    hooks,
+                    true,
+                    true,
+                    true
+                )
+            )
+        ));
 
         // Mint initial balance for user1
         cyberScrip.mint(user1, 1000 ether);
@@ -49,7 +55,7 @@ contract CyberScripTest is Test {
         assertEq(cyberScrip.name(), "Test CyberScrip");
         assertEq(cyberScrip.symbol(), "TCS");
         assertEq(cyberScrip.certPrinter(), certPrinter);
-        assertEq(cyberScrip.IssuanceManager(), issuanceManager);
+        assertEq(cyberScrip.issuanceManager(), issuanceManager);
         assertEq(cyberScrip.balanceOf(user1), 1000 ether);
     }
 
@@ -111,10 +117,24 @@ contract CyberScripTest is Test {
 
     function test_Init_TogglesDisabled_And_UsageReverts() public {
         // Deploy a separate instance with all toggles disabled
-        TestableCyberScrip disabled = new TestableCyberScrip();
         ITransferRestrictionHook[] memory hooks2 = new ITransferRestrictionHook[](1);
         hooks2[0] = ITransferRestrictionHook(address(mockHook));
-        disabled.initialize(certPrinter, issuanceManager, "Disabled", "DIS", hooks2, false, false, false);
+        TestableCyberScrip disabled = TestableCyberScrip(address(
+            new ERC1967Proxy(
+                address(new TestableCyberScrip()),
+                abi.encodeWithSelector(
+                    CyberScrip.initialize.selector,
+                    certPrinter,
+                    issuanceManager,
+                    "Disabled",
+                    "DIS",
+                    hooks2,
+                    false,
+                    false,
+                    false
+                )
+            )
+        ));
         disabled.mint(user1, 1000 ether);
 
         vm.startPrank(issuanceManager);

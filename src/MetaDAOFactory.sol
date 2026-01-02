@@ -74,8 +74,6 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     error InvalidSalt();
 
     address public registryAddress;
-    address public cyberCertPrinterImplementation;
-    address public cyberCert20Implementation;
     address public issuanceManagerFactory;
     address public cyberCorpSingleFactory;
     address public dealManagerFactory;
@@ -96,7 +94,7 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     bool public parentCorpCreated;
 
     //adjust storage gap based on new variable
-    uint256[36] private __gap; // keep storage gap similar to CyberCorpFactory
+    uint256[38] private __gap; // keep storage gap similar to CyberCorpFactory
 
     struct CyberCertData {
         string name;
@@ -127,14 +125,12 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         address roundManager
     );
 
-    error PartyValuesMismatch();
+    error GlobalOrPartyValuesMismatch();
     error OfficerValuesMismatch();
 
     function initialize(
         address _auth,
         address _registryAddress,
-        address _cyberCertPrinterImplementation,
-        address _cyberCert20Implementation,
         address _issuanceManagerFactory,
         address _cyberCorpSingleFactory,
         address _dealManagerFactory,
@@ -146,8 +142,6 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         __BorgAuthACL_init(_auth);
 
         registryAddress = _registryAddress;
-        cyberCertPrinterImplementation = _cyberCertPrinterImplementation;
-        cyberCert20Implementation = _cyberCert20Implementation;
         issuanceManagerFactory = _issuanceManagerFactory;
         cyberCorpSingleFactory = _cyberCorpSingleFactory;
         dealManagerFactory = _dealManagerFactory;
@@ -248,13 +242,11 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         IIssuanceManager(issuanceManagerAddress).initialize(
             authAddress,
             cyberCorpAddress,
-            cyberCertPrinterImplementation,
             uriBuilder,
-            issuanceManagerFactory,
-            cyberCert20Implementation
+            issuanceManagerFactory
         );
 
-        //update role for issuance manager
+        // Initialize DealManager
         IDealManager(dealManagerAddress).initialize(
             authAddress,
             cyberCorpAddress,
@@ -341,9 +333,10 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         string memory defaultDisputeResolution,
         address _companyPayable,
         CompanyOfficer memory _officer,
-        bytes32 _templateId,
+        bytes32 _segCoTemplateId,
+        bytes32 _boardConsentTempateId,
         string[] memory _globalValues,
-        string[][] memory _partyValues,
+        string[] memory _partyValues,
         bytes memory signature,
         address deployer
     )
@@ -361,16 +354,15 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     {
         // Check: validate key fields
 
-        // TODO WIP: revise it when template specs are finalized
         if (_partyValues.length < 2
-            || _partyValues[0].length < 2
-            || _partyValues[1].length < 2
-            || !_partyValues[0][0].equal(metaDAOOfficer.name)
-            || !_partyValues[0][1].equal(metaDAOOfficer.title)
-            || !_partyValues[1][0].equal(_officer.name)
-            || !_partyValues[1][1].equal(_officer.title)
+            || !_partyValues[0].equal(_officer.name)
+            || !_partyValues[1].equal(_officer.contact)
+            || !_globalValues[2].equal(companyName)
+            || !_globalValues[3].equal(companyType)
+            || !_globalValues[4].equal(companyJurisdiction)
+            || !_globalValues[5].equal(companyContactDetails)
         ) {
-            revert PartyValuesMismatch();
+            revert GlobalOrPartyValuesMismatch();
         }
 
         if (_officer.eoa != deployer) {
@@ -381,6 +373,12 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         address[] memory partiesOverride = new address[](2);
         partiesOverride[0] = metaDAOOfficer.eoa;
         partiesOverride[1] = deployer;
+
+        string[][] memory partyValuesOverride = new string[][](2);
+        partyValuesOverride[0] = new string[](2);
+        partyValuesOverride[0][0] = metaDAOOfficer.name;
+        partyValuesOverride[0][1] = metaDAOOfficer.contact;
+        partyValuesOverride[1] = _partyValues;
 
         //create bytes32 salt
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
@@ -404,7 +402,7 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
 
         //both parties sign one agreement
         bytes32 agreementId = ICyberAgreementRegistry(registryAddress).createContract(
-            _templateId,
+            _segCoTemplateId,
             salt,
             _globalValues,
             partiesOverride,
@@ -429,10 +427,10 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         address[] memory meetingNotesParties = new address[](1);
         meetingNotesParties[0] = partiesOverride[0];
         string[][] memory meetingNotesPartyValues = new string[][](1);
-        meetingNotesPartyValues[0] = _partyValues[0];
+        meetingNotesPartyValues[0] = partyValuesOverride[0];
         bytes32 meetingNotesId = ICyberAgreementRegistry(registryAddress).createContract(
-            _templateId,
-            salt+1,
+            _boardConsentTempateId,
+            salt,
             _globalValues,
             meetingNotesParties,
             meetingNotesPartyValues,

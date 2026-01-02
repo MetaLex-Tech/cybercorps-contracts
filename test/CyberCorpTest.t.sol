@@ -74,11 +74,12 @@ import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {SAFTEExtension, SAFTEData} from "../src/storage/extensions/SAFTEExtension.sol";
 import {LeXcheX} from "../src/creds/lexchex.sol";
 import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
+import {LexScroWLite} from "../src/libs/LexScroWLite.sol";
 import {LexChexCondition} from "../src/libs/conditions/lexchexCondition.sol";
 import {LeXcheXUtils} from "./libs/LeXcheXUtils.sol";
 import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
-import {ILegacyDealManagerFactory} from "./interfaces/ILegacyDealManagerFactory.sol";
+import {ILegacyFactory} from "../script/interfaces/ILegacyFactory.sol";
 
 contract CyberCorpTest is Test {
     using ERC1967ProxyLib for address;
@@ -160,30 +161,36 @@ contract CyberCorpTest is Test {
         //use salt to deploy BorgAuth
         auth = new BorgAuth{salt: salt}(testAddress);
         //auth.initialize();
+
+        address issuanceManagerImplementation = address(new IssuanceManager{salt: salt}());
+        address cyberCertPrinterImplementation = address(new CyberCertPrinter{salt: salt}());
+        address cyberScripImplementation = address(new CyberScrip{salt: salt}());
         address issuanceManagerFactory = address(
-            new IssuanceManagerFactory{salt: salt}(address(auth))
-        );
-
-        address cyberCertPrinterImplementation = address(
-            new CyberCertPrinter{salt: salt}()
-        );
-        CyberCertPrinter cyberCertPrinter = CyberCertPrinter(
-            cyberCertPrinterImplementation
-        );
-
-        // Deploy CyberScrip implementation
-        address CyberScripImplementation = address(
-            new CyberScrip{salt: salt}()
+            new ERC1967Proxy{salt: salt}(
+                address(new IssuanceManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    IssuanceManagerFactory.initialize.selector,
+                    address(auth),
+                    issuanceManagerImplementation,
+                    cyberCertPrinterImplementation,
+                    cyberScripImplementation
+                )
+            )
         );
 
         defaultLegends = new string[][](1);
         defaultLegends[0] = new string[](1);
         defaultLegends[0][0] = "Legend 1";
 
-        //cyberCertPrinter.initialize(defaultdefaultLegends, "", "", "ipfs.io/ipfs/[cid]", address(0), securityClasses, SecuritySeries.SeriesPreSeed);
-
         address cyberCorpSingleFactory = address(
-            new CyberCorpSingleFactory{salt: salt}(address(auth))
+            new ERC1967Proxy{salt: salt}(
+                address(new CyberCorpSingleFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    CyberCorpSingleFactory.initialize.selector,
+                    address(auth),
+                    address(new CyberCorp())
+                )
+            )
         );
 
         address dealManagerFactory = address(
@@ -239,8 +246,6 @@ contract CyberCorpTest is Test {
                 CyberCorpFactory.initialize.selector,
                 address(auth),
                 address(registry),
-                cyberCertPrinterImplementation,
-                CyberScripImplementation,
                 issuanceManagerFactory,
                 cyberCorpSingleFactory,
                 dealManagerFactory,
@@ -1201,7 +1206,7 @@ contract CyberCorpTest is Test {
         );
 
         // Try to sign and finalize with wrong passphrase
-        vm.expectRevert(); // Expect revert due to invalid secret
+        vm.expectRevert(CyberAgreementRegistry.InvalidSecret.selector); // Expect revert due to invalid secret
         dealManager.signAndFinalizeDeal(
             newPartyAddr,
             id,
@@ -1605,7 +1610,7 @@ contract CyberCorpTest is Test {
         vm.stopPrank();
 
         // Try to revoke after payment - should fail
-        vm.expectRevert();
+        vm.expectRevert(DealManager.CounterPartyValueMismatch.selector);
         IDealManager(dealManagerAddr).revokeDeal(id, testAddress, signature);
         vm.stopPrank();
     }
@@ -1912,16 +1917,8 @@ contract CyberCorpTest is Test {
         );
 
         // Try to finalize without payment - should fail
-        vm.expectRevert();
-        IDealManager(dealManagerAddr).finalizeDeal(
-            testAddress,
-            id,
-            partyValues[0],
-            signature,
-            false,
-            "John Doe",
-            ""
-        );
+        vm.expectRevert(LexScroWLite.DealNotPaid.selector);
+        IDealManager(dealManagerAddr).finalizeDeal(id);
         vm.stopPrank();
     }
 
@@ -2182,16 +2179,8 @@ contract CyberCorpTest is Test {
         );
 
         // Try to finalize again - should fail
-        vm.expectRevert();
-        IDealManager(dealManagerAddr).finalizeDeal(
-            testAddress,
-            id,
-            partyValues[0],
-            signature,
-            false,
-            "",
-            ""
-        );
+        vm.expectRevert(LexScroWLite.DealNotPaid.selector);
+        IDealManager(dealManagerAddr).finalizeDeal(id);
         vm.stopPrank();
     }
 
@@ -2331,7 +2320,7 @@ contract CyberCorpTest is Test {
         );
 
         // Try to void after finalization - should fail
-        vm.expectRevert();
+        vm.expectRevert(DealManager.DealNotExpired.selector);
         IDealManager(dealManagerAddr).voidExpiredDeal(
             id,
             testAddress,
@@ -2459,7 +2448,7 @@ contract CyberCorpTest is Test {
         );
 
         // Try to sign with invalid secret - should fail
-        vm.expectRevert();
+        vm.expectRevert(CyberAgreementRegistry.InvalidSecret.selector);
         IDealManager(dealManagerAddr).signDealAndPay(
             newPartyAddr,
             id,
@@ -2594,7 +2583,7 @@ contract CyberCorpTest is Test {
         );
 
         // Try to sign expired contract - should fail
-        vm.expectRevert();
+        vm.expectRevert(LexScroWLite.DealExpired.selector);
         IDealManager(dealManagerAddr).signDealAndPay(
             newPartyAddr,
             id,
@@ -3118,7 +3107,7 @@ contract CyberCorpTest is Test {
             newImplementation,
             ""
         );
-        assertEq(registryAddr.getErc1967Implementation(vm), newImplementation);
+        assertEq(registryAddr.getErc1967Implementation(), newImplementation);
 
         // Verify the registry still works by checking the template
         (
@@ -3146,7 +3135,7 @@ contract CyberCorpTest is Test {
         // Owner should be able to upgrade it
         vm.prank(multisig);
         cyberCorpFactory.upgradeToAndCall(newImplementation, "");
-        assertEq(address(cyberCorpFactory).getErc1967Implementation(vm), newImplementation);
+        assertEq(address(cyberCorpFactory).getErc1967Implementation(), newImplementation);
 
         // Verify the factory still works by checking the dependencies and creating a new corp
 
@@ -3254,7 +3243,7 @@ contract CyberCorpTest is Test {
         // Owner should be able to upgrade it
         vm.prank(multisig);
         uriBuilder.upgradeToAndCall(newImplementation, "");
-        assertEq(address(uriBuilder).getErc1967Implementation(vm), newImplementation);
+        assertEq(address(uriBuilder).getErc1967Implementation(), newImplementation);
 
         // Set the new image builder (required for the new architecture)
         vm.prank(multisig);
@@ -3491,44 +3480,37 @@ contract CyberCorpTest is Test {
         string[] memory ledger = new string[](1);
         ledger[0] = "Test Ledger";
 
-        vm.prank(testAddress);
-        address certPrinter = IssuanceManager(issuanceManager)
-            .createCertPrinter(
-                ledger,
-                "Test Certificate",
-                "TEST",
-                "ipfs://test",
-                SecurityClass.SAFT,
-                SecuritySeries.SeriesSeed,
-                address(0)
-            );
-
         // Deploy new implementation
-        address newImplementation = address(new IssuanceManager());
+        address newIssuanceManagerImpl = address(new IssuanceManager());
         address factoryAddr = cyberCorpFactory.issuanceManagerFactory();
 
-        // Non-owner should not be able to upgrade it
+        // Non-owner should not be able to set IssuanceManager reference implementation
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
-        IssuanceManagerFactory(factoryAddr).upgradeImplementation(newImplementation);
+        IssuanceManagerFactory(factoryAddr).setRefImplementation(newIssuanceManagerImpl);
 
-        // Owner should be able to upgrade it
+        // Owner should be able to set IssuanceManager reference implementation
         vm.prank(multisig);
-        IssuanceManagerFactory(factoryAddr).upgradeImplementation(newImplementation);
-        assertEq(IssuanceManagerFactory(factoryAddr).getBeaconImplementation(), newImplementation);
+        IssuanceManagerFactory(factoryAddr).setRefImplementation(newIssuanceManagerImpl);
+        assertEq(IssuanceManagerFactory(factoryAddr).getRefImplementation(), newIssuanceManagerImpl);
 
-        address newImplementation2 = address(new CyberCertPrinter());
+        // Simulate company owner accept the upgrade
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).upgradeToAndCall(newIssuanceManagerImpl, "");
 
-        //get the factory address
+        address newCyberCertPrinterImpl = address(new CyberCertPrinter());
+
+        // Owner should be able to set CyberCertPrinter reference implementation
         vm.prank(multisig);
-        IssuanceManagerFactory(factoryAddr).upgradePrinterBeaconAt(
-            issuanceManager,
-            newImplementation2
-        );
+        IssuanceManagerFactory(factoryAddr).setCyberCertPrinterRefImplementation(newCyberCertPrinterImpl);
+        assertEq(IssuanceManagerFactory(factoryAddr).getCyberCertPrinterRefImplementation(), newCyberCertPrinterImpl);
+
+        // Simulate company owner accept the upgrade
+        vm.prank(testAddress);
+        IssuanceManager(issuanceManager).upgradeCertPrinterBeaconImplementation(newCyberCertPrinterImpl);
 
         // Verify the IssuanceManager still works by checking the certificate printer
-        address printerAddr = IssuanceManager(issuanceManager).printers(0);
-        //assertEq(printerAddr, certPrinter);
-        // assertEq(IssuanceManagerFactory(factoryAddr).getBeaconImplementation(), newImplementation);
+        assertEq(IssuanceManager(issuanceManager).printers(0), cyberCertPrinterAddr[0]);
+        assertEq(IssuanceManager(issuanceManager).getCertPrinterBeaconImplementation(), newCyberCertPrinterImpl);
     }
 
     function testUpgradeCyberCorpSingle() public {
@@ -3648,14 +3630,14 @@ contract CyberCorpTest is Test {
         address newImplementation = address(new CyberCorp());
         address factoryAddr = cyberCorpFactory.cyberCorpSingleFactory();
 
-        // Non-owner should not be able to upgrade it
+        // Non-owner should not be able to set reference implementation
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
-        CyberCorpSingleFactory(factoryAddr).upgradeImplementation(newImplementation);
+        CyberCorpSingleFactory(factoryAddr).setRefImplementation(newImplementation);
 
-        // Owner should be able to upgrade it
+        // Owner should be able to set reference implementation
         vm.prank(multisig);
-        CyberCorpSingleFactory(factoryAddr).upgradeImplementation(newImplementation);
-        assertEq(CyberCorpSingleFactory(factoryAddr).getBeaconImplementation(), newImplementation);
+        CyberCorpSingleFactory(factoryAddr).setRefImplementation(newImplementation);
+        assertEq(CyberCorpSingleFactory(factoryAddr).getRefImplementation(), newImplementation);
 
         //check the company name
         assertEq(CyberCorp(cyberCorp).cyberCORPName(), "CyberCorp");
@@ -3776,23 +3758,22 @@ contract CyberCorpTest is Test {
             );
 
         // Deploy new implementation
-        address newImplementation = address(new CyberCertPrinter());
+        address newCyberCertPrinterImpl = address(new CyberCertPrinter());
 
         address factoryAddr = cyberCorpFactory.issuanceManagerFactory();
 
-        // Only factory can call the Issuance Manager to upgrade its CyberCert Printer
-        vm.expectRevert(abi.encodeWithSelector(IssuanceManager.NotUpgradeFactory.selector));
-        IssuanceManager(issuanceManager).upgradeBeaconImplementation(newImplementation);
-
-        // Non-owner should not be able to upgrade it
-        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 99, address(this)));
-        IssuanceManagerFactory(factoryAddr).upgradePrinterBeaconAt(issuanceManager, newImplementation);
-
-        // Owner should be able to upgrade it
-        console.log(IssuanceManager(issuanceManager).getUpgradeFactory());
+        // Only MetaLeX can release new reference implementation
         vm.prank(multisig);
-        IssuanceManagerFactory(factoryAddr).upgradePrinterBeaconAt(issuanceManager, newImplementation);
-        assertEq(IssuanceManager(issuanceManager).getBeaconImplementation(), newImplementation);
+        IssuanceManagerFactory(factoryAddr).setCyberCertPrinterRefImplementation(newCyberCertPrinterImpl);
+        assertEq(IssuanceManagerFactory(factoryAddr).getCyberCertPrinterRefImplementation(), newCyberCertPrinterImpl);
+
+        // Only company owner can call the Issuance Manager to upgrade its CyberCert Printer beacon
+        vm.prank(testAddress);
+        vm.expectEmit(true, true, true, true);
+        emit IssuanceManager.CertPrinterBeaconImplementationUpgraded(newCyberCertPrinterImpl);
+        IssuanceManager(issuanceManager).upgradeCertPrinterBeaconImplementation(newCyberCertPrinterImpl);
+
+        assertEq(IssuanceManager(issuanceManager).getCertPrinterBeaconImplementation(), newCyberCertPrinterImpl);
 
         //check the security type
         assertEq(CyberCertPrinter(certPrinter).certificateUri(), "ipfs://test");
@@ -3914,7 +3895,7 @@ contract CyberCorpTest is Test {
 
         BorgAuth corpAuth = BorgAuth(cyberCorp.AUTH());
         assertEq(corpAuth.userRoles(officer2.eoa), 0);
-        vm.expectRevert();
+        vm.expectRevert(); // Really, that's the error message: empty
         cyberCorp.companyOfficers(1);
         vm.stopPrank();
     }
@@ -4489,7 +4470,7 @@ contract CyberCorpTest is Test {
 
         // Get the deployed DealManagerFactory address (legacy Beacon-based)
         address deployedFactoryAddr = 0x975df8A99C895d04ae158F8C91Ba562Fce3ECDA3;
-        ILegacyDealManagerFactory deployedFactory = ILegacyDealManagerFactory(deployedFactoryAddr);
+        ILegacyFactory deployedFactory = ILegacyFactory(deployedFactoryAddr);
 
         // Get the current beacon implementation
         address currentImplementation = deployedFactory.getBeaconImplementation();
@@ -4904,7 +4885,7 @@ contract CyberCorpTest is Test {
         );
 
         // This should fail because the counterparty has an invalid (voided) LexChex token
-        vm.expectRevert(); // Expect revert due to condition not being met
+        vm.expectRevert(DealManager.AgreementConditionsNotMet.selector); // Expect revert due to condition not being met
         dealManager.signAndFinalizeDeal(
             newPartyAddr,
             contractId,
@@ -5048,7 +5029,7 @@ contract CyberCorpTest is Test {
         );
 
         // This should fail because the counterparty has no LexChex token
-        vm.expectRevert(); // Expect revert due to condition not being met
+        vm.expectRevert(DealManager.AgreementConditionsNotMet.selector); // Expect revert due to condition not being met
         dealManager.signAndFinalizeDeal(
             newPartyAddr,
             contractId,
@@ -5636,7 +5617,7 @@ contract CyberCorpTest is Test {
 
         // Try to sign with expired delegation - should fail
         vm.startPrank(delegateAddr);
-        vm.expectRevert(); // Should revert due to expired delegation
+        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector); // Should revert due to expired delegation
         registry.signContractFor(
             principalAddr,
             contractId,
@@ -5748,7 +5729,7 @@ contract CyberCorpTest is Test {
 
         // Token 0 should be blocked by hook
         vm.startPrank(testAddress);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(CyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
         CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
         vm.stopPrank();
 
@@ -5771,7 +5752,7 @@ contract CyberCorpTest is Test {
 
         // Token 2 should be blocked
         vm.startPrank(testAddress);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(CyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
         CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 2);
         vm.stopPrank();
     }
@@ -5857,7 +5838,7 @@ contract CyberCorpTest is Test {
 
         // Without endorsement should still revert
         vm.startPrank(testAddress);
-        vm.expectRevert();
+        vm.expectRevert(CyberCertPrinter.EndorsementNotSignedOrInvalid.selector);
         CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
         vm.stopPrank();
 
@@ -6109,7 +6090,7 @@ contract CyberCorpTest is Test {
         vm.prank(testAddress);
         CyberCertPrinter(certPrinter).addEndorsement(0, e);
         vm.startPrank(testAddress);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(CyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
         CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
         vm.stopPrank();
     }
