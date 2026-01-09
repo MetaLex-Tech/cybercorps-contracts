@@ -20,6 +20,8 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
 
     event FreezeStatusUpdated(address indexed account, bool frozen);
     event ComplianceFeatureDisabledEvent(string feature);
+    event ForceTransfer(address indexed from, address indexed to, uint256 amount);
+    event ForceBurn(address indexed account, uint256 amount);
 
     modifier onlyIssuanceManager() {
         if (msg.sender != CyberScripStorage.getStorageData().issuanceManager) revert NotIssuanceManager();
@@ -31,6 +33,7 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
     }
 
     function initialize(
+        address _auth,
         address _certPrinter,
         address _issuanceManager,
         string memory _name,
@@ -41,6 +44,7 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
         bool _enableFreeze
     ) external initializer {
         __ERC20_init(_name, _symbol);
+        __BorgAuthACL_init(_auth);
 
         CyberScripStorage.StorageData storage s = CyberScripStorage.getStorageData();
         s.certPrinter = _certPrinter;
@@ -60,7 +64,8 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
                 if (s.frozen[to]) revert AccountFrozen(to);
             }
             // Enforce transfer restriction hooks
-            for (uint256 i = 0; i < s.transferRestrictionHooks.length; i++) {
+            uint256 length = s.transferRestrictionHooks.length;
+            for (uint256 i = 0; i < length; i++) {
                 (bool allowed, string memory reason) = s.transferRestrictionHooks[i].checkTransferRestriction(from, to, amount, "");
                 if (!allowed) revert RestrictedTransfer(reason);
             }
@@ -68,9 +73,6 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
         super._update(from, to, amount);
     }
 
-    function burnFrom(address account, uint256 amount) public virtual onlyIssuanceManager {
-        super._burn(account, amount);
-    }
 
     function setRestrictionHook(ITransferRestrictionHook[] memory _transferRestrictionHooks) external onlyIssuanceManager {
         CyberScripStorage.StorageData storage s = CyberScripStorage.getStorageData();
@@ -120,6 +122,7 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
         require(from != address(0) && to != address(0), "force: zero addr");
         // Bypass our override and hooks by calling the base ERC20 implementation directly
         ERC20Upgradeable._update(from, to, amount);
+        emit ForceTransfer(from, to, amount);
     }
 
     // Force burn ignoring hooks and freezes (only if feature enabled)
@@ -127,37 +130,42 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
         if (!CyberScripStorage.getStorageData().canForceBurn) revert ComplianceFeatureDisabled();
         require(account != address(0), "forceBurn: zero addr");
         ERC20Upgradeable._update(account, address(0), amount);
+        emit ForceBurn(account, amount);
     }
 
     // ========================
     // Getter / Setter
     // ========================
 
-    function certPrinter() external returns (address) {
+    function certPrinter() external view returns (address) {
         return CyberScripStorage.getStorageData().certPrinter;
     }
 
-    function issuanceManager() external returns (address) {
+    function issuanceManager() external view returns (address) {
         return CyberScripStorage.getStorageData().issuanceManager;
     }
 
-    function transferRestrictionHooks(uint256 i) external returns (ITransferRestrictionHook) {
+    function transferRestrictionHooks(uint256 i) external view returns (ITransferRestrictionHook) {
         return CyberScripStorage.getStorageData().transferRestrictionHooks[i];
     }
 
-    function canForceTransfer() external returns (bool) {
+    function transferRestrictionHooksLength() external view returns (uint256) {
+        return CyberScripStorage.getStorageData().transferRestrictionHooks.length;
+    }
+
+    function canForceTransfer() external view returns (bool) {
         return CyberScripStorage.getStorageData().canForceTransfer;
     }
 
-    function canForceBurn() external returns (bool) {
+    function canForceBurn() external view returns (bool) {
         return CyberScripStorage.getStorageData().canForceBurn;
     }
 
-    function canFreeze() external returns (bool) {
+    function canFreeze() external view returns (bool) {
         return CyberScripStorage.getStorageData().canFreeze;
     }
 
-    function frozen(address account) external returns (bool) {
+    function frozen(address account) external view returns (bool) {
         return CyberScripStorage.getStorageData().frozen[account];
     }
 }

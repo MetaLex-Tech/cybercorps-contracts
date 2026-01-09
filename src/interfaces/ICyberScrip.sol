@@ -8,6 +8,7 @@ interface ICyberScrip is IERC20 {
     error RestrictedTransfer(string reason);
 
     function initialize(
+        address _auth,
         address _certPrinter,
         address _issuanceManager,
         string calldata _name,
@@ -21,8 +22,9 @@ interface ICyberScrip is IERC20 {
 
     function setRestrictionHook(ITransferRestrictionHook[] calldata _typeRestrictionHook) external;
     function certPrinter() external view returns (address);
-    function IssuanceManager() external view returns (address);
+    function issuanceManager() external view returns (address);
     function transferRestrictionHooks(uint256 index) external view returns (ITransferRestrictionHook);
+    function transferRestrictionHooksLength() external view returns (uint256);
     function mint(address to, uint256 amount) external;
     function burnFrom(address account, uint256 amount) external;
 } 

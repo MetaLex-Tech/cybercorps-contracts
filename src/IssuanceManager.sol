@@ -588,6 +588,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         bytes32 salt = keccak256(abi.encodePacked(certAddress, address(this)));
         address newScrip = Create2.deploy(0, salt, _getBytecodeScrip());
         ICyberScrip(newScrip).initialize(
+            address(AUTH),
             certAddress,
             address(this),
             string(

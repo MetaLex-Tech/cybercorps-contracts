@@ -215,7 +215,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
     /// @notice Admin-only path to mint for autominting with certain conditions in investing
     /// @dev Mirrors requestMint but gated by onlyAdmin and skips _verifyAuthoritySignature
     function requestMintFor(
-        MintRequest calldata request,
+        MintRequest memory request,
         bytes32 _templateId,
         uint256 _salt,
         string[] memory _globalValues,

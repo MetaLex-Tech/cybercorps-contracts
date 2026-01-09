@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "../test/mock/TestableCyberScrip.sol";
 import "../test/mock/MockTransferHook.sol";
+import "../src/libs/auth.sol";
 
 contract CyberScripTest is Test {
     TestableCyberScrip public cyberScrip;
@@ -28,6 +29,9 @@ contract CyberScripTest is Test {
         // Setup transfer restriction hooks
         ITransferRestrictionHook[] memory hooks = new ITransferRestrictionHook[](1);
         hooks[0] = ITransferRestrictionHook(address(mockHook));
+        bytes32 salt = keccak256("CyberScripTest");
+        //deploy auth
+        address auth = address(new BorgAuth{salt: salt}(owner));
 
         // Deploy CyberScrip (testable)
         cyberScrip = TestableCyberScrip(address(
@@ -35,6 +39,7 @@ contract CyberScripTest is Test {
                 address(new TestableCyberScrip()),
                 abi.encodeWithSelector(
                     CyberScrip.initialize.selector,
+                    auth,
                     certPrinter,
                     issuanceManager,
                     "Test CyberScrip",
@@ -124,6 +129,7 @@ contract CyberScripTest is Test {
                 address(new TestableCyberScrip()),
                 abi.encodeWithSelector(
                     CyberScrip.initialize.selector,
+                    makeAddr("auth"),
                     certPrinter,
                     issuanceManager,
                     "Disabled",
