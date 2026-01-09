@@ -53,7 +53,7 @@ contract CyberScripTest is Test {
         ));
 
         // Mint initial balance for user1
-        cyberScrip.mint(user1, 1000 ether);
+        cyberScrip.unrestrictedMint(user1, 1000 ether);
     }
 
     function test_Initialization() public {
@@ -141,7 +141,7 @@ contract CyberScripTest is Test {
                 )
             )
         ));
-        disabled.mint(user1, 1000 ether);
+        disabled.unrestrictedMint(user1, 1000 ether);
 
         vm.startPrank(issuanceManager);
         vm.expectRevert(abi.encodeWithSignature("ComplianceFeatureDisabled()"));
@@ -269,10 +269,10 @@ contract CyberScripTest is Test {
         mockHook.setAllowTransfers(false);
         vm.startPrank(issuanceManager);
         cyberScrip.setFrozen(user2, true);
-        vm.stopPrank();
 
         // Mint to frozen recipient should still work (from == address(0))
         cyberScrip.mint(user2, 123 ether);
+        vm.stopPrank();
         assertEq(cyberScrip.balanceOf(user2), 123 ether);
     }
 
@@ -409,5 +409,59 @@ contract CyberScripTest is Test {
         vm.expectRevert(abi.encodeWithSignature("NotIssuanceManager()"));
         cyberScrip.setRestrictionHook(newHooks);
         vm.stopPrank();
+    }
+
+    // ========================
+    // Bridge Simulation Tests (IssuanceManager scripify/convert)
+    // ========================
+
+    function test_Bridge_FullScripifySimulation() public {
+        // In a real scripifyCert (full), the IssuanceManager would:
+        // 1. Receive the Cert, 2. Void it, 3. Mint scrip
+        uint256 amount = 5000 ether;
+
+        vm.prank(issuanceManager);
+        cyberScrip.mint(user2, amount);
+
+        assertEq(cyberScrip.balanceOf(user2), amount);
+        assertEq(cyberScrip.totalSupply(), 1000 ether + amount); // 1000 from setUp
+    }
+
+    function test_Bridge_PartialScripifySimulation() public {
+        // In a real scripifyCert (partial), the IssuanceManager would:
+        // 1. Reduce units on Cert, 2. Mint scrip
+        uint256 amount = 250 ether;
+
+        vm.prank(issuanceManager);
+        cyberScrip.mint(user1, amount);
+
+        assertEq(cyberScrip.balanceOf(user1), 1000 ether + amount);
+    }
+
+    function test_Bridge_ConvertScripToCertSimulation() public {
+        // In a real convertScripToCert, the IssuanceManager would:
+        // 1. Burn scrip, 2. Unvoid or Mint new Cert
+        uint256 amountToConvertBack = 400 ether;
+
+        // User1 has 1000 ether from setUp
+        vm.prank(issuanceManager);
+        cyberScrip.burnFrom(user1, amountToConvertBack);
+
+        assertEq(cyberScrip.balanceOf(user1), 600 ether);
+        assertEq(cyberScrip.totalSupply(), 1000 ether - amountToConvertBack);
+    }
+
+    function test_RevertWhen_UnauthorizedBridgeMint() public {
+        // Ensure only the designated issuanceManager can mint (crucial for bridge security)
+        vm.prank(user1);
+        vm.expectRevert(abi.encodeWithSignature("NotIssuanceManager()"));
+        cyberScrip.mint(user1, 100 ether);
+    }
+
+    function test_RevertWhen_UnauthorizedBridgeBurn() public {
+        // Ensure only the designated issuanceManager can burn (crucial for bridge security)
+        vm.prank(user1);
+        vm.expectRevert(abi.encodeWithSignature("NotIssuanceManager()"));
+        cyberScrip.burnFrom(user1, 100 ether);
     }
 }
