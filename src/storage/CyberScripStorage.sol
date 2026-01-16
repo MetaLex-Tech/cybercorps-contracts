@@ -60,6 +60,10 @@ library CyberScripStorage {
 
         // Per-account freeze registry
         mapping(address => bool) frozen;
+
+        // Holder count tracking
+        uint256 holderCount;
+        uint256 maxHolderCount;
     }
 
     // Returns the storage layout

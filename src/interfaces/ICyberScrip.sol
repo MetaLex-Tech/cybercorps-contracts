@@ -6,6 +6,7 @@ import "./ITransferRestrictionHook.sol";
 interface ICyberScrip is IERC20 {
     error NotTransferable();
     error RestrictedTransfer(string reason);
+    error HolderLimitExceeded(uint256 limit);
 
     function initialize(
         address _auth,
@@ -27,4 +28,7 @@ interface ICyberScrip is IERC20 {
     function transferRestrictionHooksLength() external view returns (uint256);
     function mint(address to, uint256 amount) external;
     function burnFrom(address account, uint256 amount) external;
+    function holderCount() external view returns (uint256);
+    function maxHolderCount() external view returns (uint256);
+    function setMaxHolderCount(uint256 maxHolders) external;
 } 

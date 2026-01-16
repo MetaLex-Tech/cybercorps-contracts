@@ -17,11 +17,13 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
     error NotIssuanceManager();
     error ComplianceFeatureDisabled();
     error AccountFrozen(address account);
+    error HolderLimitExceeded(uint256 limit);
 
     event FreezeStatusUpdated(address indexed account, bool frozen);
     event ComplianceFeatureDisabledEvent(string feature);
     event ForceTransfer(address indexed from, address indexed to, uint256 amount);
     event ForceBurn(address indexed account, uint256 amount);
+    event MaxHolderCountUpdated(uint256 maxHolderCount);
 
     modifier onlyIssuanceManager() {
         if (msg.sender != CyberScripStorage.getStorageData().issuanceManager) revert NotIssuanceManager();
@@ -57,6 +59,16 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
 
     function _update(address from, address to, uint256 amount) internal virtual override {
         CyberScripStorage.StorageData storage s = CyberScripStorage.getStorageData();
+        uint256 fromBalanceBefore = 0;
+        uint256 toBalanceBefore = 0;
+
+        if (from != address(0)) {
+            fromBalanceBefore = balanceOf(from);
+        }
+        if (to != address(0)) {
+            toBalanceBefore = balanceOf(to);
+        }
+
         // Enforce freeze checks for normal transfers (not mint/burn)
         if (from != address(0) && to != address(0)) {
             if (s.canFreeze) {
@@ -70,7 +82,36 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
                 if (!allowed) revert RestrictedTransfer(reason);
             }
         }
+
+        if (amount > 0 && from != to) {
+            uint256 holderDelta = s.holderCount;
+            bool decrementHolder = from != address(0) && fromBalanceBefore == amount;
+            bool incrementHolder = to != address(0) && toBalanceBefore == 0;
+
+            if (decrementHolder) {
+                holderDelta -= 1;
+            }
+            if (incrementHolder) {
+                holderDelta += 1;
+            }
+
+            if (s.maxHolderCount > 0 && holderDelta > s.maxHolderCount) {
+                revert HolderLimitExceeded(s.maxHolderCount);
+            }
+        }
+
         super._update(from, to, amount);
+
+        if (amount > 0 && from != to) {
+            bool decrementHolder = from != address(0) && fromBalanceBefore == amount;
+            bool incrementHolder = to != address(0) && toBalanceBefore == 0;
+            if (decrementHolder) {
+                s.holderCount -= 1;
+            }
+            if (incrementHolder) {
+                s.holderCount += 1;
+            }
+        }
     }
 
     function mint(address to, uint256 amount) public virtual onlyIssuanceManager {
@@ -113,6 +154,12 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
             s.canFreeze = false;
             emit ComplianceFeatureDisabledEvent("freeze");
         }
+    }
+
+    function setMaxHolderCount(uint256 maxHolders) external onlyIssuanceManager {
+        CyberScripStorage.StorageData storage s = CyberScripStorage.getStorageData();
+        s.maxHolderCount = maxHolders;
+        emit MaxHolderCountUpdated(maxHolders);
     }
 
     // Freeze/unfreeze an account (only if freezing is enabled)
@@ -174,5 +221,13 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
 
     function frozen(address account) external view returns (bool) {
         return CyberScripStorage.getStorageData().frozen[account];
+    }
+
+    function holderCount() external view returns (uint256) {
+        return CyberScripStorage.getStorageData().holderCount;
+    }
+
+    function maxHolderCount() external view returns (uint256) {
+        return CyberScripStorage.getStorageData().maxHolderCount;
     }
 }

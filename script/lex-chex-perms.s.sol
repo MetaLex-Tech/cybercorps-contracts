@@ -34,7 +34,7 @@ contract BaseScript is Script {
         address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
          uint256 currentChainId = block.chainid;
         address stable;
-        address minter = 0xb8fA82FE034DCa53de30Ba6BC9B571c406C2AFA4;
+        address minter = 0x0Fa8CD94cd5a1678c0A8e1252821FB7e88eE201c;
 
         BorgAuth lexchexAuth = BorgAuth(0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2);
         lexchexAuth.updateRole(address(minter), lexchexAuth.ADMIN_ROLE());
