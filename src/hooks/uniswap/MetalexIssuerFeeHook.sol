@@ -78,7 +78,7 @@ interface IHooks {
         address sender,
         PoolKey calldata key,
         IPoolManager.ModifyLiquidityParams calldata params,
-        BalanceDelta delta,
+        BalanceDelta calldata delta,
         bytes calldata hookData
     ) external returns (bytes4);
 
@@ -93,7 +93,7 @@ interface IHooks {
         address sender,
         PoolKey calldata key,
         IPoolManager.ModifyLiquidityParams calldata params,
-        BalanceDelta delta,
+        BalanceDelta calldata delta,
         bytes calldata hookData
     ) external returns (bytes4);
 
@@ -102,13 +102,13 @@ interface IHooks {
         PoolKey calldata key,
         IPoolManager.SwapParams calldata params,
         bytes calldata hookData
-    ) external returns (bytes4, BeforeSwapDelta, uint24);
+    ) external returns (bytes4, BeforeSwapDelta memory, uint24);
 
     function afterSwap(
         address sender,
         PoolKey calldata key,
         IPoolManager.SwapParams calldata params,
-        BalanceDelta delta,
+        BalanceDelta calldata delta,
         bytes calldata hookData
     ) external returns (bytes4);
 
@@ -246,7 +246,7 @@ contract MetalexIssuerFeeHook is IHooks, BorgAuthACL {
         address,
         PoolKey calldata,
         IPoolManager.ModifyLiquidityParams calldata,
-        BalanceDelta,
+        BalanceDelta calldata,
         bytes calldata
     ) external pure returns (bytes4) {
         return MetalexIssuerFeeHook.afterAddLiquidity.selector;
@@ -265,7 +265,7 @@ contract MetalexIssuerFeeHook is IHooks, BorgAuthACL {
         address,
         PoolKey calldata,
         IPoolManager.ModifyLiquidityParams calldata,
-        BalanceDelta,
+        BalanceDelta calldata,
         bytes calldata
     ) external pure returns (bytes4) {
         return MetalexIssuerFeeHook.afterRemoveLiquidity.selector;
@@ -285,7 +285,7 @@ contract MetalexIssuerFeeHook is IHooks, BorgAuthACL {
         address,
         PoolKey calldata key,
         IPoolManager.SwapParams calldata params,
-        BalanceDelta delta,
+        BalanceDelta calldata delta,
         bytes calldata
     ) external returns (bytes4) {
         if (msg.sender != address(poolManager)) {
@@ -336,7 +336,7 @@ contract MetalexIssuerFeeHook is IHooks, BorgAuthACL {
         return MetalexIssuerFeeHook.afterDonate.selector;
     }
 
-    function _inputAmount(BalanceDelta delta, bool zeroForOne) internal pure returns (uint256) {
+    function _inputAmount(BalanceDelta calldata delta, bool zeroForOne) internal pure returns (uint256) {
         if (zeroForOne) {
             if (delta.amount0 <= 0) {
                 return 0;
