@@ -38,6 +38,7 @@ name: SAFEExtension
 struct SAFEData {
     string customProvisions; // an arbitrary string intended to insert any custom provision the parties agree upon
 }
+```
 
 ## CertificateDetails Struct (for reference)
 
