@@ -2,14 +2,12 @@
 
 id: bytes32(uint256([____]))
 
-legalURI: [____]
-SAFTE URI: [____]
+legalURI: 
+SAFTE URI: ipfs://bafybeid4xxgesjbxpdwx3dmcxlupzscurpnh6c3k7lukhzt2fsfkbxjr34
 
-combined doc: [____]
+combined doc: [https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeiag7xatsusb24evnpyj6ztf62kix36dgbsp3kbazfyvr273ph56ay](https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeiag7xatsusb24evnpyj6ztf62kix36dgbsp3kbazfyvr273ph56ay)
 
-SAFTE alone: [____]
-
-Github: [____]
+SAFTE alone: [https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeid4xxgesjbxpdwx3dmcxlupzscurpnh6c3k7lukhzt2fsfkbxjr34](https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeid4xxgesjbxpdwx3dmcxlupzscurpnh6c3k7lukhzt2fsfkbxjr34)
 
 ## Global Fields
 
@@ -30,6 +28,7 @@ Github: [____]
 | minCompanyReserve       | This is a number of tokens   |
 | tokenPremiumMultiplier  | A number. If used with equityProRataToTokenSupply method, then if SAFTE is worth 30% of company fully diluted equity, and premium multiplier is 2, the investor will be entitled 15% of total supply.       |
 | protocolUSDValuationAtTimeofInvestment    |  valuation of the "network" or "protocol" (i.e., FDV of all tokens)  |
+| customProvisions  | an arbitrary string intended to insert any custom provision the parties agree upon |
 
 
 ## Party Fields
@@ -58,6 +57,7 @@ struct SAFTEData {
     uint256 minCompanyReserve;
     uint256 tokenPremiumMultiplier;
     uint256 protocolUSDValuationAtTimeofInvestment;
+    string customProvisions; // an arbitrary string intended to insert any custom provision the parties agree upon
 }
 ```
 
