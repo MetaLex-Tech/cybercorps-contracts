@@ -1,15 +1,28 @@
 # Data Overview
 
+
+SAFE + TOKEN WARRANT REG S
+
+SAFE alone (same as above): 
+https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeigkcbocfq3p7rscojjej24jajyrhqk6mukgetmlsmyo4f6cp6iqry
+
+Warrant alone
+https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeid2ldcznpjva3hf6km75zwsfe6tgaw23qabbapz63cgtmipnwy4kq
+
+SPA + SAFE + Warrant: 
+https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeicto2raupsj5ad7snxvhmmll2plwyploqho4fg2cibnn2fuhlm2d4
+
 id: bytes32(uint256(33))
 
 legalURI:
-safeURI: IFPS://bafybeihi77o6kxeien3kbg2tquhmyg4bbxvbf2kjejjswk7akfzdfprwle
+safeURI: IFPS://bafybeigkcbocfq3p7rscojjej24jajyrhqk6mukgetmlsmyo4f6cp6iqry
+warrantURI: IFPS://bafybeid2ldcznpjva3hf6km75zwsfe6tgaw23qabbapz63cgtmipnwy4kq
 
-combined doc: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeihi77o6kxeien3kbg2tquhmyg4bbxvbf2kjejjswk7akfzdfprwle
+combined doc: [https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeihi77o6kxeien3kbg2tquhmyg4bbxvbf2kjejjswk7akfzdfprwle](https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeicto2raupsj5ad7snxvhmmll2plwyploqho4fg2cibnn2fuhlm2d4)
 
-SAFE alone: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeifvtc4xupzf3mf6pgtzxsyby2uhxbzuh77cggy4bmgpddaupx5j4i
+SAFE alone: [https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeifvtc4xupzf3mf6pgtzxsyby2uhxbzuh77cggy4bmgpddaupx5j4i](https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeigkcbocfq3p7rscojjej24jajyrhqk6mukgetmlsmyo4f6cp6iqry)
 
-Warrant alone: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeievb4iysifnn6tjd2wbug6vhhpr5wyavjczxt6cibwsfiz6c7ncty
+Warrant alone: [https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeievb4iysifnn6tjd2wbug6vhhpr5wyavjczxt6cibwsfiz6c7ncty](https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeid2ldcznpjva3hf6km75zwsfe6tgaw23qabbapz63cgtmipnwy4kq)
 
 ## Global Fields
 
@@ -32,6 +45,7 @@ Warrant alone: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeievb4
 | tokenCalculationMethod       |  `equityProRataToTokenSupply` or `equityProRataToCompanyReserve`        |
 | minCompanyReserve       | This is a number of tokens   |
 | tokenPremiumMultiplier  | A number. If SAFE is worth 30% of company fully diluted equity, and premium multiplier is 2, the investor can buy 15% of total supply.       |
+| customProvisions  | an arbitrary string intended to insert any custom provision the parties agree upon |
 
 
 
@@ -64,6 +78,7 @@ struct TokenWarrantData {
     TokenCalculationMethod tokenCalculationMethod; //equityProRataToTokenSupply or equityProRataToCompanyReserve
     uint256 minCompanyReserve; //minimum company reserve within an equityProRataToCompanyReserve method--set to 0 if there is no minimum
     uint256 tokenPremiumMultiplier; //multiplier of network valuation over company equity valuation, to be used within equityProRataToTokenSupply method (set to 0 if no premium)
+    string customProvisions; // an arbitrary string intended to insert any custom provision the parties agree upon
 }
 ```
 
