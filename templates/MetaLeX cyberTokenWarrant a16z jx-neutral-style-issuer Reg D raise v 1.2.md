@@ -3,13 +3,14 @@
 id: bytes32(uint256(31))
 
 legalURI:
-safeURI: IFPS://bafybeibojsh6f4wxj3gvwjbv7uvvurony7jumyqqi5i6rqsv7wcywdsi44
+safeURI: IFPS://bafybeidq7z4sgbh5tqxfehs5rz3r3il76ony3t7psetwge5ctld6lubi5e
+warrantURI: IFPS://bafybeidmtxc6hveimc43uxdkohbi7ubmtkd57irpday2hmhomuyguxtg7a
 
-combined doc: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeibojsh6f4wxj3gvwjbv7uvvurony7jumyqqi5i6rqsv7wcywdsi44
+combined doc: [https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeiaw3pwov3ahg4bk2hte2hu4pwv34nndoguxyk3umq6f5su3kod6ay](https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeiaw3pwov3ahg4bk2hte2hu4pwv34nndoguxyk3umq6f5su3kod6ay)
 
-SAFE alone: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeiafzkynirjta4pd3g365qv6ttlz3pkeqcquhbald7nqqfmm5vpfua
+SAFE alone: [https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeidq7z4sgbh5tqxfehs5rz3r3il76ony3t7psetwge5ctld6lubi5e](https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeidq7z4sgbh5tqxfehs5rz3r3il76ony3t7psetwge5ctld6lubi5e)
 
-Warrant alone: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeigxoqe7uvfy66kpiysoeqmzm2ignf7sv3rmt5njvbwr6h55jozt5e
+Warrant alone: [https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeidmtxc6hveimc43uxdkohbi7ubmtkd57irpday2hmhomuyguxtg7a](https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeidmtxc6hveimc43uxdkohbi7ubmtkd57irpday2hmhomuyguxtg7a)
 
 ## Global Fields
 
@@ -32,6 +33,7 @@ Warrant alone: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeigxoq
 | tokenCalculationMethod       |  `equityProRataToTokenSupply` or `equityProRataToCompanyReserve`        |
 | minCompanyReserve       | This is a number of tokens   |
 | tokenPremiumMultiplier  | A number. If SAFE is worth 30% of company fully diluted equity, and premium multiplier is 2, the investor can buy 15% of total supply.       |
+| customProvisions  | an arbitrary string intended to insert any custom provision the parties agree upon |
 
 
 
@@ -64,6 +66,7 @@ struct TokenWarrantData {
     TokenCalculationMethod tokenCalculationMethod; //equityProRataToTokenSupply or equityProRataToCompanyReserve
     uint256 minCompanyReserve; //minimum company reserve within an equityProRataToCompanyReserve method--set to 0 if there is no minimum
     uint256 tokenPremiumMultiplier; //multiplier of network valuation over company equity valuation, to be used within equityProRataToTokenSupply method (set to 0 if no premium)
+    string customProvisions // an arbitrary string intended to insert any custom provision the parties agree upon
 }
 ```
 
