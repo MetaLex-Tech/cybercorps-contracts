@@ -32,7 +32,7 @@ Warrant alone: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeifnh2
 | tokenCalculationMethod       |  `equityProRataToTokenSupply` or `equityProRataToCompanyReserve`        |
 | minCompanyReserve       | This is a number of tokens   |
 | tokenPremiumMultiplier  | A number. If SAFE is worth 30% of company fully diluted equity, and premium multiplier is 2, the investor can buy 15% of total supply.       |
-
+| customProvisions  | an arbitrary string intended to insert any custom provision the parties agree upon |
 
 
 ## Party Fields
@@ -64,6 +64,7 @@ struct TokenWarrantData {
     TokenCalculationMethod tokenCalculationMethod; //equityProRataToTokenSupply or equityProRataToCompanyReserve
     uint256 minCompanyReserve; //minimum company reserve within an equityProRataToCompanyReserve method--set to 0 if there is no minimum
     uint256 tokenPremiumMultiplier; //multiplier of network valuation over company equity valuation, to be used within equityProRataToTokenSupply method (set to 0 if no premium)
+    string customProvisions // an arbitrary string intended to insert any custom provision the parties agree upon
 }
 ```
 
