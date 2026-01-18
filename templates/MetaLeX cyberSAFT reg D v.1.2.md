@@ -3,7 +3,7 @@
 id: bytes32(uint256(24))
 
 legalURI:
-saftURI: IFPS://bafybeid4xqmpm75krujhpzrzh4kvb6r2fjawdo37tbiq7o5kxwix64w5wa
+saftURI: ipfs://bafybeid4xqmpm75krujhpzrzh4kvb6r2fjawdo37tbiq7o5kxwix64w5wa
 
 combined doc: [https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeif6fqgexescp4g2hbb6fjkk3ifrqpopc2lv2oue5tiq6h3t2pmgc4](https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeieoljri2rwuv35rymjd654sr3u46kbcao7mymseqobfo7x6lxgdcy)
 
