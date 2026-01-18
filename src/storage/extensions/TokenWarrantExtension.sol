@@ -59,6 +59,7 @@ struct TokenWarrantData {
     TokenCalculationMethod tokenCalculationMethod; //equityProRataToTokenSupply or equityProRataToCompanyReserve
     uint256 minCompanyReserve; //minimum company reserve within an equityProRataToCompanyReserve method--set to 0 if there is no minimum
     uint256 tokenPremiumMultiplier; //multiplier of network valuation over company equity valuation, to be used within equityProRataToTokenSupply method (set to 0 if no premium)
+    string customProvisions; // an arbitrary string intended to insert any custom provision the parties agree upon
 }
 
 contract TokenWarrantExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
@@ -102,6 +103,7 @@ contract TokenWarrantExtension is UUPSUpgradeable, ICertificateExtension, BorgAu
             '", "tokenCalculationMethod": "', conversionTypeToString(decoded.tokenCalculationMethod),
             '", "minCompanyReserve": "', uint256ToString(decoded.minCompanyReserve),
             '", "tokenPremiumMultiplier": "', uint256ToString(decoded.tokenPremiumMultiplier),
+            '", "customProvisions": "', decoded.customProvisions,
             '"}'
         ));
         
