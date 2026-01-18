@@ -46,11 +46,7 @@ import "./ICertificateExtension.sol";
 import "../../libs/auth.sol";
 
 struct SAFEData {
-    uint256 purchaseAmount;
-    uint256 postMoneyValuationCap;
-    uint256 expirationTime;
-    string governingJurisdiction;
-    string disputeResolution;
+    string customProvisions; // an arbitrary string intended to insert any custom provision the parties agree upon
 }
 
 contract SAFEExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
