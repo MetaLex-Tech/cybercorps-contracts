@@ -1,17 +1,5 @@
 # Data Overview
 
-
-SAFE + TOKEN WARRANT REG S
-
-SAFE alone (same as above): 
-https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeigkcbocfq3p7rscojjej24jajyrhqk6mukgetmlsmyo4f6cp6iqry
-
-Warrant alone
-https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeid2ldcznpjva3hf6km75zwsfe6tgaw23qabbapz63cgtmipnwy4kq
-
-SPA + SAFE + Warrant: 
-https://beige-just-flyingfish-108.mypinata.cloud/ipfs/bafybeicto2raupsj5ad7snxvhmmll2plwyploqho4fg2cibnn2fuhlm2d4
-
 id: bytes32(uint256(33))
 
 legalURI:
