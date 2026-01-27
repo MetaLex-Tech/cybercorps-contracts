@@ -230,4 +230,71 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
     function maxHolderCount() external view returns (uint256) {
         return CyberScripStorage.getStorageData().maxHolderCount;
     }
+
+    function canTransfer(
+        address from,
+        address to,
+        uint256 amount
+    ) external view returns (bool) {
+        CyberScripStorage.StorageData storage s = CyberScripStorage
+            .getStorageData();
+        if (amount == 0 || from == to) {
+            return true;
+        }
+        if (from == address(0) || to == address(0)) {
+            return true;
+        }
+        if (s.canFreeze) {
+            if (s.frozen[from]) return false;
+            if (s.frozen[to]) return false;
+        }
+        uint256 length = s.transferRestrictionHooks.length;
+        for (uint256 i = 0; i < length; i++) {
+            (bool allowed, ) = s.transferRestrictionHooks[i]
+                .checkTransferRestriction(from, to, amount, "");
+            if (!allowed) return false;
+        }
+
+        uint256 fromBalanceBefore = balanceOf(from);
+        uint256 toBalanceBefore = balanceOf(to);
+        uint256 holderDelta = s.holderCount;
+        bool decrementHolder = fromBalanceBefore == amount;
+        bool incrementHolder = toBalanceBefore == 0;
+        if (decrementHolder) {
+            holderDelta -= 1;
+        }
+        if (incrementHolder) {
+            holderDelta += 1;
+        }
+        if (s.maxHolderCount > 0 && holderDelta > s.maxHolderCount) {
+            return false;
+        }
+        return true;
+    }
+
+    function willCreateNewHolder(
+        address to,
+        uint256 amount
+    ) external view returns (bool) {
+        if (amount == 0 || to == address(0)) {
+            return false;
+        }
+        return balanceOf(to) == 0;
+    }
+
+    function currentHolderCount() external view returns (uint256) {
+        return CyberScripStorage.getStorageData().holderCount;
+    }
+
+    function remainingSlots() external view returns (uint256) {
+        CyberScripStorage.StorageData storage s = CyberScripStorage
+            .getStorageData();
+        if (s.maxHolderCount == 0) {
+            return type(uint256).max;
+        }
+        if (s.holderCount >= s.maxHolderCount) {
+            return 0;
+        }
+        return s.maxHolderCount - s.holderCount;
+    }
 }
