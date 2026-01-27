@@ -306,6 +306,13 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         CyberCertPrinterStorage.setSecurityStatus(tokenId, SecurityStatus.Void);
         emit CertificateVoided(tokenId, block.timestamp);
     }
+
+    function isVoided(uint256 tokenId) external view returns (bool) {
+        if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
+        return
+            CyberCertPrinterStorage.getSecurityStatus(tokenId) ==
+            SecurityStatus.Void;
+    }
     
     // URI storage functionality
     function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {

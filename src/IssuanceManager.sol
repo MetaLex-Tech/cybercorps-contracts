@@ -165,6 +165,14 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         _;
     }
 
+    /// @dev Restricts execution to contract itself or AUTH.OWNER_ROLE callers
+    modifier onlyOwnerOrSelf() {
+        if (msg.sender != address(this)) {
+            AUTH.onlyRole(AUTH.OWNER_ROLE(), msg.sender);
+        }
+        _;
+    }
+
     /// @notice Creates a new certificate printer contract
     /// @dev Only callable by owner
     /// @param _ledger Array of default restrictive ledgers for a certificate
@@ -268,7 +276,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         address certAddress,
         address investor,
         CertificateDetails memory _details
-    ) public onlyOwner returns (uint256 tokenId) {
+    ) public onlyOwnerOrSelf returns (uint256 tokenId) {
         if (
             bytes(ICyberCorp(IssuanceManagerStorage.getCORP()).cyberCORPName())
                 .length == 0
@@ -725,9 +733,8 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
 
         for (uint256 i = 0; i < balance; i++) {
             uint256 tokenId = certificate.tokenOfOwnerByIndex(msg.sender, i);
-            voidedDetails = certificate.getCertificateDetails(tokenId);
-            //check if the certificate is voided
-            if (voidedDetails.voided) {
+            if (certificate.isVoided(tokenId)) {
+                voidedDetails = certificate.getCertificateDetails(tokenId);
                 // Found a voided certificate, reform it by adding the amount
                 foundVoided = true;
                 voidedTokenId = tokenId;
@@ -755,7 +762,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
                 extensionData: "" // Can be set by admin later if needed
             });
 
-            createCertAndAssign(certAddress, msg.sender, details);
+            this.createCertAndAssign(certAddress, msg.sender, details);
         }
     }
 

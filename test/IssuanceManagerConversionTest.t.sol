@@ -4,6 +4,9 @@ pragma solidity ^0.8.13;
 import "forge-std/Test.sol";
 import "../src/IssuanceManager.sol";
 import "../src/CyberScrip.sol";
+import "../src/interfaces/ICyberScrip.sol";
+import "../src/interfaces/ICondition.sol";
+import "../src/interfaces/ITransferRestrictionHook.sol";
 import "../src/libs/auth.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
@@ -60,6 +63,9 @@ contract MockCertPrinter {
 
     mapping(uint256 => CertificateDetails) internal _details;
     mapping(uint256 => address) internal _owners;
+    mapping(address => uint256) internal _balances;
+    mapping(address => uint256[]) internal _ownedTokens;
+    mapping(uint256 => bool) internal _voided;
     uint256 internal _total;
     string internal _name = "Mock";
     string internal _symbol = "MOCK";
@@ -84,12 +90,41 @@ contract MockCertPrinter {
     function totalSupply() external view returns (uint256) { return _total; }
 
     function safeMint(uint256 tokenId, address to, CertificateDetails memory details) external returns (uint256) {
+        _mint(tokenId, to, details);
+        return tokenId;
+    }
+
+    function safeMintAndAssign(address to, uint256 tokenId, CertificateDetails memory details) external returns (uint256) {
+        _mint(tokenId, to, details);
+        return tokenId;
+    }
+
+    function assignCert(address from, uint256 tokenId, address to, CertificateDetails memory details) external returns (uint256) {
+        if (_owners[tokenId] == from) {
+            _owners[tokenId] = to;
+        }
+        _details[tokenId] = details;
+        return tokenId;
+    }
+
+    function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external {
+        _details[tokenId] = details;
+    }
+
+    function balanceOf(address owner) external view returns (uint256) { return _balances[owner]; }
+
+    function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256) {
+        return _ownedTokens[owner][index];
+    }
+
+    function _mint(uint256 tokenId, address to, CertificateDetails memory details) internal {
         _details[tokenId] = details;
         _owners[tokenId] = to;
+        _balances[to] += 1;
+        _ownedTokens[to].push(tokenId);
         if (tokenId == _total) {
             _total = tokenId + 1;
         }
-        return tokenId;
     }
 
     function tokenURI(uint256) external pure returns (string memory) { return ""; }
@@ -98,7 +133,18 @@ contract MockCertPrinter {
 
     function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory) { return _details[tokenId]; }
 
-    function voidCert(uint256 /*tokenId*/) external {}
+    function voidCert(uint256 tokenId) external {
+        _voided[tokenId] = true;
+    }
+
+    function isVoided(uint256 tokenId) external view returns (bool) {
+        return _voided[tokenId];
+    }
+}
+
+contract MockCyberCorp {
+    function cyberCORPName() external pure returns (string memory) { return "MockCorp"; }
+    function cyberCORPJurisdiction() external pure returns (string memory) { return "DE"; }
 }
 
 contract IssuanceManagerConversionTest is Test {
@@ -109,6 +155,7 @@ contract IssuanceManagerConversionTest is Test {
     MockCertPrinter public equityPrinter;
     BorgAuth public auth;
     MockRoundManagerForConversion public mockRM;
+    MockCyberCorp public mockCorp;
 
     address public owner;
     address public investor;
@@ -135,9 +182,10 @@ contract IssuanceManagerConversionTest is Test {
 
         // IssuanceManager via proxy (implementation disables initializers in constructor)
         issuanceManager = IssuanceManager(imFactory.deployIssuanceManager(salt));
+        mockCorp = new MockCyberCorp();
         issuanceManager.initialize(
             address(auth),
-            address(0xC0DE),
+            address(mockCorp),
             address(0xBEEF),
             address(imFactory)
         );
@@ -191,6 +239,46 @@ contract IssuanceManagerConversionTest is Test {
 
         // SAFE should be voided (tokenURI would revert or ownerOf may still show owner but status void stored internally)
         // We can assert that further transfers are restricted due to void status only if exposed; check that updateCertificateDetails or owner unchanged is fine.
+    }
+
+    function test_convertScripToCert_AllowsNonOwnerMintPath() public {
+        // Deploy mock cert and scrip
+        MockCertPrinter certPrinter = new MockCertPrinter();
+        certPrinter.initialize(
+            new string[](0),
+            "Cert",
+            "CERT",
+            "uri://cert",
+            address(issuanceManager),
+            SecurityClass.CommonStock,
+            SecuritySeries.SeriesA,
+            address(0)
+        );
+
+        ITransferRestrictionHook[] memory hooks = new ITransferRestrictionHook[](0);
+        ICondition[] memory certToScrip = new ICondition[](0);
+        ICondition[] memory scripToCert = new ICondition[](0);
+
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            hooks,
+            certToScrip,
+            scripToCert
+        );
+
+        // Mint scrip to investor via issuance manager
+        uint256 amount = 100 ether;
+        vm.prank(address(issuanceManager));
+        ICyberScrip(scrip).mint(investor, amount);
+
+        // Non-owner should be able to convert and mint a cert via IssuanceManager
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(certPrinter), amount);
+
+        assertEq(certPrinter.totalSupply(), 1);
+        assertEq(certPrinter.ownerOf(0), investor);
+        CertificateDetails memory details = certPrinter.getCertificateDetails(0);
+        assertEq(details.unitsRepresented, amount);
     }
 }
 
