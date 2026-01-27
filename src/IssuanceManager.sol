@@ -726,10 +726,13 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         for (uint256 i = 0; i < balance; i++) {
             uint256 tokenId = certificate.tokenOfOwnerByIndex(msg.sender, i);
             voidedDetails = certificate.getCertificateDetails(tokenId);
-            // Found a voided certificate, reform it by adding the amount
-            foundVoided = true;
-            voidedTokenId = tokenId;
-            break;
+            //check if the certificate is voided
+            if (voidedDetails.voided) {
+                // Found a voided certificate, reform it by adding the amount
+                foundVoided = true;
+                voidedTokenId = tokenId;
+                break;
+            }
         }
 
         // Burn the scrip tokens
