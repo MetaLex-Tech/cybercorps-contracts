@@ -73,11 +73,12 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     error ScripifiedCertNotAllowed();
     error ConditionCheckFailed();
     error NotRefImplementation();
-    
+
     event ScripifiedCert(
         address indexed certAddress,
         uint256 indexed id,
-        address indexed scripifiedCert
+        address indexed scripifiedCert,
+        uint256 amount
     );
 
     event CertPrinterCreated(
@@ -126,14 +127,17 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         // share the same implementation or upgraded to a new version all at the same time.
         // Maintenance-wise, since IssuanceManager itself is upgradeable, we don't need to worry about beacon ownership transfers
 
-        address cyberCertPrinterRefImpl = IIssuanceManagerFactory(_upgradeFactory).getCyberCertPrinterRefImplementation();
+        address cyberCertPrinterRefImpl = IIssuanceManagerFactory(
+            _upgradeFactory
+        ).getCyberCertPrinterRefImplementation();
         UpgradeableBeacon beaconCertPrinter = new UpgradeableBeacon(
             cyberCertPrinterRefImpl,
             address(this)
         );
         emit CertPrinterBeaconImplementationUpgraded(cyberCertPrinterRefImpl);
 
-        address cyberScripRefImpl = IIssuanceManagerFactory(_upgradeFactory).getCyberScripRefImplementation();
+        address cyberScripRefImpl = IIssuanceManagerFactory(_upgradeFactory)
+            .getCyberScripRefImplementation();
         UpgradeableBeacon beaconScrip = new UpgradeableBeacon(
             cyberScripRefImpl,
             address(this)
@@ -372,19 +376,25 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     function upgradeCertPrinterBeaconImplementation(
         address _newImplementation
     ) external onlyOwner {
-        if(
-            IIssuanceManagerFactory(
-                IssuanceManagerStorage.getUpgradeFactory()
-            ).getCyberCertPrinterRefImplementation() != _newImplementation) {
+        if (
+            IIssuanceManagerFactory(IssuanceManagerStorage.getUpgradeFactory())
+                .getCyberCertPrinterRefImplementation() != _newImplementation
+        ) {
             revert NotRefImplementation();
         }
-        IssuanceManagerStorage.upgradeCertPrinterBeaconImplementation(_newImplementation);
+        IssuanceManagerStorage.upgradeCertPrinterBeaconImplementation(
+            _newImplementation
+        );
         emit CertPrinterBeaconImplementationUpgraded(_newImplementation);
     }
 
     /// @notice Gets the current implementation address of the certificate printer
     /// @return address Current implementation address
-    function getCertPrinterBeaconImplementation() external view returns (address) {
+    function getCertPrinterBeaconImplementation()
+        external
+        view
+        returns (address)
+    {
         return
             IssuanceManagerStorage.getCyberCertPrinterBeacon().implementation();
     }
@@ -395,25 +405,30 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     function upgradeScripBeaconImplementation(
         address _newImplementation
     ) external onlyOwner {
-        if(
-            IIssuanceManagerFactory(
-                IssuanceManagerStorage.getUpgradeFactory()
-            ).getCyberScripRefImplementation() != _newImplementation) {
+        if (
+            IIssuanceManagerFactory(IssuanceManagerStorage.getUpgradeFactory())
+                .getCyberScripRefImplementation() != _newImplementation
+        ) {
             revert NotRefImplementation();
         }
-        IssuanceManagerStorage.updateScripBeaconImplementation(_newImplementation);
+        IssuanceManagerStorage.updateScripBeaconImplementation(
+            _newImplementation
+        );
         emit ScripBeaconImplementationUpgraded(_newImplementation);
     }
 
     function getScripBeaconImplementation() external view returns (address) {
-        return
-            IssuanceManagerStorage.getCyberScripBeacon().implementation();
+        return IssuanceManagerStorage.getCyberScripBeacon().implementation();
     }
 
     /// @notice Gets the bytecode for creating new certificate printer proxies
     /// @dev Internal function used by createCertPrinter
     /// @return bytecode The proxy contract creation bytecode
-    function _getBytecodeCertPrinter() private view returns (bytes memory bytecode) {
+    function _getBytecodeCertPrinter()
+        private
+        view
+        returns (bytes memory bytecode)
+    {
         bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
         bytecode = abi.encodePacked(
             sourceCodeBytes,
@@ -467,11 +482,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
 
     /// @notice Gets the scrip beacon contract
     /// @return UpgradeableBeacon The beacon contract
-    function cyberScripBeacon()
-    external
-    view
-    returns (UpgradeableBeacon)
-    {
+    function cyberScripBeacon() external view returns (UpgradeableBeacon) {
         return IssuanceManagerStorage.getCyberScripBeacon();
     }
 
@@ -582,8 +593,8 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         ITransferRestrictionHook[] memory typeRestrictionHooks,
         ICondition[] memory certToScripConditions,
         ICondition[] memory scripToCertConditions
-    // TODO TBD: changed to external for now but final design may change
-//    ) internal returns (address) {
+        // TODO TBD: changed to external for now but final design may change
+        //    ) internal returns (address) {
     ) external returns (address) {
         bytes32 salt = keccak256(abi.encodePacked(certAddress, address(this)));
         address newScrip = Create2.deploy(0, salt, _getBytecodeScrip());
@@ -595,7 +606,10 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
                 abi.encodePacked("scrip", ICyberCertPrinter(certAddress).name())
             ),
             string(
-                abi.encodePacked("scrip", ICyberCertPrinter(certAddress).symbol())
+                abi.encodePacked(
+                    "scrip",
+                    ICyberCertPrinter(certAddress).symbol()
+                )
             ),
             typeRestrictionHooks,
             // TODO TBD: placeholder just to make tests work
@@ -604,8 +618,14 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             true
         );
         IssuanceManagerStorage.setScripifiedCert(certAddress, newScrip);
-        IssuanceManagerStorage.setCertToScripConditions(certAddress, certToScripConditions);
-        IssuanceManagerStorage.setScripToCertConditions(certAddress, scripToCertConditions);
+        IssuanceManagerStorage.setCertToScripConditions(
+            certAddress,
+            certToScripConditions
+        );
+        IssuanceManagerStorage.setScripToCertConditions(
+            certAddress,
+            scripToCertConditions
+        );
         return newScrip;
     }
 
@@ -613,44 +633,54 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     /// @param certAddress Address of the certificate printer contract
     /// @param id ID of the certificate to convert
     /// @param amount Number of units to convert into scrip
-    function scripifyCert(address certAddress, uint256 id, uint256 amount) external {
+    function scripifyCert(
+        address certAddress,
+        uint256 id,
+        uint256 amount
+    ) external {
         if (amount == 0) revert ConditionCheckFailed();
 
-        address scripifiedCert = IssuanceManagerStorage.getScripifiedCert(certAddress);
+        address scripifiedCert = IssuanceManagerStorage.getScripifiedCert(
+            certAddress
+        );
         if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
 
         // Check all cert-to-scrip conditions
-        ICondition[] storage conditions = IssuanceManagerStorage.getCertToScripConditions(certAddress);
-        bytes4 selector3 = bytes4(keccak256("scripifyCert(address,uint256,uint256)"));
+        ICondition[] storage conditions = IssuanceManagerStorage
+            .getCertToScripConditions(certAddress);
+        bytes4 selector3 = bytes4(
+            keccak256("scripifyCert(address,uint256,uint256)")
+        );
         for (uint i = 0; i < conditions.length; i++) {
-            if (!conditions[i].checkCondition(
-                certAddress,
-                selector3,
-                abi.encode(id, amount)
-            )) {
+            if (
+                !conditions[i].checkCondition(
+                    certAddress,
+                    selector3,
+                    abi.encode(id, amount)
+                )
+            ) {
                 revert ConditionCheckFailed();
             }
         }
 
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
-        if (certificate.ownerOf(id) != msg.sender) revert ConditionCheckFailed();
+        if (certificate.ownerOf(id) != msg.sender)
+            revert ConditionCheckFailed();
 
-        CertificateDetails memory details = certificate.getCertificateDetails(id);
+        CertificateDetails memory details = certificate.getCertificateDetails(
+            id
+        );
         if (amount > details.unitsRepresented) revert ConditionCheckFailed();
 
         if (amount == details.unitsRepresented) {
             // Full conversion: transfer cert, void it, and mint full amount
-            certificate.safeTransferFrom(
-                msg.sender,
-                address(this),
-                id
-            );
+            certificate.safeTransferFrom(msg.sender, address(this), id);
             certificate.voidCert(id);
             ICyberScrip(scripifiedCert).mint(
                 msg.sender,
                 details.unitsRepresented
             );
-            emit ScripifiedCert(certAddress, id, scripifiedCert);
+            emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
             return;
         }
 
@@ -658,7 +688,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         details.unitsRepresented = details.unitsRepresented - amount;
         certificate.updateCertificateDetails(id, details);
         ICyberScrip(scripifiedCert).mint(msg.sender, amount);
-        emit ScripifiedCert(certAddress, id, scripifiedCert);
+        emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
     }
 
     function getUpgradeFactory() public view returns (address) {
@@ -666,18 +696,22 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     }
 
     function convertScripToCert(address certAddress, uint256 amount) external {
-        address scripifiedCert = IssuanceManagerStorage.getScripifiedCert(certAddress);
-        if (scripifiedCert == address(0))
-            revert ScripifiedCertNotAllowed();
+        address scripifiedCert = IssuanceManagerStorage.getScripifiedCert(
+            certAddress
+        );
+        if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
 
         // Check all scrip-to-cert conditions
-        ICondition[] storage conditions = IssuanceManagerStorage.getScripToCertConditions(certAddress);
+        ICondition[] storage conditions = IssuanceManagerStorage
+            .getScripToCertConditions(certAddress);
         for (uint i = 0; i < conditions.length; i++) {
-            if (!conditions[i].checkCondition(
-                certAddress,
-                this.convertScripToCert.selector,
-                abi.encode(amount)
-            )) {
+            if (
+                !conditions[i].checkCondition(
+                    certAddress,
+                    this.convertScripToCert.selector,
+                    abi.encode(amount)
+                )
+            ) {
                 revert ConditionCheckFailed();
             }
         }
@@ -692,31 +726,30 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         for (uint256 i = 0; i < balance; i++) {
             uint256 tokenId = certificate.tokenOfOwnerByIndex(msg.sender, i);
             voidedDetails = certificate.getCertificateDetails(tokenId);
-            if (voidedDetails.unitsRepresented == amount) {
-                // Found a matching voided certificate, unvoid it
-                foundVoided = true;
-                voidedTokenId = tokenId;
-                break;
-            }
+            // Found a voided certificate, reform it by adding the amount
+            foundVoided = true;
+            voidedTokenId = tokenId;
+            break;
         }
 
         // Burn the scrip tokens
         ICyberScrip(scripifiedCert).burnFrom(msg.sender, amount);
 
         if (foundVoided) {
-            // Unvoid the existing certificate by updating its details
+            // Reform the existing certificate by adding the amount
+            voidedDetails.unitsRepresented = amount;
             certificate.updateCertificateDetails(voidedTokenId, voidedDetails);
         } else {
             // Create a new certificate if no matching voided one was found
 
             CertificateDetails memory details = CertificateDetails({
-                signingOfficerName: "",  // Can be set by admin later if needed
+                signingOfficerName: "", // Can be set by admin later if needed
                 signingOfficerTitle: "", // Can be set by admin later if needed
-                investmentAmountUSD: 0,  // Maintaining original value from scrip
+                investmentAmountUSD: 0, // Maintaining original value from scrip
                 issuerUSDValuationAtTimeOfInvestment: 0, // Maintaining original value from scrip
                 unitsRepresented: amount,
-                legalDetails: "",        // Can be set by admin later if needed
-                extensionData: ""        // Can be set by admin later if needed
+                legalDetails: "", // Can be set by admin later if needed
+                extensionData: "" // Can be set by admin later if needed
             });
 
             createCertAndAssign(certAddress, msg.sender, details);
@@ -729,10 +762,10 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyOwner {
-        if(
-            IIssuanceManagerFactory(
-                IssuanceManagerStorage.getUpgradeFactory()
-            ).getRefImplementation() != newImplementation) {
+        if (
+            IIssuanceManagerFactory(IssuanceManagerStorage.getUpgradeFactory())
+                .getRefImplementation() != newImplementation
+        ) {
             revert NotRefImplementation();
         }
     }

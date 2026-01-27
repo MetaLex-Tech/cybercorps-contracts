@@ -16,6 +16,10 @@ contract CyberScripTest is Test {
     address public user2;
     MockTransferHook public mockHook;
 
+    event FreezeStatusUpdated(address indexed account, bool frozen);
+    event ComplianceFeatureDisabledEvent(string feature);
+    event MaxHolderCountUpdated(uint256 maxHolderCount);
+
     function setUp() public {
         owner = address(this);
         issuanceManager = makeAddr("issuanceManager");
@@ -263,6 +267,97 @@ contract CyberScripTest is Test {
     // ------------------------
     // Additional coverage
     // ------------------------
+
+    function test_HolderCount_InitAndTransferAllUpdates() public {
+        assertEq(cyberScrip.holderCount(), 1);
+
+        vm.startPrank(user1);
+        cyberScrip.transfer(user2, 100 ether);
+        vm.stopPrank();
+        assertEq(cyberScrip.holderCount(), 2);
+
+        vm.startPrank(user1);
+        cyberScrip.transfer(user2, 900 ether);
+        vm.stopPrank();
+        assertEq(cyberScrip.holderCount(), 1);
+    }
+
+    function test_HolderCount_BurnToZero() public {
+        vm.prank(issuanceManager);
+        cyberScrip.burnFrom(user1, 1000 ether);
+        assertEq(cyberScrip.holderCount(), 0);
+    }
+
+    function test_MaxHolderCountBlocksTransfer() public {
+        vm.prank(issuanceManager);
+        cyberScrip.setMaxHolderCount(1);
+
+        vm.startPrank(user1);
+        vm.expectRevert(
+            abi.encodeWithSignature("HolderLimitExceeded(uint256)", 1)
+        );
+        cyberScrip.transfer(user2, 1 ether);
+        vm.stopPrank();
+    }
+
+    function test_MaxHolderCountBlocksMint() public {
+        vm.prank(issuanceManager);
+        cyberScrip.setMaxHolderCount(1);
+
+        vm.prank(issuanceManager);
+        vm.expectRevert(
+            abi.encodeWithSignature("HolderLimitExceeded(uint256)", 1)
+        );
+        cyberScrip.mint(user2, 1 ether);
+    }
+
+    function test_SetMaxHolderCount_EmitsEvent() public {
+        vm.expectEmit(false, false, false, true);
+        emit MaxHolderCountUpdated(2);
+        vm.prank(issuanceManager);
+        cyberScrip.setMaxHolderCount(2);
+        assertEq(cyberScrip.maxHolderCount(), 2);
+    }
+
+    function test_FreezeStatusUpdatedEventAndGetter() public {
+        vm.expectEmit(true, false, false, true);
+        emit FreezeStatusUpdated(user1, true);
+        vm.prank(issuanceManager);
+        cyberScrip.setFrozen(user1, true);
+        assertTrue(cyberScrip.frozen(user1));
+    }
+
+    function test_DisableForceTransfer_EmitsEvent() public {
+        vm.expectEmit(false, false, false, true);
+        emit ComplianceFeatureDisabledEvent("forceTransfer");
+        vm.prank(issuanceManager);
+        cyberScrip.disableForceTransfer();
+        assertFalse(cyberScrip.canForceTransfer());
+    }
+
+    function test_DisableForceBurn_EmitsEvent() public {
+        vm.expectEmit(false, false, false, true);
+        emit ComplianceFeatureDisabledEvent("forceBurn");
+        vm.prank(issuanceManager);
+        cyberScrip.disableForceBurn();
+        assertFalse(cyberScrip.canForceBurn());
+    }
+
+    function test_DisableFreeze_EmitsEvent() public {
+        vm.expectEmit(false, false, false, true);
+        emit ComplianceFeatureDisabledEvent("freeze");
+        vm.prank(issuanceManager);
+        cyberScrip.disableFreeze();
+        assertFalse(cyberScrip.canFreeze());
+    }
+
+    function test_TransferRestrictionHooksLengthAndAccessor() public {
+        assertEq(cyberScrip.transferRestrictionHooksLength(), 1);
+        assertEq(
+            address(cyberScrip.transferRestrictionHooks(0)),
+            address(mockHook)
+        );
+    }
 
     function test_MintBypassesHooksAndFreeze() public {
         // Disable transfers in hook and freeze recipient
