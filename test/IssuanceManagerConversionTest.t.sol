@@ -56,6 +56,33 @@ contract MockRoundManagerForConversion {
     }
 }
 
+contract SelectorCondition is ICondition {
+    address public expectedContract;
+    bytes4 public expectedSelector;
+    bytes32 public expectedDataHash;
+
+    constructor(
+        address _contract,
+        bytes4 _selector,
+        bytes memory data
+    ) {
+        expectedContract = _contract;
+        expectedSelector = _selector;
+        expectedDataHash = keccak256(data);
+    }
+
+    function checkCondition(
+        address _contract,
+        bytes4 _functionSignature,
+        bytes memory data
+    ) external view returns (bool) {
+        return
+            _contract == expectedContract &&
+            _functionSignature == expectedSelector &&
+            keccak256(data) == expectedDataHash;
+    }
+}
+
 contract MockCertPrinter {
     using IssuanceManagerStorage for IssuanceManagerStorage.IssuanceManagerData;
 
@@ -279,6 +306,84 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(certPrinter.ownerOf(0), investor);
         CertificateDetails memory details = certPrinter.getCertificateDetails(0);
         assertEq(details.unitsRepresented, amount);
+    }
+
+    function test_ScripifyAndUnscripify_WithConditions() public {
+        MockCertPrinter certPrinter = new MockCertPrinter();
+        certPrinter.initialize(
+            new string[](0),
+            "Cert",
+            "CERT",
+            "uri://cert",
+            address(issuanceManager),
+            SecurityClass.CommonStock,
+            SecuritySeries.SeriesA,
+            address(0)
+        );
+
+        CertificateDetails memory details = CertificateDetails({
+            signingOfficerName: "Officer",
+            signingOfficerTitle: "Title",
+            investmentAmountUSD: 1000,
+            issuerUSDValuationAtTimeOfInvestment: 10000,
+            unitsRepresented: 1000,
+            legalDetails: "",
+            extensionData: ""
+        });
+
+        vm.prank(owner);
+        uint256 certId = issuanceManager.createCert(
+            address(certPrinter),
+            investor,
+            details
+        );
+
+        uint256 scripAmount = 250;
+        bytes4 scripifySelector = bytes4(
+            keccak256("scripifyCert(address,uint256,uint256)")
+        );
+        ICondition[] memory certToScrip = new ICondition[](2);
+        certToScrip[0] = ICondition(
+            new SelectorCondition(
+                address(certPrinter),
+                scripifySelector,
+                abi.encode(certId, scripAmount)
+            )
+        );
+        certToScrip[1] = ICondition(
+            new SelectorCondition(
+                address(certPrinter),
+                scripifySelector,
+                abi.encode(certId, scripAmount)
+            )
+        );
+
+        ICondition[] memory scripToCert = new ICondition[](1);
+        scripToCert[0] = ICondition(
+            new SelectorCondition(
+                address(certPrinter),
+                IssuanceManager.convertScripToCert.selector,
+                abi.encode(scripAmount)
+            )
+        );
+
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            certToScrip,
+            scripToCert
+        );
+
+        vm.prank(investor);
+        issuanceManager.scripifyCert(address(certPrinter), certId, scripAmount);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), scripAmount);
+
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(certPrinter), scripAmount);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
+
+        assertEq(certPrinter.totalSupply(), 2);
+        assertEq(certPrinter.ownerOf(1), investor);
     }
 }
 

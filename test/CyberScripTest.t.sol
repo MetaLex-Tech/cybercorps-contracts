@@ -359,6 +359,70 @@ contract CyberScripTest is Test {
         );
     }
 
+    function test_CanTransfer_TrueForSelfOrZeroAmount() public {
+        assertTrue(cyberScrip.canTransfer(user1, user1, 1 ether));
+        assertTrue(cyberScrip.canTransfer(user1, user2, 0));
+    }
+
+    function test_CanTransfer_TrueForMintOrBurn() public {
+        assertTrue(cyberScrip.canTransfer(address(0), user1, 1 ether));
+        assertTrue(cyberScrip.canTransfer(user1, address(0), 1 ether));
+    }
+
+    function test_CanTransfer_FalseWhenFrozen() public {
+        vm.prank(issuanceManager);
+        cyberScrip.setFrozen(user1, true);
+        assertFalse(cyberScrip.canTransfer(user1, user2, 1 ether));
+    }
+
+    function test_CanTransfer_FalseWhenHookDenies() public {
+        mockHook.setAllowTransfers(false);
+        assertFalse(cyberScrip.canTransfer(user1, user2, 1 ether));
+    }
+
+    function test_CanTransfer_RespectsHolderLimit() public {
+        vm.prank(issuanceManager);
+        cyberScrip.setMaxHolderCount(1);
+        assertFalse(cyberScrip.canTransfer(user1, user2, 1 ether));
+    }
+
+    function test_CanTransfer_AllowsTransferToExistingHolderAtLimit() public {
+        vm.startPrank(user1);
+        cyberScrip.transfer(user2, 1 ether);
+        vm.stopPrank();
+
+        vm.prank(issuanceManager);
+        cyberScrip.setMaxHolderCount(2);
+
+        assertTrue(cyberScrip.canTransfer(user1, user2, 1 ether));
+    }
+
+    function test_WillCreateNewHolder_Behavior() public {
+        assertTrue(cyberScrip.willCreateNewHolder(user2, 1 ether));
+        assertFalse(cyberScrip.willCreateNewHolder(user1, 1 ether));
+        assertFalse(cyberScrip.willCreateNewHolder(user2, 0));
+        assertFalse(cyberScrip.willCreateNewHolder(address(0), 1 ether));
+    }
+
+    function test_CurrentHolderCount_MatchesStorage() public {
+        assertEq(cyberScrip.currentHolderCount(), cyberScrip.holderCount());
+    }
+
+    function test_RemainingSlots_Unlimited() public {
+        assertEq(cyberScrip.remainingSlots(), type(uint256).max);
+    }
+
+    function test_RemainingSlots_WithLimit() public {
+        vm.prank(issuanceManager);
+        cyberScrip.setMaxHolderCount(2);
+        assertEq(cyberScrip.remainingSlots(), 1);
+
+        vm.startPrank(user1);
+        cyberScrip.transfer(user2, 1 ether);
+        vm.stopPrank();
+        assertEq(cyberScrip.remainingSlots(), 0);
+    }
+
     function test_MintBypassesHooksAndFreeze() public {
         // Disable transfers in hook and freeze recipient
         mockHook.setAllowTransfers(false);
