@@ -340,7 +340,7 @@ contract IssuanceManagerConversionTest is Test {
 
         uint256 scripAmount = 250;
         bytes4 scripifySelector = bytes4(
-            keccak256("scripifyCert(address,uint256,uint256)")
+            keccak256("scripifyCert(address,uint256,uint256,address)")
         );
         ICondition[] memory certToScrip = new ICondition[](2);
         certToScrip[0] = ICondition(
@@ -375,7 +375,7 @@ contract IssuanceManagerConversionTest is Test {
         );
 
         vm.prank(investor);
-        issuanceManager.scripifyCert(address(certPrinter), certId, scripAmount);
+        issuanceManager.scripifyCert(address(certPrinter), certId, scripAmount, address(0));
         assertEq(ICyberScrip(scrip).balanceOf(investor), scripAmount);
 
         vm.prank(investor);

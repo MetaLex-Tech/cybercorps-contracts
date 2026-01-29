@@ -41,24 +41,41 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 import "./ICyberCorp.sol";
+import "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "./ITransferRestrictionHook.sol";
+import "./ICondition.sol";
 import "../CyberCorpConstants.sol";
 import "../storage/CyberCertPrinterStorage.sol";
 
-//Adapter interface for custom auth roles. Allows extensibility for different auth protocols i.e. hats.
-interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
-
+interface IIssuanceManager {
     // Events
-    event CertificateCreated(uint256 indexed tokenId, address indexed investor, uint256 amount, uint256 cap);
-    event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
-    event CertificateSigned(uint256 indexed tokenId, string signatureURI);
-    event CertificateEndorsed(uint256 indexed tokenId, address indexed endorser, string signatureURI);
-    event HookStatusChanged(bool enabled);
-    event WhitelistUpdated(address indexed account, bool whitelisted);
+    event ScripifiedCert(
+        address indexed certAddress,
+        uint256 indexed id,
+        address indexed scripifiedCert
+    );
+    event CertPrinterCreated(
+        address indexed certificate,
+        address indexed corp,
+        string[] ledger,
+        string name,
+        string ticker,
+        SecurityClass securityType,
+        SecuritySeries securitySeries,
+        string certificateUri
+    );
+    event CertificateCreated(
+        uint256 indexed tokenId,
+        address indexed certificate,
+        uint256 amount,
+        uint256 cap,
+        CertificateDetails details,
+        string tokenURI
+    );
+    event CompanyDetailsUpdated(string companyName, string jurisdiction);
+    event CertPrinterBeaconImplementationUpgraded(address implementation);
+    event ScripBeaconImplementationUpgraded(address implementation);
 
     // Issuance Manager Functions
     function initialize(
@@ -73,7 +90,7 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
         string memory _name,
         string memory _ticker,
         string memory _certificateUri,
-        SecurityClass _securityClass,
+        SecurityClass _securityType,
         SecuritySeries _securitySeries,
         address _extension
     ) external returns (address);
@@ -108,7 +125,8 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
         address certAddress,
         uint256 tokenId,
         address endorser,
-        string calldata signatureURI
+        bytes calldata signature,
+        bytes32 agreementId
     ) external;
 
     function updateCertificateDetails(
@@ -122,11 +140,9 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
         uint256 tokenId
     ) external;
 
-    function convert(
+    function setGlobalTransferable(
         address certAddress,
-        uint256 tokenId,
-        address convertTo,
-        uint256 stockAmount
+        bool transferable
     ) external;
 
     function getUpgradeFactory() external view returns (address);
@@ -143,27 +159,15 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
 
     function getScripBeaconImplementation() external view returns (address);
 
-    // Certificate Details Functions
-    function getCertificateDetails(
-        uint256 tokenId
-    ) external view returns (CertificateDetails memory);
-
-    function getEndorsementHistory(
-        uint256 tokenId,
-        uint256 index
-    ) external view returns (
-        address endorser,
-        string memory signatureURI,
-        uint256 timestamp
-    );
-
     // Transfer Hook Functions
     function setRestrictionHook(
+        address certAddress,
         uint256 _id,
         address _hookAddress
     ) external;
 
     function setGlobalRestrictionHook(
+        address certAddress,
         address hookAddress
     ) external;
 
@@ -173,21 +177,62 @@ interface IIssuanceManager is IERC721, IERC721Enumerable, IERC721Metadata {
         bool value
     ) external;
 
-    function restrictionHooksById(
-        uint256 tokenId
-    ) external view returns (ITransferRestrictionHook);
+    function addDefaultLegend(
+        address certAddress,
+        string memory newLegend
+    ) external;
 
-    function globalRestrictionHook() external view returns (ITransferRestrictionHook);
+    function removeDefaultLegendAt(
+        address certAddress,
+        uint256 index
+    ) external;
 
-    // Beacon Functions
-    function CyberCertPrinterBeacon() external view returns (address);
+    function addCertLegend(
+        address certAddress,
+        uint256 tokenId,
+        string memory newLegend
+    ) external;
+
+    function removeCertLegendAt(
+        address certAddress,
+        uint256 tokenId,
+        uint256 index
+    ) external;
+
+    function deployCyberScrip(
+        address certAddress,
+        ITransferRestrictionHook[] memory typeRestrictionHooks,
+        ICondition[] memory certToScripConditions,
+        ICondition[] memory scripToCertConditions
+    ) external returns (address);
+
+    function scripifyCert(
+        address certAddress,
+        uint256 id,
+        uint256 amount
+    ) external;
+
+    function scripifyCert(
+        address certAddress,
+        uint256 id,
+        uint256 amount,
+        address recipient
+    ) external;
+
+    function convertScripToCert(
+        address certAddress,
+        uint256 amount
+    ) external;
+
+    // Beacon / Config Functions
     function CORP() external view returns (address);
     function uriBuilder() external view returns (address);
-    function certifications(uint256) external view returns (address);
     function companyName() external view returns (string memory);
     function companyJurisdiction() external view returns (string memory);
     function AUTH() external view returns (address);
     function DEPLOY_VERSION() external view returns (string memory);
-    function cyberCertPrinterBeacon() external view returns (address);
-    function cyberScripBeacon() external view returns (address);
+    function cyberCertPrinterBeacon() external view returns (UpgradeableBeacon);
+    function cyberScripBeacon() external view returns (UpgradeableBeacon);
+    function printers(uint256 index) external view returns (address);
+    function setUriBuilder(address _uriBuilder) external;
 }

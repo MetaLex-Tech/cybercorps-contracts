@@ -644,48 +644,9 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     function scripifyCert(
         address certAddress,
         uint256 id,
-        uint256 amount
-    ) external {
-        _scripifyCert(
-            certAddress,
-            id,
-            amount,
-            msg.sender,
-            bytes4(keccak256("scripifyCert(address,uint256,uint256)")),
-            abi.encode(id, amount)
-        );
-    }
-
-    /// @notice Convert a certificate into scrip tokens, partially or fully, and send to a target
-    /// @param certAddress Address of the certificate printer contract
-    /// @param id ID of the certificate to convert
-    /// @param amount Number of units to convert into scrip
-    /// @param recipient Address to receive scrip (defaults to msg.sender if zero)
-    function scripifyCert(
-        address certAddress,
-        uint256 id,
         uint256 amount,
-        address recipient
+        address target
     ) external {
-        address target = recipient == address(0) ? msg.sender : recipient;
-        _scripifyCert(
-            certAddress,
-            id,
-            amount,
-            target,
-            bytes4(keccak256("scripifyCert(address,uint256,uint256,address)")),
-            abi.encode(id, amount, recipient)
-        );
-    }
-
-    function _scripifyCert(
-        address certAddress,
-        uint256 id,
-        uint256 amount,
-        address recipient,
-        bytes4 selector,
-        bytes memory conditionData
-    ) internal {
         if (amount == 0) revert ConditionCheckFailed();
 
         address scripifiedCert = IssuanceManagerStorage.getScripifiedCert(
@@ -696,12 +657,15 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         // Check all cert-to-scrip conditions
         ICondition[] storage conditions = IssuanceManagerStorage
             .getCertToScripConditions(certAddress);
+        bytes4 selector3 = bytes4(
+            keccak256("scripifyCert(address,uint256,uint256,address)")
+        );
         for (uint i = 0; i < conditions.length; i++) {
             if (
                 !conditions[i].checkCondition(
                     certAddress,
-                    selector,
-                    conditionData
+                    selector3,
+                    abi.encode(id, amount, target)
                 )
             ) {
                 revert ConditionCheckFailed();
@@ -709,9 +673,13 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         }
 
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+ 
         if (certificate.ownerOf(id) != msg.sender)
             revert ConditionCheckFailed();
 
+        address toSend = target;
+        if (toSend == address(0)) toSend = msg.sender;
+        
         CertificateDetails memory details = certificate.getCertificateDetails(
             id
         );
@@ -722,7 +690,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             certificate.safeTransferFrom(msg.sender, address(this), id);
             certificate.voidCert(id);
             ICyberScrip(scripifiedCert).mint(
-                recipient,
+                toSend,
                 details.unitsRepresented
             );
             emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
@@ -732,7 +700,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         // Partial conversion: reduce units on the certificate and mint scrip for `amount`
         details.unitsRepresented = details.unitsRepresented - amount;
         certificate.updateCertificateDetails(id, details);
-        ICyberScrip(scripifiedCert).mint(recipient, amount);
+        ICyberScrip(scripifiedCert).mint(toSend, amount);
         emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
     }
 
