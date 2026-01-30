@@ -206,7 +206,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     }
 
     /// @notice allows only when finalizer is not defined, or msg.sender is the finalizer
-    modifier onlyFinalizer(bytes32 contractId) {
+    modifier onlyFinalizerIfSet(bytes32 contractId) {
         if (
             agreements[contractId].finalizer != msg.sender &&
             agreements[contractId].finalizer != address(0)
@@ -616,11 +616,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         emit AgreementSigned(contractId, escrowSigner, timestamp);
 
         if (totalSignatures == agreementData.parties.length) {
-            if (agreementData.finalizer == address(0)) {
-                agreementData.finalized = true;
-                emit ContractFinalized(contractId, msg.sender, timestamp);
-            }
-
             emit ContractFullySigned(contractId, timestamp);
         }
     }
@@ -681,7 +676,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     function finalizeContract(
         bytes32 contractId
-    ) public onlyFinalizer(contractId) {
+    ) public onlyFinalizerIfSet(contractId) {
         AgreementData storage agreementData = agreements[contractId];
         if (agreementData.finalized) revert ContractAlreadyFinalized();
         if (agreementData.parties.length == 0) revert ContractDoesNotExist();
