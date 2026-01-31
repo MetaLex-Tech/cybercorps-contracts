@@ -435,6 +435,139 @@ contract IssuanceManagerConversionTest is Test {
         );
         assertEq(newDetails.unitsRepresented, 4);
     }
+
+    function test_GetScripRatio_DefaultsToOneWhenUnset() public {
+        MockCertPrinter certPrinter = new MockCertPrinter();
+        certPrinter.initialize(
+            new string[](0),
+            "Cert",
+            "CERT",
+            "uri://cert",
+            address(issuanceManager),
+            SecurityClass.CommonStock,
+            SecuritySeries.SeriesA,
+            address(0)
+        );
+
+        (uint256 numerator, uint256 denominator) = issuanceManager.getScripRatio(
+            address(certPrinter)
+        );
+        assertEq(numerator, 1);
+        assertEq(denominator, 1);
+    }
+
+    function test_DeployCyberScrip_SetsDefaultRatio() public {
+        MockCertPrinter certPrinter = new MockCertPrinter();
+        certPrinter.initialize(
+            new string[](0),
+            "Cert",
+            "CERT",
+            "uri://cert",
+            address(issuanceManager),
+            SecurityClass.CommonStock,
+            SecuritySeries.SeriesA,
+            address(0)
+        );
+
+        issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0)
+        );
+
+        (uint256 numerator, uint256 denominator) = issuanceManager.getScripRatio(
+            address(certPrinter)
+        );
+        assertEq(numerator, 1);
+        assertEq(denominator, 1);
+    }
+
+    function test_RevertWhen_SetScripRatioZeroNumeratorOrDenominator() public {
+        MockCertPrinter certPrinter = new MockCertPrinter();
+        certPrinter.initialize(
+            new string[](0),
+            "Cert",
+            "CERT",
+            "uri://cert",
+            address(issuanceManager),
+            SecurityClass.CommonStock,
+            SecuritySeries.SeriesA,
+            address(0)
+        );
+
+        vm.expectRevert(IssuanceManager.InvalidScripRatio.selector);
+        issuanceManager.setScripRatio(address(certPrinter), 0, 1);
+
+        vm.expectRevert(IssuanceManager.InvalidScripRatio.selector);
+        issuanceManager.setScripRatio(address(certPrinter), 1, 0);
+    }
+
+    function test_RevertWhen_ScripifyRatioRemainder() public {
+        MockCertPrinter certPrinter = new MockCertPrinter();
+        certPrinter.initialize(
+            new string[](0),
+            "Cert",
+            "CERT",
+            "uri://cert",
+            address(issuanceManager),
+            SecurityClass.CommonStock,
+            SecuritySeries.SeriesA,
+            address(0)
+        );
+
+        CertificateDetails memory details = CertificateDetails({
+            signingOfficerName: "Officer",
+            signingOfficerTitle: "Title",
+            investmentAmountUSD: 1000,
+            issuerUSDValuationAtTimeOfInvestment: 10000,
+            unitsRepresented: 10,
+            legalDetails: "",
+            extensionData: ""
+        });
+
+        issuanceManager.createCert(address(certPrinter), investor, details);
+
+        issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0)
+        );
+
+        issuanceManager.setScripRatio(address(certPrinter), 2, 3);
+
+        vm.prank(investor);
+        vm.expectRevert(IssuanceManager.ScripRatioRemainder.selector);
+        issuanceManager.scripifyCert(address(certPrinter), 0, 1, address(0));
+    }
+
+    function test_RevertWhen_ConvertScripRatioRemainder() public {
+        MockCertPrinter certPrinter = new MockCertPrinter();
+        certPrinter.initialize(
+            new string[](0),
+            "Cert",
+            "CERT",
+            "uri://cert",
+            address(issuanceManager),
+            SecurityClass.CommonStock,
+            SecuritySeries.SeriesA,
+            address(0)
+        );
+
+        issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0)
+        );
+
+        issuanceManager.setScripRatio(address(certPrinter), 3, 2);
+
+        vm.prank(investor);
+        vm.expectRevert(IssuanceManager.ScripRatioRemainder.selector);
+        issuanceManager.convertScripToCert(address(certPrinter), 1);
+    }
 }
 
 
