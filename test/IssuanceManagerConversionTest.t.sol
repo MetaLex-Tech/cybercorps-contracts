@@ -385,6 +385,56 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(certPrinter.totalSupply(), 2);
         assertEq(certPrinter.ownerOf(1), investor);
     }
+
+    function test_ScripRatio_AppliesOnScripifyAndConvert() public {
+        MockCertPrinter certPrinter = new MockCertPrinter();
+        certPrinter.initialize(
+            new string[](0),
+            "Cert",
+            "CERT",
+            "uri://cert",
+            address(issuanceManager),
+            SecurityClass.CommonStock,
+            SecuritySeries.SeriesA,
+            address(0)
+        );
+
+        CertificateDetails memory details = CertificateDetails({
+            signingOfficerName: "Officer",
+            signingOfficerTitle: "Title",
+            investmentAmountUSD: 1000,
+            issuerUSDValuationAtTimeOfInvestment: 10000,
+            unitsRepresented: 10,
+            legalDetails: "",
+            extensionData: ""
+        });
+
+        vm.prank(owner);
+        issuanceManager.createCert(address(certPrinter), investor, details);
+
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0)
+        );
+
+        vm.prank(owner);
+        issuanceManager.setScripRatio(address(certPrinter), 2, 1);
+
+        vm.prank(investor);
+        issuanceManager.scripifyCert(address(certPrinter), 0, 4, address(0));
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 8);
+
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(certPrinter), 8);
+
+        assertEq(certPrinter.totalSupply(), 2);
+        CertificateDetails memory newDetails = certPrinter.getCertificateDetails(
+            1
+        );
+        assertEq(newDetails.unitsRepresented, 4);
+    }
 }
 
 

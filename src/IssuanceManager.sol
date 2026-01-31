@@ -73,6 +73,8 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     error ScripifiedCertNotAllowed();
     error ConditionCheckFailed();
     error NotRefImplementation();
+    error InvalidScripRatio();
+    error ScripRatioRemainder();
 
     event ScripifiedCert(
         address indexed certAddress,
@@ -508,6 +510,21 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         IssuanceManagerStorage.setUriBuilder(_uriBuilder);
     }
 
+    function setScripRatio(
+        address certAddress,
+        uint256 numerator,
+        uint256 denominator
+    ) external onlyOwner {
+        if (numerator == 0 || denominator == 0) revert InvalidScripRatio();
+        IssuanceManagerStorage.setScripRatio(certAddress, numerator, denominator);
+    }
+
+    function getScripRatio(
+        address certAddress
+    ) external view returns (uint256 numerator, uint256 denominator) {
+        (numerator, denominator) = _getScripRatio(certAddress);
+    }
+
     /// @notice Sets a restriction hook for a specific certificate
     /// @dev Only callable by admin
     /// @param certAddress Address of the certificate printer contract
@@ -634,6 +651,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             certAddress,
             scripToCertConditions
         );
+        _initDefaultScripRatio(certAddress);
         return newScrip;
     }
 
@@ -685,14 +703,16 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         );
         if (amount > details.unitsRepresented) revert ConditionCheckFailed();
 
+        (uint256 numerator, uint256 denominator) = _getScripRatio(certAddress);
+        uint256 scripAmount = amount * numerator;
+        if (scripAmount % denominator != 0) revert ScripRatioRemainder();
+        scripAmount = scripAmount / denominator;
+
         if (amount == details.unitsRepresented) {
             // Full conversion: transfer cert, void it, and mint full amount
             certificate.safeTransferFrom(msg.sender, address(this), id);
             certificate.voidCert(id);
-            ICyberScrip(scripifiedCert).mint(
-                toSend,
-                details.unitsRepresented
-            );
+            ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
             emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
             return;
         }
@@ -700,7 +720,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         // Partial conversion: reduce units on the certificate and mint scrip for `amount`
         details.unitsRepresented = details.unitsRepresented - amount;
         certificate.updateCertificateDetails(id, details);
-        ICyberScrip(scripifiedCert).mint(toSend, amount);
+        ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
         emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
     }
 
@@ -713,6 +733,11 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             certAddress
         );
         if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
+
+        (uint256 numerator, uint256 denominator) = _getScripRatio(certAddress);
+        uint256 units = amount * denominator;
+        if (units % numerator != 0) revert ScripRatioRemainder();
+        units = units / numerator;
 
         // Check all scrip-to-cert conditions
         ICondition[] storage conditions = IssuanceManagerStorage
@@ -752,7 +777,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
 
         if (foundVoided) {
             // Reform the existing certificate by adding the amount
-            voidedDetails.unitsRepresented = amount;
+            voidedDetails.unitsRepresented = units;
             certificate.updateCertificateDetails(voidedTokenId, voidedDetails);
         } else {
             // Create a new certificate if no matching voided one was found
@@ -762,7 +787,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
                 signingOfficerTitle: "", // Can be set by admin later if needed
                 investmentAmountUSD: 0, // Maintaining original value from scrip
                 issuerUSDValuationAtTimeOfInvestment: 0, // Maintaining original value from scrip
-                unitsRepresented: amount,
+                unitsRepresented: units,
                 legalDetails: "", // Can be set by admin later if needed
                 extensionData: "" // Can be set by admin later if needed
             });
@@ -782,6 +807,26 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
                 .getRefImplementation() != newImplementation
         ) {
             revert NotRefImplementation();
+        }
+    }
+
+    function _initDefaultScripRatio(address certAddress) internal {
+        IssuanceManagerStorage.ScripRatio storage ratio = IssuanceManagerStorage
+            .getScripRatio(certAddress);
+        if (ratio.numerator == 0 && ratio.denominator == 0) {
+            IssuanceManagerStorage.setScripRatio(certAddress, 1, 1);
+        }
+    }
+
+    function _getScripRatio(
+        address certAddress
+    ) internal view returns (uint256 numerator, uint256 denominator) {
+        IssuanceManagerStorage.ScripRatio storage ratio = IssuanceManagerStorage
+            .getScripRatio(certAddress);
+        numerator = ratio.numerator;
+        denominator = ratio.denominator;
+        if (numerator == 0 || denominator == 0) {
+            return (1, 1);
         }
     }
 }

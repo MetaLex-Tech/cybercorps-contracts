@@ -209,15 +209,19 @@ interface IIssuanceManager {
     function scripifyCert(
         address certAddress,
         uint256 id,
-        uint256 amount
-    ) external;
-
-    function scripifyCert(
-        address certAddress,
-        uint256 id,
         uint256 amount,
         address recipient
     ) external;
+
+    function setScripRatio(
+        address certAddress,
+        uint256 numerator,
+        uint256 denominator
+    ) external;
+
+    function getScripRatio(
+        address certAddress
+    ) external view returns (uint256 numerator, uint256 denominator);
 
     function convertScripToCert(
         address certAddress,

@@ -59,6 +59,12 @@ library IssuanceManagerStorage {
         mapping(address => address) scripifiedCert;
         mapping(address => ICondition[]) certToScripConditions;
         mapping(address => ICondition[]) scripToCertConditions;
+        mapping(address => ScripRatio) scripRatios;
+    }
+
+    struct ScripRatio {
+        uint256 numerator;
+        uint256 denominator;
     }
 
     // Returns the storage layout
@@ -183,5 +189,16 @@ library IssuanceManagerStorage {
         for (uint i = 0; i < conditions.length; i++) {
             issuanceManagerStorage().certToScripConditions[certAddress].push(conditions[i]);
         }
+    }
+
+    function getScripRatio(address certAddress) internal view returns (ScripRatio storage) {
+        return issuanceManagerStorage().scripRatios[certAddress];
+    }
+
+    function setScripRatio(address certAddress, uint256 numerator, uint256 denominator) internal {
+        issuanceManagerStorage().scripRatios[certAddress] = ScripRatio({
+            numerator: numerator,
+            denominator: denominator
+        });
     }
 }
