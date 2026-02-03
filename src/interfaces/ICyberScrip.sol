@@ -25,4 +25,10 @@ interface ICyberScrip is IERC20 {
     function transferRestrictionHooks(uint256 index) external view returns (ITransferRestrictionHook);
     function mint(address to, uint256 amount) external;
     function burnFrom(address account, uint256 amount) external;
+    function disableForceTransfer() external;
+    function disableForceBurn() external;
+    function disableFreeze() external;
+    function setFrozen(address account, bool isFrozen) external;
+    function forceTransfer(address from, address to, uint256 amount) external;
+    function forceBurn(address account, uint256 amount) external;
 } 

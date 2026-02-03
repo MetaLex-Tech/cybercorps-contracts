@@ -608,6 +608,57 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         return newScrip;
     }
 
+    function setScripRestrictionHooks(
+        address certAddress,
+        ITransferRestrictionHook[] memory hooks
+    ) external onlyAdmin {
+        address scripifiedCert = _getScripForCert(certAddress);
+        ICyberScrip(scripifiedCert).setRestrictionHook(hooks);
+    }
+
+    function disableScripForceTransfer(address certAddress) external onlyOwner {
+        address scripifiedCert = _getScripForCert(certAddress);
+        ICyberScrip(scripifiedCert).disableForceTransfer();
+    }
+
+    function disableScripForceBurn(address certAddress) external onlyOwner {
+        address scripifiedCert = _getScripForCert(certAddress);
+        ICyberScrip(scripifiedCert).disableForceBurn();
+    }
+
+    function disableScripFreeze(address certAddress) external onlyOwner {
+        address scripifiedCert = _getScripForCert(certAddress);
+        ICyberScrip(scripifiedCert).disableFreeze();
+    }
+
+    function setScripFrozen(
+        address certAddress,
+        address account,
+        bool isFrozen
+    ) external onlyAdmin {
+        address scripifiedCert = _getScripForCert(certAddress);
+        ICyberScrip(scripifiedCert).setFrozen(account, isFrozen);
+    }
+
+    function forceScripTransfer(
+        address certAddress,
+        address from,
+        address to,
+        uint256 amount
+    ) external onlyAdmin {
+        address scripifiedCert = _getScripForCert(certAddress);
+        ICyberScrip(scripifiedCert).forceTransfer(from, to, amount);
+    }
+
+    function forceScripBurn(
+        address certAddress,
+        address account,
+        uint256 amount
+    ) external onlyAdmin {
+        address scripifiedCert = _getScripForCert(certAddress);
+        ICyberScrip(scripifiedCert).forceBurn(account, amount);
+    }
+
     /// @notice Convert a certificate into scrip tokens, partially or fully
     /// @param certAddress Address of the certificate printer contract
     /// @param id ID of the certificate to convert
@@ -615,8 +666,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     function scripifyCert(address certAddress, uint256 id, uint256 amount) external {
         if (amount == 0) revert ConditionCheckFailed();
 
-        address scripifiedCert = IssuanceManagerStorage.getScripifiedCert(certAddress);
-        if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
+        address scripifiedCert = _getScripForCert(certAddress);
 
         // Check all cert-to-scrip conditions
         ICondition[] storage conditions = IssuanceManagerStorage.getCertToScripConditions(certAddress);
@@ -665,9 +715,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     }
 
     function convertScripToCert(address certAddress, uint256 amount) external {
-        address scripifiedCert = IssuanceManagerStorage.getScripifiedCert(certAddress);
-        if (scripifiedCert == address(0))
-            revert ScripifiedCertNotAllowed();
+        address scripifiedCert = _getScripForCert(certAddress);
 
         // Check all scrip-to-cert conditions
         ICondition[] storage conditions = IssuanceManagerStorage.getScripToCertConditions(certAddress);
@@ -734,5 +782,11 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             ).getRefImplementation() != newImplementation) {
             revert NotRefImplementation();
         }
+    }
+
+    function _getScripForCert(address certAddress) private view returns (address) {
+        address scripifiedCert = IssuanceManagerStorage.getScripifiedCert(certAddress);
+        if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
+        return scripifiedCert;
     }
 }
