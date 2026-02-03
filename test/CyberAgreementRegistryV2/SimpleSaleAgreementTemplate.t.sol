@@ -398,4 +398,112 @@ contract SimpleSaleAgreementTemplateTest is Test {
     function _equals(string memory a, string memory b) internal pure returns (bool) {
         return keccak256(bytes(a)) == keccak256(bytes(b));
     }
+
+    // ============ Additional Coverage Tests ============
+
+    function test_GetLegalWordingValues_ZeroEther() public view {
+        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
+            .SaleAgreementData({
+            assetAddress: address(0x1234),
+            assetAmount: 100,
+            purchasePrice: 0,
+            paymentToken: address(0),
+            deliveryDate: block.timestamp + 1 days,
+            description: "Free asset"
+        });
+
+        bytes memory data = abi.encode(saleData);
+        (, string[] memory values) = template.getLegalWordingValues(data);
+
+        assertTrue(_contains(values[2], "0"));
+        assertTrue(_contains(values[2], "ETH"));
+    }
+
+    function test_GetLegalWordingValues_LargeAmount() public view {
+        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
+            .SaleAgreementData({
+            assetAddress: address(0x1234),
+            assetAmount: 999999,
+            purchasePrice: 1000000 ether,
+            paymentToken: address(0),
+            deliveryDate: block.timestamp + 365 days,
+            description: "Large amount test"
+        });
+
+        bytes memory data = abi.encode(saleData);
+        (string[] memory keys, string[] memory values) = template.getLegalWordingValues(data);
+
+        assertEq(keys.length, 6);
+        assertEq(values.length, 6);
+    }
+
+    function test_GetLegalWordingValues_FarFutureDate() public view {
+        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
+            .SaleAgreementData({
+            assetAddress: address(0x1234),
+            assetAmount: 100,
+            purchasePrice: 1 ether,
+            paymentToken: address(0),
+            deliveryDate: block.timestamp + 3650 days,
+            description: "Future delivery"
+        });
+
+        bytes memory data = abi.encode(saleData);
+        (, string[] memory values) = template.getLegalWordingValues(data);
+
+        assertTrue(bytes(values[4]).length >= 10);
+        assertTrue(_contains(values[4], "-"));
+    }
+
+    function test_ValidateTemplateData_ZeroAddressPaymentToken() public view {
+        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
+            .SaleAgreementData({
+            assetAddress: address(0x1234),
+            assetAmount: 100,
+            purchasePrice: 1 ether,
+            paymentToken: address(0),
+            deliveryDate: block.timestamp + 1 days,
+            description: "ETH payment"
+        });
+
+        bytes memory data = abi.encode(saleData);
+        assertTrue(template.validateTemplateData(data));
+    }
+
+    function test_ValidateTemplateData_CurrentTimestampDelivery() public view {
+        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
+            .SaleAgreementData({
+            assetAddress: address(0x1234),
+            assetAmount: 100,
+            purchasePrice: 1 ether,
+            paymentToken: address(0),
+            deliveryDate: block.timestamp,
+            description: "Current delivery"
+        });
+
+        bytes memory data = abi.encode(saleData);
+        assertFalse(template.validateTemplateData(data));
+    }
+
+    function test_ValidatePartyData_LongStrings() public view {
+        IAgreementTemplate.PartyData memory partyData = IAgreementTemplate.PartyData({
+            name: "A very long name that might cause issues if there are buffer limits",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "a.very.long.email@example.com",
+            jurisdiction: ""
+        });
+
+        assertTrue(template.validatePartyData(partyData));
+    }
+
+    function test_ValidatePartyData_CompanyWithLongJurisdiction() public view {
+        IAgreementTemplate.PartyData memory partyData = IAgreementTemplate.PartyData({
+            name: "Test Corp",
+            partyType: IAgreementTemplate.PartyType.Company,
+            contactDetails: "legal@testcorp.com",
+            jurisdiction: "Delaware United States"
+        });
+
+        assertTrue(template.validatePartyData(partyData));
+    }
 }

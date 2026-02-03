@@ -55,6 +55,14 @@ contract TestAgreementTemplate is AgreementTemplateBase {
         _setTemplateContentUri(_contentUri);
     }
 
+    function addClosingCondition(ICondition condition) public {
+        _addClosingCondition(condition);
+    }
+
+    function removeClosingCondition(uint256 index) public {
+        _removeClosingCondition(index);
+    }
+
     function encodeTemplateData(bytes memory data) external pure override returns (bytes memory) {
         return data;
     }
@@ -70,6 +78,15 @@ contract TestAgreementTemplate is AgreementTemplateBase {
     function getLegalWordingValues(bytes memory) external pure override returns (string[] memory keys, string[] memory values) {
         keys = new string[](0);
         values = new string[](0);
+    }
+}
+
+/**
+ * @notice Mock condition for testing
+ */
+contract MockTestCondition is ICondition {
+    function checkCondition(address, bytes4, bytes memory) external pure returns (bool) {
+        return true;
     }
 }
 
@@ -363,5 +380,58 @@ contract AgreementTemplateBaseTest is Test {
         }
 
         return false;
+    }
+
+    // ============ Closing Conditions Tests ============
+
+    function test_AddClosingCondition() public {
+        MockTestCondition condition1 = new MockTestCondition();
+        MockTestCondition condition2 = new MockTestCondition();
+
+        template.addClosingCondition(condition1);
+        ICondition[] memory conditions = template.getClosingConditions();
+        assertEq(conditions.length, 1);
+        assertEq(address(conditions[0]), address(condition1));
+
+        template.addClosingCondition(condition2);
+        conditions = template.getClosingConditions();
+        assertEq(conditions.length, 2);
+        assertEq(address(conditions[1]), address(condition2));
+    }
+
+    function test_RemoveClosingCondition() public {
+        MockTestCondition condition1 = new MockTestCondition();
+        MockTestCondition condition2 = new MockTestCondition();
+        MockTestCondition condition3 = new MockTestCondition();
+
+        template.addClosingCondition(condition1);
+        template.addClosingCondition(condition2);
+        template.addClosingCondition(condition3);
+
+        ICondition[] memory conditions = template.getClosingConditions();
+        assertEq(conditions.length, 3);
+
+        template.removeClosingCondition(1);
+        conditions = template.getClosingConditions();
+        assertEq(conditions.length, 2);
+        assertEq(address(conditions[0]), address(condition1));
+        assertEq(address(conditions[1]), address(condition3));
+
+        template.removeClosingCondition(0);
+        conditions = template.getClosingConditions();
+        assertEq(conditions.length, 1);
+        assertEq(address(conditions[0]), address(condition3));
+
+        template.removeClosingCondition(0);
+        conditions = template.getClosingConditions();
+        assertEq(conditions.length, 0);
+    }
+
+    function test_RevertIf_RemoveConditionOutOfBounds() public {
+        MockTestCondition condition = new MockTestCondition();
+        template.addClosingCondition(condition);
+
+        vm.expectRevert("Index out of bounds");
+        template.removeClosingCondition(1);
     }
 }

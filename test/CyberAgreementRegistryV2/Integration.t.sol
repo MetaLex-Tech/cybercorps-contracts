@@ -732,4 +732,147 @@ contract IntegrationTest is Test {
         vm.prank(party);
         registry.signAgreement(agreementId, partyData[partyIndex], signature, false, "");
     }
+
+    // ============ Multiple Closing Conditions Tests ============
+
+    function test_Workflow_WithMultipleConditions_AllPass() public {
+        MockCondition condition1 = new MockCondition(true);
+        MockCondition condition2 = new MockCondition(true);
+        MockCondition condition3 = new MockCondition(true);
+
+        vm.startPrank(deployer);
+        ICondition[] memory conditions = new ICondition[](3);
+        conditions[0] = condition1;
+        conditions[1] = condition2;
+        conditions[2] = condition3;
+
+        TestTemplateWithConditions templateImpl = new TestTemplateWithConditions();
+        TestTemplateWithConditions templateWithConditions = TestTemplateWithConditions(
+            address(
+                new ERC1967Proxy(
+                    address(templateImpl),
+                    abi.encodeWithSelector(
+                        TestTemplateWithConditions.initialize.selector,
+                        address(auth),
+                        "ipfs://QmMultiCondition/",
+                        conditions
+                    )
+                )
+            )
+        );
+        vm.stopPrank();
+
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        bytes[] memory partyData = new bytes[](2);
+        partyData[0] = abi.encode(
+            IAgreementTemplate.PartyData({
+            name: "Alice",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "alice@example.com",
+            jurisdiction: ""
+        })
+        );
+        partyData[1] = abi.encode(
+            IAgreementTemplate.PartyData({
+            name: "Bob",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "bob@example.com",
+            jurisdiction: ""
+        })
+        );
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createAgreement(
+            address(templateWithConditions),
+            "",
+            parties,
+            partyData,
+            address(0),
+            block.timestamp + 7 days
+        );
+
+        // Both parties sign - should auto-finalize because all conditions pass
+        _signAgreementWithTemplate(agreementId, partyData, parties, alice, alicePrivateKey, 0, address(templateWithConditions));
+        _signAgreementWithTemplate(agreementId, partyData, parties, bob, bobPrivateKey, 1, address(templateWithConditions));
+
+        assertTrue(registry.isFinalized(agreementId), "Should be finalized because all conditions pass");
+    }
+
+    function test_Workflow_WithMultipleConditions_OneFails() public {
+        MockCondition condition1 = new MockCondition(true);
+        MockCondition condition2 = new MockCondition(false); // This one fails
+        MockCondition condition3 = new MockCondition(true);
+
+        vm.startPrank(deployer);
+        ICondition[] memory conditions = new ICondition[](3);
+        conditions[0] = condition1;
+        conditions[1] = condition2;
+        conditions[2] = condition3;
+
+        TestTemplateWithConditions templateImpl = new TestTemplateWithConditions();
+        TestTemplateWithConditions templateWithConditions = TestTemplateWithConditions(
+            address(
+                new ERC1967Proxy(
+                    address(templateImpl),
+                    abi.encodeWithSelector(
+                        TestTemplateWithConditions.initialize.selector,
+                        address(auth),
+                        "ipfs://QmMultiCondition/",
+                        conditions
+                    )
+                )
+            )
+        );
+        vm.stopPrank();
+
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        bytes[] memory partyData = new bytes[](2);
+        partyData[0] = abi.encode(
+            IAgreementTemplate.PartyData({
+            name: "Alice",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "alice@example.com",
+            jurisdiction: ""
+        })
+        );
+        partyData[1] = abi.encode(
+            IAgreementTemplate.PartyData({
+            name: "Bob",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "bob@example.com",
+            jurisdiction: ""
+        })
+        );
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createAgreement(
+            address(templateWithConditions),
+            "",
+            parties,
+            partyData,
+            address(0),
+            block.timestamp + 7 days
+        );
+
+        // Both parties sign - should NOT auto-finalize because one condition fails
+        _signAgreementWithTemplate(agreementId, partyData, parties, alice, alicePrivateKey, 0, address(templateWithConditions));
+        _signAgreementWithTemplate(agreementId, partyData, parties, bob, bobPrivateKey, 1, address(templateWithConditions));
+
+        assertFalse(registry.isFinalized(agreementId), "Should not be finalized because one condition fails");
+        assertTrue(registry.allPartiesSigned(agreementId), "All parties should have signed");
+
+        // Fix the failing condition and finalize manually
+        condition2.setShouldPass(true);
+
+        vm.prank(chad);
+        registry.finalizeAgreement(agreementId);
+
+        assertTrue(registry.isFinalized(agreementId), "Should be finalized after fixing condition");
+    }
 }
