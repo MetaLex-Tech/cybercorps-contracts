@@ -222,35 +222,35 @@ interface ICyberAgreementRegistryV2 {
 
 ### Phase 2: Registry Implementation
 
-- [ ] Create `src/CyberAgreementRegistryV2.sol`
-  - [ ] Import required OpenZeppelin contracts (Initializable, UUPSUpgradeable)
-  - [ ] Import interfaces (IAgreementTemplate, ICondition)
-  - [ ] Define contract inheriting from Initializable, UUPSUpgradeable, BorgAuthACL
-  - [ ] Define EIP-712 domain constants and typehashes
-  - [ ] Define storage mappings (agreements, agreementsForParty, delegations)
-  - [ ] Implement initialize() function
-  - [ ] Implement createAgreement() with template validation via ERC165
-  - [ ] Implement signAgreement() and signAgreementFor()
-    - [ ] Add auto-finalization logic when all parties signed AND finalizer == address(0)
-    - [ ] Check closing conditions before auto-finalizing (skip if any condition fails)
-  - [ ] Implement voidAgreement()
-  - [ ] Implement finalizeAgreement() with closing condition checks
-  - [ ] Implement all view functions
-  - [ ] Implement EIP-712 hashing functions
-  - [ ] Implement delegation support
-  - [ ] Implement _authorizeUpgrade()
+- [x] Create `src/CyberAgreementRegistryV2.sol`
+  - [x] Import required OpenZeppelin contracts (Initializable, UUPSUpgradeable)
+  - [x] Import interfaces (IAgreementTemplate, ICondition)
+  - [x] Define contract inheriting from Initializable, UUPSUpgradeable, BorgAuthACL
+  - [x] Define EIP-712 domain constants and typehashes
+  - [x] Define storage mappings (agreements, agreementsForParty, delegations)
+  - [x] Implement initialize() function
+  - [x] Implement createAgreement() with template validation via ERC165
+  - [x] Implement signAgreement() and signAgreementFor()
+    - [x] Add auto-finalization logic when all parties signed AND finalizer == address(0)
+    - [x] Check closing conditions before auto-finalizing (skip if any condition fails)
+  - [x] Implement voidAgreement()
+  - [x] Implement finalizeAgreement() with closing condition checks
+  - [x] Implement all view functions
+  - [x] Implement EIP-712 hashing functions
+  - [x] Implement delegation support
+  - [x] Implement _authorizeUpgrade()
 
 ### Phase 3: Example Template Implementation
 
-- [ ] Create `src/templates/examples/SimpleSaleAgreementTemplate.sol`
-  - [ ] Define SaleAgreementData struct
-  - [ ] Inherit from AgreementTemplateBase and UUPSUpgradeable
-  - [ ] Implement initialize() with auth and content URI
-  - [ ] Implement encode/decode for SaleAgreementData with validation
-  - [ ] Implement validateTemplateData()
-  - [ ] Implement getLegalWordingValues() with conversions
-  - [ ] Add helper functions (addressToString, uint256ToString, etc.)
-  - [ ] Implement _authorizeUpgrade()
+- [x] Create `src/templates/examples/SimpleSaleAgreementTemplate.sol`
+  - [x] Define SaleAgreementData struct
+  - [x] Inherit from AgreementTemplateBase and UUPSUpgradeable
+  - [x] Implement initialize() with auth and content URI
+  - [x] Implement encode/decode for SaleAgreementData with validation
+  - [x] Implement validateTemplateData()
+  - [x] Implement getLegalWordingValues() with conversions
+  - [x] Add helper functions (addressToString, uint256ToString, etc.)
+  - [x] Implement _authorizeUpgrade()
 
 ### Phase 4: Testing
 
@@ -595,7 +595,9 @@ Checked in signature verification - recovered signer can be either the party or 
 ## Next Steps
 
 1. ✅ Phase 1 complete (interfaces and base contract created)
-2. Begin Phase 2: Registry implementation
-3. Create parallel tracking issue for frontend development
-4. Schedule architecture review after Phase 2
-5. Set up testnet deployment for integration testing
+2. ✅ Phase 2 complete (registry implementation)
+3. ✅ Phase 3 complete (example template implementation)
+4. Begin Phase 4: Testing
+5. Create parallel tracking issue for frontend development
+6. Schedule architecture review after testing
+7. Set up testnet deployment for integration testing

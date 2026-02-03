@@ -4,6 +4,7 @@ out = "out"
 libs = ["lib", "dependencies"]
 optimizer = true
 optimizer_runs = 15
+via_ir = true
 fs_permissions = [{ access = "read", path = "./script/res" }]
 
 [fmt]
