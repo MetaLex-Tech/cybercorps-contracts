@@ -265,7 +265,6 @@ interface ICyberAgreementRegistryV2 {
 - [ ] Create `test/CyberAgreementRegistryV2/AgreementTemplateBase.t.sol`
   - [ ] Test base template functionality
   - [ ] Test party data encoding/decoding
-  - [ ] Test default party validation
 
 - [ ] Create `test/CyberAgreementRegistryV2/SimpleSaleAgreementTemplate.t.sol`
   - [ ] Test template initialization
