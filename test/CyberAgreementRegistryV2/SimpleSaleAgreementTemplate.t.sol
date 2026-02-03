@@ -43,6 +43,7 @@ pragma solidity 0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {IERC165} from "@openzeppelin/contracts/interfaces/IERC165.sol";
 import {BorgAuth} from "../../src/libs/auth.sol";
 import {SimpleSaleAgreementTemplate} from "../../src/templates/examples/SimpleSaleAgreementTemplate.sol";
 import {IAgreementTemplate} from "../../src/interfaces/IAgreementTemplate.sol";
@@ -367,6 +368,33 @@ contract SimpleSaleAgreementTemplateTest is Test {
             template.supportsInterface(type(IAgreementTemplate).interfaceId),
             "Should support IAgreementTemplate"
         );
+    }
+
+    function test_SupportsInterface_IERC165() public view {
+        assertTrue(
+            template.supportsInterface(type(IERC165).interfaceId),
+            "Should support IERC165"
+        );
+    }
+
+    function test_SupportsInterface_Unknown() public view {
+        bytes4 unknownInterfaceId = bytes4(keccak256("unknownInterface()"));
+        assertFalse(
+            template.supportsInterface(unknownInterfaceId),
+            "Should not support unknown interface"
+        );
+    }
+
+    function test_AuthorizeUpgrade() public {
+        // Deploy a new implementation
+        SimpleSaleAgreementTemplate newImpl = new SimpleSaleAgreementTemplate();
+        
+        // Upgrade should work when called by owner (deployer)
+        vm.prank(deployer);
+        template.upgradeToAndCall(address(newImpl), "");
+        
+        // Verify the upgrade happened by checking the implementation
+        // Note: We can't directly verify, but if no revert occurred, it worked
     }
 
     // ============ Helper Functions ============

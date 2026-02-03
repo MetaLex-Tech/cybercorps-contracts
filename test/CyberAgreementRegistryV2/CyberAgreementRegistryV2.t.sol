@@ -520,11 +520,21 @@ contract CyberAgreementRegistryV2Test is Test {
         vm.prank(alice);
         registry.setDelegation(chad, block.timestamp + 1 days);
 
-        // Then revokes
+        // Verify delegation is set
+        (address delegate, uint256 expiry) = registry.delegations(alice);
+        assertEq(delegate, chad);
+        assertGt(expiry, block.timestamp);
+
+        // Alice revokes delegation
         vm.prank(alice);
         registry.revokeDelegation();
 
-        // Chad tries to sign - should fail
+        // Verify delegation is revoked
+        (address delegateAfter, uint256 expiryAfter) = registry.delegations(alice);
+        assertEq(delegateAfter, address(0));
+        assertEq(expiryAfter, 0);
+
+        // Chad tries to sign on behalf of Alice - should fail
         bytes memory signature = CyberAgreementV2Utils.signAgreement(
             vm,
             registry.DOMAIN_SEPARATOR(),
@@ -537,6 +547,71 @@ contract CyberAgreementRegistryV2Test is Test {
             chadPrivateKey
         );
 
+        vm.prank(chad);
+        vm.expectRevert(CyberAgreementRegistryV2.InvalidSignature.selector);
+        registry.signAgreementFor(alice, agreementId, partyDataEncoded[0], signature, false, "");
+    }
+
+    function test_DelegationWithZeroExpiry() public {
+        // Test that delegation with expiry=0 works correctly
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreement();
+
+        // Alice delegates to Chad with expiry=0 (never expires)
+        vm.prank(alice);
+        registry.setDelegation(chad, 0);
+
+        // Verify delegation is set with no expiry
+        (address delegate, uint256 expiry) = registry.delegations(alice);
+        assertEq(delegate, chad);
+        assertEq(expiry, 0);
+
+        // Chad signs on behalf of Alice (immediate, before any warp)
+        bytes memory signature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(template),
+            _getTemplateData(),
+            _getParties(),
+            partyDataEncoded,
+            chadPrivateKey
+        );
+
+        vm.prank(chad);
+        registry.signAgreementFor(alice, agreementId, partyDataEncoded[0], signature, false, "");
+
+        assertTrue(registry.hasSigned(agreementId, alice));
+        
+        // Now warp and verify Chad could still sign if there was another agreement
+        vm.warp(block.timestamp + 365 days);
+        
+        // The delegation should still be valid (expiry=0 means no expiry)
+        (address delegateAfter, uint256 expiryAfter) = registry.delegations(alice);
+        assertEq(delegateAfter, chad);
+        assertEq(expiryAfter, 0);
+    }
+
+    function _createTestAgreementWithExpiry(uint256 expiry)
+        internal
+        returns (bytes32 agreementId, bytes[] memory partyDataEncoded)
+    {
+        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
+            .SaleAgreementData({
+            assetAddress: address(0x1234),
+            assetAmount: 100,
+            purchasePrice: 1 ether,
+            paymentToken: address(0),
+            deliveryDate: block.timestamp + 1 days,
+            description: "Test sale"
+        });
+
+        bytes memory templateData = abi.encode(saleData);
+
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
         IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
             name: "Alice",
             partyType: IAgreementTemplate.PartyType.Individual,
@@ -544,9 +619,26 @@ contract CyberAgreementRegistryV2Test is Test {
             jurisdiction: ""
         });
 
-        vm.prank(chad);
-        vm.expectRevert(CyberAgreementRegistryV2.InvalidSignature.selector);
-        registry.signAgreementFor(alice, agreementId, abi.encode(alicePartyData), signature, false, "");
+        IAgreementTemplate.PartyData memory bobPartyData = IAgreementTemplate.PartyData({
+            name: "Bob",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "bob@example.com",
+            jurisdiction: ""
+        });
+
+        partyDataEncoded = new bytes[](2);
+        partyDataEncoded[0] = abi.encode(alicePartyData);
+        partyDataEncoded[1] = abi.encode(bobPartyData);
+
+        vm.prank(alice);
+        agreementId = registry.createAgreement(
+            address(template),
+            templateData,
+            parties,
+            partyDataEncoded,
+            address(0),
+            expiry
+        );
     }
 
     // ============ Voiding Tests ============

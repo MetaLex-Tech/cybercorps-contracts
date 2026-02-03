@@ -434,4 +434,19 @@ contract AgreementTemplateBaseTest is Test {
         vm.expectRevert("Index out of bounds");
         template.removeClosingCondition(1);
     }
+
+    function test_RemoveAllConditions() public {
+        MockTestCondition condition1 = new MockTestCondition();
+        MockTestCondition condition2 = new MockTestCondition();
+        
+        template.addClosingCondition(condition1);
+        template.addClosingCondition(condition2);
+        
+        // Remove all conditions one by one
+        template.removeClosingCondition(0);
+        template.removeClosingCondition(0);
+        
+        ICondition[] memory conditions = template.getClosingConditions();
+        assertEq(conditions.length, 0);
+    }
 }
