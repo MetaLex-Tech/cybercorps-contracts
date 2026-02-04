@@ -56,7 +56,8 @@ pragma solidity 0.8.28;
  *      - bool finalized: Whether agreement is finalized
  *      - bool voided: Whether agreement is voided
  *      - uint256 expiry: Expiration timestamp
- *      - address[] voidRequestedBy: Addresses that requested void
+ *      - mapping(address => bool) voidRequestedBy: Tracks which parties requested void
+ *      - uint256 voidRequestCount: Number of parties that requested void
  */
 interface ICyberAgreementRegistryV2 {
 
@@ -79,10 +80,9 @@ interface ICyberAgreementRegistryV2 {
     /**
      * @notice Emitted when an agreement is voided
      * @param agreementId The agreement identifier
-     * @param voidSigners Array of addresses that requested voiding
      * @param timestamp The block timestamp of voiding
      */
-    event AgreementVoided(bytes32 indexed agreementId, address[] voidSigners, uint256 timestamp);
+    event AgreementVoided(bytes32 indexed agreementId, uint256 timestamp);
 
     /**
      * @notice Emitted when an agreement is finalized
@@ -247,9 +247,17 @@ interface ICyberAgreementRegistryV2 {
     function getAgreementHash(bytes32 agreementId) external view returns (bytes32);
 
     /**
-     * @notice Returns addresses that requested voiding
+     * @notice Checks if a party has requested voiding
      * @param agreementId The agreement identifier
-     * @return address[] memory Array of addresses that requested void
+     * @param party The party address to check
+     * @return bool True if the party requested void
      */
-    function getVoidRequestedBy(bytes32 agreementId) external view returns (address[] memory);
+    function hasRequestedVoid(bytes32 agreementId, address party) external view returns (bool);
+
+    /**
+     * @notice Returns the number of parties that requested voiding
+     * @param agreementId The agreement identifier
+     * @return uint256 The count of void requests
+     */
+    function getVoidRequestCount(bytes32 agreementId) external view returns (uint256);
 }

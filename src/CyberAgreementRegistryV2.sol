@@ -86,7 +86,8 @@ contract CyberAgreementRegistryV2 is
         bool finalized;
         bool voided;
         uint256 expiry;
-        address[] voidRequestedBy;
+        mapping(address => bool) voidRequestedBy;
+        uint256 voidRequestCount;
         uint256 salt; // Used for unique agreement ID generation
     }
 
@@ -416,19 +417,12 @@ contract CyberAgreementRegistryV2 is
                 isParty = true;
 
                 // Check if this party already requested void
-                bool alreadyRequested = false;
-                for (uint256 j = 0; j < agreement.voidRequestedBy.length; j++) {
-                    if (agreement.voidRequestedBy[j] == agreement.parties[i]) {
-                        alreadyRequested = true;
-                        break;
-                    }
-                }
-
-                if (alreadyRequested) {
+                if (agreement.voidRequestedBy[agreement.parties[i]]) {
                     revert VoidAlreadyRequested();
                 }
 
-                agreement.voidRequestedBy.push(agreement.parties[i]);
+                agreement.voidRequestedBy[agreement.parties[i]] = true;
+                agreement.voidRequestCount++;
                 break;
             }
         }
@@ -438,9 +432,9 @@ contract CyberAgreementRegistryV2 is
         }
 
         // Check if all parties requested void
-        if (agreement.voidRequestedBy.length == agreement.parties.length) {
+        if (agreement.voidRequestCount == agreement.parties.length) {
             agreement.voided = true;
-            emit AgreementVoided(agreementId, agreement.voidRequestedBy, block.timestamp);
+            emit AgreementVoided(agreementId, block.timestamp);
         }
     }
 
@@ -662,8 +656,15 @@ contract CyberAgreementRegistryV2 is
     /**
      * @inheritdoc ICyberAgreementRegistryV2
      */
-    function getVoidRequestedBy(bytes32 agreementId) external view returns (address[] memory) {
-        return agreements[agreementId].voidRequestedBy;
+    function hasRequestedVoid(bytes32 agreementId, address party) external view returns (bool) {
+        return agreements[agreementId].voidRequestedBy[party];
+    }
+
+    /**
+     * @inheritdoc ICyberAgreementRegistryV2
+     */
+    function getVoidRequestCount(bytes32 agreementId) external view returns (uint256) {
+        return agreements[agreementId].voidRequestCount;
     }
 
     /**

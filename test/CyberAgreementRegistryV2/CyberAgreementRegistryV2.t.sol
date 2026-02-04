@@ -664,16 +664,12 @@ contract CyberAgreementRegistryV2Test is Test {
         registry.voidAgreement(agreementId, voidSignature);
 
         // Check void requested
-        address[] memory voidRequestedBy = registry.getVoidRequestedBy(agreementId);
-        assertEq(voidRequestedBy.length, 1, "Should have one void request");
-        assertEq(voidRequestedBy[0], alice, "Alice should have requested void");
+        assertEq(registry.getVoidRequestCount(agreementId), 1, "Should have one void request");
+        assertTrue(registry.hasRequestedVoid(agreementId, alice), "Alice should have requested void");
         assertFalse(registry.isVoided(agreementId), "Should not be voided yet");
 
         // Bob signs
         _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
-
-        // Get parties for event check
-        (,, address[] memory parties,,,,) = registry.getAgreement(agreementId);
 
         // Bob also requests void
         voidSignature = CyberAgreementV2Utils.signVoid(
@@ -687,7 +683,7 @@ contract CyberAgreementRegistryV2Test is Test {
 
         vm.prank(bob);
         vm.expectEmit(true, true, true, true);
-        emit ICyberAgreementRegistryV2.AgreementVoided(agreementId, parties, block.timestamp);
+        emit ICyberAgreementRegistryV2.AgreementVoided(agreementId, block.timestamp);
         registry.voidAgreement(agreementId, voidSignature);
 
         assertTrue(registry.isVoided(agreementId), "Should be voided");
