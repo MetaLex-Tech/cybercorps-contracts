@@ -62,6 +62,17 @@ pragma solidity 0.8.28;
  */
 interface ICyberAgreementRegistryV2 {
     /**
+     * @notice Enum representing the status of an agreement
+     */
+    enum AgreementStatus {
+        Draft,           // Created, not all parties signed
+        PendingChanges,  // Amendment proposed, awaiting acceptance
+        FullySigned,     // All parties signed, awaiting finalization
+        Finalized,       // Complete
+        Voided           // Agreement voided by parties
+    }
+
+    /**
      * @notice Struct containing full signature information for a party
      * @param signature The EIP-712 signature bytes
      * @param delegatedSigner The address that signed on behalf of the party (zero address if direct signature)
@@ -71,6 +82,24 @@ interface ICyberAgreementRegistryV2 {
         bytes signature;
         address delegatedSigner;
         address escrowSigner;
+    }
+
+    /**
+     * @notice Struct containing information about a pending amendment
+     * @param agreementId The agreement this change applies to
+     * @param newPatchUris Proposed patch URIs to add
+     * @param proposedTemplateData Proposed new template data (empty if unchanged)
+     * @param proposer Address that proposed the change
+     * @param proposedAt Timestamp when proposed
+     * @param acceptances Count of parties that have accepted
+     */
+    struct PendingChange {
+        bytes32 agreementId;
+        string[] newPatchUris;
+        bytes proposedTemplateData;
+        address proposer;
+        uint256 proposedAt;
+        uint256 acceptances;
     }
 
     /**
@@ -110,6 +139,40 @@ interface ICyberAgreementRegistryV2 {
      * @param timestamp The block timestamp when fully signed
      */
     event AgreementFullySigned(bytes32 indexed agreementId, uint256 timestamp);
+
+    /**
+     * @notice Emitted when an amendment is proposed
+     * @param agreementId The agreement identifier
+     * @param proposer The address that proposed the amendment
+     * @param patchUris The proposed patch URIs
+     */
+    event AmendmentProposed(bytes32 indexed agreementId, address indexed proposer, string[] patchUris);
+
+    /**
+     * @notice Emitted when a party accepts an amendment
+     * @param agreementId The agreement identifier
+     * @param acceptor The address that accepted the amendment
+     */
+    event AmendmentAccepted(bytes32 indexed agreementId, address indexed acceptor);
+
+    /**
+     * @notice Emitted when a party rejects an amendment
+     * @param agreementId The agreement identifier
+     * @param rejector The address that rejected the amendment
+     */
+    event AmendmentRejected(bytes32 indexed agreementId, address indexed rejector);
+
+    /**
+     * @notice Emitted when an amendment is applied
+     * @param agreementId The agreement identifier
+     */
+    event AmendmentApplied(bytes32 indexed agreementId);
+
+    /**
+     * @notice Emitted when signatures are cleared due to amendment
+     * @param agreementId The agreement identifier
+     */
+    event SignaturesCleared(bytes32 indexed agreementId);
 
     /**
      * @notice Creates a new agreement
@@ -199,6 +262,33 @@ interface ICyberAgreementRegistryV2 {
     function finalizeAgreement(bytes32 agreementId) external;
 
     /**
+     * @notice Proposes an amendment to the agreement
+     * @param agreementId The agreement identifier
+     * @param newPatchUris Array of new patch URIs to add (empty if none)
+     * @param newTemplateData New template data (empty if unchanged)
+     * @dev Clears all existing signatures and sets status to PendingChanges
+     */
+    function proposeAmendment(
+        bytes32 agreementId,
+        string[] calldata newPatchUris,
+        bytes calldata newTemplateData
+    ) external;
+
+    /**
+     * @notice Accepts a proposed amendment
+     * @param agreementId The agreement identifier
+     * @dev Once all parties accept, the amendment is applied automatically
+     */
+    function acceptAmendment(bytes32 agreementId) external;
+
+    /**
+     * @notice Rejects a proposed amendment
+     * @param agreementId The agreement identifier
+     * @dev Discards the pending change and returns agreement to Draft status
+     */
+    function rejectAmendment(bytes32 agreementId) external;
+
+    /**
      * @notice Returns agreement details
      * @param agreementId The agreement identifier
      * @return template The template contract address
@@ -208,6 +298,7 @@ interface ICyberAgreementRegistryV2 {
      * @return isComplete Whether all parties have signed
      * @return finalized Whether the agreement has been finalized
      * @return voided Whether the agreement has been voided
+     * @return status The current agreement status
      */
     function getAgreement(bytes32 agreementId) external view returns (
         address template,
@@ -216,7 +307,8 @@ interface ICyberAgreementRegistryV2 {
         uint256[] memory signedAt,
         bool isComplete,
         bool finalized,
-        bool voided
+        bool voided,
+        AgreementStatus status
     );
 
     /**
@@ -301,4 +393,37 @@ interface ICyberAgreementRegistryV2 {
      * @return SignatureInfo The signature info struct containing signature and metadata
      */
     function getSignatureInfo(bytes32 agreementId, address party) external view returns (SignatureInfo memory);
+
+    /**
+     * @notice Returns the current status of an agreement
+     * @param agreementId The agreement identifier
+     * @return AgreementStatus The current status
+     */
+    function getAgreementStatus(bytes32 agreementId) external view returns (AgreementStatus);
+
+    /**
+     * @notice Returns the pending change for an agreement
+     * @param agreementId The agreement identifier
+     * @return patchUris The proposed patch URIs
+     * @return templateData The proposed template data
+     * @return proposer The address that proposed the change
+     * @return proposedAt The timestamp when proposed
+     * @return acceptances The number of acceptances
+     * @return hasAccepted Whether the caller has accepted
+     */
+    function getPendingChange(bytes32 agreementId) external view returns (
+        string[] memory patchUris,
+        bytes memory templateData,
+        address proposer,
+        uint256 proposedAt,
+        uint256 acceptances,
+        bool hasAccepted
+    );
+
+    /**
+     * @notice Returns the agreement patch URIs
+     * @param agreementId The agreement identifier
+     * @return string[] memory Array of patch URIs
+     */
+    function getAgreementPatchUris(bytes32 agreementId) external view returns (string[] memory);
 }

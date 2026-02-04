@@ -89,6 +89,20 @@ contract CyberAgreementRegistryV2 is
         mapping(address => bool) voidRequestedBy;
         uint256 voidRequestCount;
         uint256 salt; // Used for unique agreement ID generation
+        string[] agreementPatchUris; // Agreement-specific patches
+        ICyberAgreementRegistryV2.AgreementStatus status; // Current agreement status
+    }
+
+    // Internal struct for pending amendment storage (extends interface struct with mappings)
+    struct PendingChangeStorage {
+        bytes32 agreementId;
+        string[] newPatchUris;
+        bytes proposedTemplateData;
+        address proposer;
+        uint256 proposedAt;
+        mapping(address => bool) acceptedBy;
+        uint256 acceptances;
+        bool active; // Whether this pending change is active
     }
 
     // Delegation struct
@@ -101,9 +115,10 @@ contract CyberAgreementRegistryV2 is
     mapping(bytes32 => Agreement) internal agreements;
     mapping(address => bytes32[]) internal agreementsForParty;
     mapping(address => Delegation) public delegations;
+    mapping(bytes32 => PendingChangeStorage) public pendingChanges;
 
     // Storage gap for upgradeability
-    uint256[40] private __gap;
+    uint256[38] private __gap;
 
     // Custom errors
     error InvalidTemplate();
@@ -125,6 +140,13 @@ contract CyberAgreementRegistryV2 is
     error NotFullySigned();
     error VoidAlreadyRequested();
     error InvalidSecret();
+    error AmendmentAlreadyPending();
+    error NoPendingAmendment();
+    error AlreadyAccepted();
+    error AmendmentNotReady();
+    error InvalidAmendmentData();
+    error AgreementNotDraft();
+    error AgreementNotPendingChanges();
 
     /**
      * @notice Initializes the contract
@@ -207,6 +229,7 @@ contract CyberAgreementRegistryV2 is
         agreement.finalizer = finalizer;
         agreement.expiry = expiry;
         agreement.salt = salt;
+        agreement.status = ICyberAgreementRegistryV2.AgreementStatus.Draft;
 
         // Store party data and track agreements per party
         for (uint256 i = 0; i < parties.length; i++) {
@@ -416,6 +439,14 @@ contract CyberAgreementRegistryV2 is
             revert AgreementAlreadyFinalized();
         }
 
+        // Check agreement is in valid state for signing (Draft or PendingChanges)
+        if (
+            agreement.status != ICyberAgreementRegistryV2.AgreementStatus.Draft &&
+            agreement.status != ICyberAgreementRegistryV2.AgreementStatus.PendingChanges
+        ) {
+            revert AgreementNotDraft();
+        }
+
         // Find party index and validate
         partyIndex = _findPartyIndex(agreement, signer, fillUnallocated);
         if (partyIndex == type(uint256).max) {
@@ -461,6 +492,7 @@ contract CyberAgreementRegistryV2 is
      */
     function _checkAndAutoFinalize(Agreement storage agreement, bytes32 agreementId) internal {
         if (_allPartiesSigned(agreement)) {
+            agreement.status = ICyberAgreementRegistryV2.AgreementStatus.FullySigned;
             emit AgreementFullySigned(agreementId, block.timestamp);
 
             // Auto-finalize if no finalizer set and closing conditions pass
@@ -529,6 +561,7 @@ contract CyberAgreementRegistryV2 is
         // Check if all parties requested void
         if (agreement.voidRequestCount == agreement.parties.length) {
             agreement.voided = true;
+            agreement.status = ICyberAgreementRegistryV2.AgreementStatus.Voided;
             emit AgreementVoided(agreementId, block.timestamp);
         }
     }
@@ -570,6 +603,7 @@ contract CyberAgreementRegistryV2 is
         }
 
         agreement.finalized = true;
+        agreement.status = ICyberAgreementRegistryV2.AgreementStatus.Finalized;
         emit AgreementFinalized(agreementId, msg.sender, block.timestamp);
     }
 
@@ -587,6 +621,7 @@ contract CyberAgreementRegistryV2 is
 
         // All conditions pass - finalize
         agreement.finalized = true;
+        agreement.status = ICyberAgreementRegistryV2.AgreementStatus.Finalized;
         emit AgreementFinalized(agreementId, address(0), block.timestamp);
     }
 
@@ -637,7 +672,8 @@ contract CyberAgreementRegistryV2 is
             uint256[] memory signedAt,
             bool isComplete,
             bool finalized,
-            bool voided
+            bool voided,
+            ICyberAgreementRegistryV2.AgreementStatus status
         )
     {
         Agreement storage agreement = agreements[agreementId];
@@ -654,6 +690,7 @@ contract CyberAgreementRegistryV2 is
         isComplete = _allPartiesSigned(agreement);
         finalized = agreement.finalized;
         voided = agreement.voided;
+        status = agreement.status;
     }
 
     /**
@@ -850,6 +887,266 @@ contract CyberAgreementRegistryV2 is
      */
     function _recoverSigner(bytes32 hash, bytes memory signature) internal pure returns (address) {
         return hash.recover(signature);
+    }
+
+    /**
+     * @inheritdoc ICyberAgreementRegistryV2
+     * @notice Proposes an amendment to the agreement
+     * @dev Clears all existing signatures and sets status to PendingChanges
+     */
+    function proposeAmendment(
+        bytes32 agreementId,
+        string[] calldata newPatchUris,
+        bytes calldata newTemplateData
+    ) external {
+        Agreement storage agreement = agreements[agreementId];
+
+        // Check agreement exists
+        if (agreement.parties.length == 0) {
+            revert AgreementDoesNotExist();
+        }
+
+        // Check not voided
+        if (agreement.voided) {
+            revert AgreementAlreadyVoided();
+        }
+
+        // Check not finalized
+        if (agreement.finalized) {
+            revert AgreementAlreadyFinalized();
+        }
+
+        // Check no pending amendment already exists
+        if (pendingChanges[agreementId].active) {
+            revert AmendmentAlreadyPending();
+        }
+
+        // Check sender is a party
+        bool isParty = false;
+        for (uint256 i = 0; i < agreement.parties.length; i++) {
+            if (agreement.parties[i] == msg.sender) {
+                isParty = true;
+                break;
+            }
+        }
+        if (!isParty) {
+            revert NotAParty();
+        }
+
+        // Validate that at least one change is being proposed
+        if (newPatchUris.length == 0 && newTemplateData.length == 0) {
+            revert InvalidAmendmentData();
+        }
+
+        // Validate new template data if provided
+        if (newTemplateData.length > 0) {
+            IAgreementTemplate template = IAgreementTemplate(agreement.template);
+            if (!template.validateTemplateData(newTemplateData)) {
+                revert InvalidTemplate();
+            }
+        }
+
+        // Create pending change
+        PendingChangeStorage storage change = pendingChanges[agreementId];
+        change.agreementId = agreementId;
+        change.newPatchUris = newPatchUris;
+        change.proposedTemplateData = newTemplateData;
+        change.proposer = msg.sender;
+        change.proposedAt = block.timestamp;
+        change.active = true;
+
+        // Clear all signatures
+        _clearSignatures(agreement);
+
+        // Set status to PendingChanges
+        agreement.status = ICyberAgreementRegistryV2.AgreementStatus.PendingChanges;
+
+        emit AmendmentProposed(agreementId, msg.sender, newPatchUris);
+        emit SignaturesCleared(agreementId);
+    }
+
+    /**
+     * @inheritdoc ICyberAgreementRegistryV2
+     * @notice Accepts a proposed amendment
+     * @dev Once all parties accept, the amendment is applied automatically
+     */
+    function acceptAmendment(bytes32 agreementId) external {
+        Agreement storage agreement = agreements[agreementId];
+        PendingChangeStorage storage change = pendingChanges[agreementId];
+
+        // Check agreement exists
+        if (agreement.parties.length == 0) {
+            revert AgreementDoesNotExist();
+        }
+
+        // Check there is a pending amendment
+        if (!change.active) {
+            revert NoPendingAmendment();
+        }
+
+        // Check sender is a party
+        bool isParty = false;
+        for (uint256 i = 0; i < agreement.parties.length; i++) {
+            if (agreement.parties[i] == msg.sender) {
+                isParty = true;
+                break;
+            }
+        }
+        if (!isParty) {
+            revert NotAParty();
+        }
+
+        // Check not already accepted
+        if (change.acceptedBy[msg.sender]) {
+            revert AlreadyAccepted();
+        }
+
+        // Record acceptance
+        change.acceptedBy[msg.sender] = true;
+        change.acceptances++;
+
+        emit AmendmentAccepted(agreementId, msg.sender);
+
+        // If all parties have accepted, apply the amendment
+        if (change.acceptances == agreement.parties.length) {
+            _applyAmendment(agreement, change, agreementId);
+        }
+    }
+
+    /**
+     * @inheritdoc ICyberAgreementRegistryV2
+     * @notice Rejects a proposed amendment
+     * @dev Discards the pending change and returns agreement to Draft status
+     */
+    function rejectAmendment(bytes32 agreementId) external {
+        Agreement storage agreement = agreements[agreementId];
+        PendingChangeStorage storage change = pendingChanges[agreementId];
+
+        // Check agreement exists
+        if (agreement.parties.length == 0) {
+            revert AgreementDoesNotExist();
+        }
+
+        // Check there is a pending amendment
+        if (!change.active) {
+            revert NoPendingAmendment();
+        }
+
+        // Check sender is a party
+        bool isParty = false;
+        for (uint256 i = 0; i < agreement.parties.length; i++) {
+            if (agreement.parties[i] == msg.sender) {
+                isParty = true;
+                break;
+            }
+        }
+        if (!isParty) {
+            revert NotAParty();
+        }
+
+        // Clear all acceptances before deleting (mappings are not cleared by delete)
+        for (uint256 i = 0; i < agreement.parties.length; i++) {
+            change.acceptedBy[agreement.parties[i]] = false;
+        }
+
+        // Delete the pending change
+        delete pendingChanges[agreementId];
+
+        // Return agreement to Draft status
+        agreement.status = ICyberAgreementRegistryV2.AgreementStatus.Draft;
+
+        emit AmendmentRejected(agreementId, msg.sender);
+    }
+
+    /**
+     * @notice Internal function to apply an amendment
+     * @param agreement The agreement storage
+     * @param change The pending change storage
+     * @param agreementId The agreement identifier
+     */
+    function _applyAmendment(
+        Agreement storage agreement,
+        PendingChangeStorage storage change,
+        bytes32 agreementId
+    ) internal {
+        // Apply template data changes if provided
+        if (change.proposedTemplateData.length > 0) {
+            agreement.templateData = change.proposedTemplateData;
+        }
+
+        // Apply patch URI changes
+        for (uint256 i = 0; i < change.newPatchUris.length; i++) {
+            agreement.agreementPatchUris.push(change.newPatchUris[i]);
+        }
+
+        // Clear all acceptances before deleting (mappings are not cleared by delete)
+        for (uint256 i = 0; i < agreement.parties.length; i++) {
+            change.acceptedBy[agreement.parties[i]] = false;
+        }
+
+        // Delete the pending change
+        delete pendingChanges[agreementId];
+
+        // Return agreement to Draft status (signatures already cleared)
+        agreement.status = ICyberAgreementRegistryV2.AgreementStatus.Draft;
+
+        emit AmendmentApplied(agreementId);
+    }
+
+    /**
+     * @notice Internal function to clear all signatures from an agreement
+     * @param agreement The agreement storage
+     */
+    function _clearSignatures(Agreement storage agreement) internal {
+        for (uint256 i = 0; i < agreement.parties.length; i++) {
+            address party = agreement.parties[i];
+            agreement.signedAt[party] = 0;
+            delete agreement.signatureInfo[party];
+        }
+    }
+
+    /**
+     * @inheritdoc ICyberAgreementRegistryV2
+     * @notice Returns the current status of an agreement
+     */
+    function getAgreementStatus(bytes32 agreementId) external view returns (ICyberAgreementRegistryV2.AgreementStatus) {
+        return agreements[agreementId].status;
+    }
+
+    /**
+     * @inheritdoc ICyberAgreementRegistryV2
+     * @notice Returns the pending change for an agreement
+     */
+    function getPendingChange(bytes32 agreementId) external view returns (
+        string[] memory patchUris,
+        bytes memory templateData,
+        address proposer,
+        uint256 proposedAt,
+        uint256 acceptances,
+        bool hasAccepted
+    ) {
+        PendingChangeStorage storage change = pendingChanges[agreementId];
+
+        if (!change.active) {
+            return (new string[](0), "", address(0), 0, 0, false);
+        }
+
+        return (
+            change.newPatchUris,
+            change.proposedTemplateData,
+            change.proposer,
+            change.proposedAt,
+            change.acceptances,
+            change.acceptedBy[msg.sender]
+        );
+    }
+
+    /**
+     * @inheritdoc ICyberAgreementRegistryV2
+     * @notice Returns the agreement patch URIs
+     */
+    function getAgreementPatchUris(bytes32 agreementId) external view returns (string[] memory) {
+        return agreements[agreementId].agreementPatchUris;
     }
 
     /**

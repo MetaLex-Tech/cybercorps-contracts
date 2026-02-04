@@ -178,7 +178,8 @@ contract CyberAgreementRegistryV2Test is Test {
             uint256[] memory signedAt,
             bool isComplete,
             bool finalized,
-            bool voided
+            bool voided,
+            ICyberAgreementRegistryV2.AgreementStatus status
         ) = registry.getAgreement(agreementId);
 
         assertEq(storedTemplate, address(template), "Template mismatch");
@@ -318,7 +319,8 @@ contract CyberAgreementRegistryV2Test is Test {
             uint256[] memory signedAt,
             bool isComplete,
             bool finalized,
-            bool voided
+            bool voided,
+            ICyberAgreementRegistryV2.AgreementStatus status
         ) = registry.getAgreement(agreementId);
 
         assertEq(storedTemplate, address(template), "Template mismatch");
@@ -353,7 +355,7 @@ contract CyberAgreementRegistryV2Test is Test {
 
         // Verify Alice claimed the slot
         assertTrue(registry.hasSigned(agreementId, alice), "Alice should have signed");
-        (storedTemplate, storedTemplateData, storedParties,,,,) = registry.getAgreement(agreementId);
+        (storedTemplate, storedTemplateData, storedParties,,,,,) = registry.getAgreement(agreementId);
         assertEq(storedParties[0], alice, "First party should now be Alice");
 
         // Bob claims second slot
@@ -1332,7 +1334,7 @@ contract CyberAgreementRegistryV2Test is Test {
         );
 
         // Verify the agreement was created with address(0) as second party
-        (,, address[] memory storedParties,,,,) = registry.getAgreement(agreementId);
+        (,, address[] memory storedParties,,,,,) = registry.getAgreement(agreementId);
         assertEq(storedParties[0], alice);
         assertEq(storedParties[1], address(0));
         
@@ -1606,7 +1608,8 @@ contract CyberAgreementRegistryV2Test is Test {
             uint256[] memory signedAt,
             bool isComplete,
             bool finalized,
-            bool voided
+            bool voided,
+            ICyberAgreementRegistryV2.AgreementStatus status
         ) = registry.getAgreement(agreementId);
 
         assertEq(storedTemplate, address(template), "Template mismatch");
@@ -2154,7 +2157,723 @@ contract CyberAgreementRegistryV2Test is Test {
         // Verify Bob claimed the slot
         assertTrue(registry.hasSigned(agreementId, bob), "Bob should have signed via escrow");
         
-        (, , address[] memory storedParties, , , , ) = registry.getAgreement(agreementId);
+        (, , address[] memory storedParties, , , , ,) = registry.getAgreement(agreementId);
         assertEq(storedParties[1], bob, "Second party should now be Bob");
+    }
+
+    // ============ Amendment Tests ============
+
+    function test_ProposeAmendment_Success() public {
+        // Create agreement with finalizer to prevent auto-finalize
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        assertTrue(registry.allPartiesSigned(agreementId), "All parties should have signed");
+        assertTrue(registry.isFinalized(agreementId) == false, "Should not be finalized");
+
+        // Propose amendment with patch URIs
+        string[] memory newPatchUris = new string[](1);
+        newPatchUris[0] = "ipfs://QmAmendment1";
+
+        vm.prank(alice);
+        vm.expectEmit(true, true, true, true);
+        emit ICyberAgreementRegistryV2.AmendmentProposed(agreementId, alice, newPatchUris);
+        emit ICyberAgreementRegistryV2.SignaturesCleared(agreementId);
+        registry.proposeAmendment(agreementId, newPatchUris, "");
+
+        // Verify status changed to PendingChanges
+        ICyberAgreementRegistryV2.AgreementStatus status = registry.getAgreementStatus(agreementId);
+        assertEq(uint256(status), uint256(ICyberAgreementRegistryV2.AgreementStatus.PendingChanges), "Status should be PendingChanges");
+
+        // Verify signatures were cleared
+        assertFalse(registry.hasSigned(agreementId, alice), "Alice's signature should be cleared");
+        assertFalse(registry.hasSigned(agreementId, bob), "Bob's signature should be cleared");
+
+        // Verify pending change
+        (
+            string[] memory patchUris,
+            bytes memory templateData,
+            address proposer,
+            uint256 proposedAt,
+            uint256 acceptances,
+            bool hasAccepted
+        ) = registry.getPendingChange(agreementId);
+
+        assertEq(patchUris.length, 1, "Should have 1 patch URI");
+        assertEq(patchUris[0], "ipfs://QmAmendment1", "Patch URI mismatch");
+        assertEq(templateData.length, 0, "Template data should be empty");
+        assertEq(proposer, alice, "Proposer should be Alice");
+        assertGt(proposedAt, 0, "ProposedAt should be set");
+        assertEq(acceptances, 0, "Should have 0 acceptances");
+        assertFalse(hasAccepted, "Alice should not have accepted yet");
+    }
+
+    function test_ProposeAmendment_WithTemplateData() public {
+        // Create agreement with finalizer
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Create new template data
+        SimpleSaleAgreementTemplate.SaleAgreementData memory newSaleData = SimpleSaleAgreementTemplate
+            .SaleAgreementData({
+            assetAddress: address(0x5678),
+            assetAmount: 200,
+            purchasePrice: 2 ether,
+            paymentToken: address(0),
+            deliveryDate: block.timestamp + 2 days,
+            description: "Amended sale"
+        });
+        bytes memory newTemplateData = abi.encode(newSaleData);
+
+        string[] memory newPatchUris = new string[](1);
+        newPatchUris[0] = "ipfs://QmAmendment2";
+
+        vm.prank(alice);
+        registry.proposeAmendment(agreementId, newPatchUris, newTemplateData);
+
+        // Verify pending change includes template data
+        (
+            string[] memory patchUris,
+            bytes memory templateData,
+            address proposer,
+            uint256 proposedAt,
+            uint256 acceptances,
+            bool hasAccepted
+        ) = registry.getPendingChange(agreementId);
+
+        assertEq(patchUris.length, 1, "Should have 1 patch URI");
+        assertEq(templateData, newTemplateData, "Template data mismatch");
+        assertEq(proposer, alice, "Proposer should be Alice");
+    }
+
+    function test_RevertIf_ProposeAmendment_AgreementDoesNotExist() public {
+        bytes32 fakeAgreementId = keccak256("fake");
+        string[] memory newPatchUris = new string[](1);
+        newPatchUris[0] = "ipfs://QmAmendment";
+
+        vm.prank(alice);
+        vm.expectRevert(CyberAgreementRegistryV2.AgreementDoesNotExist.selector);
+        registry.proposeAmendment(fakeAgreementId, newPatchUris, "");
+    }
+
+    function test_RevertIf_ProposeAmendment_AlreadyVoided() public {
+        // Create and void an agreement
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign and void
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Void the agreement
+        bytes memory voidSignature = CyberAgreementV2Utils.signVoid(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.VOID_TYPEHASH(),
+            agreementId,
+            alice,
+            alicePrivateKey
+        );
+        vm.prank(alice);
+        registry.voidAgreement(agreementId, voidSignature);
+
+        voidSignature = CyberAgreementV2Utils.signVoid(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.VOID_TYPEHASH(),
+            agreementId,
+            bob,
+            bobPrivateKey
+        );
+        vm.prank(bob);
+        registry.voidAgreement(agreementId, voidSignature);
+
+        assertTrue(registry.isVoided(agreementId), "Agreement should be voided");
+
+        // Try to propose amendment
+        string[] memory newPatchUris = new string[](1);
+        newPatchUris[0] = "ipfs://QmAmendment";
+
+        vm.prank(alice);
+        vm.expectRevert(CyberAgreementRegistryV2.AgreementAlreadyVoided.selector);
+        registry.proposeAmendment(agreementId, newPatchUris, "");
+    }
+
+    function test_RevertIf_ProposeAmendment_AlreadyFinalized() public {
+        // Create and finalize an agreement
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Finalize
+        vm.prank(chad);
+        registry.finalizeAgreement(agreementId);
+
+        assertTrue(registry.isFinalized(agreementId), "Agreement should be finalized");
+
+        // Try to propose amendment
+        string[] memory newPatchUris = new string[](1);
+        newPatchUris[0] = "ipfs://QmAmendment";
+
+        vm.prank(alice);
+        vm.expectRevert(CyberAgreementRegistryV2.AgreementAlreadyFinalized.selector);
+        registry.proposeAmendment(agreementId, newPatchUris, "");
+    }
+
+    function test_RevertIf_ProposeAmendment_NotAParty() public {
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Chad (not a party) tries to propose amendment
+        string[] memory newPatchUris = new string[](1);
+        newPatchUris[0] = "ipfs://QmAmendment";
+
+        vm.prank(chad);
+        vm.expectRevert(CyberAgreementRegistryV2.NotAParty.selector);
+        registry.proposeAmendment(agreementId, newPatchUris, "");
+    }
+
+    function test_RevertIf_ProposeAmendment_AlreadyPending() public {
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Propose first amendment
+        string[] memory newPatchUris = new string[](1);
+        newPatchUris[0] = "ipfs://QmAmendment1";
+
+        vm.prank(alice);
+        registry.proposeAmendment(agreementId, newPatchUris, "");
+
+        // Try to propose another amendment while one is pending
+        string[] memory newPatchUris2 = new string[](1);
+        newPatchUris2[0] = "ipfs://QmAmendment2";
+
+        vm.prank(alice);
+        vm.expectRevert(CyberAgreementRegistryV2.AmendmentAlreadyPending.selector);
+        registry.proposeAmendment(agreementId, newPatchUris2, "");
+    }
+
+    function test_RevertIf_ProposeAmendment_InvalidAmendmentData() public {
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Try to propose amendment with empty data
+        string[] memory emptyPatchUris = new string[](0);
+
+        vm.prank(alice);
+        vm.expectRevert(CyberAgreementRegistryV2.InvalidAmendmentData.selector);
+        registry.proposeAmendment(agreementId, emptyPatchUris, "");
+    }
+
+    function test_AcceptAmendment_Success() public {
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Propose amendment
+        string[] memory newPatchUris = new string[](1);
+        newPatchUris[0] = "ipfs://QmAmendment1";
+
+        vm.prank(alice);
+        registry.proposeAmendment(agreementId, newPatchUris, "");
+
+        // Alice accepts
+        vm.prank(alice);
+        vm.expectEmit(true, true, true, true);
+        emit ICyberAgreementRegistryV2.AmendmentAccepted(agreementId, alice);
+        registry.acceptAmendment(agreementId);
+
+        // Verify acceptance - need to call as Alice since hasAccepted is based on msg.sender
+        (
+            string[] memory patchUris,
+            bytes memory templateData,
+            address proposer,
+            uint256 proposedAt,
+            uint256 acceptances,
+            bool hasAccepted
+        ) = registry.getPendingChange(agreementId);
+
+        assertEq(acceptances, 1, "Should have 1 acceptance");
+        assertEq(patchUris[0], "ipfs://QmAmendment1", "Patch URI should still be pending");
+
+        // Check hasAccepted as Alice
+        vm.prank(alice);
+        (,,,,, hasAccepted) = registry.getPendingChange(agreementId);
+        assertTrue(hasAccepted, "Alice should have accepted");
+    }
+
+    function test_AcceptAmendment_FullAcceptance_AppliesAmendment() public {
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Get original template data
+        (address storedTemplate, bytes memory originalTemplateData,,,,,,) = registry.getAgreement(agreementId);
+
+        // Propose amendment with new template data
+        SimpleSaleAgreementTemplate.SaleAgreementData memory newSaleData = SimpleSaleAgreementTemplate
+            .SaleAgreementData({
+            assetAddress: address(0x5678),
+            assetAmount: 200,
+            purchasePrice: 2 ether,
+            paymentToken: address(0),
+            deliveryDate: block.timestamp + 2 days,
+            description: "Amended sale"
+        });
+        bytes memory newTemplateData = abi.encode(newSaleData);
+
+        string[] memory newPatchUris = new string[](1);
+        newPatchUris[0] = "ipfs://QmAmendment1";
+
+        vm.prank(alice);
+        registry.proposeAmendment(agreementId, newPatchUris, newTemplateData);
+
+        // Both parties accept
+        vm.prank(alice);
+        registry.acceptAmendment(agreementId);
+
+        vm.prank(bob);
+        vm.expectEmit(true, true, true, true);
+        emit ICyberAgreementRegistryV2.AmendmentApplied(agreementId);
+        registry.acceptAmendment(agreementId);
+
+        // Verify amendment was applied
+        (
+            address templateAfter,
+            bytes memory templateDataAfter,
+            address[] memory partiesAfter,
+            uint256[] memory signedAtAfter,
+            bool isCompleteAfter,
+            bool finalizedAfter,
+            bool voidedAfter,
+            ICyberAgreementRegistryV2.AgreementStatus statusAfter
+        ) = registry.getAgreement(agreementId);
+
+        // Template data should be updated
+        assertEq(templateDataAfter, newTemplateData, "Template data should be updated");
+
+        // Status should be back to Draft
+        assertEq(uint256(statusAfter), uint256(ICyberAgreementRegistryV2.AgreementStatus.Draft), "Status should be Draft");
+
+        // Patch URIs should be added
+        string[] memory patchUris = registry.getAgreementPatchUris(agreementId);
+        assertEq(patchUris.length, 1, "Should have 1 patch URI");
+        assertEq(patchUris[0], "ipfs://QmAmendment1", "Patch URI should be added");
+
+        // Pending change should be cleared
+        (
+            string[] memory pendingPatchUris,
+            bytes memory pendingTemplateData,
+            address pendingProposer,
+            uint256 pendingProposedAt,
+            uint256 pendingAcceptances,
+            bool pendingHasAccepted
+        ) = registry.getPendingChange(agreementId);
+
+        assertEq(pendingPatchUris.length, 0, "Pending patch URIs should be cleared");
+        assertEq(pendingTemplateData.length, 0, "Pending template data should be cleared");
+        assertEq(pendingProposer, address(0), "Pending proposer should be cleared");
+        assertEq(pendingProposedAt, 0, "Pending proposedAt should be cleared");
+        assertEq(pendingAcceptances, 0, "Pending acceptances should be cleared");
+        assertFalse(pendingHasAccepted, "Pending hasAccepted should be false");
+    }
+
+    function test_AcceptAmendment_MultiplePatchUris() public {
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Propose amendment with multiple patch URIs
+        string[] memory newPatchUris = new string[](2);
+        newPatchUris[0] = "ipfs://QmAmendment1";
+        newPatchUris[1] = "ipfs://QmAmendment2";
+
+        vm.prank(alice);
+        registry.proposeAmendment(agreementId, newPatchUris, "");
+
+        // Both parties accept
+        vm.prank(alice);
+        registry.acceptAmendment(agreementId);
+
+        vm.prank(bob);
+        registry.acceptAmendment(agreementId);
+
+        // Verify all patch URIs were added
+        string[] memory patchUris = registry.getAgreementPatchUris(agreementId);
+        assertEq(patchUris.length, 2, "Should have 2 patch URIs");
+        assertEq(patchUris[0], "ipfs://QmAmendment1", "First patch URI should be added");
+        assertEq(patchUris[1], "ipfs://QmAmendment2", "Second patch URI should be added");
+    }
+
+    function test_RevertIf_AcceptAmendment_AgreementDoesNotExist() public {
+        bytes32 fakeAgreementId = keccak256("fake");
+
+        vm.prank(alice);
+        vm.expectRevert(CyberAgreementRegistryV2.AgreementDoesNotExist.selector);
+        registry.acceptAmendment(fakeAgreementId);
+    }
+
+    function test_RevertIf_AcceptAmendment_NoPendingAmendment() public {
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Try to accept without proposing
+        vm.prank(alice);
+        vm.expectRevert(CyberAgreementRegistryV2.NoPendingAmendment.selector);
+        registry.acceptAmendment(agreementId);
+    }
+
+    function test_RevertIf_AcceptAmendment_NotAParty() public {
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Propose amendment
+        string[] memory newPatchUris = new string[](1);
+        newPatchUris[0] = "ipfs://QmAmendment1";
+
+        vm.prank(alice);
+        registry.proposeAmendment(agreementId, newPatchUris, "");
+
+        // Chad (not a party) tries to accept
+        vm.prank(chad);
+        vm.expectRevert(CyberAgreementRegistryV2.NotAParty.selector);
+        registry.acceptAmendment(agreementId);
+    }
+
+    function test_RevertIf_AcceptAmendment_AlreadyAccepted() public {
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Propose amendment
+        string[] memory newPatchUris = new string[](1);
+        newPatchUris[0] = "ipfs://QmAmendment1";
+
+        vm.prank(alice);
+        registry.proposeAmendment(agreementId, newPatchUris, "");
+
+        // Alice accepts
+        vm.prank(alice);
+        registry.acceptAmendment(agreementId);
+
+        // Alice tries to accept again
+        vm.prank(alice);
+        vm.expectRevert(CyberAgreementRegistryV2.AlreadyAccepted.selector);
+        registry.acceptAmendment(agreementId);
+    }
+
+    function test_RejectAmendment_Success() public {
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Propose amendment
+        string[] memory newPatchUris = new string[](1);
+        newPatchUris[0] = "ipfs://QmAmendment1";
+
+        vm.prank(alice);
+        registry.proposeAmendment(agreementId, newPatchUris, "");
+
+        // Verify status is PendingChanges
+        ICyberAgreementRegistryV2.AgreementStatus statusBefore = registry.getAgreementStatus(agreementId);
+        assertEq(uint256(statusBefore), uint256(ICyberAgreementRegistryV2.AgreementStatus.PendingChanges), "Status should be PendingChanges");
+
+        // Bob rejects
+        vm.prank(bob);
+        vm.expectEmit(true, true, true, true);
+        emit ICyberAgreementRegistryV2.AmendmentRejected(agreementId, bob);
+        registry.rejectAmendment(agreementId);
+
+        // Verify status is back to Draft
+        ICyberAgreementRegistryV2.AgreementStatus statusAfter = registry.getAgreementStatus(agreementId);
+        assertEq(uint256(statusAfter), uint256(ICyberAgreementRegistryV2.AgreementStatus.Draft), "Status should be Draft after rejection");
+
+        // Verify pending change is cleared
+        (
+            string[] memory pendingPatchUris,
+            bytes memory pendingTemplateData,
+            address pendingProposer,
+            uint256 pendingProposedAt,
+            uint256 pendingAcceptances,
+            bool pendingHasAccepted
+        ) = registry.getPendingChange(agreementId);
+
+        assertEq(pendingPatchUris.length, 0, "Pending patch URIs should be cleared");
+        assertEq(pendingTemplateData.length, 0, "Pending template data should be cleared");
+        assertEq(pendingProposer, address(0), "Pending proposer should be cleared");
+    }
+
+    function test_RejectAmendment_AfterPartialAcceptance() public {
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Propose amendment
+        string[] memory newPatchUris = new string[](1);
+        newPatchUris[0] = "ipfs://QmAmendment1";
+
+        vm.prank(alice);
+        registry.proposeAmendment(agreementId, newPatchUris, "");
+
+        // Alice accepts
+        vm.prank(alice);
+        registry.acceptAmendment(agreementId);
+
+        // Bob rejects (should clear everything)
+        vm.prank(bob);
+        registry.rejectAmendment(agreementId);
+
+        // Verify pending change is cleared
+        (
+            string[] memory pendingPatchUris,
+            bytes memory pendingTemplateData,
+            address pendingProposer,
+            uint256 pendingProposedAt,
+            uint256 pendingAcceptances,
+            bool pendingHasAccepted
+        ) = registry.getPendingChange(agreementId);
+
+        assertEq(pendingAcceptances, 0, "Acceptances should be cleared");
+        assertFalse(pendingHasAccepted, "hasAccepted should be false for Bob");
+
+        // Status should be back to Draft
+        ICyberAgreementRegistryV2.AgreementStatus statusAfter = registry.getAgreementStatus(agreementId);
+        assertEq(uint256(statusAfter), uint256(ICyberAgreementRegistryV2.AgreementStatus.Draft), "Status should be Draft after rejection");
+    }
+
+    function test_RevertIf_RejectAmendment_AgreementDoesNotExist() public {
+        bytes32 fakeAgreementId = keccak256("fake");
+
+        vm.prank(alice);
+        vm.expectRevert(CyberAgreementRegistryV2.AgreementDoesNotExist.selector);
+        registry.rejectAmendment(fakeAgreementId);
+    }
+
+    function test_RevertIf_RejectAmendment_NoPendingAmendment() public {
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Try to reject without proposing
+        vm.prank(alice);
+        vm.expectRevert(CyberAgreementRegistryV2.NoPendingAmendment.selector);
+        registry.rejectAmendment(agreementId);
+    }
+
+    function test_RevertIf_RejectAmendment_NotAParty() public {
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Propose amendment
+        string[] memory newPatchUris = new string[](1);
+        newPatchUris[0] = "ipfs://QmAmendment1";
+
+        vm.prank(alice);
+        registry.proposeAmendment(agreementId, newPatchUris, "");
+
+        // Chad (not a party) tries to reject
+        vm.prank(chad);
+        vm.expectRevert(CyberAgreementRegistryV2.NotAParty.selector);
+        registry.rejectAmendment(agreementId);
+    }
+
+    function test_Amendment_Flow_SignAfterAmendment() public {
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        assertTrue(registry.allPartiesSigned(agreementId), "All parties should have signed");
+
+        // Propose amendment
+        string[] memory newPatchUris = new string[](1);
+        newPatchUris[0] = "ipfs://QmAmendment1";
+
+        vm.prank(alice);
+        registry.proposeAmendment(agreementId, newPatchUris, "");
+
+        // Signatures should be cleared
+        assertFalse(registry.hasSigned(agreementId, alice), "Alice's signature should be cleared");
+        assertFalse(registry.hasSigned(agreementId, bob), "Bob's signature should be cleared");
+        assertFalse(registry.allPartiesSigned(agreementId), "Not all parties should have signed");
+
+        // Both parties accept the amendment
+        vm.prank(alice);
+        registry.acceptAmendment(agreementId);
+
+        vm.prank(bob);
+        registry.acceptAmendment(agreementId);
+
+        // Status should be back to Draft
+        ICyberAgreementRegistryV2.AgreementStatus status = registry.getAgreementStatus(agreementId);
+        assertEq(uint256(status), uint256(ICyberAgreementRegistryV2.AgreementStatus.Draft), "Status should be Draft");
+
+        // Parties can sign again
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        assertTrue(registry.allPartiesSigned(agreementId), "All parties should have signed again");
+    }
+
+    function test_GetAgreementStatus() public {
+        // Create agreement - should be Draft
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        ICyberAgreementRegistryV2.AgreementStatus status = registry.getAgreementStatus(agreementId);
+        assertEq(uint256(status), uint256(ICyberAgreementRegistryV2.AgreementStatus.Draft), "Status should be Draft");
+
+        // Sign one party - should still be Draft
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        status = registry.getAgreementStatus(agreementId);
+        assertEq(uint256(status), uint256(ICyberAgreementRegistryV2.AgreementStatus.Draft), "Status should still be Draft");
+
+        // Sign second party - should be FullySigned
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+        status = registry.getAgreementStatus(agreementId);
+        assertEq(uint256(status), uint256(ICyberAgreementRegistryV2.AgreementStatus.FullySigned), "Status should be FullySigned");
+
+        // Propose amendment - should be PendingChanges
+        string[] memory newPatchUris = new string[](1);
+        newPatchUris[0] = "ipfs://QmAmendment1";
+
+        vm.prank(alice);
+        registry.proposeAmendment(agreementId, newPatchUris, "");
+
+        status = registry.getAgreementStatus(agreementId);
+        assertEq(uint256(status), uint256(ICyberAgreementRegistryV2.AgreementStatus.PendingChanges), "Status should be PendingChanges");
+
+        // Accept and finalize - should be Finalized
+        vm.prank(alice);
+        registry.acceptAmendment(agreementId);
+
+        vm.prank(bob);
+        registry.acceptAmendment(agreementId);
+
+        // Sign again
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        vm.prank(chad);
+        registry.finalizeAgreement(agreementId);
+
+        status = registry.getAgreementStatus(agreementId);
+        assertEq(uint256(status), uint256(ICyberAgreementRegistryV2.AgreementStatus.Finalized), "Status should be Finalized");
+    }
+
+    function test_GetAgreementPatchUris() public {
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Initially no patch URIs
+        string[] memory patchUris = registry.getAgreementPatchUris(agreementId);
+        assertEq(patchUris.length, 0, "Should have no patch URIs initially");
+
+        // Both parties sign
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Propose amendment with multiple patch URIs
+        string[] memory newPatchUris = new string[](2);
+        newPatchUris[0] = "ipfs://QmAmendment1";
+        newPatchUris[1] = "ipfs://QmAmendment2";
+
+        vm.prank(alice);
+        registry.proposeAmendment(agreementId, newPatchUris, "");
+
+        // Accept amendment
+        vm.prank(alice);
+        registry.acceptAmendment(agreementId);
+
+        vm.prank(bob);
+        registry.acceptAmendment(agreementId);
+
+        // Verify patch URIs
+        patchUris = registry.getAgreementPatchUris(agreementId);
+        assertEq(patchUris.length, 2, "Should have 2 patch URIs");
+        assertEq(patchUris[0], "ipfs://QmAmendment1", "First patch URI mismatch");
+        assertEq(patchUris[1], "ipfs://QmAmendment2", "Second patch URI mismatch");
+    }
+
+    function test_MultipleAmendments() public {
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // First amendment cycle
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        string[] memory patchUris1 = new string[](1);
+        patchUris1[0] = "ipfs://QmAmendment1";
+
+        vm.prank(alice);
+        registry.proposeAmendment(agreementId, patchUris1, "");
+
+        vm.prank(alice);
+        registry.acceptAmendment(agreementId);
+
+        vm.prank(bob);
+        registry.acceptAmendment(agreementId);
+
+        string[] memory currentPatchUris = registry.getAgreementPatchUris(agreementId);
+        assertEq(currentPatchUris.length, 1, "Should have 1 patch URI after first amendment");
+
+        // Second amendment cycle
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        string[] memory patchUris2 = new string[](1);
+        patchUris2[0] = "ipfs://QmAmendment2";
+
+        vm.prank(bob);
+        registry.proposeAmendment(agreementId, patchUris2, "");
+
+        vm.prank(alice);
+        registry.acceptAmendment(agreementId);
+
+        vm.prank(bob);
+        registry.acceptAmendment(agreementId);
+
+        currentPatchUris = registry.getAgreementPatchUris(agreementId);
+        assertEq(currentPatchUris.length, 2, "Should have 2 patch URIs after second amendment");
+        assertEq(currentPatchUris[0], "ipfs://QmAmendment1", "First patch URI should be preserved");
+        assertEq(currentPatchUris[1], "ipfs://QmAmendment2", "Second patch URI should be added");
     }
 }
