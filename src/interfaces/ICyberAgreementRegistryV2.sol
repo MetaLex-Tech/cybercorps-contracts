@@ -52,6 +52,7 @@ pragma solidity 0.8.28;
  *      - mapping(address => bytes) partyData: Template-specific party data per party
  *      - mapping(address => uint256) signedAt: Timestamp of signature per party
  *      - mapping(address => bytes) signatures: EIP-712 signature per party
+ *      - mapping(address => SignatureMetadata) signatureMetadata: Metadata about how signature was made
  *      - address finalizer: Optional finalizer address
  *      - bool finalized: Whether agreement is finalized
  *      - bool voided: Whether agreement is voided
@@ -60,6 +61,17 @@ pragma solidity 0.8.28;
  *      - uint256 voidRequestCount: Number of parties that requested void
  */
 interface ICyberAgreementRegistryV2 {
+    /**
+     * @notice Struct containing full signature information for a party
+     * @param signature The EIP-712 signature bytes
+     * @param delegatedSigner The address that signed on behalf of the party (zero address if direct signature)
+     * @param escrowSigner The address that escrowed the signature (zero address if not escrowed)
+     */
+    struct SignatureInfo {
+        bytes signature;
+        address delegatedSigner;
+        address escrowSigner;
+    }
 
     /**
      * @notice Emitted when a new agreement is created
@@ -261,4 +273,12 @@ interface ICyberAgreementRegistryV2 {
      * @return uint256 The count of void requests
      */
     function getVoidRequestCount(bytes32 agreementId) external view returns (uint256);
+
+    /**
+     * @notice Returns full signature information for a party
+     * @param agreementId The agreement identifier
+     * @param party The party address
+     * @return SignatureInfo The signature info struct containing signature and metadata
+     */
+    function getSignatureInfo(bytes32 agreementId, address party) external view returns (SignatureInfo memory);
 }

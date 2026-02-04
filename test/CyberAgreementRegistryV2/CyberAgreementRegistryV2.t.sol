@@ -288,19 +288,13 @@ contract CyberAgreementRegistryV2Test is Test {
         registry.createAgreement(address(template), templateData, parties, partyData, address(0), 0);
     }
 
-    function test_RevertIf_FirstPartyZeroAddress() public {
-        address[] memory parties = new address[](1);
-        parties[0] = address(0);
+    function test_CreateBlankAgreementAndFill() public {
+        // A lawyer (non-party) creates a blank agreement with unallocated slots
+        address[] memory parties = new address[](2);
+        parties[0] = address(0); // Unallocated slot for first party
+        parties[1] = address(0); // Unallocated slot for second party
 
-        bytes[] memory partyData = new bytes[](1);
-        partyData[0] = abi.encode(
-            IAgreementTemplate.PartyData({
-            name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
-            contactDetails: "alice@example.com",
-            jurisdiction: ""
-        })
-        );
+        bytes[] memory partyData = new bytes[](0); // No party data initially
 
         // Use valid template data
         bytes memory templateData = abi.encode(SimpleSaleAgreementTemplate.SaleAgreementData({
@@ -309,12 +303,90 @@ contract CyberAgreementRegistryV2Test is Test {
             purchasePrice: 1 ether,
             paymentToken: address(0),
             deliveryDate: block.timestamp + 1 days,
-            description: "Test"
+            description: "Test sale"
         }));
 
+        // Lawyer (chad) creates the agreement
+        vm.prank(chad);
+        bytes32 agreementId = registry.createAgreement(address(template), templateData, parties, partyData, address(0), 0);
+
+        // Verify agreement was created with zero addresses
+        (
+            address storedTemplate,
+            bytes memory storedTemplateData,
+            address[] memory storedParties,
+            uint256[] memory signedAt,
+            bool isComplete,
+            bool finalized,
+            bool voided
+        ) = registry.getAgreement(agreementId);
+
+        assertEq(storedTemplate, address(template), "Template mismatch");
+        assertEq(storedParties.length, 2, "Party count mismatch");
+        assertEq(storedParties[0], address(0), "First party should be zero");
+        assertEq(storedParties[1], address(0), "Second party should be zero");
+        assertFalse(isComplete, "Should not be complete");
+        assertFalse(finalized, "Should not be finalized");
+
+        // Alice claims first slot with fillUnallocated=true
+        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+            name: "Alice",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "alice@example.com",
+            jurisdiction: ""
+        });
+
+        bytes memory aliceSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(template),
+            templateData,
+            parties, // Original parties array for signature
+            abi.encode(alicePartyData),
+            alicePrivateKey
+        );
+
         vm.prank(alice);
-        vm.expectRevert(CyberAgreementRegistryV2.FirstPartyZeroAddress.selector);
-        registry.createAgreement(address(template), templateData, parties, partyData, address(0), 0);
+        registry.signAgreement(agreementId, abi.encode(alicePartyData), aliceSignature, true, "");
+
+        // Verify Alice claimed the slot
+        assertTrue(registry.hasSigned(agreementId, alice), "Alice should have signed");
+        (storedTemplate, storedTemplateData, storedParties,,,,) = registry.getAgreement(agreementId);
+        assertEq(storedParties[0], alice, "First party should now be Alice");
+
+        // Bob claims second slot
+        IAgreementTemplate.PartyData memory bobPartyData = IAgreementTemplate.PartyData({
+            name: "Bob",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "bob@example.com",
+            jurisdiction: ""
+        });
+
+        // Update parties array for Bob's signature (Alice now in first slot)
+        address[] memory currentParties = new address[](2);
+        currentParties[0] = alice;
+        currentParties[1] = address(0);
+
+        bytes memory bobSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(template),
+            templateData,
+            currentParties,
+            abi.encode(bobPartyData),
+            bobPrivateKey
+        );
+
+        vm.prank(bob);
+        registry.signAgreement(agreementId, abi.encode(bobPartyData), bobSignature, true, "");
+
+        // Verify Bob claimed the slot and agreement auto-finalized
+        assertTrue(registry.hasSigned(agreementId, bob), "Bob should have signed");
+        assertTrue(registry.isFinalized(agreementId), "Should be finalized after both parties signed");
     }
 
     // ============ Signing Tests ============
@@ -955,10 +1027,10 @@ contract CyberAgreementRegistryV2Test is Test {
         assertEq(decoded.contactDetails, "alice@example.com", "Contact details mismatch");
     }
 
-    function test_GetAgreementHash() public {
-        (bytes32 agreementId,) = _createTestAgreement();
+    function test_GetAgreementHashForSigner() public {
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreement();
 
-        bytes32 hash = registry.getAgreementHash(agreementId);
+        bytes32 hash = registry.getAgreementHashForSigner(agreementId, partyDataEncoded[0]);
         assertNotEq(hash, bytes32(0), "Hash should not be zero");
     }
 

@@ -72,19 +72,16 @@ contract CyberAgreementRegistryV2 is
     bytes32 public VOID_TYPEHASH;
 
     // Contract version
-    // REVIEW: Check
     string public constant VERSION = "1";
 
     // Storage for agreements
     struct Agreement {
         address template;
         bytes templateData;
-        // REVIEW: previously globalFields
         address[] parties;
         mapping(address => bytes) partyData;
         mapping(address => uint256) signedAt;
-        // REVIEW: Consider whether we should store whether or not the signature was either from a delegate, or escrowed.
-        mapping(address => bytes) signatures;
+        mapping(address => ICyberAgreementRegistryV2.SignatureInfo) signatureInfo;
         address finalizer;
         bool finalized;
         bool voided;
@@ -121,7 +118,6 @@ contract CyberAgreementRegistryV2 is
     error AlreadySigned();
     error InvalidSignature();
     error InvalidDelegation();
-    error FirstPartyZeroAddress();
     error InvalidPartyCount();
     error NotFinalizer();
     error ConditionsNotMet();
@@ -186,11 +182,6 @@ contract CyberAgreementRegistryV2 is
         // Validate parties array
         if (parties.length == 0) {
             revert InvalidPartyCount();
-        }
-
-        // REVIEW: We may not need this constraint.
-        if (parties[0] == address(0)) {
-            revert FirstPartyZeroAddress();
         }
 
         // Party data is optional - if provided, validate it
@@ -289,8 +280,16 @@ contract CyberAgreementRegistryV2 is
         // Store party data
         agreement.partyData[signer] = partyData;
 
-        // Store signature and timestamp
-        agreement.signatures[signer] = signature;
+        // Store signature info and timestamp
+        address recoveredSigner = _recoverSigner(
+            getAgreementHashForSigner(agreementId, partyData),
+            signature
+        );
+        agreement.signatureInfo[signer] = ICyberAgreementRegistryV2.SignatureInfo({
+            signature: signature,
+            delegatedSigner: recoveredSigner != signer ? recoveredSigner : address(0),
+            escrowSigner: address(0)
+        });
         agreement.signedAt[signer] = block.timestamp;
 
         emit AgreementSigned(agreementId, signer, block.timestamp);
@@ -434,7 +433,6 @@ contract CyberAgreementRegistryV2 is
         }
 
         if (!isParty) {
-            // REVIEW: Consider whether finalizer should be able to void
             revert NotAParty();
         }
 
@@ -477,19 +475,8 @@ contract CyberAgreementRegistryV2 is
         }
 
         // Check closing conditions
-        IAgreementTemplate template = IAgreementTemplate(agreement.template);
-        ICondition[] memory conditions = template.getClosingConditions();
-
-        for (uint256 i = 0; i < conditions.length; i++) {
-            if (
-                !conditions[i].checkCondition(
-                    address(this),
-                    this.finalizeAgreement.selector,
-                    abi.encode(agreementId)
-                )
-            ) {
-                revert ConditionsNotMet();
-            }
+        if (!_checkClosingConditions(agreement, agreementId, true)) {
+            revert ConditionsNotMet();
         }
 
         agreement.finalized = true;
@@ -503,13 +490,31 @@ contract CyberAgreementRegistryV2 is
     function _tryAutoFinalize(bytes32 agreementId) internal {
         Agreement storage agreement = agreements[agreementId];
 
-        // Check closing conditions
+        // Check closing conditions - don't revert on failure
+        if (!_checkClosingConditions(agreement, agreementId, false)) {
+            return;
+        }
+
+        // All conditions pass - finalize
+        agreement.finalized = true;
+        emit AgreementFinalized(agreementId, address(0), block.timestamp);
+    }
+
+    /**
+     * @notice Checks closing conditions for an agreement
+     * @param agreement The agreement storage
+     * @param agreementId The agreement identifier
+     * @param revertOnFailure If true, function never returns false (reverts instead)
+     * @return bool True if all conditions pass, false otherwise (only when revertOnFailure is false)
+     */
+    function _checkClosingConditions(
+        Agreement storage agreement,
+        bytes32 agreementId,
+        bool revertOnFailure
+    ) internal view returns (bool) {
         IAgreementTemplate template = IAgreementTemplate(agreement.template);
-        // REVIEW:  check how closing conditions are set.
         ICondition[] memory conditions = template.getClosingConditions();
 
-
-        // REVIEW: Consider extracting to utility function
         for (uint256 i = 0; i < conditions.length; i++) {
             if (
                 !conditions[i].checkCondition(
@@ -518,14 +523,13 @@ contract CyberAgreementRegistryV2 is
                     abi.encode(agreementId)
                 )
             ) {
-                // Conditions don't pass - don't finalize, but don't revert
-                return;
+                if (revertOnFailure) {
+                    revert ConditionsNotMet();
+                }
+                return false;
             }
         }
-
-        // All conditions pass - finalize
-        agreement.finalized = true;
-        emit AgreementFinalized(agreementId, address(0), block.timestamp);
+        return true;
     }
 
     /**
@@ -573,7 +577,7 @@ contract CyberAgreementRegistryV2 is
      * @inheritdoc ICyberAgreementRegistryV2
      */
     function getPartySignature(bytes32 agreementId, address party) external view returns (bytes memory) {
-        return agreements[agreementId].signatures[party];
+        return agreements[agreementId].signatureInfo[party].signature;
     }
 
     /**
@@ -668,6 +672,16 @@ contract CyberAgreementRegistryV2 is
      */
     function getVoidRequestCount(bytes32 agreementId) external view returns (uint256) {
         return agreements[agreementId].voidRequestCount;
+    }
+
+    /**
+     * @inheritdoc ICyberAgreementRegistryV2
+     */
+    function getSignatureInfo(
+        bytes32 agreementId,
+        address party
+    ) external view returns (ICyberAgreementRegistryV2.SignatureInfo memory) {
+        return agreements[agreementId].signatureInfo[party];
     }
 
     /**
