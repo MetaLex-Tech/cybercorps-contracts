@@ -270,10 +270,9 @@ contract CyberAgreementRegistryV2 is
     ) internal {
         Agreement storage agreement = agreements[agreementId];
 
-        _validateAgreementForSigning(agreement, signer, fillUnallocated);
+        uint256 partyIndex = _validateAgreementForSigning(agreement, signer, fillUnallocated);
 
         // Handle fillUnallocated - replace zero address with signer
-        uint256 partyIndex = _findPartyIndex(agreement, signer, fillUnallocated);
         if (fillUnallocated && agreement.parties[partyIndex] == address(0)) {
             agreement.parties[partyIndex] = signer;
             agreementsForParty[signer].push(agreementId);
@@ -302,7 +301,7 @@ contract CyberAgreementRegistryV2 is
         Agreement storage agreement,
         address signer,
         bool fillUnallocated
-    ) internal view {
+    ) internal view returns (uint256 partyIndex) {
         // Check agreement exists
         if (agreement.parties.length == 0) {
             revert AgreementDoesNotExist();
@@ -324,7 +323,8 @@ contract CyberAgreementRegistryV2 is
         }
 
         // Find party index and validate
-        if (_findPartyIndex(agreement, signer, fillUnallocated) == type(uint256).max) {
+        partyIndex = _findPartyIndex(agreement, signer, fillUnallocated);
+        if (partyIndex == type(uint256).max) {
             revert NotAParty();
         }
 
