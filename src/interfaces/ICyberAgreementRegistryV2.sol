@@ -165,6 +165,26 @@ interface ICyberAgreementRegistryV2 {
     ) external;
 
     /**
+     * @notice Signs an agreement with escrowed signatures
+     * @dev Allows a finalizer contract to escrow signatures on behalf of parties.
+     *      Requires a predefined finalizer to enforce proper access control.
+     * @param escrowSigner The address of the party whose signature is being escrowed
+     * @param agreementId The agreement identifier
+     * @param partyData Encoded party data for the escrow signer
+     * @param signature EIP-712 signature of the agreement data by the escrow signer
+     * @param fillUnallocated Whether to fill an unallocated (zero address) party slot
+     * @param secret Optional secret for additional validation (empty string if unused)
+     */
+    function signAgreementWithEscrow(
+        address escrowSigner,
+        bytes32 agreementId,
+        bytes calldata partyData,
+        bytes calldata signature,
+        bool fillUnallocated,
+        string calldata secret
+    ) external;
+
+    /**
      * @notice Voids an agreement
      * @param agreementId The agreement identifier
      * @param signature EIP-712 signature authorizing voiding

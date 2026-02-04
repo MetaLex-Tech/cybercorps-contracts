@@ -1644,4 +1644,517 @@ contract CyberAgreementRegistryV2Test is Test {
         registry.signAgreement(agreementId, abi.encode(alicePartyData), aliceSignature, false, "");
         assertTrue(registry.hasSigned(agreementId, alice), "Alice should have signed");
     }
+
+    // ============ Escrow Signature Tests ============
+
+    function test_SignAgreementWithEscrow() public {
+        // Create agreement with chad as finalizer
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Alice signs via escrow (Chad as finalizer escrows Alice's signature)
+        bytes memory aliceSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(template),
+            _getTemplateData(),
+            _getParties(),
+            partyDataEncoded[0],
+            alicePrivateKey
+        );
+
+        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+            name: "Alice",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "alice@example.com",
+            jurisdiction: ""
+        });
+
+        // Chad (finalizer) escrows Alice's signature
+        vm.prank(chad);
+        vm.expectEmit(true, true, true, true);
+        emit ICyberAgreementRegistryV2.AgreementSigned(agreementId, alice, block.timestamp);
+        registry.signAgreementWithEscrow(
+            alice,
+            agreementId,
+            abi.encode(alicePartyData),
+            aliceSignature,
+            false,
+            ""
+        );
+
+        // Verify Alice has signed via escrow
+        assertTrue(registry.hasSigned(agreementId, alice), "Alice should have signed via escrow");
+        
+        // Verify signature info shows escrow
+        ICyberAgreementRegistryV2.SignatureInfo memory sigInfo = registry.getSignatureInfo(agreementId, alice);
+        assertEq(sigInfo.escrowSigner, alice, "Escrow signer should be Alice");
+        assertEq(sigInfo.signature, aliceSignature, "Signature should match");
+    }
+
+    function test_SignAgreementWithEscrowAndFinalize() public {
+        // Create agreement with chad as finalizer
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Both parties sign via escrow
+        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+            name: "Alice",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "alice@example.com",
+            jurisdiction: ""
+        });
+
+        IAgreementTemplate.PartyData memory bobPartyData = IAgreementTemplate.PartyData({
+            name: "Bob",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "bob@example.com",
+            jurisdiction: ""
+        });
+
+        bytes memory aliceSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(template),
+            _getTemplateData(),
+            _getParties(),
+            partyDataEncoded[0],
+            alicePrivateKey
+        );
+
+        bytes memory bobSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(template),
+            _getTemplateData(),
+            _getParties(),
+            partyDataEncoded[1],
+            bobPrivateKey
+        );
+
+        // Chad (finalizer) escrows both signatures
+        vm.startPrank(chad);
+        registry.signAgreementWithEscrow(
+            alice,
+            agreementId,
+            abi.encode(alicePartyData),
+            aliceSignature,
+            false,
+            ""
+        );
+        
+        registry.signAgreementWithEscrow(
+            bob,
+            agreementId,
+            abi.encode(bobPartyData),
+            bobSignature,
+            false,
+            ""
+        );
+        vm.stopPrank();
+
+        // Should be fully signed but not yet finalized (has finalizer)
+        assertTrue(registry.allPartiesSigned(agreementId), "All parties should have signed");
+        assertFalse(registry.isFinalized(agreementId), "Should not be finalized yet");
+
+        // Chad finalizes
+        vm.prank(chad);
+        registry.finalizeAgreement(agreementId);
+
+        assertTrue(registry.isFinalized(agreementId), "Should be finalized");
+    }
+
+    function test_RevertIf_signAgreementWithEscrowUndefinedFinalizer() public {
+        // Create agreement WITHOUT finalizer (address(0))
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreement();
+
+        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+            name: "Alice",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "alice@example.com",
+            jurisdiction: ""
+        });
+
+        bytes memory aliceSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(template),
+            _getTemplateData(),
+            _getParties(),
+            partyDataEncoded[0],
+            alicePrivateKey
+        );
+
+        // Bob tries to escrow Alice's signature but finalizer is not defined
+        vm.prank(bob);
+        vm.expectRevert(CyberAgreementRegistryV2.FinalizerNotDefined.selector);
+        registry.signAgreementWithEscrow(
+            alice,
+            agreementId,
+            abi.encode(alicePartyData),
+            aliceSignature,
+            false,
+            ""
+        );
+    }
+
+    function test_RevertIf_signAgreementWithEscrowNotFinalizer() public {
+        // Create agreement with chad as finalizer
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+            name: "Alice",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "alice@example.com",
+            jurisdiction: ""
+        });
+
+        bytes memory aliceSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(template),
+            _getTemplateData(),
+            _getParties(),
+            partyDataEncoded[0],
+            alicePrivateKey
+        );
+
+        // Bob (not the finalizer) tries to escrow Alice's signature
+        vm.prank(bob);
+        vm.expectRevert(CyberAgreementRegistryV2.NotFinalizer.selector);
+        registry.signAgreementWithEscrow(
+            alice,
+            agreementId,
+            abi.encode(alicePartyData),
+            aliceSignature,
+            false,
+            ""
+        );
+    }
+
+    function test_RevertIf_signAgreementWithEscrowAlreadySigned() public {
+        // Create agreement with chad as finalizer
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+            name: "Alice",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "alice@example.com",
+            jurisdiction: ""
+        });
+
+        bytes memory aliceSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(template),
+            _getTemplateData(),
+            _getParties(),
+            partyDataEncoded[0],
+            alicePrivateKey
+        );
+
+        // Chad escrows Alice's signature
+        vm.prank(chad);
+        registry.signAgreementWithEscrow(
+            alice,
+            agreementId,
+            abi.encode(alicePartyData),
+            aliceSignature,
+            false,
+            ""
+        );
+
+        // Chad tries to escrow Alice's signature again
+        vm.prank(chad);
+        vm.expectRevert(CyberAgreementRegistryV2.AlreadySigned.selector);
+        registry.signAgreementWithEscrow(
+            alice,
+            agreementId,
+            abi.encode(alicePartyData),
+            aliceSignature,
+            false,
+            ""
+        );
+    }
+
+    function test_RevertIf_signAgreementWithEscrowAgreementDoesNotExist() public {
+        bytes32 fakeAgreementId = keccak256("fake");
+
+        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+            name: "Alice",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "alice@example.com",
+            jurisdiction: ""
+        });
+
+        bytes memory aliceSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            fakeAgreementId,
+            address(template),
+            _getTemplateData(),
+            _getParties(),
+            abi.encode(alicePartyData),
+            alicePrivateKey
+        );
+
+        vm.prank(chad);
+        vm.expectRevert(CyberAgreementRegistryV2.AgreementDoesNotExist.selector);
+        registry.signAgreementWithEscrow(
+            alice,
+            fakeAgreementId,
+            abi.encode(alicePartyData),
+            aliceSignature,
+            false,
+            ""
+        );
+    }
+
+    function test_RevertIf_signAgreementWithEscrowExpired() public {
+        // Create agreement with chad as finalizer and short expiry
+        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
+            .SaleAgreementData({
+            assetAddress: address(0x1234),
+            assetAmount: 100,
+            purchasePrice: 1 ether,
+            paymentToken: address(0),
+            deliveryDate: block.timestamp + 1 days,
+            description: "Test sale"
+        });
+
+        bytes memory templateData = abi.encode(saleData);
+
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        bytes[] memory partyData = new bytes[](2);
+        partyData[0] = abi.encode(
+            IAgreementTemplate.PartyData({
+            name: "Alice",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "alice@example.com",
+            jurisdiction: ""
+        })
+        );
+        partyData[1] = abi.encode(
+            IAgreementTemplate.PartyData({
+            name: "Bob",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "bob@example.com",
+            jurisdiction: ""
+        })
+        );
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createAgreement(
+            address(template),
+            templateData,
+            parties,
+            partyData,
+            chad, // Chad is the finalizer
+            block.timestamp + 1 days
+        );
+
+        // Warp past expiry
+        vm.warp(block.timestamp + 2 days);
+
+        bytes memory aliceSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(template),
+            templateData,
+            parties,
+            partyData[0],
+            alicePrivateKey
+        );
+
+        // Chad tries to escrow after expiry
+        vm.prank(chad);
+        vm.expectRevert(CyberAgreementRegistryV2.AgreementExpired.selector);
+        registry.signAgreementWithEscrow(
+            alice,
+            agreementId,
+            partyData[0],
+            aliceSignature,
+            false,
+            ""
+        );
+    }
+
+    function test_RevertIf_signAgreementWithEscrowAlreadyVoided() public {
+        // Create agreement with chad as finalizer
+        (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
+
+        // Alice signs normally first
+        _signAsParty(agreementId, partyDataEncoded, alice, alicePrivateKey, 0);
+
+        // Bob signs normally
+        _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
+
+        // Both parties request void
+        bytes memory voidSignature = CyberAgreementV2Utils.signVoid(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.VOID_TYPEHASH(),
+            agreementId,
+            alice,
+            alicePrivateKey
+        );
+
+        vm.prank(alice);
+        registry.voidAgreement(agreementId, voidSignature);
+
+        voidSignature = CyberAgreementV2Utils.signVoid(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.VOID_TYPEHASH(),
+            agreementId,
+            bob,
+            bobPrivateKey
+        );
+
+        vm.prank(bob);
+        registry.voidAgreement(agreementId, voidSignature);
+
+        assertTrue(registry.isVoided(agreementId), "Agreement should be voided");
+
+        // Chad tries to escrow Bob's signature after agreement is voided
+        // (Bob hasn't signed yet in this scenario)
+        IAgreementTemplate.PartyData memory bobPartyData = IAgreementTemplate.PartyData({
+            name: "Bob",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "bob@example.com",
+            jurisdiction: ""
+        });
+
+        bytes memory bobSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(template),
+            _getTemplateData(),
+            _getParties(),
+            abi.encode(bobPartyData),
+            bobPrivateKey
+        );
+
+        // Chad tries to escrow after agreement is voided
+        vm.prank(chad);
+        vm.expectRevert(CyberAgreementRegistryV2.AgreementAlreadyVoided.selector);
+        registry.signAgreementWithEscrow(
+            bob,
+            agreementId,
+            abi.encode(bobPartyData),
+            bobSignature,
+            false,
+            ""
+        );
+    }
+
+    function test_SignAgreementWithEscrowFillUnallocated() public {
+        // Create agreement with chad as finalizer and one unallocated slot
+        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
+            .SaleAgreementData({
+            assetAddress: address(0x1234),
+            assetAmount: 100,
+            purchasePrice: 1 ether,
+            paymentToken: address(0),
+            deliveryDate: block.timestamp + 1 days,
+            description: "Test sale"
+        });
+
+        bytes memory templateData = abi.encode(saleData);
+
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = address(0); // Unallocated slot
+
+        bytes[] memory partyData = new bytes[](2);
+        partyData[0] = abi.encode(
+            IAgreementTemplate.PartyData({
+            name: "Alice",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "alice@example.com",
+            jurisdiction: ""
+        })
+        );
+        partyData[1] = abi.encode(
+            IAgreementTemplate.PartyData({
+            name: "Bob",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "bob@example.com",
+            jurisdiction: ""
+        })
+        );
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createAgreement(
+            address(template),
+            templateData,
+            parties,
+            partyData,
+            chad, // Chad is the finalizer
+            block.timestamp + 7 days
+        );
+
+        // Alice signs normally
+        bytes memory aliceSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(template),
+            templateData,
+            parties,
+            partyData[0],
+            alicePrivateKey
+        );
+
+        vm.prank(alice);
+        registry.signAgreement(agreementId, partyData[0], aliceSignature, false, "");
+
+        // Bob signs via escrow with fillUnallocated=true
+        bytes memory bobSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(template),
+            templateData,
+            parties,
+            partyData[1],
+            bobPrivateKey
+        );
+
+        vm.prank(chad);
+        registry.signAgreementWithEscrow(
+            bob,
+            agreementId,
+            partyData[1],
+            bobSignature,
+            true, // fillUnallocated
+            ""
+        );
+
+        // Verify Bob claimed the slot
+        assertTrue(registry.hasSigned(agreementId, bob), "Bob should have signed via escrow");
+        
+        (, , address[] memory storedParties, , , , ) = registry.getAgreement(agreementId);
+        assertEq(storedParties[1], bob, "Second party should now be Bob");
+    }
 }

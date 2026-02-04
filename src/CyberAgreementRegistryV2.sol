@@ -120,6 +120,7 @@ contract CyberAgreementRegistryV2 is
     error InvalidDelegation();
     error InvalidPartyCount();
     error NotFinalizer();
+    error FinalizerNotDefined();
     error ConditionsNotMet();
     error NotFullySigned();
     error VoidAlreadyRequested();
@@ -251,6 +252,95 @@ contract CyberAgreementRegistryV2 is
         string calldata secret
     ) external {
         _signAgreement(signer, agreementId, partyData, signature, fillUnallocated, secret);
+    }
+
+    /**
+     * @inheritdoc ICyberAgreementRegistryV2
+     * @notice Signs an agreement with escrowed signatures
+     * @dev Requires a predefined finalizer (smart contract) to enforce proper access control.
+     *      The escrow signer provides the signature, but the finalizer contract controls authorization.
+     *      Prevents exploits by requiring finalizer to be defined (see test_RevertIf_signContractWithEscrowUndefinedFinalizer).
+     */
+    function signAgreementWithEscrow(
+        address escrowSigner,
+        bytes32 agreementId,
+        bytes calldata partyData,
+        bytes calldata signature,
+        bool fillUnallocated,
+        string calldata secret
+    ) external {
+        Agreement storage agreement = agreements[agreementId];
+
+        // Check agreement exists
+        if (agreement.parties.length == 0) {
+            revert AgreementDoesNotExist();
+        }
+
+        // Require a predefined finalizer to prevent unauthorized escrow signatures
+        // This prevents exploits where an attacker could escrow signatures without authorization
+        if (agreement.finalizer == address(0)) {
+            revert FinalizerNotDefined();
+        }
+
+        // Only the finalizer can escrow signatures
+        if (agreement.finalizer != msg.sender) {
+            revert NotFinalizer();
+        }
+
+        // Check not expired
+        if (agreement.expiry > 0 && block.timestamp > agreement.expiry) {
+            revert AgreementExpired();
+        }
+
+        // Check not voided
+        if (agreement.voided) {
+            revert AgreementAlreadyVoided();
+        }
+
+        // Check not finalized
+        if (agreement.finalized) {
+            revert AgreementAlreadyFinalized();
+        }
+
+        // Check escrow signer not already signed
+        if (agreement.signedAt[escrowSigner] > 0) {
+            revert AlreadySigned();
+        }
+
+        // Find party index
+        uint256 partyIndex = _findPartyIndex(agreement, escrowSigner, fillUnallocated);
+        if (partyIndex == type(uint256).max) {
+            revert NotAParty();
+        }
+
+        // Validate party data and verify signature
+        _validatePartyDataAndSignature(agreement, escrowSigner, partyData, signature, agreementId);
+
+        // Handle fillUnallocated - replace zero address with escrow signer
+        if (fillUnallocated && agreement.parties[partyIndex] == address(0)) {
+            agreement.parties[partyIndex] = escrowSigner;
+            agreementsForParty[escrowSigner].push(agreementId);
+        }
+
+        // Store party data
+        agreement.partyData[escrowSigner] = partyData;
+
+        // Store signature info with escrow signer tracking
+        address recoveredSigner = _recoverSigner(
+            getAgreementHashForSigner(agreementId, partyData),
+            signature
+        );
+        agreement.signatureInfo[escrowSigner] = ICyberAgreementRegistryV2.SignatureInfo({
+            signature: signature,
+            delegatedSigner: recoveredSigner != escrowSigner ? recoveredSigner : address(0),
+            escrowSigner: escrowSigner
+        });
+        agreement.signedAt[escrowSigner] = block.timestamp;
+
+        emit AgreementSigned(agreementId, escrowSigner, block.timestamp);
+
+        // Check if all parties signed and auto-finalize if appropriate
+        _checkAndAutoFinalize(agreement, agreementId);
     }
 
     /**
