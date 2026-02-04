@@ -72,15 +72,18 @@ contract CyberAgreementRegistryV2 is
     bytes32 public VOID_TYPEHASH;
 
     // Contract version
+    // REVIEW: Check
     string public constant VERSION = "1";
 
     // Storage for agreements
     struct Agreement {
         address template;
         bytes templateData;
+        // REVIEW: previously globalFields
         address[] parties;
         mapping(address => bytes) partyData;
         mapping(address => uint256) signedAt;
+        // REVIEW: Consider whether we should store whether or not the signature was either from a delegate, or escrowed.
         mapping(address => bytes) signatures;
         address finalizer;
         bool finalized;
@@ -148,8 +151,9 @@ contract CyberAgreementRegistryV2 is
         );
 
         // Initialize EIP-712 type hashes
+        // Note: partyData is now the signer's individual party data, not all parties
         AGREEMENT_TYPEHASH = keccak256(
-            "AgreementSignatureData(bytes32 agreementId,address template,bytes templateData,address[] parties,bytes[] partyData)"
+            "AgreementSignatureData(bytes32 agreementId,address template,bytes templateData,address[] parties,bytes partyData)"
         );
 
         VOID_TYPEHASH = keccak256(
@@ -179,17 +183,19 @@ contract CyberAgreementRegistryV2 is
             revert InvalidTemplate();
         }
 
-        // Validate party data length matches parties length
-        if (partyData.length != parties.length) {
-            revert PartyDataLengthMismatch();
-        }
-
         // Validate parties array
         if (parties.length == 0) {
             revert InvalidPartyCount();
         }
+
+        // REVIEW: We may not need this constraint.
         if (parties[0] == address(0)) {
             revert FirstPartyZeroAddress();
+        }
+
+        // Party data is optional - if provided, validate it
+        if (partyData.length > 0 && partyData.length != parties.length) {
+            revert PartyDataLengthMismatch();
         }
 
         // Generate unique agreement ID using salt
@@ -212,16 +218,15 @@ contract CyberAgreementRegistryV2 is
 
         // Store party data and track agreements per party
         for (uint256 i = 0; i < parties.length; i++) {
-            // Validate party data if party is not zero address
-            if (parties[i] != address(0)) {
+            // Validate and store party data if provided
+            if (partyData.length > 0 && partyData[i].length > 0) {
                 IAgreementTemplate.PartyData memory decodedPartyData = templateContract
                     .decodePartyData(partyData[i]);
                 if (!templateContract.validatePartyData(decodedPartyData)) {
                     revert InvalidTemplate();
                 }
+                agreement.partyData[parties[i]] = partyData[i];
             }
-
-            agreement.partyData[parties[i]] = partyData[i];
             agreementsForParty[parties[i]].push(agreementId);
         }
 
@@ -272,6 +277,9 @@ contract CyberAgreementRegistryV2 is
 
         uint256 partyIndex = _validateAgreementForSigning(agreement, signer, fillUnallocated);
 
+        // Validate party data and verify signature
+        _validatePartyDataAndSignature(agreement, signer, partyData, signature, agreementId);
+
         // Handle fillUnallocated - replace zero address with signer
         if (fillUnallocated && agreement.parties[partyIndex] == address(0)) {
             agreement.parties[partyIndex] = signer;
@@ -280,9 +288,6 @@ contract CyberAgreementRegistryV2 is
 
         // Store party data
         agreement.partyData[signer] = partyData;
-
-        // Validate party data and verify signature
-        _validatePartyDataAndSignature(agreement, signer, partyData, signature, agreementId);
 
         // Store signature and timestamp
         agreement.signatures[signer] = signature;
@@ -336,6 +341,7 @@ contract CyberAgreementRegistryV2 is
 
     /**
      * @notice Validates party data and signature
+     * @dev Each party signs only their own party data, not all parties' data
      */
     function _validatePartyDataAndSignature(
         Agreement storage agreement,
@@ -352,7 +358,7 @@ contract CyberAgreementRegistryV2 is
         }
 
         // Verify EIP-712 signature
-        bytes32 agreementHash = getAgreementHash(agreementId);
+        bytes32 agreementHash = getAgreementHashForSigner(agreementId, partyData);
         address recoveredSigner = _recoverSigner(agreementHash, signature);
 
         // Check if recovered signer is the party or a valid delegate
@@ -428,6 +434,7 @@ contract CyberAgreementRegistryV2 is
         }
 
         if (!isParty) {
+            // REVIEW: Consider whether finalizer should be able to void
             revert NotAParty();
         }
 
@@ -498,8 +505,11 @@ contract CyberAgreementRegistryV2 is
 
         // Check closing conditions
         IAgreementTemplate template = IAgreementTemplate(agreement.template);
+        // REVIEW:  check how closing conditions are set.
         ICondition[] memory conditions = template.getClosingConditions();
 
+
+        // REVIEW: Consider extracting to utility function
         for (uint256 i = 0; i < conditions.length; i++) {
             if (
                 !conditions[i].checkCondition(
@@ -614,29 +624,22 @@ contract CyberAgreementRegistryV2 is
     }
 
     /**
-     * @inheritdoc ICyberAgreementRegistryV2
+     * @notice Computes the agreement hash for a specific signer with their party data
+     * @param agreementId The agreement identifier
+     * @param partyData The signer's party data
+     * @return bytes32 The EIP-712 hash for signing
      */
-    function getAgreementHash(bytes32 agreementId) public view returns (bytes32) {
+    function getAgreementHashForSigner(bytes32 agreementId, bytes memory partyData) public view returns (bytes32) {
         Agreement storage agreement = agreements[agreementId];
-
-        // Build party data array
-        bytes[] memory partyDataArray = new bytes[](agreement.parties.length);
-        for (uint256 i = 0; i < agreement.parties.length; i++) {
-            partyDataArray[i] = agreement.partyData[agreement.parties[i]];
-        }
-
-        // Hash party data array
-        bytes32[] memory partyDataHashes = new bytes32[](partyDataArray.length);
-        for (uint256 i = 0; i < partyDataArray.length; i++) {
-            partyDataHashes[i] = keccak256(partyDataArray[i]);
-        }
-        bytes32 partyDataArrayHash = keccak256(abi.encodePacked(partyDataHashes));
 
         // Hash template data
         bytes32 templateDataHash = keccak256(agreement.templateData);
 
         // Hash parties array
         bytes32 partiesHash = keccak256(abi.encodePacked(agreement.parties));
+
+        // Hash signer's party data only
+        bytes32 partyDataHash = keccak256(partyData);
 
         // Create struct hash
         bytes32 structHash = keccak256(
@@ -646,7 +649,7 @@ contract CyberAgreementRegistryV2 is
                 agreement.template,
                 templateDataHash,
                 partiesHash,
-                partyDataArrayHash
+                partyDataHash
             )
         );
 

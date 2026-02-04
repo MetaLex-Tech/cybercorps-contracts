@@ -563,6 +563,85 @@ Checked in signature verification - recovered signer can be either the party or 
 
 ---
 
+## Additions to Consider
+
+### 1. Escrowed Signatures Support
+
+V1 supports escrowed signatures via `signContractWithEscrow()` which allows a finalizer contract to escrow signatures on behalf of parties. This is important for:
+- Smart contract wallets that can't directly sign
+- Institutional custody solutions
+- Time-locked or conditional signing scenarios
+
+**Implementation approach for V2:**
+- Add `signAgreementWithEscrow()` function similar to V1
+- Requires a predefined finalizer (smart contract) to enforce proper access control
+- Escrow signer provides signature, but finalizer contract controls the authorization logic
+- Should maintain same security guarantees as V1 (see `test_RevertIf_signContractWithEscrowUndefinedFinalizer`)
+
+**Interface addition:**
+```solidity
+function signAgreementWithEscrow(
+    address escrowSigner,
+    bytes32 agreementId,
+    bytes calldata partyData,
+    bytes calldata signature,
+    bool fillUnallocated,
+    string calldata secret
+) external;
+```
+
+### 2. Negotiation Mechanism for Agreement Modifications
+
+Currently, `templateData` is immutable after agreement creation. Consider supporting a negotiation flow where parties can propose and agree to modifications.
+
+**Option A: Git-style Patch to .typ Wording (Complex)**
+- Store patches/diffs to the template wording
+- All parties must sign off on patches
+- Versioned document history
+- Requires sophisticated diff/patch validation
+
+**Option B: Mutable templateData (Simpler Interim)**
+- Allow modification proposals to `templateData`
+- Any party can propose a change
+- Other parties can accept/reject
+- Once all parties accept new data, agreement updates
+- Track revision history
+
+**Implementation approach for Option B:**
+```solidity
+struct ModificationProposal {
+    bytes32 agreementId;
+    bytes proposedTemplateData;
+    address proposer;
+    uint256 proposedAt;
+    mapping(address => bool) acceptedBy;
+    uint256 acceptances;
+    bool executed;
+}
+
+// Propose a modification
+function proposeModification(
+    bytes32 agreementId,
+    bytes calldata newTemplateData
+) external returns (bytes32 proposalId);
+
+// Accept a proposed modification
+function acceptModification(bytes32 proposalId) external;
+
+// Events
+event ModificationProposed(bytes32 indexed agreementId, bytes32 indexed proposalId, address proposer);
+event ModificationAccepted(bytes32 indexed proposalId, address acceptor);
+event ModificationExecuted(bytes32 indexed agreementId, bytes32 indexed proposalId);
+```
+
+**Considerations:**
+- Modifications should only be allowed before finalization
+- May need to reset signatures after modification (optional)
+- Template must validate new data structure
+- Gas costs for storing proposal history
+
+---
+
 ## Success Criteria
 
 1. ✅ Agreement creation with typed template data

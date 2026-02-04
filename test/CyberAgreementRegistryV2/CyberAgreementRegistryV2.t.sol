@@ -331,7 +331,7 @@ contract CyberAgreementRegistryV2Test is Test {
             address(template),
             _getTemplateData(),
             _getParties(),
-            partyDataEncoded,
+            partyDataEncoded[0],
             alicePrivateKey
         );
 
@@ -374,7 +374,7 @@ contract CyberAgreementRegistryV2Test is Test {
             address(template),
             _getTemplateData(),
             _getParties(),
-            partyDataEncoded,
+            partyDataEncoded[0],
             alicePrivateKey
         );
 
@@ -406,7 +406,7 @@ contract CyberAgreementRegistryV2Test is Test {
             address(template),
             _getTemplateData(),
             _getParties(),
-            partyDataEncoded,
+            partyDataEncoded[0],
             alicePrivateKey
         );
 
@@ -434,7 +434,7 @@ contract CyberAgreementRegistryV2Test is Test {
             address(template),
             _getTemplateData(),
             _getParties(),
-            partyDataEncoded,
+            partyDataEncoded[0],
             chadPrivateKey // Chad's key, not Alice's
         );
 
@@ -454,6 +454,13 @@ contract CyberAgreementRegistryV2Test is Test {
         (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreement();
 
         // Chad tries to sign but he's not a party
+        IAgreementTemplate.PartyData memory chadPartyData = IAgreementTemplate.PartyData({
+            name: "Chad",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "chad@example.com",
+            jurisdiction: ""
+        });
+
         bytes memory signature = CyberAgreementV2Utils.signAgreement(
             vm,
             registry.DOMAIN_SEPARATOR(),
@@ -462,16 +469,9 @@ contract CyberAgreementRegistryV2Test is Test {
             address(template),
             _getTemplateData(),
             _getParties(),
-            partyDataEncoded,
+            abi.encode(chadPartyData),
             chadPrivateKey
         );
-
-        IAgreementTemplate.PartyData memory chadPartyData = IAgreementTemplate.PartyData({
-            name: "Chad",
-            partyType: IAgreementTemplate.PartyType.Individual,
-            contactDetails: "chad@example.com",
-            jurisdiction: ""
-        });
 
         vm.prank(chad);
         vm.expectRevert(CyberAgreementRegistryV2.NotAParty.selector);
@@ -496,7 +496,7 @@ contract CyberAgreementRegistryV2Test is Test {
             address(template),
             _getTemplateData(),
             _getParties(),
-            partyDataEncoded,
+            partyDataEncoded[0],
             chadPrivateKey // Chad signs with his own key
         );
 
@@ -543,7 +543,7 @@ contract CyberAgreementRegistryV2Test is Test {
             address(template),
             _getTemplateData(),
             _getParties(),
-            partyDataEncoded,
+            partyDataEncoded[0],
             chadPrivateKey
         );
 
@@ -574,7 +574,7 @@ contract CyberAgreementRegistryV2Test is Test {
             address(template),
             _getTemplateData(),
             _getParties(),
-            partyDataEncoded,
+            partyDataEncoded[0],
             chadPrivateKey
         );
 
@@ -923,7 +923,7 @@ contract CyberAgreementRegistryV2Test is Test {
             address(template),
             templateData,
             parties,
-            partyData,
+            partyData[0],
             alicePrivateKey
         );
 
@@ -1063,6 +1063,9 @@ contract CyberAgreementRegistryV2Test is Test {
         uint256 privateKey,
         uint256 partyIndex
     ) internal {
+        // Each party now signs only their own party data
+        bytes memory ownPartyData = partyDataEncoded[partyIndex];
+        
         bytes memory signature = CyberAgreementV2Utils.signAgreement(
             vm,
             registry.DOMAIN_SEPARATOR(),
@@ -1071,12 +1074,12 @@ contract CyberAgreementRegistryV2Test is Test {
             address(template),
             _getTemplateData(),
             _getParties(),
-            partyDataEncoded,
+            ownPartyData, // Only signer's party data
             privateKey
         );
 
         vm.prank(party);
-        registry.signAgreement(agreementId, partyDataEncoded[partyIndex], signature, false, "");
+        registry.signAgreement(agreementId, ownPartyData, signature, false, "");
     }
 
     function _getTemplateData() internal view returns (bytes memory) {
@@ -1291,7 +1294,7 @@ contract CyberAgreementRegistryV2Test is Test {
             address(template),
             _getTemplateData(),
             _getParties(),
-            partyDataEncoded,
+            partyDataEncoded[0],
             chadPrivateKey
         );
 
@@ -1319,7 +1322,7 @@ contract CyberAgreementRegistryV2Test is Test {
             address(template),
             _getTemplateData(),
             _getParties(),
-            partyDataEncoded,
+            partyDataEncoded[0],
             alicePrivateKey
         );
 
@@ -1388,5 +1391,185 @@ contract CyberAgreementRegistryV2Test is Test {
         vm.prank(alice);
         vm.expectRevert(CyberAgreementRegistryV2.AgreementAlreadyVoided.selector);
         registry.voidAgreement(agreementId, voidSignature);
+    }
+
+    /**
+     * @notice Test that demonstrates parties can now sign independently
+     * @dev Each party signs only their own party data. The hash no longer includes
+     * other parties' data, so Bob can sign with different data than what was 
+     * stored at creation time.
+     */
+    function test_AsyncSigningWithIndependentPartyData() public {
+        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
+            .SaleAgreementData({
+            assetAddress: address(0x1234),
+            assetAmount: 100,
+            purchasePrice: 1 ether,
+            paymentToken: address(0),
+            deliveryDate: block.timestamp + 1 days,
+            description: "Test sale"
+        });
+
+        bytes memory templateData = abi.encode(saleData);
+
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        // At creation time, we provide placeholder data for Bob
+        bytes[] memory initialPartyData = new bytes[](2);
+        
+        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+            name: "Alice",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "alice@example.com",
+            jurisdiction: ""
+        });
+        initialPartyData[0] = abi.encode(alicePartyData);
+        
+        // Bob's placeholder data at creation
+        IAgreementTemplate.PartyData memory placeholderBobData = IAgreementTemplate.PartyData({
+            name: "Bob_Placeholder",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "placeholder@example.com",
+            jurisdiction: ""
+        });
+        initialPartyData[1] = abi.encode(placeholderBobData);
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createAgreement(
+            address(template),
+            templateData,
+            parties,
+            initialPartyData,
+            chad, // Use finalizer to prevent auto-finalize
+            block.timestamp + 7 days
+        );
+
+        // Alice signs with only her party data (not Bob's)
+        bytes memory aliceSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(template),
+            templateData,
+            parties,
+            abi.encode(alicePartyData), // Only Alice's data
+            alicePrivateKey
+        );
+
+        vm.prank(alice);
+        registry.signAgreement(agreementId, abi.encode(alicePartyData), aliceSignature, false, "");
+        assertTrue(registry.hasSigned(agreementId, alice), "Alice should have signed");
+
+        // Later, Bob signs with his REAL data (different from placeholder)
+        // This now works because Bob's signature only includes his own data
+        IAgreementTemplate.PartyData memory realBobData = IAgreementTemplate.PartyData({
+            name: "Bob",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "bob@real-email.com", // Different from placeholder!
+            jurisdiction: ""
+        });
+
+        bytes memory bobSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(template),
+            templateData,
+            parties,
+            abi.encode(realBobData), // Only Bob's data
+            bobPrivateKey
+        );
+
+        // Bob can now sign independently with his real data
+        vm.prank(bob);
+        registry.signAgreement(agreementId, abi.encode(realBobData), bobSignature, false, "");
+        
+        // Both parties successfully signed with independent data
+        assertTrue(registry.hasSigned(agreementId, bob), "Bob should be able to sign with his real data");
+    }
+
+    /**
+     * @notice Test creating agreement without party data
+     * @dev Party data is now optional at creation time
+     */
+    function test_CreateAgreementWithoutPartyData() public {
+        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
+            .SaleAgreementData({
+            assetAddress: address(0x1234),
+            assetAmount: 100,
+            purchasePrice: 1 ether,
+            paymentToken: address(0),
+            deliveryDate: block.timestamp + 1 days,
+            description: "Test sale"
+        });
+
+        bytes memory templateData = abi.encode(saleData);
+
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        // Create agreement with empty party data array
+        bytes[] memory emptyPartyData = new bytes[](0);
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createAgreement(
+            address(template),
+            templateData,
+            parties,
+            emptyPartyData, // No party data provided
+            address(0), // No finalizer
+            block.timestamp + 7 days
+        );
+
+        // Verify agreement was created successfully
+        (
+            address storedTemplate,
+            bytes memory storedTemplateData,
+            address[] memory storedParties,
+            uint256[] memory signedAt,
+            bool isComplete,
+            bool finalized,
+            bool voided
+        ) = registry.getAgreement(agreementId);
+
+        assertEq(storedTemplate, address(template), "Template mismatch");
+        assertEq(storedTemplateData, templateData, "Template data mismatch");
+        assertEq(storedParties.length, 2, "Party count mismatch");
+        assertEq(storedParties[0], alice, "First party mismatch");
+        assertEq(storedParties[1], bob, "Second party mismatch");
+        assertFalse(isComplete, "Should not be complete");
+        assertFalse(finalized, "Should not be finalized");
+        assertFalse(voided, "Should not be voided");
+        assertEq(signedAt[0], 0, "Alice should not have signed");
+        assertEq(signedAt[1], 0, "Bob should not have signed");
+
+        // Alice can now sign with her data
+        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+            name: "Alice",
+            partyType: IAgreementTemplate.PartyType.Individual,
+            contactDetails: "alice@example.com",
+            jurisdiction: ""
+        });
+
+        bytes memory aliceSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(template),
+            templateData,
+            parties,
+            abi.encode(alicePartyData),
+            alicePrivateKey
+        );
+
+        vm.prank(alice);
+        registry.signAgreement(agreementId, abi.encode(alicePartyData), aliceSignature, false, "");
+        assertTrue(registry.hasSigned(agreementId, alice), "Alice should have signed");
     }
 }

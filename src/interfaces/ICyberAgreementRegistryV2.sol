@@ -240,11 +240,12 @@ interface ICyberAgreementRegistryV2 {
     function getAgreementsForParty(address party) external view returns (bytes32[] memory);
 
     /**
-     * @notice Returns the EIP-712 hash of an agreement for signing
+     * @notice Returns the EIP-712 hash for a specific signer with their party data
      * @param agreementId The agreement identifier
-     * @return bytes32 The agreement hash
+     * @param partyData The signer's encoded party data
+     * @return bytes32 The agreement hash for the signer to sign
      */
-    function getAgreementHash(bytes32 agreementId) external view returns (bytes32);
+    function getAgreementHashForSigner(bytes32 agreementId, bytes memory partyData) external view returns (bytes32);
 
     /**
      * @notice Checks if a party has requested voiding

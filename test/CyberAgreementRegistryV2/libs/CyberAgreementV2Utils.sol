@@ -57,7 +57,7 @@ library CyberAgreementV2Utils {
      * @param template The template contract address
      * @param templateData The encoded template data
      * @param parties Array of party addresses
-     * @param partyData Array of encoded party data
+     * @param partyData The signer's encoded party data (not all parties)
      * @param privKey The private key to sign with
      * @return signature The EIP-712 signature
      */
@@ -69,7 +69,7 @@ library CyberAgreementV2Utils {
         address template,
         bytes memory templateData,
         address[] memory parties,
-        bytes[] memory partyData,
+        bytes memory partyData,
         uint256 privKey
     ) internal pure returns (bytes memory signature) {
         // Hash template data
@@ -78,12 +78,8 @@ library CyberAgreementV2Utils {
         // Hash parties array
         bytes32 partiesHash = keccak256(abi.encodePacked(parties));
 
-        // Hash party data array
-        bytes32[] memory partyDataHashes = new bytes32[](partyData.length);
-        for (uint256 i = 0; i < partyData.length; i++) {
-            partyDataHashes[i] = keccak256(partyData[i]);
-        }
-        bytes32 partyDataArrayHash = keccak256(abi.encodePacked(partyDataHashes));
+        // Hash signer's party data only
+        bytes32 partyDataHash = keccak256(partyData);
 
         // Create struct hash
         bytes32 structHash = keccak256(
@@ -93,7 +89,7 @@ library CyberAgreementV2Utils {
                 template,
                 templateDataHash,
                 partiesHash,
-                partyDataArrayHash
+                partyDataHash
             )
         );
 

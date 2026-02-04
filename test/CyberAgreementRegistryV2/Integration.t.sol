@@ -545,7 +545,7 @@ contract IntegrationTest is Test {
             address(simpleTemplate),
             templateData,
             parties,
-            partyData,
+            partyData[0],
             alicePrivateKey
         );
 
@@ -564,7 +564,7 @@ contract IntegrationTest is Test {
             address(simpleTemplate),
             templateData,
             parties,
-            partyData,
+            partyData[1],
             bobPrivateKey
         );
 
@@ -700,7 +700,7 @@ contract IntegrationTest is Test {
             address(simpleTemplate),
             templateData,
             parties,
-            partyData,
+            partyData[partyIndex],
             privateKey
         );
 
@@ -725,7 +725,7 @@ contract IntegrationTest is Test {
             template,
             "", // empty template data for test template
             parties,
-            partyData,
+            partyData[partyIndex],
             privateKey
         );
 
