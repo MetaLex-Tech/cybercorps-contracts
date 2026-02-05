@@ -198,7 +198,7 @@ contract CyberAgreementRegistryV2 is
 
         // Validate template data
         IAgreementTemplate templateContract = IAgreementTemplate(template);
-        if (!templateContract.validateTemplateData(templateData)) {
+        if (!templateContract.validate(templateData)) {
             revert InvalidTemplate();
         }
 
@@ -233,13 +233,8 @@ contract CyberAgreementRegistryV2 is
 
         // Store party data and track agreements per party
         for (uint256 i = 0; i < parties.length; i++) {
-            // Validate and store party data if provided
+            // Store party data if provided (validation is handled by frontend or template)
             if (partyData.length > 0 && partyData[i].length > 0) {
-                IAgreementTemplate.PartyData memory decodedPartyData = templateContract
-                    .decodePartyData(partyData[i]);
-                if (!templateContract.validatePartyData(decodedPartyData)) {
-                    revert InvalidTemplate();
-                }
                 agreement.partyData[parties[i]] = partyData[i];
             }
             agreementsForParty[parties[i]].push(agreementId);
@@ -336,8 +331,8 @@ contract CyberAgreementRegistryV2 is
             revert NotAParty();
         }
 
-        // Validate party data and verify signature
-        _validatePartyDataAndSignature(agreement, escrowSigner, partyData, signature, agreementId);
+        // Verify signature (party data validation is optional, handled by template or frontend)
+        _validatePartySignature(agreement, escrowSigner, partyData, signature, agreementId);
 
         // Handle fillUnallocated - replace zero address with escrow signer
         if (fillUnallocated && agreement.parties[partyIndex] == address(0)) {
@@ -381,8 +376,8 @@ contract CyberAgreementRegistryV2 is
 
         uint256 partyIndex = _validateAgreementForSigning(agreement, signer, fillUnallocated);
 
-        // Validate party data and verify signature
-        _validatePartyDataAndSignature(agreement, signer, partyData, signature, agreementId);
+        // Verify signature (party data validation is optional, handled by template or frontend)
+        _validatePartySignature(agreement, signer, partyData, signature, agreementId);
 
         // Handle fillUnallocated - replace zero address with signer
         if (fillUnallocated && agreement.parties[partyIndex] == address(0)) {
@@ -460,23 +455,17 @@ contract CyberAgreementRegistryV2 is
     }
 
     /**
-     * @notice Validates party data and signature
+     * @notice Validates party signature
      * @dev Each party signs only their own party data, not all parties' data
+     * @dev Party data validation is optional and handled by the template or frontend
      */
-    function _validatePartyDataAndSignature(
+    function _validatePartySignature(
         Agreement storage agreement,
         address signer,
         bytes calldata partyData,
         bytes calldata signature,
         bytes32 agreementId
     ) internal view {
-        // Validate party data
-        IAgreementTemplate template = IAgreementTemplate(agreement.template);
-        IAgreementTemplate.PartyData memory decodedPartyData = template.decodePartyData(partyData);
-        if (!template.validatePartyData(decodedPartyData)) {
-            revert InvalidTemplate();
-        }
-
         // Verify EIP-712 signature
         bytes32 agreementHash = getAgreementHashForSigner(agreementId, partyData);
         address recoveredSigner = _recoverSigner(agreementHash, signature);
@@ -638,16 +627,10 @@ contract CyberAgreementRegistryV2 is
         bool revertOnFailure
     ) internal view returns (bool) {
         IAgreementTemplate template = IAgreementTemplate(agreement.template);
-        ICondition[] memory conditions = template.getClosingConditions();
+        address[] memory conditions = template.getClosingConditions();
 
         for (uint256 i = 0; i < conditions.length; i++) {
-            if (
-                !conditions[i].checkCondition(
-                    address(this),
-                    this.finalizeAgreement.selector,
-                    abi.encode(agreementId)
-                )
-            ) {
+            if (!ICondition(conditions[i]).check(agreementId)) {
                 if (revertOnFailure) {
                     revert ConditionsNotMet();
                 }
@@ -941,7 +924,7 @@ contract CyberAgreementRegistryV2 is
         // Validate new template data if provided
         if (newTemplateData.length > 0) {
             IAgreementTemplate template = IAgreementTemplate(agreement.template);
-            if (!template.validateTemplateData(newTemplateData)) {
+            if (!template.validate(newTemplateData)) {
                 revert InvalidTemplate();
             }
         }
