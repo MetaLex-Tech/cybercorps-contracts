@@ -294,6 +294,8 @@ contract IssuanceManagerConversionTest is Test {
             0,
             1,
             1,
+            new uint256[](0),
+            false,
             true,
             true,
             true
@@ -381,6 +383,8 @@ contract IssuanceManagerConversionTest is Test {
             0,
             1,
             1,
+            new uint256[](0),
+            false,
             true,
             true,
             true
@@ -432,6 +436,8 @@ contract IssuanceManagerConversionTest is Test {
             0,
             1,
             1,
+            new uint256[](0),
+            false,
             true,
             true,
             true
@@ -452,6 +458,176 @@ contract IssuanceManagerConversionTest is Test {
             1
         );
         assertEq(newDetails.unitsRepresented, 4);
+    }
+
+    function test_ScripifyWhitelist_EnabledBlocksNonWhitelisted() public {
+        MockCertPrinter certPrinter = new MockCertPrinter();
+        certPrinter.initialize(
+            new string[](0),
+            "Cert",
+            "CERT",
+            "uri://cert",
+            address(issuanceManager),
+            SecurityClass.CommonStock,
+            SecuritySeries.SeriesA,
+            address(0)
+        );
+
+        CertificateDetails memory details = CertificateDetails({
+            signingOfficerName: "Officer",
+            signingOfficerTitle: "Title",
+            investmentAmountUSD: 1000,
+            issuerUSDValuationAtTimeOfInvestment: 10000,
+            unitsRepresented: 10,
+            legalDetails: "",
+            extensionData: ""
+        });
+
+        vm.prank(owner);
+        uint256 certId = issuanceManager.createCert(
+            address(certPrinter),
+            investor,
+            details
+        );
+
+        issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            0,
+            1,
+            1,
+            new uint256[](0),
+            true,
+            true,
+            true,
+            true
+        );
+
+        vm.prank(investor);
+        vm.expectRevert(IssuanceManager.ScripifyNotWhitelisted.selector);
+        issuanceManager.scripifyCert(address(certPrinter), certId, 1, address(0));
+    }
+
+    function test_ScripifyWhitelist_EnabledAllowsWhitelisted() public {
+        MockCertPrinter certPrinter = new MockCertPrinter();
+        certPrinter.initialize(
+            new string[](0),
+            "Cert",
+            "CERT",
+            "uri://cert",
+            address(issuanceManager),
+            SecurityClass.CommonStock,
+            SecuritySeries.SeriesA,
+            address(0)
+        );
+
+        CertificateDetails memory details = CertificateDetails({
+            signingOfficerName: "Officer",
+            signingOfficerTitle: "Title",
+            investmentAmountUSD: 1000,
+            issuerUSDValuationAtTimeOfInvestment: 10000,
+            unitsRepresented: 10,
+            legalDetails: "",
+            extensionData: ""
+        });
+
+        vm.prank(owner);
+        uint256 certId = issuanceManager.createCert(
+            address(certPrinter),
+            investor,
+            details
+        );
+
+        uint256[] memory whitelistIds = new uint256[](1);
+        whitelistIds[0] = certId;
+        issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            0,
+            1,
+            1,
+            whitelistIds,
+            true,
+            true,
+            true,
+            true
+        );
+
+        vm.prank(investor);
+        issuanceManager.scripifyCert(address(certPrinter), certId, 1, address(0));
+    }
+
+    function test_ScripifyWhitelist_ToggleAndUpdate() public {
+        MockCertPrinter certPrinter = new MockCertPrinter();
+        certPrinter.initialize(
+            new string[](0),
+            "Cert",
+            "CERT",
+            "uri://cert",
+            address(issuanceManager),
+            SecurityClass.CommonStock,
+            SecuritySeries.SeriesA,
+            address(0)
+        );
+
+        CertificateDetails memory details = CertificateDetails({
+            signingOfficerName: "Officer",
+            signingOfficerTitle: "Title",
+            investmentAmountUSD: 1000,
+            issuerUSDValuationAtTimeOfInvestment: 10000,
+            unitsRepresented: 10,
+            legalDetails: "",
+            extensionData: ""
+        });
+
+        vm.prank(owner);
+        uint256 certId = issuanceManager.createCert(
+            address(certPrinter),
+            investor,
+            details
+        );
+
+        issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            0,
+            1,
+            1,
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+
+        // Enable whitelist and add ID
+        issuanceManager.setScripifyWhitelistEnabled(address(certPrinter), true);
+        uint256[] memory addIds = new uint256[](1);
+        addIds[0] = certId;
+        issuanceManager.addScripifyWhitelistIds(address(certPrinter), addIds);
+
+        vm.prank(investor);
+        issuanceManager.scripifyCert(address(certPrinter), certId, 1, address(0));
+
+        // Remove ID and ensure blocked
+        uint256[] memory removeIds = new uint256[](1);
+        removeIds[0] = certId;
+        issuanceManager.removeScripifyWhitelistIds(address(certPrinter), removeIds);
+
+        vm.prank(investor);
+        vm.expectRevert(IssuanceManager.ScripifyNotWhitelisted.selector);
+        issuanceManager.scripifyCert(address(certPrinter), certId, 1, address(0));
+
+        // Disable whitelist and allow again
+        issuanceManager.setScripifyWhitelistEnabled(address(certPrinter), false);
+        vm.prank(investor);
+        issuanceManager.scripifyCert(address(certPrinter), certId, 1, address(0));
     }
 
     function test_GetScripRatio_DefaultsToOneWhenUnset() public {
@@ -495,6 +671,8 @@ contract IssuanceManagerConversionTest is Test {
             0,
             1,
             1,
+            new uint256[](0),
+            false,
             true,
             true,
             true
@@ -560,6 +738,8 @@ contract IssuanceManagerConversionTest is Test {
             0,
             1,
             1,
+            new uint256[](0),
+            false,
             true,
             true,
             true
@@ -593,6 +773,8 @@ contract IssuanceManagerConversionTest is Test {
             0,
             1,
             1,
+            new uint256[](0),
+            false,
             true,
             true,
             true

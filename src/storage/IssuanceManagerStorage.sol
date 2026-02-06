@@ -61,6 +61,8 @@ library IssuanceManagerStorage {
         mapping(address => ICondition[]) scripToCertConditions;
         mapping(address => uint256) scripToCertMinimums;
         mapping(address => ScripRatio) scripRatios;
+        mapping(address => bool) scripifyWhitelistEnabled;
+        mapping(address => mapping(uint256 => bool)) scripifyWhitelist;
     }
 
     struct ScripRatio {
@@ -191,6 +193,34 @@ library IssuanceManagerStorage {
 
     function setScripToCertMinimum(address certAddress, uint256 minimum) internal {
         issuanceManagerStorage().scripToCertMinimums[certAddress] = minimum;
+    }
+
+    function isScripifyWhitelisted(
+        address certAddress,
+        uint256 id
+    ) internal view returns (bool) {
+        return issuanceManagerStorage().scripifyWhitelist[certAddress][id];
+    }
+
+    function setScripifyWhitelistEnabled(
+        address certAddress,
+        bool enabled
+    ) internal {
+        issuanceManagerStorage().scripifyWhitelistEnabled[certAddress] = enabled;
+    }
+
+    function getScripifyWhitelistEnabled(
+        address certAddress
+    ) internal view returns (bool) {
+        return issuanceManagerStorage().scripifyWhitelistEnabled[certAddress];
+    }
+
+    function setScripifyWhitelisted(
+        address certAddress,
+        uint256 id,
+        bool isWhitelisted
+    ) internal {
+        issuanceManagerStorage().scripifyWhitelist[certAddress][id] = isWhitelisted;
     }
 
     function setCertToScripConditions(address certAddress, ICondition[] memory conditions) internal {

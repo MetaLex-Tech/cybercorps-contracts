@@ -76,6 +76,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     error InvalidScripRatio();
     error ScripRatioRemainder();
     error ScripToCertMinimumNotMet();
+    error ScripifyNotWhitelisted();
     event ScripifiedCert(
         address indexed certAddress,
         uint256 indexed id,
@@ -105,6 +106,12 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     event CertPrinterBeaconImplementationUpgraded(address implementation);
     event ScripBeaconImplementationUpgraded(address implementation);
     event ScripToCertMinimumSet(address indexed certAddress, uint256 minimum);
+    event ScripifyWhitelistEnabledSet(address indexed certAddress, bool enabled);
+    event ScripifyWhitelistUpdated(
+        address indexed certAddress,
+        uint256 indexed id,
+        bool isWhitelisted
+    );
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -573,6 +580,42 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         emit ScripToCertMinimumSet(certAddress, minimum);
     }
 
+    function setScripifyWhitelistEnabled(
+        address certAddress,
+        bool enabled
+    ) external onlyOwner {
+        IssuanceManagerStorage.setScripifyWhitelistEnabled(certAddress, enabled);
+        emit ScripifyWhitelistEnabledSet(certAddress, enabled);
+    }
+
+    function addScripifyWhitelistIds(
+        address certAddress,
+        uint256[] memory ids
+    ) external onlyOwner {
+        for (uint256 i = 0; i < ids.length; i++) {
+            IssuanceManagerStorage.setScripifyWhitelisted(
+                certAddress,
+                ids[i],
+                true
+            );
+            emit ScripifyWhitelistUpdated(certAddress, ids[i], true);
+        }
+    }
+
+    function removeScripifyWhitelistIds(
+        address certAddress,
+        uint256[] memory ids
+    ) external onlyOwner {
+        for (uint256 i = 0; i < ids.length; i++) {
+            IssuanceManagerStorage.setScripifyWhitelisted(
+                certAddress,
+                ids[i],
+                false
+            );
+            emit ScripifyWhitelistUpdated(certAddress, ids[i], false);
+        }
+    }
+
     /// @notice Adds a default legend to a certificate contract
     /// @dev Only callable by admin
     /// @param certAddress Address of the certificate printer contract
@@ -634,11 +677,11 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         uint256 scripToCertMinimum,
         uint256 scripRatioNumerator,
         uint256 scripRatioDenominator,
+        uint256[] memory scripifyWhitelistIds,
+        bool scripifyWhitelistEnabled,
         bool enableForceTransfer,
         bool enableForceBurn,
         bool enableFreeze
-        // TODO TBD: changed to external for now but final design may change
-        //    ) internal returns (address) {
     ) external returns (address) {
         if (scripRatioNumerator == 0 || scripRatioDenominator == 0) {
             revert InvalidScripRatio();
@@ -682,6 +725,23 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             scripRatioDenominator
         );
         emit ScripToCertMinimumSet(certAddress, scripToCertMinimum);
+        IssuanceManagerStorage.setScripifyWhitelistEnabled(
+            certAddress,
+            scripifyWhitelistEnabled
+        );
+        emit ScripifyWhitelistEnabledSet(certAddress, scripifyWhitelistEnabled);
+        for (uint256 i = 0; i < scripifyWhitelistIds.length; i++) {
+            IssuanceManagerStorage.setScripifyWhitelisted(
+                certAddress,
+                scripifyWhitelistIds[i],
+                true
+            );
+            emit ScripifyWhitelistUpdated(
+                certAddress,
+                scripifyWhitelistIds[i],
+                true
+            );
+        }
         return newScrip;
     }
 
@@ -753,6 +813,12 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         );
         if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
 
+        if (IssuanceManagerStorage.getScripifyWhitelistEnabled(certAddress)) {
+            if (!IssuanceManagerStorage.isScripifyWhitelisted(certAddress, id)) {
+                revert ScripifyNotWhitelisted();
+            }
+        }
+
         // Check all cert-to-scrip conditions
         ICondition[] storage conditions = IssuanceManagerStorage
             .getCertToScripConditions(certAddress);
@@ -811,6 +877,19 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
 
     function getScripToCertMinimum(address certAddress) external view returns (uint256) {
         return IssuanceManagerStorage.getScripToCertMinimum(certAddress);
+    }
+
+    function getScripifyWhitelistEnabled(
+        address certAddress
+    ) external view returns (bool) {
+        return IssuanceManagerStorage.getScripifyWhitelistEnabled(certAddress);
+    }
+
+    function isScripifyWhitelisted(
+        address certAddress,
+        uint256 id
+    ) external view returns (bool) {
+        return IssuanceManagerStorage.isScripifyWhitelisted(certAddress, id);
     }
 
     function convertScripToCert(address certAddress, uint256 amount) external {

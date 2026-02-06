@@ -208,6 +208,8 @@ interface IIssuanceManager {
         uint256 scripToCertMinimum,
         uint256 scripRatioNumerator,
         uint256 scripRatioDenominator,
+        uint256[] memory scripifyWhitelistIds,
+        bool scripifyWhitelistEnabled,
         bool enableForceTransfer,
         bool enableForceBurn,
         bool enableFreeze
@@ -238,6 +240,30 @@ interface IIssuanceManager {
     function getScripToCertMinimum(
         address certAddress
     ) external view returns (uint256);
+
+    function setScripifyWhitelistEnabled(
+        address certAddress,
+        bool enabled
+    ) external;
+
+    function addScripifyWhitelistIds(
+        address certAddress,
+        uint256[] memory ids
+    ) external;
+
+    function removeScripifyWhitelistIds(
+        address certAddress,
+        uint256[] memory ids
+    ) external;
+
+    function getScripifyWhitelistEnabled(
+        address certAddress
+    ) external view returns (bool);
+
+    function isScripifyWhitelisted(
+        address certAddress,
+        uint256 id
+    ) external view returns (bool);
 
     function convertScripToCert(
         address certAddress,
