@@ -75,7 +75,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     error NotRefImplementation();
     error InvalidScripRatio();
     error ScripRatioRemainder();
-
+    error ScripToCertMinimumNotMet();
     event ScripifiedCert(
         address indexed certAddress,
         uint256 indexed id,
@@ -104,6 +104,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
     event CertPrinterBeaconImplementationUpgraded(address implementation);
     event ScripBeaconImplementationUpgraded(address implementation);
+    event ScripToCertMinimumSet(address indexed certAddress, uint256 minimum);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -560,6 +561,18 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         certificate.setTokenTransferable(tokenId, value);
     }
 
+    /// @notice Sets the minimum scrip amount required to convert back into certs
+    /// @dev Only callable by owner; set to 0 to disable the minimum
+    /// @param certAddress Address of the certificate printer contract
+    /// @param minimum Minimum amount required for scrip-to-cert conversion
+    function setScripToCertMinimum(
+        address certAddress,
+        uint256 minimum
+    ) external onlyOwner {
+        IssuanceManagerStorage.setScripToCertMinimum(certAddress, minimum);
+        emit ScripToCertMinimumSet(certAddress, minimum);
+    }
+
     /// @notice Adds a default legend to a certificate contract
     /// @dev Only callable by admin
     /// @param certAddress Address of the certificate printer contract
@@ -617,10 +630,19 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         address certAddress,
         ITransferRestrictionHook[] memory typeRestrictionHooks,
         ICondition[] memory certToScripConditions,
-        ICondition[] memory scripToCertConditions
+        ICondition[] memory scripToCertConditions,
+        uint256 scripToCertMinimum,
+        uint256 scripRatioNumerator,
+        uint256 scripRatioDenominator,
+        bool enableForceTransfer,
+        bool enableForceBurn,
+        bool enableFreeze
         // TODO TBD: changed to external for now but final design may change
         //    ) internal returns (address) {
     ) external returns (address) {
+        if (scripRatioNumerator == 0 || scripRatioDenominator == 0) {
+            revert InvalidScripRatio();
+        }
         bytes32 salt = keccak256(abi.encodePacked(certAddress, address(this)));
         address newScrip = Create2.deploy(0, salt, _getBytecodeScrip());
         ICyberScrip(newScrip).initialize(
@@ -637,10 +659,9 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
                 )
             ),
             typeRestrictionHooks,
-            // TODO TBD: placeholder just to make tests work
-            true,
-            true,
-            true
+            enableForceTransfer,
+            enableForceBurn,
+            enableFreeze
         );
         IssuanceManagerStorage.setScripifiedCert(certAddress, newScrip);
         IssuanceManagerStorage.setCertToScripConditions(
@@ -651,8 +672,68 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             certAddress,
             scripToCertConditions
         );
-        _initDefaultScripRatio(certAddress);
+        IssuanceManagerStorage.setScripToCertMinimum(
+            certAddress,
+            scripToCertMinimum
+        );
+        IssuanceManagerStorage.setScripRatio(
+            certAddress,
+            scripRatioNumerator,
+            scripRatioDenominator
+        );
+        emit ScripToCertMinimumSet(certAddress, scripToCertMinimum);
         return newScrip;
+    }
+
+    function setScripRestrictionHooks(
+        address certAddress,
+        ITransferRestrictionHook[] memory hooks
+    ) external onlyAdmin {
+        address scripifiedCert = _getScripForCert(certAddress);
+        ICyberScrip(scripifiedCert).setRestrictionHook(hooks);
+    }
+
+    function disableScripForceTransfer(address certAddress) external onlyOwner {
+        address scripifiedCert = _getScripForCert(certAddress);
+        ICyberScrip(scripifiedCert).disableForceTransfer();
+    }
+
+    function disableScripForceBurn(address certAddress) external onlyOwner {
+        address scripifiedCert = _getScripForCert(certAddress);
+        ICyberScrip(scripifiedCert).disableForceBurn();
+    }
+
+    function disableScripFreeze(address certAddress) external onlyOwner {
+        address scripifiedCert = _getScripForCert(certAddress);
+        ICyberScrip(scripifiedCert).disableFreeze();
+    }
+
+    function setScripFrozen(
+        address certAddress,
+        address account,
+        bool isFrozen
+    ) external onlyAdmin {
+        address scripifiedCert = _getScripForCert(certAddress);
+        ICyberScrip(scripifiedCert).setFrozen(account, isFrozen);
+    }
+
+    function forceScripTransfer(
+        address certAddress,
+        address from,
+        address to,
+        uint256 amount
+    ) external onlyAdmin {
+        address scripifiedCert = _getScripForCert(certAddress);
+        ICyberScrip(scripifiedCert).forceTransfer(from, to, amount);
+    }
+
+    function forceScripBurn(
+        address certAddress,
+        address account,
+        uint256 amount
+    ) external onlyAdmin {
+        address scripifiedCert = _getScripForCert(certAddress);
+        ICyberScrip(scripifiedCert).forceBurn(account, amount);
     }
 
     /// @notice Convert a certificate into scrip tokens, partially or fully
@@ -728,11 +809,17 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         return IssuanceManagerStorage.getUpgradeFactory();
     }
 
+    function getScripToCertMinimum(address certAddress) external view returns (uint256) {
+        return IssuanceManagerStorage.getScripToCertMinimum(certAddress);
+    }
+
     function convertScripToCert(address certAddress, uint256 amount) external {
         address scripifiedCert = IssuanceManagerStorage.getScripifiedCert(
             certAddress
         );
         if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
+        uint256 minimum = IssuanceManagerStorage.getScripToCertMinimum(certAddress);
+        if (minimum > 0 && amount < minimum) revert ScripToCertMinimumNotMet();
 
         (uint256 numerator, uint256 denominator) = _getScripRatio(certAddress);
         uint256 units = amount * denominator;
@@ -818,6 +905,12 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         }
     }
 
+    function _getScripForCert(address certAddress) private view returns (address) {
+        address scripifiedCert = IssuanceManagerStorage.getScripifiedCert(certAddress);
+        if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
+        return scripifiedCert;
+    }
+
     function _getScripRatio(
         address certAddress
     ) internal view returns (uint256 numerator, uint256 denominator) {
@@ -829,4 +922,5 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             return (1, 1);
         }
     }
+
 }

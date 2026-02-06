@@ -59,6 +59,7 @@ library IssuanceManagerStorage {
         mapping(address => address) scripifiedCert;
         mapping(address => ICondition[]) certToScripConditions;
         mapping(address => ICondition[]) scripToCertConditions;
+        mapping(address => uint256) scripToCertMinimums;
         mapping(address => ScripRatio) scripRatios;
     }
 
@@ -182,6 +183,14 @@ library IssuanceManagerStorage {
         for (uint i = 0; i < conditions.length; i++) {
             issuanceManagerStorage().scripToCertConditions[certAddress].push(conditions[i]);
         }
+    }
+
+    function getScripToCertMinimum(address certAddress) internal view returns (uint256) {
+        return issuanceManagerStorage().scripToCertMinimums[certAddress];
+    }
+
+    function setScripToCertMinimum(address certAddress, uint256 minimum) internal {
+        issuanceManagerStorage().scripToCertMinimums[certAddress] = minimum;
     }
 
     function setCertToScripConditions(address certAddress, ICondition[] memory conditions) internal {

@@ -290,7 +290,13 @@ contract IssuanceManagerConversionTest is Test {
             address(certPrinter),
             hooks,
             certToScrip,
-            scripToCert
+            scripToCert,
+            0,
+            1,
+            1,
+            true,
+            true,
+            true
         );
 
         // Mint scrip to investor via issuance manager
@@ -347,14 +353,14 @@ contract IssuanceManagerConversionTest is Test {
             new SelectorCondition(
                 address(certPrinter),
                 scripifySelector,
-                abi.encode(certId, scripAmount)
+                abi.encode(certId, scripAmount, address(0))
             )
         );
         certToScrip[1] = ICondition(
             new SelectorCondition(
                 address(certPrinter),
                 scripifySelector,
-                abi.encode(certId, scripAmount)
+                abi.encode(certId, scripAmount, address(0))
             )
         );
 
@@ -371,7 +377,13 @@ contract IssuanceManagerConversionTest is Test {
             address(certPrinter),
             new ITransferRestrictionHook[](0),
             certToScrip,
-            scripToCert
+            scripToCert,
+            0,
+            1,
+            1,
+            true,
+            true,
+            true
         );
 
         vm.prank(investor);
@@ -416,7 +428,13 @@ contract IssuanceManagerConversionTest is Test {
             address(certPrinter),
             new ITransferRestrictionHook[](0),
             new ICondition[](0),
-            new ICondition[](0)
+            new ICondition[](0),
+            0,
+            1,
+            1,
+            true,
+            true,
+            true
         );
 
         vm.prank(owner);
@@ -473,7 +491,13 @@ contract IssuanceManagerConversionTest is Test {
             address(certPrinter),
             new ITransferRestrictionHook[](0),
             new ICondition[](0),
-            new ICondition[](0)
+            new ICondition[](0),
+            0,
+            1,
+            1,
+            true,
+            true,
+            true
         );
 
         (uint256 numerator, uint256 denominator) = issuanceManager.getScripRatio(
@@ -532,7 +556,13 @@ contract IssuanceManagerConversionTest is Test {
             address(certPrinter),
             new ITransferRestrictionHook[](0),
             new ICondition[](0),
-            new ICondition[](0)
+            new ICondition[](0),
+            0,
+            1,
+            1,
+            true,
+            true,
+            true
         );
 
         issuanceManager.setScripRatio(address(certPrinter), 2, 3);
@@ -559,7 +589,13 @@ contract IssuanceManagerConversionTest is Test {
             address(certPrinter),
             new ITransferRestrictionHook[](0),
             new ICondition[](0),
-            new ICondition[](0)
+            new ICondition[](0),
+            0,
+            1,
+            1,
+            true,
+            true,
+            true
         );
 
         issuanceManager.setScripRatio(address(certPrinter), 3, 2);

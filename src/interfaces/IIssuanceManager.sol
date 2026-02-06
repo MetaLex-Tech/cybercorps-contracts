@@ -76,6 +76,7 @@ interface IIssuanceManager {
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
     event CertPrinterBeaconImplementationUpgraded(address implementation);
     event ScripBeaconImplementationUpgraded(address implementation);
+    event ScripToCertMinimumSet(address indexed certAddress, uint256 minimum);
 
     // Issuance Manager Functions
     function initialize(
@@ -203,7 +204,13 @@ interface IIssuanceManager {
         address certAddress,
         ITransferRestrictionHook[] memory typeRestrictionHooks,
         ICondition[] memory certToScripConditions,
-        ICondition[] memory scripToCertConditions
+        ICondition[] memory scripToCertConditions,
+        uint256 scripToCertMinimum,
+        uint256 scripRatioNumerator,
+        uint256 scripRatioDenominator,
+        bool enableForceTransfer,
+        bool enableForceBurn,
+        bool enableFreeze
     ) external returns (address);
 
     function scripifyCert(
@@ -222,6 +229,15 @@ interface IIssuanceManager {
     function getScripRatio(
         address certAddress
     ) external view returns (uint256 numerator, uint256 denominator);
+
+    function setScripToCertMinimum(
+        address certAddress,
+        uint256 minimum
+    ) external;
+
+    function getScripToCertMinimum(
+        address certAddress
+    ) external view returns (uint256);
 
     function convertScripToCert(
         address certAddress,
