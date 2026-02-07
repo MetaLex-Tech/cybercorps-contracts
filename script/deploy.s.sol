@@ -26,7 +26,7 @@ contract BaseScript is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         vm.startBroadcast(deployerPrivateKey);
 
-        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunch"));
+        bytes32 salt = bytes32(keccak256("MetaLexCyberCorpLaunchV2.2"));
         uint256 currentChainId = block.chainid;
         address stable;
 
@@ -39,6 +39,8 @@ contract BaseScript is Script {
         } else if (currentChainId == 84532) {
             stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e; // Base Sepolia
         } else if (currentChainId == 11155111) {
+            stable = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238; // Sepolia
+        }else if (currentChainId == 421614) {
             stable = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238; // Sepolia
         } else {
             revert("Unsupported chain ID"); // Handle unsupported chains
