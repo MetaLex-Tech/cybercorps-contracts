@@ -444,6 +444,8 @@ contract CyberCorpUpgradeabilityTest is Test {
                     0, // scripToCertMinimum
                     1, // scripRatioNumerator
                     1, // scripRatioDenominator
+                    new uint256[](0), // scripifyWhitelistIds
+                    false, // scripifyWhitelistEnabled
                     true, // enableForceTransfer
                     true, // enableForceBurn
                     true // enableFreeze
