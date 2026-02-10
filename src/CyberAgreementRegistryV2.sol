@@ -630,7 +630,7 @@ contract CyberAgreementRegistryV2 is
         address[] memory conditions = template.getClosingConditions();
 
         for (uint256 i = 0; i < conditions.length; i++) {
-            if (!ICondition(conditions[i]).check(agreementId)) {
+            if (!ICondition(conditions[i]).checkCondition(address(this), this.finalizeAgreement.selector, abi.encode(agreementId))) {
                 if (revertOnFailure) {
                     revert ConditionsNotMet();
                 }

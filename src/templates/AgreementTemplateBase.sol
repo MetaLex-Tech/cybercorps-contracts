@@ -68,7 +68,12 @@ abstract contract AgreementTemplateBase is IAgreementTemplate, ERC165 {
      * @return Array of condition contract addresses
      * @dev Default implementation returns empty array. Override to add conditions.
      */
-    function getClosingConditions() external view override returns (address[] memory) {
+    function getClosingConditions()
+        external
+        view
+        override
+        returns (address[] memory)
+    {
         return _closingConditions;
     }
 
@@ -78,7 +83,9 @@ abstract contract AgreementTemplateBase is IAgreementTemplate, ERC165 {
      * @return true if valid
      * @dev Default implementation returns true (no validation). Override to add validation.
      */
-    function validate(bytes memory templateData) external view virtual override returns (bool) {
+    function validate(
+        bytes memory templateData
+    ) external view virtual override returns (bool) {
         return true;
     }
 
@@ -97,11 +104,11 @@ abstract contract AgreementTemplateBase is IAgreementTemplate, ERC165 {
 
     /**
      * @notice Sets the content URI for this template
-     * @param contentUri The Arweave URI (format: "ar://<transaction-id>")
+     * @param __contentUri The Arweave URI (format: "ar://<transaction-id>")
      * @dev Internal function to be called during construction
      */
-    function _setContentUri(string memory contentUri) internal {
-        _contentUri = contentUri;
+    function _setContentUri(string memory __contentUri) internal {
+        _contentUri = __contentUri;
     }
 
     /**

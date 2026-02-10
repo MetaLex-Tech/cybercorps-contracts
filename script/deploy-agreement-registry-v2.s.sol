@@ -11,14 +11,16 @@ contract DeployAgreementRegistryV2 is Script {
     function run() public {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         address deployerAddress = vm.addr(deployerPrivateKey);
-        
+
         vm.startBroadcast(deployerPrivateKey);
 
-        bytes32 salt = bytes32(keccak256("CyberAgreementRegistryV2Deploy"));
+        bytes32 salt = bytes32(keccak256("CyberAgreementRegistryV2Deploy001"));
 
         BorgAuth auth = new BorgAuth{salt: salt}(deployerAddress);
 
-        address implementation = address(new CyberAgreementRegistryV2{salt: salt}());
+        address implementation = address(
+            new CyberAgreementRegistryV2{salt: salt}()
+        );
 
         address proxy = address(
             new ERC1967Proxy{salt: salt}(
@@ -32,7 +34,10 @@ contract DeployAgreementRegistryV2 is Script {
 
         vm.stopBroadcast();
 
-        console.log("CyberAgreementRegistryV2 Implementation: `%s`", implementation);
+        console.log(
+            "CyberAgreementRegistryV2 Implementation: `%s`",
+            implementation
+        );
         console.log("CyberAgreementRegistryV2 Proxy: `%s`", proxy);
         console.log("BorgAuth: `%s`", address(auth));
     }

@@ -49,9 +49,11 @@ pragma solidity ^0.8.20;
  */
 interface ICondition {
     /**
-     * @notice Check if condition is satisfied for an agreement
-     * @param agreementId The unique identifier of the agreement
+     * @notice Check if condition is satisfied for a function call
+     * @param _contract The address of the contract being called
+     * @param _functionSignature The function selector being called
+     * @param data Additional data for the condition check
      * @return true if condition passes, false otherwise
      */
-    function check(bytes32 agreementId) external view returns (bool);
+    function checkCondition(address _contract, bytes4 _functionSignature, bytes memory data) external view returns (bool);
 }
