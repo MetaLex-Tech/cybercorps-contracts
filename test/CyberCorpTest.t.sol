@@ -3906,16 +3906,24 @@ contract CyberCorpTest is Test {
 
     function testPrintCertificateSAFTEUri() public {
         vm.startPrank(testAddress);
-        //bytes32 check = bytes32(bytes("nuvolari_safet"));
         bytes32 check = bytes32(bytes("ABV_safe_t"));
         console.logBytes32(check);
-        check = bytes32(uint256(30));
-        console.logBytes32(check);
 
-        check = bytes32(uint256(31));
+        check = bytes32(bytes("mlx_safe_reg_d_v1_3"));
         console.logBytes32(check);
-
-        check = bytes32(uint256(32));
+        check = bytes32(bytes("mlx_safe_reg_s_v1_3"));
+        console.logBytes32(check);
+        check = bytes32(bytes("mlx_safe_tw_reg_d_v1_3"));
+        console.logBytes32(check);
+        check = bytes32(bytes("mlx_safe_tw_reg_s_v1_3"));
+        console.logBytes32(check);
+        check = bytes32(bytes("mlx_safte_reg_d_v1_3"));
+        console.logBytes32(check);
+        check = bytes32(bytes("mlx_safte_reg_s_v1_3"));
+        console.logBytes32(check);
+        check = bytes32(bytes("mlx_saft_reg_d_v1_3"));
+        console.logBytes32(check);
+        check = bytes32(bytes("mlx_saft_reg_s_v1_3"));
         console.logBytes32(check);
 
         bytes32 salt = bytes32(keccak256("TestSAFTE"));
