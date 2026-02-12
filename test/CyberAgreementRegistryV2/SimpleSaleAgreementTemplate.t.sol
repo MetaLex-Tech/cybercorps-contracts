@@ -149,7 +149,7 @@ contract SimpleSaleAgreementTemplateTest is Test {
 
     function test_Validate_Valid() public view {
         SimpleSaleAgreementTemplate.SaleInput memory input = SimpleSaleAgreementTemplate.SaleInput({
-            assetAddress: address(0x1234),
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -177,7 +177,7 @@ contract SimpleSaleAgreementTemplateTest is Test {
 
     function test_Validate_Invalid_ZeroAssetAmount() public view {
         SimpleSaleAgreementTemplate.SaleInput memory input = SimpleSaleAgreementTemplate.SaleInput({
-            assetAddress: address(0x1234),
+            assetAddress: address(mockToken),
             assetAmount: 0,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -191,7 +191,7 @@ contract SimpleSaleAgreementTemplateTest is Test {
 
     function test_Validate_Invalid_ZeroPurchasePrice() public view {
         SimpleSaleAgreementTemplate.SaleInput memory input = SimpleSaleAgreementTemplate.SaleInput({
-            assetAddress: address(0x1234),
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 0,
             paymentToken: address(0),
@@ -205,7 +205,7 @@ contract SimpleSaleAgreementTemplateTest is Test {
 
     function test_Validate_Invalid_PastDeliveryDate() public view {
         SimpleSaleAgreementTemplate.SaleInput memory input = SimpleSaleAgreementTemplate.SaleInput({
-            assetAddress: address(0x1234),
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -219,7 +219,7 @@ contract SimpleSaleAgreementTemplateTest is Test {
 
     function test_Validate_Invalid_EmptyDescription() public view {
         SimpleSaleAgreementTemplate.SaleInput memory input = SimpleSaleAgreementTemplate.SaleInput({
-            assetAddress: address(0x1234),
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),

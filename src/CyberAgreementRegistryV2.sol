@@ -74,9 +74,14 @@ contract CyberAgreementRegistryV2 is
     // Contract version
     string public constant VERSION = "1";
 
+    // Template type constants
+    uint8 public constant TEMPLATE_TYPE_SMART_CONTRACT = 0;
+    uint8 public constant TEMPLATE_TYPE_BASIC = 1;
+
     // Storage for agreements
     struct Agreement {
         address template;
+        string templateUri;
         bytes templateData;
         address[] parties;
         mapping(address => bytes) partyData;
@@ -88,9 +93,9 @@ contract CyberAgreementRegistryV2 is
         uint256 expiry;
         mapping(address => bool) voidRequestedBy;
         uint256 voidRequestCount;
-        uint256 salt; // Used for unique agreement ID generation
-        string[] agreementPatchUris; // Agreement-specific patches
-        ICyberAgreementRegistryV2.AgreementStatus status; // Current agreement status
+        uint256 salt;
+        string[] agreementPatchUris;
+        ICyberAgreementRegistryV2.AgreementStatus status;
     }
 
     // Internal struct for pending amendment storage (extends interface struct with mappings)
@@ -185,23 +190,13 @@ contract CyberAgreementRegistryV2 is
      */
     function createAgreement(
         address template,
+        string calldata templateUri,
         bytes calldata templateData,
         address[] calldata parties,
         bytes[] calldata partyData,
         address finalizer,
         uint256 expiry
     ) external returns (bytes32 agreementId) {
-        // Validate template supports IAgreementTemplate via ERC165
-        if (!IERC165(template).supportsInterface(type(IAgreementTemplate).interfaceId)) {
-            revert TemplateDoesNotSupportInterface();
-        }
-
-        // Validate template data
-        IAgreementTemplate templateContract = IAgreementTemplate(template);
-        if (!templateContract.validate(templateData)) {
-            revert InvalidTemplate();
-        }
-
         // Validate parties array
         if (parties.length == 0) {
             revert InvalidPartyCount();
@@ -210,6 +205,20 @@ contract CyberAgreementRegistryV2 is
         // Party data is optional - if provided, validate it
         if (partyData.length > 0 && partyData.length != parties.length) {
             revert PartyDataLengthMismatch();
+        }
+
+        // Smart Contract Template validation (Basic templates use address(0))
+        if (template != address(0)) {
+            // Validate template supports IAgreementTemplate via ERC165
+            if (!IERC165(template).supportsInterface(type(IAgreementTemplate).interfaceId)) {
+                revert TemplateDoesNotSupportInterface();
+            }
+
+            // Validate template data
+            IAgreementTemplate templateContract = IAgreementTemplate(template);
+            if (!templateContract.validate(templateData)) {
+                revert InvalidTemplate();
+            }
         }
 
         // Generate unique agreement ID using salt
@@ -224,6 +233,7 @@ contract CyberAgreementRegistryV2 is
         // Create agreement storage
         Agreement storage agreement = agreements[agreementId];
         agreement.template = template;
+        agreement.templateUri = templateUri;
         agreement.templateData = templateData;
         agreement.parties = parties;
         agreement.finalizer = finalizer;
@@ -240,7 +250,10 @@ contract CyberAgreementRegistryV2 is
             agreementsForParty[parties[i]].push(agreementId);
         }
 
-        emit AgreementCreated(agreementId, template, parties);
+        // Determine template type for event
+        uint8 templateType = (template == address(0)) ? TEMPLATE_TYPE_BASIC : TEMPLATE_TYPE_SMART_CONTRACT;
+
+        emit AgreementCreated(agreementId, template, templateUri, templateType, parties);
 
         return agreementId;
     }
@@ -626,6 +639,11 @@ contract CyberAgreementRegistryV2 is
         bytes32 agreementId,
         bool revertOnFailure
     ) internal view returns (bool) {
+        // Basic templates (address(0)) have no on-chain conditions
+        if (agreement.template == address(0)) {
+            return true;
+        }
+
         IAgreementTemplate template = IAgreementTemplate(agreement.template);
         address[] memory conditions = template.getClosingConditions();
 
@@ -921,8 +939,8 @@ contract CyberAgreementRegistryV2 is
             revert InvalidAmendmentData();
         }
 
-        // Validate new template data if provided
-        if (newTemplateData.length > 0) {
+        // Validate new template data if provided (only for Smart Contract templates)
+        if (newTemplateData.length > 0 && agreement.template != address(0)) {
             IAgreementTemplate template = IAgreementTemplate(agreement.template);
             if (!template.validate(newTemplateData)) {
                 revert InvalidTemplate();
@@ -1130,6 +1148,22 @@ contract CyberAgreementRegistryV2 is
      */
     function getAgreementPatchUris(bytes32 agreementId) external view returns (string[] memory) {
         return agreements[agreementId].agreementPatchUris;
+    }
+
+    /**
+     * @inheritdoc ICyberAgreementRegistryV2
+     * @notice Checks if an agreement uses a Basic template (no smart contract)
+     */
+    function isBasicTemplate(bytes32 agreementId) external view returns (bool) {
+        return agreements[agreementId].template == address(0);
+    }
+
+    /**
+     * @inheritdoc ICyberAgreementRegistryV2
+     * @notice Returns the template URI for an agreement
+     */
+    function getTemplateUri(bytes32 agreementId) external view returns (string memory) {
+        return agreements[agreementId].templateUri;
     }
 
     /**

@@ -52,6 +52,18 @@ import {IAgreementTemplate} from "../../src/interfaces/IAgreementTemplate.sol";
 import {ICondition} from "../../src/interfaces/ICondition.sol";
 import {ICyberAgreementRegistryV2} from "../../src/interfaces/ICyberAgreementRegistryV2.sol";
 import {CyberAgreementV2Utils} from "./libs/CyberAgreementV2Utils.sol";
+import {MockERC20} from "../mock/MockERC20.sol";
+
+/**
+ * @notice Party data struct for test usage
+ * @dev This was removed from IAgreementTemplate interface
+ */
+struct PartyData {
+    string name;
+    string partyType;
+    string contactDetails;
+    string jurisdiction;
+}
 
 /**
  * @notice Mock condition for testing
@@ -78,27 +90,14 @@ contract MockCondition is ICondition {
 contract TestTemplateWithConditions is Initializable, BorgAuthACL, AgreementTemplateBase {
     function initialize(address _auth, string memory _contentUri, ICondition[] memory _conditions) public initializer {
         __BorgAuthACL_init(_auth);
-        _setTemplateContentUri(_contentUri);
+        _setContentUri(_contentUri);
         for (uint256 i = 0; i < _conditions.length; i++) {
-            _addClosingCondition(_conditions[i]);
+            _addClosingCondition(address(_conditions[i]));
         }
     }
 
-    function encodeTemplateData(bytes memory data) external pure override returns (bytes memory) {
+    function getWordingValues(bytes memory data) external pure returns (bytes memory) {
         return data;
-    }
-
-    function decodeTemplateData(bytes memory data) external pure override returns (bytes memory) {
-        return data;
-    }
-
-    function validateTemplateData(bytes memory) external pure override returns (bool) {
-        return true;
-    }
-
-    function getLegalWordingValues(bytes memory) external pure override returns (string[] memory keys, string[] memory values) {
-        keys = new string[](0);
-        values = new string[](0);
     }
 }
 
@@ -117,6 +116,7 @@ contract IntegrationTest is Test {
     BorgAuth auth;
     CyberAgreementRegistryV2 registry;
     SimpleSaleAgreementTemplate simpleTemplate;
+    MockERC20 mockToken;
 
     bytes32 coreSalt = keccak256("IntegrationTest");
 
@@ -145,20 +145,16 @@ contract IntegrationTest is Test {
             )
         );
 
-        // Deploy SimpleSaleAgreementTemplate
-        SimpleSaleAgreementTemplate templateImpl = new SimpleSaleAgreementTemplate{salt: coreSalt}();
-        simpleTemplate = SimpleSaleAgreementTemplate(
-            address(
-                new ERC1967Proxy{salt: coreSalt}(
-                    address(templateImpl),
-                    abi.encodeWithSelector(
-                        SimpleSaleAgreementTemplate.initialize.selector,
-                        address(auth),
-                        "ipfs://QmSaleTemplate/"
-                    )
-                )
-            )
+        // Deploy SimpleSaleAgreementTemplate directly (not via proxy)
+        // Constructor takes (string memory _contentUri, address[] memory _conditions)
+        address[] memory conditions = new address[](0);
+        simpleTemplate = new SimpleSaleAgreementTemplate{salt: coreSalt}(
+            "ipfs://QmSaleTemplate/",
+            conditions
         );
+
+        // Deploy mock ERC20 token for testing
+        mockToken = new MockERC20("Mock Token", "MOCK", 18);
 
         vm.stopPrank();
     }
@@ -293,17 +289,17 @@ contract IntegrationTest is Test {
 
         bytes[] memory partyData = new bytes[](2);
         partyData[0] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         })
         );
         partyData[1] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         })
@@ -313,6 +309,7 @@ contract IntegrationTest is Test {
         bytes32 agreementId = registry.createAgreement(
             address(templateWithCondition),
             "",
+            "", // empty templateData
             parties,
             partyData,
             address(0), // auto-finalize
@@ -358,17 +355,17 @@ contract IntegrationTest is Test {
 
         bytes[] memory partyData = new bytes[](2);
         partyData[0] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         })
         );
         partyData[1] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         })
@@ -378,6 +375,7 @@ contract IntegrationTest is Test {
         bytes32 agreementId = registry.createAgreement(
             address(templateWithCondition),
             "",
+            "", // empty templateData
             parties,
             partyData,
             address(0), // auto-finalize
@@ -432,17 +430,17 @@ contract IntegrationTest is Test {
 
         bytes[] memory partyData = new bytes[](2);
         partyData[0] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         })
         );
         partyData[1] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         })
@@ -452,6 +450,7 @@ contract IntegrationTest is Test {
         bytes32 agreementId = registry.createAgreement(
             address(templateWithCondition),
             "",
+            "", // empty templateData
             parties,
             partyData,
             chad, // finalizer
@@ -492,9 +491,9 @@ contract IntegrationTest is Test {
 
     function test_AgreementLifecycle_ExpireAfterSign() public {
         // Create agreement data first (capture timestamp)
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -510,17 +509,17 @@ contract IntegrationTest is Test {
 
         bytes[] memory partyData = new bytes[](2);
         partyData[0] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         })
         );
         partyData[1] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         })
@@ -529,6 +528,7 @@ contract IntegrationTest is Test {
         vm.prank(alice);
         bytes32 agreementId = registry.createAgreement(
             address(simpleTemplate),
+            "ipfs://QmSaleTemplate/",
             templateData,
             parties,
             partyData,
@@ -584,9 +584,9 @@ contract IntegrationTest is Test {
             address[] memory parties
         )
     {
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -602,17 +602,17 @@ contract IntegrationTest is Test {
 
         partyData = new bytes[](2);
         partyData[0] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         })
         );
         partyData[1] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         })
@@ -621,6 +621,7 @@ contract IntegrationTest is Test {
         vm.prank(alice);
         agreementId = registry.createAgreement(
             address(simpleTemplate),
+            "ipfs://QmSaleTemplate/",
             templateData,
             parties,
             partyData,
@@ -638,9 +639,9 @@ contract IntegrationTest is Test {
             address[] memory parties
         )
     {
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -656,17 +657,17 @@ contract IntegrationTest is Test {
 
         partyData = new bytes[](2);
         partyData[0] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         })
         );
         partyData[1] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         })
@@ -675,6 +676,7 @@ contract IntegrationTest is Test {
         vm.prank(alice);
         agreementId = registry.createAgreement(
             address(simpleTemplate),
+            "ipfs://QmSaleTemplate/",
             templateData,
             parties,
             partyData,
@@ -768,17 +770,17 @@ contract IntegrationTest is Test {
 
         bytes[] memory partyData = new bytes[](2);
         partyData[0] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         })
         );
         partyData[1] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         })
@@ -788,6 +790,7 @@ contract IntegrationTest is Test {
         bytes32 agreementId = registry.createAgreement(
             address(templateWithConditions),
             "",
+            "", // empty templateData
             parties,
             partyData,
             address(0),
@@ -834,17 +837,17 @@ contract IntegrationTest is Test {
 
         bytes[] memory partyData = new bytes[](2);
         partyData[0] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         })
         );
         partyData[1] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         })
@@ -854,6 +857,7 @@ contract IntegrationTest is Test {
         bytes32 agreementId = registry.createAgreement(
             address(templateWithConditions),
             "",
+            "", // empty templateData
             parties,
             partyData,
             address(0),

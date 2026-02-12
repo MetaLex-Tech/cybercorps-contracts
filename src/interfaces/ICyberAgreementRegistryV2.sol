@@ -105,10 +105,18 @@ interface ICyberAgreementRegistryV2 {
     /**
      * @notice Emitted when a new agreement is created
      * @param agreementId The unique identifier for the agreement
-     * @param template The template contract address
+     * @param template The template contract address (address(0) for Basic templates)
+     * @param templateUri URI to the template.json (e.g., "ar://<txid>")
+     * @param templateType 0 for Smart Contract, 1 for Basic
      * @param parties Array of party addresses
      */
-    event AgreementCreated(bytes32 indexed agreementId, address indexed template, address[] parties);
+    event AgreementCreated(
+        bytes32 indexed agreementId, 
+        address indexed template, 
+        string templateUri,
+        uint8 templateType,
+        address[] parties
+    );
 
     /**
      * @notice Emitted when a party signs an agreement
@@ -176,7 +184,8 @@ interface ICyberAgreementRegistryV2 {
 
     /**
      * @notice Creates a new agreement
-     * @param template The template contract address
+     * @param template The template contract address (use address(0) for Basic templates)
+     * @param templateUri URI to the template.json (e.g., "ar://<txid>", "ipfs://<hash>")
      * @param templateData Encoded template-specific data
      * @param parties Array of party addresses
      * @param partyData Array of encoded party data, indexed by party
@@ -186,6 +195,7 @@ interface ICyberAgreementRegistryV2 {
      */
     function createAgreement(
         address template,
+        string calldata templateUri,
         bytes calldata templateData,
         address[] calldata parties,
         bytes[] calldata partyData,
@@ -426,4 +436,18 @@ interface ICyberAgreementRegistryV2 {
      * @return string[] memory Array of patch URIs
      */
     function getAgreementPatchUris(bytes32 agreementId) external view returns (string[] memory);
+
+    /**
+     * @notice Checks if an agreement uses a Basic template (no smart contract)
+     * @param agreementId The agreement identifier
+     * @return bool True if the agreement uses a Basic template
+     */
+    function isBasicTemplate(bytes32 agreementId) external view returns (bool);
+
+    /**
+     * @notice Returns the template URI for an agreement
+     * @param agreementId The agreement identifier
+     * @return string memory The URI to the template.json
+     */
+    function getTemplateUri(bytes32 agreementId) external view returns (string memory);
 }

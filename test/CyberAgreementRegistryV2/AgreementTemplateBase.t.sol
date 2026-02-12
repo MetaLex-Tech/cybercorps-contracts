@@ -71,7 +71,7 @@ contract TestAgreementTemplate is AgreementTemplateBase {
         _addClosingCondition(condition);
     }
 
-    function getWordingValues(bytes memory data) external pure override returns (bytes memory) {
+    function getWordingValues(bytes memory data) external pure returns (bytes memory) {
         TestInput memory input = abi.decode(data, (TestInput));
         
         TestOutput memory output = TestOutput({
@@ -88,7 +88,7 @@ contract TestAgreementTemplate is AgreementTemplateBase {
  * @notice Mock condition for testing
  */
 contract MockTestCondition is ICondition {
-    function check(bytes32) external pure returns (bool) {
+    function checkCondition(address, bytes4, bytes memory) external pure returns (bool) {
         return true;
     }
 }

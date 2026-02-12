@@ -49,6 +49,18 @@ import {SimpleSaleAgreementTemplate} from "../../src/templates/examples/SimpleSa
 import {IAgreementTemplate} from "../../src/interfaces/IAgreementTemplate.sol";
 import {ICyberAgreementRegistryV2} from "../../src/interfaces/ICyberAgreementRegistryV2.sol";
 import {CyberAgreementV2Utils} from "./libs/CyberAgreementV2Utils.sol";
+import {MockERC20} from "../mock/MockERC20.sol";
+
+/**
+ * @notice Party data struct for test usage
+ * @dev This was removed from IAgreementTemplate interface
+ */
+struct PartyData {
+    string name;
+    string partyType;
+    string contactDetails;
+    string jurisdiction;
+}
 
 /**
  * @notice Mock contract that doesn't support IAgreementTemplate interface
@@ -74,6 +86,7 @@ contract CyberAgreementRegistryV2Test is Test {
     BorgAuth auth;
     CyberAgreementRegistryV2 registry;
     SimpleSaleAgreementTemplate template;
+    MockERC20 mockToken;
 
     // Test data
     bytes32 coreSalt = keccak256("CyberAgreementRegistryV2Test");
@@ -104,20 +117,16 @@ contract CyberAgreementRegistryV2Test is Test {
             )
         );
 
-        // Deploy SimpleSaleAgreementTemplate
-        SimpleSaleAgreementTemplate templateImpl = new SimpleSaleAgreementTemplate{salt: coreSalt}();
-        template = SimpleSaleAgreementTemplate(
-            address(
-                new ERC1967Proxy{salt: coreSalt}(
-                    address(templateImpl),
-                    abi.encodeWithSelector(
-                        SimpleSaleAgreementTemplate.initialize.selector,
-                        address(auth),
-                        "ipfs://QmTest/"
-                    )
-                )
-            )
+        // Deploy SimpleSaleAgreementTemplate directly (not via proxy)
+        // Constructor takes (string memory _contentUri, address[] memory _conditions)
+        address[] memory conditions = new address[](0);
+        template = new SimpleSaleAgreementTemplate{salt: coreSalt}(
+            "ipfs://QmTest/",
+            conditions
         );
+
+        // Deploy mock ERC20 token for testing
+        mockToken = new MockERC20("Mock Token", "MOCK", 18);
 
         vm.stopPrank();
     }
@@ -126,9 +135,9 @@ contract CyberAgreementRegistryV2Test is Test {
 
     function test_CreateAgreement() public {
         // Prepare test data
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -142,16 +151,16 @@ contract CyberAgreementRegistryV2Test is Test {
         parties[0] = alice;
         parties[1] = bob;
 
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
 
-        IAgreementTemplate.PartyData memory bobPartyData = IAgreementTemplate.PartyData({
+        PartyData memory bobPartyData = PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         });
@@ -163,6 +172,7 @@ contract CyberAgreementRegistryV2Test is Test {
         vm.prank(alice);
         bytes32 agreementId = registry.createAgreement(
             address(template),
+            "ipfs://QmSaleTemplate/",
             templateData,
             parties,
             partyData,
@@ -203,9 +213,9 @@ contract CyberAgreementRegistryV2Test is Test {
 
         bytes[] memory partyData = new bytes[](1);
         partyData[0] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         })
@@ -215,8 +225,9 @@ contract CyberAgreementRegistryV2Test is Test {
         vm.expectRevert(CyberAgreementRegistryV2.TemplateDoesNotSupportInterface.selector);
         registry.createAgreement(
             address(nonTemplate), // Not a valid template
-            abi.encode(SimpleSaleAgreementTemplate.SaleAgreementData({
-                assetAddress: address(0x1234),
+            "ipfs://QmSaleTemplate/",
+            abi.encode(SimpleSaleAgreementTemplate.SaleInput({
+                assetAddress: address(mockToken),
                 assetAmount: 100,
                 purchasePrice: 1 ether,
                 paymentToken: address(0),
@@ -231,9 +242,9 @@ contract CyberAgreementRegistryV2Test is Test {
     }
 
     function test_RevertIf_PartyDataLengthMismatch() public {
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -250,9 +261,9 @@ contract CyberAgreementRegistryV2Test is Test {
         // Only provide party data for one party
         bytes[] memory partyData = new bytes[](1);
         partyData[0] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         })
@@ -262,6 +273,7 @@ contract CyberAgreementRegistryV2Test is Test {
         vm.expectRevert(CyberAgreementRegistryV2.PartyDataLengthMismatch.selector);
         registry.createAgreement(
             address(template),
+            "ipfs://QmSaleTemplate/",
             templateData,
             parties,
             partyData,
@@ -275,8 +287,8 @@ contract CyberAgreementRegistryV2Test is Test {
         bytes[] memory partyData = new bytes[](0);
 
         // Use valid template data
-        bytes memory templateData = abi.encode(SimpleSaleAgreementTemplate.SaleAgreementData({
-            assetAddress: address(0x1234),
+        bytes memory templateData = abi.encode(SimpleSaleAgreementTemplate.SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -286,7 +298,7 @@ contract CyberAgreementRegistryV2Test is Test {
 
         vm.prank(alice);
         vm.expectRevert(CyberAgreementRegistryV2.InvalidPartyCount.selector);
-        registry.createAgreement(address(template), templateData, parties, partyData, address(0), 0);
+        registry.createAgreement(address(template), "ipfs://QmSaleTemplate/", templateData, parties, partyData, address(0), 0);
     }
 
     function test_CreateBlankAgreementAndFill() public {
@@ -298,8 +310,8 @@ contract CyberAgreementRegistryV2Test is Test {
         bytes[] memory partyData = new bytes[](0); // No party data initially
 
         // Use valid template data
-        bytes memory templateData = abi.encode(SimpleSaleAgreementTemplate.SaleAgreementData({
-            assetAddress: address(0x1234),
+        bytes memory templateData = abi.encode(SimpleSaleAgreementTemplate.SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -309,7 +321,7 @@ contract CyberAgreementRegistryV2Test is Test {
 
         // Lawyer (chad) creates the agreement
         vm.prank(chad);
-        bytes32 agreementId = registry.createAgreement(address(template), templateData, parties, partyData, address(0), 0);
+        bytes32 agreementId = registry.createAgreement(address(template), "ipfs://QmSaleTemplate/", templateData, parties, partyData, address(0), 0);
 
         // Verify agreement was created with zero addresses
         (
@@ -331,9 +343,9 @@ contract CyberAgreementRegistryV2Test is Test {
         assertFalse(finalized, "Should not be finalized");
 
         // Alice claims first slot with fillUnallocated=true
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
@@ -359,9 +371,9 @@ contract CyberAgreementRegistryV2Test is Test {
         assertEq(storedParties[0], alice, "First party should now be Alice");
 
         // Bob claims second slot
-        IAgreementTemplate.PartyData memory bobPartyData = IAgreementTemplate.PartyData({
+        PartyData memory bobPartyData = PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         });
@@ -409,9 +421,9 @@ contract CyberAgreementRegistryV2Test is Test {
             alicePrivateKey
         );
 
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
@@ -452,9 +464,9 @@ contract CyberAgreementRegistryV2Test is Test {
             alicePrivateKey
         );
 
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
@@ -484,9 +496,9 @@ contract CyberAgreementRegistryV2Test is Test {
             alicePrivateKey
         );
 
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
@@ -512,9 +524,9 @@ contract CyberAgreementRegistryV2Test is Test {
             chadPrivateKey // Chad's key, not Alice's
         );
 
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
@@ -528,9 +540,9 @@ contract CyberAgreementRegistryV2Test is Test {
         (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreement();
 
         // Chad tries to sign but he's not a party
-        IAgreementTemplate.PartyData memory chadPartyData = IAgreementTemplate.PartyData({
+        PartyData memory chadPartyData = PartyData({
             name: "Chad",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "chad@example.com",
             jurisdiction: ""
         });
@@ -574,9 +586,9 @@ contract CyberAgreementRegistryV2Test is Test {
             chadPrivateKey // Chad signs with his own key
         );
 
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
@@ -670,9 +682,9 @@ contract CyberAgreementRegistryV2Test is Test {
         internal
         returns (bytes32 agreementId, bytes[] memory partyDataEncoded)
     {
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -686,16 +698,16 @@ contract CyberAgreementRegistryV2Test is Test {
         parties[0] = alice;
         parties[1] = bob;
 
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
 
-        IAgreementTemplate.PartyData memory bobPartyData = IAgreementTemplate.PartyData({
+        PartyData memory bobPartyData = PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         });
@@ -707,6 +719,7 @@ contract CyberAgreementRegistryV2Test is Test {
         vm.prank(alice);
         agreementId = registry.createAgreement(
             address(template),
+            "ipfs://QmSaleTemplate/",
             templateData,
             parties,
             partyDataEncoded,
@@ -815,9 +828,9 @@ contract CyberAgreementRegistryV2Test is Test {
     // ============ Finalization Tests ============
 
     function test_FinalizeAgreementWithFinalizer() public {
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -833,17 +846,17 @@ contract CyberAgreementRegistryV2Test is Test {
 
         bytes[] memory partyData = new bytes[](2);
         partyData[0] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         })
         );
         partyData[1] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         })
@@ -852,6 +865,7 @@ contract CyberAgreementRegistryV2Test is Test {
         vm.prank(alice);
         bytes32 agreementId = registry.createAgreement(
             address(template),
+            "ipfs://QmSaleTemplate/",
             templateData,
             parties,
             partyData,
@@ -884,9 +898,9 @@ contract CyberAgreementRegistryV2Test is Test {
     }
 
     function test_RevertIf_FinalizeNotFinalizer() public {
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -902,17 +916,17 @@ contract CyberAgreementRegistryV2Test is Test {
 
         bytes[] memory partyData = new bytes[](2);
         partyData[0] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         })
         );
         partyData[1] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         })
@@ -921,6 +935,7 @@ contract CyberAgreementRegistryV2Test is Test {
         vm.prank(alice);
         bytes32 agreementId = registry.createAgreement(
             address(template),
+            "ipfs://QmSaleTemplate/",
             templateData,
             parties,
             partyData,
@@ -941,9 +956,9 @@ contract CyberAgreementRegistryV2Test is Test {
     // ============ Expiry Tests ============
 
     function test_RevertIf_Expired() public {
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -959,17 +974,17 @@ contract CyberAgreementRegistryV2Test is Test {
 
         bytes[] memory partyData = new bytes[](2);
         partyData[0] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         })
         );
         partyData[1] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         })
@@ -978,6 +993,7 @@ contract CyberAgreementRegistryV2Test is Test {
         vm.prank(alice);
         bytes32 agreementId = registry.createAgreement(
             address(template),
+            "ipfs://QmSaleTemplate/",
             templateData,
             parties,
             partyData,
@@ -1024,7 +1040,7 @@ contract CyberAgreementRegistryV2Test is Test {
         (bytes32 agreementId,) = _createTestAgreement();
 
         bytes memory storedPartyData = registry.getPartyData(agreementId, alice);
-        IAgreementTemplate.PartyData memory decoded = abi.decode(storedPartyData, (IAgreementTemplate.PartyData));
+        PartyData memory decoded = abi.decode(storedPartyData, (PartyData));
         assertEq(decoded.name, "Alice", "Party name mismatch");
         assertEq(decoded.contactDetails, "alice@example.com", "Contact details mismatch");
     }
@@ -1039,9 +1055,9 @@ contract CyberAgreementRegistryV2Test is Test {
     // ============ Helper Functions ============
 
     function _createTestAgreement() internal returns (bytes32 agreementId, bytes[] memory partyDataEncoded) {
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -1055,16 +1071,16 @@ contract CyberAgreementRegistryV2Test is Test {
         parties[0] = alice;
         parties[1] = bob;
 
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
 
-        IAgreementTemplate.PartyData memory bobPartyData = IAgreementTemplate.PartyData({
+        PartyData memory bobPartyData = PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         });
@@ -1076,6 +1092,7 @@ contract CyberAgreementRegistryV2Test is Test {
         vm.prank(alice);
         agreementId = registry.createAgreement(
             address(template),
+            "ipfs://QmSaleTemplate/",
             templateData,
             parties,
             partyDataEncoded,
@@ -1085,9 +1102,9 @@ contract CyberAgreementRegistryV2Test is Test {
     }
 
     function _createTestAgreementWithFinalizer(address finalizer) internal returns (bytes32 agreementId, bytes[] memory partyDataEncoded) {
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -1101,16 +1118,16 @@ contract CyberAgreementRegistryV2Test is Test {
         parties[0] = alice;
         parties[1] = bob;
 
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
 
-        IAgreementTemplate.PartyData memory bobPartyData = IAgreementTemplate.PartyData({
+        PartyData memory bobPartyData = PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         });
@@ -1122,6 +1139,7 @@ contract CyberAgreementRegistryV2Test is Test {
         vm.prank(alice);
         agreementId = registry.createAgreement(
             address(template),
+            "ipfs://QmSaleTemplate/",
             templateData,
             parties,
             partyDataEncoded,
@@ -1157,9 +1175,9 @@ contract CyberAgreementRegistryV2Test is Test {
     }
 
     function _getTemplateData() internal view returns (bytes memory) {
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -1183,9 +1201,9 @@ contract CyberAgreementRegistryV2Test is Test {
         (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreement();
         
         // Try to create the same agreement again with same data (will fail because same agreementId)
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -1203,6 +1221,7 @@ contract CyberAgreementRegistryV2Test is Test {
         vm.expectRevert(CyberAgreementRegistryV2.AgreementAlreadyExists.selector);
         registry.createAgreement(
             address(template),
+            "ipfs://QmSaleTemplate/",
             templateData,
             parties,
             partyDataEncoded,
@@ -1289,9 +1308,9 @@ contract CyberAgreementRegistryV2Test is Test {
     function test_FillUnallocatedSlotLogic() public {
         // Test the internal logic of fillUnallocated by checking if 
         // an unallocated party can sign after creation
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -1307,17 +1326,17 @@ contract CyberAgreementRegistryV2Test is Test {
 
         bytes[] memory partyData = new bytes[](2);
         partyData[0] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         })
         );
         partyData[1] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         })
@@ -1326,6 +1345,7 @@ contract CyberAgreementRegistryV2Test is Test {
         vm.prank(alice);
         bytes32 agreementId = registry.createAgreement(
             address(template),
+            "ipfs://QmSaleTemplate/",
             templateData,
             parties,
             partyData,
@@ -1372,9 +1392,9 @@ contract CyberAgreementRegistryV2Test is Test {
             chadPrivateKey
         );
 
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
@@ -1400,9 +1420,9 @@ contract CyberAgreementRegistryV2Test is Test {
             alicePrivateKey
         );
 
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
@@ -1474,9 +1494,9 @@ contract CyberAgreementRegistryV2Test is Test {
      * stored at creation time.
      */
     function test_AsyncSigningWithIndependentPartyData() public {
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -1493,18 +1513,18 @@ contract CyberAgreementRegistryV2Test is Test {
         // At creation time, we provide placeholder data for Bob
         bytes[] memory initialPartyData = new bytes[](2);
         
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
         initialPartyData[0] = abi.encode(alicePartyData);
         
         // Bob's placeholder data at creation
-        IAgreementTemplate.PartyData memory placeholderBobData = IAgreementTemplate.PartyData({
+        PartyData memory placeholderBobData = PartyData({
             name: "Bob_Placeholder",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "placeholder@example.com",
             jurisdiction: ""
         });
@@ -1513,6 +1533,7 @@ contract CyberAgreementRegistryV2Test is Test {
         vm.prank(alice);
         bytes32 agreementId = registry.createAgreement(
             address(template),
+            "ipfs://QmSaleTemplate/",
             templateData,
             parties,
             initialPartyData,
@@ -1539,9 +1560,9 @@ contract CyberAgreementRegistryV2Test is Test {
 
         // Later, Bob signs with his REAL data (different from placeholder)
         // This now works because Bob's signature only includes his own data
-        IAgreementTemplate.PartyData memory realBobData = IAgreementTemplate.PartyData({
+        PartyData memory realBobData = PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@real-email.com", // Different from placeholder!
             jurisdiction: ""
         });
@@ -1571,9 +1592,9 @@ contract CyberAgreementRegistryV2Test is Test {
      * @dev Party data is now optional at creation time
      */
     function test_CreateAgreementWithoutPartyData() public {
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -1593,6 +1614,7 @@ contract CyberAgreementRegistryV2Test is Test {
         vm.prank(alice);
         bytes32 agreementId = registry.createAgreement(
             address(template),
+            "ipfs://QmSaleTemplate/",
             templateData,
             parties,
             emptyPartyData, // No party data provided
@@ -1624,9 +1646,9 @@ contract CyberAgreementRegistryV2Test is Test {
         assertEq(signedAt[1], 0, "Bob should not have signed");
 
         // Alice can now sign with her data
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
@@ -1667,9 +1689,9 @@ contract CyberAgreementRegistryV2Test is Test {
             alicePrivateKey
         );
 
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
@@ -1701,16 +1723,16 @@ contract CyberAgreementRegistryV2Test is Test {
         (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
 
         // Both parties sign via escrow
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
 
-        IAgreementTemplate.PartyData memory bobPartyData = IAgreementTemplate.PartyData({
+        PartyData memory bobPartyData = PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         });
@@ -1775,9 +1797,9 @@ contract CyberAgreementRegistryV2Test is Test {
         // Create agreement WITHOUT finalizer (address(0))
         (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreement();
 
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
@@ -1811,9 +1833,9 @@ contract CyberAgreementRegistryV2Test is Test {
         // Create agreement with chad as finalizer
         (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
 
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
@@ -1847,9 +1869,9 @@ contract CyberAgreementRegistryV2Test is Test {
         // Create agreement with chad as finalizer
         (bytes32 agreementId, bytes[] memory partyDataEncoded) = _createTestAgreementWithFinalizer(chad);
 
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
@@ -1893,9 +1915,9 @@ contract CyberAgreementRegistryV2Test is Test {
     function test_RevertIf_signAgreementWithEscrowAgreementDoesNotExist() public {
         bytes32 fakeAgreementId = keccak256("fake");
 
-        IAgreementTemplate.PartyData memory alicePartyData = IAgreementTemplate.PartyData({
+        PartyData memory alicePartyData = PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         });
@@ -1926,9 +1948,9 @@ contract CyberAgreementRegistryV2Test is Test {
 
     function test_RevertIf_signAgreementWithEscrowExpired() public {
         // Create agreement with chad as finalizer and short expiry
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -1944,17 +1966,17 @@ contract CyberAgreementRegistryV2Test is Test {
 
         bytes[] memory partyData = new bytes[](2);
         partyData[0] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         })
         );
         partyData[1] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         })
@@ -1963,6 +1985,7 @@ contract CyberAgreementRegistryV2Test is Test {
         vm.prank(alice);
         bytes32 agreementId = registry.createAgreement(
             address(template),
+            "ipfs://QmSaleTemplate/",
             templateData,
             parties,
             partyData,
@@ -2037,9 +2060,9 @@ contract CyberAgreementRegistryV2Test is Test {
 
         // Chad tries to escrow Bob's signature after agreement is voided
         // (Bob hasn't signed yet in this scenario)
-        IAgreementTemplate.PartyData memory bobPartyData = IAgreementTemplate.PartyData({
+        PartyData memory bobPartyData = PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         });
@@ -2071,9 +2094,9 @@ contract CyberAgreementRegistryV2Test is Test {
 
     function test_SignAgreementWithEscrowFillUnallocated() public {
         // Create agreement with chad as finalizer and one unallocated slot
-        SimpleSaleAgreementTemplate.SaleAgreementData memory saleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x1234),
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 100,
             purchasePrice: 1 ether,
             paymentToken: address(0),
@@ -2089,17 +2112,17 @@ contract CyberAgreementRegistryV2Test is Test {
 
         bytes[] memory partyData = new bytes[](2);
         partyData[0] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Alice",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "alice@example.com",
             jurisdiction: ""
         })
         );
         partyData[1] = abi.encode(
-            IAgreementTemplate.PartyData({
+            PartyData({
             name: "Bob",
-            partyType: IAgreementTemplate.PartyType.Individual,
+            partyType: "Individual",
             contactDetails: "bob@example.com",
             jurisdiction: ""
         })
@@ -2108,6 +2131,7 @@ contract CyberAgreementRegistryV2Test is Test {
         vm.prank(alice);
         bytes32 agreementId = registry.createAgreement(
             address(template),
+            "ipfs://QmSaleTemplate/",
             templateData,
             parties,
             partyData,
@@ -2220,9 +2244,9 @@ contract CyberAgreementRegistryV2Test is Test {
         _signAsParty(agreementId, partyDataEncoded, bob, bobPrivateKey, 1);
 
         // Create new template data
-        SimpleSaleAgreementTemplate.SaleAgreementData memory newSaleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x5678),
+        SimpleSaleAgreementTemplate.SaleInput memory newSaleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 200,
             purchasePrice: 2 ether,
             paymentToken: address(0),
@@ -2431,9 +2455,9 @@ contract CyberAgreementRegistryV2Test is Test {
         (address storedTemplate, bytes memory originalTemplateData,,,,,,) = registry.getAgreement(agreementId);
 
         // Propose amendment with new template data
-        SimpleSaleAgreementTemplate.SaleAgreementData memory newSaleData = SimpleSaleAgreementTemplate
-            .SaleAgreementData({
-            assetAddress: address(0x5678),
+        SimpleSaleAgreementTemplate.SaleInput memory newSaleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
             assetAmount: 200,
             purchasePrice: 2 ether,
             paymentToken: address(0),
@@ -2875,5 +2899,243 @@ contract CyberAgreementRegistryV2Test is Test {
         assertEq(currentPatchUris.length, 2, "Should have 2 patch URIs after second amendment");
         assertEq(currentPatchUris[0], "ipfs://QmAmendment1", "First patch URI should be preserved");
         assertEq(currentPatchUris[1], "ipfs://QmAmendment2", "Second patch URI should be added");
+    }
+
+    // ============ Basic Template Tests ============
+
+    function test_CreateAgreementWithBasicTemplate() public {
+        // Create agreement with Basic template (address(0))
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        bytes[] memory partyData = new bytes[](2);
+        partyData[0] = abi.encode(
+            PartyData({
+            name: "Alice",
+            partyType: "Individual",
+            contactDetails: "alice@example.com",
+            jurisdiction: ""
+        })
+        );
+        partyData[1] = abi.encode(
+            PartyData({
+            name: "Bob",
+            partyType: "Individual",
+            contactDetails: "bob@example.com",
+            jurisdiction: ""
+        })
+        );
+
+        bytes memory templateData = abi.encode("Basic agreement data");
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createAgreement(
+            address(0), // Basic template
+            "ipfs://QmBasicTemplate/",
+            templateData,
+            parties,
+            partyData,
+            address(0), // no finalizer
+            block.timestamp + 7 days
+        );
+
+        // Verify agreement was created
+        (
+            address storedTemplate,
+            bytes memory storedTemplateData,
+            address[] memory storedParties,
+            uint256[] memory signedAt,
+            bool isComplete,
+            bool finalized,
+            bool voided,
+            ICyberAgreementRegistryV2.AgreementStatus status
+        ) = registry.getAgreement(agreementId);
+
+        assertEq(storedTemplate, address(0), "Template should be address(0) for Basic template");
+        assertEq(storedTemplateData, templateData, "Template data mismatch");
+        assertEq(storedParties.length, 2, "Party count mismatch");
+        assertEq(storedParties[0], alice, "First party mismatch");
+        assertEq(storedParties[1], bob, "Second party mismatch");
+        assertFalse(isComplete, "Should not be complete");
+        assertFalse(finalized, "Should not be finalized");
+        assertFalse(voided, "Should not be voided");
+    }
+
+    function test_isBasicTemplate() public {
+        // Create agreement with Smart Contract template
+        (bytes32 agreementId1,) = _createTestAgreement();
+        
+        // Verify it's not a Basic template
+        assertFalse(registry.isBasicTemplate(agreementId1), "Should not be Basic template");
+
+        // Create agreement with Basic template
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        bytes[] memory partyData = new bytes[](0);
+        bytes memory templateData = abi.encode("Basic agreement data");
+
+        vm.prank(alice);
+        bytes32 agreementId2 = registry.createAgreement(
+            address(0), // Basic template
+            "ipfs://QmBasicTemplate/",
+            templateData,
+            parties,
+            partyData,
+            address(0),
+            block.timestamp + 7 days
+        );
+
+        // Verify it's a Basic template
+        assertTrue(registry.isBasicTemplate(agreementId2), "Should be Basic template");
+    }
+
+    function test_getTemplateUri() public {
+        // Create agreement with Smart Contract template
+        (bytes32 agreementId1,) = _createTestAgreement();
+        
+        // Verify template URI
+        assertEq(registry.getTemplateUri(agreementId1), "ipfs://QmSaleTemplate/", "Template URI mismatch for smart contract template");
+
+        // Create agreement with Basic template
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        bytes[] memory partyData = new bytes[](0);
+        bytes memory templateData = abi.encode("Basic agreement data");
+
+        vm.prank(alice);
+        bytes32 agreementId2 = registry.createAgreement(
+            address(0), // Basic template
+            "ipfs://QmBasicTemplate/",
+            templateData,
+            parties,
+            partyData,
+            address(0),
+            block.timestamp + 7 days
+        );
+
+        // Verify template URI for Basic template
+        assertEq(registry.getTemplateUri(agreementId2), "ipfs://QmBasicTemplate/", "Template URI mismatch for basic template");
+    }
+
+    function test_BasicTemplateAutoFinalize() public {
+        // Create agreement with Basic template
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        bytes[] memory partyData = new bytes[](2);
+        partyData[0] = abi.encode(
+            PartyData({
+            name: "Alice",
+            partyType: "Individual",
+            contactDetails: "alice@example.com",
+            jurisdiction: ""
+        })
+        );
+        partyData[1] = abi.encode(
+            PartyData({
+            name: "Bob",
+            partyType: "Individual",
+            contactDetails: "bob@example.com",
+            jurisdiction: ""
+        })
+        );
+
+        bytes memory templateData = abi.encode("Basic agreement data");
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createAgreement(
+            address(0), // Basic template
+            "ipfs://QmBasicTemplate/",
+            templateData,
+            parties,
+            partyData,
+            address(0), // no finalizer, will auto-finalize
+            block.timestamp + 7 days
+        );
+
+        // Both parties sign
+        bytes memory aliceSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(0), // Basic template
+            templateData,
+            parties,
+            partyData[0],
+            alicePrivateKey
+        );
+
+        vm.prank(alice);
+        registry.signAgreement(agreementId, partyData[0], aliceSignature, false, "");
+
+        bytes memory bobSignature = CyberAgreementV2Utils.signAgreement(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.AGREEMENT_TYPEHASH(),
+            agreementId,
+            address(0), // Basic template
+            templateData,
+            parties,
+            partyData[1],
+            bobPrivateKey
+        );
+
+        vm.prank(bob);
+        registry.signAgreement(agreementId, partyData[1], bobSignature, false, "");
+
+        // Should auto-finalize since no finalizer and Basic templates have no conditions
+        assertTrue(registry.isFinalized(agreementId), "Basic template agreement should auto-finalize");
+        assertTrue(registry.allPartiesSigned(agreementId), "All parties should have signed");
+    }
+
+    function test_AgreementCreatedEventWithTemplateType() public {
+        // Create agreement and check event
+        SimpleSaleAgreementTemplate.SaleInput memory saleData = SimpleSaleAgreementTemplate
+            .SaleInput({
+            assetAddress: address(mockToken),
+            assetAmount: 100,
+            purchasePrice: 1 ether,
+            paymentToken: address(0),
+            deliveryDate: block.timestamp + 1 days,
+            description: "Test sale"
+        });
+
+        bytes memory templateData = abi.encode(saleData);
+
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = bob;
+
+        bytes[] memory partyData = new bytes[](0);
+
+        vm.prank(alice);
+        
+        // Expect event with templateType 0 (Smart Contract)
+        // Don't check agreementId (topic1) since it's computed from block.timestamp
+        vm.expectEmit(false, true, true, false);
+        emit ICyberAgreementRegistryV2.AgreementCreated(
+            bytes32(0), // agreementId is computed, so we use placeholder
+            address(template),
+            "ipfs://QmSaleTemplate/",
+            0, // TEMPLATE_TYPE_SMART_CONTRACT
+            parties
+        );
+        
+        registry.createAgreement(
+            address(template),
+            "ipfs://QmSaleTemplate/",
+            templateData,
+            parties,
+            partyData,
+            address(0),
+            block.timestamp + 7 days
+        );
     }
 }

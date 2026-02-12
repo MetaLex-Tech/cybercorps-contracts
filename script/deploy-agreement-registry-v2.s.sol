@@ -14,7 +14,7 @@ contract DeployAgreementRegistryV2 is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        bytes32 salt = bytes32(keccak256("CyberAgreementRegistryV2Deploy001"));
+        bytes32 salt = bytes32(keccak256("CyberAgreementRegistryV2Deploy002"));
 
         BorgAuth auth = new BorgAuth{salt: salt}(deployerAddress);
 
