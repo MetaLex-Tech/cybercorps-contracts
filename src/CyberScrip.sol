@@ -102,7 +102,20 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
 
         super._update(from, to, amount);
 
+        _updateHolderCount(from, to, amount, fromBalanceBefore, toBalanceBefore);
+    }
+
+    /// @dev Updates holderCount after a token transfer/mint/burn has been executed.
+    ///      Must be called with the balances captured BEFORE the transfer.
+    function _updateHolderCount(
+        address from,
+        address to,
+        uint256 amount,
+        uint256 fromBalanceBefore,
+        uint256 toBalanceBefore
+    ) private {
         if (amount > 0 && from != to) {
+            CyberScripStorage.StorageData storage s = CyberScripStorage.getStorageData();
             bool decrementHolder = from != address(0) && fromBalanceBefore == amount;
             bool incrementHolder = to != address(0) && toBalanceBefore == 0;
             if (decrementHolder) {
@@ -174,8 +187,12 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
     function forceTransfer(address from, address to, uint256 amount) external onlyIssuanceManager {
         if (!CyberScripStorage.getStorageData().canForceTransfer) revert ComplianceFeatureDisabled();
         require(from != address(0) && to != address(0), "force: zero addr");
+        uint256 fromBalanceBefore = balanceOf(from);
+        uint256 toBalanceBefore = balanceOf(to);
         // Bypass our override and hooks by calling the base ERC20 implementation directly
         ERC20Upgradeable._update(from, to, amount);
+        // Still maintain accurate holder count tracking
+        _updateHolderCount(from, to, amount, fromBalanceBefore, toBalanceBefore);
         emit ForceTransfer(from, to, amount);
     }
 
@@ -183,7 +200,10 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
     function forceBurn(address account, uint256 amount) external onlyIssuanceManager {
         if (!CyberScripStorage.getStorageData().canForceBurn) revert ComplianceFeatureDisabled();
         require(account != address(0), "forceBurn: zero addr");
+        uint256 accountBalanceBefore = balanceOf(account);
         ERC20Upgradeable._update(account, address(0), amount);
+        // Still maintain accurate holder count tracking
+        _updateHolderCount(account, address(0), amount, accountBalanceBefore, 0);
         emit ForceBurn(account, amount);
     }
 

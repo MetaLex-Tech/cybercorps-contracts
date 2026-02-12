@@ -682,7 +682,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         bool enableForceTransfer,
         bool enableForceBurn,
         bool enableFreeze
-    ) external returns (address) {
+    ) onlyOwner external returns (address) {
         if (scripRatioNumerator == 0 || scripRatioDenominator == 0) {
             revert InvalidScripRatio();
         }
@@ -856,8 +856,9 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         scripAmount = scripAmount / denominator;
 
         if (amount == details.unitsRepresented) {
-            // Full conversion: transfer cert, void it, and mint full amount
-            certificate.safeTransferFrom(msg.sender, address(this), id);
+            //get the cybercorps dealmanager address
+            address dm = ICyberCorp(IssuanceManagerStorage.getCORP()).dealManager();
+            certificate.safeTransferFrom(msg.sender, dm, id);
             certificate.voidCert(id);
             ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
             emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
@@ -945,6 +946,9 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             // Reform the existing certificate by adding the amount
             voidedDetails.unitsRepresented = units;
             certificate.updateCertificateDetails(voidedTokenId, voidedDetails);
+            //get the cybercorps dealmanager address
+            address dm = ICyberCorp(IssuanceManagerStorage.getCORP()).dealManager();
+            certificate.safeTransferFrom(msg.sender, dm, voidedTokenId);
         } else {
             // Create a new certificate if no matching voided one was found
 
