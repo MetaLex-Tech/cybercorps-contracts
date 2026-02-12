@@ -19,7 +19,7 @@
 
 
    .oooooo.                .o8                            .oooooo.
-  d8P'  `Y8b              "888"                           d8P'  `Y8b
+  d8P'  `Y8b              "888                           d8P'  `Y8b
  888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.
  888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b
  888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888
@@ -39,21 +39,49 @@ distributed, transmitted, sublicensed, sold, or otherwise used in any form or by
 mechanical, including photocopying, recording, or by any information storage and retrieval system,
 except with the express prior written permission of the copyright holder.*/
 
-pragma solidity ^0.8.20;
+pragma solidity 0.8.28;
+
+import {IERC165} from "@openzeppelin/contracts/interfaces/IERC165.sol";
 
 /**
- * @title ICondition
- * @notice Interface for agreement closing conditions
- * @dev Conditions are checked before an agreement can be finalized.
- *      They receive the agreement ID and can query the agreement state.
+ * @title IAgreementTemplate
+ * @notice Interface for agreement template contracts
+ * @dev Templates are immutable smart contracts that define the structure and validation
+ *      of agreement data, compute derived values by reading on-chain state, and return
+ *      ABI-encoded data for PDF generation.
+ * 
+ *      Templates are self-contained and should not inherit from base contracts unless desired.
+ *      The frontend is responsible for encoding/decoding data using ABIs from template.json.
  */
-interface ICondition {
+interface IAgreementTemplate is IERC165 {
     /**
-     * @notice Check if condition is satisfied for a function call
-     * @param _contract The address of the contract being called
-     * @param _functionSignature The function selector being called
-     * @param data Additional data for the condition check
-     * @return true if condition passes, false otherwise
+     * @notice Returns Arweave transaction ID containing template.json and template.typ
+     * @return Arweave URI in format "ar://<transaction-id>"
      */
-    function checkCondition(address _contract, bytes4 _functionSignature, bytes memory data) external view returns (bool);
+    function contentUri() external view returns (string memory);
+    
+    /**
+     * @notice Returns computed wording values by reading blockchain state
+     * @param templateData ABI-encoded template input struct
+     * @return ABI-encoded output struct with values for PDF generation
+     * @dev The output struct is defined by the template and documented in template.json
+     */
+    function getWordingValues(bytes memory templateData) external view returns (bytes memory);
+    
+    /**
+     * @notice Returns conditions that must pass before agreement can be finalized
+     * @return Array of condition contract addresses
+     * @dev Returns empty array if no conditions are required
+     */
+    function getClosingConditions() external view returns (address[] memory);
+    
+    /**
+     * @notice Optionally validates template data
+     * @param templateData ABI-encoded template input struct
+     * @return true if valid, false otherwise
+     * @dev This function is OPTIONAL. If not implemented, it should return true.
+     *      Templates may choose to implement validation or leave it to the frontend.
+     *      The registry may call this during agreement creation if implemented.
+     */
+    function validate(bytes memory templateData) external view returns (bool);
 }
