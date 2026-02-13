@@ -81,6 +81,7 @@ library CyberCertPrinterStorage {
     struct CyberCertStorage {
         // Token data
         mapping(uint256 => CertificateDetails) certificateDetails;
+        mapping(uint256 => string[]) issuerSignatures;
         mapping(uint256 => Endorsement[]) endorsements;
         mapping(uint256 => OwnerDetails) owners;
         mapping(uint256 => SecurityStatus) securityStatus;

@@ -980,14 +980,6 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         }
     }
 
-    function _initDefaultScripRatio(address certAddress) internal {
-        IssuanceManagerStorage.ScripRatio storage ratio = IssuanceManagerStorage
-            .getScripRatio(certAddress);
-        if (ratio.numerator == 0 && ratio.denominator == 0) {
-            IssuanceManagerStorage.setScripRatio(certAddress, 1, 1);
-        }
-    }
-
     function _getScripForCert(address certAddress) private view returns (address) {
         address scripifiedCert = IssuanceManagerStorage.getScripifiedCert(certAddress);
         if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();

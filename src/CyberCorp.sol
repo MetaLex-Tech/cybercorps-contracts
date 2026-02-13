@@ -78,13 +78,19 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
 
     /// @notice Address of the round manager contract
     address public roundManager;
+    /// @notice Escrowed officer signatures that can be applied to certificates
+    string[] public escrowedOfficerSignatures;
 
     event CyberCORPDetailsUpdated(string cyberCORPName, string cyberCORPType, string cyberCORPJurisdiction, string cyberCORPContactDetails, string defaultDisputeResolution);
     event OfficerAdded(address indexed officer, uint256 index);
     event OfficerRemoved(address indexed officer, uint256 index);
     event CompanyPayableUpdated(address indexed companyPayable, address indexed oldCompanyPayable);
+    event EscrowedOfficerSignatureAdded(uint256 indexed index, address indexed officer);
+    event EscrowedOfficerSignatureUpdated(uint256 indexed index, address indexed officer);
 
     error NotRefImplementation();
+    error SignatureURIRequired();
+    error InvalidEscrowSignatureIndex();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -219,6 +225,42 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         address oldCompanyPayable = companyPayable;
         companyPayable = _companyPayable;
         emit CompanyPayableUpdated(companyPayable, oldCompanyPayable);
+    }
+
+    /// @notice Adds a reusable escrowed officer signature
+    /// @dev Officer role (200+) required
+    function addEscrowedOfficerSignature(string calldata signatureURI) external onlyRole(200) {
+        if (bytes(signatureURI).length == 0) revert SignatureURIRequired();
+        escrowedOfficerSignatures.push(signatureURI);
+        emit EscrowedOfficerSignatureAdded(
+            escrowedOfficerSignatures.length - 1,
+            msg.sender
+        );
+    }
+
+    /// @notice Updates an existing reusable escrowed officer signature
+    /// @dev Officer role (200+) required
+    function setEscrowedOfficerSignature(
+        uint256 index,
+        string calldata signatureURI
+    ) external onlyRole(200) {
+        if (index >= escrowedOfficerSignatures.length) revert InvalidEscrowSignatureIndex();
+        if (bytes(signatureURI).length == 0) revert SignatureURIRequired();
+        escrowedOfficerSignatures[index] = signatureURI;
+        emit EscrowedOfficerSignatureUpdated(index, msg.sender);
+    }
+
+    /// @notice Reads an escrowed officer signature by index
+    function getEscrowedOfficerSignature(
+        uint256 index
+    ) external view returns (string memory) {
+        if (index >= escrowedOfficerSignatures.length) revert InvalidEscrowSignatureIndex();
+        return escrowedOfficerSignatures[index];
+    }
+
+    /// @notice Gets total escrowed officer signature count
+    function getEscrowedOfficerSignatureCount() external view returns (uint256) {
+        return escrowedOfficerSignatures.length;
     }
 
     // ========================

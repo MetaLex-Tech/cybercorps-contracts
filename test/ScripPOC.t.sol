@@ -42,6 +42,7 @@ contract POCMockCertPrinter {
     mapping(address => uint256[]) internal _ownedTokens;
     mapping(uint256 => bool) internal _voided;
     mapping(uint256 => address) internal _restrictionHooks;
+    mapping(uint256 => string[]) internal _issuerSignatures;
     uint256 internal _total;
     string internal _name;
     string internal _symbol;
@@ -107,10 +108,16 @@ contract POCMockCertPrinter {
         return tokenId;
     }
 
-    function addIssuerSignature(uint256, string calldata) external pure {
-        // This function does NOT exist in the real CyberCertPrinter implementation.
-        // Calling it through the interface will revert at the proxy level.
-        revert("NOT_IMPLEMENTED");
+    function addIssuerSignature(uint256 tokenId, string calldata signatureURI) external {
+        _issuerSignatures[tokenId].push(signatureURI);
+    }
+
+    function getIssuerSignatureCount(uint256 tokenId) external view returns (uint256) {
+        return _issuerSignatures[tokenId].length;
+    }
+
+    function getIssuerSignatureAt(uint256 tokenId, uint256 index) external view returns (string memory) {
+        return _issuerSignatures[tokenId][index];
     }
 
     function setRestrictionHook(uint256 id, address hook) external {
@@ -243,23 +250,18 @@ contract ScripPOCTest is Test {
     }
 
     // =========================================================================
-    // POC #2 - addIssuerSignature not implemented in CyberCertPrinter (Critical)
-    //
-    // The ICyberCertPrinter interface declares addIssuerSignature, and
-    // IssuanceManager.signCertificate calls it, but CyberCertPrinter.sol
-    // never implements it. Any call to signCertificate will revert.
+    // POC #2 - addIssuerSignature implementation regression guard
     // =========================================================================
 
-    function test_POC2_AddIssuerSignature_NotImplemented() public {
+    function test_POC2_AddIssuerSignature_Implemented() public {
         CertificateDetails memory details = _defaultDetails(100);
         vm.prank(owner);
         uint256 certId = issuanceManager.createCert(address(certPrinter), investor, details);
 
-        // signCertificate -> certificate.addIssuerSignature() which doesn't exist
-        // on the real CyberCertPrinter. Our mock explicitly reverts to simulate this.
         vm.prank(owner);
-        vm.expectRevert("NOT_IMPLEMENTED");
         issuanceManager.signCertificate(address(certPrinter), certId, "ipfs://signature");
+        assertEq(certPrinter.getIssuerSignatureCount(certId), 1, "signature should be added");
+        assertEq(certPrinter.getIssuerSignatureAt(certId, 0), "ipfs://signature", "stored signature mismatch");
     }
 
     // =========================================================================
@@ -581,16 +583,49 @@ contract ScripPOCTest is Test {
     // =========================================================================
 
     function test_POC5_GetEndorsementHistory_InterfaceMismatch() public {
-        // ICyberCertPrinter.getEndorsementHistory returns:
-        //   (address endorser, string memory endorseeName, address registry,
-        //    bytes32 agreementId, uint256 timestamp, bytes memory signatureHash, address endorsee)
-        //
-        // CyberCertPrinter.getEndorsementHistory returns:
-        //   (Endorsement memory details)
-        //
-        // The struct has fields in a different ABI layout than the individual returns.
-        // External callers using ICyberCertPrinter will decode the return data incorrectly.
-        assertTrue(true);
+        // Deploy a real printer (not the local mock), mint, then add an endorsement.
+        address realPrinter = issuanceManager.createCertPrinter(
+            new string[](0),
+            "Real Cert",
+            "RCERT",
+            "uri://real",
+            SecurityClass.CommonStock,
+            SecuritySeries.SeriesA,
+            address(0)
+        );
+
+        // Avoid IssuanceManager.createCert in this PoC: it fetches tokenURI, which
+        // depends on uriBuilder being configured in setUp.
+        vm.prank(address(issuanceManager));
+        ICyberCertPrinter(realPrinter).safeMint(0, investor, _defaultDetails(100));
+
+        bytes memory signature = abi.encodePacked(uint256(12345));
+        bytes32 agreementId = keccak256("POC5");
+        Endorsement memory endorsement = Endorsement(
+            owner,
+            block.timestamp,
+            signature,
+            address(0),
+            agreementId,
+            address(0),
+            ""
+        );
+        vm.prank(address(issuanceManager));
+        ICyberCertPrinter(realPrinter).addEndorsement(0, endorsement);
+
+        // Do a raw call first (this succeeds and returns bytes).
+        (bool ok, bytes memory returndata) = realPrinter.staticcall(
+            abi.encodeWithSelector(ICyberCertPrinter.getEndorsementHistory.selector, 0, 0)
+        );
+        assertTrue(ok, "raw getEndorsementHistory call failed");
+
+        // Then decode as the INTERFACE tuple shape.
+        // If issue #5 exists, this decode reverts due ABI layout mismatch.
+        vm.expectRevert();
+        abi.decode(
+            returndata,
+            (address, string, address, bytes32, uint256, bytes, address)
+        );
     }
 
     // =========================================================================

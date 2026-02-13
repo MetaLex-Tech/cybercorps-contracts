@@ -122,6 +122,12 @@ interface IIssuanceManager {
         string calldata signatureURI
     ) external;
 
+    function addOfficerSignature(
+        address certAddress,
+        uint256 tokenId,
+        string calldata signatureURI
+    ) external;
+
     function endorseCertificate(
         address certAddress,
         uint256 tokenId,

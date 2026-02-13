@@ -66,6 +66,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     error EndorsementNotSignedOrInvalid();
     error InvalidEndorsement();
     error InvalidLegendIndex();
+    error SignatureRequired();
 
     //events
     event CertificateCreated(uint256 indexed tokenId, address indexed investor, uint256 amount, uint256 cap);
@@ -160,7 +161,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId] = CyberCertPrinterStorage.cyberCertStorage().defaultLegend;
         // Store agreement details
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
-        string memory issuerName = IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName();
         emit CyberCertPrinter_CertificateCreated(tokenId);
         return tokenId;
     }
@@ -174,7 +174,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         if(ownerOf(tokenId) != from) revert InvalidTokenId();
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
         string memory issuerName = IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName();
-       // _transfer(from, to, tokenId);
         return tokenId;
     }
     
@@ -199,6 +198,16 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         );
     }
 
+    function addIssuerSignature(
+        uint256 tokenId,
+        string calldata signatureURI
+    ) external onlyIssuanceManager {
+        if (!_exists(tokenId)) revert TokenDoesNotExist();
+        if (bytes(signatureURI).length == 0) revert SignatureRequired();
+        CyberCertPrinterStorage.cyberCertStorage().issuerSignatures[tokenId].push(signatureURI);
+        emit CertificateSigned(tokenId, signatureURI);
+    }
+
     function endorseAndTransfer(uint256 tokenId, Endorsement memory newEndorsement, address from, address to) external {
         addEndorsement(tokenId, newEndorsement);
         _transfer(from, to, tokenId);
@@ -215,6 +224,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         
         // Clear agreement details
         delete CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId];
+        delete CyberCertPrinterStorage.cyberCertStorage().issuerSignatures[tokenId];
     }
     
     /**
@@ -300,6 +310,16 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     ) {
         if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
              details = CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId][index];
+    }
+
+    function getIssuerSignatureCount(uint256 tokenId) external view returns (uint256) {
+        if (!_exists(tokenId)) revert TokenDoesNotExist();
+        return CyberCertPrinterStorage.cyberCertStorage().issuerSignatures[tokenId].length;
+    }
+
+    function getIssuerSignatureAt(uint256 tokenId, uint256 index) external view returns (string memory) {
+        if (!_exists(tokenId)) revert TokenDoesNotExist();
+        return CyberCertPrinterStorage.cyberCertStorage().issuerSignatures[tokenId][index];
     }
 
     function voidCert(uint256 tokenId) external onlyIssuanceManager {
