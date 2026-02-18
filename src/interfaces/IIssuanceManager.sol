@@ -136,12 +136,6 @@ interface IIssuanceManager {
         bytes32 agreementId
     ) external;
 
-    function updateCertificateDetails(
-        address certAddress,
-        uint256 tokenId,
-        CertificateDetails memory _details
-    ) external;
-
     function voidCertificate(
         address certAddress,
         uint256 tokenId

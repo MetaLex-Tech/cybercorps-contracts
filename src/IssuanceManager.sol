@@ -350,7 +350,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         certificate.addEndorsement(tokenId, newEndorsement);
     }
 
-    /// @notice Updates the details of an existing certificate
+   /* /// @notice Updates the details of an existing certificate
     /// @dev Only callable by admin
     /// @param certAddress Address of the certificate printer contract
     /// @param tokenId ID of the certificate
@@ -362,7 +362,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     ) external onlyAdmin {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
         certificate.updateCertificateDetails(tokenId, _details);
-    }
+    }*/
 
     /// @notice Voids a certificate
     /// @dev Only callable by admin

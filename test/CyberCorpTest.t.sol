@@ -3908,8 +3908,8 @@ contract CyberCorpTest is Test {
         vm.startPrank(testAddress);
         bytes32 check = bytes32(bytes("ABV_safe_t"));
         console.logBytes32(check);
-
-        check = bytes32(bytes("mlx_safe_reg_d_v1_3"));
+     console.log("blackhaven_safe_t");
+        check = bytes32(bytes("blackhaven_safe_t"));
         console.logBytes32(check);
         check = bytes32(bytes("mlx_safe_reg_s_v1_3"));
         console.logBytes32(check);

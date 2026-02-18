@@ -1,0 +1,58 @@
+{
+  "version": "1.0",
+  "chainId": "8453",
+  "createdAt": 1763075700311,
+  "meta": {
+    "name": "Transactions Batch",
+    "description": "Add blackhaven_safe_t template",
+    "txBuilderVersion": "1.18.2",
+    "createdFromSafeAddress": "0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C",
+    "createdFromOwnerAddress": "",
+    "checksum": ""
+  },
+  "transactions": [
+    {
+      "to": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+      "value": "0",
+      "data": null,
+      "contractMethod": {
+        "inputs": [
+          {
+            "internalType": "bytes32",
+            "name": "templateId",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "string",
+            "name": "title",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "legalContractUri",
+            "type": "string"
+          },
+          {
+            "internalType": "string[]",
+            "name": "globalFields",
+            "type": "string[]"
+          },
+          {
+            "internalType": "string[]",
+            "name": "partyFields",
+            "type": "string[]"
+          }
+        ],
+        "name": "createTemplate",
+        "payable": false
+      },
+      "contractInputsValues": {
+        "templateId": "0x626c61636b686176656e5f736166655f74000000000000000000000000000000",
+        "title": "blackhaven_safe_t",
+        "legalContractUri": "IPFS://bafybeiamepjce7tn4oigr3q6zdph2glgali3jp2xe25pivifsx3rha55gi",
+        "globalFields": "[\"purchaseAmount\", \"postMoneyValuationCap\", \"expirationTime\", \"governingJurisdiction\", \"disputeResolution\", \"exercisePriceMethod\", \"exercisePrice\", \"unlockStartTimeType\", \"unlockStartTime\", \"unlockingPeriod\", \"latestExpirationTime\", \"unlockingCliffPeriod\", \"unlockingCliffPercentage\", \"unlockingIntervalType\", \"tokenCalculationMethod\", \"minCompanyReserve\", \"tokenPremiumMultiplier\"]",
+        "partyFields": "[\"name\", \"evmAddress\", \"contactDetails\", \"investorType\", \"investorJurisdiction\"]"
+      }
+    }
+  ]
+}

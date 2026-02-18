@@ -160,6 +160,16 @@ contract MockCertPrinter {
 
     function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory) { return _details[tokenId]; }
 
+    function safeTransferFrom(address from, address to, uint256 tokenId) external {
+        if (_owners[tokenId] != from) {
+            revert("NOT_OWNER");
+        }
+        _owners[tokenId] = to;
+        _balances[from] -= 1;
+        _balances[to] += 1;
+        _ownedTokens[to].push(tokenId);
+    }
+
     function voidCert(uint256 tokenId) external {
         _voided[tokenId] = true;
     }
@@ -170,8 +180,11 @@ contract MockCertPrinter {
 }
 
 contract MockCyberCorp {
+    address public dealManagerAddress = address(0xD34D);
+
     function cyberCORPName() external pure returns (string memory) { return "MockCorp"; }
     function cyberCORPJurisdiction() external pure returns (string memory) { return "DE"; }
+    function dealManager() external view returns (address) { return dealManagerAddress; }
 }
 
 contract IssuanceManagerConversionTest is Test {
@@ -186,10 +199,12 @@ contract IssuanceManagerConversionTest is Test {
 
     address public owner;
     address public investor;
+    address public otherInvestor;
 
     function setUp() public {
         owner = address(this);
         investor = makeAddr("investor");
+        otherInvestor = makeAddr("otherInvestor");
 
         // Auth
         auth = new BorgAuth(owner);
@@ -785,6 +800,247 @@ contract IssuanceManagerConversionTest is Test {
         vm.prank(investor);
         vm.expectRevert(IssuanceManager.ScripRatioRemainder.selector);
         issuanceManager.convertScripToCert(address(certPrinter), 1);
+    }
+
+    function test_convertScripToCert_parameterLifecycleAndRuntimeUpdates() public {
+        MockCertPrinter certPrinter = _deployPrinter("Lifecycle Cert", "LCERT");
+        uint256 certId = _mintCert(certPrinter, investor, 75);
+
+        uint256[] memory whitelistIds = new uint256[](1);
+        whitelistIds[0] = certId;
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            50, // initial minimum
+            3, // initial ratio numerator
+            2, // initial ratio denominator
+            whitelistIds,
+            true, // whitelist enabled
+            true,
+            true,
+            true
+        );
+
+        // Validate deploy-time parameters
+        (uint256 initialNum, uint256 initialDen) = issuanceManager.getScripRatio(
+            address(certPrinter)
+        );
+        assertEq(initialNum, 3);
+        assertEq(initialDen, 2);
+        assertEq(issuanceManager.getScripToCertMinimum(address(certPrinter)), 50);
+        assertTrue(issuanceManager.getScripifyWhitelistEnabled(address(certPrinter)));
+        assertTrue(issuanceManager.isScripifyWhitelisted(address(certPrinter), certId));
+        assertFalse(issuanceManager.isScripifyWhitelisted(address(certPrinter), 99999));
+
+        // Update all runtime parameters and verify
+        issuanceManager.setScripRatio(address(certPrinter), 4, 1);
+        issuanceManager.setScripToCertMinimum(address(certPrinter), 40);
+        issuanceManager.setScripifyWhitelistEnabled(address(certPrinter), false);
+
+        uint256[] memory removeIds = new uint256[](1);
+        removeIds[0] = certId;
+        issuanceManager.removeScripifyWhitelistIds(address(certPrinter), removeIds);
+        assertFalse(issuanceManager.isScripifyWhitelisted(address(certPrinter), certId));
+
+        uint256[] memory addIds = new uint256[](2);
+        addIds[0] = certId;
+        addIds[1] = certId + 1;
+        issuanceManager.addScripifyWhitelistIds(address(certPrinter), addIds);
+
+        (uint256 updatedNum, uint256 updatedDen) = issuanceManager.getScripRatio(
+            address(certPrinter)
+        );
+        assertEq(updatedNum, 4);
+        assertEq(updatedDen, 1);
+        assertEq(issuanceManager.getScripToCertMinimum(address(certPrinter)), 40);
+        assertFalse(issuanceManager.getScripifyWhitelistEnabled(address(certPrinter)));
+        assertTrue(issuanceManager.isScripifyWhitelisted(address(certPrinter), certId));
+        assertTrue(issuanceManager.isScripifyWhitelisted(address(certPrinter), certId + 1));
+
+        // With ratio 4:1, scripifying 10 units mints 40 scrip
+        vm.prank(investor);
+        issuanceManager.scripifyCert(address(certPrinter), certId, 10, address(0));
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 40);
+
+        // Minimum is now 40; lower amounts should revert
+        vm.prank(investor);
+        vm.expectRevert(IssuanceManager.ScripToCertMinimumNotMet.selector);
+        issuanceManager.convertScripToCert(address(certPrinter), 39);
+
+        // Convert exactly at minimum, ensuring conversion uses updated ratio
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(certPrinter), 40);
+
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
+        assertEq(certPrinter.totalSupply(), 2);
+        assertEq(certPrinter.ownerOf(1), investor);
+        CertificateDetails memory converted = certPrinter.getCertificateDetails(1);
+        assertEq(converted.unitsRepresented, 10);
+    }
+
+    function test_convertScripToCert_revertGatesAndConditionValidation() public {
+        MockCertPrinter certPrinter = _deployPrinter("Guard Cert", "GCERT");
+
+        // Unconfigured cert should always fail conversion.
+        vm.prank(investor);
+        vm.expectRevert(IssuanceManager.ScripifiedCertNotAllowed.selector);
+        issuanceManager.convertScripToCert(address(certPrinter), 1);
+
+        // Condition requires exact amount = 150
+        ICondition[] memory scripToCert = new ICondition[](1);
+        scripToCert[0] = ICondition(
+            new SelectorCondition(
+                address(certPrinter),
+                IssuanceManager.convertScripToCert.selector,
+                abi.encode(uint256(150))
+            )
+        );
+
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            scripToCert,
+            90, // minimum
+            3, // ratio numerator
+            2, // ratio denominator
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+
+        vm.prank(address(issuanceManager));
+        ICyberScrip(scrip).mint(investor, 200);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 200);
+
+        // Fails minimum
+        vm.prank(investor);
+        vm.expectRevert(IssuanceManager.ScripToCertMinimumNotMet.selector);
+        issuanceManager.convertScripToCert(address(certPrinter), 80);
+
+        // Passes minimum but fails ratio divisibility (100*2 % 3 != 0)
+        vm.prank(investor);
+        vm.expectRevert(IssuanceManager.ScripRatioRemainder.selector);
+        issuanceManager.convertScripToCert(address(certPrinter), 100);
+
+        // Passes minimum and ratio, but fails condition (expects 150)
+        vm.prank(investor);
+        vm.expectRevert(IssuanceManager.ConditionCheckFailed.selector);
+        issuanceManager.convertScripToCert(address(certPrinter), 120);
+
+        // Successful conversion with expected amount
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(certPrinter), 150);
+
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 50);
+        assertEq(certPrinter.totalSupply(), 1);
+        assertEq(certPrinter.ownerOf(0), investor);
+        CertificateDetails memory newCert = certPrinter.getCertificateDetails(0);
+        assertEq(newCert.unitsRepresented, 100); // 150 * 2 / 3
+    }
+
+    function test_convertScripToCert_reformsVoidedCertAndTransfersToDealManager()
+        public
+    {
+        MockCertPrinter certPrinter = _deployPrinter("Voided Cert", "VCERT");
+
+        CertificateDetails memory original = CertificateDetails({
+            signingOfficerName: "Alice Officer",
+            signingOfficerTitle: "General Counsel",
+            investmentAmountUSD: 3_000_000,
+            issuerUSDValuationAtTimeOfInvestment: 33_000_000,
+            unitsRepresented: 500,
+            legalDetails: "Original legal details",
+            extensionData: "Original extension"
+        });
+        vm.prank(owner);
+        issuanceManager.createCert(address(certPrinter), investor, original);
+
+        // Mark existing cert as voided while investor still owns it.
+        certPrinter.voidCert(0);
+        assertTrue(certPrinter.isVoided(0));
+        assertEq(certPrinter.ownerOf(0), investor);
+
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            0,
+            2, // ratio numerator
+            1, // ratio denominator
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+
+        // 20 scrip -> 10 units at ratio 2:1
+        vm.prank(address(issuanceManager));
+        ICyberScrip(scrip).mint(investor, 20);
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(certPrinter), 20);
+
+        // Reform path should update existing cert (no mint) and transfer to deal manager
+        assertEq(certPrinter.totalSupply(), 1);
+        assertEq(certPrinter.ownerOf(0), mockCorp.dealManager());
+
+        CertificateDetails memory reformed = certPrinter.getCertificateDetails(0);
+        assertEq(reformed.unitsRepresented, 10);
+        // All other fields should remain intact on reform.
+        assertEq(reformed.signingOfficerName, original.signingOfficerName);
+        assertEq(reformed.signingOfficerTitle, original.signingOfficerTitle);
+        assertEq(
+            reformed.investmentAmountUSD,
+            original.investmentAmountUSD
+        );
+        assertEq(
+            reformed.issuerUSDValuationAtTimeOfInvestment,
+            original.issuerUSDValuationAtTimeOfInvestment
+        );
+        assertEq(reformed.legalDetails, original.legalDetails);
+        assertEq(reformed.extensionData, original.extensionData);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
+    }
+
+    function _deployPrinter(
+        string memory name,
+        string memory symbol
+    ) internal returns (MockCertPrinter certPrinter) {
+        certPrinter = new MockCertPrinter();
+        certPrinter.initialize(
+            new string[](0),
+            name,
+            symbol,
+            "uri://cert",
+            address(issuanceManager),
+            SecurityClass.CommonStock,
+            SecuritySeries.SeriesA,
+            address(0)
+        );
+    }
+
+    function _mintCert(
+        MockCertPrinter certPrinter,
+        address to,
+        uint256 units
+    ) internal returns (uint256 tokenId) {
+        CertificateDetails memory details = CertificateDetails({
+            signingOfficerName: "Officer",
+            signingOfficerTitle: "Title",
+            investmentAmountUSD: 1000,
+            issuerUSDValuationAtTimeOfInvestment: 10000,
+            unitsRepresented: units,
+            legalDetails: "",
+            extensionData: ""
+        });
+        vm.prank(owner);
+        tokenId = issuanceManager.createCert(address(certPrinter), to, details);
     }
 }
 

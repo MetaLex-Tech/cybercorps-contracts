@@ -39,7 +39,7 @@ contract UpdateCertificate is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         // Call updateCertificateDetails on the IssuanceManager
-        IIssuanceManager(issuanceManagerAddress).updateCertificateDetails(printerAddress, tokenId, details);
+     //   IIssuanceManager(issuanceManagerAddress).updateCertificateDetails(printerAddress, tokenId, details);
 
         vm.stopBroadcast();
 
