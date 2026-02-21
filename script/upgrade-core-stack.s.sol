@@ -11,6 +11,7 @@ import {CyberCorp} from "../src/CyberCorp.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
+import {IssuerApprovalRecertificationCondition} from "../src/libs/conditions/IssuerApprovalRecertificationCondition.sol";
 import {ERC1967ProxyLib} from "../test/libs/ERC1967ProxyLib.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 
@@ -33,6 +34,7 @@ contract UpgradeCoreStackScript is Script {
         address issuanceManagerImpl;
         address cyberCertPrinterImpl;
         address cyberScripImpl;
+        address issuerApprovalRecertificationCondition;
     }
 
     function run() public {
@@ -88,6 +90,9 @@ contract UpgradeCoreStackScript is Script {
         impls.issuanceManagerImpl = address(new IssuanceManager());
         impls.cyberCertPrinterImpl = address(new CyberCertPrinter());
         impls.cyberScripImpl = address(new CyberScrip());
+        impls.issuerApprovalRecertificationCondition = address(
+            new IssuerApprovalRecertificationCondition()
+        );
 
         console2.log("New CyberCorp implementation:", impls.cyberCorpImpl);
         console2.log(
@@ -99,6 +104,10 @@ contract UpgradeCoreStackScript is Script {
             impls.cyberCertPrinterImpl
         );
         console2.log("New CyberScrip implementation:", impls.cyberScripImpl);
+        console2.log(
+            "New IssuerApprovalRecertificationCondition:",
+            impls.issuerApprovalRecertificationCondition
+        );
     }
 
     function _updateFactoryReferences(

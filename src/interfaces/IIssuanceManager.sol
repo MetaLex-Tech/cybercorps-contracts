@@ -116,16 +116,26 @@ interface IIssuanceManager {
         CertificateDetails memory _details
     ) external returns (uint256 tokenId);
 
+    function createCertSignAndAssign(
+        address certAddress,
+        address investor,
+        CertificateDetails memory _details,
+        bytes calldata endorsementSignature,
+        address registry,
+        bytes32 agreementId,
+        string calldata investorName
+    ) external returns (uint256 tokenId);
+
     function signCertificate(
         address certAddress,
         uint256 tokenId,
-        string calldata signatureURI
+        bytes calldata signature
     ) external;
 
     function addOfficerSignature(
         address certAddress,
         uint256 tokenId,
-        string calldata signatureURI
+        bytes calldata signature
     ) external;
 
     function endorseCertificate(

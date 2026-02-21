@@ -81,7 +81,6 @@ library CyberCertPrinterStorage {
     struct CyberCertStorage {
         // Token data
         mapping(uint256 => CertificateDetails) certificateDetails;
-        mapping(uint256 => string[]) issuerSignatures;
         mapping(uint256 => Endorsement[]) endorsements;
         mapping(uint256 => OwnerDetails) owners;
         mapping(uint256 => SecurityStatus) securityStatus;
@@ -100,6 +99,7 @@ library CyberCertPrinterStorage {
         bool endorsementRequired;
         // New variables must be appended below to preserve storage layout for upgrades
         mapping(uint256 => bool) tokenTransferable;
+        mapping(uint256 => bytes[]) issuerSignatures;
         
     }
 

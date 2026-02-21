@@ -21,6 +21,10 @@ import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {Round, RoundLib} from "../src/libs/RoundLib.sol";
 import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
+import {ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
+import {ICyberScrip} from "../src/interfaces/ICyberScrip.sol";
+import {IssuerApprovalRecertificationCondition} from "../src/libs/conditions/IssuerApprovalRecertificationCondition.sol";
+import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
@@ -33,6 +37,33 @@ interface IUUPS {
         address newImplementation,
         bytes calldata data
     ) external payable;
+}
+
+contract SelectorCondition is ICondition {
+    address public expectedContract;
+    bytes4 public expectedSelector;
+    bytes32 public expectedDataHash;
+
+    constructor(
+        address _contract,
+        bytes4 _selector,
+        bytes memory data
+    ) {
+        expectedContract = _contract;
+        expectedSelector = _selector;
+        expectedDataHash = keccak256(data);
+    }
+
+    function checkCondition(
+        address _contract,
+        bytes4 _functionSignature,
+        bytes memory data
+    ) external view returns (bool) {
+        return
+            _contract == expectedContract &&
+            _functionSignature == expectedSelector &&
+            keccak256(data) == expectedDataHash;
+    }
 }
 
 contract CyberScripUpgradeTest is Test {
@@ -56,8 +87,10 @@ contract CyberScripUpgradeTest is Test {
 
     uint256 internal companyOwnerPk;
     uint256 internal investorPk;
+    uint256 internal otherInvestorPk;
     address internal companyOwner;
     address internal investor;
+    address internal otherInvestor;
 
     function setUp() public {
 
@@ -66,8 +99,10 @@ contract CyberScripUpgradeTest is Test {
         // deterministic test users
         companyOwnerPk = uint256(keccak256("cyberscrip-upgrade-company-owner"));
         investorPk = uint256(keccak256("cyberscrip-upgrade-investor"));
+        otherInvestorPk = uint256(keccak256("cyberscrip-upgrade-other-investor"));
         companyOwner = vm.addr(companyOwnerPk);
         investor = vm.addr(investorPk);
+        otherInvestor = vm.addr(otherInvestorPk);
     }
 
     function test_UpgradeCyberScrip_And_InvestorRoundFlow() public {
@@ -310,6 +345,231 @@ contract CyberScripUpgradeTest is Test {
         );
 
         assertTrue(corp != address(0), "corp should be deployed");
+    }
+
+    function test_PostUpgrade_ConversionLifecycleAndRuntimeUpdates() public {
+        IssuanceManager issuanceManager = _setupUpgradedIssuanceManager();
+        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+            issuanceManager,
+            "Lifecycle Cert",
+            "LCERT"
+        );
+        uint256 certId = _mintCertAfterUpgrade(
+            issuanceManager,
+            certPrinter,
+            investor,
+            75
+        );
+
+        uint256[] memory whitelistIds = new uint256[](1);
+        whitelistIds[0] = certId;
+        vm.prank(companyOwner);
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            50,
+            3,
+            2,
+            whitelistIds,
+            true,
+            true,
+            true,
+            true
+        );
+
+        (uint256 initialNum, uint256 initialDen) = issuanceManager.getScripRatio(
+            address(certPrinter)
+        );
+        assertEq(initialNum, 3);
+        assertEq(initialDen, 2);
+        assertEq(issuanceManager.getScripToCertMinimum(address(certPrinter)), 50);
+        assertTrue(issuanceManager.getScripifyWhitelistEnabled(address(certPrinter)));
+        assertTrue(issuanceManager.isScripifyWhitelisted(address(certPrinter), certId));
+
+        vm.prank(companyOwner);
+        issuanceManager.setScripRatio(address(certPrinter), 4, 1);
+        vm.prank(companyOwner);
+        issuanceManager.setScripToCertMinimum(address(certPrinter), 40);
+        vm.prank(companyOwner);
+        issuanceManager.setScripifyWhitelistEnabled(address(certPrinter), false);
+
+        uint256[] memory removeIds = new uint256[](1);
+        removeIds[0] = certId;
+        vm.prank(companyOwner);
+        issuanceManager.removeScripifyWhitelistIds(address(certPrinter), removeIds);
+
+        uint256[] memory addIds = new uint256[](2);
+        addIds[0] = certId;
+        addIds[1] = certId + 1;
+        vm.prank(companyOwner);
+        issuanceManager.addScripifyWhitelistIds(address(certPrinter), addIds);
+
+        vm.prank(investor);
+        issuanceManager.scripifyCert(address(certPrinter), certId, 10, address(0));
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 40);
+
+        vm.prank(investor);
+        vm.expectRevert(IssuanceManager.ScripToCertMinimumNotMet.selector);
+        issuanceManager.convertScripToCert(address(certPrinter), 39);
+
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(certPrinter), 40);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
+    }
+
+    function test_PostUpgrade_ConversionGatesAndConditions() public {
+        IssuanceManager issuanceManager = _setupUpgradedIssuanceManager();
+        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+            issuanceManager,
+            "Guard Cert",
+            "GCERT"
+        );
+
+        vm.prank(investor);
+        vm.expectRevert(IssuanceManager.ScripifiedCertNotAllowed.selector);
+        issuanceManager.convertScripToCert(address(certPrinter), 1);
+
+        ICondition[] memory scripToCert = new ICondition[](1);
+        scripToCert[0] = ICondition(
+            new SelectorCondition(
+                address(certPrinter),
+                IssuanceManager.convertScripToCert.selector,
+                abi.encode(uint256(150), investor)
+            )
+        );
+
+        vm.prank(companyOwner);
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            scripToCert,
+            90,
+            3,
+            2,
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+
+        vm.prank(address(issuanceManager));
+        ICyberScrip(scrip).mint(investor, 200);
+
+        vm.prank(investor);
+        vm.expectRevert(IssuanceManager.ScripToCertMinimumNotMet.selector);
+        issuanceManager.convertScripToCert(address(certPrinter), 80);
+
+        vm.prank(investor);
+        vm.expectRevert(IssuanceManager.ScripRatioRemainder.selector);
+        issuanceManager.convertScripToCert(address(certPrinter), 100);
+
+        vm.prank(investor);
+        vm.expectRevert(IssuanceManager.ConditionCheckFailed.selector);
+        issuanceManager.convertScripToCert(address(certPrinter), 120);
+
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(certPrinter), 150);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 50);
+    }
+
+    function test_PostUpgrade_ReformsVoidedPath() public {
+        IssuanceManager issuanceManager = _setupUpgradedIssuanceManager();
+        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+            issuanceManager,
+            "Voided Cert",
+            "VCERT"
+        );
+        _mintCertAfterUpgrade(issuanceManager, certPrinter, investor, 500);
+
+        vm.prank(companyOwner);
+        issuanceManager.voidCertificate(address(certPrinter), 0);
+        assertTrue(certPrinter.isVoided(0));
+
+        vm.prank(companyOwner);
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            0,
+            2,
+            1,
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+
+        vm.prank(address(issuanceManager));
+        ICyberScrip(scrip).mint(investor, 20);
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(certPrinter), 20);
+
+        assertEq(certPrinter.totalSupply(), 2);
+        assertEq(certPrinter.ownerOf(1), investor);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
+    }
+
+    function test_PostUpgrade_RequiresIssuerApprovalCondition() public {
+        IssuanceManager issuanceManager = _setupUpgradedIssuanceManager();
+        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+            issuanceManager,
+            "Approval Cert",
+            "APPR"
+        );
+        uint256 certId = _mintCertAfterUpgrade(
+            issuanceManager,
+            certPrinter,
+            investor,
+            10
+        );
+
+        IssuerApprovalRecertificationCondition condition = new IssuerApprovalRecertificationCondition();
+        ICondition[] memory scripToCert = new ICondition[](1);
+        scripToCert[0] = ICondition(address(condition));
+
+        vm.prank(companyOwner);
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            scripToCert,
+            0,
+            1,
+            1,
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+
+        vm.prank(investor);
+        issuanceManager.scripifyCert(address(certPrinter), certId, 5, address(0));
+
+        vm.prank(investor);
+        vm.expectRevert(IssuanceManager.ConditionCheckFailed.selector);
+        issuanceManager.convertScripToCert(address(certPrinter), 5);
+
+        vm.prank(otherInvestor);
+        vm.expectRevert();
+        condition.setInvestorApproval(address(certPrinter), investor, true);
+
+        // Condition approvals require AUTH.ADMIN_ROLE on the cert's issuance manager.
+        BorgAuth auth = BorgAuth(issuanceManager.AUTH());
+        uint256 adminRole = auth.ADMIN_ROLE();
+        vm.prank(companyOwner);
+        auth.updateRole(address(this), adminRole);
+
+        condition.setInvestorApproval(address(scrip), investor, true);
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(certPrinter), 5);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
     }
 
     function _recreateRoundAfterUpgrade(
@@ -649,5 +909,163 @@ contract CyberScripUpgradeTest is Test {
         arr = new string[](2);
         arr[0] = a;
         arr[1] = b;
+    }
+
+    function _setupUpgradedIssuanceManager()
+        internal
+        returns (IssuanceManager issuanceManager)
+    {
+        CyberCorpFactory corpFactory = CyberCorpFactory(
+            deployment.cyberCorpFactory
+        );
+        CyberAgreementRegistry registry = CyberAgreementRegistry(
+            deployment.cyberAgreementRegistry
+        );
+        RoundManagerFactory rmFactory = RoundManagerFactory(
+            deployment.roundManagerFactory
+        );
+        CyberCorpSingleFactory corpSingleFactory = CyberCorpSingleFactory(
+            deployment.cyberCorpSingleFactory
+        );
+        IssuanceManagerFactory imFactory = IssuanceManagerFactory(
+            deployment.issuanceManagerFactory
+        );
+
+        address stable = corpFactory.stable();
+        bytes32 templateId = bytes32(
+            uint256(keccak256(abi.encodePacked("cyberscrip-upgrade-conversion-template", address(this), block.timestamp)))
+        );
+
+        vm.prank(METALEX_SAFE);
+        registry.createTemplate(
+            templateId,
+            "CyberScrip conversion template",
+            "ipfs://cyberscrip-conversion-template",
+            _strings("purchaseAmount", "valuation"),
+            _strings("name", "jurisdiction")
+        );
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: companyOwner,
+            name: "Officer One",
+            contact: "officer@test.local",
+            title: "CEO"
+        });
+
+        uint256 userSalt = uint256(
+            keccak256(abi.encodePacked("cyberscrip-upgrade-conversion-salt", address(this), block.timestamp))
+        );
+        bytes32 corpSalt = keccak256(abi.encodePacked(userSalt));
+
+        uint256 raiseCap = 100_000e6;
+        uint256 minTicket = 100e6;
+        uint256 maxTicket = 2_000e6;
+        uint256 startTime = block.timestamp - 1;
+        uint256 endTime = block.timestamp + 7 days;
+        uint256 pricePerUnit = 1e18;
+        uint256 valuation = 5_000_000e18;
+
+        (bytes memory escrowedSignature, ) = _computeEscrowSignature(
+            rmFactory.computeRoundManagerAddress(corpSalt),
+            SecuritySeries.SeriesA,
+            raiseCap,
+            minTicket,
+            maxTicket,
+            RoundType.FCFS,
+            startTime,
+            endTime,
+            templateId,
+            stable,
+            pricePerUnit,
+            valuation,
+            companyOwnerPk,
+            corpSingleFactory.computeCyberCorpSingleAddress(corpSalt)
+        );
+
+        CyberCertData[] memory certData = new CyberCertData[](1);
+        certData[0] = CyberCertData({
+            name: "SAFE",
+            symbol: "SAFE",
+            uri: "ipfs://safe-cert",
+            securityClass: SecurityClass.SAFE,
+            securitySeries: SecuritySeries.SeriesA,
+            extension: address(0),
+            defaultLegend: new string[](0)
+        });
+
+        string[] memory legalDetails = new string[](1);
+        legalDetails[0] = "legal-details";
+        bytes[] memory extensionData = new bytes[](1);
+        extensionData[0] = "";
+        string[] memory roundPartyValues = _strings("Officer One", "US");
+
+        (address corp, address auth, address issuanceManagerAddr, , , ) = _deployCorpAndRound(
+            corpFactory,
+            userSalt,
+            officer,
+            legalDetails,
+            extensionData,
+            certData,
+            templateId,
+            stable,
+            pricePerUnit,
+            valuation,
+            roundPartyValues,
+            escrowedSignature,
+            raiseCap,
+            minTicket,
+            maxTicket,
+            startTime,
+            endTime
+        );
+
+        vm.prank(deployment.cyberCorpFactory);
+        BorgAuth(auth).updateRole(companyOwner, 99);
+
+        issuanceManager = IssuanceManager(issuanceManagerAddr);
+        _upgradeCoreStackForCorp(
+            corp,
+            issuanceManager,
+            corpSingleFactory,
+            imFactory
+        );
+    }
+
+    function _deployPrinterAfterUpgrade(
+        IssuanceManager issuanceManager,
+        string memory name,
+        string memory symbol
+    ) internal returns (ICyberCertPrinter certPrinter) {
+        vm.prank(companyOwner);
+        certPrinter = ICyberCertPrinter(
+            issuanceManager.createCertPrinter(
+                new string[](0),
+                name,
+                symbol,
+                "uri://cert",
+                SecurityClass.CommonStock,
+                SecuritySeries.SeriesA,
+                address(0)
+            )
+        );
+    }
+
+    function _mintCertAfterUpgrade(
+        IssuanceManager issuanceManager,
+        ICyberCertPrinter certPrinter,
+        address to,
+        uint256 units
+    ) internal returns (uint256 tokenId) {
+        CertificateDetails memory details = CertificateDetails({
+            signingOfficerName: "Officer",
+            signingOfficerTitle: "Title",
+            investmentAmountUSD: 1000,
+            issuerUSDValuationAtTimeOfInvestment: 10000,
+            unitsRepresented: units,
+            legalDetails: "",
+            extensionData: ""
+        });
+        vm.prank(companyOwner);
+        tokenId = issuanceManager.createCert(address(certPrinter), to, details);
     }
 }

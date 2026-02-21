@@ -11,7 +11,7 @@ import "./storage/CyberScripStorage.sol";
 contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
     using CyberScripStorage for CyberScripStorage.StorageData;
     
-    string public constant DEPLOY_VERSION = "3"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "4"; // For version-tracking on all deployment and future upgrades
 
     error RestrictedTransfer(string reason);
     error NotIssuanceManager();

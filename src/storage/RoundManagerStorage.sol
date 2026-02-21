@@ -424,17 +424,17 @@ library RoundManagerStorage {
         }
 
         if (_isStockSecurityClass(round.primarySecurityClass)) {
-            string memory secondEscrowedSignature = "";
+            bytes memory secondEscrowedSignature = "";
             address corp = LexScrowStorage.getCorp();
             try ICyberCorp(corp).getEscrowedOfficerSignatureCount() returns (uint256 count) {
                 if (count > 1) {
-                    try ICyberCorp(corp).getEscrowedOfficerSignature(1) returns (string memory sig) {
+                    try ICyberCorp(corp).getEscrowedOfficerSignature(1) returns (bytes memory sig) {
                         secondEscrowedSignature = sig;
                     } catch {}
                 }
             } catch {}
 
-            if (bytes(secondEscrowedSignature).length > 0) {
+            if (secondEscrowedSignature.length > 0) {
                 for (uint256 i = 0; i < round.certPrinter.length; i++) {
                     issuanceManager.addOfficerSignature(
                         round.certPrinter[i],

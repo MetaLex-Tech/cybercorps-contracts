@@ -62,11 +62,11 @@ import "./storage/IssuanceManagerStorage.sol";
 contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     using IssuanceManagerStorage for IssuanceManagerStorage.IssuanceManagerData;
 
-    string public constant DEPLOY_VERSION = "3"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "4"; // For version-tracking on all deployment and future upgrades
 
     // IssuanceManager errors
     error CompanyDetailsNotSet();
-    error SignatureURIRequired();
+    error SignatureRequired();
     error TokenProxyNotFound();
     error NotSAFEToken();
     error NotUpgradeFactory();
@@ -307,20 +307,108 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         return tokenId;
     }
 
+    /// @notice Creates, assigns, signs, and endorses a new certificate in one transaction
+    /// @dev Only callable by owner/self, requires company details to be set
+    /// @param certAddress Address of the certificate printer contract
+    /// @param investor Recipient of the certificate
+    /// @param _details Certificate details
+    /// @param endorsementSignature Signature hash to store in endorsement and cert signatures
+    /// @param registry Optional source registry associated with endorsement
+    /// @param agreementId Optional agreement id associated with endorsement
+    /// @param investorName Human-readable investor name stored in endorsement
+    /// @return tokenId ID of the new certificate
+    function createCertSignAndAssign(
+        address certAddress,
+        address investor,
+        CertificateDetails memory _details,
+        bytes memory endorsementSignature,
+        address registry,
+        bytes32 agreementId,
+        string memory investorName
+    ) public onlyOwnerOrSelf returns (uint256 tokenId) {
+        if (
+            bytes(ICyberCorp(IssuanceManagerStorage.getCORP()).cyberCORPName())
+                .length == 0
+        ) revert CompanyDetailsNotSet();
+        ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
+        tokenId = cert.totalSupply();
+
+        cert.safeMintAndAssign(investor, tokenId, _details);
+
+        Endorsement memory newEndorsement = Endorsement({
+            endorser: address(this),
+            timestamp: block.timestamp,
+            signatureHash: endorsementSignature,
+            registry: registry,
+            agreementId: agreementId,
+            endorsee: investor,
+            endorseeName: investorName
+        });
+        cert.addEndorsement(tokenId, newEndorsement);
+
+        bytes memory escrowedOfficerSignature = "";
+        address corp = IssuanceManagerStorage.getCORP();
+        try ICyberCorp(corp).getEscrowedOfficerSignatureCount() returns (
+            uint256 count
+        ) {
+            if (count > 0) {
+                try
+                    ICyberCorp(corp).getEscrowedOfficerSignature(0)
+                returns (bytes memory sig) {
+                    escrowedOfficerSignature = sig;
+                } catch {}
+            }
+        } catch {}
+
+        if (endorsementSignature.length > 0) {
+            cert.addIssuerSignature(tokenId, endorsementSignature);
+        }
+        if (escrowedOfficerSignature.length > 0) {
+            cert.addIssuerSignature(tokenId, escrowedOfficerSignature);
+        }
+
+        string memory tokenURI = cert.tokenURI(tokenId);
+        emit CertificateCreated(
+            tokenId,
+            certAddress,
+            _details.investmentAmountUSD,
+            _details.issuerUSDValuationAtTimeOfInvestment,
+            _details,
+            tokenURI
+        );
+        return tokenId;
+    }
+
     /// @notice Adds an issuer's signature to a certificate
-    /// @dev Only callable by admin, requires valid signature URI
+    /// @dev Only callable by admin, requires non-empty signature bytes
     /// @param certAddress Address of the certificate printer contract
     /// @param tokenId ID of the certificate
-    /// @param signatureURI URI containing the signature data
+    /// @param signature Signed hash payload
     function signCertificate(
         address certAddress,
         uint256 tokenId,
-        string calldata signatureURI
+        bytes calldata signature
     ) external onlyAdmin {
-        if (bytes(signatureURI).length == 0) revert SignatureURIRequired();
+        if (signature.length == 0) revert SignatureRequired();
 
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
-        certificate.addIssuerSignature(tokenId, signatureURI);
+        certificate.addIssuerSignature(tokenId, signature);
+    }
+
+    /// @notice Adds an officer signature to a certificate
+    /// @dev Alias maintained for IIssuanceManager compatibility
+    /// @param certAddress Address of the certificate printer contract
+    /// @param tokenId ID of the certificate
+    /// @param signature Signed hash payload
+    function addOfficerSignature(
+        address certAddress,
+        uint256 tokenId,
+        bytes calldata signature
+    ) external onlyAdmin {
+        if (signature.length == 0) revert SignatureRequired();
+
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        certificate.addIssuerSignature(tokenId, signature);
     }
 
     /// @notice Adds an endorsement for secondary market transfer

@@ -42,7 +42,7 @@ contract POCMockCertPrinter {
     mapping(address => uint256[]) internal _ownedTokens;
     mapping(uint256 => bool) internal _voided;
     mapping(uint256 => address) internal _restrictionHooks;
-    mapping(uint256 => string[]) internal _issuerSignatures;
+    mapping(uint256 => bytes[]) internal _issuerSignatures;
     uint256 internal _total;
     string internal _name;
     string internal _symbol;
@@ -108,15 +108,15 @@ contract POCMockCertPrinter {
         return tokenId;
     }
 
-    function addIssuerSignature(uint256 tokenId, string calldata signatureURI) external {
-        _issuerSignatures[tokenId].push(signatureURI);
+    function addIssuerSignature(uint256 tokenId, bytes calldata signature) external {
+        _issuerSignatures[tokenId].push(signature);
     }
 
     function getIssuerSignatureCount(uint256 tokenId) external view returns (uint256) {
         return _issuerSignatures[tokenId].length;
     }
 
-    function getIssuerSignatureAt(uint256 tokenId, uint256 index) external view returns (string memory) {
+    function getIssuerSignatureAt(uint256 tokenId, uint256 index) external view returns (bytes memory) {
         return _issuerSignatures[tokenId][index];
     }
 
@@ -259,9 +259,10 @@ contract ScripPOCTest is Test {
         uint256 certId = issuanceManager.createCert(address(certPrinter), investor, details);
 
         vm.prank(owner);
-        issuanceManager.signCertificate(address(certPrinter), certId, "ipfs://signature");
+        bytes memory signature = abi.encodePacked("signed-hash");
+        issuanceManager.signCertificate(address(certPrinter), certId, signature);
         assertEq(certPrinter.getIssuerSignatureCount(certId), 1, "signature should be added");
-        assertEq(certPrinter.getIssuerSignatureAt(certId, 0), "ipfs://signature", "stored signature mismatch");
+        assertEq(certPrinter.getIssuerSignatureAt(certId, 0), signature, "stored signature mismatch");
     }
 
     // =========================================================================
