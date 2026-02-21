@@ -8,6 +8,7 @@ import "../src/interfaces/ICyberScrip.sol";
 import "../src/interfaces/ICondition.sol";
 import "../src/interfaces/ITransferRestrictionHook.sol";
 import "../src/libs/auth.sol";
+import "../src/libs/conditions/IssuerApprovalRecertificationCondition.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
@@ -96,23 +97,26 @@ contract MockCertPrinter {
     uint256 internal _total;
     string internal _name = "Mock";
     string internal _symbol = "MOCK";
+    address internal _issuanceManager;
 
     function initialize(
         string[] memory,
         string memory name_,
         string memory symbol_,
         string memory,
-        address,
+        address issuanceManager_,
         SecurityClass,
         SecuritySeries,
         address
     ) external {
         _name = name_;
         _symbol = symbol_;
+        _issuanceManager = issuanceManager_;
     }
 
     function name() external view returns (string memory) { return _name; }
     function symbol() external view returns (string memory) { return _symbol; }
+    function issuanceManager() external view returns (address) { return _issuanceManager; }
 
     function totalSupply() external view returns (uint256) { return _total; }
 
@@ -386,7 +390,7 @@ contract IssuanceManagerConversionTest is Test {
             new SelectorCondition(
                 address(certPrinter),
                 IssuanceManager.convertScripToCert.selector,
-                abi.encode(scripAmount)
+                abi.encode(scripAmount, investor)
             )
         );
 
@@ -894,7 +898,7 @@ contract IssuanceManagerConversionTest is Test {
             new SelectorCondition(
                 address(certPrinter),
                 IssuanceManager.convertScripToCert.selector,
-                abi.encode(uint256(150))
+                abi.encode(uint256(150), investor)
             )
         );
 
@@ -1006,6 +1010,52 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(reformed.legalDetails, original.legalDetails);
         assertEq(reformed.extensionData, original.extensionData);
         assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
+    }
+
+    function test_convertScripToCert_RequiresIssuerAdminApprovalCondition() public {
+        MockCertPrinter certPrinter = _deployPrinter("Approval Cert", "APPR");
+        uint256 certId = _mintCert(certPrinter, investor, 10);
+
+        IssuerApprovalRecertificationCondition condition = new IssuerApprovalRecertificationCondition();
+        ICondition[] memory scripToCert = new ICondition[](1);
+        scripToCert[0] = ICondition(address(condition));
+
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            scripToCert,
+            0,
+            1,
+            1,
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+
+        vm.prank(investor);
+        issuanceManager.scripifyCert(address(certPrinter), certId, 5, address(0));
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 5);
+
+        vm.prank(investor);
+        vm.expectRevert(IssuanceManager.ConditionCheckFailed.selector);
+        issuanceManager.convertScripToCert(address(certPrinter), 5);
+
+        vm.prank(otherInvestor);
+        vm.expectRevert();
+        condition.setInvestorApproval(address(certPrinter), investor, true);
+
+        // Approve using scrip address to prove cert/scrip writes are both supported.
+        condition.setInvestorApproval(address(scrip), investor, true);
+        assertTrue(condition.isInvestorApproved(address(certPrinter), investor));
+
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(certPrinter), 5);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
+        assertEq(certPrinter.totalSupply(), 2);
+        assertEq(certPrinter.ownerOf(1), investor);
     }
 
     function _deployPrinter(

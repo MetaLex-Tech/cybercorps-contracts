@@ -43,8 +43,26 @@ pragma solidity 0.8.28;
 
 import "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "../interfaces/ICondition.sol";
+import "../interfaces/ICyberCertPrinter.sol";
+import "../interfaces/ICyberScrip.sol";
+import "../interfaces/ICyberCorp.sol";
+import "../interfaces/IIssuanceManager.sol";
+import "./CyberCertPrinterStorage.sol";
 
 library IssuanceManagerStorage {
+    error ConditionCheckFailed();
+    error ScripifiedCertNotAllowed();
+    error ScripRatioRemainder();
+    error ScripToCertMinimumNotMet();
+    error ScripifyNotWhitelisted();
+
+    event ScripifiedCert(
+        address indexed certAddress,
+        uint256 indexed id,
+        address indexed scripifiedCert,
+        uint256 amount
+    );
+
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.issuancemanager.storage.v1");
 
@@ -68,6 +86,13 @@ library IssuanceManagerStorage {
     struct ScripRatio {
         uint256 numerator;
         uint256 denominator;
+    }
+
+    struct RecertSelection {
+        bool foundActive;
+        uint256 activeTokenId;
+        bool foundVoided;
+        uint256 voidedTokenId;
     }
 
     // Returns the storage layout
@@ -239,5 +264,204 @@ library IssuanceManagerStorage {
             numerator: numerator,
             denominator: denominator
         });
+    }
+
+    function selectRecertToken(
+        address certAddress,
+        address account
+    ) external view returns (RecertSelection memory selection) {
+        return _selectRecertToken(certAddress, account);
+    }
+
+    function executeScripifyCert(
+        address certAddress,
+        uint256 id,
+        uint256 amount,
+        address target,
+        address account
+    ) external {
+        if (amount == 0) revert ConditionCheckFailed();
+
+        address scripifiedCert = getScripifiedCert(certAddress);
+        if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
+
+        if (getScripifyWhitelistEnabled(certAddress)) {
+            if (!isScripifyWhitelisted(certAddress, id)) {
+                revert ScripifyNotWhitelisted();
+            }
+        }
+
+        ICondition[] storage conditions = getCertToScripConditions(certAddress);
+        bytes4 selector = bytes4(
+            keccak256("scripifyCert(address,uint256,uint256,address)")
+        );
+        for (uint256 i = 0; i < conditions.length; i++) {
+            if (
+                !conditions[i].checkCondition(
+                    certAddress,
+                    selector,
+                    abi.encode(id, amount, target)
+                )
+            ) {
+                revert ConditionCheckFailed();
+            }
+        }
+
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        if (certificate.ownerOf(id) != account) revert ConditionCheckFailed();
+
+        address toSend = target;
+        if (toSend == address(0)) toSend = account;
+
+        CertificateDetails memory details = certificate.getCertificateDetails(id);
+        if (amount > details.unitsRepresented) revert ConditionCheckFailed();
+
+        (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(
+            certAddress
+        );
+        uint256 scripAmount = amount * numerator;
+        if (scripAmount % denominator != 0) revert ScripRatioRemainder();
+        scripAmount = scripAmount / denominator;
+
+        if (amount == details.unitsRepresented) {
+            address dm = ICyberCorp(getCORP()).dealManager();
+            certificate.safeTransferFrom(account, dm, id);
+            certificate.voidCert(id);
+            ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
+            emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
+            return;
+        }
+
+        details.unitsRepresented = details.unitsRepresented - amount;
+        certificate.updateCertificateDetails(id, details);
+        ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
+        emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
+    }
+
+    function executeConvertScripToCert(
+        address certAddress,
+        uint256 amount,
+        address account,
+        bytes4 convertSelector
+    ) external {
+        address scripifiedCert = getScripifiedCert(certAddress);
+        if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
+        uint256 minimum = getScripToCertMinimum(certAddress);
+        if (minimum > 0 && amount < minimum) revert ScripToCertMinimumNotMet();
+
+        (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(
+            certAddress
+        );
+        uint256 units = amount * denominator;
+        if (units % numerator != 0) revert ScripRatioRemainder();
+        units = units / numerator;
+
+        ICondition[] storage conditions = getScripToCertConditions(certAddress);
+        for (uint256 i = 0; i < conditions.length; i++) {
+            if (
+                !conditions[i].checkCondition(
+                    certAddress,
+                    convertSelector,
+                    abi.encode(amount, account)
+                )
+            ) {
+                revert ConditionCheckFailed();
+            }
+        }
+
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        RecertSelection memory selection = _selectRecertToken(
+            certAddress,
+            account
+        );
+
+        ICyberScrip(scripifiedCert).burnFrom(account, amount);
+
+        if (selection.foundActive) {
+            CertificateDetails memory activeDetails = certificate
+                .getCertificateDetails(selection.activeTokenId);
+            activeDetails.unitsRepresented = activeDetails.unitsRepresented + units;
+            certificate.updateCertificateDetails(
+                selection.activeTokenId,
+                activeDetails
+            );
+        } else if (selection.foundVoided) {
+            CertificateDetails memory voidedDetails = certificate
+                .getCertificateDetails(selection.voidedTokenId);
+            voidedDetails.unitsRepresented = units;
+            certificate.updateCertificateDetails(
+                selection.voidedTokenId,
+                voidedDetails
+            );
+
+            address certCustodian = certificate.ownerOf(selection.voidedTokenId);
+            if (certCustodian != account) {
+                Endorsement memory recertEndorsement = Endorsement({
+                    endorser: certCustodian,
+                    timestamp: block.timestamp,
+                    signatureHash: "",
+                    registry: address(0),
+                    agreementId: bytes32(0),
+                    endorsee: account,
+                    endorseeName: ""
+                });
+                certificate.endorseAndTransfer(
+                    selection.voidedTokenId,
+                    recertEndorsement,
+                    certCustodian,
+                    account
+                );
+            }
+        } else {
+            CertificateDetails memory details = CertificateDetails({
+                signingOfficerName: "",
+                signingOfficerTitle: "",
+                investmentAmountUSD: 0,
+                issuerUSDValuationAtTimeOfInvestment: 0,
+                unitsRepresented: units,
+                legalDetails: "",
+                extensionData: ""
+            });
+            IIssuanceManager(address(this)).createCertAndAssign(
+                certAddress,
+                account,
+                details
+            );
+        }
+    }
+
+    function _selectRecertToken(
+        address certAddress,
+        address account
+    ) internal view returns (RecertSelection memory selection) {
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        uint256 supply = certificate.totalSupply();
+
+        for (uint256 i = 0; i < supply; i++) {
+            uint256 tokenId = certificate.tokenByIndex(i);
+            if (certificate.legalOwnerOf(tokenId) != account) continue;
+
+            if (!certificate.isVoided(tokenId)) {
+                selection.foundActive = true;
+                selection.activeTokenId = tokenId;
+                return selection;
+            }
+
+            if (!selection.foundVoided) {
+                selection.foundVoided = true;
+                selection.voidedTokenId = tokenId;
+            }
+        }
+    }
+
+    function _getScripRatioOrDefault(
+        address certAddress
+    ) internal view returns (uint256 numerator, uint256 denominator) {
+        ScripRatio storage ratio = getScripRatio(certAddress);
+        numerator = ratio.numerator;
+        denominator = ratio.denominator;
+        if (numerator == 0 || denominator == 0) {
+            return (1, 1);
+        }
     }
 }

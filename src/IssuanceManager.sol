@@ -530,7 +530,13 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     function getScripRatio(
         address certAddress
     ) external view returns (uint256 numerator, uint256 denominator) {
-        (numerator, denominator) = _getScripRatio(certAddress);
+        IssuanceManagerStorage.ScripRatio storage ratio = IssuanceManagerStorage
+            .getScripRatio(certAddress);
+        numerator = ratio.numerator;
+        denominator = ratio.denominator;
+        if (numerator == 0 || denominator == 0) {
+            return (1, 1);
+        }
     }
 
     /// @notice Sets a restriction hook for a specific certificate
@@ -806,70 +812,13 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         uint256 amount,
         address target
     ) external {
-        if (amount == 0) revert ConditionCheckFailed();
-
-        address scripifiedCert = IssuanceManagerStorage.getScripifiedCert(
-            certAddress
+        IssuanceManagerStorage.executeScripifyCert(
+            certAddress,
+            id,
+            amount,
+            target,
+            msg.sender
         );
-        if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
-
-        if (IssuanceManagerStorage.getScripifyWhitelistEnabled(certAddress)) {
-            if (!IssuanceManagerStorage.isScripifyWhitelisted(certAddress, id)) {
-                revert ScripifyNotWhitelisted();
-            }
-        }
-
-        // Check all cert-to-scrip conditions
-        ICondition[] storage conditions = IssuanceManagerStorage
-            .getCertToScripConditions(certAddress);
-        bytes4 selector3 = bytes4(
-            keccak256("scripifyCert(address,uint256,uint256,address)")
-        );
-        for (uint i = 0; i < conditions.length; i++) {
-            if (
-                !conditions[i].checkCondition(
-                    certAddress,
-                    selector3,
-                    abi.encode(id, amount, target)
-                )
-            ) {
-                revert ConditionCheckFailed();
-            }
-        }
-
-        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
- 
-        if (certificate.ownerOf(id) != msg.sender)
-            revert ConditionCheckFailed();
-
-        address toSend = target;
-        if (toSend == address(0)) toSend = msg.sender;
-        
-        CertificateDetails memory details = certificate.getCertificateDetails(
-            id
-        );
-        if (amount > details.unitsRepresented) revert ConditionCheckFailed();
-
-        (uint256 numerator, uint256 denominator) = _getScripRatio(certAddress);
-        uint256 scripAmount = amount * numerator;
-        if (scripAmount % denominator != 0) revert ScripRatioRemainder();
-        scripAmount = scripAmount / denominator;
-
-        if (amount == details.unitsRepresented) {
-            //get the cybercorps dealmanager address
-            address dm = ICyberCorp(IssuanceManagerStorage.getCORP()).dealManager();
-            certificate.safeTransferFrom(msg.sender, dm, id);
-            certificate.voidCert(id);
-            ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
-            emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
-            return;
-        }
-
-        // Partial conversion: reduce units on the certificate and mint scrip for `amount`
-        details.unitsRepresented = details.unitsRepresented - amount;
-        certificate.updateCertificateDetails(id, details);
-        ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
-        emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
     }
 
     function getUpgradeFactory() public view returns (address) {
@@ -894,76 +843,12 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     }
 
     function convertScripToCert(address certAddress, uint256 amount) external {
-        address scripifiedCert = IssuanceManagerStorage.getScripifiedCert(
-            certAddress
+        IssuanceManagerStorage.executeConvertScripToCert(
+            certAddress,
+            amount,
+            msg.sender,
+            this.convertScripToCert.selector
         );
-        if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
-        uint256 minimum = IssuanceManagerStorage.getScripToCertMinimum(certAddress);
-        if (minimum > 0 && amount < minimum) revert ScripToCertMinimumNotMet();
-
-        (uint256 numerator, uint256 denominator) = _getScripRatio(certAddress);
-        uint256 units = amount * denominator;
-        if (units % numerator != 0) revert ScripRatioRemainder();
-        units = units / numerator;
-
-        // Check all scrip-to-cert conditions
-        ICondition[] storage conditions = IssuanceManagerStorage
-            .getScripToCertConditions(certAddress);
-        for (uint i = 0; i < conditions.length; i++) {
-            if (
-                !conditions[i].checkCondition(
-                    certAddress,
-                    this.convertScripToCert.selector,
-                    abi.encode(amount)
-                )
-            ) {
-                revert ConditionCheckFailed();
-            }
-        }
-
-        // Check for voided certificates owned by the sender
-        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
-        uint256 balance = certificate.balanceOf(msg.sender);
-        bool foundVoided = false;
-        uint256 voidedTokenId;
-        CertificateDetails memory voidedDetails;
-
-        for (uint256 i = 0; i < balance; i++) {
-            uint256 tokenId = certificate.tokenOfOwnerByIndex(msg.sender, i);
-            if (certificate.isVoided(tokenId)) {
-                voidedDetails = certificate.getCertificateDetails(tokenId);
-                // Found a voided certificate, reform it by adding the amount
-                foundVoided = true;
-                voidedTokenId = tokenId;
-                break;
-            }
-        }
-
-        // Burn the scrip tokens
-        ICyberScrip(scripifiedCert).burnFrom(msg.sender, amount);
-
-        if (foundVoided) {
-            // Reform the existing certificate by adding the amount
-            voidedDetails.unitsRepresented = units;
-            certificate.updateCertificateDetails(voidedTokenId, voidedDetails);
-            //get the cybercorps dealmanager address
-            address dm = ICyberCorp(IssuanceManagerStorage.getCORP()).dealManager();
-            certificate.safeTransferFrom(msg.sender, dm, voidedTokenId);
-        } else {
-            // Create a new certificate if no matching voided one was found
-
-            CertificateDetails memory details = CertificateDetails({
-                signingOfficerName: "", // Can be set by admin later if needed
-                signingOfficerTitle: "", // Can be set by admin later if needed
-                investmentAmountUSD: 0, // Maintaining original value from scrip
-                issuerUSDValuationAtTimeOfInvestment: 0, // Maintaining original value from scrip
-                unitsRepresented: units,
-                legalDetails: "", // Can be set by admin later if needed
-                extensionData: "" // Can be set by admin later if needed
-            });
-
-            this.createCertAndAssign(certAddress, msg.sender, details);
-        }
     }
 
     /// @notice UUPS upgrade authorization
@@ -984,18 +869,6 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         address scripifiedCert = IssuanceManagerStorage.getScripifiedCert(certAddress);
         if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
         return scripifiedCert;
-    }
-
-    function _getScripRatio(
-        address certAddress
-    ) internal view returns (uint256 numerator, uint256 denominator) {
-        IssuanceManagerStorage.ScripRatio storage ratio = IssuanceManagerStorage
-            .getScripRatio(certAddress);
-        numerator = ratio.numerator;
-        denominator = ratio.denominator;
-        if (numerator == 0 || denominator == 0) {
-            return (1, 1);
-        }
     }
 
 }
