@@ -421,6 +421,13 @@ library RoundManagerStorage {
                 address(this),
                 details
             );
+
+            //add officer signature from round escrowed signature
+            issuanceManager.addOfficerSignature(
+                round.certPrinter[i],
+                certIds[i],
+                round.escrowedSignature
+            );
         }
 
         if (_isStockSecurityClass(round.primarySecurityClass)) {

@@ -10,6 +10,8 @@ import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
 
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
+import {DealManagerFactory} from "../src/DealManagerFactory.sol";
+import {DealManager} from "../src/DealManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
@@ -115,6 +117,9 @@ contract CyberScripUpgradeTest is Test {
         RoundManagerFactory rmFactory = RoundManagerFactory(
             deployment.roundManagerFactory
         );
+        DealManagerFactory dmFactory = DealManagerFactory(
+            deployment.dealManagerFactory
+        );
         CyberCorpSingleFactory corpSingleFactory = CyberCorpSingleFactory(
             deployment.cyberCorpSingleFactory
         );
@@ -138,16 +143,17 @@ contract CyberScripUpgradeTest is Test {
             _strings("name", "jurisdiction")
         );
 
+        address issuerA = companyOwner;
+        uint256 issuerAPk = companyOwnerPk;
+
         CompanyOfficer memory officer = CompanyOfficer({
-            eoa: companyOwner,
+            eoa: issuerA,
             name: "Officer One",
             contact: "officer@test.local",
             title: "CEO"
         });
 
         uint256 userSalt = uint256(keccak256("cyberscrip-upgrade-corp-salt"));
-        bytes32 corpSalt = keccak256(abi.encodePacked(userSalt));
-
         uint256 raiseCap = 100_000e6;
         uint256 minTicket = 100e6;
         uint256 maxTicket = 2_000e6;
@@ -156,22 +162,84 @@ contract CyberScripUpgradeTest is Test {
         uint256 pricePerUnit = 1e18; // USD (18 decimals)
         uint256 valuation = 5_000_000e18;
 
-        (bytes memory escrowedSignature, ) = _computeEscrowSignature(
-            rmFactory.computeRoundManagerAddress(corpSalt),
-            SecuritySeries.SeriesA,
-            raiseCap,
-            minTicket,
-            maxTicket,
-            RoundType.FCFS,
-            startTime,
-            endTime,
+        // 1) Pre-upgrade: issuerA deploys corp stack and creates a deal via factory.
+        CyberCorpFactory.CyberCertData[] memory offerCertData = new CyberCorpFactory.CyberCertData[](1);
+        offerCertData[0] = CyberCorpFactory.CyberCertData({
+            name: "SAFE",
+            symbol: "SAFE",
+            uri: "ipfs://safe-cert",
+            securityClass: SecurityClass.SAFE,
+            securitySeries: SecuritySeries.SeriesA,
+            extension: address(0),
+            defaultLegend: new string[](0)
+        });
+
+        string[] memory offerGlobalValues = _strings("100", "5000000");
+        address[] memory offerParties = new address[](2);
+        offerParties[0] = issuerA;
+        offerParties[1] = investor;
+        string[][] memory offerPartyValues = new string[][](2);
+        offerPartyValues[0] = _strings("Officer One", "US");
+        offerPartyValues[1] = _strings("Investor A", "US");
+        bytes memory offerSignature = _computeAgreementSignature(
+            registry,
             templateId,
-            stable,
-            pricePerUnit,
-            valuation,
-            companyOwnerPk,
-            corpSingleFactory.computeCyberCorpSingleAddress(corpSalt)
+            userSalt,
+            offerGlobalValues,
+            offerPartyValues[0],
+            offerParties,
+            issuerAPk
         );
+
+        CertificateDetails[] memory offerDetails = new CertificateDetails[](1);
+        offerDetails[0] = CertificateDetails({
+            signingOfficerName: "Officer One",
+            signingOfficerTitle: "CEO",
+            investmentAmountUSD: minTicket * 1e12,
+            issuerUSDValuationAtTimeOfInvestment: valuation,
+            unitsRepresented: minTicket * 1e12,
+            legalDetails: "pre-upgrade-offer",
+            extensionData: ""
+        });
+
+        address corp;
+        address auth;
+        address issuanceManagerAddr;
+        address roundManagerAddr;
+        uint256[] memory preUpgradeCertIds;
+        vm.prank(issuerA);
+        (
+            corp,
+            auth,
+            issuanceManagerAddr,
+            ,
+            roundManagerAddr,
+            ,
+            ,
+            preUpgradeCertIds
+        ) = corpFactory.deployCyberCorpAndCreateOffer(
+            userSalt,
+            "Issuer A Corp",
+            "Limited Liability Company",
+            "Delaware",
+            "issuera@test.local",
+            "Arbitration",
+            issuerA,
+            officer,
+            offerCertData,
+            templateId,
+            offerGlobalValues,
+            offerParties,
+            minTicket,
+            offerPartyValues,
+            offerSignature,
+            offerDetails,
+            new address[](0),
+            bytes32(0),
+            block.timestamp + 7 days
+        );
+        assertEq(preUpgradeCertIds.length, 1, "expected one pre-upgrade cert");
+        assertTrue(corp != address(0), "corp should be deployed");
 
         CyberCertData[] memory certData = new CyberCertData[](1);
         certData[0] = CyberCertData({
@@ -189,40 +257,37 @@ contract CyberScripUpgradeTest is Test {
         bytes[] memory extensionData = new bytes[](1);
         extensionData[0] = "";
         string[] memory roundPartyValues = _strings("Officer One", "US");
+        (bytes memory escrowedSignature, ) = _computeEscrowSignature(
+            roundManagerAddr,
+            SecuritySeries.SeriesA,
+            raiseCap,
+            minTicket,
+            maxTicket,
+            RoundType.FCFS,
+            startTime,
+            endTime,
+            templateId,
+            stable,
+            pricePerUnit,
+            valuation,
+            issuerAPk,
+            corp
+        );
 
-        (
-            address corp,
-            address auth,
-            address issuanceManagerAddr,
-            ,
-            address roundManagerAddr,
-            bytes32 roundId
-        ) = _deployCorpAndRound(
-                corpFactory,
-                userSalt,
-                officer,
-                legalDetails,
-                extensionData,
-                certData,
-                templateId,
-                stable,
-                pricePerUnit,
-                valuation,
-                roundPartyValues,
-                escrowedSignature,
-                raiseCap,
-                minTicket,
-                maxTicket,
-                startTime,
-                endTime
-            );
-
-        // Newly deployed corp AUTH owner is the factory by default. Grant owner to companyOwner for IM owner-gated ops.
+        // Newly deployed corp AUTH owner is the factory by default. Grant owner to issuerA for owner-gated upgrades.
         vm.prank(deployment.cyberCorpFactory);
-        BorgAuth(auth).updateRole(companyOwner, 99);
+        BorgAuth(auth).updateRole(issuerA, 99);
 
         IssuanceManager issuanceManager = IssuanceManager(issuanceManagerAddr);
-        _upgradeCoreStackForCorp(corp, issuanceManager, corpSingleFactory, imFactory);
+        _upgradeCoreStackForCorp(
+            corp,
+            issuanceManager,
+            corpSingleFactory,
+            imFactory,
+            dmFactory,
+            rmFactory
+        );
+        bytes32 roundId;
         roundId = _recreateRoundAfterUpgrade(
             roundManagerAddr,
             SecuritySeries.SeriesA,
@@ -263,13 +328,16 @@ contract CyberScripUpgradeTest is Test {
 
         string[] memory globalValues = _strings("100", "5000000");
         string[] memory investorPartyValues = _strings("Investor A", "US");
+        uint256 eoiSalt = uint256(
+            keccak256(abi.encodePacked("cyberscrip-upgrade-eoi-salt", userSalt))
+        );
         bytes memory investorSignature = _computeEOISignature(
             registry,
             templateId,
-            userSalt,
+            eoiSalt,
             globalValues,
             investorPartyValues,
-            companyOwner,
+            issuerA,
             investorPk
         );
 
@@ -280,7 +348,7 @@ contract CyberScripUpgradeTest is Test {
             globalValues,
             investorPartyValues,
             investorSignature,
-            userSalt,
+            eoiSalt,
             new address[](0),
             bytes32(0)
         );
@@ -302,7 +370,7 @@ contract CyberScripUpgradeTest is Test {
         ICondition[] memory noConditions = new ICondition[](0);
         uint256[] memory noWhitelist = new uint256[](0);
 
-        vm.prank(companyOwner);
+        vm.prank(issuerA);
         address scrip = issuanceManager.deployCyberScrip(
             certPrinter,
             noHooks,
@@ -343,6 +411,8 @@ contract CyberScripUpgradeTest is Test {
             1,
             "investor should hold original cert"
         );
+        string memory certUri = _getCertificateTokenURI(certPrinter, 0);
+        assertGt(bytes(certUri).length, 0, "tokenURI should not be empty");
 
         assertTrue(corp != address(0), "corp should be deployed");
     }
@@ -628,16 +698,22 @@ contract CyberScripUpgradeTest is Test {
         address corp,
         IssuanceManager issuanceManager,
         CyberCorpSingleFactory corpSingleFactory,
-        IssuanceManagerFactory imFactory
+        IssuanceManagerFactory imFactory,
+        DealManagerFactory dmFactory,
+        RoundManagerFactory rmFactory
     ) internal {
         address newCyberCorpImpl = address(new CyberCorp());
         address newIssuanceManagerImpl = address(new IssuanceManager());
+        address newDealManagerImpl = address(new DealManager());
+        address newRoundManagerImpl = address(new RoundManager());
         address newCertPrinterImpl = address(new CyberCertPrinter());
         address newScripImpl = address(new CyberScrip());
 
         vm.startPrank(METALEX_SAFE);
         corpSingleFactory.setRefImplementation(newCyberCorpImpl);
         imFactory.setRefImplementation(newIssuanceManagerImpl);
+        dmFactory.setRefImplementation(newDealManagerImpl);
+        rmFactory.setRefImplementation(newRoundManagerImpl);
         imFactory.setCyberCertPrinterRefImplementation(newCertPrinterImpl);
         imFactory.setCyberScripRefImplementation(newScripImpl);
         vm.stopPrank();
@@ -653,6 +729,16 @@ contract CyberScripUpgradeTest is Test {
             "IssuanceManager factory ref implementation mismatch"
         );
         assertEq(
+            dmFactory.getRefImplementation(),
+            newDealManagerImpl,
+            "DealManager factory ref implementation mismatch"
+        );
+        assertEq(
+            rmFactory.getRefImplementation(),
+            newRoundManagerImpl,
+            "RoundManager factory ref implementation mismatch"
+        );
+        assertEq(
             imFactory.getCyberCertPrinterRefImplementation(),
             newCertPrinterImpl,
             "CyberCertPrinter factory ref implementation mismatch"
@@ -664,9 +750,13 @@ contract CyberScripUpgradeTest is Test {
         );
 
         address issuanceManagerAddr = address(issuanceManager);
+        address dealManagerAddr = CyberCorp(corp).dealManager();
+        address roundManagerAddr = CyberCorp(corp).roundManager();
         address oldCyberCorpImpl = corp.getErc1967Implementation();
         address oldIssuanceManagerImpl = issuanceManagerAddr
             .getErc1967Implementation();
+        address oldDealManagerImpl = dealManagerAddr.getErc1967Implementation();
+        address oldRoundManagerImpl = roundManagerAddr.getErc1967Implementation();
         address oldCertPrinterImpl = issuanceManager
             .getCertPrinterBeaconImplementation();
         address oldScripImpl = issuanceManager.getScripBeaconImplementation();
@@ -675,6 +765,10 @@ contract CyberScripUpgradeTest is Test {
         IUUPS(corp).upgradeToAndCall(newCyberCorpImpl, "");
         vm.prank(companyOwner);
         IUUPS(issuanceManagerAddr).upgradeToAndCall(newIssuanceManagerImpl, "");
+        vm.prank(companyOwner);
+        IUUPS(dealManagerAddr).upgradeToAndCall(newDealManagerImpl, "");
+        vm.prank(companyOwner);
+        IUUPS(roundManagerAddr).upgradeToAndCall(newRoundManagerImpl, "");
         vm.prank(companyOwner);
         issuanceManager.upgradeCertPrinterBeaconImplementation(newCertPrinterImpl);
         vm.prank(companyOwner);
@@ -691,6 +785,16 @@ contract CyberScripUpgradeTest is Test {
             "IssuanceManager implementation not upgraded"
         );
         assertEq(
+            dealManagerAddr.getErc1967Implementation(),
+            newDealManagerImpl,
+            "DealManager implementation not upgraded"
+        );
+        assertEq(
+            roundManagerAddr.getErc1967Implementation(),
+            newRoundManagerImpl,
+            "RoundManager implementation not upgraded"
+        );
+        assertEq(
             issuanceManager.getCertPrinterBeaconImplementation(),
             newCertPrinterImpl,
             "CyberCertPrinter beacon implementation not upgraded"
@@ -705,6 +809,14 @@ contract CyberScripUpgradeTest is Test {
         assertTrue(
             oldIssuanceManagerImpl != newIssuanceManagerImpl,
             "expected new issuance manager impl"
+        );
+        assertTrue(
+            oldDealManagerImpl != newDealManagerImpl,
+            "expected new deal manager impl"
+        );
+        assertTrue(
+            oldRoundManagerImpl != newRoundManagerImpl,
+            "expected new round manager impl"
         );
         assertTrue(
             oldCertPrinterImpl != newCertPrinterImpl,
@@ -879,6 +991,46 @@ contract CyberScripUpgradeTest is Test {
             );
     }
 
+    function _computeAgreementSignature(
+        CyberAgreementRegistry registry,
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        string[] memory partyValues,
+        address[] memory parties,
+        uint256 signerPrivKey
+    ) internal view returns (bytes memory) {
+        (
+            string memory legalUri,
+            ,
+            string[] memory glFields,
+            string[] memory partyFields
+        ) = registry.getTemplateDetails(templateId);
+        bytes32 contractId = keccak256(
+            abi.encode(templateId, salt, globalValues, parties)
+        );
+        return
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                contractId,
+                legalUri,
+                glFields,
+                partyFields,
+                globalValues,
+                partyValues,
+                signerPrivKey
+            );
+    }
+
+    function _getCertificateTokenURI(
+        address certPrinter,
+        uint256 tokenId
+    ) internal view returns (string memory) {
+        return ICyberCertPrinter(certPrinter).tokenURI(tokenId);
+    }
+
     function _emptyLex() internal pure returns (LexChexDetails memory) {
         return
             LexChexDetails({
@@ -923,6 +1075,9 @@ contract CyberScripUpgradeTest is Test {
         );
         RoundManagerFactory rmFactory = RoundManagerFactory(
             deployment.roundManagerFactory
+        );
+        DealManagerFactory dmFactory = DealManagerFactory(
+            deployment.dealManagerFactory
         );
         CyberCorpSingleFactory corpSingleFactory = CyberCorpSingleFactory(
             deployment.cyberCorpSingleFactory
@@ -1027,7 +1182,9 @@ contract CyberScripUpgradeTest is Test {
             corp,
             issuanceManager,
             corpSingleFactory,
-            imFactory
+            imFactory,
+            dmFactory,
+            rmFactory
         );
     }
 

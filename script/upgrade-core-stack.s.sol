@@ -7,8 +7,12 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {DealManagerFactory} from "../src/DealManagerFactory.sol";
+import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
+import {DealManager} from "../src/DealManager.sol";
+import {RoundManager} from "../src/RoundManager.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {IssuerApprovalRecertificationCondition} from "../src/libs/conditions/IssuerApprovalRecertificationCondition.sol";
@@ -26,12 +30,16 @@ interface IUUPS {
 /// @dev Default run updates factory reference implementations only.
 ///      To also upgrade a specific deployed stack, set CORP_ADDRESS env var
 ///      or call run(address[]) with explicit corp addresses.
-contract UpgradeCoreStackScript is Script {
+contract BaseScript is Script {
     using ERC1967ProxyLib for address;
+    bytes32 internal constant UPGRADE_SALT =
+        keccak256("MetaLexCyberCorp.CoreStack.UpgradeV1");
 
     struct UpgradeImplementations {
         address cyberCorpImpl;
         address issuanceManagerImpl;
+        address dealManagerImpl;
+        address roundManagerImpl;
         address cyberCertPrinterImpl;
         address cyberScripImpl;
         address issuerApprovalRecertificationCondition;
@@ -86,12 +94,20 @@ contract UpgradeCoreStackScript is Script {
         internal
         returns (UpgradeImplementations memory impls)
     {
-        impls.cyberCorpImpl = address(new CyberCorp());
-        impls.issuanceManagerImpl = address(new IssuanceManager());
-        impls.cyberCertPrinterImpl = address(new CyberCertPrinter());
-        impls.cyberScripImpl = address(new CyberScrip());
+        impls.cyberCorpImpl = address(new CyberCorp{salt: UPGRADE_SALT}());
+        impls.issuanceManagerImpl = address(
+            new IssuanceManager{salt: UPGRADE_SALT}()
+        );
+        impls.dealManagerImpl = address(new DealManager{salt: UPGRADE_SALT}());
+        impls.roundManagerImpl = address(
+            new RoundManager{salt: UPGRADE_SALT}()
+        );
+        impls.cyberCertPrinterImpl = address(
+            new CyberCertPrinter{salt: UPGRADE_SALT}()
+        );
+        impls.cyberScripImpl = address(new CyberScrip{salt: UPGRADE_SALT}());
         impls.issuerApprovalRecertificationCondition = address(
-            new IssuerApprovalRecertificationCondition()
+            new IssuerApprovalRecertificationCondition{salt: UPGRADE_SALT}()
         );
 
         console2.log("New CyberCorp implementation:", impls.cyberCorpImpl);
@@ -99,6 +115,8 @@ contract UpgradeCoreStackScript is Script {
             "New IssuanceManager implementation:",
             impls.issuanceManagerImpl
         );
+        console2.log("New DealManager implementation:", impls.dealManagerImpl);
+        console2.log("New RoundManager implementation:", impls.roundManagerImpl);
         console2.log(
             "New CyberCertPrinter implementation:",
             impls.cyberCertPrinterImpl
@@ -121,9 +139,17 @@ contract UpgradeCoreStackScript is Script {
         IssuanceManagerFactory issuanceManagerFactory = IssuanceManagerFactory(
             cyberCorpFactory.issuanceManagerFactory()
         );
+        DealManagerFactory dealManagerFactory = DealManagerFactory(
+            cyberCorpFactory.dealManagerFactory()
+        );
+        RoundManagerFactory roundManagerFactory = RoundManagerFactory(
+            cyberCorpFactory.roundManagerFactory()
+        );
 
         corpSingleFactory.setRefImplementation(impls.cyberCorpImpl);
         issuanceManagerFactory.setRefImplementation(impls.issuanceManagerImpl);
+        dealManagerFactory.setRefImplementation(impls.dealManagerImpl);
+        roundManagerFactory.setRefImplementation(impls.roundManagerImpl);
         issuanceManagerFactory.setCyberCertPrinterRefImplementation(
             impls.cyberCertPrinterImpl
         );
@@ -142,6 +168,16 @@ contract UpgradeCoreStackScript is Script {
             "IssuanceManagerFactory reference implementation mismatch"
         );
         vm.assertEq(
+            dealManagerFactory.getRefImplementation(),
+            impls.dealManagerImpl,
+            "DealManagerFactory reference implementation mismatch"
+        );
+        vm.assertEq(
+            roundManagerFactory.getRefImplementation(),
+            impls.roundManagerImpl,
+            "RoundManagerFactory reference implementation mismatch"
+        );
+        vm.assertEq(
             issuanceManagerFactory.getCyberCertPrinterRefImplementation(),
             impls.cyberCertPrinterImpl,
             "IssuanceManagerFactory CyberCertPrinter reference implementation mismatch"
@@ -153,7 +189,7 @@ contract UpgradeCoreStackScript is Script {
         );
 
         console2.log(
-            "Factory refs updated: CyberCorp, IssuanceManager, CyberCertPrinter, CyberScrip"
+            "Factory refs updated: CyberCorp, IssuanceManager, DealManager, RoundManager, CyberCertPrinter, CyberScrip"
         );
     }
 
@@ -181,21 +217,35 @@ contract UpgradeCoreStackScript is Script {
 
         CyberCorp cyberCorp = CyberCorp(cyberCorpAddr);
         address issuanceManagerAddr = cyberCorp.issuanceManager();
+        address dealManagerAddr = cyberCorp.dealManager();
+        address roundManagerAddr = cyberCorp.roundManager();
         if (issuanceManagerAddr == address(0)) {
             revert("CyberCorp has no IssuanceManager");
         }
+        if (dealManagerAddr == address(0)) {
+            revert("CyberCorp has no DealManager");
+        }
+        if (roundManagerAddr == address(0)) {
+            revert("CyberCorp has no RoundManager");
+        }
         address oldIssuanceManagerImpl = issuanceManagerAddr
             .getErc1967Implementation();
+        address oldDealManagerImpl = dealManagerAddr.getErc1967Implementation();
+        address oldRoundManagerImpl = roundManagerAddr.getErc1967Implementation();
 
         console2.log("Upgrading CyberCorp:", cyberCorpAddr);
         console2.log("  old CyberCorp impl:", oldCyberCorpImpl);
         console2.log("  old IssuanceManager impl:", oldIssuanceManagerImpl);
+        console2.log("  old DealManager impl:", oldDealManagerImpl);
+        console2.log("  old RoundManager impl:", oldRoundManagerImpl);
 
         IUUPS(cyberCorpAddr).upgradeToAndCall(impls.cyberCorpImpl, "");
         IUUPS(issuanceManagerAddr).upgradeToAndCall(
             impls.issuanceManagerImpl,
             ""
         );
+        IUUPS(dealManagerAddr).upgradeToAndCall(impls.dealManagerImpl, "");
+        IUUPS(roundManagerAddr).upgradeToAndCall(impls.roundManagerImpl, "");
 
         IssuanceManager issuanceManager = IssuanceManager(issuanceManagerAddr);
         issuanceManager.upgradeCertPrinterBeaconImplementation(
@@ -214,6 +264,16 @@ contract UpgradeCoreStackScript is Script {
             "IssuanceManager upgrade failed"
         );
         vm.assertEq(
+            dealManagerAddr.getErc1967Implementation(),
+            impls.dealManagerImpl,
+            "DealManager upgrade failed"
+        );
+        vm.assertEq(
+            roundManagerAddr.getErc1967Implementation(),
+            impls.roundManagerImpl,
+            "RoundManager upgrade failed"
+        );
+        vm.assertEq(
             issuanceManager.getCertPrinterBeaconImplementation(),
             impls.cyberCertPrinterImpl,
             "CyberCertPrinter beacon upgrade failed"
@@ -228,6 +288,14 @@ contract UpgradeCoreStackScript is Script {
         console2.log(
             "  new IssuanceManager impl:",
             issuanceManagerAddr.getErc1967Implementation()
+        );
+        console2.log(
+            "  new DealManager impl:",
+            dealManagerAddr.getErc1967Implementation()
+        );
+        console2.log(
+            "  new RoundManager impl:",
+            roundManagerAddr.getErc1967Implementation()
         );
         console2.log(
             "  new CyberCertPrinter beacon impl:",

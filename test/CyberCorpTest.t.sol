@@ -5714,7 +5714,11 @@ contract CyberCorpTest is Test {
         hook.setTokenTransferable(1, true);
         vm.stopPrank();
 
-        // Mint 3 certificates to the owner (testAddress)
+        // Mint 3 certificates to an EOA owner (avoid receiver-hook issues if testAddress has code)
+        address certOwner = vm.addr(0xA11CE);
+        assertEq(certOwner.code.length, 0, "certOwner must be EOA");
+
+        // Mint 3 certificates to the owner
         CertificateDetails memory cd = CertificateDetails({
             signingOfficerName: "",
             signingOfficerTitle: "",
@@ -5726,25 +5730,25 @@ contract CyberCorpTest is Test {
         });
 
         vm.prank(testAddress);
-        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // tokenId 0
+        IssuanceManager(issuanceManager).createCert(certPrinter, certOwner, cd); // tokenId 0
         vm.prank(testAddress);
-        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // tokenId 1
+        IssuanceManager(issuanceManager).createCert(certPrinter, certOwner, cd); // tokenId 1
         vm.prank(testAddress);
-        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // tokenId 2
+        IssuanceManager(issuanceManager).createCert(certPrinter, certOwner, cd); // tokenId 2
 
         // Prepare recipient
         address recipient = vm.addr(0xBEEF);
 
         // Token 0 should be blocked by hook
-        vm.startPrank(testAddress);
+        vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSelector(CyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
-        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
+        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 0);
         vm.stopPrank();
 
         // Token 1 should be allowed by hook, but endorsement is required by printer
-        vm.startPrank(testAddress);
+        vm.startPrank(certOwner);
         Endorsement memory e = Endorsement({
-            endorser: testAddress,
+            endorser: certOwner,
             timestamp: block.timestamp,
             signatureHash: bytes("hook-test"),
             registry: address(0),
@@ -5754,14 +5758,14 @@ contract CyberCorpTest is Test {
         });
         CyberCertPrinter(certPrinter).addEndorsement(1, e);
         vm.stopPrank();
-        vm.prank(testAddress);
-        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 1);
+        vm.prank(certOwner);
+        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 1);
         assertEq(CyberCertPrinter(certPrinter).ownerOf(1), recipient);
 
         // Token 2 should be blocked
-        vm.startPrank(testAddress);
+        vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSelector(CyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
-        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 2);
+        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 2);
         vm.stopPrank();
     }
 

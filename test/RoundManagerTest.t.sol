@@ -125,6 +125,7 @@ library CyberCorpHelper {
     address constant LEXCHEX_MINTER_ADDRESS = 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960;
     address constant LEXCHEX_ADDRESS = 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62;
     address constant UPGRADE_OWNER = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
+    address constant BASE_SEPOLIA_URI_BUILDER = 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3;
 
     bytes32 constant SALT = keccak256("CyberCorpHelper");
 
@@ -155,15 +156,20 @@ library CyberCorpHelper {
             )
         );
 
-        uriBuilder = address(
-            new ERC1967Proxy{salt: SALT}(
-                address(new CertificateUriBuilder{salt: SALT}()),
-                abi.encodeWithSelector(
-                    CertificateUriBuilder.initialize.selector,
-                    address(bootstrapAuth)
+        // Use deployed URI builder on Base Sepolia so imageBuilder is already configured.
+        if (block.chainid == 84532) {
+            uriBuilder = BASE_SEPOLIA_URI_BUILDER;
+        } else {
+            uriBuilder = address(
+                new ERC1967Proxy{salt: SALT}(
+                    address(new CertificateUriBuilder{salt: SALT}()),
+                    abi.encodeWithSelector(
+                        CertificateUriBuilder.initialize.selector,
+                        address(bootstrapAuth)
+                    )
                 )
-            )
-        );
+            );
+        }
 
         address issuanceManagerImpl = address(new IssuanceManager{salt: SALT}());
         address certPrinterImpl = address(new CyberCertPrinter{salt: SALT}());
