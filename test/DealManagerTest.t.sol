@@ -320,6 +320,41 @@ contract DealManagerTest is Test {
         );
     }
 
+    function testPOC_SignAndFinalizeDeal_BypassesSignatureWhenRegistryAlreadySigned() public {
+        (bytes32 agreementId, ) = _proposeSignedDeal();
+
+        // Alice signs directly in the registry first (out-of-band from DealManager).
+        registry.signContractFor(
+            alice,
+            agreementId,
+            new string[](0),
+            GOOD_SIGNATURE,
+            false,
+            ""
+        );
+
+        uint256 companyPaymentTokenBalancesBefore = paymentToken.balanceOf(companyPayable);
+
+        // Bob can now finalize on behalf of Alice with a bad signature because
+        // DealManager skips signature verification when registry.hasSigned == true.
+        vm.prank(bob);
+        dm.signAndFinalizeDeal(
+            alice, // signer
+            agreementId,
+            new string[](0), // partyValues
+            BAD_SIGNATURE, // ignored on hasSigned branch
+            false,
+            "Bob as Alice",
+            ""
+        );
+
+        assertEq(
+            paymentToken.balanceOf(companyPayable),
+            companyPaymentTokenBalancesBefore + 10 ether,
+            "Bob triggers Alice payment/finalization with invalid signature"
+        );
+    }
+
     function test_PaymentFlow_ProposeDeal() public {
         // proposeDeal() is one of the two methods that'll pull certificates from the issuing company (first party)
         // Unlike the more generic LexScroWLite, DealManager assumes the company's assets are certificates-only

@@ -572,6 +572,52 @@ contract LexChexMinterTest is Test {
         assertEq(paymentToken.balanceOf(treasury) - treasuryPaymentBalanceBefore, 10e6, "treasury received amount is not correct");
     }
 
+    function testPOC_RequestRenewal_SignatureSubjectMismatchReverts() public {
+        // Mint tokenId=0 for user1 first.
+        testRequestMint();
+
+        uint256 originalExpiry = lexchex.accreditations(0).expiryDate;
+
+        // Authority signs renewal for user2, not the token owner (user1).
+        request = LeXcheXMinter.MintRequest({
+            uuid: 999,
+            owner: user2,
+            investorName: "Different Subject",
+            investorType: "DAO",
+            investorJurisdiction: "Cayman",
+            investorContact: "user2@test.com",
+            mintPrice: 0,
+            expiry: block.timestamp + 30 days,
+            paymentToken: address(paymentToken)
+        });
+
+        authoritySignature = LeXcheXUtils.signAuthorizationTypedData(
+            vm,
+            lexchexMinter.DOMAIN_SEPARATOR(),
+            lexchexMinter.AUTHORITY_TYPEHASH(),
+            LeXcheXMinter.AuthorityData({
+                uuid: request.uuid,
+                owner: request.owner,
+                investorName: request.investorName,
+                investorType: request.investorType,
+                investorJurisdiction: request.investorJurisdiction,
+                investorContact: request.investorContact,
+                mintPrice: request.mintPrice,
+                expiry: request.expiry,
+                paymentToken: request.paymentToken
+            }),
+            authorityPrivateKey
+        );
+
+        // Renewal must now fail because request.owner does not own tokenId=0.
+        vm.expectRevert(abi.encodeWithSelector(LeXcheXMinter.RequestOwnerMismatch.selector));
+        vm.prank(agent);
+        lexchexMinter.requestRenewal(request, 0, authoritySignature);
+
+        assertEq(lexchex.ownerOf(0), user1, "token owner is still user1");
+        assertEq(lexchex.accreditations(0).expiryDate, originalExpiry, "expiry should remain unchanged");
+    }
+
     function test_RevertIf_RequestRenewalInvalidAuthoritySignature() public {
         // Mint a token first
         testRequestMint();

@@ -1098,6 +1098,53 @@ contract RoundManagerTest is Test {
         // Note: In a real test you'd need to properly mock the CertPrinter and verify its state
     }
 
+    function testPOC_Allocate_CanMarkOfficerSignedWithNonAgreementSignature() public {
+        // Investor submits an EOI with a valid investor agreement signature.
+        vm.startPrank(investor);
+        (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
+            roundId,
+            77,
+            5_000 * 10 ** 6,
+            10_000 * 10 ** 6,
+            corpOwner,
+            investorPrivKey
+        );
+        vm.stopPrank();
+
+        Round memory round = RoundManager(roundManager).getRound(roundId);
+
+        // Officer has not signed yet in FounderApproved mode prior to allocation.
+        assertFalse(registry.hasSigned(agreementId, round.authorityOfficer));
+
+        // The stored escrowed signature is NOT a valid agreement signature.
+        vm.startPrank(round.authorityOfficer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CyberAgreementRegistry.SignatureVerificationFailed.selector
+            )
+        );
+        registry.signContractFor(
+            round.authorityOfficer,
+            agreementId,
+            round.roundPartyValues,
+            round.escrowedSignature,
+            false,
+            ""
+        );
+        vm.stopPrank();
+
+        // Yet allocate() will mark the same officer as signed through signContractWithEscrow.
+        vm.prank(corpOwner);
+        RoundManager(roundManager).allocate(agreementId, 7_500 * 10 ** 6);
+
+        assertTrue(
+            registry.hasSigned(agreementId, round.authorityOfficer),
+            "officer marked signed without a valid agreement signature"
+        );
+    }
+
 	function test_Allocate_RefundsDustAndUpdatesCertificateDetails() public {
 		// Submit EOI with a max that creates 5 USDC dust w.r.t. 10 USDC price per unit
 		vm.startPrank(investor);
