@@ -72,7 +72,7 @@ interface ICyberCorpLocal {
     function issuanceManager() external view returns (address);
 }
 
-contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
+contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     using Strings for string;
     
     error InvalidSalt();
@@ -84,13 +84,13 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     address public dealManagerFactory;
     address public roundManagerFactory;
     address public uriBuilder;
-    //store an escrowed signature hash for metaDAO
-    bytes public metaDAOSignatureHash;
+    //store an escrowed signature hash for parent corp
+    bytes public parentCoSignatureHash;
     address public stable;
-    // stored MetaDAO officer details used in agreements
-    CompanyOfficer public metaDAOOfficer;
+    // stored ParentCo officer details used in agreements
+    CompanyOfficer public parentCoOfficer;
 
-    // Parent corp (MetaDAO) deployment record
+    // Parent corp (ParentCo) deployment record
     address public parentCorp;
     address public parentAuth;
     address public parentIssuanceManager;
@@ -111,7 +111,7 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         string[] defaultLegend;
     }
 
-    event MetaCorpDeployed(
+    event CorpDeployed(
         address indexed cyberCorp,
         address indexed auth,
         address indexed issuanceManager,
@@ -178,32 +178,32 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         stable = _stable;
     }
 
-    function setMetaDAOSignatureHash(bytes memory _metaDAOSignatureHash) public onlyOwner {
-        metaDAOSignatureHash = _metaDAOSignatureHash;
+    function setParentCoSignatureHash(bytes memory _parentCoSignatureHash) public onlyOwner {
+        parentCoSignatureHash = _parentCoSignatureHash;
     }
 
     function setStable(address _stable) public onlyOwner {
         stable = _stable;
     }
 
-    function setMetaDAOOfficer(CompanyOfficer memory _officer) public onlyOwner {
-        metaDAOOfficer = _officer;
+    function setParentCoOfficer(CompanyOfficer memory _officer) public onlyOwner {
+        parentCoOfficer = _officer;
     }
 
-    function setMetaDAOOfficerEOA(address _eoa) public onlyOwner {
-        metaDAOOfficer.eoa = _eoa;
+    function setParentCoOfficerEOA(address _eoa) public onlyOwner {
+        parentCoOfficer.eoa = _eoa;
     }
 
-    function setMetaDAOOfficerName(string memory _name) public onlyOwner {
-        metaDAOOfficer.name = _name;
+    function setParentCoOfficerName(string memory _name) public onlyOwner {
+        parentCoOfficer.name = _name;
     }
 
-    function setMetaDAOOfficerContact(string memory _contact) public onlyOwner {
-        metaDAOOfficer.contact = _contact;
+    function setParentCoOfficerContact(string memory _contact) public onlyOwner {
+        parentCoOfficer.contact = _contact;
     }
 
-    function setMetaDAOOfficerTitle(string memory _title) public onlyOwner {
-        metaDAOOfficer.title = _title;
+    function setParentCoOfficerTitle(string memory _title) public onlyOwner {
+        parentCoOfficer.title = _title;
     }
 
     function setIssuanceManagerFactory(address _issuanceManagerFactory) external onlyOwner {
@@ -242,7 +242,7 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         emit RegistryAddressUpdated(_registryAddress, old);
     }
 
-    function deployMetaCorp(
+    function deployCorp(
         bytes32 salt,
         string memory companyName,
         string memory companyType,
@@ -322,10 +322,10 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
 
-        emit MetaCorpDeployed(cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress, roundManagerAddress, address(0), 0, _officer.eoa);
+        emit CorpDeployed(cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress, roundManagerAddress, address(0), 0, _officer.eoa);
     }
 
-    // Admin-only, one-time creation of the MetaDAO parent corp
+    // Admin-only, one-time creation of the  parent corp
     function createParentCorp(
         bytes32 salt,
         string memory companyName,
@@ -342,8 +342,8 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         address roundMgr
     ) {
         if (parentCorpCreated) revert("ParentCorpAlreadyCreated");
-        CompanyOfficer memory officer = metaDAOOfficer;
-        if (officer.eoa == address(0)) revert("MetaDAOOfficerNotSet");
+        CompanyOfficer memory officer = parentCoOfficer;
+        if (officer.eoa == address(0)) revert("ParentCoOfficerNotSet");
 
         (
             corp,
@@ -351,7 +351,7 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             issuance,
             dealMgr,
             roundMgr
-        ) = deployMetaCorp(
+        ) = deployCorp(
             salt,
             companyName,
             companyType,
@@ -372,7 +372,7 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         emit ParentCorpCreated(corp, auth, issuance, dealMgr, roundMgr);
     }
 
-    function deployMetaDAOContractFor(
+    function deployCorpContractFor(
         uint256 salt,
         string memory companyName,
         string memory companyType,
@@ -419,13 +419,13 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
 
         // Effect: construct parties
         address[] memory partiesOverride = new address[](2);
-        partiesOverride[0] = metaDAOOfficer.eoa;
+        partiesOverride[0] = parentCoOfficer.eoa;
         partiesOverride[1] = deployer;
 
         string[][] memory partyValuesOverride = new string[][](2);
         partyValuesOverride[0] = new string[](2);
-        partyValuesOverride[0][0] = metaDAOOfficer.name;
-        partyValuesOverride[0][1] = metaDAOOfficer.contact;
+        partyValuesOverride[0][0] = parentCoOfficer.name;
+        partyValuesOverride[0][1] = parentCoOfficer.contact;
         partyValuesOverride[1] = _partyValues;
 
         //create bytes32 salt
@@ -437,7 +437,7 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             issuanceManagerAddress,
             dealManagerAddress,
             roundManagerAddress
-        ) = deployMetaCorp(
+        ) = deployCorp(
             corpSalt,
             companyName,
             companyType,
@@ -463,10 +463,10 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         ICyberAgreementRegistry(registryAddress).signContractFor(deployer, agreementId, partyValuesOverride[1], signature, false, "");
 
         ICyberAgreementRegistry(registryAddress).signContractWithEscrow(
-            metaDAOOfficer.eoa,
+            parentCoOfficer.eoa,
             agreementId,
             partyValuesOverride[0],
-            metaDAOSignatureHash,
+            parentCoSignatureHash,
             false,
             ""
         );
@@ -488,10 +488,10 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         );
 
         ICyberAgreementRegistry(registryAddress).signContractWithEscrow(
-            metaDAOOfficer.eoa,
+            parentCoOfficer.eoa,
             meetingNotesId,
             meetingNotesPartyValues[0],
-            metaDAOSignatureHash,
+            parentCoSignatureHash,
             false,
             ""
         );

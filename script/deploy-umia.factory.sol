@@ -46,7 +46,7 @@ contract DeployScript is Script {
             vm.envUint("PRIVATE_KEY_MAIN"), // deployerPrivateKey
             0x59026c9A3871505c8E5fb0B021e274a0B28547F6, // corpPayable
             0x76A6168B69f8f1b27E06dC77a30F2D1C92733e7A, // officerAddress
-            hex"63f62ac9b08c813401a02a16a820a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1b" // metadaoEscrowSig
+            hex"73f62ac9b08c813401a02a16a920a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1a" // metadaoEscrowSig
         );
     }
 
@@ -57,14 +57,14 @@ contract DeployScript is Script {
         bytes memory metadaoEscrowSig
     ) public returns (CyberAgreementRegistry registry, MetaDAOFactory metaDAOFactory) {
         // Other configs
-        string memory metaDAOOfficerName = "MetaDAO LLC, a Marshall Islands DAO limited liability company"; 
-        string memory metaDAOOfficerContact = "market.governed.civilization@metadao.fi PO Box 852, Long Island Rd, Majuro, Marshall Islands MH 96960"; 
+        string memory metaDAOOfficerName = "Test Umia Officer"; 
+        string memory metaDAOOfficerContact = "Test Contact"; 
         string memory metaDAOOfficerTitle = "Director & Management Shareholder"; 
 
         address deployerAddress = vm.addr(deployerPrivateKey);
         vm.startBroadcast(deployerPrivateKey);
 
-        bytes32 salt = bytes32(keccak256("MetaDAOFactory.deploy.v1"));
+        bytes32 salt = bytes32(keccak256("UmiaFactory.deploy.v1"));
 
         address stable = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913; // USDC @ Base
 
@@ -87,11 +87,11 @@ contract DeployScript is Script {
         partyFields[1] = "contactDetails";
 
         // Create template for SegCo
-        string memory segCoAgreementTitle = "MetaDAO Futarchy Governance SPC - SegCo combined v 1.0";
+        string memory segCoAgreementTitle = "Test Umia Futarchy Governance SPC - SegCo combined v 1.0";
         string memory segCoAgreementUri = "ipfs://bafybeifpvfwxfmobk7nhflsczqiynp3ca5urvyk3duh7s3rwptcnfzhuje";
 
         // Create template for Board Consent
-        string memory boardConsentTitle = "MetaDAO Futarchy Governance SPC - Board Consent - Approval of SegCo v 1.0";
+        string memory boardConsentTitle = "Test  Futarchy Governance SPC - Board Consent - Approval of SegCo v 1.0";
         string memory boardConsentUri = "ipfs://bafkreic7dscoigvwjc23vzvkmzophm34kpafu6nrctykq5bif63lqvpuoa";
 
 
