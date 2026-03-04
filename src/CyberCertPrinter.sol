@@ -229,7 +229,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         delete CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId];
         delete CyberCertPrinterStorage.cyberCertStorage().issuerSignatures[tokenId];
     }
-    
+
     /**
      * @dev Override _update to enforce transferability restrictions
      * This function is called for all token transfers, mints, and burns
@@ -328,6 +328,11 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     function voidCert(uint256 tokenId) external onlyIssuanceManager {
         CyberCertPrinterStorage.setSecurityStatus(tokenId, SecurityStatus.Void);
         emit CertificateVoided(tokenId, block.timestamp);
+    }
+
+    function unvoidCert(uint256 tokenId) external onlyIssuanceManager {
+        if (!_exists(tokenId)) revert TokenDoesNotExist();
+        CyberCertPrinterStorage.setSecurityStatus(tokenId, SecurityStatus.Assigned);
     }
 
     function isVoided(uint256 tokenId) external view returns (bool) {

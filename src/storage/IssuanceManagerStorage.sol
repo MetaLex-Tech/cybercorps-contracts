@@ -325,7 +325,7 @@ library IssuanceManagerStorage {
 
         if (amount == details.unitsRepresented) {
             address dm = ICyberCorp(getCORP()).dealManager();
-            certificate.safeTransferFrom(account, dm, id);
+            //certificate.safeTransferFrom(account, dm, id);
             certificate.voidCert(id);
             ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
             emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
@@ -393,6 +393,7 @@ library IssuanceManagerStorage {
                 selection.voidedTokenId,
                 voidedDetails
             );
+            certificate.unvoidCert(selection.voidedTokenId);
 
             address certCustodian = certificate.ownerOf(selection.voidedTokenId);
             if (certCustodian != account) {
@@ -413,15 +414,10 @@ library IssuanceManagerStorage {
                 );
             }
         } else {
-            CertificateDetails memory details = CertificateDetails({
-                signingOfficerName: "",
-                signingOfficerTitle: "",
-                investmentAmountUSD: 0,
-                issuerUSDValuationAtTimeOfInvestment: 0,
-                unitsRepresented: units,
-                legalDetails: "",
-                extensionData: ""
-            });
+            CertificateDetails memory details = _buildRecertDetails(
+                certificate,
+                units
+            );
             IIssuanceManager(address(this)).createCertAndAssign(
                 certAddress,
                 account,
@@ -463,5 +459,28 @@ library IssuanceManagerStorage {
         if (numerator == 0 || denominator == 0) {
             return (1, 1);
         }
+    }
+
+    function _buildRecertDetails(
+        ICyberCertPrinter certificate,
+        uint256 units
+    ) internal view returns (CertificateDetails memory details) {
+        details.unitsRepresented = units;
+
+        uint256 supply = certificate.totalSupply();
+        if (supply == 0) {
+            return details;
+        }
+
+        // Use the latest minted certificate as the best available template for recert fields.
+        uint256 templateTokenId = certificate.tokenByIndex(supply - 1);
+        CertificateDetails memory template = certificate.getCertificateDetails(
+            templateTokenId
+        );
+
+        details.signingOfficerName = template.signingOfficerName;
+        details.signingOfficerTitle = template.signingOfficerTitle;
+        details.issuerUSDValuationAtTimeOfInvestment = template
+            .issuerUSDValuationAtTimeOfInvestment;
     }
 }

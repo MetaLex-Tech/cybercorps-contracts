@@ -386,32 +386,43 @@ contract CyberScripUpgradeTest is Test {
             false
         );
 
-        uint256 unit = 1e18; // one cert unit in this round setup
+        uint256 fullCertUnits = ICyberCertPrinter(certPrinter)
+            .getCertificateDetails(0)
+            .unitsRepresented;
+        assertGt(fullCertUnits, 0, "certificate should have units");
         assertEq(IERC20(scrip).balanceOf(investor), 0, "initial scrip balance");
 
-        // Investor scripifies a portion of the certificate.
+        // Investor scripifies the full certificate amount.
         vm.prank(investor);
-        issuanceManager.scripifyCert(certPrinter, 0, unit, address(0));
+        issuanceManager.scripifyCert(certPrinter, 0, fullCertUnits, address(0));
         assertEq(
             IERC20(scrip).balanceOf(investor),
-            unit,
-            "scrip balance after scripify"
-        );
-
-        // Investor converts scrip back to a certificate.
-        vm.prank(investor);
-        issuanceManager.convertScripToCert(certPrinter, unit);
-        assertEq(
-            IERC20(scrip).balanceOf(investor),
-            0,
-            "scrip balance after recertify"
+            fullCertUnits,
+            "scrip balance after full scripify"
         );
         assertEq(
             IERC721(certPrinter).balanceOf(investor),
             1,
-            "investor should hold original cert"
+            "full scripify should not consume investor cert"
         );
-        string memory certUri = _getCertificateTokenURI(certPrinter, 0);
+
+        // Investor converts full scrip amount back to a certificate.
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(certPrinter, fullCertUnits);
+
+        assertEq(
+            IERC721(certPrinter).balanceOf(investor),
+            1,
+            "investor should hold recertified cert"
+        );
+        uint256 recertifiedTokenId = ICyberCertPrinter(certPrinter).tokenOfOwnerByIndex(
+            investor,
+            0
+        );
+        string memory certUri = _getCertificateTokenURI(
+            certPrinter,
+            recertifiedTokenId
+        );
         assertGt(bytes(certUri).length, 0, "tokenURI should not be empty");
 
         assertTrue(corp != address(0), "corp should be deployed");

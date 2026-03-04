@@ -100,6 +100,7 @@ interface ICyberCertPrinter is IERC721 {
     ) external;
     function burn(uint256 tokenId) external;
     function voidCert(uint256 tokenId) external;
+    function unvoidCert(uint256 tokenId) external;
     function isVoided(uint256 tokenId) external view returns (bool);
     function getCertificateDetails(
         uint256 tokenId
