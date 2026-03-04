@@ -112,6 +112,15 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         uint256 indexed id,
         bool isWhitelisted
     );
+    event CyberScripDeployed(
+        address indexed certPrinterAddress,
+        address indexed cyberScripAddress,
+        uint256 scripRatioNumerator,
+        uint256 scripRatioDenominator,
+        bool enableForceTransfer,
+        bool enableForceBurn,
+        bool enableFreeze
+    );
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -782,6 +791,15 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         }
         bytes32 salt = keccak256(abi.encodePacked(certAddress, address(this)));
         address newScrip = Create2.deploy(0, salt, _getBytecodeScrip());
+        emit CyberScripDeployed(
+            certAddress,
+            newScrip,
+            scripRatioNumerator,
+            scripRatioDenominator,
+            enableForceTransfer,
+            enableForceBurn,
+            enableFreeze
+        );
         ICyberScrip(newScrip).initialize(
             address(AUTH),
             certAddress,
