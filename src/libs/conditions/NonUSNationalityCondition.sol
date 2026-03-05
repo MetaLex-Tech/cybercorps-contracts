@@ -21,8 +21,7 @@ contract NonUSNationalityCondition is BaseCondition {
 
     event ProofSubmitted(
         address indexed account,
-        uint256 expiresAt,
-        bytes32 normalizedNationalityHash
+        uint256 expiresAt
     );
 
     // Deterministic verifier address from ZKPassport docs.
@@ -81,15 +80,6 @@ contract NonUSNationalityCondition is BaseCondition {
         if (boundData.senderAddress != msg.sender) revert InvalidBoundSender();
         if (boundData.chainId != block.chainid) revert InvalidBoundChainId();
 
-        DisclosedData memory disclosed = helper.getDisclosedData(
-            params.committedInputs,
-            isIDCard
-        );
-        bytes32 normalizedNationalityHash = _normalizedCountryHash(
-            disclosed.nationality
-        );
-        if (_isUSHash(normalizedNationalityHash)) revert USNationalityNotAllowed();
-
         uint256 proofTimestamp = helper.getProofTimestamp(
             params.proofVerificationData.publicInputs
         );
@@ -100,7 +90,7 @@ contract NonUSNationalityCondition is BaseCondition {
         if (expiresAt < block.timestamp) revert ProofExpired();
 
         nonUSProofExpiry[msg.sender] = expiresAt;
-        emit ProofSubmitted(msg.sender, expiresAt, normalizedNationalityHash);
+        emit ProofSubmitted(msg.sender, expiresAt);
     }
 
     /// @notice Condition check used by LexScroWLite.conditionCheck
