@@ -17,6 +17,7 @@ contract NonUSNationalityCondition is BaseCondition {
     error USNationalityNotAllowed();
     error ProofExpired();
     error ProofAlreadyUsed();
+    error MaxValidityPeriodExceeded();
 
     event ProofSubmitted(
         address indexed account,
@@ -31,6 +32,7 @@ contract NonUSNationalityCondition is BaseCondition {
     IZKPassportVerifier public immutable verifier;
     string public expectedDomain;
     string public expectedScope;
+    uint256 public immutable maxValidityPeriod;
 
     mapping(address => uint256) public nonUSProofExpiry;
     mapping(bytes32 => bool) public usedProofIdentifiers;
@@ -38,10 +40,14 @@ contract NonUSNationalityCondition is BaseCondition {
     constructor(
         string memory _expectedDomain,
         string memory _expectedScope,
-        address _verifier
+        address _verifier,
+        uint256 _maxValidityPeriod
     ) {
         expectedDomain = _expectedDomain;
         expectedScope = _expectedScope;
+
+        require(_maxValidityPeriod > 0, "maxValidityPeriod should not be zero");
+        maxValidityPeriod = _maxValidityPeriod;
 
         address resolvedVerifier = _verifier == address(0)
             ? DEFAULT_ZKPASSPORT_VERIFIER
@@ -87,8 +93,10 @@ contract NonUSNationalityCondition is BaseCondition {
         uint256 proofTimestamp = helper.getProofTimestamp(
             params.proofVerificationData.publicInputs
         );
-        uint256 expiresAt = proofTimestamp +
-            params.serviceConfig.validityPeriodInSeconds;
+        uint256 validityPeriod = params.serviceConfig.validityPeriodInSeconds;
+        if (validityPeriod > maxValidityPeriod) revert MaxValidityPeriodExceeded();
+
+        uint256 expiresAt = proofTimestamp + validityPeriod;
         if (expiresAt < block.timestamp) revert ProofExpired();
 
         nonUSProofExpiry[msg.sender] = expiresAt;

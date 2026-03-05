@@ -11,13 +11,15 @@ contract BaseScript is Script {
         string memory expectedDomain = vm.envString("ZKPASSPORT_DOMAIN");
         string memory expectedScope = vm.envString("ZKPASSPORT_SCOPE");
         address verifier = vm.envOr("ZKPASSPORT_VERIFIER", address(0));
+        uint256 maxValidityPeriod = vm.envUint("ZKPASSPORT_MAX_VALIDITY_PERIOD");
 
         vm.startBroadcast(deployerPrivateKey);
 
         NonUSNationalityCondition condition = new NonUSNationalityCondition(
             expectedDomain,
             expectedScope,
-            verifier
+            verifier,
+            maxValidityPeriod
         );
 
         vm.stopBroadcast();

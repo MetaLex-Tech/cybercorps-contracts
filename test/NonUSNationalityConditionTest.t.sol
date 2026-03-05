@@ -99,13 +99,16 @@ contract NonUSNationalityConditionTest is Test {
     NonUSNationalityCondition internal condition;
     MockEscrowSource internal escrowSource;
 
+    uint256 internal constant MAX_VALIDITY_PERIOD = 30 days;
+
     function setUp() public {
         helper = new MockZKPassportHelper();
         verifier = new MockZKPassportVerifier(address(helper));
         condition = new NonUSNationalityCondition(
             EXPECTED_DOMAIN,
             EXPECTED_SCOPE,
-            address(verifier)
+            address(verifier),
+            MAX_VALIDITY_PERIOD
         );
         escrowSource = new MockEscrowSource();
     }
@@ -216,6 +219,23 @@ contract NonUSNationalityConditionTest is Test {
         vm.expectRevert(NonUSNationalityCondition.InvalidBoundSender.selector);
         condition.submitProof(victimsParams, false);
         vm.stopPrank();
+    }
+
+    function test_RevertIf_ValidityPeriodExceedsMax() public {
+        address investor = address(0x123);
+        ProofVerificationParams memory params = _buildParams(
+            investor,
+            "FRA",
+            EXPECTED_DOMAIN,
+            EXPECTED_SCOPE
+        );
+
+        // Request 100 days, but max is 30 days
+        params.serviceConfig.validityPeriodInSeconds = 100 days;
+
+        vm.prank(investor);
+        vm.expectRevert(NonUSNationalityCondition.MaxValidityPeriodExceeded.selector);
+        condition.submitProof(params, false);
     }
 
     function _buildParams(
