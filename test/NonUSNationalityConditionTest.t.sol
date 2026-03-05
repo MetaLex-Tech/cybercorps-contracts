@@ -60,9 +60,11 @@ contract MockZKPassportVerifier is IZKPassportVerifier {
     }
 
     function verify(
-        ProofVerificationParams calldata
+        ProofVerificationParams calldata params
     ) external view returns (bool verified, bytes32 uniqueIdentifier, IZKPassportHelper zkHelper) {
-        return (shouldVerify, bytes32(uint256(1)), helper);
+        // Simulate different IDs for different params so they don't conflict upon submissions
+        uniqueIdentifier = keccak256(abi.encode(params.proofVerificationData.publicInputs, params.committedInputs));
+        return (shouldVerify, uniqueIdentifier, helper);
     }
 }
 
@@ -156,6 +158,64 @@ contract NonUSNationalityConditionTest is Test {
             abi.encode(agreementId)
         );
         assertTrue(allowed);
+    }
+
+    /// @dev User should not be able to resubmit an old proof (same proof/public inputs)
+    ///      but with a larger validity period in ServiceConfig, effectively extending eligibility without a new proof.
+    function test_RevertIf_ExtendEligibilityByReplayAttack() public {
+        bytes32 agreementId = keccak256("agreement-valid-proof");
+        address investor = address(0xB0B);
+        escrowSource.setCounterparty(agreementId, investor);
+
+        ProofVerificationParams memory params = _buildParams(
+            investor,
+            "FRA",
+            EXPECTED_DOMAIN,
+            EXPECTED_SCOPE
+        );
+
+        vm.startPrank(investor);
+
+        // Initial submit uses 1 day validity (as built by _buildParams)
+        condition.submitProof(params, false);
+        uint256 expiry1 = condition.nonUSProofExpiry(investor);
+
+        // Simulate expiry
+        vm.warp(expiry1 + 1);
+
+        {
+            bool allowed = condition.checkCondition(
+                address(escrowSource),
+                bytes4(0),
+                abi.encode(agreementId)
+            );
+            assertFalse(allowed);
+        }
+
+        // "Replay" the same proof package but claim a longer validity period.
+        params.serviceConfig.validityPeriodInSeconds = 365 days;
+        vm.expectRevert(NonUSNationalityCondition.ProofAlreadyUsed.selector);
+        condition.submitProof(params, false);
+
+        vm.stopPrank();
+    }
+
+    /// @dev A different address should not be able to replay someone else's proof package
+    function test_RevertIf_ReplaySomeoneElsesProof() public {
+        address victim = address(0xA11CE);
+        address attacker = address(0xB0B);
+
+        ProofVerificationParams memory victimsParams = _buildParams(
+            victim,
+            "FRA",
+            EXPECTED_DOMAIN,
+            EXPECTED_SCOPE
+        );
+
+        vm.startPrank(attacker);
+        vm.expectRevert(NonUSNationalityCondition.InvalidBoundSender.selector);
+        condition.submitProof(victimsParams, false);
+        vm.stopPrank();
     }
 
     function _buildParams(

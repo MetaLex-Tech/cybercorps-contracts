@@ -16,6 +16,7 @@ contract NonUSNationalityCondition is BaseCondition {
     error InvalidBoundChainId();
     error USNationalityNotAllowed();
     error ProofExpired();
+    error ProofAlreadyUsed();
 
     event ProofSubmitted(
         address indexed account,
@@ -32,6 +33,7 @@ contract NonUSNationalityCondition is BaseCondition {
     string public expectedScope;
 
     mapping(address => uint256) public nonUSProofExpiry;
+    mapping(bytes32 => bool) public usedProofIdentifiers;
 
     constructor(
         string memory _expectedDomain,
@@ -53,8 +55,11 @@ contract NonUSNationalityCondition is BaseCondition {
         ProofVerificationParams calldata params,
         bool isIDCard
     ) external {
-        (bool verified, , IZKPassportHelper helper) = verifier.verify(params);
+        (bool verified, bytes32 uniqueIdentifier, IZKPassportHelper helper) = verifier.verify(params);
         if (!verified || address(helper) == address(0)) revert InvalidProof();
+
+        if (usedProofIdentifiers[uniqueIdentifier]) revert ProofAlreadyUsed();
+        usedProofIdentifiers[uniqueIdentifier] = true;
 
         if (
             !helper.verifyScopes(
