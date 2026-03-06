@@ -26,7 +26,10 @@ import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
 import {ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
 import {ICyberScrip} from "../src/interfaces/ICyberScrip.sol";
 import {IssuerApprovalRecertificationCondition} from "../src/libs/conditions/IssuerApprovalRecertificationCondition.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {
+    CertificateDetails,
+    Endorsement
+} from "../src/storage/CyberCertPrinterStorage.sol";
 
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
@@ -500,6 +503,56 @@ contract CyberScripUpgradeTest is Test {
         assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
     }
 
+    function test_PostUpgrade_ScripifyUsesLegalOwner() public {
+        IssuanceManager issuanceManager = _setupUpgradedIssuanceManager();
+        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+            issuanceManager,
+            "Legal Owner Cert",
+            "LOCERT"
+        );
+        uint256 certId = _mintCertAfterUpgrade(
+            issuanceManager,
+            certPrinter,
+            investor,
+            25
+        );
+
+        vm.prank(companyOwner);
+        issuanceManager.setGlobalTransferable(address(certPrinter), true);
+
+        vm.prank(companyOwner);
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            0,
+            1,
+            1,
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+
+        vm.prank(investor);
+        certPrinter.safeTransferFrom(investor, otherInvestor, certId);
+
+        assertEq(certPrinter.ownerOf(certId), otherInvestor);
+        assertEq(certPrinter.legalOwnerOf(certId), investor);
+
+        vm.prank(otherInvestor);
+        vm.expectRevert(IssuanceManager.ConditionCheckFailed.selector);
+        issuanceManager.scripifyCert(address(certPrinter), certId, 10, address(0));
+
+        vm.prank(investor);
+        issuanceManager.scripifyCert(address(certPrinter), certId, 10, address(0));
+
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 10);
+        assertEq(certPrinter.getCertificateDetails(certId).unitsRepresented, 15);
+    }
+
     function test_PostUpgrade_ConversionGatesAndConditions() public {
         IssuanceManager issuanceManager = _setupUpgradedIssuanceManager();
         ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
@@ -591,8 +644,9 @@ contract CyberScripUpgradeTest is Test {
         vm.prank(investor);
         issuanceManager.convertScripToCert(address(certPrinter), 20);
 
-        assertEq(certPrinter.totalSupply(), 2);
-        assertEq(certPrinter.ownerOf(1), investor);
+        assertEq(certPrinter.totalSupply(), 1);
+        assertEq(certPrinter.ownerOf(0), investor);
+        assertFalse(certPrinter.isVoided(0));
         assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
     }
 
@@ -1235,5 +1289,24 @@ contract CyberScripUpgradeTest is Test {
         });
         vm.prank(companyOwner);
         tokenId = issuanceManager.createCert(address(certPrinter), to, details);
+
+        // Seed legal owner in tests: endorsement + self-transfer triggers owner details update.
+        Endorsement memory selfEndorsement = Endorsement({
+            endorser: to,
+            timestamp: block.timestamp,
+            signatureHash: "",
+            registry: address(0),
+            agreementId: bytes32(0),
+            endorsee: to,
+            endorseeName: ""
+        });
+        vm.prank(to);
+        certPrinter.addEndorsement(tokenId, selfEndorsement);
+        vm.prank(companyOwner);
+        issuanceManager.setTokenTransferable(address(certPrinter), tokenId, true);
+        vm.prank(to);
+        certPrinter.safeTransferFrom(to, to, tokenId);
+        vm.prank(companyOwner);
+        issuanceManager.setTokenTransferable(address(certPrinter), tokenId, false);
     }
 }

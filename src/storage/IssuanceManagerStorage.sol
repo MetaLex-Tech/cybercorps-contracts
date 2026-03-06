@@ -290,7 +290,7 @@ library IssuanceManagerStorage {
                 revert ScripifyNotWhitelisted();
             }
         }
-
+        
         ICondition[] storage conditions = getCertToScripConditions(certAddress);
         bytes4 selector = bytes4(
             keccak256("scripifyCert(address,uint256,uint256,address)")
@@ -308,7 +308,9 @@ library IssuanceManagerStorage {
         }
 
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
-        if (certificate.ownerOf(id) != account) revert ConditionCheckFailed();
+        if (certificate.isVoided(id)) revert ConditionCheckFailed();
+        if (certificate.legalOwnerOf(id) != account)
+            revert ConditionCheckFailed();
 
         address toSend = target;
         if (toSend == address(0)) toSend = account;
