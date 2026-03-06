@@ -34,8 +34,7 @@ contract BaseScript is Script {
         // TODO WIP: share with lexchexAuth?
         BorgAuth zkpassportAuth = new BorgAuth{salt: salt}(deployerAddress);
 
-        NonUSNationalityCondition condition = new NonUSNationalityCondition{salt: salt}();
-        condition.initialize(
+        NonUSNationalityCondition condition = new NonUSNationalityCondition{salt: salt}(
             address(zkpassportAuth),
             expectedDomain,
             expectedScope,

@@ -131,8 +131,7 @@ contract NonUSNationalityConditionTest is Test {
         string[] memory excludedCountries = new string[](1);
         excludedCountries[0] = "USA";
 
-        condition = new NonUSNationalityCondition();
-        condition.initialize(
+        condition = new NonUSNationalityCondition(
             address(zkpassportAuth),
             EXPECTED_DOMAIN,
             EXPECTED_SCOPE,
@@ -332,9 +331,8 @@ contract NonUSNationalityConditionTest is Test {
         string[] memory excludedCountries = new string[](1);
         excludedCountries[0] = "USA";
 
-        NonUSNationalityCondition fresh = new NonUSNationalityCondition();
         vm.expectRevert(NonUSNationalityCondition.InvalidMaxValidityPeriod.selector);
-        fresh.initialize(
+        NonUSNationalityCondition fresh = new NonUSNationalityCondition(
             address(zkpassportAuth),
             EXPECTED_DOMAIN,
             EXPECTED_SCOPE,

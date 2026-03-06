@@ -44,8 +44,23 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
 
     string[] public excludedCountries;
 
-    /// @notice Empty constructor for implementation contract
-    constructor() {
+    /// @notice initialize atomically since this is not an upgradeable contract
+    constructor(
+        address _auth,
+        string memory _expectedDomain,
+        string memory _expectedScope,
+        address _verifier,
+        uint256 _maxValidityPeriod,
+        string[] memory _excludedCountries
+    ) {
+        initialize(
+            _auth,
+            _expectedDomain,
+            _expectedScope,
+            _verifier,
+            _maxValidityPeriod,
+            _excludedCountries
+        );
     }
 
     function initialize(

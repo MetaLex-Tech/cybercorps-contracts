@@ -47,8 +47,7 @@ contract NonUSNationalityConditionForkTest is Test {
 
         zkpassportAuth = new BorgAuth(address(this));
 
-        condition = new NonUSNationalityCondition();
-        condition.initialize(
+        condition = new NonUSNationalityCondition(
             address(zkpassportAuth),
             domain,
             scope,
