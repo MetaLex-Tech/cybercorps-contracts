@@ -5,6 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {Escrow, EscrowStatus, Token} from "../src/storage/LexScrowStorage.sol";
 import {NonUSNationalityCondition} from "../src/libs/conditions/NonUSNationalityCondition.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
+import {ICondition} from "../src/interfaces/ICondition.sol";
+import {IERC165} from "@openzeppelin/contracts/interfaces/IERC165.sol";
 import {
     BoundData,
     DisclosedData,
@@ -273,6 +275,92 @@ contract NonUSNationalityConditionTest is Test {
         vm.prank(investor);
         condition.submitProof(params, false);
         assertEq(condition.proofExpiry(investor), proofTimestamp + validityPeriod);
+    }
+
+    // --- checkCondition tests ---
+
+    function test_CheckCondition_ReturnsTrueWithValidProof() public {
+        bytes32 agreementId = keccak256("agreement-1");
+        address investor = address(0xA11CE);
+        escrowSource.setCounterparty(agreementId, investor);
+
+        ProofVerificationParams memory params = _buildParams(investor, block.timestamp, 1 days);
+        vm.prank(investor);
+        condition.submitProof(params, false);
+
+        bool result = condition.checkCondition(address(escrowSource), bytes4(0), abi.encode(agreementId));
+        assertTrue(result);
+    }
+
+    function test_CheckCondition_ReturnsFalseAfterExpiry() public {
+        bytes32 agreementId = keccak256("agreement-2");
+        address investor = address(0xA11CE);
+        escrowSource.setCounterparty(agreementId, investor);
+
+        ProofVerificationParams memory params = _buildParams(investor, block.timestamp, 1 days);
+        vm.prank(investor);
+        condition.submitProof(params, false);
+
+        vm.warp(block.timestamp + 2 days);
+        bool result = condition.checkCondition(address(escrowSource), bytes4(0), abi.encode(agreementId));
+        assertFalse(result);
+    }
+
+    // --- access control tests ---
+
+    function test_RevertWhen_UpdateMaxValidityPeriod_Unauthorized() public {
+        vm.prank(address(0xBEEF));
+        vm.expectRevert(
+            abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, uint256(98), address(0xBEEF))
+        );
+        condition.updateMaxValidityPeriod(1 days);
+    }
+
+    function test_RevertWhen_UpdateExcludedCountries_Unauthorized() public {
+        string[] memory countries = new string[](1);
+        countries[0] = "FRA";
+        vm.prank(address(0xBEEF));
+        vm.expectRevert(
+            abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, uint256(98), address(0xBEEF))
+        );
+        condition.updateExcludedCountries(countries);
+    }
+
+    // --- initialize validation tests ---
+
+    function test_RevertWhen_Initialize_ZeroMaxValidityPeriod() public {
+        string[] memory excludedCountries = new string[](1);
+        excludedCountries[0] = "USA";
+
+        NonUSNationalityCondition fresh = new NonUSNationalityCondition();
+        vm.expectRevert(NonUSNationalityCondition.InvalidMaxValidityPeriod.selector);
+        fresh.initialize(
+            address(zkpassportAuth),
+            EXPECTED_DOMAIN,
+            EXPECTED_SCOPE,
+            address(mockVerifier),
+            0,
+            excludedCountries
+        );
+    }
+
+    function test_RevertWhen_UpdateMaxValidityPeriod_Zero() public {
+        vm.expectRevert(NonUSNationalityCondition.InvalidMaxValidityPeriod.selector);
+        condition.updateMaxValidityPeriod(0);
+    }
+
+    // --- supportsInterface tests ---
+
+    function test_SupportsInterface_ICondition() public view {
+        assertTrue(condition.supportsInterface(type(ICondition).interfaceId));
+    }
+
+    function test_SupportsInterface_IERC165() public view {
+        assertTrue(condition.supportsInterface(type(IERC165).interfaceId));
+    }
+
+    function test_SupportsInterface_Unknown() public view {
+        assertFalse(condition.supportsInterface(bytes4(0xDEADBEEF)));
     }
 
     // --- internal helpers ---
