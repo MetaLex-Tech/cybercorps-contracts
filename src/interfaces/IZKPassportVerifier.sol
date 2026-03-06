@@ -68,4 +68,10 @@ interface IZKPassportHelper {
         string[] memory countryList,
         bytes calldata committedInputs
     ) external pure returns (bool);
+
+    function enforceSanctionsRoot(
+        uint256 currentTimestamp,
+        bool isStrict,
+        bytes calldata committedInputs
+    ) external view;
 }

@@ -2,6 +2,7 @@
 pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts/interfaces/IERC165.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./baseCondition.sol";
 import "../LexScroWLite.sol";
 import "../../interfaces/IZKPassportVerifier.sol";
@@ -14,7 +15,7 @@ contract NonUSNationalityCondition is BaseCondition {
     error InvalidScope();
     error InvalidBoundSender();
     error InvalidBoundChainId();
-    error USNationalityNotAllowed();
+    error USAOrSanctionedCountriesNotAllowed();
     error ProofExpired();
     error ProofAlreadyUsed();
     error MaxValidityPeriodExceeded();
@@ -23,6 +24,8 @@ contract NonUSNationalityCondition is BaseCondition {
         address indexed account,
         uint256 expiresAt
     );
+
+    event SanctionedCountriesUpdated(string[] countries);
 
     // Deterministic verifier address from ZKPassport docs.
     address public constant DEFAULT_ZKPASSPORT_VERIFIER =
@@ -33,15 +36,21 @@ contract NonUSNationalityCondition is BaseCondition {
     string public expectedScope;
     uint256 public immutable maxValidityPeriod;
 
-    mapping(address => uint256) public nonUSProofExpiry;
+    mapping(address => uint256) public proofExpiry;
     mapping(bytes32 => bool) public usedProofIdentifiers;
 
+    string[] public outCountries;
+
     constructor(
+//        address _auth,
         string memory _expectedDomain,
         string memory _expectedScope,
         address _verifier,
-        uint256 _maxValidityPeriod
+        uint256 _maxValidityPeriod,
+        string[] memory _outCountries
     ) {
+//        __BorgAuthACL_init(_auth);
+
         expectedDomain = _expectedDomain;
         expectedScope = _expectedScope;
 
@@ -53,7 +62,16 @@ contract NonUSNationalityCondition is BaseCondition {
             : _verifier;
         if (resolvedVerifier == address(0)) revert InvalidVerifier();
         verifier = IZKPassportVerifier(resolvedVerifier);
+
+        outCountries = _outCountries;
+        emit SanctionedCountriesUpdated(_outCountries);
     }
+
+    // TODO WIP TBD
+//    function updateSanctionedCountries(string[] calldata _outCountries) external onlyAdmin {
+//        outCountries = _outCountries;
+//        emit SanctionedCountriesUpdated(_outCountries);
+//    }
 
     /// @notice Submit and verify ZKPassport proof, then cache non-US eligibility for the caller
     function submitProof(
@@ -80,22 +98,26 @@ contract NonUSNationalityCondition is BaseCondition {
         if (boundData.senderAddress != msg.sender) revert InvalidBoundSender();
         if (boundData.chainId != block.chainid) revert InvalidBoundChainId();
 
-        // TDOO WIP: Add sanction list check
-
-        string[] memory countryList = new string[](1);
-        countryList[0] = "USA";
-        if(!helper.isNationalityOut(countryList, params.committedInputs)) revert USNationalityNotAllowed();
+        if(!helper.isNationalityOut(outCountries, params.committedInputs)) revert USAOrSanctionedCountriesNotAllowed();
 
         uint256 proofTimestamp = helper.getProofTimestamp(
             params.proofVerificationData.publicInputs
         );
+
+        // Check against the sanctioned watchlist at the time of the proof
+        helper.enforceSanctionsRoot(
+            proofTimestamp,
+            false,
+            params.committedInputs
+        );
+
         uint256 validityPeriod = params.serviceConfig.validityPeriodInSeconds;
         if (validityPeriod > maxValidityPeriod) revert MaxValidityPeriodExceeded();
 
         uint256 expiresAt = proofTimestamp + validityPeriod;
         if (expiresAt < block.timestamp) revert ProofExpired();
 
-        nonUSProofExpiry[msg.sender] = expiresAt;
+        proofExpiry[msg.sender] = expiresAt;
         emit ProofSubmitted(msg.sender, expiresAt);
     }
 
@@ -108,7 +130,7 @@ contract NonUSNationalityCondition is BaseCondition {
         LexScroWLite lexScrow = LexScroWLite(_contract);
         bytes32 agreementId = abi.decode(data, (bytes32));
         address counterparty = lexScrow.getEscrowDetails(agreementId).counterParty;
-        return nonUSProofExpiry[counterparty] >= block.timestamp;
+        return proofExpiry[counterparty] >= block.timestamp;
     }
 
     function supportsInterface(

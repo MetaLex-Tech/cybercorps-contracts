@@ -13,6 +13,7 @@ import {
     ServiceConfig
 } from "../src/interfaces/IZKPassportVerifier.sol";
 import {NonUSNationalityCondition} from "../src/libs/conditions/NonUSNationalityCondition.sol";
+import {BorgAuth} from "../src/libs/auth.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 
 /// @notice Assume Sepolia testnet
@@ -20,6 +21,7 @@ contract NonUSNationalityConditionForkTest is Test {
     using stdJson for string;
 
     NonUSNationalityCondition internal condition;
+    BorgAuth internal auth = BorgAuth(0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01);
 
     uint256 internal constant MAX_VALIDITY_PERIOD = 365 days;
     address public constant REAL_VERIFIER = 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8;
@@ -27,30 +29,45 @@ contract NonUSNationalityConditionForkTest is Test {
     // These must match the proof or what the condition expects
     string domain = "localhost";
     string scope = "hello-world";
+    
+    string[] outCountries;
 
     function setUp() public {
+        outCountries = new string[](9);
+        outCountries[0] = "IRN";
+        outCountries[1] = "IRQ";
+        outCountries[2] = "LBY";
+        outCountries[3] = "PRK";
+        outCountries[4] = "SDN";
+        outCountries[5] = "SOM";
+        outCountries[6] = "SYR";
+        outCountries[7] = "USA";
+        outCountries[8] = "YEM";
+        
         condition = new NonUSNationalityCondition(
+//            address(auth), // TODO WIP TBD
             domain,
             scope,
             REAL_VERIFIER,
-            MAX_VALIDITY_PERIOD
+            MAX_VALIDITY_PERIOD,
+            outCountries
         );
     }
 
-    function test_SubmitRealProof() public {
+    function test_SubmitRealProofValid() public {
         // Assume the sample data is signed for Sepolia (included in committedInputs)
-        // at timestamp: 1772702435 (included in publicInputs)
-        uint256 signedTimestamp = 1772702435;
-        (ProofVerificationParams memory params, address account) = _parseProofFromJson("test/res/sample-non-us-proof-call.json");
+        // at timestamp: 1772783327 (included in publicInputs)
+        uint256 signedTimestamp = 1772783327;
+        (ProofVerificationParams memory params, address account) = _parseProofFromJson("test/res/sample-non-us-sanctioned-countries-sanctioned-list-proof-call.json");
 
         vm.warp(signedTimestamp);
         vm.prank(account);
         condition.submitProof(params, false);
-        assertEq(condition.nonUSProofExpiry(account), signedTimestamp + params.serviceConfig.validityPeriodInSeconds, "unexpected proof expiry");
+        assertEq(condition.proofExpiry(account), signedTimestamp + params.serviceConfig.validityPeriodInSeconds, "unexpected proof expiry");
     }
 
-    /// @notice Real proof of non-FRA nationality should not pass since we want non-US proof
-    function test_RevertIf_RealButWrongProof() public {
+    /// @notice Real proof of non-FRA nationality should not pass since we want non-US + non-sanctioned proof
+    function test_RevertIf_RealProofInvalid() public {
         // Assume the sample data is signed for Sepolia (included in committedInputs)
         // at timestamp: 1772768315 (included in publicInputs)
         uint256 signedTimestamp = 1772768315;
@@ -58,7 +75,7 @@ contract NonUSNationalityConditionForkTest is Test {
 
         vm.warp(signedTimestamp);
         vm.prank(account);
-        vm.expectRevert(NonUSNationalityCondition.USNationalityNotAllowed.selector);
+        vm.expectRevert(NonUSNationalityCondition.USAOrSanctionedCountriesNotAllowed.selector);
         condition.submitProof(params, false);
     }
 
