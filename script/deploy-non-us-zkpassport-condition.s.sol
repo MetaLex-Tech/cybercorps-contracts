@@ -7,17 +7,21 @@ import {NonUSNationalityCondition} from "../src/libs/conditions/NonUSNationality
 
 contract BaseScript is Script {
     function run() public {
+        bytes32 salt = keccak256(abi.encodePacked("zkpassport.v1"));
+
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         string memory expectedDomain = vm.envString("ZKPASSPORT_DOMAIN");
         string memory expectedScope = vm.envString("ZKPASSPORT_SCOPE");
         address verifier = vm.envOr("ZKPASSPORT_VERIFIER", address(0));
+        uint256 maxValidityPeriod = vm.envUint("ZKPASSPORT_MAX_VALIDITY_PERIOD");
 
         vm.startBroadcast(deployerPrivateKey);
 
-        NonUSNationalityCondition condition = new NonUSNationalityCondition(
+        NonUSNationalityCondition condition = new NonUSNationalityCondition{salt: salt}(
             expectedDomain,
             expectedScope,
-            verifier
+            verifier,
+            maxValidityPeriod
         );
 
         vm.stopBroadcast();

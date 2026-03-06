@@ -16,11 +16,12 @@ contract NonUSNationalityCondition is BaseCondition {
     error InvalidBoundChainId();
     error USNationalityNotAllowed();
     error ProofExpired();
+    error ProofAlreadyUsed();
+    error MaxValidityPeriodExceeded();
 
     event ProofSubmitted(
         address indexed account,
-        uint256 expiresAt,
-        bytes32 normalizedNationalityHash
+        uint256 expiresAt
     );
 
     // Deterministic verifier address from ZKPassport docs.
@@ -30,16 +31,22 @@ contract NonUSNationalityCondition is BaseCondition {
     IZKPassportVerifier public immutable verifier;
     string public expectedDomain;
     string public expectedScope;
+    uint256 public immutable maxValidityPeriod;
 
     mapping(address => uint256) public nonUSProofExpiry;
+    mapping(bytes32 => bool) public usedProofIdentifiers;
 
     constructor(
         string memory _expectedDomain,
         string memory _expectedScope,
-        address _verifier
+        address _verifier,
+        uint256 _maxValidityPeriod
     ) {
         expectedDomain = _expectedDomain;
         expectedScope = _expectedScope;
+
+        require(_maxValidityPeriod > 0, "maxValidityPeriod should not be zero");
+        maxValidityPeriod = _maxValidityPeriod;
 
         address resolvedVerifier = _verifier == address(0)
             ? DEFAULT_ZKPASSPORT_VERIFIER
@@ -53,8 +60,11 @@ contract NonUSNationalityCondition is BaseCondition {
         ProofVerificationParams calldata params,
         bool isIDCard
     ) external {
-        (bool verified, , IZKPassportHelper helper) = verifier.verify(params);
+        (bool verified, bytes32 uniqueIdentifier, IZKPassportHelper helper) = verifier.verify(params);
         if (!verified || address(helper) == address(0)) revert InvalidProof();
+
+        if (usedProofIdentifiers[uniqueIdentifier]) revert ProofAlreadyUsed();
+        usedProofIdentifiers[uniqueIdentifier] = true;
 
         if (
             !helper.verifyScopes(
@@ -70,24 +80,17 @@ contract NonUSNationalityCondition is BaseCondition {
         if (boundData.senderAddress != msg.sender) revert InvalidBoundSender();
         if (boundData.chainId != block.chainid) revert InvalidBoundChainId();
 
-        DisclosedData memory disclosed = helper.getDisclosedData(
-            params.committedInputs,
-            isIDCard
-        );
-        bytes32 normalizedNationalityHash = _normalizedCountryHash(
-            disclosed.nationality
-        );
-        if (_isUSHash(normalizedNationalityHash)) revert USNationalityNotAllowed();
-
         uint256 proofTimestamp = helper.getProofTimestamp(
             params.proofVerificationData.publicInputs
         );
-        uint256 expiresAt = proofTimestamp +
-            params.serviceConfig.validityPeriodInSeconds;
+        uint256 validityPeriod = params.serviceConfig.validityPeriodInSeconds;
+        if (validityPeriod > maxValidityPeriod) revert MaxValidityPeriodExceeded();
+
+        uint256 expiresAt = proofTimestamp + validityPeriod;
         if (expiresAt < block.timestamp) revert ProofExpired();
 
         nonUSProofExpiry[msg.sender] = expiresAt;
-        emit ProofSubmitted(msg.sender, expiresAt, normalizedNationalityHash);
+        emit ProofSubmitted(msg.sender, expiresAt);
     }
 
     /// @notice Condition check used by LexScroWLite.conditionCheck
