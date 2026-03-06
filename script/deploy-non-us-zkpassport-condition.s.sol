@@ -11,6 +11,7 @@ contract BaseScript is Script {
         bytes32 salt = keccak256(abi.encodePacked("zkpassport.v1"));
 
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
+        address deployerAddress = vm.addr(deployerPrivateKey);
         string memory expectedDomain = vm.envString("ZKPASSPORT_DOMAIN");
         string memory expectedScope = vm.envString("ZKPASSPORT_SCOPE");
         address verifier = vm.envOr("ZKPASSPORT_VERIFIER", address(0));
@@ -30,8 +31,12 @@ contract BaseScript is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        NonUSNationalityCondition condition = new NonUSNationalityCondition{salt: salt}(
-//            address(coreAuth), // TODO WIP TBD
+        // TODO WIP: share with lexchexAuth?
+        BorgAuth zkpassportAuth = new BorgAuth{salt: salt}(deployerAddress);
+
+        NonUSNationalityCondition condition = new NonUSNationalityCondition{salt: salt}();
+        condition.initialize(
+            address(zkpassportAuth),
             expectedDomain,
             expectedScope,
             verifier,
@@ -41,6 +46,7 @@ contract BaseScript is Script {
 
         vm.stopBroadcast();
 
+        console2.log("zkpassportAuth:", address(zkpassportAuth));
         console2.log("NonUSNationalityCondition:", address(condition));
         console2.log("Expected domain:", expectedDomain);
         console2.log("Expected scope:", expectedScope);

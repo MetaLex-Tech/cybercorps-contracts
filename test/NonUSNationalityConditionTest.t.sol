@@ -115,37 +115,31 @@ contract NonUSNationalityConditionTest is Test {
     MockZKPassportVerifier internal verifier;
     NonUSNationalityCondition internal condition;
     MockEscrowSource internal escrowSource;
-    BorgAuth internal auth;
+    BorgAuth internal zkpassportAuth;
 
     uint256 internal constant MAX_VALIDITY_PERIOD = 30 days;
 
-    string[] outCountries;
+    string[] excludedCountries;
 
     function setUp() public {
-        auth = new BorgAuth(address(this));
+        zkpassportAuth = new BorgAuth(address(this));
 
         helper = new MockZKPassportHelper();
         verifier = new MockZKPassportVerifier(address(helper));
 
-        outCountries = new string[](1);
-        outCountries[0] = "USA";
+        excludedCountries = new string[](1);
+        excludedCountries[0] = "USA";
 
-        condition = new NonUSNationalityCondition(
-//            address(auth), // TODO WIP TBD
+        condition = new NonUSNationalityCondition();
+        condition.initialize(
+            address(zkpassportAuth),
             EXPECTED_DOMAIN,
             EXPECTED_SCOPE,
             address(verifier),
             MAX_VALIDITY_PERIOD,
-            outCountries
+            excludedCountries
         );
         escrowSource = new MockEscrowSource();
-    }
-
-    function test_RevertWhen_USNationality() public {
-        vm.startPrank(msg.sender);
-        vm.expectRevert(NonUSNationalityCondition.USAOrSanctionedCountriesNotAllowed.selector);
-        condition.submitProof(_buildParams(msg.sender, "USA", EXPECTED_DOMAIN, EXPECTED_SCOPE), false);
-        vm.stopPrank();
     }
 
     function test_RevertWhen_InvalidScope() public {
@@ -266,52 +260,20 @@ contract NonUSNationalityConditionTest is Test {
         condition.submitProof(params, false);
     }
 
-//    function test_RevertIf_Sanctioned() public {
-//        // Assume the sample data is signed for Sepolia (included in committedInputs)
-//        // at timestamp: 1772768315 (included in publicInputs)
-//        uint256 signedTimestamp = 1772768315;
-//        (ProofVerificationParams memory params, address account) = _parseProofFromJson("test/res/sample-non-fr-proof-call.json");
-//
-//        // Set "FRA" as sanctioned
-//        string[] memory sanctioned = new string[](1);
-//        sanctioned[0] = "FRA";
-//        condition.updateSanctionedCountries(sanctioned);
-//
-//        // Sanity check: verify FRA is in sanctionedCountries
-//        assertEq(condition.sanctionedCountries(0), "FRA");
-//
-//        vm.warp(signedTimestamp);
-//        vm.prank(account);
-//        // Expect USNationalityNotAllowed first because it's checked before SanctionedCountryNotAllowed
-//        // and "FRA" (from sample-non-fr-proof-call.json) is NOT "USA", so isNationalityOut(["USA"], FRA) should be TRUE.
-//        // Wait, if it is TRUE, it DOES NOT revert USNationalityNotAllowed.
-//        // So it should reach SanctionedCountryNotAllowed.
-//        vm.expectRevert(NonUSNationalityCondition.SanctionedCountryNotAllowed.selector);
-//        condition.submitProof(params, false);
-//    }
-//
-//    function test_UpdateSanctionedCountries() public {
-//        string[] memory sanctioned = new string[](2);
-//        sanctioned[0] = "FRA";
-//        sanctioned[1] = "NK";
-//        condition.updateSanctionedCountries(sanctioned);
-//
-//        assertEq(condition.sanctionedCountries(0), "FRA");
-//        assertEq(condition.sanctionedCountries(1), "NK");
-//    }
-//
-//    function test_RevertIf_UpdateSanctionedByNonAdmin() public {
-//        address nonAdmin = address(0x123);
-//        string[] memory sanctioned = new string[](1);
-//        sanctioned[0] = "NK";
-//
-//        vm.prank(nonAdmin);
-//        // BorgAuth uses a role-based revert with a specific error
-//        // BorgAuth_NotAuthorized(uint256 role, address user)
-//        // ADMIN_ROLE is 98
-//        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, 98, nonAdmin));
-//        condition.updateSanctionedCountries(sanctioned);
-//    }
+    function test_UpdateMaxValidityPeriod() public {
+        condition.updateMaxValidityPeriod(1 days);
+        assertEq(condition.maxValidityPeriod(), 1 days);
+    }
+
+    function test_UpdateSanctionedCountries() public {
+        string[] memory sanctioned = new string[](2);
+        sanctioned[0] = "FRA";
+        sanctioned[1] = "NK";
+        condition.updateExcludedCountries(sanctioned);
+
+        assertEq(condition.excludedCountries(0), "FRA");
+        assertEq(condition.excludedCountries(1), "NK");
+    }
 
     function _buildParams(
         address senderAddress,

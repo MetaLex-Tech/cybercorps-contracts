@@ -5,16 +5,18 @@ import "@openzeppelin/contracts/interfaces/IERC165.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./baseCondition.sol";
 import "../LexScroWLite.sol";
+import "../auth.sol";
 import "../../interfaces/IZKPassportVerifier.sol";
 
 /// @title NonUSNationalityCondition
 /// @notice Round condition requiring a valid, non-US ZKPassport proof for the participant
-contract NonUSNationalityCondition is BaseCondition {
+contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
     error InvalidVerifier();
     error InvalidProof();
     error InvalidScope();
     error InvalidBoundSender();
     error InvalidBoundChainId();
+    error InvalidMaxValidityPeriod();
     error USAOrSanctionedCountriesNotAllowed();
     error ProofExpired();
     error ProofAlreadyUsed();
@@ -25,37 +27,39 @@ contract NonUSNationalityCondition is BaseCondition {
         uint256 expiresAt
     );
 
-    event SanctionedCountriesUpdated(string[] countries);
+    event MaxValidityPeriodUpdated(uint256 maxValidityPeriod);
+    event ExcludedCountriesUpdated(string[] countries);
 
     // Deterministic verifier address from ZKPassport docs.
     address public constant DEFAULT_ZKPASSPORT_VERIFIER =
         0x1D000001000EFD9a6371f4d90bB8920D5431c0D8;
 
-    IZKPassportVerifier public immutable verifier;
+    IZKPassportVerifier public verifier;
     string public expectedDomain;
     string public expectedScope;
-    uint256 public immutable maxValidityPeriod;
+    uint256 public maxValidityPeriod;
 
     mapping(address => uint256) public proofExpiry;
     mapping(bytes32 => bool) public usedProofIdentifiers;
 
-    string[] public outCountries;
+    string[] public excludedCountries;
 
-    constructor(
-//        address _auth,
+    /// @notice Empty constructor for implementation contract
+    constructor() {
+    }
+
+    function initialize(
+        address _auth,
         string memory _expectedDomain,
         string memory _expectedScope,
         address _verifier,
         uint256 _maxValidityPeriod,
-        string[] memory _outCountries
-    ) {
-//        __BorgAuthACL_init(_auth);
+        string[] memory _excludedCountries
+    ) public initializer {
+        __BorgAuthACL_init(_auth);
 
         expectedDomain = _expectedDomain;
         expectedScope = _expectedScope;
-
-        require(_maxValidityPeriod > 0, "maxValidityPeriod should not be zero");
-        maxValidityPeriod = _maxValidityPeriod;
 
         address resolvedVerifier = _verifier == address(0)
             ? DEFAULT_ZKPASSPORT_VERIFIER
@@ -63,15 +67,24 @@ contract NonUSNationalityCondition is BaseCondition {
         if (resolvedVerifier == address(0)) revert InvalidVerifier();
         verifier = IZKPassportVerifier(resolvedVerifier);
 
-        outCountries = _outCountries;
-        emit SanctionedCountriesUpdated(_outCountries);
+        if(_maxValidityPeriod == 0) revert InvalidMaxValidityPeriod();
+        maxValidityPeriod = _maxValidityPeriod;
+        emit MaxValidityPeriodUpdated(_maxValidityPeriod);
+
+        excludedCountries = _excludedCountries;
+        emit ExcludedCountriesUpdated(_excludedCountries);
     }
 
-    // TODO WIP TBD
-//    function updateSanctionedCountries(string[] calldata _outCountries) external onlyAdmin {
-//        outCountries = _outCountries;
-//        emit SanctionedCountriesUpdated(_outCountries);
-//    }
+    function updateMaxValidityPeriod(uint256 _maxValidityPeriod) external onlyAdmin {
+        if(_maxValidityPeriod == 0) revert InvalidMaxValidityPeriod();
+        maxValidityPeriod = _maxValidityPeriod;
+        emit MaxValidityPeriodUpdated(_maxValidityPeriod);
+    }
+
+    function updateExcludedCountries(string[] calldata _excludedCountries) external onlyAdmin {
+        excludedCountries = _excludedCountries;
+        emit ExcludedCountriesUpdated(_excludedCountries);
+    }
 
     /// @notice Submit and verify ZKPassport proof, then cache non-US eligibility for the caller
     function submitProof(
@@ -98,7 +111,7 @@ contract NonUSNationalityCondition is BaseCondition {
         if (boundData.senderAddress != msg.sender) revert InvalidBoundSender();
         if (boundData.chainId != block.chainid) revert InvalidBoundChainId();
 
-        if(!helper.isNationalityOut(outCountries, params.committedInputs)) revert USAOrSanctionedCountriesNotAllowed();
+        if(!helper.isNationalityOut(excludedCountries, params.committedInputs)) revert USAOrSanctionedCountriesNotAllowed();
 
         uint256 proofTimestamp = helper.getProofTimestamp(
             params.proofVerificationData.publicInputs

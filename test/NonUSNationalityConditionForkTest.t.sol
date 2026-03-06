@@ -20,8 +20,9 @@ import {stdJson} from "forge-std/StdJson.sol";
 contract NonUSNationalityConditionForkTest is Test {
     using stdJson for string;
 
+    BorgAuth internal zkpassportAuth;
+
     NonUSNationalityCondition internal condition;
-    BorgAuth internal auth = BorgAuth(0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01);
 
     uint256 internal constant MAX_VALIDITY_PERIOD = 365 days;
     address public constant REAL_VERIFIER = 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8;
@@ -30,27 +31,30 @@ contract NonUSNationalityConditionForkTest is Test {
     string domain = "localhost";
     string scope = "hello-world";
     
-    string[] outCountries;
+    string[] excludedCountries;
 
     function setUp() public {
-        outCountries = new string[](9);
-        outCountries[0] = "IRN";
-        outCountries[1] = "IRQ";
-        outCountries[2] = "LBY";
-        outCountries[3] = "PRK";
-        outCountries[4] = "SDN";
-        outCountries[5] = "SOM";
-        outCountries[6] = "SYR";
-        outCountries[7] = "USA";
-        outCountries[8] = "YEM";
-        
-        condition = new NonUSNationalityCondition(
-//            address(auth), // TODO WIP TBD
+        excludedCountries = new string[](9);
+        excludedCountries[0] = "IRN";
+        excludedCountries[1] = "IRQ";
+        excludedCountries[2] = "LBY";
+        excludedCountries[3] = "PRK";
+        excludedCountries[4] = "SDN";
+        excludedCountries[5] = "SOM";
+        excludedCountries[6] = "SYR";
+        excludedCountries[7] = "USA";
+        excludedCountries[8] = "YEM";
+
+        zkpassportAuth = new BorgAuth(address(this));
+
+        condition = new NonUSNationalityCondition();
+        condition.initialize(
+            address(zkpassportAuth),
             domain,
             scope,
             REAL_VERIFIER,
             MAX_VALIDITY_PERIOD,
-            outCountries
+            excludedCountries
         );
     }
 
