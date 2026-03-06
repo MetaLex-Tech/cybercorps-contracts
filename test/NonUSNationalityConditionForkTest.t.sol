@@ -40,10 +40,29 @@ contract NonUSNationalityConditionForkTest is Test {
     function test_SubmitRealProof() public {
         // Assume the sample data is signed for Sepolia (included in committedInputs)
         // at timestamp: 1772702435 (included in publicInputs)
-        // with validityPeriodInSeconds =
         uint256 signedTimestamp = 1772702435;
+        (ProofVerificationParams memory params, address account) = _parseProofFromJson("test/res/sample-non-us-proof-call.json");
 
-        string memory path = "test/res/sample-non-us-proof-call.json";
+        vm.warp(signedTimestamp);
+        vm.prank(account);
+        condition.submitProof(params, false);
+        assertEq(condition.nonUSProofExpiry(account), signedTimestamp + params.serviceConfig.validityPeriodInSeconds, "unexpected proof expiry");
+    }
+
+    /// @notice Real proof of non-FRA nationality should not pass since we want non-US proof
+    function test_RevertIf_RealButWrongProof() public {
+        // Assume the sample data is signed for Sepolia (included in committedInputs)
+        // at timestamp: 1772768315 (included in publicInputs)
+        uint256 signedTimestamp = 1772768315;
+        (ProofVerificationParams memory params, address account) = _parseProofFromJson("test/res/sample-non-fr-proof-call.json");
+
+        vm.warp(signedTimestamp);
+        vm.prank(account);
+        vm.expectRevert(NonUSNationalityCondition.USNationalityNotAllowed.selector);
+        condition.submitProof(params, false);
+    }
+
+    function _parseProofFromJson(string memory path) internal returns (ProofVerificationParams memory params, address account) {
         string memory json = vm.readFile(path);
 
         bytes32 vkeyHash = json.readBytes32(".args[0].proofVerificationData.vkeyHash");
@@ -65,17 +84,15 @@ contract NonUSNationalityConditionForkTest is Test {
             devMode: json.readBool(".args[0].serviceConfig.devMode")
         });
 
-        ProofVerificationParams memory params = ProofVerificationParams({
+        params = ProofVerificationParams({
             version: version,
             proofVerificationData: proofData,
             committedInputs: committedInputs,
             serviceConfig: serviceConfig
         });
 
-        address account = json.readAddress(".account");
-        vm.warp(signedTimestamp);
-        vm.prank(account);
-        condition.submitProof(params, false);
-        assertEq(condition.nonUSProofExpiry(account), signedTimestamp + serviceConfig.validityPeriodInSeconds, "unexpected proof expiry");
+        account = json.readAddress(".account");
+
+        return (params, account);
     }
 }

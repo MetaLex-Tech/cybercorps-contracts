@@ -63,4 +63,9 @@ interface IZKPassportHelper {
     function getProofTimestamp(
         bytes32[] calldata publicInputs
     ) external pure returns (uint256);
+
+    function isNationalityOut(
+        string[] memory countryList,
+        bytes calldata committedInputs
+    ) external pure returns (bool);
 }

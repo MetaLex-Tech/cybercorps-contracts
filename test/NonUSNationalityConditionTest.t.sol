@@ -45,6 +45,14 @@ contract MockZKPassportHelper is IZKPassportHelper {
         if (publicInputs.length < 3) return 0;
         return uint256(publicInputs[2]);
     }
+
+    function isNationalityOut(
+        string[] memory countryList,
+        bytes calldata committedInputs
+    ) external pure returns (bool) {
+        // TODO WIP: do not use. review needed
+        return true;
+    }
 }
 
 contract MockZKPassportVerifier is IZKPassportVerifier {

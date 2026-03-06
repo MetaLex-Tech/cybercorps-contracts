@@ -80,6 +80,12 @@ contract NonUSNationalityCondition is BaseCondition {
         if (boundData.senderAddress != msg.sender) revert InvalidBoundSender();
         if (boundData.chainId != block.chainid) revert InvalidBoundChainId();
 
+        // TDOO WIP: Add sanction list check
+
+        string[] memory countryList = new string[](1);
+        countryList[0] = "USA";
+        if(!helper.isNationalityOut(countryList, params.committedInputs)) revert USNationalityNotAllowed();
+
         uint256 proofTimestamp = helper.getProofTimestamp(
             params.proofVerificationData.publicInputs
         );
