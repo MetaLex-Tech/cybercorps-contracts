@@ -153,38 +153,4 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
             interfaceId == type(ICondition).interfaceId ||
             interfaceId == type(IERC165).interfaceId;
     }
-
-    function _isUSHash(bytes32 countryHash) internal pure returns (bool) {
-        return
-            countryHash == keccak256(bytes("USA")) ||
-            countryHash == keccak256(bytes("US")) ||
-            countryHash == keccak256(bytes("UNITEDSTATES")) ||
-            countryHash == keccak256(bytes("UNITEDSTATESOFAMERICA"));
-    }
-
-    function _normalizedCountryHash(
-        string memory raw
-    ) internal pure returns (bytes32) {
-        bytes memory source = bytes(raw);
-        bytes memory cleaned = new bytes(source.length);
-        uint256 count = 0;
-
-        for (uint256 i = 0; i < source.length; i++) {
-            uint8 c = uint8(source[i]);
-            if (c >= 97 && c <= 122) {
-                c -= 32; // to upper
-            }
-            if (c >= 65 && c <= 90) {
-                cleaned[count] = bytes1(c);
-                count++;
-            }
-        }
-
-        bytes memory normalized = new bytes(count);
-        for (uint256 i = 0; i < count; i++) {
-            normalized[i] = cleaned[i];
-        }
-
-        return keccak256(normalized);
-    }
 }
