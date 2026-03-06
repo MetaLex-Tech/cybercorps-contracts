@@ -51,11 +51,6 @@ interface IZKPassportHelper {
         string calldata scope
     ) external pure returns (bool);
 
-    function getDisclosedData(
-        bytes calldata committedInputs,
-        bool isIDCard
-    ) external pure returns (DisclosedData memory);
-
     function getBoundData(
         bytes calldata committedInputs
     ) external pure returns (BoundData memory);
@@ -67,7 +62,7 @@ interface IZKPassportHelper {
     function isNationalityOut(
         string[] memory countryList,
         bytes calldata committedInputs
-    ) external pure returns (bool);
+    ) external view returns (bool);
 
     function enforceSanctionsRoot(
         uint256 currentTimestamp,

@@ -3,6 +3,8 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {Escrow, EscrowStatus, Token} from "../src/storage/LexScrowStorage.sol";
+import {NonUSNationalityCondition} from "../src/libs/conditions/NonUSNationalityCondition.sol";
+import {BorgAuth} from "../src/libs/auth.sol";
 import {
     BoundData,
     DisclosedData,
@@ -12,78 +14,6 @@ import {
     ProofVerificationParams,
     ServiceConfig
 } from "../src/interfaces/IZKPassportVerifier.sol";
-import {NonUSNationalityCondition} from "../src/libs/conditions/NonUSNationalityCondition.sol";
-import {BorgAuth} from "../src/libs/auth.sol";
-
-contract MockZKPassportHelper is IZKPassportHelper {
-    function verifyScopes(
-        bytes32[] calldata publicInputs,
-        string calldata domain,
-        string calldata scope
-    ) external pure returns (bool) {
-        if (publicInputs.length < 2) return false;
-        return
-            publicInputs[0] == keccak256(bytes(domain)) &&
-            publicInputs[1] == keccak256(bytes(scope));
-    }
-
-    function getDisclosedData(
-        bytes calldata committedInputs,
-        bool
-    ) external pure returns (DisclosedData memory disclosedData) {
-        (, disclosedData) = abi.decode(committedInputs, (BoundData, DisclosedData));
-    }
-
-    function getBoundData(
-        bytes calldata committedInputs
-    ) external pure returns (BoundData memory boundData) {
-        (boundData, ) = abi.decode(committedInputs, (BoundData, DisclosedData));
-    }
-
-    function getProofTimestamp(
-        bytes32[] calldata publicInputs
-    ) external pure returns (uint256) {
-        if (publicInputs.length < 3) return 0;
-        return uint256(publicInputs[2]);
-    }
-
-    function isNationalityOut(
-        string[] memory countryList,
-        bytes calldata committedInputs
-    ) external pure returns (bool) {
-        // TODO WIP: do not use. review needed
-        return true;
-    }
-
-    function enforceSanctionsRoot(
-        uint256 currentTimestamp,
-        bool isStrict,
-        bytes calldata committedInputs
-    ) external view {
-        // TODO WIP: no-op for now
-    }
-}
-
-contract MockZKPassportVerifier is IZKPassportVerifier {
-    bool public shouldVerify = true;
-    IZKPassportHelper public helper;
-
-    constructor(address _helper) {
-        helper = IZKPassportHelper(_helper);
-    }
-
-    function setShouldVerify(bool _shouldVerify) external {
-        shouldVerify = _shouldVerify;
-    }
-
-    function verify(
-        ProofVerificationParams calldata params
-    ) external view returns (bool verified, bytes32 uniqueIdentifier, IZKPassportHelper zkHelper) {
-        // Simulate different IDs for different params so they don't conflict upon submissions
-        uniqueIdentifier = keccak256(abi.encode(params.proofVerificationData.publicInputs, params.committedInputs));
-        return (shouldVerify, uniqueIdentifier, helper);
-    }
-}
 
 contract MockEscrowSource {
     mapping(bytes32 => address) public counterpartyByAgreementId;
@@ -107,27 +37,96 @@ contract MockEscrowSource {
     }
 }
 
+contract MockZKPassportHelper is IZKPassportHelper {
+    bool public shouldRevertSanctions;
+    bool public shouldRejectNationality;
+
+    error SanctionsCheckFailed();
+
+    function setShouldRevertSanctions(bool _should) external {
+        shouldRevertSanctions = _should;
+    }
+
+    function setShouldRejectNationality(bool _should) external {
+        shouldRejectNationality = _should;
+    }
+
+    function verifyScopes(
+        bytes32[] calldata publicInputs,
+        string calldata domain,
+        string calldata scope
+    ) external pure returns (bool) {
+        return publicInputs[0] == keccak256(bytes(domain)) && publicInputs[1] == keccak256(bytes(scope));
+    }
+
+    function getBoundData(bytes calldata committedInputs) external pure returns (BoundData memory) {
+        return abi.decode(committedInputs, (BoundData));
+    }
+
+    function getProofTimestamp(bytes32[] calldata publicInputs) external pure returns (uint256) {
+        return uint256(publicInputs[2]);
+    }
+
+    function isNationalityOut(string[] memory, bytes calldata) external view returns (bool) {
+        return !shouldRejectNationality;
+    }
+
+    function enforceSanctionsRoot(uint256, bool, bytes calldata) external view {
+        if (shouldRevertSanctions) revert SanctionsCheckFailed();
+    }
+}
+
+contract MockZKPassportVerifier is IZKPassportVerifier {
+    bool public shouldVerify = true;
+    bool public shouldReturnZeroHelper;
+    IZKPassportHelper public helperContract;
+    bytes32 public uniqueId = keccak256("default-proof-id");
+
+    function setHelper(address _helper) external {
+        helperContract = IZKPassportHelper(_helper);
+    }
+
+    function setShouldVerify(bool _should) external {
+        shouldVerify = _should;
+    }
+
+    function setShouldReturnZeroHelper(bool _should) external {
+        shouldReturnZeroHelper = _should;
+    }
+
+    function setUniqueId(bytes32 _id) external {
+        uniqueId = _id;
+    }
+
+    function verify(ProofVerificationParams calldata)
+        external
+        returns (bool, bytes32, IZKPassportHelper)
+    {
+        if (!shouldVerify) return (false, bytes32(0), IZKPassportHelper(address(0)));
+        if (shouldReturnZeroHelper) return (true, uniqueId, IZKPassportHelper(address(0)));
+        return (true, uniqueId, helperContract);
+    }
+}
+
 contract NonUSNationalityConditionTest is Test {
     string internal constant EXPECTED_DOMAIN = "app.example";
     string internal constant EXPECTED_SCOPE = "non-us-round";
 
-    MockZKPassportHelper internal helper;
-    MockZKPassportVerifier internal verifier;
     NonUSNationalityCondition internal condition;
     MockEscrowSource internal escrowSource;
     BorgAuth internal zkpassportAuth;
+    MockZKPassportHelper internal mockHelper;
+    MockZKPassportVerifier internal mockVerifier;
 
     uint256 internal constant MAX_VALIDITY_PERIOD = 30 days;
 
-    string[] excludedCountries;
-
     function setUp() public {
         zkpassportAuth = new BorgAuth(address(this));
+        mockHelper = new MockZKPassportHelper();
+        mockVerifier = new MockZKPassportVerifier();
+        mockVerifier.setHelper(address(mockHelper));
 
-        helper = new MockZKPassportHelper();
-        verifier = new MockZKPassportVerifier(address(helper));
-
-        excludedCountries = new string[](1);
+        string[] memory excludedCountries = new string[](1);
         excludedCountries[0] = "USA";
 
         condition = new NonUSNationalityCondition();
@@ -135,22 +134,14 @@ contract NonUSNationalityConditionTest is Test {
             address(zkpassportAuth),
             EXPECTED_DOMAIN,
             EXPECTED_SCOPE,
-            address(verifier),
+            address(mockVerifier),
             MAX_VALIDITY_PERIOD,
             excludedCountries
         );
         escrowSource = new MockEscrowSource();
     }
 
-    function test_RevertWhen_InvalidScope() public {
-        vm.expectRevert(NonUSNationalityCondition.InvalidScope.selector);
-        condition.submitProof(_buildParams(msg.sender, "FRA", EXPECTED_DOMAIN, "wrong-scope"), false);
-    }
-
-    function test_RevertWhen_BoundSenderMismatch() public {
-        vm.expectRevert(NonUSNationalityCondition.InvalidBoundSender.selector);
-        condition.submitProof(_buildParams(address(0xBEEF), "FRA", EXPECTED_DOMAIN, EXPECTED_SCOPE), false);
-    }
+    // --- existing tests ---
 
     function test_ConditionCheck_RevertsWithoutSubmittedProof() public {
         bytes32 agreementId = keccak256("agreement-no-proof");
@@ -163,101 +154,6 @@ contract NonUSNationalityConditionTest is Test {
             abi.encode(agreementId)
         );
         assertFalse(allowed);
-    }
-
-    function test_ConditionCheck_PassesWithValidNonUSProof() public {
-        bytes32 agreementId = keccak256("agreement-valid-proof");
-        address investor = address(0xB0B);
-        escrowSource.setCounterparty(agreementId, investor);
-
-        vm.startPrank(investor);
-        condition.submitProof(
-            _buildParams(investor, "FRA", EXPECTED_DOMAIN, EXPECTED_SCOPE),
-            false
-        );
-        vm.stopPrank();
-
-        bool allowed = condition.checkCondition(
-            address(escrowSource),
-            bytes4(0),
-            abi.encode(agreementId)
-        );
-        assertTrue(allowed);
-    }
-
-    /// @dev User should not be able to resubmit an old proof (same proof/public inputs)
-    ///      but with a larger validity period in ServiceConfig, effectively extending eligibility without a new proof.
-    function test_RevertIf_ExtendEligibilityByReplayAttack() public {
-        bytes32 agreementId = keccak256("agreement-valid-proof");
-        address investor = address(0xB0B);
-        escrowSource.setCounterparty(agreementId, investor);
-
-        ProofVerificationParams memory params = _buildParams(
-            investor,
-            "FRA",
-            EXPECTED_DOMAIN,
-            EXPECTED_SCOPE
-        );
-
-        vm.startPrank(investor);
-
-        // Initial submit uses 1 day validity (as built by _buildParams)
-        condition.submitProof(params, false);
-        uint256 expiry1 = condition.proofExpiry(investor);
-
-        // Simulate expiry
-        vm.warp(expiry1 + 1);
-
-        {
-            bool allowed = condition.checkCondition(
-                address(escrowSource),
-                bytes4(0),
-                abi.encode(agreementId)
-            );
-            assertFalse(allowed);
-        }
-
-        // "Replay" the same proof package but claim a longer validity period.
-        params.serviceConfig.validityPeriodInSeconds = 365 days;
-        vm.expectRevert(NonUSNationalityCondition.ProofAlreadyUsed.selector);
-        condition.submitProof(params, false);
-
-        vm.stopPrank();
-    }
-
-    /// @dev A different address should not be able to replay someone else's proof package
-    function test_RevertIf_ReplaySomeoneElsesProof() public {
-        address victim = address(0xA11CE);
-        address attacker = address(0xB0B);
-
-        ProofVerificationParams memory victimsParams = _buildParams(
-            victim,
-            "FRA",
-            EXPECTED_DOMAIN,
-            EXPECTED_SCOPE
-        );
-
-        vm.startPrank(attacker);
-        vm.expectRevert(NonUSNationalityCondition.InvalidBoundSender.selector);
-        condition.submitProof(victimsParams, false);
-        vm.stopPrank();
-    }
-
-    function test_RevertIf_ValidityPeriodExceedsMax() public {
-        address investor = address(0x123);
-        ProofVerificationParams memory params = _buildParams(
-            investor,
-            "FRA",
-            EXPECTED_DOMAIN,
-            EXPECTED_SCOPE
-        );
-
-        // Request 100 days, but max is 30 days
-        params.serviceConfig.validityPeriodInSeconds = 100 days;
-
-        vm.prank(investor);
-        vm.expectRevert(NonUSNationalityCondition.MaxValidityPeriodExceeded.selector);
-        condition.submitProof(params, false);
     }
 
     function test_UpdateMaxValidityPeriod() public {
@@ -275,46 +171,148 @@ contract NonUSNationalityConditionTest is Test {
         assertEq(condition.excludedCountries(1), "NK");
     }
 
+    // --- submitProof tests ---
+
+    function test_RevertWhen_InvalidProof_VerificationFailed() public {
+        mockVerifier.setShouldVerify(false);
+        address investor = address(0xA11CE);
+        ProofVerificationParams memory params = _buildParams(investor, block.timestamp, 1 days);
+        vm.prank(investor);
+        vm.expectRevert(NonUSNationalityCondition.InvalidProof.selector);
+        condition.submitProof(params, false);
+    }
+
+    function test_RevertWhen_InvalidProof_ZeroHelper() public {
+        mockVerifier.setShouldReturnZeroHelper(true);
+        address investor = address(0xA11CE);
+        ProofVerificationParams memory params = _buildParams(investor, block.timestamp, 1 days);
+        vm.prank(investor);
+        vm.expectRevert(NonUSNationalityCondition.InvalidProof.selector);
+        condition.submitProof(params, false);
+    }
+
+    function test_RevertWhen_ProofAlreadyUsed() public {
+        address investor = address(0xA11CE);
+        ProofVerificationParams memory params = _buildParams(investor, block.timestamp, 1 days);
+        vm.prank(investor);
+        condition.submitProof(params, false);
+
+        vm.prank(investor);
+        vm.expectRevert(NonUSNationalityCondition.ProofAlreadyUsed.selector);
+        condition.submitProof(params, false);
+    }
+
+    function test_RevertWhen_InvalidScope() public {
+        address investor = address(0xA11CE);
+        ProofVerificationParams memory params = _buildParams(investor, block.timestamp, 1 days);
+        params.proofVerificationData.publicInputs[1] = keccak256(bytes("wrong-scope"));
+        vm.prank(investor);
+        vm.expectRevert(NonUSNationalityCondition.InvalidScope.selector);
+        condition.submitProof(params, false);
+    }
+
+    function test_RevertWhen_BoundSenderMismatch() public {
+        address investor = address(0xA11CE);
+        address attacker = address(0xDEAD);
+        ProofVerificationParams memory params = _buildParams(investor, block.timestamp, 1 days);
+        vm.prank(attacker);
+        vm.expectRevert(NonUSNationalityCondition.InvalidBoundSender.selector);
+        condition.submitProof(params, false);
+    }
+
+    function test_RevertWhen_BoundChainIdMismatch() public {
+        address investor = address(0xA11CE);
+        ProofVerificationParams memory params = _buildParams(investor, block.timestamp, 1 days);
+        params.committedInputs = _buildCommittedInputs(investor, block.chainid + 1);
+        vm.prank(investor);
+        vm.expectRevert(NonUSNationalityCondition.InvalidBoundChainId.selector);
+        condition.submitProof(params, false);
+    }
+
+    function test_RevertWhen_NationalityRejected() public {
+        mockHelper.setShouldRejectNationality(true);
+        address investor = address(0xA11CE);
+        ProofVerificationParams memory params = _buildParams(investor, block.timestamp, 1 days);
+        vm.prank(investor);
+        vm.expectRevert(NonUSNationalityCondition.USAOrSanctionedCountriesNotAllowed.selector);
+        condition.submitProof(params, false);
+    }
+
+    function test_RevertWhen_SanctionsFail() public {
+        mockHelper.setShouldRevertSanctions(true);
+        address investor = address(0xA11CE);
+        ProofVerificationParams memory params = _buildParams(investor, block.timestamp, 1 days);
+        vm.prank(investor);
+        vm.expectRevert(MockZKPassportHelper.SanctionsCheckFailed.selector);
+        condition.submitProof(params, false);
+    }
+
+    function test_RevertWhen_MaxValidityPeriodExceeded() public {
+        address investor = address(0xA11CE);
+        ProofVerificationParams memory params = _buildParams(investor, block.timestamp, 100 days);
+        vm.prank(investor);
+        vm.expectRevert(NonUSNationalityCondition.MaxValidityPeriodExceeded.selector);
+        condition.submitProof(params, false);
+    }
+
+    function test_RevertWhen_ProofExpired() public {
+        vm.warp(3 days);
+        address investor = address(0xA11CE);
+        uint256 proofTimestamp = block.timestamp - 2 days;
+        ProofVerificationParams memory params = _buildParams(investor, proofTimestamp, 1 days);
+        vm.prank(investor);
+        vm.expectRevert(NonUSNationalityCondition.ProofExpired.selector);
+        condition.submitProof(params, false);
+    }
+
+    function test_SubmitProof_HappyPath() public {
+        address investor = address(0xA11CE);
+        uint256 proofTimestamp = block.timestamp;
+        uint256 validityPeriod = 1 days;
+        ProofVerificationParams memory params = _buildParams(investor, proofTimestamp, validityPeriod);
+        vm.prank(investor);
+        condition.submitProof(params, false);
+        assertEq(condition.proofExpiry(investor), proofTimestamp + validityPeriod);
+    }
+
+    // --- internal helpers ---
+    //
+    // NOTE: The encoding conventions used here (committedInputs, publicInputs, BoundData)
+    // are simplified mock conventions chosen for testability. They do NOT necessarily
+    // reflect the actual production encoding used by the ZKPassport protocol. Specifically:
+    //   - committedInputs: abi.encode(BoundData) — mock only; nationality is controlled via flag
+    //   - publicInputs[0]: keccak256(domain), [1]: keccak256(scope), [2]: timestamp — mock only
+    //   - BoundData fields are populated with synthetic test values
+
+    function _buildCommittedInputs(address sender, uint256 chainId) internal pure returns (bytes memory) {
+        return abi.encode(BoundData({senderAddress: sender, chainId: chainId, customData: ""}));
+    }
+
+    function _buildPublicInputs(uint256 proofTimestamp) internal pure returns (bytes32[] memory) {
+        bytes32[] memory pubs = new bytes32[](3);
+        pubs[0] = keccak256(bytes(EXPECTED_DOMAIN));
+        pubs[1] = keccak256(bytes(EXPECTED_SCOPE));
+        pubs[2] = bytes32(proofTimestamp);
+        return pubs;
+    }
+
     function _buildParams(
-        address senderAddress,
-        string memory nationality,
-        string memory domain,
-        string memory scope
-    ) internal view returns (ProofVerificationParams memory params) {
-        BoundData memory boundData = BoundData({
-            senderAddress: senderAddress,
-            chainId: block.chainid,
-            customData: ""
-        });
-        DisclosedData memory disclosedData = DisclosedData({
-            name: "",
-            issuingCountry: "",
-            nationality: nationality,
-            gender: "",
-            birthDate: "",
-            expiryDate: "",
-            documentNumber: "",
-            documentType: "passport"
-        });
-        bytes memory committedInputs = abi.encode(boundData, disclosedData);
-
-        bytes32[] memory publicInputs = new bytes32[](3);
-        publicInputs[0] = keccak256(bytes(domain));
-        publicInputs[1] = keccak256(bytes(scope));
-        publicInputs[2] = bytes32(block.timestamp);
-
-        params = ProofVerificationParams({
-            version: bytes32(uint256(1)),
+        address sender,
+        uint256 proofTimestamp,
+        uint256 validityPeriod
+    ) internal view returns (ProofVerificationParams memory) {
+        return ProofVerificationParams({
+            version: bytes32(0),
             proofVerificationData: ProofVerificationData({
                 vkeyHash: bytes32(0),
                 proof: "",
-                publicInputs: publicInputs
+                publicInputs: _buildPublicInputs(proofTimestamp)
             }),
-            committedInputs: committedInputs,
+            committedInputs: _buildCommittedInputs(sender, block.chainid),
             serviceConfig: ServiceConfig({
-                validityPeriodInSeconds: 1 days,
-                domain: domain,
-                scope: scope,
+                validityPeriodInSeconds: validityPeriod,
+                domain: EXPECTED_DOMAIN,
+                scope: EXPECTED_SCOPE,
                 devMode: false
             })
         });
