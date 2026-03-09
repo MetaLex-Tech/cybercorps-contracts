@@ -1,0 +1,11 @@
+{
+  "dependencies/forge-std": {
+    "rev": "8ba9031ffcbe25aa0d1224d3ca263a995026e477"
+  },
+  "dependencies/openzeppelin-contracts": {
+    "rev": "fda6b85f2c65d146b86d513a604554d15abd6679"
+  },
+  "dependencies/openzeppelin-contracts-upgradeable": {
+    "rev": "36ec7079af1a68bd866f6b9f4cf2f4dddee1e7bc"
+  }
+}
