@@ -47,7 +47,7 @@ import "../../CyberCorpConstants.sol";
 import "../../libs/auth.sol";
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  Enums (file scope for potential centralization into CyberCorpConstants.sol)
+//  Enums
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// @notice Liquidation preference payout structure
@@ -73,8 +73,6 @@ enum DividendType {
 }
 
 /// @notice Transfer restriction regime applicable to shares.
-/// NOTE: Rule144Eligible removed — that is a holder/time condition, not a series designation.
-/// SecuritiesActRestriction added — the standard "not registered" restricted-securities legend.
 enum TransferRestrictionType {
     None,
     BoardConsentRequired,       // Section 8.9(a) of Bylaws — no transfer without board consent
@@ -103,33 +101,48 @@ enum MandatoryConversionTriggerType {
 
 /// @notice Scope of a voting right — distinguishes class-wide votes from series-specific votes.
 /// Under DGCL section 151(a), the certificate of incorporation may provide that holders of any
-/// class or series shall vote as a separate class or series. These are distinct:
-///   - ClassWide: all series within the same share class vote together (e.g., all Preferred)
-///   - SeriesSpecific: only holders of this specific series vote (e.g., Series A alone)
+/// class or series shall vote as a separate class or series.
 enum VotingScope {
     ClassWide,          // all series sharing the same shareClassKey vote together
     SeriesSpecific      // only this series votes
+}
+
+/// @notice Share representation form (DGCL §158)
+enum ShareRepresentationType {
+    Certificated,       // traditional paper or PDF certificate
+    Uncertificated,     // book-entry (DGCL §158 uncertificated shares)
+    Tokenized           // on-chain tokenized representation
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  Structs
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// @notice Mandatory/automatic conversion trigger definition
+/// @notice Mandatory/automatic conversion trigger definition.
+/// Supports compound conditions (e.g., QualifiedIPO requires price AND proceeds AND listing).
 struct MandatoryConversionTrigger {
     MandatoryConversionTriggerType triggerType;
-    uint256 thresholdValue;     // e.g., IPO price threshold (18 dec), vote percentage (4 dec)
-    string description;         // human-readable description of the trigger condition
+    uint256 primaryThreshold;       // e.g., IPO price per share threshold (18 dec)
+    uint256 secondaryThreshold;     // e.g., minimum aggregate proceeds threshold (18 dec); 0 if single-condition
+    string additionalConditions;    // human-readable additional conditions (e.g., "listed on NYSE or NASDAQ")
+    string description;             // human-readable description of the full trigger condition
 }
 
 /// @notice Matter-specific voting right (used for protective provisions and special class/series votes)
 struct SpecialVotingRight {
-    bytes32 matterType;     // e.g., keccak256("CHARTER_AMENDMENT"), keccak256("MERGER_APPROVAL")
+    bytes32 matterType;     // e.g., MATTER_CHARTER_AMENDMENT, MATTER_MERGER_APPROVAL, etc.
     uint256 votesPerShare;  // votes per share for this specific matter (18 decimals)
     uint256 threshold;      // approval threshold (4 decimal percentage, e.g. 5010 = 50.1%)
     bool isVetoRight;       // true = blocking/consent right rather than affirmative vote
     VotingScope scope;      // whether this right is exercised at the class level or series level
     string description;     // human-readable description
+}
+
+/// @notice Exception to a transfer restriction (Bylaws section 8.9(b) compliance)
+struct TransferRestrictionException {
+    bytes32 exceptionType;      // e.g., keccak256("ESTATE_PLANNING_TRANSFER"), keccak256("AFFILIATE_TRANSFER")
+    string exceptionText;       // human-readable description of the exception
+    bool requiresEvidence;      // whether evidence must be presented for this exception to apply
 }
 
 /// @notice A single transfer restriction with full legal text (DGCL section 202 compliance)
@@ -138,11 +151,22 @@ struct TransferRestriction {
     string restrictionText;     // actual legal legend / restriction notice text
     string sourceAgreement;     // pointer to imposing agreement (e.g., "Bylaws section 8.9")
     bool isRemovable;           // whether this restriction can be removed (e.g., Rule 144 legend removal)
+    TransferRestrictionException[] exceptions;  // carved-out exceptions to this restriction
+}
+
+/// @notice Record of a stock split applied to a series
+struct SplitRecord {
+    uint256 numerator;          // split ratio numerator (e.g., 10000 for a 10,000:1 split)
+    uint256 denominator;        // split ratio denominator (e.g., 1)
+    uint256 timestamp;          // when the split was recorded
+    string sourceAuthorityURI;  // pointer to the board resolution or charter amendment authorizing the split
 }
 
 /// @notice Canonical series-wide terms, stored once per class/series.
 /// All price/value fields use 18-decimal precision.
 /// Percentage fields use 4-decimal precision (10**4 basis, 5010 = 50.10%).
+/// NOTE: Dynamic arrays (mandatoryConversionTriggers, specialVotingRights, transferRestrictions)
+/// are stored in separate mappings and managed via dedicated CRUD functions.
 struct SeriesTerms {
     // --- Identity & Classification ---
     bytes32 shareClassKey;              // extensible class identifier (use CLASS_COMMON, CLASS_PREFERRED, or custom)
@@ -173,19 +197,17 @@ struct SeriesTerms {
     AntiDilutionType antiDilutionType;
     bool allowsFractionalConversion;    // whether fractional shares may be issued on conversion
     bool hasMandatoryConversion;
-    MandatoryConversionTrigger[] mandatoryConversionTriggers;
+    // NOTE: mandatoryConversionTriggers stored separately in _conversionTriggers mapping
 
     // --- Voting ---
     uint256 votesPerShare;              // default votes per share (18 decimals, 1e18 = 1 vote); 0 = non-voting
     uint8 designatedBoardSeats;         // board seats this series is entitled to elect
     bool hasClassVotingRights;          // whether this series participates in class-wide separate votes
-                                        // (e.g., all Preferred series voting together as a single class)
     bool hasSeriesVotingRights;         // whether this series can vote separately as its own series
-                                        // (e.g., Series A alone voting on matters requiring Series A consent)
-    SpecialVotingRight[] specialVotingRights; // each entry specifies its own VotingScope
+    // NOTE: specialVotingRights stored separately in _specialVotingRights mapping
 
     // --- Transfer Restrictions ---
-    TransferRestriction[] transferRestrictions;
+    // NOTE: transferRestrictions stored separately in _transferRestrictions mapping
 
     // --- Redemption ---
     bool isRedeemable;
@@ -193,9 +215,19 @@ struct SeriesTerms {
     uint256 redemptionPrice;            // redemption price per share (18 decimals)
     string redemptionSchedule;          // human-readable or URI to redemption schedule/terms
     string redemptionTriggerDescription; // for EventTriggered: description of the triggering event
+
+    // --- NVCA Optional Fields ---
+    bool hasPayToPlay;                  // whether pay-to-play provisions apply
+    string payToPlayTermsURI;           // pointer to pay-to-play terms
+    bool hasRegistrationRights;         // whether registration rights exist
+    string registrationRightsURI;       // pointer to registration rights agreement
+    bool hasProRataRights;              // whether pro-rata participation rights exist
+    bool hasInformationRights;          // whether information rights exist
+    bool hasDragAlongRights;            // whether drag-along rights exist
+    string dragAlongTermsURI;           // pointer to drag-along terms
 }
 
-/// @notice Per-certificate metadata (V2). References canonical SeriesTerms via seriesId.
+/// @notice Per-certificate metadata. References canonical SeriesTerms via seriesId.
 /// Legends are stored in dedicated mappings, not in this struct, to allow individual add/remove.
 struct CertificateData {
     bytes32 seriesId;               // pointer to canonical SeriesTerms
@@ -206,6 +238,9 @@ struct CertificateData {
     uint256 amountPaid;             // if partly paid, amount actually paid (18 decimals)
     uint256 totalConsideration;     // if partly paid, total consideration to be paid (18 decimals)
     string sourceAuthorityURI;      // per-certificate pointer to board resolution, subscription agreement, etc.
+    ShareRepresentationType representationType;  // form of share representation (DGCL §158)
+    uint256 holdingPeriodStartDate;              // Rule 144(d) holding period start (may differ from issueDate due to tacking)
+    bool holdingPeriodTackingApplied;            // whether tacking was applied to the holding period
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -226,39 +261,86 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     bytes32 public constant CLASS_COMMON = keccak256("COMMON");
     bytes32 public constant CLASS_PREFERRED = keccak256("PREFERRED");
 
+    /// @notice Protective provision matter type constants (COI §3.3 categories)
+    bytes32 public constant MATTER_CHARTER_AMENDMENT = keccak256("CHARTER_AMENDMENT");
+    bytes32 public constant MATTER_MERGER_APPROVAL = keccak256("MERGER_APPROVAL");
+    bytes32 public constant MATTER_ASSET_SALE = keccak256("ASSET_SALE");
+    bytes32 public constant MATTER_NEW_SERIES_ISSUANCE = keccak256("NEW_SERIES_ISSUANCE");
+    bytes32 public constant MATTER_DIVIDEND_DECLARATION = keccak256("DIVIDEND_DECLARATION");
+    bytes32 public constant MATTER_LIQUIDATION = keccak256("LIQUIDATION");
+    bytes32 public constant MATTER_DEBT_INCURRENCE = keccak256("DEBT_INCURRENCE");
+    bytes32 public constant MATTER_RELATED_PARTY_TRANSACTION = keccak256("RELATED_PARTY_TRANSACTION");
+
+    /// @notice Standard Securities Act restricted legend text (Rule 144 / §5 compliance)
+    string public constant SECURITIES_ACT_LEGEND =
+        "THE SECURITIES REPRESENTED HEREBY HAVE NOT BEEN REGISTERED UNDER THE SECURITIES ACT OF 1933, "
+        "AS AMENDED (THE \"ACT\"), OR UNDER THE SECURITIES LAWS OF ANY STATE. THESE SECURITIES ARE "
+        "SUBJECT TO RESTRICTIONS ON TRANSFERABILITY AND RESALE AND MAY NOT BE TRANSFERRED OR RESOLD "
+        "EXCEPT AS PERMITTED UNDER THE ACT AND APPLICABLE STATE SECURITIES LAWS, PURSUANT TO "
+        "REGISTRATION OR EXEMPTION THEREFROM.";
+
     // ──────────────────────────────────────────────────────────────
     //  Events
     // ──────────────────────────────────────────────────────────────
 
     event SeriesCreated(bytes32 indexed seriesId, bytes32 indexed shareClassKey, string seriesName);
-    event SeriesTermsUpdated(bytes32 indexed seriesId, string fieldChanged);
+    event SeriesTermsUpdated(bytes32 indexed seriesId, uint256 newVersion, bytes32 oldTermsHash);
     event ConversionPriceAdjusted(bytes32 indexed seriesId, uint256 oldPrice, uint256 newPrice);
     event AuthorizedSharesChanged(bytes32 indexed seriesId, uint256 oldAmount, uint256 newAmount);
+    event StockSplitRecorded(
+        bytes32 indexed seriesId, uint256 numerator, uint256 denominator,
+        uint256 oldOIP, uint256 newOIP, uint256 oldParValue, uint256 newParValue
+    );
+    event ConversionTriggerAdded(bytes32 indexed seriesId, uint256 index);
+    event ConversionTriggerRemoved(bytes32 indexed seriesId, uint256 index);
+    event SpecialVotingRightAdded(bytes32 indexed seriesId, uint256 index, bytes32 matterType);
+    event SpecialVotingRightRemoved(bytes32 indexed seriesId, uint256 index, bytes32 matterType);
+    event TransferRestrictionAdded(bytes32 indexed seriesId, uint256 index);
+    event TransferRestrictionRemoved(bytes32 indexed seriesId, uint256 index);
     event LegendAdded(uint256 indexed tokenId, uint256 legendIndex, bytes32 legendHash);
     event LegendRemoved(uint256 indexed tokenId, uint256 legendIndex, bytes32 legendHash);
+    event LegendRemovalRequested(uint256 indexed tokenId, uint256 legendIndex, string justification);
     event IssuerNameUpdated(string oldName, string newName);
+    event StateOfIncorporationUpdated(string oldState, string newState);
 
     // ──────────────────────────────────────────────────────────────
     //  State variables
     //  NOTE: These occupy the same storage slots as the former __gap[30].
-    //  6 slots used + 24 reserved = 30 total (preserves layout).
+    //  Slots used + reserved = 30 total (preserves layout).
     // ──────────────────────────────────────────────────────────────
 
     /// @notice Canonical series terms registry
-    mapping(bytes32 => SeriesTerms) internal _seriesRegistry;       // slot 0
+    mapping(bytes32 => SeriesTerms) internal _seriesRegistry;           // slot 0
     /// @notice Ordered list of series IDs for enumeration
-    bytes32[] public seriesIds;                                      // slot 1
+    bytes32[] public seriesIds;                                          // slot 1
     /// @notice O(1) existence check for series
-    mapping(bytes32 => bool) public seriesExists;                   // slot 2
+    mapping(bytes32 => bool) public seriesExists;                       // slot 2
     /// @notice Per-certificate legend texts keyed by token ID
-    mapping(uint256 => string[]) internal _certificateLegends;      // slot 3
+    mapping(uint256 => string[]) internal _certificateLegends;          // slot 3
     /// @notice Parallel array of legend hashes for efficient on-chain verification
-    mapping(uint256 => bytes32[]) internal _certificateLegendHashes; // slot 4
+    mapping(uint256 => bytes32[]) internal _certificateLegendHashes;    // slot 4
     /// @notice Issuer name — changeable by board/owner (covers name changes, mergers)
-    string public issuerName;                                        // slot 5
+    string public issuerName;                                            // slot 5
+
+    // --- Phase 1 new storage (slots 6-14) ---
+
+    /// @notice Separated dynamic arrays: mandatory conversion triggers per series
+    mapping(bytes32 => MandatoryConversionTrigger[]) internal _conversionTriggers;    // slot 6
+    /// @notice Separated dynamic arrays: special voting rights per series
+    mapping(bytes32 => SpecialVotingRight[]) internal _specialVotingRights;           // slot 7
+    /// @notice Separated dynamic arrays: transfer restrictions per series
+    mapping(bytes32 => TransferRestriction[]) internal _transferRestrictions;          // slot 8
+    /// @notice Series terms version counter (incremented on each update)
+    mapping(bytes32 => uint256) public seriesTermsVersion;                            // slot 9
+    /// @notice Historical terms hashes: seriesId => version => keccak256 of old terms
+    mapping(bytes32 => mapping(uint256 => bytes32)) public seriesTermsHistoryHashes;  // slot 10
+    /// @notice Stock split history per series
+    mapping(bytes32 => SplitRecord[]) internal _splitHistory;                         // slot 11
+    /// @notice State of incorporation (DGCL §158 compliance)
+    string public stateOfIncorporation;                                               // slot 12
 
     /// @dev Reserved storage for future upgrades
-    uint256[24] private __gap;                                       // slots 6-29
+    uint256[17] private __gap;                                           // slots 13-29
 
     // ──────────────────────────────────────────────────────────────
     //  Initialization
@@ -273,9 +355,8 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     //  Series Management (onlyOwner / board-authorized)
     // ══════════════════════════════════════════════════════════════
 
-    /// @notice Register a new series with canonical terms
-    /// @param seriesId Unique identifier for the series (immutable once created)
-    /// @param terms The full series terms struct
+    /// @notice Register a new series with canonical terms.
+    /// Dynamic arrays (triggers, voting rights, restrictions) must be added via dedicated CRUD functions after creation.
     function createSeries(bytes32 seriesId, SeriesTerms memory terms) external onlyOwner {
         require(seriesId != bytes32(0), "ShareExtension: zero seriesId");
         require(!seriesExists[seriesId], "ShareExtension: series already exists");
@@ -286,22 +367,28 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         _seriesRegistry[seriesId] = terms;
         seriesIds.push(seriesId);
         seriesExists[seriesId] = true;
+        seriesTermsVersion[seriesId] = 1;
 
         emit SeriesCreated(seriesId, terms.shareClassKey, terms.seriesName);
     }
 
-    /// @notice Replace the full terms for an existing series
-    /// @param seriesId The series to update
-    /// @param terms The new full series terms
+    /// @notice Replace the full scalar terms for an existing series.
+    /// Increments version, hashes old terms, emits versioned event.
     function updateSeriesTerms(bytes32 seriesId, SeriesTerms memory terms) external onlyOwner {
         require(seriesExists[seriesId], "ShareExtension: series does not exist");
 
         (bool valid, string memory err) = _validateSeriesTermsInternal(terms);
         require(valid, err);
 
-        _seriesRegistry[seriesId] = terms;
+        // Version and hash the old terms before overwriting
+        uint256 currentVersion = seriesTermsVersion[seriesId];
+        bytes32 oldHash = keccak256(abi.encode(_seriesRegistry[seriesId]));
+        seriesTermsHistoryHashes[seriesId][currentVersion] = oldHash;
 
-        emit SeriesTermsUpdated(seriesId, "ALL");
+        _seriesRegistry[seriesId] = terms;
+        seriesTermsVersion[seriesId] = currentVersion + 1;
+
+        emit SeriesTermsUpdated(seriesId, currentVersion + 1, oldHash);
     }
 
     /// @notice Update conversion price independently (e.g., anti-dilution adjustment)
@@ -332,7 +419,190 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     function updateSeriesName(bytes32 seriesId, string calldata newName) external onlyOwner {
         require(seriesExists[seriesId], "ShareExtension: series does not exist");
         _seriesRegistry[seriesId].seriesName = newName;
-        emit SeriesTermsUpdated(seriesId, "seriesName");
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  Stock Split Management
+    // ══════════════════════════════════════════════════════════════
+
+    /// @notice Record a stock split and atomically adjust all price/share fields.
+    /// @param seriesId The series to adjust
+    /// @param splitNumerator The numerator of the split ratio (e.g., 10000 for 10,000:1)
+    /// @param splitDenominator The denominator of the split ratio (e.g., 1)
+    /// @param sourceAuthorityURI Pointer to the board resolution or charter amendment
+    function recordStockSplit(
+        bytes32 seriesId,
+        uint256 splitNumerator,
+        uint256 splitDenominator,
+        string calldata sourceAuthorityURI
+    ) external onlyOwner {
+        require(seriesExists[seriesId], "ShareExtension: series does not exist");
+        require(splitNumerator > 0 && splitDenominator > 0, "ShareExtension: split ratio must be non-zero");
+        require(splitNumerator != splitDenominator, "ShareExtension: split ratio must differ from 1:1");
+
+        SeriesTerms storage s = _seriesRegistry[seriesId];
+
+        uint256 oldOIP = s.originalIssuePrice;
+        uint256 oldParValue = s.parValue;
+
+        // Adjust price fields DOWN by numerator/denominator (more shares = lower per-share price)
+        s.originalIssuePrice = (s.originalIssuePrice * splitDenominator) / splitNumerator;
+        s.parValue = (s.parValue * splitDenominator) / splitNumerator;
+        if (s.conversionPrice > 0) {
+            s.conversionPrice = (s.conversionPrice * splitDenominator) / splitNumerator;
+        }
+        if (s.redemptionPrice > 0) {
+            s.redemptionPrice = (s.redemptionPrice * splitDenominator) / splitNumerator;
+        }
+
+        // Adjust share count UP
+        s.authorizedShares = (s.authorizedShares * splitNumerator) / splitDenominator;
+
+        // Adjust conversion trigger thresholds (price-based thresholds scale down)
+        MandatoryConversionTrigger[] storage triggers = _conversionTriggers[seriesId];
+        for (uint256 i = 0; i < triggers.length; i++) {
+            if (triggers[i].primaryThreshold > 0) {
+                triggers[i].primaryThreshold = (triggers[i].primaryThreshold * splitDenominator) / splitNumerator;
+            }
+            // secondaryThreshold (e.g., aggregate proceeds) is typically not per-share, so not adjusted
+        }
+
+        // Record history
+        _splitHistory[seriesId].push(SplitRecord({
+            numerator: splitNumerator,
+            denominator: splitDenominator,
+            timestamp: block.timestamp,
+            sourceAuthorityURI: sourceAuthorityURI
+        }));
+
+        emit StockSplitRecorded(seriesId, splitNumerator, splitDenominator, oldOIP, s.originalIssuePrice, oldParValue, s.parValue);
+    }
+
+    /// @notice Record a stock split across multiple series (e.g., class-wide split)
+    function recordStockSplitBatch(
+        bytes32[] calldata _seriesIds,
+        uint256 splitNumerator,
+        uint256 splitDenominator,
+        string calldata sourceAuthorityURI
+    ) external onlyOwner {
+        for (uint256 i = 0; i < _seriesIds.length; i++) {
+            // Inline the logic to avoid external call overhead; reuse internal checks
+            this.recordStockSplit(_seriesIds[i], splitNumerator, splitDenominator, sourceAuthorityURI);
+        }
+    }
+
+    /// @notice Get split history for a series
+    function getSplitHistory(bytes32 seriesId) external view returns (SplitRecord[] memory) {
+        return _splitHistory[seriesId];
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  Dynamic Array CRUD — Conversion Triggers
+    // ══════════════════════════════════════════════════════════════
+
+    function addConversionTrigger(bytes32 seriesId, MandatoryConversionTrigger memory trigger) external onlyOwner {
+        require(seriesExists[seriesId], "ShareExtension: series does not exist");
+        require(_seriesRegistry[seriesId].isConvertible, "ShareExtension: series is not convertible");
+        _conversionTriggers[seriesId].push(trigger);
+        emit ConversionTriggerAdded(seriesId, _conversionTriggers[seriesId].length - 1);
+    }
+
+    function removeConversionTrigger(bytes32 seriesId, uint256 index) external onlyOwner {
+        MandatoryConversionTrigger[] storage triggers = _conversionTriggers[seriesId];
+        require(index < triggers.length, "ShareExtension: trigger index out of bounds");
+        uint256 lastIdx = triggers.length - 1;
+        if (index != lastIdx) {
+            triggers[index] = triggers[lastIdx];
+        }
+        triggers.pop();
+        emit ConversionTriggerRemoved(seriesId, index);
+    }
+
+    function getConversionTriggers(bytes32 seriesId) external view returns (MandatoryConversionTrigger[] memory) {
+        return _conversionTriggers[seriesId];
+    }
+
+    function getConversionTriggerCount(bytes32 seriesId) external view returns (uint256) {
+        return _conversionTriggers[seriesId].length;
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  Dynamic Array CRUD — Special Voting Rights
+    // ══════════════════════════════════════════════════════════════
+
+    function addSpecialVotingRight(bytes32 seriesId, SpecialVotingRight memory right) external onlyOwner {
+        require(seriesExists[seriesId], "ShareExtension: series does not exist");
+        _specialVotingRights[seriesId].push(right);
+        emit SpecialVotingRightAdded(seriesId, _specialVotingRights[seriesId].length - 1, right.matterType);
+    }
+
+    function removeSpecialVotingRight(bytes32 seriesId, uint256 index) external onlyOwner {
+        SpecialVotingRight[] storage rights = _specialVotingRights[seriesId];
+        require(index < rights.length, "ShareExtension: voting right index out of bounds");
+        bytes32 matterType = rights[index].matterType;
+        uint256 lastIdx = rights.length - 1;
+        if (index != lastIdx) {
+            rights[index] = rights[lastIdx];
+        }
+        rights.pop();
+        emit SpecialVotingRightRemoved(seriesId, index, matterType);
+    }
+
+    function getSpecialVotingRights(bytes32 seriesId) external view returns (SpecialVotingRight[] memory) {
+        return _specialVotingRights[seriesId];
+    }
+
+    function getSpecialVotingRightCount(bytes32 seriesId) external view returns (uint256) {
+        return _specialVotingRights[seriesId].length;
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  Dynamic Array CRUD — Transfer Restrictions
+    // ══════════════════════════════════════════════════════════════
+
+    function addTransferRestriction(bytes32 seriesId, TransferRestriction memory restriction) external onlyOwner {
+        require(seriesExists[seriesId], "ShareExtension: series does not exist");
+        _transferRestrictions[seriesId].push();
+        uint256 idx = _transferRestrictions[seriesId].length - 1;
+        TransferRestriction storage stored = _transferRestrictions[seriesId][idx];
+        stored.restrictionType = restriction.restrictionType;
+        stored.restrictionText = restriction.restrictionText;
+        stored.sourceAgreement = restriction.sourceAgreement;
+        stored.isRemovable = restriction.isRemovable;
+        for (uint256 i = 0; i < restriction.exceptions.length; i++) {
+            stored.exceptions.push(restriction.exceptions[i]);
+        }
+        emit TransferRestrictionAdded(seriesId, idx);
+    }
+
+    function removeTransferRestriction(bytes32 seriesId, uint256 index) external onlyOwner {
+        TransferRestriction[] storage restrictions = _transferRestrictions[seriesId];
+        require(index < restrictions.length, "ShareExtension: restriction index out of bounds");
+        uint256 lastIdx = restrictions.length - 1;
+        if (index != lastIdx) {
+            // Deep copy: swap last into removed slot
+            TransferRestriction storage target = restrictions[index];
+            TransferRestriction storage last = restrictions[lastIdx];
+            target.restrictionType = last.restrictionType;
+            target.restrictionText = last.restrictionText;
+            target.sourceAgreement = last.sourceAgreement;
+            target.isRemovable = last.isRemovable;
+            // Clear and copy exceptions
+            delete target.exceptions;
+            for (uint256 i = 0; i < last.exceptions.length; i++) {
+                target.exceptions.push(last.exceptions[i]);
+            }
+        }
+        restrictions.pop();
+        emit TransferRestrictionRemoved(seriesId, index);
+    }
+
+    function getTransferRestrictions(bytes32 seriesId) external view returns (TransferRestriction[] memory) {
+        return _transferRestrictions[seriesId];
+    }
+
+    function getTransferRestrictionCount(bytes32 seriesId) external view returns (uint256) {
+        return _transferRestrictions[seriesId].length;
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -354,8 +624,6 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     // ══════════════════════════════════════════════════════════════
 
     /// @notice Add a legend to a specific certificate
-    /// @param tokenId The ERC-721 token ID
-    /// @param legendText The full legal legend/restriction notice text
     function addLegend(uint256 tokenId, string calldata legendText) external onlyOwner {
         bytes32 h = keccak256(bytes(legendText));
         _certificateLegends[tokenId].push(legendText);
@@ -365,8 +633,6 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     }
 
     /// @notice Remove a legend from a specific certificate by index (swap-and-pop)
-    /// @param tokenId The ERC-721 token ID
-    /// @param legendIndex Index of the legend to remove
     function removeLegend(uint256 tokenId, uint256 legendIndex) external onlyOwner {
         string[] storage legends = _certificateLegends[tokenId];
         bytes32[] storage hashes = _certificateLegendHashes[tokenId];
@@ -374,7 +640,6 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
 
         bytes32 removedHash = hashes[legendIndex];
 
-        // Swap with last element and pop
         uint256 lastIdx = legends.length - 1;
         if (legendIndex != lastIdx) {
             legends[legendIndex] = legends[lastIdx];
@@ -384,6 +649,12 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         hashes.pop();
 
         emit LegendRemoved(tokenId, legendIndex, removedHash);
+    }
+
+    /// @notice Request legend removal (informational audit trail; actual removal requires removeLegend)
+    function requestLegendRemoval(uint256 tokenId, uint256 legendIndex, string calldata justification) external {
+        require(legendIndex < _certificateLegends[tokenId].length, "ShareExtension: legend index out of bounds");
+        emit LegendRemovalRequested(tokenId, legendIndex, justification);
     }
 
     /// @notice Get all legends for a certificate
@@ -396,7 +667,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     function initializeLegends(uint256 tokenId, bytes32 seriesId) external onlyOwner {
         require(seriesExists[seriesId], "ShareExtension: series does not exist");
 
-        TransferRestriction[] storage restrictions = _seriesRegistry[seriesId].transferRestrictions;
+        TransferRestriction[] storage restrictions = _transferRestrictions[seriesId];
         for (uint256 i = 0; i < restrictions.length; i++) {
             if (bytes(restrictions[i].restrictionText).length > 0) {
                 bytes32 h = keccak256(bytes(restrictions[i].restrictionText));
@@ -411,11 +682,18 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     //  Issuer Identity
     // ══════════════════════════════════════════════════════════════
 
-    /// @notice Set or update the issuer name (single authoritative value for all certs)
+    /// @notice Set or update the issuer name
     function setIssuerName(string calldata _name) external onlyOwner {
         string memory oldName = issuerName;
         issuerName = _name;
         emit IssuerNameUpdated(oldName, _name);
+    }
+
+    /// @notice Set or update the state of incorporation (DGCL §158 compliance)
+    function setStateOfIncorporation(string calldata _state) external onlyOwner {
+        string memory oldState = stateOfIncorporation;
+        stateOfIncorporation = _state;
+        emit StateOfIncorporationUpdated(oldState, _state);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -433,9 +711,27 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return seriesIds;
     }
 
-    /// @notice Get full share info: series terms + decoded certificate data + legends
-    /// @param certExtensionData The encoded CertificateData bytes
-    /// @param tokenId The ERC-721 token ID (for legend lookup)
+    /// @notice Get the number of registered series
+    function getSeriesCount() external view returns (uint256) {
+        return seriesIds.length;
+    }
+
+    /// @notice Paginated series ID retrieval
+    function getSeriesIdsPaginated(uint256 offset, uint256 limit) external view returns (bytes32[] memory) {
+        uint256 total = seriesIds.length;
+        if (offset >= total) {
+            return new bytes32[](0);
+        }
+        uint256 end = offset + limit;
+        if (end > total) end = total;
+        bytes32[] memory page = new bytes32[](end - offset);
+        for (uint256 i = offset; i < end; i++) {
+            page[i - offset] = seriesIds[i];
+        }
+        return page;
+    }
+
+    /// @notice Get full share info: series terms + decoded certificate data + legends + separated arrays
     function getFullShareInfo(bytes memory certExtensionData, uint256 tokenId)
         external
         view
@@ -447,12 +743,50 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         legends = _certificateLegends[tokenId];
     }
 
+    /// @notice Compute the conversion ratio for a convertible series: OIP / conversionPrice
+    /// @return ratio The conversion ratio (18 decimals); 0 if not convertible or conversionPrice is 0
+    function getConversionRatio(bytes32 seriesId) external view returns (uint256 ratio) {
+        require(seriesExists[seriesId], "ShareExtension: series does not exist");
+        SeriesTerms storage s = _seriesRegistry[seriesId];
+        if (!s.isConvertible || s.conversionPrice == 0) return 0;
+        ratio = (s.originalIssuePrice * PRICE_PRECISION) / s.conversionPrice;
+    }
+
+    /// @notice Compute the payment percentage for a partly-paid certificate
+    /// @return percentage The payment percentage (4 decimal basis, 10000 = 100%)
+    function getPaymentPercentage(bytes memory certExtensionData) external pure returns (uint256 percentage) {
+        CertificateData memory cert = abi.decode(certExtensionData, (CertificateData));
+        if (!cert.isPartlyPaid || cert.totalConsideration == 0) return 10000; // fully paid
+        percentage = (cert.amountPaid * 10000) / cert.totalConsideration;
+    }
+
+    /// @notice Compute accrued dividends for cumulative preferred shares
+    /// @param seriesId The series to compute for
+    /// @param asOfTimestamp The timestamp to compute accrual up to
+    /// @param numberOfShares Number of shares to compute accrual for
+    /// @return accrued The accrued dividend amount (18 decimals)
+    function computeAccruedDividends(
+        bytes32 seriesId,
+        uint256 asOfTimestamp,
+        uint256 numberOfShares
+    ) external view returns (uint256 accrued) {
+        require(seriesExists[seriesId], "ShareExtension: series does not exist");
+        SeriesTerms storage s = _seriesRegistry[seriesId];
+        if (s.dividendType != DividendType.Cumulative) return 0;
+        if (asOfTimestamp <= s.dividendAccrualStartDate) return 0;
+
+        uint256 elapsed = asOfTimestamp - s.dividendAccrualStartDate;
+        // Simple accrual: rate * OIP * shares * elapsed / (365 days * 1e18)
+        // Rate is already in 18 decimals as a fraction (8% = 8e16)
+        accrued = (s.dividendRate * s.originalIssuePrice * numberOfShares * elapsed)
+            / (365 days * PRICE_PRECISION);
+    }
+
     // ══════════════════════════════════════════════════════════════
     //  Validation
     // ══════════════════════════════════════════════════════════════
 
     /// @notice Validate series terms without modifying state
-    /// @dev `view` because it may check seriesExists for targetConversionSeriesId
     function validateSeriesTerms(SeriesTerms memory terms) external view returns (bool valid, string memory error) {
         return _validateSeriesTermsInternal(terms);
     }
@@ -470,8 +804,8 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return extensionType == EXTENSION_TYPE;
     }
 
-    /// @notice Render extension data as a JSON fragment.
-    /// @dev `view` (not `pure`) because it reads seriesRegistry and issuerName.
+    /// @notice Render extension data as a JSON fragment (intended for off-chain metadata consumption).
+    /// @dev `view` because it reads seriesRegistry, legends, and issuerName.
     function getExtensionURI(bytes memory data) external view override returns (string memory) {
         if (data.length == 0) return "";
 
@@ -485,71 +819,52 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     //  Internal — Validation
     // ══════════════════════════════════════════════════════════════
 
-    function _validateSeriesTermsInternal(SeriesTerms memory t) internal view returns (bool, string memory) {
-        // 9. authorizedShares must be > 0
+    function _validateSeriesTermsInternal(SeriesTerms memory t) internal pure returns (bool, string memory) {
         if (t.authorizedShares == 0) return (false, "ShareExtension: authorizedShares must be > 0");
-
-        // 10. parValue should be > 0
         if (t.parValue == 0) return (false, "ShareExtension: parValue must be > 0");
 
-        // 1. If not convertible, conversion fields must be zero/empty
         if (!t.isConvertible) {
             if (t.conversionPrice != 0) return (false, "ShareExtension: conversionPrice must be 0 when not convertible");
             if (t.targetConversionSeriesId != bytes32(0)) return (false, "ShareExtension: targetConversionSeriesId must be zero when not convertible");
-            if (t.mandatoryConversionTriggers.length > 0) return (false, "ShareExtension: mandatoryConversionTriggers must be empty when not convertible");
             if (t.hasMandatoryConversion) return (false, "ShareExtension: hasMandatoryConversion must be false when not convertible");
         }
 
-        // 2. If convertible, targetConversionSeriesId must be non-zero
         if (t.isConvertible) {
             if (t.targetConversionSeriesId == bytes32(0)) return (false, "ShareExtension: targetConversionSeriesId must be non-zero when convertible");
         }
 
-        // 3. If dividendType == None, dividendRate must be 0
         if (t.dividendType == DividendType.None) {
             if (t.dividendRate != 0) return (false, "ShareExtension: dividendRate must be 0 when dividendType is None");
         }
 
-        // 4. If dividendType == Cumulative, accrualStartDate should be non-zero
         if (t.dividendType == DividendType.Cumulative) {
             if (t.dividendAccrualStartDate == 0) return (false, "ShareExtension: dividendAccrualStartDate should be non-zero for Cumulative dividends");
         }
 
-        // 5. If not CappedParticipating, participationCap must be 0
         if (t.liquidationPreferenceType != LiquidationPreferenceType.CappedParticipating) {
             if (t.participationCap != 0) return (false, "ShareExtension: participationCap must be 0 when not CappedParticipating");
         }
 
-        // 6. If CappedParticipating, participationCap must be > 0
         if (t.liquidationPreferenceType == LiquidationPreferenceType.CappedParticipating) {
             if (t.participationCap == 0) return (false, "ShareExtension: participationCap must be > 0 when CappedParticipating");
         }
 
-        // 7. If not redeemable, redemptionPrice must be 0 and redemptionType must be None
         if (!t.isRedeemable) {
             if (t.redemptionPrice != 0) return (false, "ShareExtension: redemptionPrice must be 0 when not redeemable");
             if (t.redemptionType != RedemptionType.None) return (false, "ShareExtension: redemptionType must be None when not redeemable");
-        }
-
-        // 11. hasMandatoryConversion requires at least one trigger
-        if (t.hasMandatoryConversion) {
-            if (t.mandatoryConversionTriggers.length == 0) return (false, "ShareExtension: hasMandatoryConversion requires at least one trigger");
         }
 
         return (true, "");
     }
 
     function _validateCertificateDataInternal(CertificateData memory d) internal view returns (bool, string memory) {
-        // 13. seriesId must reference an existing series
         if (!seriesExists[d.seriesId]) return (false, "ShareExtension: seriesId does not reference an existing series");
 
-        // 14. If partly paid, amountPaid < totalConsideration and totalConsideration > 0
         if (d.isPartlyPaid) {
             if (d.totalConsideration == 0) return (false, "ShareExtension: totalConsideration must be > 0 when partly paid");
             if (d.amountPaid >= d.totalConsideration) return (false, "ShareExtension: amountPaid must be < totalConsideration when partly paid");
         }
 
-        // 15. If not partly paid, amountPaid and totalConsideration should both be 0
         if (!d.isPartlyPaid) {
             if (d.amountPaid != 0) return (false, "ShareExtension: amountPaid must be 0 when not partly paid");
             if (d.totalConsideration != 0) return (false, "ShareExtension: totalConsideration must be 0 when not partly paid");
@@ -568,9 +883,9 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         string memory p1 = _buildIdentity(terms);
         string memory p2 = _buildEconomics(terms);
         string memory p3 = _buildDividends(terms);
-        string memory p4 = _buildConversion(terms);
-        string memory p5 = _buildVoting(terms);
-        string memory p6 = _buildRestrictionsRedemption(terms);
+        string memory p4 = _buildConversion(terms, cert.seriesId);
+        string memory p5 = _buildVoting(terms, cert.seriesId);
+        string memory p6 = _buildRestrictionsRedemption(terms, cert.seriesId);
         string memory p7 = _buildCertificate(cert);
         string memory p8 = _buildIssuer();
 
@@ -613,32 +928,32 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         ));
     }
 
-    function _buildConversion(SeriesTerms storage t) internal view returns (string memory) {
+    function _buildConversion(SeriesTerms storage t, bytes32 seriesId) internal view returns (string memory) {
         return string(abi.encodePacked(
             '"isConvertible": "', _boolToString(t.isConvertible),
             '", "conversionPrice": "', _uint256ToString(t.conversionPrice),
             '", "antiDilutionType": "', _antiDilutionTypeToString(t.antiDilutionType),
             '", "allowsFractionalConversion": "', _boolToString(t.allowsFractionalConversion),
             '", "hasMandatoryConversion": "', _boolToString(t.hasMandatoryConversion),
-            '", "mandatoryConversionTriggerCount": "', _uint256ToString(t.mandatoryConversionTriggers.length),
+            '", "mandatoryConversionTriggerCount": "', _uint256ToString(_conversionTriggers[seriesId].length),
             '", '
         ));
     }
 
-    function _buildVoting(SeriesTerms storage t) internal view returns (string memory) {
+    function _buildVoting(SeriesTerms storage t, bytes32 seriesId) internal view returns (string memory) {
         return string(abi.encodePacked(
             '"votesPerShare": "', _uint256ToString(t.votesPerShare),
             '", "designatedBoardSeats": "', _uint256ToString(uint256(t.designatedBoardSeats)),
             '", "hasClassVotingRights": "', _boolToString(t.hasClassVotingRights),
             '", "hasSeriesVotingRights": "', _boolToString(t.hasSeriesVotingRights),
-            '", "specialVotingRightsCount": "', _uint256ToString(t.specialVotingRights.length),
+            '", "specialVotingRightsCount": "', _uint256ToString(_specialVotingRights[seriesId].length),
             '", '
         ));
     }
 
-    function _buildRestrictionsRedemption(SeriesTerms storage t) internal view returns (string memory) {
+    function _buildRestrictionsRedemption(SeriesTerms storage t, bytes32 seriesId) internal view returns (string memory) {
         return string(abi.encodePacked(
-            '"transferRestrictionCount": "', _uint256ToString(t.transferRestrictions.length),
+            '"transferRestrictionCount": "', _uint256ToString(_transferRestrictions[seriesId].length),
             '", "isRedeemable": "', _boolToString(t.isRedeemable),
             '", "redemptionType": "', _redemptionTypeToString(t.redemptionType),
             '", "redemptionPrice": "', _uint256ToString(t.redemptionPrice),
@@ -654,13 +969,15 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
             '", "isPartlyPaid": "', _boolToString(c.isPartlyPaid),
             '", "amountPaid": "', _uint256ToString(c.amountPaid),
             '", "totalConsideration": "', _uint256ToString(c.totalConsideration),
+            '", "representationType": "', _representationTypeToString(c.representationType),
             '", '
         ));
     }
 
     function _buildIssuer() internal view returns (string memory) {
         return string(abi.encodePacked(
-            '"issuerName": "', issuerName, '"'
+            '"issuerName": "', issuerName,
+            '", "stateOfIncorporation": "', stateOfIncorporation, '"'
         ));
     }
 
@@ -712,6 +1029,13 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         if (t == RedemptionType.CompanyOptional) return "CompanyOptional";
         if (t == RedemptionType.Mandatory) return "Mandatory";
         if (t == RedemptionType.EventTriggered) return "EventTriggered";
+        return "Unknown";
+    }
+
+    function _representationTypeToString(ShareRepresentationType t) internal pure returns (string memory) {
+        if (t == ShareRepresentationType.Certificated) return "Certificated";
+        if (t == ShareRepresentationType.Uncertificated) return "Uncertificated";
+        if (t == ShareRepresentationType.Tokenized) return "Tokenized";
         return "Unknown";
     }
 
