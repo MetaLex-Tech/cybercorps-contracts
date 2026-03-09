@@ -254,6 +254,9 @@ struct CertificateData {
 //  Contract
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// @notice NOTE: This contract has NO prior production deployment. No proxies or storage layouts
+///         from previous versions exist on any chain. Storage slots can be freely re-ordered
+///         without upgrade-compatibility concerns.
 contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     using StringUtils for uint256;
 
@@ -320,31 +323,27 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     bytes32[] public seriesIds;                                          // slot 1
     /// @notice O(1) existence check for series
     mapping(bytes32 => bool) public seriesExists;                       // slot 2
-    /// @dev DEPRECATED — legends now managed by CyberCertPrinter. Slot preserved for upgrade safety.
-    mapping(uint256 => string[]) internal _deprecated_certificateLegends;   // slot 3
-    /// @dev DEPRECATED — legend hashes now managed by CyberCertPrinter. Slot preserved for upgrade safety.
-    mapping(uint256 => bytes32[]) internal _deprecated_certificateLegendHashes; // slot 4
     /// @notice Issuer name — changeable by board/owner (covers name changes, mergers)
-    string public issuerName;                                            // slot 5
+    string public issuerName;                                            // slot 3
 
-    // --- Phase 1 new storage (slots 6-14) ---
+    // --- Separated dynamic arrays (slots 4-11) ---
 
     /// @notice Separated dynamic arrays: mandatory conversion triggers per series
-    mapping(bytes32 => MandatoryConversionTrigger[]) internal _conversionTriggers;    // slot 6
+    mapping(bytes32 => MandatoryConversionTrigger[]) internal _conversionTriggers;    // slot 4
     /// @notice Separated dynamic arrays: special voting rights per series
-    mapping(bytes32 => SpecialVotingRight[]) internal _specialVotingRights;           // slot 7
+    mapping(bytes32 => SpecialVotingRight[]) internal _specialVotingRights;           // slot 5
     /// @notice Separated dynamic arrays: transfer restrictions per series
-    mapping(bytes32 => TransferRestriction[]) internal _transferRestrictions;          // slot 8
+    mapping(bytes32 => TransferRestriction[]) internal _transferRestrictions;          // slot 6
     /// @notice Series terms version counter (incremented on each update)
-    mapping(bytes32 => uint256) public seriesTermsVersion;                            // slot 9
+    mapping(bytes32 => uint256) public seriesTermsVersion;                            // slot 7
     /// @notice Historical terms hashes: seriesId => version => keccak256 of old terms
-    mapping(bytes32 => mapping(uint256 => bytes32)) public seriesTermsHistoryHashes;  // slot 10
+    mapping(bytes32 => mapping(uint256 => bytes32)) public seriesTermsHistoryHashes;  // slot 8
     /// @notice Stock split history per series
-    mapping(bytes32 => SplitRecord[]) internal _splitHistory;                         // slot 11
+    mapping(bytes32 => SplitRecord[]) internal _splitHistory;                         // slot 9
     /// @notice State of incorporation (DGCL §158 compliance)
-    string public stateOfIncorporation;                                               // slot 12
+    string public stateOfIncorporation;                                               // slot 10
     /// @notice CyberCertPrinter address — canonical legend storage owner
-    address public certPrinter;                                                       // slot 13
+    address public certPrinter;                                                       // slot 11
 
     /// @dev Reserved storage for future upgrades
     uint256[16] private __gap;                                           // slots 14-29
