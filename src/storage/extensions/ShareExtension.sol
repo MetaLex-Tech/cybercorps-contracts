@@ -922,6 +922,11 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     }
 
     function _buildEconomics(SeriesTerms storage t) internal view returns (string memory) {
+        if (t.liquidationPreferenceMultiple == 0) {
+            return string(abi.encodePacked(
+                '"liquidationPreferenceMultiple": "0", '
+            ));
+        }
         return string(abi.encodePacked(
             '"liquidationPreferenceMultiple": "', _uint256ToString(t.liquidationPreferenceMultiple),
             '", "liquidationPreferenceType": "', _liquidationPrefTypeToString(t.liquidationPreferenceType),
@@ -932,6 +937,9 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     }
 
     function _buildDividends(SeriesTerms storage t) internal view returns (string memory) {
+        if (t.dividendType == DividendType.None) {
+            return '"dividendType": "None", ';
+        }
         return string(abi.encodePacked(
             '"dividendType": "', _dividendTypeToString(t.dividendType),
             '", "dividendRate": "', _uint256ToString(t.dividendRate),
@@ -942,8 +950,11 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     }
 
     function _buildConversion(SeriesTerms storage t, bytes32 seriesId) internal view returns (string memory) {
+        if (!t.isConvertible) {
+            return '"isConvertible": "false", ';
+        }
         return string(abi.encodePacked(
-            '"isConvertible": "', _boolToString(t.isConvertible),
+            '"isConvertible": "true',
             '", "conversionPrice": "', _uint256ToString(t.conversionPrice),
             '", "antiDilutionType": "', _antiDilutionTypeToString(t.antiDilutionType),
             '", "allowsFractionalConversion": "', _boolToString(t.allowsFractionalConversion),
@@ -965,9 +976,15 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     }
 
     function _buildRestrictionsRedemption(SeriesTerms storage t, bytes32 seriesId) internal view returns (string memory) {
+        if (!t.isRedeemable) {
+            return string(abi.encodePacked(
+                '"transferRestrictionCount": "', _uint256ToString(_transferRestrictions[seriesId].length),
+                '", "isRedeemable": "false", '
+            ));
+        }
         return string(abi.encodePacked(
             '"transferRestrictionCount": "', _uint256ToString(_transferRestrictions[seriesId].length),
-            '", "isRedeemable": "', _boolToString(t.isRedeemable),
+            '", "isRedeemable": "true',
             '", "redemptionType": "', _redemptionTypeToString(t.redemptionType),
             '", "redemptionPrice": "', _uint256ToString(t.redemptionPrice),
             '", '
@@ -975,11 +992,21 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     }
 
     function _buildCertificate(CertificateData memory c) internal pure returns (string memory) {
+        if (!c.isPartlyPaid) {
+            return string(abi.encodePacked(
+                '"certificateNumber": "', _uint256ToString(c.certificateNumber),
+                '", "numberOfShares": "', _uint256ToString(c.numberOfShares),
+                '", "issueDate": "', _uint256ToString(c.issueDate),
+                '", "isPartlyPaid": "false',
+                '", "representationType": "', _representationTypeToString(c.representationType),
+                '", '
+            ));
+        }
         return string(abi.encodePacked(
             '"certificateNumber": "', _uint256ToString(c.certificateNumber),
             '", "numberOfShares": "', _uint256ToString(c.numberOfShares),
             '", "issueDate": "', _uint256ToString(c.issueDate),
-            '", "isPartlyPaid": "', _boolToString(c.isPartlyPaid),
+            '", "isPartlyPaid": "true',
             '", "amountPaid": "', _uint256ToString(c.amountPaid),
             '", "totalConsideration": "', _uint256ToString(c.totalConsideration),
             '", "representationType": "', _representationTypeToString(c.representationType),
