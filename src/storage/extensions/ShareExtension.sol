@@ -396,6 +396,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         require(seriesExists[seriesId], "ShareExtension: series does not exist");
         SeriesTerms storage s = _seriesRegistry[seriesId];
         require(s.isConvertible, "ShareExtension: series is not convertible");
+        require(newPrice > 0, "ShareExtension: conversionPrice must be > 0");
 
         uint256 oldPrice = s.conversionPrice;
         s.conversionPrice = newPrice;
@@ -830,6 +831,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         }
 
         if (t.isConvertible) {
+            if (t.conversionPrice == 0) return (false, "ShareExtension: conversionPrice must be > 0 when convertible");
             if (t.targetConversionSeriesId == bytes32(0)) return (false, "ShareExtension: targetConversionSeriesId must be non-zero when convertible");
         }
 
