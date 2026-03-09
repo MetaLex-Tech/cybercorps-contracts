@@ -459,10 +459,10 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         // Adjust share count UP
         s.authorizedShares = (s.authorizedShares * splitNumerator) / splitDenominator;
 
-        // Adjust conversion trigger thresholds (price-based thresholds scale down)
+        // Adjust conversion trigger thresholds — only price-denominated triggers scale with splits
         MandatoryConversionTrigger[] storage triggers = _conversionTriggers[seriesId];
         for (uint256 i = 0; i < triggers.length; i++) {
-            if (triggers[i].primaryThreshold > 0) {
+            if (triggers[i].triggerType == MandatoryConversionTriggerType.QualifiedIPO && triggers[i].primaryThreshold > 0) {
                 triggers[i].primaryThreshold = (triggers[i].primaryThreshold * splitDenominator) / splitNumerator;
             }
             // secondaryThreshold (e.g., aggregate proceeds) is typically not per-share, so not adjusted
