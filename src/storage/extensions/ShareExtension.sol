@@ -80,15 +80,19 @@ enum DividendType {
 }
 
 /// @notice Transfer restriction regime applicable to shares.
-/// NOTE: Rule144Eligible removed — that is a holder/time condition, not a series designation.
-/// SecuritiesActRestriction added — the standard "not registered" restricted-securities legend.
+/// IMPORTANT: Ordinals 0-4 are frozen to preserve V1 ABI backward compatibility.
+/// Rule144Eligible (ordinal 3) is deprecated — it is a holder/time condition, not a series
+/// designation — but retained at its original position so V1-encoded certificates decode correctly.
+/// New restriction types are appended after the original ordinals.
 enum TransferRestrictionType {
-    None,
-    BoardConsentRequired,       // Section 8.9(a) of Bylaws — no transfer without board consent
-    ROFRAndCoSale,              // subject to ROFR/Co-Sale agreement
-    LockUp,                     // time-based lock-up restriction
-    SecuritiesActRestriction,   // Securities Act restricted legend (standard "not registered" legend)
-    CustomRestriction           // custom restriction defined by agreement or board resolution
+    None,                       // 0
+    BoardConsentRequired,       // 1 — Section 8.9(a) of Bylaws
+    ROFRAndCoSale,              // 2 — subject to ROFR/Co-Sale agreement
+    Rule144Eligible,            // 3 — DEPRECATED (V1 compat only); do not use for new series
+    CustomRestriction,          // 4 — custom restriction defined by agreement or board resolution
+    // --- V2 additions (ordinal 5+) ---
+    LockUp,                     // 5 — time-based lock-up restriction
+    SecuritiesActRestriction    // 6 — Securities Act restricted legend (standard "not registered" legend)
 }
 
 /// @notice Redemption mechanism type
@@ -832,9 +836,10 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         if (t == TransferRestrictionType.None) return "None";
         if (t == TransferRestrictionType.BoardConsentRequired) return "BoardConsentRequired";
         if (t == TransferRestrictionType.ROFRAndCoSale) return "ROFRAndCoSale";
+        if (t == TransferRestrictionType.Rule144Eligible) return "Rule144Eligible";
+        if (t == TransferRestrictionType.CustomRestriction) return "CustomRestriction";
         if (t == TransferRestrictionType.LockUp) return "LockUp";
         if (t == TransferRestrictionType.SecuritiesActRestriction) return "SecuritiesActRestriction";
-        if (t == TransferRestrictionType.CustomRestriction) return "CustomRestriction";
         return "Unknown";
     }
 
