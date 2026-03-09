@@ -59,6 +59,7 @@ import "./storage/IssuanceManagerStorage.sol";
 /// @dev Minimal interface for extension legend seeding at mint time.
 interface ILegendSeeder {
     function initializeLegends(uint256 tokenId, bytes32 seriesId) external;
+    function setCertPrinter(address _certPrinter) external;
 }
 
 /// @title IssuanceManager
@@ -202,6 +203,9 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             _securitySeries,
             _extension
         );
+        if (_extension != address(0)) {
+            try ILegendSeeder(_extension).setCertPrinter(newCert) {} catch {}
+        }
         emit CertPrinterCreated(
             newCert,
             IssuanceManagerStorage.getCORP(),
