@@ -437,6 +437,27 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         uint256 splitDenominator,
         string calldata sourceAuthorityURI
     ) external onlyOwner {
+        _recordStockSplit(seriesId, splitNumerator, splitDenominator, sourceAuthorityURI);
+    }
+
+    /// @notice Record a stock split across multiple series (e.g., class-wide split)
+    function recordStockSplitBatch(
+        bytes32[] calldata _seriesIds,
+        uint256 splitNumerator,
+        uint256 splitDenominator,
+        string calldata sourceAuthorityURI
+    ) external onlyOwner {
+        for (uint256 i = 0; i < _seriesIds.length; i++) {
+            _recordStockSplit(_seriesIds[i], splitNumerator, splitDenominator, sourceAuthorityURI);
+        }
+    }
+
+    function _recordStockSplit(
+        bytes32 seriesId,
+        uint256 splitNumerator,
+        uint256 splitDenominator,
+        string calldata sourceAuthorityURI
+    ) internal {
         require(seriesExists[seriesId], "ShareExtension: series does not exist");
         require(splitNumerator > 0 && splitDenominator > 0, "ShareExtension: split ratio must be non-zero");
         require(splitNumerator != splitDenominator, "ShareExtension: split ratio must differ from 1:1");
@@ -477,19 +498,6 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         }));
 
         emit StockSplitRecorded(seriesId, splitNumerator, splitDenominator, oldOIP, s.originalIssuePrice, oldParValue, s.parValue);
-    }
-
-    /// @notice Record a stock split across multiple series (e.g., class-wide split)
-    function recordStockSplitBatch(
-        bytes32[] calldata _seriesIds,
-        uint256 splitNumerator,
-        uint256 splitDenominator,
-        string calldata sourceAuthorityURI
-    ) external onlyOwner {
-        for (uint256 i = 0; i < _seriesIds.length; i++) {
-            // Inline the logic to avoid external call overhead; reuse internal checks
-            this.recordStockSplit(_seriesIds[i], splitNumerator, splitDenominator, sourceAuthorityURI);
-        }
     }
 
     /// @notice Get split history for a series
