@@ -46,6 +46,12 @@ import "./ICertificateExtension.sol";
 import "../../CyberCorpConstants.sol";
 import "../../libs/auth.sol";
 
+/// @notice Minimal interface for CyberCertPrinter legend operations
+interface ICertPrinterLegends {
+    function addCertLegend(uint256 tokenId, string memory newLegend) external;
+    function getCertLegends(uint256 tokenId) external view returns (string[] memory texts, bytes32[] memory hashes);
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 //  Enums
 // ══════════════════════════════════════════════════════════════════════════════
@@ -297,9 +303,6 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     event SpecialVotingRightRemoved(bytes32 indexed seriesId, uint256 index, bytes32 matterType);
     event TransferRestrictionAdded(bytes32 indexed seriesId, uint256 index);
     event TransferRestrictionRemoved(bytes32 indexed seriesId, uint256 index);
-    event LegendAdded(uint256 indexed tokenId, uint256 legendIndex, bytes32 legendHash);
-    event LegendRemoved(uint256 indexed tokenId, uint256 legendIndex, bytes32 legendHash);
-    event LegendRemovalRequested(uint256 indexed tokenId, uint256 legendIndex, string justification);
     event IssuerNameUpdated(string oldName, string newName);
     event StateOfIncorporationUpdated(string oldState, string newState);
 
@@ -315,10 +318,10 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     bytes32[] public seriesIds;                                          // slot 1
     /// @notice O(1) existence check for series
     mapping(bytes32 => bool) public seriesExists;                       // slot 2
-    /// @notice Per-certificate legend texts keyed by token ID
-    mapping(uint256 => string[]) internal _certificateLegends;          // slot 3
-    /// @notice Parallel array of legend hashes for efficient on-chain verification
-    mapping(uint256 => bytes32[]) internal _certificateLegendHashes;    // slot 4
+    /// @dev DEPRECATED — legends now managed by CyberCertPrinter. Slot preserved for upgrade safety.
+    mapping(uint256 => string[]) internal _deprecated_certificateLegends;   // slot 3
+    /// @dev DEPRECATED — legend hashes now managed by CyberCertPrinter. Slot preserved for upgrade safety.
+    mapping(uint256 => bytes32[]) internal _deprecated_certificateLegendHashes; // slot 4
     /// @notice Issuer name — changeable by board/owner (covers name changes, mergers)
     string public issuerName;                                            // slot 5
 
@@ -338,9 +341,11 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     mapping(bytes32 => SplitRecord[]) internal _splitHistory;                         // slot 11
     /// @notice State of incorporation (DGCL §158 compliance)
     string public stateOfIncorporation;                                               // slot 12
+    /// @notice CyberCertPrinter address — canonical legend storage owner
+    address public certPrinter;                                                       // slot 13
 
     /// @dev Reserved storage for future upgrades
-    uint256[17] private __gap;                                           // slots 13-29
+    uint256[16] private __gap;                                           // slots 14-29
 
     // ──────────────────────────────────────────────────────────────
     //  Initialization
@@ -349,6 +354,12 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     function initialize(address _auth) external initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
+    }
+
+    /// @notice Set the CyberCertPrinter address for delegated legend management
+    function setCertPrinter(address _certPrinter) external onlyOwner {
+        require(_certPrinter != address(0), "ShareExtension: zero address");
+        certPrinter = _certPrinter;
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -629,62 +640,28 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  Legend Management (per-certificate)
+    //  Legend Management (delegated to CyberCertPrinter)
     // ══════════════════════════════════════════════════════════════
 
-    /// @notice Add a legend to a specific certificate
-    function addLegend(uint256 tokenId, string calldata legendText) external onlyOwner {
-        bytes32 h = keccak256(bytes(legendText));
-        _certificateLegends[tokenId].push(legendText);
-        _certificateLegendHashes[tokenId].push(h);
-
-        emit LegendAdded(tokenId, _certificateLegends[tokenId].length - 1, h);
-    }
-
-    /// @notice Remove a legend from a specific certificate by index (swap-and-pop)
-    function removeLegend(uint256 tokenId, uint256 legendIndex) external onlyOwner {
-        string[] storage legends = _certificateLegends[tokenId];
-        bytes32[] storage hashes = _certificateLegendHashes[tokenId];
-        require(legendIndex < legends.length, "ShareExtension: legend index out of bounds");
-
-        bytes32 removedHash = hashes[legendIndex];
-
-        uint256 lastIdx = legends.length - 1;
-        if (legendIndex != lastIdx) {
-            legends[legendIndex] = legends[lastIdx];
-            hashes[legendIndex] = hashes[lastIdx];
-        }
-        legends.pop();
-        hashes.pop();
-
-        emit LegendRemoved(tokenId, legendIndex, removedHash);
-    }
-
-    /// @notice Request legend removal (informational audit trail; actual removal requires removeLegend)
-    function requestLegendRemoval(uint256 tokenId, uint256 legendIndex, string calldata justification) external {
-        require(legendIndex < _certificateLegends[tokenId].length, "ShareExtension: legend index out of bounds");
-        emit LegendRemovalRequested(tokenId, legendIndex, justification);
-    }
-
-    /// @notice Get all legends for a certificate
-    function getLegends(uint256 tokenId) external view returns (string[] memory texts, bytes32[] memory hashes) {
-        return (_certificateLegends[tokenId], _certificateLegendHashes[tokenId]);
-    }
-
-    /// @notice Initialize a certificate's legends from its series' default transfer restrictions
-    /// @dev Should be called at mint time to populate initial restriction notices
+    /// @notice Initialize a certificate's legends from its series' default transfer restrictions.
+    /// @dev Delegates to CyberCertPrinter.addCertLegend(). Should be called at mint time.
     function initializeLegends(uint256 tokenId, bytes32 seriesId) external onlyOwner {
+        require(certPrinter != address(0), "ShareExtension: certPrinter not set");
         require(seriesExists[seriesId], "ShareExtension: series does not exist");
 
+        ICertPrinterLegends printer = ICertPrinterLegends(certPrinter);
         TransferRestriction[] storage restrictions = _transferRestrictions[seriesId];
         for (uint256 i = 0; i < restrictions.length; i++) {
             if (bytes(restrictions[i].restrictionText).length > 0) {
-                bytes32 h = keccak256(bytes(restrictions[i].restrictionText));
-                _certificateLegends[tokenId].push(restrictions[i].restrictionText);
-                _certificateLegendHashes[tokenId].push(h);
-                emit LegendAdded(tokenId, _certificateLegends[tokenId].length - 1, h);
+                printer.addCertLegend(tokenId, restrictions[i].restrictionText);
             }
         }
+    }
+
+    /// @notice Get all legends for a certificate (reads from CyberCertPrinter)
+    function getLegends(uint256 tokenId) external view returns (string[] memory texts, bytes32[] memory hashes) {
+        require(certPrinter != address(0), "ShareExtension: certPrinter not set");
+        return ICertPrinterLegends(certPrinter).getCertLegends(tokenId);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -749,7 +726,9 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         cert = abi.decode(certExtensionData, (CertificateData));
         require(seriesExists[cert.seriesId], "ShareExtension: series does not exist");
         terms = _seriesRegistry[cert.seriesId];
-        legends = _certificateLegends[tokenId];
+        if (certPrinter != address(0)) {
+            (legends, ) = ICertPrinterLegends(certPrinter).getCertLegends(tokenId);
+        }
     }
 
     /// @notice Compute the conversion ratio for a convertible series: OIP / conversionPrice
