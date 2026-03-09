@@ -108,6 +108,16 @@ enum MandatoryConversionTriggerType {
     Custom
 }
 
+/// @notice Scope of a voting right — distinguishes class-wide votes from series-specific votes.
+/// Under DGCL section 151(a), the certificate of incorporation may provide that holders of any
+/// class or series shall vote as a separate class or series. These are distinct:
+///   - ClassWide: all series within the same share class vote together (e.g., all Preferred)
+///   - SeriesSpecific: only holders of this specific series vote (e.g., Series A alone)
+enum VotingScope {
+    ClassWide,          // all series sharing the same shareClassKey vote together
+    SeriesSpecific      // only this series votes
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 //  Structs
 // ══════════════════════════════════════════════════════════════════════════════
@@ -145,12 +155,13 @@ struct MandatoryConversionTrigger {
     string description;         // human-readable description of the trigger condition
 }
 
-/// @notice Matter-specific voting right (used for protective provisions and special class votes)
+/// @notice Matter-specific voting right (used for protective provisions and special class/series votes)
 struct SpecialVotingRight {
     bytes32 matterType;     // e.g., keccak256("CHARTER_AMENDMENT"), keccak256("MERGER_APPROVAL")
     uint256 votesPerShare;  // votes per share for this specific matter (18 decimals)
     uint256 threshold;      // approval threshold (4 decimal percentage, e.g. 5010 = 50.1%)
     bool isVetoRight;       // true = blocking/consent right rather than affirmative vote
+    VotingScope scope;      // whether this right is exercised at the class level or series level
     string description;     // human-readable description
 }
 
@@ -200,8 +211,11 @@ struct SeriesTerms {
     // --- Voting ---
     uint256 votesPerShare;              // default votes per share (18 decimals, 1e18 = 1 vote); 0 = non-voting
     uint8 designatedBoardSeats;         // board seats this series is entitled to elect
-    bool hasClassVotingRights;          // whether this series votes as a separate class on certain matters
-    SpecialVotingRight[] specialVotingRights;
+    bool hasClassVotingRights;          // whether this series participates in class-wide separate votes
+                                        // (e.g., all Preferred series voting together as a single class)
+    bool hasSeriesVotingRights;         // whether this series can vote separately as its own series
+                                        // (e.g., Series A alone voting on matters requiring Series A consent)
+    SpecialVotingRight[] specialVotingRights; // each entry specifies its own VotingScope
 
     // --- Transfer Restrictions ---
     TransferRestriction[] transferRestrictions;
@@ -677,6 +691,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
             '"votesPerShare": "', _uint256ToString(t.votesPerShare),
             '", "designatedBoardSeats": "', _uint256ToString(uint256(t.designatedBoardSeats)),
             '", "hasClassVotingRights": "', _boolToString(t.hasClassVotingRights),
+            '", "hasSeriesVotingRights": "', _boolToString(t.hasSeriesVotingRights),
             '", "specialVotingRightsCount": "', _uint256ToString(t.specialVotingRights.length),
             '", '
         ));
