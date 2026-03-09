@@ -766,10 +766,32 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         if (asOfTimestamp <= s.dividendAccrualStartDate) return 0;
 
         uint256 elapsed = asOfTimestamp - s.dividendAccrualStartDate;
-        // Simple accrual: rate * OIP * shares * elapsed / (365 days * 1e18)
-        // Rate is already in 18 decimals as a fraction (8% = 8e16)
-        accrued = (s.dividendRate * s.originalIssuePrice * numberOfShares * elapsed)
-            / (365 days * PRICE_PRECISION);
+        uint256 principal = s.originalIssuePrice * numberOfShares;
+
+        if (!s.dividendCompounding) {
+            // Simple accrual: rate * OIP * shares * elapsed / (365 days * 1e18)
+            // Rate is already in 18 decimals as a fraction (8% = 8e16)
+            accrued = (s.dividendRate * principal * elapsed)
+                / (365 days * PRICE_PRECISION);
+        } else {
+            // Compound accrual (annual compounding):
+            // For each full year, principal grows by (1 + rate).
+            // Partial year remainder accrues simple interest on the compounded principal.
+            uint256 fullYears = elapsed / 365 days;
+            uint256 remainder = elapsed % 365 days;
+
+            uint256 compounded = principal;
+            for (uint256 i = 0; i < fullYears; i++) {
+                compounded = (compounded * (PRICE_PRECISION + s.dividendRate)) / PRICE_PRECISION;
+            }
+
+            // Simple interest for the partial year on the compounded principal
+            if (remainder > 0) {
+                compounded += (compounded * s.dividendRate * remainder) / (365 days * PRICE_PRECISION);
+            }
+
+            accrued = compounded - principal;
+        }
     }
 
     // ══════════════════════════════════════════════════════════════
