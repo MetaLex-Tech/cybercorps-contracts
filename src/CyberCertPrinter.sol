@@ -428,6 +428,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     }
 
     function addDefaultLegend(string memory newLegend) external onlyIssuanceManager {
+        _ensureDefaultLegendHashes();
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
         bytes32 h = keccak256(bytes(newLegend));
         s.defaultLegend.push(newLegend);
@@ -463,6 +464,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     }
 
     function addCertLegend(uint256 tokenId, string memory newLegend) external onlyIssuanceManagerOrExtension {
+        _ensureCertLegendHashes(tokenId);
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
         bytes32 h = keccak256(bytes(newLegend));
         s.certLegend[tokenId].push(newLegend);
