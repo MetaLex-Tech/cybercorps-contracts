@@ -158,6 +158,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     ) external onlyIssuanceManager returns (uint256) {
 
         _safeMint(to, tokenId);
+        _ensureDefaultLegendHashes();
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
         s.certLegend[tokenId] = s.defaultLegend;
         s.certLegendHashes[tokenId] = s.defaultLegendHashes;
@@ -173,6 +174,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         CertificateDetails memory details
     ) external onlyIssuanceManager returns (uint256) {
         _safeMint(to, tokenId);
+        _ensureDefaultLegendHashes();
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
         s.certLegend[tokenId] = s.defaultLegend;
         s.certLegendHashes[tokenId] = s.defaultLegendHashes;
@@ -401,6 +403,30 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         return CyberCertPrinterStorage.cyberCertStorage().endorsementRequired;
     }
 
+    /// @dev Backfill defaultLegendHashes for proxies deployed before hash tracking was added.
+    function _ensureDefaultLegendHashes() internal {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        uint256 textLen = s.defaultLegend.length;
+        uint256 hashLen = s.defaultLegendHashes.length;
+        if (hashLen < textLen) {
+            for (uint256 i = hashLen; i < textLen; i++) {
+                s.defaultLegendHashes.push(keccak256(bytes(s.defaultLegend[i])));
+            }
+        }
+    }
+
+    /// @dev Backfill certLegendHashes for tokens minted before hash tracking was added.
+    function _ensureCertLegendHashes(uint256 tokenId) internal {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        uint256 textLen = s.certLegend[tokenId].length;
+        uint256 hashLen = s.certLegendHashes[tokenId].length;
+        if (hashLen < textLen) {
+            for (uint256 i = hashLen; i < textLen; i++) {
+                s.certLegendHashes[tokenId].push(keccak256(bytes(s.certLegend[tokenId][i])));
+            }
+        }
+    }
+
     function addDefaultLegend(string memory newLegend) external onlyIssuanceManager {
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
         bytes32 h = keccak256(bytes(newLegend));
@@ -410,6 +436,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     }
 
     function removeDefaultLegendAt(uint256 index) external onlyIssuanceManager {
+        _ensureDefaultLegendHashes();
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
         if (index >= s.defaultLegend.length) revert InvalidLegendIndex();
 
@@ -444,6 +471,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     }
 
     function removeCertLegendAt(uint256 tokenId, uint256 index) external onlyIssuanceManager {
+        _ensureCertLegendHashes(tokenId);
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
         if (index >= s.certLegend[tokenId].length) revert InvalidLegendIndex();
 
