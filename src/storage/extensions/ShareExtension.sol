@@ -1001,7 +1001,20 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     function _shareClassKeyToString(bytes32 key) internal pure returns (string memory) {
         if (key == CLASS_COMMON) return "Common";
         if (key == CLASS_PREFERRED) return "Preferred";
-        return "Custom";
+        return _bytes32ToHexString(key);
+    }
+
+    function _bytes32ToHexString(bytes32 value) internal pure returns (string memory) {
+        bytes memory hexChars = "0123456789abcdef";
+        bytes memory result = new bytes(66); // "0x" + 64 hex chars
+        result[0] = "0";
+        result[1] = "x";
+        for (uint256 i = 0; i < 32; i++) {
+            uint8 b = uint8(value[i]);
+            result[2 + i * 2] = hexChars[b >> 4];
+            result[3 + i * 2] = hexChars[b & 0x0f];
+        }
+        return string(result);
     }
 
     function _liquidationPrefTypeToString(LiquidationPreferenceType t) internal pure returns (string memory) {
