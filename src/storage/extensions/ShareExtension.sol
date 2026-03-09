@@ -50,13 +50,6 @@ import "../../libs/auth.sol";
 //  Enums (file scope for potential centralization into CyberCorpConstants.sol)
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// @notice V1 legacy share class enum — retained for backward-compatible decoding of V1 ShareData.
-/// V2 uses extensible bytes32 shareClassKey instead.
-enum ShareClass {
-    Common,
-    Preferred
-}
-
 /// @notice Liquidation preference payout structure
 enum LiquidationPreferenceType {
     NonParticipating,       // single-dip: greater of preference or as-converted
@@ -121,32 +114,6 @@ enum VotingScope {
 // ══════════════════════════════════════════════════════════════════════════════
 //  Structs
 // ══════════════════════════════════════════════════════════════════════════════
-
-/// @notice V1 legacy share data struct — retained for backward-compatible decoding.
-/// New certificates should use CertificateData (V2) with a SeriesTerms reference.
-struct ShareData {
-    ShareClass shareClass;
-    string seriesName;
-    uint256 parValue;
-    uint256 originalIssuePrice;
-    uint256 liquidationPreferenceMultiple;
-    LiquidationPreferenceType liquidationPreferenceType;
-    uint256 participationCap;
-    DividendType dividendType;
-    uint256 dividendRateOrPriority;
-    bool isConvertible;
-    uint256 conversionPrice;
-    AntiDilutionType antiDilutionType;
-    uint256 votesPerShare;
-    bool hasClassVotingRights;
-    uint8 designatedBoardSeats;
-    TransferRestrictionType transferRestrictionType;
-    bool isRedeemable;
-    uint256 redemptionPrice;
-    bool hasProtectiveProvisions;
-    uint256 protectiveProvisionThreshold;
-    uint256 authorizedShares;
-}
 
 /// @notice Mandatory/automatic conversion trigger definition
 struct MandatoryConversionTrigger {
@@ -252,7 +219,6 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     // ──────────────────────────────────────────────────────────────
 
     bytes32 public constant EXTENSION_TYPE = keccak256("SHARE");
-    bytes32 public constant EXTENSION_TYPE_V2 = keccak256("SHARE_V2");
     uint256 public constant PERCENTAGE_PRECISION = 10 ** 4;
     uint256 public constant PRICE_PRECISION = 10 ** 18;
 
@@ -370,31 +336,17 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  Certificate Data (V2 — ICertificateExtension compatibility)
+    //  Certificate Data (ICertificateExtension compatibility)
     // ══════════════════════════════════════════════════════════════
 
-    /// @notice Encode V2 certificate data into extension bytes
+    /// @notice Encode certificate data into extension bytes
     function encodeCertificateData(CertificateData memory data) external pure returns (bytes memory) {
         return abi.encode(data);
     }
 
-    /// @notice Decode V2 certificate data from extension bytes
+    /// @notice Decode certificate data from extension bytes
     function decodeCertificateData(bytes memory data) external pure returns (CertificateData memory) {
         return abi.decode(data, (CertificateData));
-    }
-
-    // ══════════════════════════════════════════════════════════════
-    //  V1 Legacy Encode/Decode (backward compatibility)
-    // ══════════════════════════════════════════════════════════════
-
-    /// @notice Decode V1 ShareData from extension bytes (legacy)
-    function decodeExtensionData(bytes memory data) external pure returns (ShareData memory) {
-        return abi.decode(data, (ShareData));
-    }
-
-    /// @notice Encode V1 ShareData into extension bytes (legacy)
-    function encodeExtensionData(ShareData memory data) external pure returns (bytes memory) {
-        return abi.encode(data);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -482,7 +434,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     }
 
     /// @notice Get full share info: series terms + decoded certificate data + legends
-    /// @param certExtensionData The encoded V2 CertificateData bytes
+    /// @param certExtensionData The encoded CertificateData bytes
     /// @param tokenId The ERC-721 token ID (for legend lookup)
     function getFullShareInfo(bytes memory certExtensionData, uint256 tokenId)
         external
@@ -514,30 +466,19 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     //  ICertificateExtension Overrides
     // ══════════════════════════════════════════════════════════════
 
-    /// @notice Supports both V1 ("SHARE") and V2 ("SHARE_V2") extension types
     function supportsExtensionType(bytes32 extensionType) external pure override returns (bool) {
-        return extensionType == EXTENSION_TYPE || extensionType == EXTENSION_TYPE_V2;
+        return extensionType == EXTENSION_TYPE;
     }
 
     /// @notice Render extension data as a JSON fragment.
-    /// @dev Now `view` (not `pure`) because it reads seriesRegistry, legends, and issuerName.
-    /// Detects V1 vs V2 format: if the first 32 bytes match a known seriesId, decodes as V2.
+    /// @dev `view` (not `pure`) because it reads seriesRegistry and issuerName.
     function getExtensionURI(bytes memory data) external view override returns (string memory) {
         if (data.length == 0) return "";
 
-        // Attempt V2 detection: first 32 bytes of CertificateData is the seriesId
-        bytes32 potentialSeriesId;
-        // solhint-disable-next-line no-inline-assembly
-        assembly {
-            potentialSeriesId := mload(add(data, 32))
-        }
+        CertificateData memory cert = abi.decode(data, (CertificateData));
+        require(seriesExists[cert.seriesId], "ShareExtension: unknown seriesId in extension data");
 
-        if (seriesExists[potentialSeriesId]) {
-            return _buildV2URI(data, potentialSeriesId);
-        }
-
-        // Fall back to V1 decoding
-        return _buildV1URI(data);
+        return _buildURI(cert);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -618,31 +559,29 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  Internal — V2 URI Builder
+    //  Internal — URI Builder
     // ══════════════════════════════════════════════════════════════
 
-    function _buildV2URI(bytes memory data, bytes32 sid) internal view returns (string memory) {
-        CertificateData memory cert = abi.decode(data, (CertificateData));
-        SeriesTerms storage terms = _seriesRegistry[sid];
+    function _buildURI(CertificateData memory cert) internal view returns (string memory) {
+        SeriesTerms storage terms = _seriesRegistry[cert.seriesId];
 
-        string memory p1 = _buildV2Identity(terms);
-        string memory p2 = _buildV2Economics(terms);
-        string memory p3 = _buildV2Dividends(terms);
-        string memory p4 = _buildV2Conversion(terms);
-        string memory p5 = _buildV2Voting(terms);
-        string memory p6 = _buildV2RestrictionsRedemption(terms);
-        string memory p7 = _buildV2Certificate(cert);
-        string memory p8 = _buildV2Issuer();
+        string memory p1 = _buildIdentity(terms);
+        string memory p2 = _buildEconomics(terms);
+        string memory p3 = _buildDividends(terms);
+        string memory p4 = _buildConversion(terms);
+        string memory p5 = _buildVoting(terms);
+        string memory p6 = _buildRestrictionsRedemption(terms);
+        string memory p7 = _buildCertificate(cert);
+        string memory p8 = _buildIssuer();
 
         return string(abi.encodePacked(
             ', "shareDetails": {',
-            '"version": "2", ',
             p1, p2, p3, p4, p5, p6, p7, p8,
             "}"
         ));
     }
 
-    function _buildV2Identity(SeriesTerms storage t) internal view returns (string memory) {
+    function _buildIdentity(SeriesTerms storage t) internal view returns (string memory) {
         return string(abi.encodePacked(
             '"shareClassKey": "', _shareClassKeyToString(t.shareClassKey),
             '", "seriesName": "', t.seriesName,
@@ -654,7 +593,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         ));
     }
 
-    function _buildV2Economics(SeriesTerms storage t) internal view returns (string memory) {
+    function _buildEconomics(SeriesTerms storage t) internal view returns (string memory) {
         return string(abi.encodePacked(
             '"liquidationPreferenceMultiple": "', _uint256ToString(t.liquidationPreferenceMultiple),
             '", "liquidationPreferenceType": "', _liquidationPrefTypeToString(t.liquidationPreferenceType),
@@ -664,7 +603,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         ));
     }
 
-    function _buildV2Dividends(SeriesTerms storage t) internal view returns (string memory) {
+    function _buildDividends(SeriesTerms storage t) internal view returns (string memory) {
         return string(abi.encodePacked(
             '"dividendType": "', _dividendTypeToString(t.dividendType),
             '", "dividendRate": "', _uint256ToString(t.dividendRate),
@@ -674,7 +613,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         ));
     }
 
-    function _buildV2Conversion(SeriesTerms storage t) internal view returns (string memory) {
+    function _buildConversion(SeriesTerms storage t) internal view returns (string memory) {
         return string(abi.encodePacked(
             '"isConvertible": "', _boolToString(t.isConvertible),
             '", "conversionPrice": "', _uint256ToString(t.conversionPrice),
@@ -686,7 +625,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         ));
     }
 
-    function _buildV2Voting(SeriesTerms storage t) internal view returns (string memory) {
+    function _buildVoting(SeriesTerms storage t) internal view returns (string memory) {
         return string(abi.encodePacked(
             '"votesPerShare": "', _uint256ToString(t.votesPerShare),
             '", "designatedBoardSeats": "', _uint256ToString(uint256(t.designatedBoardSeats)),
@@ -697,7 +636,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         ));
     }
 
-    function _buildV2RestrictionsRedemption(SeriesTerms storage t) internal view returns (string memory) {
+    function _buildRestrictionsRedemption(SeriesTerms storage t) internal view returns (string memory) {
         return string(abi.encodePacked(
             '"transferRestrictionCount": "', _uint256ToString(t.transferRestrictions.length),
             '", "isRedeemable": "', _boolToString(t.isRedeemable),
@@ -707,7 +646,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         ));
     }
 
-    function _buildV2Certificate(CertificateData memory c) internal pure returns (string memory) {
+    function _buildCertificate(CertificateData memory c) internal pure returns (string memory) {
         return string(abi.encodePacked(
             '"certificateNumber": "', _uint256ToString(c.certificateNumber),
             '", "numberOfShares": "', _uint256ToString(c.numberOfShares),
@@ -719,74 +658,9 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         ));
     }
 
-    function _buildV2Issuer() internal view returns (string memory) {
+    function _buildIssuer() internal view returns (string memory) {
         return string(abi.encodePacked(
             '"issuerName": "', issuerName, '"'
-        ));
-    }
-
-    // ══════════════════════════════════════════════════════════════
-    //  Internal — V1 URI Builder (backward compatibility)
-    // ══════════════════════════════════════════════════════════════
-
-    function _buildV1URI(bytes memory data) internal pure returns (string memory) {
-        ShareData memory d = abi.decode(data, (ShareData));
-
-        string memory part1 = _buildV1IdentityAndEconomics(d);
-        string memory part2 = _buildV1ConversionAndVoting(d);
-        string memory part3 = _buildV1RestrictionsAndRedemption(d);
-        string memory part4 = _buildV1ProtectiveAndAuth(d);
-
-        return string(abi.encodePacked(
-            ', "shareDetails": {',
-            '"version": "1", ',
-            part1, part2, part3, part4,
-            "}"
-        ));
-    }
-
-    function _buildV1IdentityAndEconomics(ShareData memory d) internal pure returns (string memory) {
-        return string(abi.encodePacked(
-            '"shareClass": "', _shareClassToString(d.shareClass),
-            '", "seriesName": "', d.seriesName,
-            '", "parValue": "', _uint256ToString(d.parValue),
-            '", "originalIssuePrice": "', _uint256ToString(d.originalIssuePrice),
-            '", "liquidationPreferenceMultiple": "', _uint256ToString(d.liquidationPreferenceMultiple),
-            '", "liquidationPreferenceType": "', _liquidationPrefTypeToString(d.liquidationPreferenceType),
-            '", "participationCap": "', _uint256ToString(d.participationCap),
-            '", '
-        ));
-    }
-
-    function _buildV1ConversionAndVoting(ShareData memory d) internal pure returns (string memory) {
-        return string(abi.encodePacked(
-            '"dividendType": "', _dividendTypeToString(d.dividendType),
-            '", "dividendRateOrPriority": "', _uint256ToString(d.dividendRateOrPriority),
-            '", "isConvertible": "', _boolToString(d.isConvertible),
-            '", "conversionPrice": "', _uint256ToString(d.conversionPrice),
-            '", "antiDilutionType": "', _antiDilutionTypeToString(d.antiDilutionType),
-            '", "votesPerShare": "', _uint256ToString(d.votesPerShare),
-            '", "hasClassVotingRights": "', _boolToString(d.hasClassVotingRights),
-            '", "designatedBoardSeats": "', _uint256ToString(uint256(d.designatedBoardSeats)),
-            '", '
-        ));
-    }
-
-    function _buildV1RestrictionsAndRedemption(ShareData memory d) internal pure returns (string memory) {
-        return string(abi.encodePacked(
-            '"transferRestrictionType": "', _transferRestrictionTypeToString(d.transferRestrictionType),
-            '", "isRedeemable": "', _boolToString(d.isRedeemable),
-            '", "redemptionPrice": "', _uint256ToString(d.redemptionPrice),
-            '", '
-        ));
-    }
-
-    function _buildV1ProtectiveAndAuth(ShareData memory d) internal pure returns (string memory) {
-        return string(abi.encodePacked(
-            '"hasProtectiveProvisions": "', _boolToString(d.hasProtectiveProvisions),
-            '", "protectiveProvisionThreshold": "', _uint256ToString(d.protectiveProvisionThreshold),
-            '", "authorizedShares": "', _uint256ToString(d.authorizedShares),
-            '"'
         ));
     }
 
@@ -798,12 +672,6 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         if (key == CLASS_COMMON) return "Common";
         if (key == CLASS_PREFERRED) return "Preferred";
         return "Custom";
-    }
-
-    function _shareClassToString(ShareClass c) internal pure returns (string memory) {
-        if (c == ShareClass.Common) return "Common";
-        if (c == ShareClass.Preferred) return "Preferred";
-        return "Unknown";
     }
 
     function _liquidationPrefTypeToString(LiquidationPreferenceType t) internal pure returns (string memory) {
