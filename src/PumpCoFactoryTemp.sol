@@ -401,9 +401,9 @@ contract PumpCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         emit PumpCorpCreated(corp, auth, issuance, dealMgr, roundMgr);
     }
 
-    // TODO deprecated: merge it with deployCyberCorpAndCreateRound()
-    function deployCorpContractFor(
+    function deployCyberCorpAndCreateRound(
         uint256 salt,
+        SecuritySeries seriesType,
         string memory companyName,
         string memory companyType,
         string memory companyJurisdiction,
@@ -411,12 +411,24 @@ contract PumpCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         string memory defaultDisputeResolution,
         address _companyPayable,
         CompanyOfficer memory _officer,
-        bytes32 _segCoTemplateId,
-        bytes32 _boardConsentTempateId,
-        string[] memory _globalValues,
-        string[] memory _partyValues,
-        bytes memory signature,
-        address deployer
+        string[] memory legalDetails,
+        bytes[] memory extensionData,
+        RM_CyberCertData[] memory certData,
+        bytes32 templateId,
+        address paymentToken,
+        uint256 pricePerUnit,
+        uint256 valuation,
+        string[] memory roundPartyValues,
+        bytes memory escrowedSignature,
+        RoundType roundType,
+        address[] memory conditions,
+        uint256 raiseCap,
+        uint256 minTicket,
+        uint256 maxTicket,
+        uint256 startTime,
+        uint256 endTime,
+        bool publicRound,
+        bool allowTimedOffers
     )
         external
         returns (
@@ -425,40 +437,9 @@ contract PumpCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             address issuanceManagerAddress,
             address dealManagerAddress,
             address roundManagerAddress,
-            address[] memory certPrinterAddress,
-            bytes32 id,
-            uint256[] memory certIds
+            bytes32 roundId
         )
     {
-        // Check: validate key fields
-
-        if (_partyValues.length < 2
-            || !_partyValues[0].equal(_officer.name)
-            || !_partyValues[1].equal(_officer.contact)
-            || !_globalValues[2].equal(companyName)
-            || !_globalValues[3].equal(companyType)
-            || !_globalValues[4].equal(companyJurisdiction)
-            || !_globalValues[5].equal(companyContactDetails)
-        ) {
-            revert GlobalOrPartyValuesMismatch();
-        }
-
-        if (_officer.eoa != deployer) {
-            revert OfficerValuesMismatch();
-        }
-
-        // Effect: construct parties
-        address[] memory partiesOverride = new address[](2);
-        partiesOverride[0] = pumpCoOfficer.eoa;
-        partiesOverride[1] = deployer;
-
-        string[][] memory partyValuesOverride = new string[][](2);
-        partyValuesOverride[0] = new string[](2);
-        partyValuesOverride[0][0] = pumpCoOfficer.name;
-        partyValuesOverride[0][1] = pumpCoOfficer.contact;
-        partyValuesOverride[1] = _partyValues;
-
-        //create bytes32 salt
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
 
         (
@@ -467,7 +448,7 @@ contract PumpCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             issuanceManagerAddress,
             dealManagerAddress,
             roundManagerAddress
-        ) = deployCorp(
+        ) = deployCyberCorp(
             corpSalt,
             companyName,
             companyType,
@@ -478,53 +459,44 @@ contract PumpCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             _officer
         );
 
-        //both parties sign one agreement
-        bytes32 agreementId = ICyberAgreementRegistry(registryAddress).createContract(
-            _segCoTemplateId,
-            salt,
-            _globalValues,
-            partiesOverride,
-            partyValuesOverride,
-            bytes32(0),
-            address(this),
-            block.timestamp + 7 days
-        );
+        // Deploy RoundManager via its factory
+        bytes32 rmSalt = keccak256(abi.encodePacked("round", salt));
 
-        ICyberAgreementRegistry(registryAddress).signContractFor(deployer, agreementId, partyValuesOverride[1], signature, false, "");
 
-        ICyberAgreementRegistry(registryAddress).signContractWithEscrow(
-            pumpCoOfficer.eoa,
-            agreementId,
-            partyValuesOverride[0],
-            pumpCoSignatureHash,
-            false,
-            ""
-        );
-
-        //parent company sign the meeting notes (single-party)
-        address[] memory meetingNotesParties = new address[](1);
-        meetingNotesParties[0] = partiesOverride[0];
-        string[][] memory meetingNotesPartyValues = new string[][](1);
-        meetingNotesPartyValues[0] = partyValuesOverride[0];
-        bytes32 meetingNotesId = ICyberAgreementRegistry(registryAddress).createContract(
-            _boardConsentTempateId,
-            salt,
-            _globalValues,
-            meetingNotesParties,
-            meetingNotesPartyValues,
-            bytes32(0),
-            address(this),
-            block.timestamp + 7 days
-        );
-
-        ICyberAgreementRegistry(registryAddress).signContractWithEscrow(
-            pumpCoOfficer.eoa,
-            meetingNotesId,
-            meetingNotesPartyValues[0],
-            pumpCoSignatureHash,
-            false,
-            ""
-        );
+        // Create round with provided round type using RoundLib
+        {
+            Round memory draft = RoundLib
+                .draft()
+                .setTickets(
+                    seriesType,
+                    roundType,
+                    publicRound,
+                    allowTimedOffers,
+                    raiseCap,
+                    minTicket,
+                    maxTicket,
+                    paymentToken,
+                    pricePerUnit,
+                    valuation,
+                    startTime,
+                    endTime
+                )
+                .setAgreement(
+                    templateId,
+                    _officer.eoa,
+                    _officer.name,
+                    _officer.title,
+                    legalDetails,
+                    roundPartyValues,
+                    extensionData,
+                    conditions,
+                    escrowedSignature
+                );
+            roundId = IRoundManagerInterface(roundManagerAddress).createRound(
+                draft,
+                certData
+            );
+        }
     }
 
     // Allow this factory to receive ERC721 tokens via safeTransferFrom/safeMint
