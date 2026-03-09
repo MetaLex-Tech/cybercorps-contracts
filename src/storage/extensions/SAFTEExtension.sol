@@ -45,6 +45,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./ICertificateExtension.sol";
 import "../../CyberCorpConstants.sol";
 import "../../libs/auth.sol";
+import "../../libs/StringUtils.sol";
 
 struct SAFTEData {
     UnlockStartTimeType unlockStartTimeType;    
@@ -60,6 +61,8 @@ struct SAFTEData {
     }
 
 contract SAFTEExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
+    using StringUtils for uint256;
+
     bytes32 public constant EXTENSION_TYPE = keccak256("SAFTE");
     uint256 public constant PERCENTAGE_PRECISION = 10 ** 4;
 
@@ -88,43 +91,20 @@ contract SAFTEExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         
         string memory json = string(abi.encodePacked(
             ', "SAFTEDetails": {',
-            '"protocolUSDValuationAtTimeofInvestment": "', uint256ToString(decoded.protocolUSDValuationAtTimeofInvestment),
+            '"protocolUSDValuationAtTimeofInvestment": "', decoded.protocolUSDValuationAtTimeofInvestment.uint256ToString(),
             '", "unlockStartTimeType": "', UnlockStartTimeTypeToString(decoded.unlockStartTimeType),
-            '", "unlockStartTime": "', uint256ToString(decoded.unlockStartTime),
-            '", "unlockingPeriod": "', uint256ToString(decoded.unlockingPeriod),
-            '", "unlockingCliffPeriod": "', uint256ToString(decoded.unlockingCliffPeriod),
-            '", "unlockingCliffPercentage": "', uint256ToString(decoded.unlockingCliffPercentage),
+            '", "unlockStartTime": "', decoded.unlockStartTime.uint256ToString(),
+            '", "unlockingPeriod": "', decoded.unlockingPeriod.uint256ToString(),
+            '", "unlockingCliffPeriod": "', decoded.unlockingCliffPeriod.uint256ToString(),
+            '", "unlockingCliffPercentage": "', decoded.unlockingCliffPercentage.uint256ToString(),
             '", "unlockingIntervalType": "', UnlockingIntervalTypeToString(decoded.unlockingIntervalType),
             '", "tokenCalculationMethod": "', conversionTypeToString(decoded.tokenCalculationMethod),
-            '", "minCompanyReserve": "', uint256ToString(decoded.minCompanyReserve),
-            '", "tokenPremiumMultiplier": "', uint256ToString(decoded.tokenPremiumMultiplier),
+            '", "minCompanyReserve": "', decoded.minCompanyReserve.uint256ToString(),
+            '", "tokenPremiumMultiplier": "', decoded.tokenPremiumMultiplier.uint256ToString(),
             '"}'
         ));
         
         return json;
-    }
-
-        // Helper function to convert uint256 to string
-    function uint256ToString(uint256 _i) internal pure returns (string memory) {
-        if (_i == 0) {
-            return "0";
-        } 
-        uint256 j = _i;
-        uint256 len;
-        while (j != 0) {
-            len++;
-            j /= 10;
-        }
-        bytes memory bstr = new bytes(len);
-        uint256 k = len;
-        while (_i != 0) {
-            k = k-1;
-            uint8 temp = uint8(48 + (_i % 10));
-            bytes1 b1 = bytes1(temp);
-            bstr[k] = b1;
-            _i /= 10;
-        }
-        return string(bstr);
     }
 
     function conversionTypeToString(TokenCalculationMethod _type) internal pure returns (string memory) {
