@@ -99,7 +99,8 @@ library CyberCertPrinterStorage {
         bool endorsementRequired;
         // New variables must be appended below to preserve storage layout for upgrades
         mapping(uint256 => bool) tokenTransferable;
-        
+        mapping(uint256 => bytes32[]) certLegendHashes;
+        bytes32[] defaultLegendHashes;
     }
 
     // Returns the storage layout
