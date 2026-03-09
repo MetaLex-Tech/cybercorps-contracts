@@ -56,6 +56,11 @@ import "./interfaces/ICertificateConverter.sol";
 import "./interfaces/IIssuanceManagerFactory.sol";
 import "./storage/IssuanceManagerStorage.sol";
 
+/// @dev Minimal interface for extension legend seeding at mint time.
+interface ILegendSeeder {
+    function initializeLegends(uint256 tokenId, bytes32 seriesId) external;
+}
+
 /// @title IssuanceManager
 /// @notice Manages the issuance and lifecycle of digital certificates representing securities and more
 /// @dev Implements UUPS upgradeable pattern and BorgAuth access control
@@ -224,6 +229,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         uint256 tokenId = cert.totalSupply();
         uint256 id = cert.safeMint(tokenId, to, _details);
+        _seedSeriesLegends(certAddress, tokenId, _details.extensionData);
         string memory tokenURI = cert.tokenURI(tokenId);
         emit CertificateCreated(
             tokenId,
@@ -273,6 +279,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         tokenId = cert.totalSupply();
 
         cert.safeMintAndAssign(investor, tokenId, _details);
+        _seedSeriesLegends(certAddress, tokenId, _details.extensionData);
         string memory tokenURI = cert.tokenURI(tokenId);
         emit CertificateCreated(
             tokenId,
@@ -283,6 +290,21 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             tokenURI
         );
         return tokenId;
+    }
+
+    /// @dev If the cert has a share extension with series-specific transfer restrictions,
+    ///      seed those restriction texts as certificate legends. Silently skips if the
+    ///      extension doesn't support initializeLegends (e.g. SAFT, TokenWarrant).
+    function _seedSeriesLegends(address certAddress, uint256 tokenId, bytes memory extensionData) internal {
+        if (extensionData.length == 0) return;
+        address ext = ICyberCertPrinter(certAddress).getExtension(tokenId);
+        if (ext == address(0)) return;
+        // First 32 bytes of the ABI-encoded CertificateData is the seriesId
+        bytes32 seriesId;
+        // solhint-disable-next-line no-inline-assembly
+        assembly { seriesId := mload(add(extensionData, 32)) }
+        if (seriesId == bytes32(0)) return;
+        try ILegendSeeder(ext).initializeLegends(tokenId, seriesId) {} catch {}
     }
 
     /// @notice Adds an issuer's signature to a certificate
