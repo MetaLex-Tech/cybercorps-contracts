@@ -154,7 +154,7 @@ contract DeployPumpCorpFactoryScript is Script {
         uint256 roundMaxTicket = 10000000;
         RoundType roundType = RoundType.FCFS;
         uint256 roundStartTime = block.timestamp - 1;
-        uint256 roundEndTime = block.timestamp + 21 days;
+        uint256 roundEndTime = type(uint256).max; // no round expiry
         bytes32 roundTemplateId = bytes32(uint256(1)); // SAFE
         address roundPaymentToken = address(memeToken);
         uint256 roundPricePerUnit = 1000;
