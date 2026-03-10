@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
+import {Vm} from "forge-std/Test.sol";
 import {PumpCorpFactory} from "../src/PumpCorpFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -10,10 +11,11 @@ import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
+import {RoundManager} from "../src/RoundManager.sol";
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {CompanyOfficer, SecuritySeries, SecurityClass} from "../src/CyberCorpConstants.sol";
 import {RoundType} from "../src/libs/RoundLib.sol";
-import {CyberCertData} from "../src/storage/RoundManagerStorage.sol";
+import {CyberCertData, EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {MockERC20} from "../test/mock/MockERC20.sol";
 
 contract DeployPumpCorpFactoryScript is Script {
@@ -29,7 +31,8 @@ contract DeployPumpCorpFactoryScript is Script {
         return
             runWithArgs(
                 vm.envUint("PRIVATE_KEY_MAIN"), // deployerPrivateKey
-                vm.envUint("PRIVATE_KEY_MAIN"), // founderPrivateKey
+                vm.envUint("FOUNDER_KEY_MAIN"), // founderPrivateKey
+                vm.envUint("INVESTOR_KEY_MAIN"), // investorPrivateKey
 
                 // TODO WIP: update for production
                 0x5ff4e90Efa2B88cf3cA92D63d244a78a88219Abf, // test corp payable
@@ -40,10 +43,13 @@ contract DeployPumpCorpFactoryScript is Script {
     function runWithArgs(
         uint256 deployerPrivateKey,
         uint256 founderPrivateKey,
+        uint256 investorPrivateKey,
         address corpPayable,
         address officerAddress
     ) public returns (PumpCorpFactory pumpCorpFactory) {
         address deployerAddress = vm.addr(deployerPrivateKey);
+        address investorAddress = vm.addr(investorPrivateKey);
+        
         string memory saltStr = "PumpCorpFactory.deploy.v1";
         bytes32 salt = bytes32(keccak256(bytes(saltStr)));
 
@@ -55,6 +61,7 @@ contract DeployPumpCorpFactoryScript is Script {
         console2.log("salt string: %s", saltStr);
         console2.log("deployer: %s", deployerAddress);
         console2.log("founder: %s", vm.addr(founderPrivateKey));
+        console2.log("investor: %s", investorAddress);
         console2.log("corpPayable: %s", corpPayable);
         console2.log("officerAddress: %s", officerAddress);
         console2.log(
@@ -73,6 +80,8 @@ contract DeployPumpCorpFactoryScript is Script {
         );
 
         vm.startBroadcast(deployerPrivateKey);
+
+        // (1) Deploy factory contracts
 
         BorgAuth auth = new BorgAuth{salt: salt}(deployerAddress);
 
@@ -94,11 +103,19 @@ contract DeployPumpCorpFactoryScript is Script {
             )
         );
 
-        // Deploy test meme token
+        // (2) Deploy test meme token
         MockERC20 memeToken = new MockERC20("Test Token", "TEST", 9);
+        memeToken.mint(investorAddress, 10000e9);
 
-        // Build SubCorp inputs matching PumpCorpFactory's strict field checks.
-        // TODO WIP: update for production
+        console2.log("==== Deployed ====");
+        console2.log("Test MEME token:", address(memeToken));
+        console2.log("Auth:", address(auth));
+        console2.log("PumpCorpFactory (proxy):", address(pumpCorpFactory));
+        console2.log("");
+
+        // TODO WIP: remove before production
+        // (3) Create corp and round
+
         uint256 corpSaltUint = block.timestamp + 1;
         bytes32 corpSalt = keccak256(abi.encodePacked(corpSaltUint));
         string memory companyName = "Test SubCo SPV 1";
@@ -107,15 +124,12 @@ contract DeployPumpCorpFactoryScript is Script {
         string memory companyContact = "subco@parentco.example";
         string memory disputeResolution = "binding arbitration";
 
-        // TODO WIP: update for production
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: officerAddress,
             name: "Test Founder",
             contact: "test@company.com",
             title: "Founder"
         });
-
-        // (5) Fill sub corp round info
 
         string[] memory roundLegalDetails = new string[](1);
         roundLegalDetails[0] = "Legal Details";
@@ -236,12 +250,96 @@ contract DeployPumpCorpFactoryScript is Script {
         auth.updateRole(officerAddress, auth.OWNER_ROLE());
         auth.updateRole(corpPayable, auth.OWNER_ROLE());
 
-        console2.log("==== Deployed ====");
-        console2.log("Test MEME token:", address(memeToken));
-        console2.log("Auth:", address(auth));
-        console2.log("PumpCorpFactory (proxy):", address(pumpCorpFactory));
+        vm.stopBroadcast();
+
+        console2.log("==== Corp & Round Created ====");
+        console2.log("corp:", corp);
+        console2.log("roundManager:", roundManager);
+        console2.log("roundId:");
+        console2.logBytes32(roundId);
+        console2.log("");
+
+        // (4) Submit EOI
+
+        string memory investorName = "Investor 1";
+        string memory investorContact = "email@investor.net";
+        string memory investorType = "Individual";
+        string memory investorJurisdiction = "US";
+        
+        string[] memory roundGlobalValues = new string[](5);
+        roundGlobalValues[0] = "1.00"; // purchaseAmount
+        roundGlobalValues[1] = "10000000"; // postMoneyValuationCap
+        roundGlobalValues[2] = "1700000000"; // expirationTime (ts)
+        roundGlobalValues[3] = "DE"; // governingJurisdiction
+        roundGlobalValues[4] = "arbitration"; // disputeResolution
+        
+        string[] memory investorPartyValues = new string[](5);
+        roundFirstPartyValues[0] = investorName; // name
+        roundFirstPartyValues[1] = vm.toString(investorAddress); // evmAddress (string form)
+        roundFirstPartyValues[2] = investorContact; // contactDetails
+        roundFirstPartyValues[3] = investorType; // investorType
+        roundFirstPartyValues[4] = investorJurisdiction; // investorJurisdiction
+
+        vm.startBroadcast(investorPrivateKey);
+        
+        EOI memory eoi = EOI({
+            name: investorName,
+            investorType: investorType,
+            jurisdiction: investorJurisdiction,
+            contact: investorContact,
+            minAmount: 1,
+            maxAmount: 1,
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: LexChexDetails({
+                request: MintRequest({
+                    uuid: 0,
+                    owner: address(0),
+                    investorName: "",
+                    investorType: "",
+                    investorJurisdiction: "",
+                    investorContact: "",
+                    mintPrice: 0,
+                    expiry: 0,
+                    paymentToken: address(0)
+                }),
+                templateId: bytes32(0),
+                salt: 0,
+                globalValues: new string[](0),
+                parties: new address[](0),
+                partyValues: new string[][](0),
+                agreementSignature: ""
+            })
+        });
+
+        memeToken.approve(roundManager, type(uint256).max);
+        (bytes32 agreementId, uint256 tokenId) = RoundManager(roundManager).submitEOI(
+            roundId,
+            eoi,
+            roundGlobalValues,
+            investorPartyValues,
+            _computeEOISignature(
+                vm,
+                CyberAgreementRegistry(registry),
+                roundTemplateId,
+                block.timestamp,
+                roundGlobalValues,
+                investorPartyValues,
+                officerAddress,
+                investorPrivateKey
+            ),
+            block.timestamp,
+            new address[](0),
+            bytes32(0)
+        );
 
         vm.stopBroadcast();
+
+        console2.log("==== EOI Submitted ====");
+        console2.log("tokenId:", tokenId);
+        console2.log("agreementId:");
+        console2.logBytes32(agreementId);
+        console2.log("");
     }
 
     function _computeEscrowSignature(
@@ -307,5 +405,42 @@ contract DeployPumpCorpFactoryScript is Script {
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivKey, digest);
         sig = abi.encodePacked(r, s, v);
+    }
+
+    function _computeEOISignature(
+        Vm vm,
+        CyberAgreementRegistry registry,
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        string[] memory partyValues,
+        address authorityOfficer,
+        uint256 signerPrivKey
+    ) internal view returns (bytes memory) {
+        (
+            string memory legalUri,
+            ,
+            string[] memory glFields,
+            string[] memory partyFields
+        ) = registry.getTemplateDetails(templateId);
+        address signer = vm.addr(signerPrivKey);
+        address[] memory parties = new address[](2);
+        parties[0] = authorityOfficer;
+        parties[1] = signer;
+        bytes32 contractId = keccak256(
+            abi.encode(templateId, salt, globalValues, parties)
+        );
+        return CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            legalUri,
+            glFields,
+            partyFields,
+            globalValues,
+            partyValues,
+            signerPrivKey
+        );
     }
 }
