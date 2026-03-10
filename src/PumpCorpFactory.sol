@@ -42,21 +42,24 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "./interfaces/IIssuanceManagerFactory.sol";
+import "./libs/auth.sol";
+import "@openzeppelin/contracts/utils/Create2.sol";
+import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./interfaces/ICyberCorp.sol";
 import "./interfaces/ICyberCorpSingleFactory.sol";
 import "./interfaces/IDealManagerFactory.sol";
 import "./interfaces/IDealManager.sol";
 import "./interfaces/IRoundManagerFactory.sol";
+import {IRoundManager as IRoundManagerInterface} from "./interfaces/IRoundManager.sol";
 import "./interfaces/ICyberCertPrinter.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
 import "./CyberCorpConstants.sol";
 import "./storage/CyberCertPrinterStorage.sol";
+import {CyberCertData as RM_CyberCertData} from "./storage/RoundManagerStorage.sol";
+import {Round, RoundType, RoundLib} from "./libs/RoundLib.sol";
 import "./libs/auth.sol";
-import "@openzeppelin/contracts/utils/Create2.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
 interface IRoundManagerInit {
     function initialize(
@@ -72,9 +75,8 @@ interface ICyberCorpLocal {
     function issuanceManager() external view returns (address);
 }
 
-contract PumpCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
-    using Strings for string;
-    
+contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
+    using RoundLib for Round;
     error InvalidSalt();
     error RoundManagerAlreadyExists();
 
@@ -84,19 +86,9 @@ contract PumpCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     address public dealManagerFactory;
     address public roundManagerFactory;
     address public uriBuilder;
-    //store an escrowed signature hash for parent corp
-    bytes public pumpCoSignatureHash;
-    // stored PumpCo officer details used in agreements
-    CompanyOfficer public pumpCoOfficer;
+    address public lexchexAuth;
 
-    // Parent corp (PumpCo) deployment record
-    address public pumpCorp;
-    address public parentAuth;
-    address public parentIssuanceManager;
-    address public parentDealManager;
-    address public parentRoundManager;
-    bool public pumpCorpCreated;
-
+    // TODO WIP: review needed
     //adjust storage gap based on new variable
     uint256[38] private __gap; // keep storage gap similar to CyberCorpFactory
 
@@ -110,31 +102,30 @@ contract PumpCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         string[] defaultLegend;
     }
 
-    event CorpDeployed(
+    event CyberCorpDeployed(
         address indexed cyberCorp,
         address indexed auth,
         address indexed issuanceManager,
         address dealManager,
-        address roundManager,
         string cyberCORPName,
         string cyberCORPType,
         string cyberCORPContactDetails,
         string cyberCORPJurisdiction,
         string defaultDisputeResolution,
-        address _companyPayable,
-        address certPrinter,
-        uint256 certTokenId,
-        address ownerEOA
+        address _companyPayable
     );
 
-    event PumpCorpCreated(
-        address indexed corp,
-        address indexed auth,
-        address indexed issuanceManager,
-        address dealManager,
-        address roundManager
+    event DealManagerFactoryUpdated(
+        address indexed dealManagerFactory,
+        address oldDealFactory
     );
 
+    event RoundManagerDeployed(
+        address indexed cyberCorp,
+        address indexed roundManager
+    );
+
+    //create an event when IssuanceManagerFactory is updated
     event IssuanceManagerFactoryUpdated(
         address indexed issuanceManagerFactory,
         address oldIssuanceFactory
@@ -145,21 +136,22 @@ contract PumpCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         address oldCyberCorpFactory
     );
 
-    event DealManagerFactoryUpdated(
-        address indexed dealManagerFactory,
-        address oldDealFactory
-    );
-
     event RoundManagerFactoryUpdated(
         address indexed roundManagerFactory,
         address oldRoundManagerFactory
     );
 
-    event UriBuilderUpdated(address indexed uriBuilder, address oldUriBuilder);
-    event RegistryAddressUpdated(address indexed registryAddress, address oldRegistryAddress);
+    event UriBuilderUpdated(
+        address indexed uriBuilder,
+        address oldUriBuilder
+    );
 
-    error GlobalOrPartyValuesMismatch();
-    error OfficerValuesMismatch();
+    event RegistryAddressUpdated(
+        address indexed registryAddress,
+        address oldRegistryAddress
+    );
+
+    event LexchexAuthUpdated(address indexed lexchexAuth, address oldLexchexAuth);
 
     function initialize(
         address _auth,
@@ -171,6 +163,7 @@ contract PumpCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         address _uriBuilder
     ) public initializer {
         __UUPSUpgradeable_init();
+        // Initialize BorgAuthACL
         __BorgAuthACL_init(_auth);
 
         registryAddress = _registryAddress;
@@ -179,69 +172,15 @@ contract PumpCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         dealManagerFactory = _dealManagerFactory;
         roundManagerFactory = _roundManagerFactory;
         uriBuilder = _uriBuilder;
+
+        // TODO WIP: temporarily disabled for test deployment
+//        // Set default LeXcheX AUTH if not already set
+//        if (lexchexAuth == address(0)) {
+//            lexchexAuth = 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2;
+//        }
     }
 
-    function setPumpCoSignatureHash(bytes memory _pumpCoSignatureHash) public onlyOwner {
-        pumpCoSignatureHash = _pumpCoSignatureHash;
-    }
-
-    function setPumpCoOfficer(CompanyOfficer memory _officer) public onlyOwner {
-        pumpCoOfficer = _officer;
-    }
-
-    function setPumpCoOfficerEOA(address _eoa) public onlyOwner {
-        pumpCoOfficer.eoa = _eoa;
-    }
-
-    function setPumpCoOfficerName(string memory _name) public onlyOwner {
-        pumpCoOfficer.name = _name;
-    }
-
-    function setPumpCoOfficerContact(string memory _contact) public onlyOwner {
-        pumpCoOfficer.contact = _contact;
-    }
-
-    function setPumpCoOfficerTitle(string memory _title) public onlyOwner {
-        pumpCoOfficer.title = _title;
-    }
-
-    function setIssuanceManagerFactory(address _issuanceManagerFactory) external onlyOwner {
-        address old = issuanceManagerFactory;
-        issuanceManagerFactory = _issuanceManagerFactory;
-        emit IssuanceManagerFactoryUpdated(_issuanceManagerFactory, old);
-    }
-
-    function setCyberCorpSingleFactory(address _cyberCorpSingleFactory) external onlyOwner {
-        address old = cyberCorpSingleFactory;
-        cyberCorpSingleFactory = _cyberCorpSingleFactory;
-        emit CyberCorpSingleFactoryUpdated(_cyberCorpSingleFactory, old);
-    }
-
-    function setDealManagerFactory(address _dealManagerFactory) external onlyOwner {
-        address old = dealManagerFactory;
-        dealManagerFactory = _dealManagerFactory;
-        emit DealManagerFactoryUpdated(_dealManagerFactory, old);
-    }
-
-    function setRoundManagerFactory(address _roundManagerFactory) external onlyOwner {
-        address old = roundManagerFactory;
-        roundManagerFactory = _roundManagerFactory;
-        emit RoundManagerFactoryUpdated(_roundManagerFactory, old);
-    }
-
-    function setUriBuilder(address _uriBuilder) external onlyOwner {
-        address old = uriBuilder;
-        uriBuilder = _uriBuilder;
-        emit UriBuilderUpdated(_uriBuilder, old);
-    }
-
-    function setRegistryAddress(address _registryAddress) external onlyOwner {
-        address old = registryAddress;
-        registryAddress = _registryAddress;
-        emit RegistryAddressUpdated(_registryAddress, old);
-    }
-
-    function deployCorp(
+    function deployCyberCorp(
         bytes32 salt,
         string memory companyName,
         string memory companyType,
@@ -301,7 +240,7 @@ contract PumpCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         dealManagerAddress = IDealManagerFactory(dealManagerFactory)
             .deployDealManager(salt);
         ICyberCorp(cyberCorpAddress).setDealManager(dealManagerAddress);
-
+        // Initialize IssuanceManager
         IIssuanceManager(issuanceManagerAddress).initialize(
             authAddress,
             cyberCorpAddress,
@@ -318,7 +257,6 @@ contract PumpCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             dealManagerFactory
         );
 
-        // TODO WIP: review needed (start)
         // Deploy and initialize RoundManager
         roundManagerAddress = deployAndInitializeRoundManager(salt, cyberCorpAddress);
 
@@ -329,76 +267,117 @@ contract PumpCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
 
         // Set RoundManager on the corp
         ICyberCorp(cyberCorpAddress).setRoundManager(roundManagerAddress);
-        // TODO WIP: review needed (end)
 
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
         BorgAuth(authAddress).updateRole(roundManagerAddress, 99);
 
-        emit CorpDeployed(
+        emit CyberCorpDeployed(
             cyberCorpAddress,
             authAddress,
             issuanceManagerAddress,
             dealManagerAddress,
-            roundManagerAddress,
             companyName,
             companyType,
             companyContactDetails,
             companyJurisdiction,
             defaultDisputeResolution,
-            _companyPayable,
-            address(0), // certPrinter
-            0, // certTokenId
-            _officer.eoa // ownerEOA
+            _companyPayable
         );
     }
 
-    // Admin-only, one-time creation of the parent corp
-    // TODO WIP: do we need this?
-    function createPumpCorp(
-        bytes32 salt,
+    function deployCyberCorpAndCreateOffer(
+        uint256 salt,
         string memory companyName,
         string memory companyType,
         string memory companyJurisdiction,
         string memory companyContactDetails,
         string memory defaultDisputeResolution,
-        address _companyPayable
-    ) external onlyOwner returns (
-        address corp,
-        address auth,
-        address issuance,
-        address dealMgr,
-        address roundMgr
-    ) {
-        if (pumpCorpCreated) revert("PumpCorpAlreadyCreated");
-        CompanyOfficer memory officer = pumpCoOfficer;
-        if (officer.eoa == address(0)) revert("PumpCoOfficerNotSet");
+        address _companyPayable,
+        CompanyOfficer memory _officer,
+        CyberCertData[] memory _certData,
+        bytes32 _templateId,
+        address paymentToken,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        uint256 _paymentAmount,
+        string[][] memory _partyValues,
+        bytes memory signature,
+        CertificateDetails[] memory _details,
+        address[] memory conditions,
+        bytes32 secretHash,
+        uint256 expiry
+    )
+        external
+        returns (
+            address cyberCorpAddress,
+            address authAddress,
+            address issuanceManagerAddress,
+            address dealManagerAddress,
+            address roundManagerAddress,
+            address[] memory certPrinterAddress,
+            bytes32 id,
+            uint256[] memory certIds
+        )
+    {
+        //create bytes32 salt
+        bytes32 corpSalt = keccak256(abi.encodePacked(salt));
+
+        //set this officer's eoa to the sender
+        _officer.eoa = msg.sender;
 
         (
-            corp,
-            auth,
-            issuance,
-            dealMgr,
-            roundMgr
-        ) = deployCorp(
-            salt,
+            cyberCorpAddress,
+            authAddress,
+            issuanceManagerAddress,
+            dealManagerAddress,
+            roundManagerAddress
+        ) = deployCyberCorp(
+            corpSalt,
             companyName,
             companyType,
             companyJurisdiction,
             companyContactDetails,
             defaultDisputeResolution,
             _companyPayable,
-            officer
+            _officer
         );
 
-        pumpCorp = corp;
-        parentAuth = auth;
-        parentIssuanceManager = issuance;
-        parentDealManager = dealMgr;
-        parentRoundManager = roundMgr;
-        pumpCorpCreated = true;
+        certPrinterAddress = new address[](_certData.length);
 
-        emit PumpCorpCreated(corp, auth, issuance, dealMgr, roundMgr);
+        for (uint256 i = 0; i < _certData.length; i++) {
+            ICyberCertPrinter certPrinter = ICyberCertPrinter(
+                IIssuanceManager(issuanceManagerAddress).createCertPrinter(
+                    _certData[i].defaultLegend,
+                    string.concat(companyName, " ", _certData[i].name),
+                    _certData[i].symbol,
+                    _certData[i].uri,
+                    _certData[i].securityClass,
+                    _certData[i].securitySeries,
+                    _certData[i].extension
+                )
+            );
+            certPrinterAddress[i] = address(certPrinter);
+        }
+
+        // Create and sign deal
+        certIds = new uint256[](_certData.length);
+        (id, certIds) = IDealManager(dealManagerAddress).proposeAndSignDeal(
+            certPrinterAddress,
+            paymentToken,
+            _paymentAmount,
+            _templateId,
+            salt,
+            _globalValues,
+            _parties,
+            _details,
+            msg.sender,
+            signature,
+            _partyValues,
+            conditions,
+            secretHash,
+            expiry
+        );
     }
 
     function deployCyberCorpAndCreateRound(
@@ -438,8 +417,18 @@ contract PumpCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             address dealManagerAddress,
             address roundManagerAddress,
             bytes32 roundId
+            // TODO WIP: do we need this?
+//            address[] memory certPrinterAddress,
+//            bytes32 id,
+//            uint256[] memory certIds
         )
     {
+        // TODO WIP: review needed
+        address deployer = msg.sender;
+
+        // (1) Deploy corp
+
+        //create bytes32 salt
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
 
         (
@@ -459,9 +448,9 @@ contract PumpCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             _officer
         );
 
-        // Deploy RoundManager via its factory
-        bytes32 rmSalt = keccak256(abi.encodePacked("round", salt));
+        // (2) Deploy Round
 
+        bytes32 rmSalt = keccak256(abi.encodePacked("round", salt));
 
         // Create round with provided round type using RoundLib
         {
@@ -499,15 +488,105 @@ contract PumpCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         }
     }
 
-    // Allow this factory to receive ERC721 tokens via safeTransferFrom/safeMint
-    function onERC721Received(
-        address,
-        address,
-        uint256,
-        bytes calldata
-    ) external pure override returns (bytes4) {
-        return this.onERC721Received.selector;
+    /// @notice Deploy, initialize and grant LeXCheX access to a new RoundManager for the given cyber corp
+    /// @dev For security, the cyber corp is expected to authorize the created RoundManager itself
+    function deployAndInitializeRoundManager(bytes32 salt, address cyberCorpAddress) public returns (address) {
+        if (ICyberCorp(cyberCorpAddress).roundManager() != address(0)) {
+            revert RoundManagerAlreadyExists();
+        }
+
+        address roundManagerAddress = IRoundManagerFactory(roundManagerFactory).deployRoundManager(salt);
+
+        // Initialize RoundManager
+        IRoundManagerInit(roundManagerAddress).initialize(
+            address(BorgAuthACL(cyberCorpAddress).AUTH()),
+            cyberCorpAddress,
+            registryAddress,
+            ICyberCorpLocal(cyberCorpAddress).issuanceManager(),
+            roundManagerFactory
+        );
+
+        // Add newly created RoundManager as OWNER in LeXcheX AUTH
+        if (lexchexAuth != address(0)) {
+            BorgAuth(lexchexAuth).updateRole(
+                roundManagerAddress,
+                BorgAuth(lexchexAuth).OWNER_ROLE()
+            );
+        }
+
+        emit RoundManagerDeployed(
+            cyberCorpAddress,
+            roundManagerAddress
+        );
+
+        return roundManagerAddress;
     }
 
-    function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
+    function setIssuanceManagerFactory(
+        address _issuanceManagerFactory
+    ) external onlyOwner {
+        address oldIssuanceFactory = issuanceManagerFactory;
+        issuanceManagerFactory = _issuanceManagerFactory;
+        emit IssuanceManagerFactoryUpdated(
+            issuanceManagerFactory,
+            oldIssuanceFactory
+        );
+    }
+
+    function setCyberCorpSingleFactory(
+        address _cyberCorpSingleFactory
+    ) external onlyOwner {
+        address oldCyberCorpFactory = cyberCorpSingleFactory;
+        cyberCorpSingleFactory = _cyberCorpSingleFactory;
+        emit CyberCorpSingleFactoryUpdated(
+            cyberCorpSingleFactory,
+            oldCyberCorpFactory
+        );
+    }
+
+    function setRegistryAddress(
+        address _registryAddress
+    ) external onlyOwner {
+        address old = registryAddress;
+        registryAddress = _registryAddress;
+        emit RegistryAddressUpdated(
+            registryAddress,
+            old
+        );
+    }
+
+    function setDealManagerFactory(
+        address _dealManagerFactory
+    ) external onlyOwner {
+        address oldDealFactory = dealManagerFactory;
+        dealManagerFactory = _dealManagerFactory;
+        emit DealManagerFactoryUpdated(dealManagerFactory, oldDealFactory);
+    }
+
+    function setRoundManagerFactory(
+        address _roundManagerFactory
+    ) external onlyOwner {
+        address oldRoundManagerFactory = roundManagerFactory;
+        roundManagerFactory = _roundManagerFactory;
+        emit RoundManagerFactoryUpdated(
+            roundManagerFactory,
+            oldRoundManagerFactory
+        );
+    }
+
+    function setUriBuilder(address _uriBuilder) external onlyOwner {
+        address old = uriBuilder;
+        uriBuilder = _uriBuilder;
+        emit UriBuilderUpdated(_uriBuilder, old);
+    }
+
+    function setLexchexAuth(address _lexchexAuth) external onlyOwner {
+        address old = lexchexAuth;
+        lexchexAuth = _lexchexAuth;
+        emit LexchexAuthUpdated(lexchexAuth, old);
+    }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal virtual override onlyOwner {}
 }

@@ -3,16 +3,29 @@ pragma solidity ^0.8.28;
 
 import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
-import {PumpCoFactory} from "../src/PumpCoFactory.sol";
+import {PumpCorpFactory} from "../src/PumpCorpFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
+import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
-import {CompanyOfficer} from "../src/CyberCorpConstants.sol";
+import {CompanyOfficer, SecuritySeries, SecurityClass} from "../src/CyberCorpConstants.sol";
+import {RoundType} from "../src/libs/RoundLib.sol";
+import {CyberCertData} from "../src/storage/RoundManagerStorage.sol";
+import {MockERC20} from "../test/mock/MockERC20.sol";
 
-contract DeployPumpCoFactoryScript is Script {
-    function run() public returns (PumpCoFactory pumpCoFactory) {
+contract DeployPumpCorpFactoryScript is Script {
+    // EIP-712 constants for RoundManager escrow signature
+    bytes32 constant EIP712_DOMAIN_TYPEHASH = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
+    bytes32 constant ESCROWEDSIGNATUREDATA_TYPEHASH = keccak256(
+        "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation,address companyAddress)"
+    );
+
+    function run() public returns (PumpCorpFactory pumpCorpFactory) {
         return
             runWithArgs(
                 vm.envUint("PRIVATE_KEY_MAIN"),
@@ -27,28 +40,28 @@ contract DeployPumpCoFactoryScript is Script {
         uint256 deployerPrivateKey,
         address corpPayable,
         address officerAddress
-    ) public returns (PumpCoFactory pumpCoFactory) {
-        string memory pumpCoOfficerName = "Test PumpCo Officer";
-        string memory pumpCoOfficerContact = "test@parentco.example";
-        string memory pumpCoOfficerTitle = "Director";
-
+    ) public returns (PumpCorpFactory pumpCorpFactory) {
         // TODO WIP: update for production
         DeploymentConstants.CoreDeployment memory deployment = DeploymentConstants
             .coreV2(DeploymentConstants.ETH_SEPOLIA);
 
+        CyberAgreementRegistry registry = CyberAgreementRegistry(
+            deployment.cyberAgreementRegistry
+        );
+
         address deployerAddress = vm.addr(deployerPrivateKey);
-        bytes32 salt = bytes32(keccak256("PumpCoFactory.deploy.v1"));
+        bytes32 salt = bytes32(keccak256("PumpCorpFactory.deploy.v1"));
 
         vm.startBroadcast(deployerPrivateKey);
 
         BorgAuth auth = new BorgAuth{salt: salt}(deployerAddress);
 
-        pumpCoFactory = PumpCoFactory(
+        pumpCorpFactory = PumpCorpFactory(
             address(
                 new ERC1967Proxy{salt: salt}(
-                    address(new PumpCoFactory{salt: salt}()),
+                    address(new PumpCorpFactory{salt: salt}()),
                     abi.encodeWithSelector(
-                        PumpCoFactory.initialize.selector,
+                        PumpCorpFactory.initialize.selector,
                         address(auth),
                         deployment.cyberAgreementRegistry,
                         deployment.issuanceManagerFactory,
@@ -61,79 +74,10 @@ contract DeployPumpCoFactoryScript is Script {
             )
         );
 
-        pumpCoFactory.setPumpCoOfficerEOA(officerAddress);
-        pumpCoFactory.setPumpCoOfficerName(pumpCoOfficerName);
-        pumpCoFactory.setPumpCoOfficerContact(pumpCoOfficerContact);
-        pumpCoFactory.setPumpCoOfficerTitle(pumpCoOfficerTitle);
+        // Deploy test meme token
+        MockERC20 memeToken = new MockERC20("Test Token", "TEST", 9);
 
-        (
-            address pumpCorp,
-            address parentAuth,
-            address parentIssuance,
-            address parentDealMgr,
-            address parentRoundMgr
-        ) = pumpCoFactory.createPumpCorp(
-            // TODO WIP: update for production
-            bytes32(keccak256("Test2 PumpCo LLC")),
-            "Test PumpCo LLC",
-            "limited liability company",
-            "Delaware",
-            "test@parentco.example",
-            "binding arbitration",
-            corpPayable
-        );
-
-        // Escrow signature bytes for parent signing path (placeholder/test value).
-        // TODO WIP: update for production
-        bytes memory parentEscrowSig = hex"73f62ac9b08c813401a02a16a920a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1a";
-        pumpCoFactory.setPumpCoSignatureHash(parentEscrowSig);
-
-        CyberAgreementRegistry registry = CyberAgreementRegistry(
-            deployment.cyberAgreementRegistry
-        );
-
-        // Create (or no-op if already present) templates used by deployCorpContractFor.
-        // TODO WIP: update for production
-        bytes32 segCoTemplateId = keccak256("PumpCo.Test2.SegCo.v1");
-        bytes32 boardConsentTemplateId = keccak256(
-            "PumpCo.Test2.BoardConsent.v1"
-        );
-
-        string[] memory globalFields = new string[](8);
-        globalFields[0] = "founderName";
-        globalFields[1] = "enterpriseName";
-        globalFields[2] = "companyName";
-        globalFields[3] = "companyType";
-        globalFields[4] = "companyJurisdiction";
-        globalFields[5] = "companyContactDetails";
-        globalFields[6] = "tokenSymbol";
-        globalFields[7] = "tokenName";
-
-        string[] memory partyFields = new string[](2);
-        partyFields[0] = "name";
-        partyFields[1] = "contactDetails";
-
-        try
-            registry.createTemplate(
-                segCoTemplateId,
-                "PumpCo Test SegCo Agreement",
-                "ipfs://parentco-test-segco-template",
-                globalFields,
-                partyFields
-            )
-        {} catch {}
-
-        try
-            registry.createTemplate(
-                boardConsentTemplateId,
-                "PumpCo Test Board Consent",
-                "ipfs://parentco-test-board-consent-template",
-                globalFields,
-                partyFields
-            )
-        {} catch {}
-
-        // Build SubCorp inputs matching PumpCoFactory's strict field checks.
+        // Build SubCorp inputs matching PumpCorpFactory's strict field checks.
         // TODO WIP: update for production
         uint256 subCorpSalt = uint256(keccak256("PumpCo.Test2.SubCorp.v1"));
         string memory subCompanyName = "Test SubCo SPV 1";
@@ -143,82 +87,119 @@ contract DeployPumpCoFactoryScript is Script {
         string memory subDisputeResolution = "binding arbitration";
 
         // TODO WIP: update for production
-        string[] memory globalValues = new string[](8);
-        globalValues[0] = "Test Founder";
-        globalValues[1] = "Test PumpCo Enterprise";
-        globalValues[2] = subCompanyName;
-        globalValues[3] = subCompanyType;
-        globalValues[4] = subCompanyJurisdiction;
-        globalValues[5] = subCompanyContact;
-        globalValues[6] = "TSC1";
-        globalValues[7] = "Test SubCo One";
-
-        // TODO WIP: update for production
         string[] memory partyValues = new string[](2);
-        partyValues[0] = "Test Deployer Officer";
-        partyValues[1] = "deployer@parentco.example";
+        partyValues[0] = "Test Founder";
+        partyValues[1] = "test@company.com";
 
         // TODO WIP: update for production
-        CompanyOfficer memory subOfficer = CompanyOfficer({
-            eoa: deployerAddress,
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: officerAddress,
             name: partyValues[0],
             contact: partyValues[1],
             title: "Founder"
         });
 
-        // Pre-compute agreement id and signer signature expected by signContractFor.
-        address[] memory agreementParties = new address[](2);
-        agreementParties[0] = officerAddress;
-        agreementParties[1] = deployerAddress;
-        bytes32 agreementId = keccak256(
-            abi.encode(segCoTemplateId, subCorpSalt, globalValues, agreementParties)
-        );
+        // (5) Fill sub corp round info
 
-        (
-            string memory legalContractUri,
-            ,
-            string[] memory templateGlobalFields,
-            string[] memory templatePartyFields
-        ) = registry.getTemplateDetails(segCoTemplateId);
+        string[] memory roundLegalDetails = new string[](1);
+        roundLegalDetails[0] = "Legal Details";
 
-        bytes memory deployerSignature = CyberAgreementUtils.signAgreementTypedData(
-            vm,
-            registry.DOMAIN_SEPARATOR(),
-            registry.SIGNATUREDATA_TYPEHASH(),
-            agreementId,
-            legalContractUri,
-            templateGlobalFields,
-            templatePartyFields,
-            globalValues,
-            partyValues,
+        bytes[] memory roundExtensionData = new bytes[](1);
+        roundExtensionData[0] = "";
+
+        CyberCertData[] memory roundCertData = new CyberCertData[](1);
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Legend";
+        roundCertData[0] = CyberCertData({
+            name: "CyberCorp",
+            symbol: "CC",
+            uri: "ipfs://certificate",
+            securityClass: SecurityClass.SAFE,
+            securitySeries: SecuritySeries.SeriesA,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+
+        string[] memory roundFirstPartyValues = new string[](5);
+        roundFirstPartyValues[0] = "Investor 1"; // name
+        roundFirstPartyValues[1] = "0xINVESTOR"; // evmAddress (string form)
+        roundFirstPartyValues[2] = "email"; // contactDetails
+        roundFirstPartyValues[3] = "Individual"; // investorType
+        roundFirstPartyValues[4] = "US"; // investorJurisdiction
+
+        // Predict corp and round manager addresses to build a valid escrow signature
+        uint256 corpSaltUint = block.timestamp + 1;
+        bytes32 corpSalt = keccak256(abi.encodePacked(corpSaltUint));
+        address predictedCorp = CyberCorpSingleFactory(deployment.cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt);
+        address predictedRM = RoundManagerFactory(deployment.roundManagerFactory).computeRoundManagerAddress(corpSalt);
+
+        // Define shared round parameters
+        SecuritySeries roundSeriesType = SecuritySeries.SeriesA;
+        uint256 roundRaiseCap = 100000000000;
+        uint256 roundMinTicket = 1;
+        uint256 roundMaxTicket = 10000000;
+        RoundType roundType = RoundType.FCFS;
+        uint256 roundStartTime = block.timestamp - 1;
+        uint256 roundEndTime = block.timestamp + 21 days;
+        bytes32 roundTemplateId = bytes32(uint256(1));
+        address roundPaymentToken = address(memeToken);
+        uint256 roundPricePerUnit = 1000;
+        uint256 roundValuation = 1000000000000000;
+
+        bytes memory escrowedSig = _computeEscrowSignature(
+            predictedRM,
+            roundSeriesType,
+            roundRaiseCap,
+            roundMinTicket,
+            roundMaxTicket,
+            roundType,
+            roundStartTime,
+            roundEndTime,
+            roundTemplateId,
+            roundPaymentToken,
+            roundPricePerUnit,
+            roundValuation,
+            predictedCorp,
             deployerPrivateKey
         );
 
+        // Deploy another CyberCorp and create a public round using SAFE template id 1
         (
-            address subCorp,
-            address subAuth,
-            address subIssuance,
-            address subDealMgr,
-            address subRoundMgr,
-            address[] memory subCertPrinters,
-            bytes32 subAgreementId,
-            uint256[] memory subCertIds
-        ) = pumpCoFactory.deployCorpContractFor(
-                subCorpSalt,
-                subCompanyName,
-                subCompanyType,
-                subCompanyJurisdiction,
-                subCompanyContact,
-                subDisputeResolution,
-                corpPayable,
-                subOfficer,
-                segCoTemplateId,
-                boardConsentTemplateId,
-                globalValues,
-                partyValues,
-                deployerSignature,
-                deployerAddress
-            );
+            address corp,
+            address corpAuth,
+            address issuance,
+            address dealManager,
+            address roundManager,
+            bytes32 roundId
+        ) = pumpCorpFactory.deployCyberCorpAndCreateRound(
+            corpSaltUint, // salt
+            roundSeriesType, // seriesType
+            "SafeCorp", // companyName
+            "Limited Liability Company", // companyType
+            "DE", // companyJurisdiction
+            "contact@corp.example", // companyContactDetails
+            "arbitration", // defaultDisputeResolution
+            corpPayable, // _companyPayable
+            officer, // _officer
+            roundLegalDetails, // legalDetails
+            roundExtensionData, // extensionData
+            roundCertData, // certData
+            roundTemplateId, // roundTemplateId
+            roundPaymentToken, // paymentToken
+            roundPricePerUnit, // pricePerUnit
+            roundValuation, // valuation
+            roundFirstPartyValues, // roundPartyValues
+            escrowedSig, // escrowedSignature
+            roundType, // roundType
+            new address[](0), // conditions
+            roundRaiseCap, // raiseCap
+            roundMinTicket, // minTicket
+            roundMaxTicket, // maxTicket
+            roundStartTime, // startTime
+            roundEndTime, // endTime
+            true, // publicRound
+            true // allowTimedOffers
+        );
 
         auth.updateRole(officerAddress, auth.OWNER_ROLE());
         auth.updateRole(corpPayable, auth.OWNER_ROLE());
@@ -233,22 +214,73 @@ contract DeployPumpCoFactoryScript is Script {
         console2.log("DealManagerFactory:", deployment.dealManagerFactory);
         console2.log("RoundManagerFactory:", deployment.roundManagerFactory);
         console2.log("CertificateUriBuilder:", deployment.uriBuilder);
-        console2.log("PumpCoFactory (proxy):", address(pumpCoFactory));
-        console2.log("PumpCorp:", pumpCorp);
-        console2.log("ParentAuth:", parentAuth);
-        console2.log("ParentIssuance:", parentIssuance);
-        console2.log("ParentDealMgr:", parentDealMgr);
-        console2.log("ParentRoundMgr:", parentRoundMgr);
-        console2.log("SubCorp:", subCorp);
-        console2.log("SubAuth:", subAuth);
-        console2.log("SubIssuance:", subIssuance);
-        console2.log("SubDealMgr:", subDealMgr);
-        console2.log("SubRoundMgr:", subRoundMgr);
-        console2.log("SubAgreementId:");
-        console2.logBytes32(subAgreementId);
-        console2.log("SubCertPrinters count:", subCertPrinters.length);
-        console2.log("SubCertIds count:", subCertIds.length);
+        console2.log("PumpCorpFactory (proxy):", address(pumpCorpFactory));
 
         vm.stopBroadcast();
+    }
+
+    function _computeEscrowSignature(
+        address roundManager,
+        SecuritySeries seriesType,
+        uint256 raiseCap,
+        uint256 minTicket,
+        uint256 maxTicket,
+        RoundType roundType,
+        uint256 startTime,
+        uint256 endTime,
+        bytes32 templateId,
+        address paymentToken,
+        uint256 pricePerUnit,
+        uint256 valuation,
+        address companyAddress,
+        uint256 signerPrivKey
+    ) internal view returns (bytes memory sig) {
+        bytes32 roundId = keccak256(
+            abi.encodePacked(
+                seriesType,
+                raiseCap,
+                minTicket,
+                maxTicket,
+                uint8(roundType),
+                startTime,
+                endTime,
+                templateId,
+                paymentToken,
+                pricePerUnit,
+                valuation,
+                companyAddress
+            )
+        );
+
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                EIP712_DOMAIN_TYPEHASH,
+                keccak256(bytes("RoundManager")),
+                keccak256(bytes("1")),
+                block.chainid,
+                roundManager
+            )
+        );
+        bytes32 structHash = keccak256(
+            abi.encode(
+                ESCROWEDSIGNATUREDATA_TYPEHASH,
+                roundId,
+                uint8(seriesType),
+                raiseCap,
+                minTicket,
+                maxTicket,
+                uint8(roundType),
+                startTime,
+                endTime,
+                templateId,
+                paymentToken,
+                pricePerUnit,
+                valuation,
+                companyAddress
+            )
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivKey, digest);
+        sig = abi.encodePacked(r, s, v);
     }
 }
