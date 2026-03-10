@@ -137,8 +137,8 @@ contract DeployPumpCorpFactoryScript is Script {
         });
 
         string[] memory roundFirstPartyValues = new string[](5);
-        roundFirstPartyValues[0] = "Founder"; // name
-        roundFirstPartyValues[1] = "0xFOUNDER"; // evmAddress (string form)
+        roundFirstPartyValues[0] = officer.name; // name
+        roundFirstPartyValues[1] = vm.toString(officer.eoa); // evmAddress (string form)
         roundFirstPartyValues[2] = "email@founder.net"; // contactDetails
         roundFirstPartyValues[3] = "Individual"; // investorType
         roundFirstPartyValues[4] = "US"; // investorJurisdiction

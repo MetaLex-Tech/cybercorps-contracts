@@ -43,6 +43,7 @@ pragma solidity 0.8.28;
 
 import "./interfaces/IIssuanceManagerFactory.sol";
 import "./libs/auth.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
@@ -76,9 +77,11 @@ interface ICyberCorpLocal {
 }
 
 contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
+    using Strings for string;
     using RoundLib for Round;
     error InvalidSalt();
     error RoundManagerAlreadyExists();
+    error GlobalOrPartyValuesMismatch();
 
     address public registryAddress;
     address public issuanceManagerFactory;
@@ -423,10 +426,18 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
 //            uint256[] memory certIds
         )
     {
-        // TODO WIP: review needed
-        address deployer = msg.sender;
+        // Validation
 
-        // (1) Deploy corp
+        // TODO WIP: review needed: are we sure all templates potentially being used
+        //  share the same partyFields structures as following:
+        if (roundPartyValues.length < 2
+            || !roundPartyValues[0].equal(_officer.name)
+            || roundPartyValues[1].parseAddress() != _officer.eoa
+        ) {
+            revert GlobalOrPartyValuesMismatch();
+        }
+
+        // Create corp
 
         //create bytes32 salt
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
@@ -448,7 +459,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             _officer
         );
 
-        // (2) Deploy Round
+        // Create Round
 
         bytes32 rmSalt = keccak256(abi.encodePacked("round", salt));
 
