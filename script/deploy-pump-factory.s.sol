@@ -28,7 +28,8 @@ contract DeployPumpCorpFactoryScript is Script {
     function run() public returns (PumpCorpFactory pumpCorpFactory) {
         return
             runWithArgs(
-                vm.envUint("PRIVATE_KEY_MAIN"),
+                vm.envUint("PRIVATE_KEY_MAIN"), // deployerPrivateKey
+                vm.envUint("PRIVATE_KEY_MAIN"), // founderPrivateKey
 
                 // TODO WIP: update for production
                 0x5ff4e90Efa2B88cf3cA92D63d244a78a88219Abf, // test corp payable
@@ -38,19 +39,38 @@ contract DeployPumpCorpFactoryScript is Script {
 
     function runWithArgs(
         uint256 deployerPrivateKey,
+        uint256 founderPrivateKey,
         address corpPayable,
         address officerAddress
     ) public returns (PumpCorpFactory pumpCorpFactory) {
+        address deployerAddress = vm.addr(deployerPrivateKey);
+        string memory saltStr = "PumpCorpFactory.deploy.v1";
+        bytes32 salt = bytes32(keccak256(bytes(saltStr)));
+
         // TODO WIP: update for production
         DeploymentConstants.CoreDeployment memory deployment = DeploymentConstants
             .coreV2(DeploymentConstants.ETH_SEPOLIA);
 
+        console2.log("==== Configs ====");
+        console2.log("salt string: %s", saltStr);
+        console2.log("deployer: %s", deployerAddress);
+        console2.log("founder: %s", vm.addr(founderPrivateKey));
+        console2.log("corpPayable: %s", corpPayable);
+        console2.log("officerAddress: %s", officerAddress);
+        console2.log(
+            "CyberAgreementRegistry:",
+            deployment.cyberAgreementRegistry
+        );
+        console2.log("IssuanceManagerFactory:", deployment.issuanceManagerFactory);
+        console2.log("CyberCorpSingleFactory:", deployment.cyberCorpSingleFactory);
+        console2.log("DealManagerFactory:", deployment.dealManagerFactory);
+        console2.log("RoundManagerFactory:", deployment.roundManagerFactory);
+        console2.log("CertificateUriBuilder:", deployment.uriBuilder);
+        console2.log("");
+
         CyberAgreementRegistry registry = CyberAgreementRegistry(
             deployment.cyberAgreementRegistry
         );
-
-        address deployerAddress = vm.addr(deployerPrivateKey);
-        bytes32 salt = bytes32(keccak256("PumpCorpFactory.deploy.v1"));
 
         vm.startBroadcast(deployerPrivateKey);
 
@@ -79,23 +99,19 @@ contract DeployPumpCorpFactoryScript is Script {
 
         // Build SubCorp inputs matching PumpCorpFactory's strict field checks.
         // TODO WIP: update for production
-        uint256 subCorpSalt = uint256(keccak256("PumpCo.Test2.SubCorp.v1"));
-        string memory subCompanyName = "Test SubCo SPV 1";
-        string memory subCompanyType = "series limited liability company";
-        string memory subCompanyJurisdiction = "Delaware";
-        string memory subCompanyContact = "subco@parentco.example";
-        string memory subDisputeResolution = "binding arbitration";
-
-        // TODO WIP: update for production
-        string[] memory partyValues = new string[](2);
-        partyValues[0] = "Test Founder";
-        partyValues[1] = "test@company.com";
+        uint256 corpSaltUint = block.timestamp + 1;
+        bytes32 corpSalt = keccak256(abi.encodePacked(corpSaltUint));
+        string memory companyName = "Test SubCo SPV 1";
+        string memory companyType = "series limited liability company";
+        string memory companyJurisdiction = "Delaware";
+        string memory companyContact = "subco@parentco.example";
+        string memory disputeResolution = "binding arbitration";
 
         // TODO WIP: update for production
         CompanyOfficer memory officer = CompanyOfficer({
             eoa: officerAddress,
-            name: partyValues[0],
-            contact: partyValues[1],
+            name: "Test Founder",
+            contact: "test@company.com",
             title: "Founder"
         });
 
@@ -121,15 +137,13 @@ contract DeployPumpCorpFactoryScript is Script {
         });
 
         string[] memory roundFirstPartyValues = new string[](5);
-        roundFirstPartyValues[0] = "Investor 1"; // name
-        roundFirstPartyValues[1] = "0xINVESTOR"; // evmAddress (string form)
-        roundFirstPartyValues[2] = "email"; // contactDetails
+        roundFirstPartyValues[0] = "Founder"; // name
+        roundFirstPartyValues[1] = "0xFOUNDER"; // evmAddress (string form)
+        roundFirstPartyValues[2] = "email@founder.net"; // contactDetails
         roundFirstPartyValues[3] = "Individual"; // investorType
         roundFirstPartyValues[4] = "US"; // investorJurisdiction
 
         // Predict corp and round manager addresses to build a valid escrow signature
-        uint256 corpSaltUint = block.timestamp + 1;
-        bytes32 corpSalt = keccak256(abi.encodePacked(corpSaltUint));
         address predictedCorp = CyberCorpSingleFactory(deployment.cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt);
         address predictedRM = RoundManagerFactory(deployment.roundManagerFactory).computeRoundManagerAddress(corpSalt);
 
@@ -141,10 +155,28 @@ contract DeployPumpCorpFactoryScript is Script {
         RoundType roundType = RoundType.FCFS;
         uint256 roundStartTime = block.timestamp - 1;
         uint256 roundEndTime = block.timestamp + 21 days;
-        bytes32 roundTemplateId = bytes32(uint256(1));
+        bytes32 roundTemplateId = bytes32(uint256(1)); // SAFE
         address roundPaymentToken = address(memeToken);
         uint256 roundPricePerUnit = 1000;
         uint256 roundValuation = 1000000000000000;
+
+        // TODO test: print SAFE template details
+//        {
+//            (
+//                string memory legalContractUri,
+//                string memory title,
+//                string[] memory globalFields,
+//                string[] memory partyFields
+//            ) = registry.getTemplateDetails(roundTemplateId);
+//            console2.log("legalContractUri: %s", legalContractUri);
+//            console2.log("title: %s", title);
+//            for (uint256 i = 0; i < globalFields.length; i++) {
+//                console2.log("globalFields[%d]: %s", i, globalFields[i]);
+//            }
+//            for (uint256 i = 0; i < partyFields.length; i++) {
+//                console2.log("partyFields[%d]: %s", i, partyFields[i]);
+//            }
+//        }
 
         bytes memory escrowedSig = _computeEscrowSignature(
             predictedRM,
@@ -160,7 +192,7 @@ contract DeployPumpCorpFactoryScript is Script {
             roundPricePerUnit,
             roundValuation,
             predictedCorp,
-            deployerPrivateKey
+            founderPrivateKey
         );
 
         // Deploy another CyberCorp and create a public round using SAFE template id 1
@@ -174,11 +206,11 @@ contract DeployPumpCorpFactoryScript is Script {
         ) = pumpCorpFactory.deployCyberCorpAndCreateRound(
             corpSaltUint, // salt
             roundSeriesType, // seriesType
-            "SafeCorp", // companyName
-            "Limited Liability Company", // companyType
-            "DE", // companyJurisdiction
-            "contact@corp.example", // companyContactDetails
-            "arbitration", // defaultDisputeResolution
+            companyName,
+            companyType,
+            companyJurisdiction,
+            companyContact,
+            disputeResolution,
             corpPayable, // _companyPayable
             officer, // _officer
             roundLegalDetails, // legalDetails
@@ -204,16 +236,9 @@ contract DeployPumpCorpFactoryScript is Script {
         auth.updateRole(officerAddress, auth.OWNER_ROLE());
         auth.updateRole(corpPayable, auth.OWNER_ROLE());
 
+        console2.log("==== Deployed ====");
+        console2.log("Test MEME token:", address(memeToken));
         console2.log("Auth:", address(auth));
-        console2.log(
-            "CyberAgreementRegistry:",
-            deployment.cyberAgreementRegistry
-        );
-        console2.log("IssuanceManagerFactory:", deployment.issuanceManagerFactory);
-        console2.log("CyberCorpSingleFactory:", deployment.cyberCorpSingleFactory);
-        console2.log("DealManagerFactory:", deployment.dealManagerFactory);
-        console2.log("RoundManagerFactory:", deployment.roundManagerFactory);
-        console2.log("CertificateUriBuilder:", deployment.uriBuilder);
         console2.log("PumpCorpFactory (proxy):", address(pumpCorpFactory));
 
         vm.stopBroadcast();
