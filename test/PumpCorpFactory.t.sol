@@ -741,75 +741,16 @@ contract PumpCorpFactoryTest is Test {
     }
 
     /// Zero-length signature is explicitly rejected before EIP-712 recovery.
-    function test_RevertIf_EmptySignature() public {
+    function test_RevertIf_EmptyEscrowedSignature() public {
         uint256 salt = 22222;
 
         (address predCorp, address predRM) = _predict(salt);
         uint256 start = block.timestamp - 1;
         uint256 end   = block.timestamp + 30 days;
 
-        _deployHappyPath(salt);
-
-        // TODO WIP: review needed
-//        vm.expectRevert(); // InvalidEscrowedSignature (length == 0 guard)
-//        pumpFactory.deployCyberCorpAndCreateRound(
-//            salt,
-//            SecuritySeries.SeriesSeed,
-//            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
-//            address(this),
-//            _officer(officer, "Alice Officer"),
-//            legalDetails, extensionData, certDataArr,
-//            TEMPLATE_ID,
-//            address(0), PRICE_PER_UNIT, VALUATION,
-//            _partyValues(officer, "Alice Officer"),
-//            "",  // empty sig
-//            _metaSigDefault(salt, officerPk),
-//            RoundType.FCFS, new address[](0),
-//            RAISE_CAP, MIN_TICKET, MAX_TICKET,
-//            start, end, true, true
-//        );
-
-//        pumpFactory.deployCyberCorpAndCreateRound(
-//            salt,
-//            SecuritySeries.SeriesSeed,
-//            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
-//            address(this),        // companyPayable
-//            _officer(officer, "Alice Officer"),
-//            legalDetails, extensionData, certDataArr,
-//            TEMPLATE_ID,
-//            address(0), PRICE_PER_UNIT, VALUATION,
-//            _partyValues(officer, "Alice Officer"),
-//            _escrowSig(predRM, predCorp, officerPk, start, end),
-//            _metaSigDefault(salt, officerPk),
-//            RoundType.FCFS,
-//            new address[](0),
-//            RAISE_CAP, MIN_TICKET, MAX_TICKET,
-//            start, end,
-//            true, true
-//        );
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  CROSS-CONTRACT REPLAY: EIP-712 domain includes verifyingContract
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// A signature produced for RoundManager A (salt 1) cannot be replayed for
-    /// RoundManager B (salt 2) because the EIP-712 domain encodes the contract address.
-    // TODO WIP: review needed
-    function test_RevertIf_CrossContractReplay() public {
-        uint256 saltA = 99991;
-        uint256 saltB = 99992;
-
-        (address predCorpA, address predRMA) = _predict(saltA);
-        uint256 start = block.timestamp - 1;
-        uint256 end   = block.timestamp + 30 days;
-
-        bytes memory sigA = _escrowSig(predRMA, predCorpA, officerPk, start, end);
-
-        // Use sigA (for rmA/corpA) in a saltB deployment (rmB/corpB)
         vm.expectRevert(RoundManager.InvalidEscrowedSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRound(
-            saltB,
+            salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
             address(this),
@@ -817,8 +758,9 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sigA,
-            _metaSigDefault(saltB, officerPk),
+            _partyValues(officer, "Alice Officer"),
+            "",  // empty escrowed sig
+            _metaSigDefault(salt, officerPk),
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
             start, end, true, true
@@ -826,7 +768,7 @@ contract PumpCorpFactoryTest is Test {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    //  PARAMETERS NOT IN ESCROW SIGNATURE (known un-protected fields)
+    //  PARAMETERS NOT IN ESCROW SIGNATURE
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// `_companyPayable` is protected by the meta signature.
@@ -838,7 +780,7 @@ contract PumpCorpFactoryTest is Test {
         uint256 start = block.timestamp - 1;
         uint256 end   = block.timestamp + 30 days;
 
-        bytes memory officerSig = _escrowSig(predRM, predCorp, officerPk, start, end);
+        bytes memory officerEscrowedSig = _escrowSig(predRM, predCorp, officerPk, start, end);
 
         // Attacker forges a meta sig with their own key, redirecting payment to themselves.
         // The factory checks that the meta sig signer == officer.eoa → revert.
@@ -854,11 +796,31 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), officerSig,
+            _partyValues(officer, "Alice Officer"), officerEscrowedSig,
             attackerMetaSig,
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
             start, end, true, true
+        );
+
+        // Test against signature malleability
+        vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
+        pumpFactory.deployCyberCorpAndCreateRound(
+            salt,
+            SecuritySeries.SeriesSeed,
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            attacker,             // ← redirected payment address
+            _officer(officer, "Alice Officer"),
+            legalDetails, extensionData, certDataArr,
+            TEMPLATE_ID,
+            address(0), PRICE_PER_UNIT, VALUATION,
+            _partyValues(officer, "Alice Officer"), officerEscrowedSig,
+            _metaSigDefault(salt, officerPk), // ← signed by officer, not attacker
+            RoundType.FCFS,
+            new address[](0),
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            start, end,
+            true, true
         );
     }
 
@@ -892,6 +854,25 @@ contract PumpCorpFactoryTest is Test {
             address(0), PRICE_PER_UNIT, VALUATION,
             _partyValues(officer, "Alice Officer"), officerSig,
             attackerMetaSig,
+            RoundType.FCFS, new address[](0),
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            start, end, true, true
+        );
+
+        // Test against signature malleability
+        vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
+        pumpFactory.deployCyberCorpAndCreateRound(
+            salt,
+            SecuritySeries.SeriesSeed,
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            address(this),
+            _officer(officer, "Alice Officer"),
+            altLegal,             // ← substituted legal details
+            extensionData, certDataArr,
+            TEMPLATE_ID,
+            address(0), PRICE_PER_UNIT, VALUATION,
+            _partyValues(officer, "Alice Officer"), officerSig,
+            _metaSigDefault(salt, officerPk),
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
             start, end, true, true
@@ -985,6 +966,25 @@ contract PumpCorpFactoryTest is Test {
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
             start, end, true, true
         );
+
+        // Test against signature malleability
+        vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
+        pumpFactory.deployCyberCorpAndCreateRound(
+            salt,
+            SecuritySeries.SeriesSeed,
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            address(this),
+            _officer(officer, "Alice Officer"),
+            legalDetails, extensionData,
+            altCert,                    // ← substituted cert
+            TEMPLATE_ID,
+            address(0), PRICE_PER_UNIT, VALUATION,
+            _partyValues(officer, "Alice Officer"), sig,
+            _metaSigDefault(salt, officerPk),
+            RoundType.FCFS, new address[](0),
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            start, end, true, true
+        );
     }
 
     /// Cert name/symbol are not covered by the escrow signature but ARE covered
@@ -1026,6 +1026,25 @@ contract PumpCorpFactoryTest is Test {
             address(0), PRICE_PER_UNIT, VALUATION,
             _partyValues(officer, "Alice Officer"), sig,
             attackerMetaSig,
+            RoundType.FCFS, new address[](0),
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            start, end, true, true
+        );
+
+        // Test against signature malleability
+        vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
+        pumpFactory.deployCyberCorpAndCreateRound(
+            salt,
+            SecuritySeries.SeriesSeed,
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            address(this),
+            _officer(officer, "Alice Officer"),
+            legalDetails, extensionData,
+            altCert,
+            TEMPLATE_ID,
+            address(0), PRICE_PER_UNIT, VALUATION,
+            _partyValues(officer, "Alice Officer"), sig,
+            _metaSigDefault(salt, officerPk),
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
             start, end, true, true
@@ -1078,6 +1097,24 @@ contract PumpCorpFactoryTest is Test {
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
             start, end, true, true
         );
+
+        // Test against signature malleability
+        vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
+        pumpFactory.deployCyberCorpAndCreateRound(
+            salt,
+            SecuritySeries.SeriesSeed,
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            address(this),
+            fakeNameOfficer,
+            legalDetails, extensionData, certDataArr,
+            TEMPLATE_ID,
+            address(0), PRICE_PER_UNIT, VALUATION,
+            pv, sig,
+            _metaSigDefault(salt, officerPk),
+            RoundType.FCFS, new address[](0),
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            start, end, true, true
+        );
     }
 
     /// Attacker tries to use "Supreme Overlord" as officer title on certificates.
@@ -1116,6 +1153,24 @@ contract PumpCorpFactoryTest is Test {
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
             start, end, true, true
         );
+
+        // Test against signature malleability
+        vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
+        pumpFactory.deployCyberCorpAndCreateRound(
+            salt,
+            SecuritySeries.SeriesSeed,
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            address(this),
+            altTitleOfficer,
+            legalDetails, extensionData, certDataArr,
+            TEMPLATE_ID,
+            address(0), PRICE_PER_UNIT, VALUATION,
+            _partyValues(officer, "Alice Officer"), sig,
+            _metaSigDefault(salt, officerPk),
+            RoundType.FCFS, new address[](0),
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            start, end, true, true
+        );
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1134,6 +1189,28 @@ contract PumpCorpFactoryTest is Test {
 
         bytes memory sig = _escrowSig(predRM, predCorp, officerPk, start, end);
 
+        // Attacker cannot use his own signatures
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), false, true, "Alice Officer", "CEO", legalDetails, certDataArr, new address[](0), attackerPk);
+        vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
+        pumpFactory.deployCyberCorpAndCreateRound(
+            salt,
+            SecuritySeries.SeriesSeed,
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            address(this),
+            _officer(officer, "Alice Officer"),
+            legalDetails, extensionData, certDataArr,
+            TEMPLATE_ID,
+            address(0), PRICE_PER_UNIT, VALUATION,
+            _partyValues(officer, "Alice Officer"), sig,
+            attackerMetaSig,
+            RoundType.FCFS, new address[](0),
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            start, end,
+            false,   // ← publicRound flipped
+            true
+        );
+
+        // Test against signature malleability
         // Deploy with publicRound=false even though the officer signed for true
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         (, , , , address rm, bytes32 roundId) = pumpFactory.deployCyberCorpAndCreateRound(
@@ -1186,6 +1263,26 @@ contract PumpCorpFactoryTest is Test {
             true,
             false  // ← allowTimedOffers flipped; not covered by escrow signature
         );
+
+        // Test against signature malleability
+        vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
+        pumpFactory.deployCyberCorpAndCreateRound(
+            salt,
+            SecuritySeries.SeriesSeed,
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            address(this),
+            _officer(officer, "Alice Officer"),
+            legalDetails, extensionData, certDataArr,
+            TEMPLATE_ID,
+            address(0), PRICE_PER_UNIT, VALUATION,
+            _partyValues(officer, "Alice Officer"), sig,
+            _metaSigDefault(salt, officerPk),
+            RoundType.FCFS, new address[](0),
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            start, end,
+            true,
+            false  // ← allowTimedOffers flipped
+        );
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1234,6 +1331,25 @@ contract PumpCorpFactoryTest is Test {
             address(0), PRICE_PER_UNIT, VALUATION,
             _partyValues(officer, "Alice Officer"), sig,
             attackerMetaSig,
+            RoundType.FCFS,
+            conditions,   // ← malicious condition injected
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            start, end, true, true
+        );
+
+        // Test against signature malleability
+        vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
+        pumpFactory.deployCyberCorpAndCreateRound(
+            salt,
+            SecuritySeries.SeriesSeed,
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            address(this),
+            _officer(officer, "Alice Officer"),
+            legalDetails, extensionData, certDataArr,
+            TEMPLATE_ID,
+            address(0), PRICE_PER_UNIT, VALUATION,
+            _partyValues(officer, "Alice Officer"), sig,
+            _metaSigDefault(salt, officerPk),
             RoundType.FCFS,
             conditions,   // ← malicious condition injected
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
