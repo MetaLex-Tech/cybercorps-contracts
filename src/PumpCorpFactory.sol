@@ -89,7 +89,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
     );
     bytes32 private constant ROUND_SUPPLEMENTAL_TYPEHASH = keccak256(
-        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,string officerName,string officerTitle,bytes32 legalDetailsHash,bytes32 certDataHash)"
+        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,string officerName,string officerTitle,bytes32 legalDetailsHash,bytes32 certDataHash,bytes32[] conditionAddresses)"
     );
 
     address public registryAddress;
@@ -307,6 +307,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         string memory officerTitle,
         bytes32 legalDetailsHash,
         bytes32 certDataHash,
+        bytes32[] memory conditionAddresses,
         address signer,
         bytes memory signature
     ) internal view {
@@ -326,7 +327,8 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             keccak256(bytes(officerName)),
             keccak256(bytes(officerTitle)),
             legalDetailsHash,
-            certDataHash
+            certDataHash,
+            conditionAddresses
         ));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));
         if (ECDSA.recover(digest, signature) != signer) revert InvalidMetadataSignature();
@@ -486,6 +488,10 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         //create bytes32 salt
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
 
+        bytes32[] memory conditionHashes = new bytes32[](conditions.length);
+        for (uint256 i = 0; i < conditions.length; i++) {
+            conditionHashes[i] = keccak256(abi.encode(conditions[i]));
+        }
         _verifySupplementalSignature(
             corpSalt,
             _companyPayable,
@@ -495,6 +501,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             _officer.title,
             keccak256(abi.encode(legalDetails)),
             keccak256(abi.encode(certData)),
+            conditionHashes,
             _officer.eoa,
             metadataSignature
         );
