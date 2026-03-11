@@ -503,6 +503,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             keccak256(abi.encode(certData)),
             conditionHashes,
             _officer.eoa,
+            // TODO WIP: should have officer.contact as well
             metadataSignature
         );
 
