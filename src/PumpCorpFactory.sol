@@ -92,7 +92,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         "CompanyOfficer(address eoa,string name,string contact,string title)"
     );
     bytes32 private constant ROUND_SUPPLEMENTAL_TYPEHASH = keccak256(
-        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,CompanyOfficer officer,bytes32 legalDetailsHash,bytes32 certDataHash,bytes32[] conditionAddresses)CompanyOfficer(address eoa,string name,string contact,string title)"
+        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,CompanyOfficer officer,string companyName,string companyType,string companyJurisdiction,string companyContactDetails,string defaultDisputeResolution,bytes32 extensionDataHash,bytes32 roundPartyValuesHash,bytes32 legalDetailsHash,bytes32 certDataHash,bytes32[] conditionAddresses)CompanyOfficer(address eoa,string name,string contact,string title)"
     );
 
     address public registryAddress;
@@ -307,6 +307,13 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         bool publicRound,
         bool allowTimedOffers,
         CompanyOfficer memory officer,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        bytes32 extensionDataHash,
+        bytes32 roundPartyValuesHash,
         bytes32 legalDetailsHash,
         bytes32 certDataHash,
         bytes32[] memory conditionAddresses,
@@ -333,6 +340,13 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             publicRound ? uint8(1) : uint8(0),
             allowTimedOffers ? uint8(1) : uint8(0),
             officerHash,
+            keccak256(bytes(companyName)),
+            keccak256(bytes(companyType)),
+            keccak256(bytes(companyJurisdiction)),
+            keccak256(bytes(companyContactDetails)),
+            keccak256(bytes(defaultDisputeResolution)),
+            extensionDataHash,
+            roundPartyValuesHash,
             legalDetailsHash,
             certDataHash,
             conditionAddresses
@@ -435,7 +449,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         );
     }
 
-    function deployCyberCorpAndCreateRound(
+    function deployCyberCorpAndCreateRoundFor(
         uint256 salt,
         SecuritySeries seriesType,
         string memory companyName,
@@ -501,6 +515,13 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             publicRound,
             allowTimedOffers,
             _officer,
+            companyName,
+            companyType,
+            companyJurisdiction,
+            companyContactDetails,
+            defaultDisputeResolution,
+            keccak256(abi.encode(extensionData)),
+            keccak256(abi.encode(roundPartyValues)),
             keccak256(abi.encode(legalDetails)),
             keccak256(abi.encode(certData)),
             conditionHashes,

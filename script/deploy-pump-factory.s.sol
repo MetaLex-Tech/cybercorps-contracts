@@ -238,7 +238,7 @@ contract DeployPumpCorpFactoryScript is Script {
             address dealManager,
             address roundManager,
             bytes32 roundId
-        ) = pumpCorpFactory.deployCyberCorpAndCreateRound(
+        ) = pumpCorpFactory.deployCyberCorpAndCreateRoundFor(
             corpSaltUint, // salt
             roundSeriesType, // seriesType
             companyName,

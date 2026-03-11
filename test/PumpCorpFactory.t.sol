@@ -50,7 +50,7 @@ contract PumpCorpFactoryTest is Test {
         "CompanyOfficer(address eoa,string name,string contact,string title)"
     );
     bytes32 constant ROUND_SUPPLEMENTAL_TYPEHASH = keccak256(
-        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,CompanyOfficer officer,bytes32 legalDetailsHash,bytes32 certDataHash,bytes32[] conditionAddresses)CompanyOfficer(address eoa,string name,string contact,string title)"
+        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,CompanyOfficer officer,string companyName,string companyType,string companyJurisdiction,string companyContactDetails,string defaultDisputeResolution,bytes32 extensionDataHash,bytes32 roundPartyValuesHash,bytes32 legalDetailsHash,bytes32 certDataHash,bytes32[] conditionAddresses)CompanyOfficer(address eoa,string name,string contact,string title)"
     );
 
     // ── Actors ────────────────────────────────────────────────────────────────
@@ -220,6 +220,13 @@ contract PumpCorpFactoryTest is Test {
         bool publicRound,
         bool allowTimedOffers,
         CompanyOfficer memory off,
+        string memory companyName_,
+        string memory companyType_,
+        string memory companyJurisdiction_,
+        string memory companyContactDetails_,
+        string memory defaultDisputeResolution_,
+        bytes[] memory extensionData_,
+        string[] memory roundPartyValues_,
         string[] memory legal,
         CyberCertData[] memory certs,
         address[] memory conditions,
@@ -251,6 +258,13 @@ contract PumpCorpFactoryTest is Test {
             publicRound ? uint8(1) : uint8(0),
             allowTimedOffers ? uint8(1) : uint8(0),
             officerHash,
+            keccak256(bytes(companyName_)),
+            keccak256(bytes(companyType_)),
+            keccak256(bytes(companyJurisdiction_)),
+            keccak256(bytes(companyContactDetails_)),
+            keccak256(bytes(defaultDisputeResolution_)),
+            keccak256(abi.encode(extensionData_)),
+            keccak256(abi.encode(roundPartyValues_)),
             keccak256(abi.encode(legal)),
             keccak256(abi.encode(certs)),
             conditionHashes
@@ -268,6 +282,9 @@ contract PumpCorpFactoryTest is Test {
             true,
             true,
             _officer(officer, "Alice Officer"),
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            extensionData,
+            _partyValues(officer, "Alice Officer"),
             legalDetails,
             certDataArr,
             new address[](0),
@@ -284,7 +301,7 @@ contract PumpCorpFactoryTest is Test {
         uint256 start = block.timestamp - 1;
         uint256 end   = block.timestamp + 30 days;
 
-        (corp, , , , rm, roundId) = pumpFactory.deployCyberCorpAndCreateRound(
+        (corp, , , , rm, roundId) = pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -353,11 +370,11 @@ contract PumpCorpFactoryTest is Test {
         string[] memory fakePv = _partyValues(attacker, fakeOff.name);
 
         // Attacker provides their own valid supplemental sig — the escrow sig still traps them
-        bytes memory attackerMetaSig = _metaSig(salt, attacker, true, true, fakeOff, legalDetails, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, attacker, true, true, fakeOff, "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, fakePv, legalDetails, certDataArr, new address[](0), attackerPk);
 
         // Attacker cannot use his own signatures
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -373,6 +390,9 @@ contract PumpCorpFactoryTest is Test {
                 true,
                 true,
                 _officer(officer, "Alice Officer"),
+                "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+                extensionData,
+                _partyValues(officer, "Alice Officer"),
                 legalDetails,
                 certDataArr,
                 new address[](0),
@@ -388,7 +408,7 @@ contract PumpCorpFactoryTest is Test {
 
         // Test against signature malleability
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -422,10 +442,10 @@ contract PumpCorpFactoryTest is Test {
         string[] memory pv = _partyValues(officer, claimedOff.name);
 
         vm.expectRevert(RoundManager.InvalidEscrowedSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
-            "Fake Corp", "C-Corp", "DE", "fake@corp.com", "Arbitration",
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
             address(this),
             claimedOff,
             legalDetails, extensionData, certDataArr,
@@ -460,7 +480,7 @@ contract PumpCorpFactoryTest is Test {
         pv[1] = attacker.toHexString(); // wrong EOA
 
         vm.expectRevert(PumpCorpFactory.GlobalOrPartyValuesMismatch.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -491,7 +511,7 @@ contract PumpCorpFactoryTest is Test {
         pv[1] = officer.toHexString();
 
         vm.expectRevert(PumpCorpFactory.GlobalOrPartyValuesMismatch.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -521,7 +541,7 @@ contract PumpCorpFactoryTest is Test {
         pv[0] = "Alice Officer";
 
         vm.expectRevert(PumpCorpFactory.GlobalOrPartyValuesMismatch.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -548,7 +568,7 @@ contract PumpCorpFactoryTest is Test {
         bytes memory sig = _escrowSig(predRM, predCorp, officerPk, start, end);
 
         vm.expectRevert(PumpCorpFactory.GlobalOrPartyValuesMismatch.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -582,7 +602,7 @@ contract PumpCorpFactoryTest is Test {
         bytes memory sigA = _escrowSig(predRMA, predCorpA, officerPk, start, end);
 
         vm.expectRevert(RoundManager.InvalidEscrowedSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             saltB,            // different salt → different corp address in RoundManager
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -613,7 +633,7 @@ contract PumpCorpFactoryTest is Test {
         bytes memory sig = _escrowSig(predRM, predCorp, officerPk, start, end);
 
         vm.expectRevert(RoundManager.InvalidEscrowedSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -641,7 +661,7 @@ contract PumpCorpFactoryTest is Test {
         bytes memory sig = _escrowSig(predRM, predCorp, officerPk, start, end);
 
         vm.expectRevert(RoundManager.InvalidEscrowedSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -669,7 +689,7 @@ contract PumpCorpFactoryTest is Test {
         bytes memory sig = _escrowSig(predRM, predCorp, officerPk, start, end);
 
         vm.expectRevert(RoundManager.InvalidEscrowedSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -699,7 +719,7 @@ contract PumpCorpFactoryTest is Test {
         // sig was produced for FCFS
 
         vm.expectRevert(RoundManager.InvalidEscrowedSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -727,7 +747,7 @@ contract PumpCorpFactoryTest is Test {
         bytes memory sig = _escrowSig(predRM, predCorp, officerPk, start, end);
 
         vm.expectRevert(RoundManager.InvalidEscrowedSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -755,7 +775,7 @@ contract PumpCorpFactoryTest is Test {
         uint256 end   = block.timestamp + 30 days;
 
         vm.expectRevert(RoundManager.InvalidEscrowedSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -790,10 +810,10 @@ contract PumpCorpFactoryTest is Test {
 
         // Attacker forges a meta sig with their own key, redirecting payment to themselves.
         // The factory checks that the meta sig signer == officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, attacker, true, true, _officer(officer, "Alice Officer"), legalDetails, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, attacker, true, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, _partyValues(officer, "Alice Officer"), legalDetails, certDataArr, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -811,7 +831,7 @@ contract PumpCorpFactoryTest is Test {
 
         // Test against signature malleability
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -845,10 +865,10 @@ contract PumpCorpFactoryTest is Test {
         altLegal[0] = "Attacker-substituted legal details";
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, _officer(officer, "Alice Officer"), altLegal, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, _partyValues(officer, "Alice Officer"), altLegal, certDataArr, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -867,7 +887,7 @@ contract PumpCorpFactoryTest is Test {
 
         // Test against signature malleability
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -903,7 +923,7 @@ contract PumpCorpFactoryTest is Test {
         bytes memory sig = _escrowSig(predRM, predCorp, officerPk, start, end);
 
         // Should succeed (non-zero corpSalt)
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             0,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -953,10 +973,10 @@ contract PumpCorpFactoryTest is Test {
         });
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, _officer(officer, "Alice Officer"), legalDetails, altCert, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, _partyValues(officer, "Alice Officer"), legalDetails, altCert, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -975,7 +995,7 @@ contract PumpCorpFactoryTest is Test {
 
         // Test against signature malleability
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -1017,10 +1037,10 @@ contract PumpCorpFactoryTest is Test {
         });
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, _officer(officer, "Alice Officer"), legalDetails, altCert, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, _partyValues(officer, "Alice Officer"), legalDetails, altCert, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -1039,7 +1059,7 @@ contract PumpCorpFactoryTest is Test {
 
         // Test against signature malleability
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -1085,10 +1105,10 @@ contract PumpCorpFactoryTest is Test {
         string[] memory pv = _partyValues(officer, "Dr. Impostor");
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, fakeNameOfficer, legalDetails, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, fakeNameOfficer, "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, pv, legalDetails, certDataArr, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -1106,7 +1126,7 @@ contract PumpCorpFactoryTest is Test {
 
         // Test against signature malleability
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -1141,10 +1161,10 @@ contract PumpCorpFactoryTest is Test {
         });
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, altTitleOfficer, legalDetails, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, altTitleOfficer, "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, _partyValues(officer, "Alice Officer"), legalDetails, certDataArr, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -1162,7 +1182,7 @@ contract PumpCorpFactoryTest is Test {
 
         // Test against signature malleability
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -1196,9 +1216,9 @@ contract PumpCorpFactoryTest is Test {
         bytes memory sig = _escrowSig(predRM, predCorp, officerPk, start, end);
 
         // Attacker cannot use his own signatures
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), false, true, _officer(officer, "Alice Officer"), legalDetails, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), false, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, _partyValues(officer, "Alice Officer"), legalDetails, certDataArr, new address[](0), attackerPk);
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -1219,7 +1239,7 @@ contract PumpCorpFactoryTest is Test {
         // Test against signature malleability
         // Deploy with publicRound=false even though the officer signed for true
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        (, , , , address rm, bytes32 roundId) = pumpFactory.deployCyberCorpAndCreateRound(
+        (, , , , address rm, bytes32 roundId) = pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -1249,10 +1269,10 @@ contract PumpCorpFactoryTest is Test {
         bytes memory sig = _escrowSig(predRM, predCorp, officerPk, start, end);
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, false, _officer(officer, "Alice Officer"), legalDetails, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, false, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, _partyValues(officer, "Alice Officer"), legalDetails, certDataArr, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -1272,7 +1292,7 @@ contract PumpCorpFactoryTest is Test {
 
         // Test against signature malleability
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -1318,6 +1338,9 @@ contract PumpCorpFactoryTest is Test {
             true,
             true,
             _officer(officer, "Alice Officer"),
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            extensionData,
+            _partyValues(officer, "Alice Officer"),
             legalDetails,
             certDataArr,
             new address[](0),
@@ -1325,7 +1348,7 @@ contract PumpCorpFactoryTest is Test {
         );
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
@@ -1344,7 +1367,7 @@ contract PumpCorpFactoryTest is Test {
 
         // Test against signature malleability
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
-        pumpFactory.deployCyberCorpAndCreateRound(
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
             SecuritySeries.SeriesSeed,
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
