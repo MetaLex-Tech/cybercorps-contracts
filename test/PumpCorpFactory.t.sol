@@ -46,8 +46,11 @@ contract PumpCorpFactoryTest is Test {
     bytes32 constant FACTORY_DOMAIN_TYPEHASH = keccak256(
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
     );
+    bytes32 constant OFFICER_TYPEHASH = keccak256(
+        "CompanyOfficer(address eoa,string name,string contact,string title)"
+    );
     bytes32 constant ROUND_SUPPLEMENTAL_TYPEHASH = keccak256(
-        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,string officerName,string officerTitle,bytes32 legalDetailsHash,bytes32 certDataHash,bytes32[] conditionAddresses)"
+        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,CompanyOfficer officer,bytes32 legalDetailsHash,bytes32 certDataHash,bytes32[] conditionAddresses)CompanyOfficer(address eoa,string name,string contact,string title)"
     );
 
     // ── Actors ────────────────────────────────────────────────────────────────
@@ -216,8 +219,7 @@ contract PumpCorpFactoryTest is Test {
         address companyPayable,
         bool publicRound,
         bool allowTimedOffers,
-        string memory officerName,
-        string memory officerTitle,
+        CompanyOfficer memory off,
         string[] memory legal,
         CyberCertData[] memory certs,
         address[] memory conditions,
@@ -235,14 +237,20 @@ contract PumpCorpFactoryTest is Test {
             block.chainid,
             address(pumpFactory)
         ));
+        bytes32 officerHash = keccak256(abi.encode(
+            OFFICER_TYPEHASH,
+            off.eoa,
+            keccak256(bytes(off.name)),
+            keccak256(bytes(off.contact)),
+            keccak256(bytes(off.title))
+        ));
         bytes32 structHash = keccak256(abi.encode(
             ROUND_SUPPLEMENTAL_TYPEHASH,
             corpSalt,
             companyPayable,
             publicRound ? uint8(1) : uint8(0),
             allowTimedOffers ? uint8(1) : uint8(0),
-            keccak256(bytes(officerName)),
-            keccak256(bytes(officerTitle)),
+            officerHash,
             keccak256(abi.encode(legal)),
             keccak256(abi.encode(certs)),
             conditionHashes
@@ -259,8 +267,7 @@ contract PumpCorpFactoryTest is Test {
             address(this),
             true,
             true,
-            "Alice Officer",
-            "CEO",
+            _officer(officer, "Alice Officer"),
             legalDetails,
             certDataArr,
             new address[](0),
@@ -346,7 +353,7 @@ contract PumpCorpFactoryTest is Test {
         string[] memory fakePv = _partyValues(attacker, fakeOff.name);
 
         // Attacker provides their own valid supplemental sig — the escrow sig still traps them
-        bytes memory attackerMetaSig = _metaSig(salt, attacker, true, true, "Attacker", "CEO", legalDetails, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, attacker, true, true, fakeOff, legalDetails, certDataArr, new address[](0), attackerPk);
 
         // Attacker cannot use his own signatures
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
@@ -365,8 +372,7 @@ contract PumpCorpFactoryTest is Test {
                 address(this),
                 true,
                 true,
-                "Alice Officer",
-                "CEO",
+                _officer(officer, "Alice Officer"),
                 legalDetails,
                 certDataArr,
                 new address[](0),
@@ -784,7 +790,7 @@ contract PumpCorpFactoryTest is Test {
 
         // Attacker forges a meta sig with their own key, redirecting payment to themselves.
         // The factory checks that the meta sig signer == officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, attacker, true, true, "Alice Officer", "CEO", legalDetails, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, attacker, true, true, _officer(officer, "Alice Officer"), legalDetails, certDataArr, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRound(
@@ -839,7 +845,7 @@ contract PumpCorpFactoryTest is Test {
         altLegal[0] = "Attacker-substituted legal details";
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, "Alice Officer", "CEO", altLegal, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, _officer(officer, "Alice Officer"), altLegal, certDataArr, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRound(
@@ -947,7 +953,7 @@ contract PumpCorpFactoryTest is Test {
         });
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, "Alice Officer", "CEO", legalDetails, altCert, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, _officer(officer, "Alice Officer"), legalDetails, altCert, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRound(
@@ -1011,7 +1017,7 @@ contract PumpCorpFactoryTest is Test {
         });
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, "Alice Officer", "CEO", legalDetails, altCert, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, _officer(officer, "Alice Officer"), legalDetails, altCert, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRound(
@@ -1053,9 +1059,9 @@ contract PumpCorpFactoryTest is Test {
 
     // ═══════════════════════════════════════════════════════════════════════════
     //  OFFICER METADATA PROTECTED BY META SIGNATURE
-    //  officerName and officerTitle are NOT covered by the escrow signature, but
-    //  ARE covered by the meta signature.  An attacker without the officer's key
-    //  cannot substitute them.
+    //  The full officer struct (eoa, name, contact, title) is NOT covered by the
+    //  escrow signature, but IS covered by the meta signature.  An attacker without
+    //  the officer's key cannot substitute any of these fields.
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// Attacker tries to display "Dr. Impostor" on certificates by supplying
@@ -1079,7 +1085,7 @@ contract PumpCorpFactoryTest is Test {
         string[] memory pv = _partyValues(officer, "Dr. Impostor");
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, "Dr. Impostor", "CEO", legalDetails, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, fakeNameOfficer, legalDetails, certDataArr, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRound(
@@ -1135,7 +1141,7 @@ contract PumpCorpFactoryTest is Test {
         });
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, "Alice Officer", "Supreme Overlord", legalDetails, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, altTitleOfficer, legalDetails, certDataArr, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRound(
@@ -1190,7 +1196,7 @@ contract PumpCorpFactoryTest is Test {
         bytes memory sig = _escrowSig(predRM, predCorp, officerPk, start, end);
 
         // Attacker cannot use his own signatures
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), false, true, "Alice Officer", "CEO", legalDetails, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), false, true, _officer(officer, "Alice Officer"), legalDetails, certDataArr, new address[](0), attackerPk);
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRound(
             salt,
@@ -1243,7 +1249,7 @@ contract PumpCorpFactoryTest is Test {
         bytes memory sig = _escrowSig(predRM, predCorp, officerPk, start, end);
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, false, "Alice Officer", "CEO", legalDetails, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, false, _officer(officer, "Alice Officer"), legalDetails, certDataArr, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRound(
@@ -1311,8 +1317,7 @@ contract PumpCorpFactoryTest is Test {
             address(this),
             true,
             true,
-            "Alice Officer",
-            "CEO",
+            _officer(officer, "Alice Officer"),
             legalDetails,
             certDataArr,
             new address[](0),

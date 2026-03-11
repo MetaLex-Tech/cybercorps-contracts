@@ -88,8 +88,11 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
     bytes32 private constant FACTORY_DOMAIN_TYPEHASH = keccak256(
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
     );
+    bytes32 private constant OFFICER_TYPEHASH = keccak256(
+        "CompanyOfficer(address eoa,string name,string contact,string title)"
+    );
     bytes32 private constant ROUND_SUPPLEMENTAL_TYPEHASH = keccak256(
-        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,string officerName,string officerTitle,bytes32 legalDetailsHash,bytes32 certDataHash,bytes32[] conditionAddresses)"
+        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,CompanyOfficer officer,bytes32 legalDetailsHash,bytes32 certDataHash,bytes32[] conditionAddresses)CompanyOfficer(address eoa,string name,string contact,string title)"
     );
 
     address public registryAddress;
@@ -303,12 +306,10 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         address companyPayable,
         bool publicRound,
         bool allowTimedOffers,
-        string memory officerName,
-        string memory officerTitle,
+        CompanyOfficer memory officer,
         bytes32 legalDetailsHash,
         bytes32 certDataHash,
         bytes32[] memory conditionAddresses,
-        address signer,
         bytes memory signature
     ) internal view {
         bytes32 domainSep = keccak256(abi.encode(
@@ -318,20 +319,26 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             block.chainid,
             address(this)
         ));
+        bytes32 officerHash = keccak256(abi.encode(
+            OFFICER_TYPEHASH,
+            officer.eoa,
+            keccak256(bytes(officer.name)),
+            keccak256(bytes(officer.contact)),
+            keccak256(bytes(officer.title))
+        ));
         bytes32 structHash = keccak256(abi.encode(
             ROUND_SUPPLEMENTAL_TYPEHASH,
             corpSalt,
             companyPayable,
             publicRound ? uint8(1) : uint8(0),
             allowTimedOffers ? uint8(1) : uint8(0),
-            keccak256(bytes(officerName)),
-            keccak256(bytes(officerTitle)),
+            officerHash,
             legalDetailsHash,
             certDataHash,
             conditionAddresses
         ));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));
-        if (ECDSA.recover(digest, signature) != signer) revert InvalidMetadataSignature();
+        if (ECDSA.recover(digest, signature) != officer.eoa) revert InvalidMetadataSignature();
     }
 
     function deployCyberCorpAndCreateOffer(
@@ -466,10 +473,6 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             address dealManagerAddress,
             address roundManagerAddress,
             bytes32 roundId
-            // TODO WIP: do we need this?
-//            address[] memory certPrinterAddress,
-//            bytes32 id,
-//            uint256[] memory certIds
         )
     {
         // Validation
@@ -497,13 +500,10 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             _companyPayable,
             publicRound,
             allowTimedOffers,
-            _officer.name,
-            _officer.title,
+            _officer,
             keccak256(abi.encode(legalDetails)),
             keccak256(abi.encode(certData)),
             conditionHashes,
-            _officer.eoa,
-            // TODO WIP: should have officer.contact as well
             metadataSignature
         );
 
