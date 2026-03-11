@@ -483,7 +483,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
                 )
                 .setAgreement(
                     templateId,
-                    _officer.eoa,
+                    _officer.eoa, // ensure only who signs the escrowedsignature can be the owner of the cybercorp
                     _officer.name,
                     _officer.title,
                     legalDetails,
