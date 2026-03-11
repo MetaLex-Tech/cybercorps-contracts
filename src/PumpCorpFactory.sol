@@ -45,6 +45,7 @@ import "./interfaces/IIssuanceManagerFactory.sol";
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/IIssuanceManager.sol";
@@ -82,6 +83,14 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
     error InvalidSalt();
     error RoundManagerAlreadyExists();
     error GlobalOrPartyValuesMismatch();
+    error InvalidMetadataSignature();
+
+    bytes32 private constant FACTORY_DOMAIN_TYPEHASH = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
+    bytes32 private constant ROUND_SUPPLEMENTAL_TYPEHASH = keccak256(
+        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,string officerName,string officerTitle,bytes32 legalDetailsHash,bytes32 certDataHash)"
+    );
 
     address public registryAddress;
     address public issuanceManagerFactory;
@@ -289,6 +298,40 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         );
     }
 
+    function _verifySupplementalSignature(
+        bytes32 corpSalt,
+        address companyPayable,
+        bool publicRound,
+        bool allowTimedOffers,
+        string memory officerName,
+        string memory officerTitle,
+        bytes32 legalDetailsHash,
+        bytes32 certDataHash,
+        address signer,
+        bytes memory signature
+    ) internal view {
+        bytes32 domainSep = keccak256(abi.encode(
+            FACTORY_DOMAIN_TYPEHASH,
+            keccak256(bytes("PumpCorpFactory")),
+            keccak256(bytes("1")),
+            block.chainid,
+            address(this)
+        ));
+        bytes32 structHash = keccak256(abi.encode(
+            ROUND_SUPPLEMENTAL_TYPEHASH,
+            corpSalt,
+            companyPayable,
+            publicRound ? uint8(1) : uint8(0),
+            allowTimedOffers ? uint8(1) : uint8(0),
+            keccak256(bytes(officerName)),
+            keccak256(bytes(officerTitle)),
+            legalDetailsHash,
+            certDataHash
+        ));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));
+        if (ECDSA.recover(digest, signature) != signer) revert InvalidMetadataSignature();
+    }
+
     function deployCyberCorpAndCreateOffer(
         uint256 salt,
         string memory companyName,
@@ -402,6 +445,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         uint256 valuation,
         string[] memory roundPartyValues,
         bytes memory escrowedSignature,
+        bytes memory metadataSignature,
         RoundType roundType,
         address[] memory conditions,
         uint256 raiseCap,
@@ -441,6 +485,19 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
 
         //create bytes32 salt
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
+
+        _verifySupplementalSignature(
+            corpSalt,
+            _companyPayable,
+            publicRound,
+            allowTimedOffers,
+            _officer.name,
+            _officer.title,
+            keccak256(abi.encode(legalDetails)),
+            keccak256(abi.encode(certData)),
+            _officer.eoa,
+            metadataSignature
+        );
 
         (
             cyberCorpAddress,

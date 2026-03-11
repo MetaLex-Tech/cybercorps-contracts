@@ -27,6 +27,14 @@ contract DeployPumpCorpFactoryScript is Script {
         "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation,address companyAddress)"
     );
 
+    // EIP-712 constants for PumpCorpFactory supplemental signature
+    bytes32 constant FACTORY_DOMAIN_TYPEHASH = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
+    bytes32 constant ROUND_SUPPLEMENTAL_TYPEHASH = keccak256(
+        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,string officerName,string officerTitle,bytes32 legalDetailsHash,bytes32 certDataHash)"
+    );
+
     function run() public returns (PumpCorpFactory pumpCorpFactory) {
         return
             runWithArgs(
@@ -192,6 +200,19 @@ contract DeployPumpCorpFactoryScript is Script {
 //            }
 //        }
 
+        bytes memory metadataSig = _computeMetadataSignature(
+            address(pumpCorpFactory),
+            corpSaltUint,
+            corpPayable,
+            true,  // publicRound
+            true,  // allowTimedOffers
+            officer.name,
+            officer.title,
+            roundLegalDetails,
+            roundCertData,
+            founderPrivateKey
+        );
+
         bytes memory escrowedSig = _computeEscrowSignature(
             predictedRM,
             roundSeriesType,
@@ -236,6 +257,7 @@ contract DeployPumpCorpFactoryScript is Script {
             roundValuation, // valuation
             roundFirstPartyValues, // roundPartyValues
             escrowedSig, // escrowedSignature
+            metadataSig, // metadataSignature
             roundType, // roundType
             new address[](0), // conditions
             roundRaiseCap, // raiseCap
@@ -340,6 +362,42 @@ contract DeployPumpCorpFactoryScript is Script {
         console2.log("agreementId:");
         console2.logBytes32(agreementId);
         console2.log("");
+    }
+
+    function _computeMetadataSignature(
+        address factory,
+        uint256 salt,
+        address companyPayable,
+        bool publicRound,
+        bool allowTimedOffers,
+        string memory officerName,
+        string memory officerTitle,
+        string[] memory legalDetails,
+        CyberCertData[] memory certData,
+        uint256 signerPrivKey
+    ) internal view returns (bytes memory sig) {
+        bytes32 corpSalt = keccak256(abi.encodePacked(salt));
+        bytes32 domainSep = keccak256(abi.encode(
+            FACTORY_DOMAIN_TYPEHASH,
+            keccak256(bytes("PumpCorpFactory")),
+            keccak256(bytes("1")),
+            block.chainid,
+            factory
+        ));
+        bytes32 structHash = keccak256(abi.encode(
+            ROUND_SUPPLEMENTAL_TYPEHASH,
+            corpSalt,
+            companyPayable,
+            publicRound ? uint8(1) : uint8(0),
+            allowTimedOffers ? uint8(1) : uint8(0),
+            keccak256(bytes(officerName)),
+            keccak256(bytes(officerTitle)),
+            keccak256(abi.encode(legalDetails)),
+            keccak256(abi.encode(certData))
+        ));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivKey, digest);
+        sig = abi.encodePacked(r, s, v);
     }
 
     function _computeEscrowSignature(
