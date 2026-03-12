@@ -306,6 +306,13 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
         return CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId];
     }
+
+    function getEffectiveCertificateDetails(
+        uint256 tokenId
+    ) external view returns (CertificateDetails memory) {
+        if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
+        return CyberCertPrinterStorage.getEffectiveCertificateDetails(tokenId);
+    }
     
     // Get endorsement history
     function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (

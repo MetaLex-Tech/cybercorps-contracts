@@ -904,8 +904,11 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         address account,
         uint256 amount
     ) external onlyAdmin {
-        address scripifiedCert = _getScripForCert(certAddress);
-        ICyberScrip(scripifiedCert).forceBurn(account, amount);
+        IssuanceManagerStorage.executeForceScripBurn(
+            certAddress,
+            account,
+            amount
+        );
     }
 
     /// @notice Convert a certificate into scrip tokens, partially or fully
@@ -939,6 +942,45 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         address certAddress
     ) external view returns (bool) {
         return IssuanceManagerStorage.getScripifyWhitelistEnabled(certAddress);
+    }
+
+    function getCertScripifiedStatus(
+        address certAddress,
+        uint256 id
+    )
+        external
+        view
+        returns (bool isScripified, uint256 scripifiedUnits, uint256 maxUnitsRepresented)
+    {
+        return IssuanceManagerStorage.getCertScripifiedStatus(certAddress, id);
+    }
+
+    function getScripPoolTotals(
+        address certAddress
+    )
+        external
+        view
+        returns (uint256 totalTrackedScrip, uint256 accReductionPerShare)
+    {
+        return IssuanceManagerStorage.getScripPoolTotals(certAddress);
+    }
+
+    function getScripPoolUserAmount(
+        address certAddress,
+        address account
+    ) external view returns (uint256) {
+        return IssuanceManagerStorage.getScripPoolUserAmount(certAddress, account);
+    }
+
+    function getScripPoolUserPosition(
+        address certAddress,
+        address account
+    )
+        external
+        view
+        returns (uint256 recordedAmount, uint256 reductionDebt, uint256 currentAmount)
+    {
+        return IssuanceManagerStorage.getScripPoolUserPosition(certAddress, account);
     }
 
     function isScripifyWhitelisted(

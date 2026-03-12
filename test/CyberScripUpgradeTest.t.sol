@@ -590,8 +590,17 @@ contract CyberScripUpgradeTest is Test {
             true
         );
 
-        vm.prank(address(issuanceManager));
-        ICyberScrip(scrip).mint(investor, 200);
+        uint256 certId = _mintCertAfterUpgrade(
+            issuanceManager,
+            certPrinter,
+            investor,
+            100
+        );
+
+        vm.prank(investor);
+        issuanceManager.scripifyCert(address(certPrinter), certId, 100, address(0));
+
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 150);
 
         vm.prank(investor);
         vm.expectRevert(IssuanceManager.ScripToCertMinimumNotMet.selector);
@@ -607,7 +616,7 @@ contract CyberScripUpgradeTest is Test {
 
         vm.prank(investor);
         issuanceManager.convertScripToCert(address(certPrinter), 150);
-        assertEq(ICyberScrip(scrip).balanceOf(investor), 50);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
     }
 
     function test_PostUpgrade_ReformsVoidedPath() public {
@@ -617,11 +626,12 @@ contract CyberScripUpgradeTest is Test {
             "Voided Cert",
             "VCERT"
         );
-        _mintCertAfterUpgrade(issuanceManager, certPrinter, investor, 500);
-
-        vm.prank(companyOwner);
-        issuanceManager.voidCertificate(address(certPrinter), 0);
-        assertTrue(certPrinter.isVoided(0));
+        uint256 certId = _mintCertAfterUpgrade(
+            issuanceManager,
+            certPrinter,
+            investor,
+            500
+        );
 
         vm.prank(companyOwner);
         address scrip = issuanceManager.deployCyberScrip(
@@ -639,15 +649,246 @@ contract CyberScripUpgradeTest is Test {
             true
         );
 
-        vm.prank(address(issuanceManager));
-        ICyberScrip(scrip).mint(investor, 20);
+        vm.prank(investor);
+        issuanceManager.scripifyCert(address(certPrinter), certId, 10, address(0));
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 20);
+
+        vm.prank(companyOwner);
+        issuanceManager.voidCertificate(address(certPrinter), certId);
+        assertTrue(certPrinter.isVoided(certId));
+
         vm.prank(investor);
         issuanceManager.convertScripToCert(address(certPrinter), 20);
 
         assertEq(certPrinter.totalSupply(), 1);
-        assertEq(certPrinter.ownerOf(0), investor);
-        assertFalse(certPrinter.isVoided(0));
+        assertEq(certPrinter.ownerOf(certId), investor);
+        assertFalse(certPrinter.isVoided(certId));
         assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
+    }
+
+    function test_PostUpgrade_ForceBurnReducesPoolTotals() public {
+        IssuanceManager issuanceManager = _setupUpgradedIssuanceManager();
+        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+            issuanceManager,
+            "Force Burn Cert",
+            "FBCERT"
+        );
+        uint256 certId = _mintCertAfterUpgrade(
+            issuanceManager,
+            certPrinter,
+            investor,
+            100
+        );
+
+        vm.prank(companyOwner);
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            0,
+            2,
+            1,
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+
+        vm.prank(investor);
+        issuanceManager.scripifyCert(address(certPrinter), certId, 10, address(0));
+
+        (uint256 totalTrackedBefore,) = issuanceManager.getScripPoolTotals(
+            address(certPrinter)
+        );
+        (bool isScripifiedBefore, uint256 scripifiedUnitsBefore,) = issuanceManager
+            .getCertScripifiedStatus(address(certPrinter), certId);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 20);
+        assertEq(totalTrackedBefore, 20);
+        assertTrue(isScripifiedBefore);
+        assertEq(scripifiedUnitsBefore, 10);
+
+        vm.prank(companyOwner);
+        issuanceManager.forceScripBurn(address(certPrinter), investor, 8);
+
+        (uint256 totalTrackedAfter,) = issuanceManager.getScripPoolTotals(
+            address(certPrinter)
+        );
+        (bool isScripifiedAfter, uint256 scripifiedUnitsAfter,) = issuanceManager
+            .getCertScripifiedStatus(address(certPrinter), certId);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 12);
+        assertEq(totalTrackedAfter, 12);
+        assertTrue(isScripifiedAfter);
+        assertEq(scripifiedUnitsAfter, 6);
+    }
+
+    function test_PostUpgrade_MultiHolderTransferAndRecertificationPoolAccounting()
+        public
+    {
+        IssuanceManager issuanceManager = _setupUpgradedIssuanceManager();
+        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+            issuanceManager,
+            "Pool Cert",
+            "PCERT"
+        );
+        address thirdHolder = vm.addr(uint256(keccak256("cyberscrip-upgrade-third-holder")));
+        address newInvestor = vm.addr(uint256(keccak256("cyberscrip-upgrade-new-investor")));
+
+        uint256 certIdA = _mintCertAfterUpgrade(
+            issuanceManager,
+            certPrinter,
+            investor,
+            10
+        );
+        uint256 certIdB = _mintCertAfterUpgrade(
+            issuanceManager,
+            certPrinter,
+            otherInvestor,
+            20
+        );
+        uint256 certIdC = _mintCertAfterUpgrade(
+            issuanceManager,
+            certPrinter,
+            thirdHolder,
+            50
+        );
+
+        vm.prank(companyOwner);
+        address scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            0,
+            1,
+            1,
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+
+        vm.prank(investor);
+        issuanceManager.scripifyCert(address(certPrinter), certIdA, 10, address(0));
+        vm.prank(otherInvestor);
+        issuanceManager.scripifyCert(address(certPrinter), certIdB, 20, address(0));
+        vm.prank(thirdHolder);
+        issuanceManager.scripifyCert(address(certPrinter), certIdC, 50, address(0));
+
+        assertEq(certPrinter.getCertificateDetails(certIdA).unitsRepresented, 0);
+        assertEq(certPrinter.getCertificateDetails(certIdB).unitsRepresented, 0);
+        assertEq(certPrinter.getCertificateDetails(certIdC).unitsRepresented, 0);
+        assertEq(
+            certPrinter.getEffectiveCertificateDetails(certIdA).unitsRepresented,
+            10
+        );
+        assertEq(
+            certPrinter.getEffectiveCertificateDetails(certIdB).unitsRepresented,
+            20
+        );
+        assertEq(
+            certPrinter.getEffectiveCertificateDetails(certIdC).unitsRepresented,
+            50
+        );
+
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 10);
+        assertEq(ICyberScrip(scrip).balanceOf(otherInvestor), 20);
+        assertEq(ICyberScrip(scrip).balanceOf(thirdHolder), 50);
+        assertEq(issuanceManager.getScripPoolUserAmount(address(certPrinter), investor), 10);
+        assertEq(
+            issuanceManager.getScripPoolUserAmount(address(certPrinter), otherInvestor),
+            20
+        );
+        assertEq(
+            issuanceManager.getScripPoolUserAmount(address(certPrinter), thirdHolder),
+            50
+        );
+        assertEq(
+            issuanceManager.getScripPoolUserAmount(address(certPrinter), newInvestor),
+            0
+        );
+
+        vm.prank(investor);
+        ICyberScrip(scrip).transfer(newInvestor, 2);
+        vm.prank(otherInvestor);
+        ICyberScrip(scrip).transfer(newInvestor, 4);
+        vm.prank(thirdHolder);
+        ICyberScrip(scrip).transfer(newInvestor, 10);
+
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 8);
+        assertEq(ICyberScrip(scrip).balanceOf(otherInvestor), 16);
+        assertEq(ICyberScrip(scrip).balanceOf(thirdHolder), 40);
+        assertEq(ICyberScrip(scrip).balanceOf(newInvestor), 16);
+
+        // ERC20 transfers do not move pool ownership.
+        assertEq(issuanceManager.getScripPoolUserAmount(address(certPrinter), investor), 10);
+        assertEq(
+            issuanceManager.getScripPoolUserAmount(address(certPrinter), otherInvestor),
+            20
+        );
+        assertEq(
+            issuanceManager.getScripPoolUserAmount(address(certPrinter), thirdHolder),
+            50
+        );
+        assertEq(
+            issuanceManager.getScripPoolUserAmount(address(certPrinter), newInvestor),
+            0
+        );
+
+        (uint256 totalTrackedBefore,) = issuanceManager.getScripPoolTotals(
+            address(certPrinter)
+        );
+        assertEq(totalTrackedBefore, 80);
+
+        vm.prank(newInvestor);
+        issuanceManager.convertScripToCert(address(certPrinter), 16);
+
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 8);
+        assertEq(ICyberScrip(scrip).balanceOf(otherInvestor), 16);
+        assertEq(ICyberScrip(scrip).balanceOf(thirdHolder), 40);
+        assertEq(ICyberScrip(scrip).balanceOf(newInvestor), 0);
+
+        (uint256 totalTrackedAfter,) = issuanceManager.getScripPoolTotals(
+            address(certPrinter)
+        );
+        assertEq(totalTrackedAfter, 64);
+        assertEq(issuanceManager.getScripPoolUserAmount(address(certPrinter), investor), 8);
+        assertEq(
+            issuanceManager.getScripPoolUserAmount(address(certPrinter), otherInvestor),
+            16
+        );
+        assertEq(
+            issuanceManager.getScripPoolUserAmount(address(certPrinter), thirdHolder),
+            40
+        );
+        assertEq(
+            issuanceManager.getScripPoolUserAmount(address(certPrinter), newInvestor),
+            0
+        );
+
+        assertEq(
+            certPrinter.getEffectiveCertificateDetails(certIdA).unitsRepresented,
+            8
+        );
+        assertEq(
+            certPrinter.getEffectiveCertificateDetails(certIdB).unitsRepresented,
+            16
+        );
+        assertEq(
+            certPrinter.getEffectiveCertificateDetails(certIdC).unitsRepresented,
+            40
+        );
+
+        uint256 newCertId = 3;
+        assertEq(certPrinter.totalSupply(), 4);
+        assertEq(certPrinter.ownerOf(newCertId), newInvestor);
+        assertEq(certPrinter.getCertificateDetails(newCertId).unitsRepresented, 16);
+        assertEq(
+            certPrinter.getEffectiveCertificateDetails(newCertId).unitsRepresented,
+            16
+        );
     }
 
     function test_PostUpgrade_RequiresIssuerApprovalCondition() public {

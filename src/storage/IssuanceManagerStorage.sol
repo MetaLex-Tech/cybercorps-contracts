@@ -45,7 +45,6 @@ import "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "../interfaces/ICondition.sol";
 import "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICyberScrip.sol";
-import "../interfaces/ICyberCorp.sol";
 import "../interfaces/IIssuanceManager.sol";
 import "./CyberCertPrinterStorage.sol";
 
@@ -55,6 +54,9 @@ library IssuanceManagerStorage {
     error ScripRatioRemainder();
     error ScripToCertMinimumNotMet();
     error ScripifyNotWhitelisted();
+    error ScripifyOverMax();
+
+    uint256 internal constant ACC_REDUCTION_PRECISION = 1e18;
 
     event ScripifiedCert(
         address indexed certAddress,
@@ -81,6 +83,10 @@ library IssuanceManagerStorage {
         mapping(address => ScripRatio) scripRatios;
         mapping(address => bool) scripifyWhitelistEnabled;
         mapping(address => mapping(uint256 => bool)) scripifyWhitelist;
+        mapping(address => mapping(uint256 => CertScripState)) certScripStates;
+        mapping(address => CertScripUnitPool) certScripUnitPools;
+        mapping(address => ScripPoolState) scripPoolStates;
+        mapping(address => mapping(address => ScripUserInfo)) scripPoolUsers;
     }
 
     struct ScripRatio {
@@ -93,6 +99,27 @@ library IssuanceManagerStorage {
         uint256 activeTokenId;
         bool foundVoided;
         uint256 voidedTokenId;
+    }
+
+    struct CertScripState {
+        uint256 amount;
+        uint256 reductionDebt;
+        uint256 maxUnitsRepresented;
+    }
+
+    struct ScripPoolState {
+        uint256 totalTrackedScrip;
+        uint256 accReductionPerShare;
+    }
+
+    struct CertScripUnitPool {
+        uint256 totalScripifiedUnits;
+        uint256 accReductionPerShare;
+    }
+
+    struct ScripUserInfo {
+        uint256 amount;
+        uint256 reductionDebt;
     }
 
     // Returns the storage layout
@@ -266,6 +293,91 @@ library IssuanceManagerStorage {
         });
     }
 
+    function getCertScripState(
+        address certAddress,
+        uint256 id
+    ) internal view returns (CertScripState storage) {
+        return issuanceManagerStorage().certScripStates[certAddress][id];
+    }
+
+    function getScripPoolState(
+        address certAddress
+    ) internal view returns (ScripPoolState storage) {
+        return issuanceManagerStorage().scripPoolStates[certAddress];
+    }
+
+    function getScripPoolUserInfo(
+        address certAddress,
+        address account
+    ) internal view returns (ScripUserInfo storage) {
+        return issuanceManagerStorage().scripPoolUsers[certAddress][account];
+    }
+
+    function getScripPoolUserAmount(
+        address certAddress,
+        address account
+    ) internal view returns (uint256) {
+        ScripPoolState storage pool = getScripPoolState(certAddress);
+        ScripUserInfo storage user = getScripPoolUserInfo(certAddress, account);
+        return _currentAmount(user.amount, user.reductionDebt, pool.accReductionPerShare);
+    }
+
+    function getScripPoolUserPosition(
+        address certAddress,
+        address account
+    )
+        internal
+        view
+        returns (uint256 recordedAmount, uint256 reductionDebt, uint256 currentAmount)
+    {
+        ScripUserInfo storage user = getScripPoolUserInfo(certAddress, account);
+        recordedAmount = user.amount;
+        reductionDebt = user.reductionDebt;
+        currentAmount = getScripPoolUserAmount(certAddress, account);
+    }
+
+    function getScripPoolTotals(
+        address certAddress
+    )
+        internal
+        view
+        returns (uint256 totalTrackedScrip, uint256 accReductionPerShare)
+    {
+        ScripPoolState storage pool = getScripPoolState(certAddress);
+        totalTrackedScrip = pool.totalTrackedScrip;
+        accReductionPerShare = pool.accReductionPerShare;
+    }
+
+    function getCertScripifiedStatus(
+        address certAddress,
+        uint256 id
+    )
+        internal
+        view
+        returns (bool isScripified, uint256 scripifiedUnits, uint256 maxUnitsRepresented)
+    {
+        CertScripState storage certState = getCertScripState(certAddress, id);
+        scripifiedUnits = getCurrentCertScripifiedUnits(certAddress, id);
+        isScripified = scripifiedUnits > 0;
+        maxUnitsRepresented = certState.maxUnitsRepresented;
+    }
+
+    function getCurrentCertScripifiedUnits(
+        address certAddress,
+        uint256 id
+    ) internal view returns (uint256) {
+        CertScripState storage certState = getCertScripState(certAddress, id);
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+            certAddress
+        ];
+        return
+            _currentAmount(
+                certState.amount,
+                certState.reductionDebt,
+                pool.accReductionPerShare
+            );
+    }
+
     function selectRecertToken(
         address certAddress,
         address account
@@ -324,18 +436,23 @@ library IssuanceManagerStorage {
         uint256 scripAmount = amount * numerator;
         if (scripAmount % denominator != 0) revert ScripRatioRemainder();
         scripAmount = scripAmount / denominator;
-
-        if (amount == details.unitsRepresented) {
-            address dm = ICyberCorp(getCORP()).dealManager();
-            //certificate.safeTransferFrom(account, dm, id);
-            certificate.voidCert(id);
-            ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
-            emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
-            return;
+        CertScripState storage certState = getCertScripState(certAddress, id);
+        uint256 currentScripifiedUnits = getCurrentCertScripifiedUnits(
+            certAddress,
+            id
+        );
+        uint256 totalUnits = details.unitsRepresented + currentScripifiedUnits;
+        if (totalUnits > certState.maxUnitsRepresented) {
+            certState.maxUnitsRepresented = totalUnits;
+        }
+        if (currentScripifiedUnits + amount > certState.maxUnitsRepresented) {
+            revert ScripifyOverMax();
         }
 
+        _depositCertScripUnits(certAddress, id, amount);
         details.unitsRepresented = details.unitsRepresented - amount;
         certificate.updateCertificateDetails(id, details);
+        _depositScripPool(certAddress, account, scripAmount);
         ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
         emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
     }
@@ -377,6 +494,8 @@ library IssuanceManagerStorage {
             account
         );
 
+        _reduceScripPool(certAddress, amount);
+        _reduceCertScripUnitsPool(certAddress, units);
         ICyberScrip(scripifiedCert).burnFrom(account, amount);
 
         if (selection.foundActive) {
@@ -387,6 +506,11 @@ library IssuanceManagerStorage {
                 selection.activeTokenId,
                 activeDetails
             );
+            _setCertMaxFromCurrent(
+                certAddress,
+                selection.activeTokenId,
+                activeDetails.unitsRepresented
+            );
         } else if (selection.foundVoided) {
             CertificateDetails memory voidedDetails = certificate
                 .getCertificateDetails(selection.voidedTokenId);
@@ -396,6 +520,11 @@ library IssuanceManagerStorage {
                 voidedDetails
             );
             certificate.unvoidCert(selection.voidedTokenId);
+            _setCertMaxFromCurrent(
+                certAddress,
+                selection.voidedTokenId,
+                voidedDetails.unitsRepresented
+            );
 
             address certCustodian = certificate.ownerOf(selection.voidedTokenId);
             if (certCustodian != account) {
@@ -420,12 +549,35 @@ library IssuanceManagerStorage {
                 certificate,
                 units
             );
-            IIssuanceManager(address(this)).createCertAndAssign(
+            uint256 createdTokenId = IIssuanceManager(address(this)).createCertAndAssign(
                 certAddress,
                 account,
                 details
             );
+            _setCertMaxFromCurrent(certAddress, createdTokenId, details.unitsRepresented);
         }
+    }
+
+    function executeForceScripBurn(
+        address certAddress,
+        address account,
+        uint256 amount
+    ) external {
+        if (amount == 0) revert ConditionCheckFailed();
+
+        address scripifiedCert = getScripifiedCert(certAddress);
+        if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
+
+        (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(
+            certAddress
+        );
+        uint256 units = amount * denominator;
+        if (units % numerator != 0) revert ScripRatioRemainder();
+        units = units / numerator;
+
+        _reduceScripPool(certAddress, amount);
+        _reduceCertScripUnitsPool(certAddress, units);
+        ICyberScrip(scripifiedCert).forceBurn(account, amount);
     }
 
     function _selectRecertToken(
@@ -484,5 +636,123 @@ library IssuanceManagerStorage {
         details.signingOfficerTitle = template.signingOfficerTitle;
         details.issuerUSDValuationAtTimeOfInvestment = template
             .issuerUSDValuationAtTimeOfInvestment;
+    }
+
+    function _setCertMaxFromCurrent(
+        address certAddress,
+        uint256 tokenId,
+        uint256 currentUnits
+    ) internal {
+        CertScripState storage certState = getCertScripState(certAddress, tokenId);
+        uint256 currentTotal = currentUnits +
+            getCurrentCertScripifiedUnits(certAddress, tokenId);
+        if (currentTotal > certState.maxUnitsRepresented) {
+            certState.maxUnitsRepresented = currentTotal;
+        }
+    }
+
+    function _depositScripPool(
+        address certAddress,
+        address account,
+        uint256 scripAmount
+    ) internal {
+        ScripPoolState storage pool = getScripPoolState(certAddress);
+        ScripUserInfo storage user = getScripPoolUserInfo(certAddress, account);
+        _syncUserScripPoolPosition(certAddress, account);
+        pool.totalTrackedScrip = pool.totalTrackedScrip + scripAmount;
+        user.amount = user.amount + scripAmount;
+        user.reductionDebt =
+            (user.amount * pool.accReductionPerShare) /
+            ACC_REDUCTION_PRECISION;
+    }
+
+    function _reduceScripPool(address certAddress, uint256 burnedScripAmount) internal {
+        ScripPoolState storage pool = getScripPoolState(certAddress);
+        if (burnedScripAmount > pool.totalTrackedScrip) revert ConditionCheckFailed();
+        if (pool.totalTrackedScrip == 0) revert ConditionCheckFailed();
+        pool.accReductionPerShare =
+            pool.accReductionPerShare +
+            ((burnedScripAmount * ACC_REDUCTION_PRECISION) / pool.totalTrackedScrip);
+        pool.totalTrackedScrip = pool.totalTrackedScrip - burnedScripAmount;
+    }
+
+    function _depositCertScripUnits(
+        address certAddress,
+        uint256 tokenId,
+        uint256 units
+    ) internal {
+        IssuanceManagerData storage ds = issuanceManagerStorage();
+        CertScripUnitPool storage pool = ds.certScripUnitPools[certAddress];
+        CertScripState storage certState = ds.certScripStates[certAddress][tokenId];
+        _syncCertScripPosition(certAddress, tokenId);
+        pool.totalScripifiedUnits = pool.totalScripifiedUnits + units;
+        certState.amount = certState.amount + units;
+        certState.reductionDebt =
+            (certState.amount * pool.accReductionPerShare) /
+            ACC_REDUCTION_PRECISION;
+    }
+
+    function _reduceCertScripUnitsPool(
+        address certAddress,
+        uint256 burnedUnits
+    ) internal {
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+            certAddress
+        ];
+        if (burnedUnits > pool.totalScripifiedUnits) revert ConditionCheckFailed();
+        if (pool.totalScripifiedUnits == 0) revert ConditionCheckFailed();
+        pool.accReductionPerShare =
+            pool.accReductionPerShare +
+            ((burnedUnits * ACC_REDUCTION_PRECISION) / pool.totalScripifiedUnits);
+        pool.totalScripifiedUnits = pool.totalScripifiedUnits - burnedUnits;
+    }
+
+    function _syncUserScripPoolPosition(address certAddress, address account) internal {
+        ScripPoolState storage pool = getScripPoolState(certAddress);
+        ScripUserInfo storage user = getScripPoolUserInfo(certAddress, account);
+        user.amount = _currentAmount(
+            user.amount,
+            user.reductionDebt,
+            pool.accReductionPerShare
+        );
+        user.reductionDebt =
+            (user.amount * pool.accReductionPerShare) /
+            ACC_REDUCTION_PRECISION;
+    }
+
+    function _syncCertScripPosition(address certAddress, uint256 tokenId) internal {
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+            certAddress
+        ];
+        CertScripState storage certState = getCertScripState(certAddress, tokenId);
+        certState.amount = _currentAmount(
+            certState.amount,
+            certState.reductionDebt,
+            pool.accReductionPerShare
+        );
+        certState.reductionDebt =
+            (certState.amount * pool.accReductionPerShare) /
+            ACC_REDUCTION_PRECISION;
+    }
+
+    function _currentAmount(
+        uint256 amount,
+        uint256 reductionDebt,
+        uint256 accReductionPerShare
+    ) internal pure returns (uint256) {
+        if (amount == 0) {
+            return 0;
+        }
+        uint256 accruedReduction = (amount * accReductionPerShare) /
+            ACC_REDUCTION_PRECISION;
+        if (accruedReduction <= reductionDebt) {
+            return amount;
+        }
+
+        uint256 pendingReduction = accruedReduction - reductionDebt;
+        if (pendingReduction >= amount) {
+            return 0;
+        }
+        return amount - pendingReduction;
     }
 }
