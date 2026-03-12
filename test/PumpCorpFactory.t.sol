@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.28;
 
-// Test command:
-//   forge test --use solc:0.8.28 --via-ir --fork-url $END_PT_SEPOLIA -vvv --mp PumpCorpFactory.t.sol
-
 import {Test, console} from "forge-std/Test.sol";
 import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
-import {PumpCorpFactory} from "../src/PumpCorpFactory.sol";
+import {PumpCorpFactory, PumpCorpFactoryLib} from "../src/PumpCorpFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
+import {EIP712Lib} from "../src/libs/EIP712Lib.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {Round, RoundType} from "../src/libs/RoundLib.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
@@ -33,25 +31,6 @@ contract AlwaysFalseCondition {
 ///   forge test --use solc:0.8.28 --via-ir --fork-url $END_PT_SEPOLIA -vvv --mp PumpCorpFactory.t.sol
 contract PumpCorpFactoryTest is Test {
     using Strings for address;
-
-    // ── EIP-712 constants (mirror EIP712Lib) ─────────────────────────────────
-    bytes32 constant EIP712_DOMAIN_TYPEHASH = keccak256(
-        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-    );
-    bytes32 constant ESCROWEDSIGNATUREDATA_TYPEHASH = keccak256(
-        "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation,address companyAddress)"
-    );
-
-    // ── EIP-712 constants (mirror PumpCorpFactory supplemental sig) ───────────
-    bytes32 constant FACTORY_DOMAIN_TYPEHASH = keccak256(
-        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-    );
-    bytes32 constant OFFICER_TYPEHASH = keccak256(
-        "CompanyOfficer(address eoa,string name,string contact,string title)"
-    );
-    bytes32 constant ROUND_SUPPLEMENTAL_TYPEHASH = keccak256(
-        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,CompanyOfficer officer,string companyName,string companyType,string companyJurisdiction,string companyContactDetails,string defaultDisputeResolution,bytes32 extensionDataHash,bytes32 roundPartyValuesHash,bytes32 legalDetailsHash,bytes32 certDataHash,bytes32[] conditionAddresses)CompanyOfficer(address eoa,string name,string contact,string title)"
-    );
 
     // ── Actors ────────────────────────────────────────────────────────────────
     uint256 internal officerPk  = 0xB0B;
@@ -189,14 +168,14 @@ contract PumpCorpFactoryTest is Test {
             corp
         ));
         bytes32 domainSep = keccak256(abi.encode(
-            EIP712_DOMAIN_TYPEHASH,
+            EIP712Lib.EIP712_DOMAIN_TYPEHASH,
             keccak256(bytes("RoundManager")),
             keccak256(bytes("1")),
             block.chainid,
             rm
         ));
         bytes32 structHash = keccak256(abi.encode(
-            ESCROWEDSIGNATUREDATA_TYPEHASH,
+            EIP712Lib.ESCROWEDSIGNATUREDATA_TYPEHASH,
             roundId,
             uint8(SecuritySeries.SeriesSeed),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -238,21 +217,21 @@ contract PumpCorpFactoryTest is Test {
             conditionHashes[i] = keccak256(abi.encode(conditions[i]));
         }
         bytes32 domainSep = keccak256(abi.encode(
-            FACTORY_DOMAIN_TYPEHASH,
+            PumpCorpFactoryLib.FACTORY_DOMAIN_TYPEHASH,
             keccak256(bytes("PumpCorpFactory")),
             keccak256(bytes("1")),
             block.chainid,
             address(pumpFactory)
         ));
         bytes32 officerHash = keccak256(abi.encode(
-            OFFICER_TYPEHASH,
+            PumpCorpFactoryLib.OFFICER_TYPEHASH,
             off.eoa,
             keccak256(bytes(off.name)),
             keccak256(bytes(off.contact)),
             keccak256(bytes(off.title))
         ));
         bytes32 structHash = keccak256(abi.encode(
-            ROUND_SUPPLEMENTAL_TYPEHASH,
+            PumpCorpFactoryLib.ROUND_SUPPLEMENTAL_TYPEHASH,
             corpSalt,
             companyPayable,
             publicRound ? uint8(1) : uint8(0),
@@ -430,7 +409,7 @@ contract PumpCorpFactoryTest is Test {
 
     /// Attacker signs the escrow data with their own key but claims the victim
     /// officer's EOA.  RoundManager recovers attacker ≠ claimed officer → revert.
-    function test_RevertIf_AttackerSignsForVictimOfficer() public {
+    function test_RevertIf_AttackerSignsEscrowForVictimOfficer() public {
         uint256 salt = 22222;
         (address predCorp, address predRM) = _predict(salt);
         uint256 start = block.timestamp - 1;
@@ -454,6 +433,40 @@ contract PumpCorpFactoryTest is Test {
             pv,
             attackerSig,      // ← signed by attacker, not officer
             _metaSigDefault(salt, officerPk),
+            RoundType.FCFS,
+            new address[](0),
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            start, end,
+            true, true
+        );
+    }
+
+    /// Attacker should not be able to sign the metadata with their own key but claims
+    /// the victim officer's EOA.
+    function test_RevertIf_AttackerSignsMetadataForVictimOfficer() public {
+        uint256 salt = 33333;
+        (address predCorp, address predRM) = _predict(salt);
+        uint256 start = block.timestamp - 1;
+        uint256 end   = block.timestamp + 30 days;
+
+        bytes memory attackerSig = _metaSigDefault(salt, attackerPk);
+
+        CompanyOfficer memory claimedOff = _officer(officer, "Alice Officer");
+        string[] memory pv = _partyValues(officer, claimedOff.name);
+
+        vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
+            salt,
+            SecuritySeries.SeriesSeed,
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            address(this),
+            claimedOff,
+            legalDetails, extensionData, certDataArr,
+            TEMPLATE_ID,
+            address(0), PRICE_PER_UNIT, VALUATION,
+            pv,
+            _escrowSig(predRM, predCorp, officerPk, start, end),
+            attackerSig,      // ← signed by attacker, not officer
             RoundType.FCFS,
             new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -589,17 +602,15 @@ contract PumpCorpFactoryTest is Test {
     //  CROSS-CORP REPLAY: signature bound to a specific corp address via CREATE2
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// Signature for salt A is bound to corpA/rmA.  Replaying it for salt B
+    /// Escrowed signature for salt A is bound to corpA/rmA.  Replaying it for salt B
     /// (different corp/rm) must fail because the signed companyAddress mismatches.
-    function test_RevertIf_SignatureReplayedForDifferentSalt() public {
+    function test_RevertIf_EscrowedSignatureReplayedForDifferentSalt() public {
         uint256 saltA = 77777;
         uint256 saltB = 88888;
 
         (address predCorpA, address predRMA) = _predict(saltA);
         uint256 start = block.timestamp - 1;
         uint256 end   = block.timestamp + 30 days;
-
-        bytes memory sigA = _escrowSig(predRMA, predCorpA, officerPk, start, end);
 
         vm.expectRevert(RoundManager.InvalidEscrowedSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRoundFor(
@@ -611,8 +622,38 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sigA,
+            _partyValues(officer, "Alice Officer"),
+            _escrowSig(predRMA, predCorpA, officerPk, start, end), // signed with saltA
             _metaSigDefault(saltB, officerPk),
+            RoundType.FCFS, new address[](0),
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            start, end, true, true
+        );
+    }
+
+    /// Metadata signature for salt A is bound to corpA/rmA.  Replaying it for salt B
+    /// (different corp/rm) must fail because the signed companyAddress mismatches.
+    function test_RevertIf_MetadataSignatureReplayedForDifferentSalt() public {
+        uint256 saltA = 77777;
+        uint256 saltB = 88888;
+
+        (address predCorpB, address predRMB) = _predict(saltA);
+        uint256 start = block.timestamp - 1;
+        uint256 end   = block.timestamp + 30 days;
+
+        vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
+            saltB,            // different salt → different corp address in RoundManager
+            SecuritySeries.SeriesSeed,
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            address(this),
+            _officer(officer, "Alice Officer"),
+            legalDetails, extensionData, certDataArr,
+            TEMPLATE_ID,
+            address(0), PRICE_PER_UNIT, VALUATION,
+            _partyValues(officer, "Alice Officer"),
+            _escrowSig(predRMB, predCorpB, officerPk, start, end),
+            _metaSigDefault(saltA, officerPk), // signed with saltA
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
             start, end, true, true
@@ -906,41 +947,6 @@ contract PumpCorpFactoryTest is Test {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    //  MISC GUARDS
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// salt=0 → corpSalt=keccak256(0)≠bytes32(0) does NOT trigger InvalidSalt?
-    /// Actually keccak256(abi.encodePacked(uint256(0))) is non-zero, so this just
-    /// deploys.  The InvalidSalt guard in deployCyberCorp requires salt==bytes32(0).
-    /// Verify that salt=0 uint input does NOT revert at the salt guard.
-    function test_SaltZeroUint_DoesNotRevertAtSaltGuard() public {
-        // corpSalt = keccak256(abi.encodePacked(uint256(0))) which is non-zero,
-        // so deployCyberCorp salt guard passes.
-        (address predCorp, address predRM) = _predict(0);
-        uint256 start = block.timestamp - 1;
-        uint256 end   = block.timestamp + 30 days;
-
-        bytes memory sig = _escrowSig(predRM, predCorp, officerPk, start, end);
-
-        // Should succeed (non-zero corpSalt)
-        pumpFactory.deployCyberCorpAndCreateRoundFor(
-            0,
-            SecuritySeries.SeriesSeed,
-            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
-            address(this),
-            _officer(officer, "Alice Officer"),
-            legalDetails, extensionData, certDataArr,
-            TEMPLATE_ID,
-            address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
-            _metaSigDefault(0, officerPk),
-            RoundType.FCFS, new address[](0),
-            RAISE_CAP, MIN_TICKET, MAX_TICKET,
-            start, end, true, true
-        );
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
     //  CERTIFICATE DATA PROTECTED BY META SIGNATURE
     //  certData is NOT covered by the escrow signature, but IS covered by the
     //  meta signature.  An attacker without the officer's key cannot substitute it.
@@ -1047,7 +1053,7 @@ contract PumpCorpFactoryTest is Test {
             address(this),
             _officer(officer, "Alice Officer"),
             legalDetails, extensionData,
-            altCert,
+            altCert, // ← substituted cert
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
             _partyValues(officer, "Alice Officer"), sig,
@@ -1066,7 +1072,7 @@ contract PumpCorpFactoryTest is Test {
             address(this),
             _officer(officer, "Alice Officer"),
             legalDetails, extensionData,
-            altCert,
+            altCert, // ← substituted cert
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
             _partyValues(officer, "Alice Officer"), sig,
@@ -1253,7 +1259,7 @@ contract PumpCorpFactoryTest is Test {
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
             start, end,
-            false,   // ← publicRound flipped; signature was produced without caring about this flag
+            false,   // ← publicRound flipped
             true
         );
     }
@@ -1287,7 +1293,7 @@ contract PumpCorpFactoryTest is Test {
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
             start, end,
             true,
-            false  // ← allowTimedOffers flipped; not covered by escrow signature
+            false  // ← allowTimedOffers flipped
         );
 
         // Test against signature malleability

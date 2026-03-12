@@ -4,8 +4,9 @@ pragma solidity ^0.8.28;
 import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
 import {Vm} from "forge-std/Test.sol";
-import {PumpCorpFactory} from "../src/PumpCorpFactory.sol";
+import {PumpCorpFactory, PumpCorpFactoryLib} from "../src/PumpCorpFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
+import {EIP712Lib} from "../src/libs/EIP712Lib.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
@@ -19,24 +20,6 @@ import {CyberCertData, EOI, LexChexDetails, MintRequest} from "../src/storage/Ro
 import {MockERC20} from "../test/mock/MockERC20.sol";
 
 contract DeployPumpCorpFactoryScript is Script {
-    // EIP-712 constants for RoundManager escrow signature
-    bytes32 constant EIP712_DOMAIN_TYPEHASH = keccak256(
-        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-    );
-    bytes32 constant ESCROWEDSIGNATUREDATA_TYPEHASH = keccak256(
-        "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation,address companyAddress)"
-    );
-
-    // EIP-712 constants for PumpCorpFactory supplemental signature
-    bytes32 constant FACTORY_DOMAIN_TYPEHASH = keccak256(
-        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-    );
-    bytes32 constant OFFICER_TYPEHASH = keccak256(
-        "CompanyOfficer(address eoa,string name,string contact,string title)"
-    );
-    bytes32 constant ROUND_SUPPLEMENTAL_TYPEHASH = keccak256(
-        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,CompanyOfficer officer,string companyName,string companyType,string companyJurisdiction,string companyContactDetails,string defaultDisputeResolution,bytes32 extensionDataHash,bytes32 roundPartyValuesHash,bytes32 legalDetailsHash,bytes32 certDataHash,bytes32[] conditionAddresses)CompanyOfficer(address eoa,string name,string contact,string title)"
-    );
 
     function run() public returns (PumpCorpFactory pumpCorpFactory) {
         return
@@ -61,7 +44,7 @@ contract DeployPumpCorpFactoryScript is Script {
         address deployerAddress = vm.addr(deployerPrivateKey);
         address investorAddress = vm.addr(investorPrivateKey);
         
-        string memory saltStr = "PumpCorpFactory.deploy.v1.0.1-dev";
+        string memory saltStr = "PumpCorpFactory.deploy.v1.0.1-dev2";
         bytes32 salt = bytes32(keccak256(bytes(saltStr)));
 
         // TODO WIP: update for production
@@ -395,14 +378,14 @@ contract DeployPumpCorpFactoryScript is Script {
     ) internal view returns (bytes memory sig) {
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
         bytes32 domainSep = keccak256(abi.encode(
-            FACTORY_DOMAIN_TYPEHASH,
+            PumpCorpFactoryLib.FACTORY_DOMAIN_TYPEHASH,
             keccak256(bytes("PumpCorpFactory")),
             keccak256(bytes("1")),
             block.chainid,
             factory
         ));
         bytes32 officerHash = keccak256(abi.encode(
-            OFFICER_TYPEHASH,
+            PumpCorpFactoryLib.OFFICER_TYPEHASH,
             officer.eoa,
             keccak256(bytes(officer.name)),
             keccak256(bytes(officer.contact)),
@@ -413,7 +396,7 @@ contract DeployPumpCorpFactoryScript is Script {
             conditionHashes[i] = keccak256(abi.encode(conditions[i]));
         }
         bytes32 structHash = keccak256(abi.encode(
-            ROUND_SUPPLEMENTAL_TYPEHASH,
+            PumpCorpFactoryLib.ROUND_SUPPLEMENTAL_TYPEHASH,
             corpSalt,
             companyPayable,
             publicRound ? uint8(1) : uint8(0),
@@ -470,7 +453,7 @@ contract DeployPumpCorpFactoryScript is Script {
 
         bytes32 domainSeparator = keccak256(
             abi.encode(
-                EIP712_DOMAIN_TYPEHASH,
+                EIP712Lib.EIP712_DOMAIN_TYPEHASH,
                 keccak256(bytes("RoundManager")),
                 keccak256(bytes("1")),
                 block.chainid,
@@ -479,7 +462,7 @@ contract DeployPumpCorpFactoryScript is Script {
         );
         bytes32 structHash = keccak256(
             abi.encode(
-                ESCROWEDSIGNATUREDATA_TYPEHASH,
+                EIP712Lib.ESCROWEDSIGNATUREDATA_TYPEHASH,
                 roundId,
                 uint8(seriesType),
                 raiseCap,

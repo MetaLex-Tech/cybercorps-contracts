@@ -77,6 +77,18 @@ interface ICyberCorpLocal {
     function issuanceManager() external view returns (address);
 }
 
+library PumpCorpFactoryLib {
+    bytes32 constant FACTORY_DOMAIN_TYPEHASH = keccak256(
+        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+    );
+    bytes32 constant OFFICER_TYPEHASH = keccak256(
+        "CompanyOfficer(address eoa,string name,string contact,string title)"
+    );
+    bytes32 constant ROUND_SUPPLEMENTAL_TYPEHASH = keccak256(
+        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,CompanyOfficer officer,string companyName,string companyType,string companyJurisdiction,string companyContactDetails,string defaultDisputeResolution,bytes32 extensionDataHash,bytes32 roundPartyValuesHash,bytes32 legalDetailsHash,bytes32 certDataHash,bytes32[] conditionAddresses)CompanyOfficer(address eoa,string name,string contact,string title)"
+    );
+}
+
 contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
     using Strings for string;
     using RoundLib for Round;
@@ -84,16 +96,6 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
     error RoundManagerAlreadyExists();
     error GlobalOrPartyValuesMismatch();
     error InvalidMetadataSignature();
-
-    bytes32 private constant FACTORY_DOMAIN_TYPEHASH = keccak256(
-        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-    );
-    bytes32 private constant OFFICER_TYPEHASH = keccak256(
-        "CompanyOfficer(address eoa,string name,string contact,string title)"
-    );
-    bytes32 private constant ROUND_SUPPLEMENTAL_TYPEHASH = keccak256(
-        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,CompanyOfficer officer,string companyName,string companyType,string companyJurisdiction,string companyContactDetails,string defaultDisputeResolution,bytes32 extensionDataHash,bytes32 roundPartyValuesHash,bytes32 legalDetailsHash,bytes32 certDataHash,bytes32[] conditionAddresses)CompanyOfficer(address eoa,string name,string contact,string title)"
-    );
 
     address public registryAddress;
     address public issuanceManagerFactory;
@@ -320,21 +322,21 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         bytes memory signature
     ) internal view {
         bytes32 domainSep = keccak256(abi.encode(
-            FACTORY_DOMAIN_TYPEHASH,
+            PumpCorpFactoryLib.FACTORY_DOMAIN_TYPEHASH,
             keccak256(bytes("PumpCorpFactory")),
             keccak256(bytes("1")),
             block.chainid,
             address(this)
         ));
         bytes32 officerHash = keccak256(abi.encode(
-            OFFICER_TYPEHASH,
+            PumpCorpFactoryLib.OFFICER_TYPEHASH,
             officer.eoa,
             keccak256(bytes(officer.name)),
             keccak256(bytes(officer.contact)),
             keccak256(bytes(officer.title))
         ));
         bytes32 structHash = keccak256(abi.encode(
-            ROUND_SUPPLEMENTAL_TYPEHASH,
+            PumpCorpFactoryLib.ROUND_SUPPLEMENTAL_TYPEHASH,
             corpSalt,
             companyPayable,
             publicRound ? uint8(1) : uint8(0),
