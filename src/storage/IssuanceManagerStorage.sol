@@ -427,7 +427,8 @@ library IssuanceManagerStorage {
         address toSend = target;
         if (toSend == address(0)) toSend = account;
 
-        CertificateDetails memory details = certificate.getCertificateDetails(id);
+        CertificateDetails memory details = certificate
+            .getActiveCertificateDetails(id);
         if (amount > details.unitsRepresented) revert ConditionCheckFailed();
 
         (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(
@@ -500,7 +501,7 @@ library IssuanceManagerStorage {
 
         if (selection.foundActive) {
             CertificateDetails memory activeDetails = certificate
-                .getCertificateDetails(selection.activeTokenId);
+                .getActiveCertificateDetails(selection.activeTokenId);
             activeDetails.unitsRepresented = activeDetails.unitsRepresented + units;
             certificate.updateCertificateDetails(
                 selection.activeTokenId,
@@ -513,7 +514,7 @@ library IssuanceManagerStorage {
             );
         } else if (selection.foundVoided) {
             CertificateDetails memory voidedDetails = certificate
-                .getCertificateDetails(selection.voidedTokenId);
+                .getActiveCertificateDetails(selection.voidedTokenId);
             voidedDetails.unitsRepresented = units;
             certificate.updateCertificateDetails(
                 selection.voidedTokenId,

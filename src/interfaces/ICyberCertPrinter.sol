@@ -105,6 +105,9 @@ interface ICyberCertPrinter is IERC721 {
     function getCertificateDetails(
         uint256 tokenId
     ) external view returns (CertificateDetails memory);
+    function getActiveCertificateDetails(
+        uint256 tokenId
+    ) external view returns (CertificateDetails memory);
     function getEffectiveCertificateDetails(
         uint256 tokenId
     ) external view returns (CertificateDetails memory);

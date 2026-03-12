@@ -550,7 +550,8 @@ contract CyberScripUpgradeTest is Test {
         issuanceManager.scripifyCert(address(certPrinter), certId, 10, address(0));
 
         assertEq(ICyberScrip(scrip).balanceOf(investor), 10);
-        assertEq(certPrinter.getCertificateDetails(certId).unitsRepresented, 15);
+        assertEq(certPrinter.getActiveCertificateDetails(certId).unitsRepresented, 15);
+        assertEq(certPrinter.getCertificateDetails(certId).unitsRepresented, 25);
     }
 
     function test_PostUpgrade_ConversionGatesAndConditions() public {
@@ -777,19 +778,19 @@ contract CyberScripUpgradeTest is Test {
         vm.prank(thirdHolder);
         issuanceManager.scripifyCert(address(certPrinter), certIdC, 50, address(0));
 
-        assertEq(certPrinter.getCertificateDetails(certIdA).unitsRepresented, 0);
-        assertEq(certPrinter.getCertificateDetails(certIdB).unitsRepresented, 0);
-        assertEq(certPrinter.getCertificateDetails(certIdC).unitsRepresented, 0);
+        assertEq(certPrinter.getActiveCertificateDetails(certIdA).unitsRepresented, 0);
+        assertEq(certPrinter.getActiveCertificateDetails(certIdB).unitsRepresented, 0);
+        assertEq(certPrinter.getActiveCertificateDetails(certIdC).unitsRepresented, 0);
         assertEq(
-            certPrinter.getEffectiveCertificateDetails(certIdA).unitsRepresented,
+            certPrinter.getCertificateDetails(certIdA).unitsRepresented,
             10
         );
         assertEq(
-            certPrinter.getEffectiveCertificateDetails(certIdB).unitsRepresented,
+            certPrinter.getCertificateDetails(certIdB).unitsRepresented,
             20
         );
         assertEq(
-            certPrinter.getEffectiveCertificateDetails(certIdC).unitsRepresented,
+            certPrinter.getCertificateDetails(certIdC).unitsRepresented,
             50
         );
 
@@ -869,15 +870,15 @@ contract CyberScripUpgradeTest is Test {
         );
 
         assertEq(
-            certPrinter.getEffectiveCertificateDetails(certIdA).unitsRepresented,
+            certPrinter.getCertificateDetails(certIdA).unitsRepresented,
             8
         );
         assertEq(
-            certPrinter.getEffectiveCertificateDetails(certIdB).unitsRepresented,
+            certPrinter.getCertificateDetails(certIdB).unitsRepresented,
             16
         );
         assertEq(
-            certPrinter.getEffectiveCertificateDetails(certIdC).unitsRepresented,
+            certPrinter.getCertificateDetails(certIdC).unitsRepresented,
             40
         );
 
@@ -886,7 +887,7 @@ contract CyberScripUpgradeTest is Test {
         assertEq(certPrinter.ownerOf(newCertId), newInvestor);
         assertEq(certPrinter.getCertificateDetails(newCertId).unitsRepresented, 16);
         assertEq(
-            certPrinter.getEffectiveCertificateDetails(newCertId).unitsRepresented,
+            certPrinter.getActiveCertificateDetails(newCertId).unitsRepresented,
             16
         );
     }

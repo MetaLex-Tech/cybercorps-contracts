@@ -154,11 +154,17 @@ library CyberCertPrinterStorage {
         return cyberCertStorage().certificateDetails[tokenId];
     }
 
+    function getActiveCertificateDetails(
+        uint256 tokenId
+    ) internal view returns (CertificateDetails memory details) {
+        details = cyberCertStorage().certificateDetails[tokenId];
+    }
+
     function getEffectiveCertificateDetails(
         uint256 tokenId
     ) internal view returns (CertificateDetails memory details) {
         CyberCertStorage storage s = cyberCertStorage();
-        details = s.certificateDetails[tokenId];
+        details = getActiveCertificateDetails(tokenId);
 
         (
             bool isScripified,

@@ -166,6 +166,7 @@ contract MockCertPrinter {
     function ownerOf(uint256 tokenId) external view returns (address) { return _owners[tokenId]; }
 
     function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory) { return _details[tokenId]; }
+    function getActiveCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory) { return _details[tokenId]; }
 
     function safeTransferFrom(address from, address to, uint256 tokenId) external {
         if (_owners[tokenId] != from) {
