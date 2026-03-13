@@ -304,7 +304,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     // Get full agreement details
     function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory) {
         if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
-        return CyberCertPrinterStorage.getEffectiveCertificateDetails(tokenId);
+        return CyberCertPrinterStorage.getCertificateDetails(tokenId);
     }
 
     function getActiveCertificateDetails(
@@ -314,13 +314,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         return CyberCertPrinterStorage.getActiveCertificateDetails(tokenId);
     }
 
-    function getEffectiveCertificateDetails(
-        uint256 tokenId
-    ) external view returns (CertificateDetails memory) {
-        if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
-        return CyberCertPrinterStorage.getEffectiveCertificateDetails(tokenId);
-    }
-    
     // Get endorsement history
     function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (
         Endorsement memory details

@@ -116,7 +116,7 @@ library CyberCertPrinterStorage {
         CyberCertPrinterStorage.CyberCertStorage storage s = cyberCertStorage();
         string[] memory certLegend = s.certLegend[tokenId];
         ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
-        CertificateDetails memory effectiveDetails = getEffectiveCertificateDetails(
+        CertificateDetails memory effectiveDetails = getCertificateDetails(
             tokenId
         );
 
@@ -150,7 +150,7 @@ library CyberCertPrinterStorage {
     }
 
     // Internal getters for complex types
-    function getCertificateDetails(uint256 tokenId) internal view returns (CertificateDetails storage) {
+    function getStoredCertificateDetails(uint256 tokenId) internal view returns (CertificateDetails storage) {
         return cyberCertStorage().certificateDetails[tokenId];
     }
 
@@ -160,7 +160,7 @@ library CyberCertPrinterStorage {
         details = cyberCertStorage().certificateDetails[tokenId];
     }
 
-    function getEffectiveCertificateDetails(
+    function getCertificateDetails(
         uint256 tokenId
     ) internal view returns (CertificateDetails memory details) {
         CyberCertStorage storage s = cyberCertStorage();
