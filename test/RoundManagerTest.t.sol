@@ -358,6 +358,7 @@ library CyberCorpHelper {
                     roundType,
                     publicRound,
                     true,
+                    false,
                     raiseCap,
                     minTicket,
                     maxTicket,
@@ -443,6 +444,7 @@ library CyberCorpHelper {
                     roundType,
                     publicRound,
                     true,
+                    false,
                     raiseCap,
                     minTicket,
                     maxTicket,
@@ -920,6 +922,7 @@ contract RoundManagerTest is Test {
                     RoundType.FounderApproved,
                     false,
                     true,
+                    false,
                     RAISE_CAP,
                     MIN_TICKET,
                     MAX_TICKET,
@@ -2149,6 +2152,7 @@ contract RoundManagerTest is Test {
                     RoundType.FounderApproved,
                     false,
                     true,
+                    false,
                     100_000 * 10 ** 6,
                     1_000 * 10 ** 6,
                     50_000 * 10 ** 6,
@@ -2528,6 +2532,7 @@ contract RoundManagerTest is Test {
                     RoundType.FCFS,
                     false,
                     true,
+                    false,
                     RAISE_CAP,
                     MIN_TICKET,
                     MAX_TICKET,
@@ -2589,6 +2594,111 @@ contract RoundManagerTest is Test {
         (uint256 price, uint8 decimals_) = RoundManager(roundManager).getRoundPriceInfo(roundId);
         assertEq(price, 42);
         assertEq(decimals_, 2);
+    }
+
+    // ── restrictEndTimeReduction tests ────────────────────────────────────────
+
+    function _createRestrictedRound() private returns (bytes32 newRoundId) {
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Legend";
+        CyberCertData[] memory cd = new CyberCertData[](1);
+        cd[0] = CyberCertData({
+            name: "Equity",
+            symbol: "EQ",
+            uri: "ipfs://eq",
+            securityClass: SecurityClass.CommonStock,
+            securitySeries: SecuritySeries.NA,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+
+        (bytes memory sig, ) = CyberCorpHelper.computeEscrowSignature(
+            roundManager,
+            SecuritySeries.SeriesA,
+            RAISE_CAP,
+            MIN_TICKET,
+            MAX_TICKET,
+            RoundType.FounderApproved,
+            block.timestamp,
+            block.timestamp + 30 days,
+            CyberCorpHelper.TEMPLATE_ID,
+            address(paymentToken),
+            PRICE_PER_UNIT,
+            VALUATION,
+            corpOwnerPrivKey,
+            corp
+        );
+
+        newRoundId = RoundManager(roundManager).createRound(
+            RoundLib.draft()
+                .setTickets(
+                    SecuritySeries.SeriesA,
+                    RoundType.FounderApproved,
+                    false,
+                    true,
+                    true, // restrictEndTimeReduction = true
+                    RAISE_CAP,
+                    MIN_TICKET,
+                    MAX_TICKET,
+                    address(paymentToken),
+                    PRICE_PER_UNIT,
+                    VALUATION,
+                    block.timestamp,
+                    block.timestamp + 30 days
+                )
+                .setAgreement(
+                    CyberCorpHelper.TEMPLATE_ID,
+                    corpOwner,
+                    "Officer",
+                    "CEO",
+                    new string[](cd.length),
+                    testRoundPartyValues,
+                    new bytes[](cd.length),
+                    new address[](0),
+                    sig
+                ),
+            cd
+        );
+    }
+
+    function test_RevertIf_SetRoundEndTime_Reduce_Restricted() public {
+        vm.startPrank(corpOwner);
+        bytes32 restrictedRoundId = _createRestrictedRound();
+        uint256 currentEndTime = RoundManager(roundManager).getRound(restrictedRoundId).endTime;
+        vm.expectRevert(RoundManager.EndTimeReductionRestricted.selector);
+        RoundManager(roundManager).setRoundEndTime(restrictedRoundId, currentEndTime - 1 days);
+        vm.stopPrank();
+    }
+
+    function test_SetRoundEndTime_Reduce_NotRestricted() public {
+        uint256 newEndTime = block.timestamp + 1 days;
+        vm.prank(corpOwner);
+        RoundManager(roundManager).setRoundEndTime(roundId, newEndTime);
+        assertEq(RoundManager(roundManager).getRound(roundId).endTime, newEndTime);
+    }
+
+    function test_SetRoundEndTime_Increase_Restricted() public {
+        vm.startPrank(corpOwner);
+        bytes32 restrictedRoundId = _createRestrictedRound();
+        uint256 currentEndTime = RoundManager(roundManager).getRound(restrictedRoundId).endTime;
+        uint256 newEndTime = currentEndTime + 1 days;
+        RoundManager(roundManager).setRoundEndTime(restrictedRoundId, newEndTime);
+        assertEq(RoundManager(roundManager).getRound(restrictedRoundId).endTime, newEndTime);
+        vm.stopPrank();
+    }
+
+    function test_RevertIf_CloseRoundNow_Restricted() public {
+        vm.startPrank(corpOwner);
+        bytes32 restrictedRoundId = _createRestrictedRound();
+        vm.expectRevert(RoundManager.EndTimeReductionRestricted.selector);
+        RoundManager(roundManager).closeRoundNow(restrictedRoundId);
+        vm.stopPrank();
+    }
+
+    function test_CloseRoundNow_NotRestricted() public {
+        vm.prank(corpOwner);
+        RoundManager(roundManager).closeRoundNow(roundId);
+        assertEq(RoundManager(roundManager).getRound(roundId).endTime, block.timestamp);
     }
 }
 
@@ -2769,6 +2879,7 @@ contract RoundManagerFCFSTest is Test {
                     RoundType.FCFS,
                     true,
                     true,
+                    false,
                     1,
                     1,
                     1,
@@ -4013,7 +4124,8 @@ contract CyberCorpFactoryPublicRoundTest is Test {
             startTime,
             endTime,
             true,
-            true
+            true,
+            false
         );
 
         // Validations

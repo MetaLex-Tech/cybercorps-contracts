@@ -411,7 +411,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         uint256 startTime,
         uint256 endTime,
         bool publicRound,
-        bool allowTimedOffers
+        bool allowTimedOffers,
+        bool restrictEndTimeReduction
     )
         external
         returns (
@@ -455,6 +456,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
                     roundType,
                     publicRound,
                     allowTimedOffers,
+                    restrictEndTimeReduction,
                     raiseCap,
                     minTicket,
                     maxTicket,
