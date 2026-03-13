@@ -91,6 +91,7 @@ contract RoundManager is
     error NotEOISubmitter();
     error NotRefImplementation();
     error EndTimeReductionRestricted();
+    error RoundAlreadyExists();
 
     event RoundCreated(bytes32 indexed roundId, address indexed corp, Round round, bool publicRound);
     event RoundSnapshotSet(
@@ -223,6 +224,8 @@ contract RoundManager is
                 corp
             )
         );
+
+        if (RoundManagerStorage.getRound(roundDraft.id).id != bytes32(0)) revert RoundAlreadyExists();
 
         if(!EIP712Lib.verifyEscrowedSignature(
             address(this),

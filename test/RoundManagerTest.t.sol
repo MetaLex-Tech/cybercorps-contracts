@@ -2596,6 +2596,25 @@ contract RoundManagerTest is Test {
         assertEq(decimals_, 2);
     }
 
+    function test_RevertIf_CreateRound_AlreadyExists() public {
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManager.RoundAlreadyExists.selector);
+        CyberCorpHelper.createRound(
+            RoundManager(roundManager),
+            address(paymentToken),
+            CyberCorpHelper.TEMPLATE_ID,
+            RAISE_CAP,
+            MIN_TICKET,
+            MAX_TICKET,
+            PRICE_PER_UNIT,
+            VALUATION,
+            RoundType.FounderApproved,
+            corpOwnerPrivKey,
+            corp,
+            false
+        );
+    }
+
     // ── restrictEndTimeReduction tests ────────────────────────────────────────
 
     function _createRestrictedRound() private returns (bytes32 newRoundId) {
