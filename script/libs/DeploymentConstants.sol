@@ -4,6 +4,8 @@ pragma solidity ^0.8.28;
 library DeploymentConstants {
     error UnsupportedChain(uint256 chainId);
 
+    uint256 internal constant BASE = 8453;
+
     uint256 internal constant ETH_SEPOLIA = 11155111;
     uint256 internal constant BASE_SEPOLIA = 84532;
 

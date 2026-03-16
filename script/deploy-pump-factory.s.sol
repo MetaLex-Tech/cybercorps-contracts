@@ -13,6 +13,10 @@ import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
+import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {IssuanceManager} from "../src/IssuanceManager.sol";
+import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {CyberScrip} from "../src/CyberScrip.sol";
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {CompanyOfficer, SecuritySeries, SecurityClass} from "../src/CyberCorpConstants.sol";
 import {RoundType} from "../src/libs/RoundLib.sol";
@@ -47,9 +51,9 @@ contract DeployPumpCorpFactoryScript is Script {
         string memory saltStr = "PumpCorpFactory.deploy.v1.0.1-dev2";
         bytes32 salt = bytes32(keccak256(bytes(saltStr)));
 
-        // TODO WIP: update for production
+        // TODO WIP: as of 
         DeploymentConstants.CoreDeployment memory deployment = DeploymentConstants
-            .coreV2(DeploymentConstants.ETH_SEPOLIA);
+            .coreV2(DeploymentConstants.BASE);
 
         console2.log("==== Configs ====");
         console2.log("salt string: %s", saltStr);
@@ -62,10 +66,8 @@ contract DeployPumpCorpFactoryScript is Script {
             "CyberAgreementRegistry:",
             deployment.cyberAgreementRegistry
         );
-        console2.log("IssuanceManagerFactory:", deployment.issuanceManagerFactory);
         console2.log("CyberCorpSingleFactory:", deployment.cyberCorpSingleFactory);
         console2.log("DealManagerFactory:", deployment.dealManagerFactory);
-        console2.log("RoundManagerFactory:", deployment.roundManagerFactory);
         console2.log("CertificateUriBuilder:", deployment.uriBuilder);
         console2.log("");
 
@@ -79,6 +81,39 @@ contract DeployPumpCorpFactoryScript is Script {
 
         BorgAuth auth = new BorgAuth{salt: salt}(deployerAddress);
 
+        // TODO WIP: as of 2026/03/16 we haven't deployed the new RoundManagerFactory with restrictEndTimeReduction yet,
+        //  so we deploy a dev one here for now
+        address tempNewRoundManagerFactory = address(
+            new ERC1967Proxy{salt: salt}(
+                address(new RoundManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    RoundManagerFactory.initialize.selector,
+                    address(deployment.auth),
+                    address(new RoundManager())
+                )
+            )
+        );
+
+        // TODO WIP: as of 2026/03/16 the on-chain IssuanceManager and CyberCertPrinter lack addOfficerSignature/addIssuerSignature,
+        //  so we deploy a new factory pointing to locally compiled implementations
+        address tempNewIssuanceManagerFactory = address(
+            new ERC1967Proxy{salt: salt}(
+                address(new IssuanceManagerFactory{salt: salt}()),
+                abi.encodeWithSelector(
+                    IssuanceManagerFactory.initialize.selector,
+                    address(deployment.auth),
+                    address(new IssuanceManager()),
+                    address(new CyberCertPrinter()),
+                    address(new CyberScrip())
+                )
+            )
+        );
+
+        console2.log("==== Deployed (for dev purposes) ====");
+        console2.log("IssuanceManagerFactory:", tempNewIssuanceManagerFactory);
+        console2.log("RoundManagerFactory:", tempNewRoundManagerFactory);
+        console2.log("");
+
         pumpCorpFactory = PumpCorpFactory(
             address(
                 new ERC1967Proxy{salt: salt}(
@@ -87,10 +122,10 @@ contract DeployPumpCorpFactoryScript is Script {
                         PumpCorpFactory.initialize.selector,
                         address(auth),
                         deployment.cyberAgreementRegistry,
-                        deployment.issuanceManagerFactory,
+                        tempNewIssuanceManagerFactory,
                         deployment.cyberCorpSingleFactory,
                         deployment.dealManagerFactory,
-                        deployment.roundManagerFactory,
+                        tempNewRoundManagerFactory,
                         deployment.uriBuilder
                     )
                 )
@@ -153,7 +188,7 @@ contract DeployPumpCorpFactoryScript is Script {
 
         // Predict corp and round manager addresses to build a valid escrow signature
         address predictedCorp = CyberCorpSingleFactory(deployment.cyberCorpSingleFactory).computeCyberCorpSingleAddress(corpSalt);
-        address predictedRM = RoundManagerFactory(deployment.roundManagerFactory).computeRoundManagerAddress(corpSalt);
+        address predictedRM = RoundManagerFactory(tempNewRoundManagerFactory).computeRoundManagerAddress(corpSalt);
 
         // Define shared round parameters
         SecuritySeries roundSeriesType = SecuritySeries.SeriesA;
@@ -192,6 +227,7 @@ contract DeployPumpCorpFactoryScript is Script {
             corpPayable,
             true,  // publicRound
             true,  // allowTimedOffers
+            true,  // restrictEndTimeReduction
             officer,
             companyName,
             companyType,
@@ -364,6 +400,7 @@ contract DeployPumpCorpFactoryScript is Script {
         address companyPayable,
         bool publicRound,
         bool allowTimedOffers,
+        bool restrictEndTimeReduction,
         CompanyOfficer memory officer,
         string memory companyName,
         string memory companyType,
@@ -400,8 +437,9 @@ contract DeployPumpCorpFactoryScript is Script {
             PumpCorpFactoryLib.ROUND_SUPPLEMENTAL_TYPEHASH,
             corpSalt,
             companyPayable,
-            publicRound ? uint8(1) : uint8(0),
-            allowTimedOffers ? uint8(1) : uint8(0),
+            publicRound,
+            allowTimedOffers,
+            restrictEndTimeReduction,
             officerHash,
             keccak256(bytes(companyName)),
             keccak256(bytes(companyType)),
