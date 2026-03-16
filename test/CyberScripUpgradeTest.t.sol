@@ -976,6 +976,7 @@ contract CyberScripUpgradeTest is Test {
                 roundType,
                 true,
                 true,
+                false,
                 raiseCap,
                 minTicket,
                 maxTicket,
@@ -1190,7 +1191,8 @@ contract CyberScripUpgradeTest is Test {
                 startTime,
                 endTime,
                 true,
-                true
+                true,
+                false
             );
     }
 

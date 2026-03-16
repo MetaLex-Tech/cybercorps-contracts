@@ -90,6 +90,8 @@ contract RoundManager is
     error EOIExpired();
     error NotEOISubmitter();
     error NotRefImplementation();
+    error EndTimeReductionRestricted();
+    error RoundAlreadyExists();
 
     event RoundCreated(bytes32 indexed roundId, address indexed corp, Round round, bool publicRound);
     event RoundSnapshotSet(
@@ -223,6 +225,8 @@ contract RoundManager is
             )
         );
 
+        if (RoundManagerStorage.getRound(roundDraft.id).id != bytes32(0)) revert RoundAlreadyExists();
+
         if(!EIP712Lib.verifyEscrowedSignature(
             address(this),
             roundDraft.authorityOfficer,
@@ -292,6 +296,7 @@ contract RoundManager is
     function setRoundEndTime(bytes32 roundId, uint256 newEndTime) external onlyOwner {
         Round storage round = RoundManagerStorage.getRound(roundId);
         if (round.id == bytes32(0)) revert InvalidRound();
+        if (round.restrictEndTimeReduction && newEndTime < round.endTime) revert EndTimeReductionRestricted();
         uint256 oldEndTime = round.endTime;
         round.endTime = newEndTime;
         emit RoundEndTimeUpdated(roundId, oldEndTime, newEndTime);
@@ -302,6 +307,7 @@ contract RoundManager is
     function closeRoundNow(bytes32 roundId) external onlyOwner {
         Round storage round = RoundManagerStorage.getRound(roundId);
         if (round.id == bytes32(0)) revert InvalidRound();
+        if (round.restrictEndTimeReduction) revert EndTimeReductionRestricted();
         uint256 oldEndTime = round.endTime;
         round.endTime = block.timestamp;
         emit RoundEndTimeUpdated(roundId, oldEndTime, round.endTime);
