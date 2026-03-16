@@ -2719,6 +2719,115 @@ contract RoundManagerTest is Test {
         RoundManager(roundManager).closeRoundNow(roundId);
         assertEq(RoundManager(roundManager).getRound(roundId).endTime, block.timestamp);
     }
+
+    /// @notice When restrictEndTimeReduction == true, allowTimedOffers == false, and
+    /// endTime == type(uint256).max, the founder cannot close/shorten the round and the
+    /// investor cannot recall their EOI (it never expires). However, reject() can still release funds.
+    function test_RejectEOI_WorksWhenRestrictedWithMaxEndTime() public {
+        string[] memory defaultLegend = new string[](1);
+        defaultLegend[0] = "Legend";
+        CyberCertData[] memory cd = new CyberCertData[](1);
+        cd[0] = CyberCertData({
+            name: "Equity",
+            symbol: "EQ",
+            uri: "ipfs://eq",
+            securityClass: SecurityClass.CommonStock,
+            securitySeries: SecuritySeries.NA,
+            extension: address(0),
+            defaultLegend: defaultLegend
+        });
+
+        uint256 maxEndTime = type(uint256).max;
+
+        (bytes memory sig, ) = CyberCorpHelper.computeEscrowSignature(
+            roundManager,
+            SecuritySeries.SeriesB,
+            RAISE_CAP,
+            MIN_TICKET,
+            MAX_TICKET,
+            RoundType.FounderApproved,
+            block.timestamp,
+            maxEndTime,
+            CyberCorpHelper.TEMPLATE_ID,
+            address(paymentToken),
+            PRICE_PER_UNIT,
+            VALUATION,
+            corpOwnerPrivKey,
+            corp
+        );
+
+        vm.prank(corpOwner);
+        bytes32 restrictedMaxRoundId = RoundManager(roundManager).createRound(
+            RoundLib.draft()
+                .setTickets(
+                    SecuritySeries.SeriesB,
+                    RoundType.FounderApproved,
+                    false,
+                    false, // allowTimedOffers = false — investor EOI expiry is ignored, round end governs
+                    true,  // restrictEndTimeReduction = true
+                    RAISE_CAP,
+                    MIN_TICKET,
+                    MAX_TICKET,
+                    address(paymentToken),
+                    PRICE_PER_UNIT,
+                    VALUATION,
+                    block.timestamp,
+                    maxEndTime
+                )
+                .setAgreement(
+                    CyberCorpHelper.TEMPLATE_ID,
+                    corpOwner,
+                    "Officer",
+                    "CEO",
+                    new string[](cd.length),
+                    testRoundPartyValues,
+                    new bytes[](cd.length),
+                    new address[](0),
+                    sig
+                ),
+            cd
+        );
+
+        // Confirm the round cannot be closed or shortened by the founder
+        vm.startPrank(corpOwner);
+        vm.expectRevert(RoundManager.EndTimeReductionRestricted.selector);
+        RoundManager(roundManager).closeRoundNow(restrictedMaxRoundId);
+        vm.expectRevert(RoundManager.EndTimeReductionRestricted.selector);
+        RoundManager(roundManager).setRoundEndTime(restrictedMaxRoundId, block.timestamp + 1 days);
+        vm.stopPrank();
+
+        // Investor submits EOI
+        uint256 balBefore = paymentToken.balanceOf(investor);
+        vm.startPrank(investor);
+        (bytes32 agreementId, ) = CyberCorpHelper.submitEOI(
+            RoundManager(roundManager),
+            registry,
+            restrictedMaxRoundId,
+            42,
+            5_000 * 10 ** 6,
+            10_000 * 10 ** 6,
+            corpOwner,
+            investorPrivKey
+        );
+        vm.stopPrank();
+
+        Escrow memory escBefore = RoundManager(roundManager).getEscrowDetails(agreementId);
+        assertEq(uint256(escBefore.status), uint256(EscrowStatus.PAID));
+        assertEq(paymentToken.balanceOf(investor), balBefore - 10_000 * 10 ** 6);
+
+        // Investor cannot recall — EOI never expires (allowTimedOffers=false + endTime=max)
+        vm.prank(investor);
+        vm.expectRevert(RoundManager.EOINotExpired.selector);
+        RoundManager(roundManager).recallEOI(agreementId);
+
+        // Founder rejects the EOI — must refund the investor
+        vm.prank(corpOwner);
+        RoundManager(roundManager).reject(agreementId);
+
+        Escrow memory escAfter = RoundManager(roundManager).getEscrowDetails(agreementId);
+        assertEq(uint256(escAfter.status), uint256(EscrowStatus.VOIDED));
+        assertEq(paymentToken.balanceOf(investor), balBefore);
+    }
 }
 
 // Separate FCFS tests in their own contract to avoid the original setUp()
