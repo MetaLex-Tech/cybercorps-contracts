@@ -197,6 +197,7 @@ contract UpgradeRoundManagerTokenWhitelistTest is Test {
                     roundType,
                     true, // publicRound
                     true, // allowTimedOffers
+                    false, // restrictEndTimeReduction
                     raiseCap,
                     minTicket,
                     maxTicket,

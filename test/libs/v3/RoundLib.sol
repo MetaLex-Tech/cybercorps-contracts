@@ -41,12 +41,8 @@
 
 pragma solidity ^0.8.28;
 
-import {SecurityClass, SecuritySeries} from "../CyberCorpConstants.sol";
-
-enum RoundType {
-    FCFS,
-    FounderApproved
-}
+import {SecurityClass, SecuritySeries} from "../../../src/CyberCorpConstants.sol";
+import {RoundType} from "../../../src/libs/RoundLib.sol";
 
 struct Round {
     bytes32 id;
@@ -78,7 +74,6 @@ struct Round {
     bytes escrowedSignature;
     bool publicRound;
     bool allowTimedOffers; // if false, ignore EOI expiries and use round end
-    bool restrictEndTimeReduction; // if true, owner cannot reduce endTime after creation
 }
 
 library RoundLib {
@@ -107,7 +102,6 @@ library RoundLib {
         RoundType roundType,
         bool publicRound,
         bool allowTimedOffers,
-        bool restrictEndTimeReduction,
         uint256 raiseCap,
         uint256 minTicket,
         uint256 maxTicket,
@@ -121,7 +115,6 @@ library RoundLib {
         round.roundType = roundType;
         round.publicRound = publicRound;
         round.allowTimedOffers = allowTimedOffers;
-        round.restrictEndTimeReduction = restrictEndTimeReduction;
         round.raiseCap = raiseCap;
         round.minTicket = minTicket;
         round.maxTicket = maxTicket;

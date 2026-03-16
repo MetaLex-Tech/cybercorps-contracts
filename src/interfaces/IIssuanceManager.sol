@@ -275,6 +275,14 @@ interface IIssuanceManager {
         uint256 id
     ) external view returns (bool);
 
+    function getCertScripifiedStatus(
+        address certAddress,
+        uint256 id
+    )
+        external
+        view
+        returns (bool isScripified, uint256 scripifiedUnits, uint256 maxUnitsRepresented);
+
     function convertScripToCert(
         address certAddress,
         uint256 amount
