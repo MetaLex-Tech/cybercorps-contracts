@@ -85,7 +85,7 @@ library PumpCorpFactoryLib {
         "CompanyOfficer(address eoa,string name,string contact,string title)"
     );
     bytes32 constant ROUND_SUPPLEMENTAL_TYPEHASH = keccak256(
-        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,CompanyOfficer officer,string companyName,string companyType,string companyJurisdiction,string companyContactDetails,string defaultDisputeResolution,bytes32 extensionDataHash,bytes32 roundPartyValuesHash,bytes32 legalDetailsHash,bytes32 certDataHash,bytes32[] conditionAddresses)CompanyOfficer(address eoa,string name,string contact,string title)"
+        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,uint8 publicRound,uint8 allowTimedOffers,uint8 restrictEndTimeReduction,CompanyOfficer officer,string companyName,string companyType,string companyJurisdiction,string companyContactDetails,string defaultDisputeResolution,bytes32 extensionDataHash,bytes32 roundPartyValuesHash,bytes32 legalDetailsHash,bytes32 certDataHash,bytes32[] conditionAddresses)CompanyOfficer(address eoa,string name,string contact,string title)"
     );
 }
 
@@ -308,6 +308,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         address companyPayable,
         bool publicRound,
         bool allowTimedOffers,
+        bool restrictEndTimeReduction,
         CompanyOfficer memory officer,
         string memory companyName,
         string memory companyType,
@@ -339,8 +340,9 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             PumpCorpFactoryLib.ROUND_SUPPLEMENTAL_TYPEHASH,
             corpSalt,
             companyPayable,
-            publicRound ? uint8(1) : uint8(0),
-            allowTimedOffers ? uint8(1) : uint8(0),
+            publicRound,
+            allowTimedOffers,
+            restrictEndTimeReduction,
             officerHash,
             keccak256(bytes(companyName)),
             keccak256(bytes(companyType)),
@@ -479,7 +481,8 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         uint256 startTime,
         uint256 endTime,
         bool publicRound,
-        bool allowTimedOffers
+        bool allowTimedOffers,
+        bool restrictEndTimeReduction
     )
         external
         returns (
@@ -516,6 +519,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
             _companyPayable,
             publicRound,
             allowTimedOffers,
+            restrictEndTimeReduction,
             _officer,
             companyName,
             companyType,
@@ -560,6 +564,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
                     roundType,
                     publicRound,
                     allowTimedOffers,
+                    restrictEndTimeReduction,
                     raiseCap,
                     minTicket,
                     maxTicket,

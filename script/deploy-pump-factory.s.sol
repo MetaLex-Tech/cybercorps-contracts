@@ -259,7 +259,8 @@ contract DeployPumpCorpFactoryScript is Script {
             roundStartTime, // startTime
             roundEndTime, // endTime
             true, // publicRound
-            true // allowTimedOffers
+            true, // allowTimedOffers
+            true // restrictEndTimeReduction
         );
 
         auth.updateRole(officerAddress, auth.OWNER_ROLE());
