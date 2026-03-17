@@ -48,7 +48,7 @@ contract DeployPumpCorpFactoryScript is Script {
         address deployerAddress = vm.addr(deployerPrivateKey);
         address investorAddress = vm.addr(investorPrivateKey);
         
-        string memory saltStr = "PumpCorpFactory.deploy.v1.0.1-dev2";
+        string memory saltStr = "PumpCorpFactory.deploy.v1.0.2-dev";
         bytes32 salt = bytes32(keccak256(bytes(saltStr)));
 
         // TODO WIP: as of 
