@@ -429,10 +429,6 @@ contract DeployPumpCorpFactoryScript is Script {
             keccak256(bytes(officer.contact)),
             keccak256(bytes(officer.title))
         ));
-        bytes32[] memory conditionHashes = new bytes32[](conditions.length);
-        for (uint256 i = 0; i < conditions.length; i++) {
-            conditionHashes[i] = keccak256(abi.encode(conditions[i]));
-        }
         bytes32 structHash = keccak256(abi.encode(
             PumpCorpFactoryLib.ROUND_SUPPLEMENTAL_TYPEHASH,
             corpSalt,
@@ -446,11 +442,11 @@ contract DeployPumpCorpFactoryScript is Script {
             keccak256(bytes(companyJurisdiction)),
             keccak256(bytes(companyContactDetails)),
             keccak256(bytes(defaultDisputeResolution)),
-            keccak256(abi.encode(extensionData)),
-            keccak256(abi.encode(roundPartyValues)),
-            keccak256(abi.encode(legalDetails)),
-            keccak256(abi.encode(certData)),
-            conditionHashes
+            PumpCorpFactoryLib.hashBytesArray(extensionData),
+            PumpCorpFactoryLib.hashStringArray(roundPartyValues),
+            PumpCorpFactoryLib.hashStringArray(legalDetails),
+            PumpCorpFactoryLib.hashCertDataArray(certData),
+            PumpCorpFactoryLib.hashAddresses(conditions)
         ));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivKey, digest);

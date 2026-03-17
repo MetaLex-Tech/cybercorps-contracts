@@ -225,10 +225,6 @@ contract PumpCorpFactoryTest is Test {
         uint256 signerPk
     ) internal view returns (bytes memory) {
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
-        bytes32[] memory conditionHashes = new bytes32[](conditions.length);
-        for (uint256 i = 0; i < conditions.length; i++) {
-            conditionHashes[i] = keccak256(abi.encode(conditions[i]));
-        }
         bytes32 domainSep = keccak256(abi.encode(
             PumpCorpFactoryLib.FACTORY_DOMAIN_TYPEHASH,
             keccak256(bytes("PumpCorpFactory")),
@@ -256,11 +252,11 @@ contract PumpCorpFactoryTest is Test {
             keccak256(bytes(companyJurisdiction_)),
             keccak256(bytes(companyContactDetails_)),
             keccak256(bytes(defaultDisputeResolution_)),
-            keccak256(abi.encode(extensionData_)),
-            keccak256(abi.encode(roundPartyValues_)),
-            keccak256(abi.encode(legal)),
-            keccak256(abi.encode(certs)),
-            conditionHashes
+            PumpCorpFactoryLib.hashBytesArray(extensionData_),
+            PumpCorpFactoryLib.hashStringArray(roundPartyValues_),
+            PumpCorpFactoryLib.hashStringArray(legal),
+            PumpCorpFactoryLib.hashCertDataArray(certs),
+            PumpCorpFactoryLib.hashAddresses(conditions)
         ));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPk, digest);
