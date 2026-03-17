@@ -48,7 +48,7 @@ contract DeployPumpCorpFactoryScript is Script {
         address deployerAddress = vm.addr(deployerPrivateKey);
         address investorAddress = vm.addr(investorPrivateKey);
         
-        string memory saltStr = "PumpCorpFactory.deploy.v1.0.2-dev";
+        string memory saltStr = "PumpCorpFactory.deploy.v1.0.2-dev2";
         bytes32 salt = bytes32(keccak256(bytes(saltStr)));
 
         // TODO WIP: as of 
@@ -145,12 +145,12 @@ contract DeployPumpCorpFactoryScript is Script {
         // TODO WIP: remove before production
         // (3) Create corp and round
 
-        uint256 corpSaltUint = block.timestamp + 1;
+        uint256 corpSaltUint = uint256(keccak256(bytes("PumpCorpFactory.test-corp")));
         bytes32 corpSalt = keccak256(abi.encodePacked(corpSaltUint));
-        string memory companyName = "Test SubCo SPV 1";
+        string memory companyName = "Test Corp";
         string memory companyType = "series limited liability company";
         string memory companyJurisdiction = "Delaware";
-        string memory companyContact = "subco@parentco.example";
+        string memory companyContact = "contact@test.com";
         string memory disputeResolution = "binding arbitration";
 
         CompanyOfficer memory officer = CompanyOfficer({
@@ -196,7 +196,7 @@ contract DeployPumpCorpFactoryScript is Script {
         uint256 roundMinTicket = 1;
         uint256 roundMaxTicket = 10000000;
         RoundType roundType = RoundType.FCFS;
-        uint256 roundStartTime = block.timestamp - 1;
+        uint256 roundStartTime = 1773785359; // Tue Mar 17 15:09:19 PDT 2026
         uint256 roundEndTime = type(uint256).max; // no round expiry
         bytes32 roundTemplateId = bytes32(uint256(1)); // SAFE
         address roundPaymentToken = address(memeToken);
@@ -258,6 +258,13 @@ contract DeployPumpCorpFactoryScript is Script {
             predictedCorp,
             founderPrivateKey
         );
+
+        console2.log("==== Signatures ====");
+        console2.log("metadataSig:");
+        console2.logBytes(metadataSig);
+        console2.log("escrowedSig:");
+        console2.logBytes(escrowedSig);
+        console2.log("");
 
         // Deploy another CyberCorp and create a public round using SAFE template id 1
         (
@@ -365,6 +372,7 @@ contract DeployPumpCorpFactoryScript is Script {
         });
 
         memeToken.approve(roundManager, type(uint256).max);
+        uint256 eoiSaltUint = uint256(keccak256(bytes("PumpCorpFactory.test-eoi")));
         (bytes32 agreementId, uint256 tokenId) = RoundManager(roundManager).submitEOI(
             roundId,
             eoi,
@@ -374,13 +382,13 @@ contract DeployPumpCorpFactoryScript is Script {
                 vm,
                 CyberAgreementRegistry(registry),
                 roundTemplateId,
-                block.timestamp,
+                eoiSaltUint,
                 roundGlobalValues,
                 investorPartyValues,
                 officerAddress,
                 investorPrivateKey
             ),
-            block.timestamp,
+            eoiSaltUint,
             new address[](0),
             bytes32(0)
         );
