@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import {Test, console} from "forge-std/Test.sol";
 import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
-
+import {DeployPumpCorpFactoryScript} from "../script/deploy-pump-factory.s.sol";
 import {PumpCorpFactory, PumpCorpFactoryLib} from "../src/PumpCorpFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
@@ -15,6 +15,14 @@ import {Round, RoundType} from "../src/libs/RoundLib.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberCertData} from "../src/interfaces/IRoundManager.sol";
 import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
+import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
+import {EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
+import {MockERC20} from "./mock/MockERC20.sol";
+import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
+import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import {EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 
 /// @dev Always-failing condition: any allocation attempt on its escrow is blocked.
 contract AlwaysFalseCondition {
@@ -33,11 +41,15 @@ contract PumpCorpFactoryTest is Test {
     using Strings for address;
 
     // ── Actors ────────────────────────────────────────────────────────────────
-    uint256 internal officerPk  = 0xB0B;
-    uint256 internal attackerPk = 0xDEAD;
+    uint256 internal deployerPk;
+    uint256 internal officerPk;
+    uint256 internal attackerPk;
+    uint256 internal investorPk;
 
-    address internal officer  = vm.addr(officerPk);
-    address internal attacker = vm.addr(attackerPk);
+    address internal deployer;
+    address internal officer;
+    address internal attacker;
+    address internal investor;
 
     // ── Live deployments (DeploymentConstants.coreV2) ────────────
     address internal metalexSafe = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
@@ -46,14 +58,13 @@ contract PumpCorpFactoryTest is Test {
 
     // Convenience aliases
     address internal REGISTRY                 = net.cyberAgreementRegistry;
-    address internal ISSUANCE_MANAGER_FACTORY = net.issuanceManagerFactory;
     address internal CYBERCORP_SINGLE_FACTORY = net.cyberCorpSingleFactory;
     address internal DEAL_MANAGER_FACTORY     = net.dealManagerFactory;
-    address internal ROUND_MANAGER_FACTORY    = net.roundManagerFactory;
     address internal URI_BUILDER              = net.uriBuilder;
 
     // ── Fresh PumpCorpFactory deployed in setUp ───────────────────────────────
     PumpCorpFactory internal pumpFactory;
+    RoundManagerFactory internal rmFactory;
 
     // ── Shared round constants ────────────────────────────────────────────────
     uint256 internal constant RAISE_CAP      = 1_000_000e6;
@@ -64,6 +75,9 @@ contract PumpCorpFactoryTest is Test {
 
     // Any bytes32 template ID works for createRound (registry not consulted there)
     bytes32 internal constant TEMPLATE_ID = bytes32(uint256(1));
+
+    // ── Lifecycle test additions ──────────────────────────────────────────────
+    MockERC20 internal payToken;      // deployed in setUp
 
     // ── Shared cert / legal arrays (1 cert → legalDetails & extensionData length 1) ─
     CyberCertData[] internal certDataArr;
@@ -76,25 +90,14 @@ contract PumpCorpFactoryTest is Test {
         assertEq(block.chainid, DeploymentConstants.BASE, "Fork test: Base only @ block 43534187");
         vm.rollFork(43534187);
 
-        address deployer = address(this);
-        BorgAuth auth = new BorgAuth(deployer);
+        (deployer, deployerPk) = makeAddrAndKey("deployer");
+        (officer, officerPk) = makeAddrAndKey("officer");
+        (attacker, attackerPk) = makeAddrAndKey("attacker");
+        (investor, investorPk) = makeAddrAndKey("investor");
 
-        pumpFactory = PumpCorpFactory(
-            address(
-                new ERC1967Proxy(
-                    address(new PumpCorpFactory()),
-                    abi.encodeWithSelector(
-                        PumpCorpFactory.initialize.selector,
-                        address(auth),
-                        REGISTRY,
-                        ISSUANCE_MANAGER_FACTORY,
-                        CYBERCORP_SINGLE_FACTORY,
-                        DEAL_MANAGER_FACTORY,
-                        ROUND_MANAGER_FACTORY,
-                        URI_BUILDER
-                    )
-                )
-            )
+        (pumpFactory, rmFactory) = (new DeployPumpCorpFactoryScript()).runWithArgs(
+            "PumpCorpFactoryTest",
+            deployerPk
         );
 
         // Simulate granting PumpCorpFactory owner access to LeXcheX
@@ -119,13 +122,8 @@ contract PumpCorpFactoryTest is Test {
         extensionData   = new bytes[](1);
         extensionData[0] = "";
 
-        // Upgrade the RoundManagerFactory to use the locally compiled RoundManager
-        // (which includes the `restrictEndTimeReduction` field) so that createRound calls
-        // encode/decode correctly against the new struct layout.
-        RoundManagerFactory rmFactory = RoundManagerFactory(ROUND_MANAGER_FACTORY);
-        vm.startPrank(metalexSafe);
-        rmFactory.setRefImplementation(address(new RoundManager()));
-        vm.stopPrank();
+        // ── Lifecycle setup ──────────────────────────────────────────────────
+        payToken = new MockERC20("Test Token", "TT", 9);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -139,7 +137,7 @@ contract PumpCorpFactoryTest is Test {
         bytes32 corpSalt = keccak256(abi.encodePacked(salt));
         corp = CyberCorpSingleFactory(CYBERCORP_SINGLE_FACTORY)
             .computeCyberCorpSingleAddress(corpSalt);
-        rm   = RoundManagerFactory(ROUND_MANAGER_FACTORY)
+        rm   = rmFactory
             .computeRoundManagerAddress(corpSalt);
     }
 
@@ -1459,6 +1457,270 @@ contract PumpCorpFactoryTest is Test {
             conditions,   // ← malicious condition injected
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
             start, end, true, true, true
+        );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  FULL LIFECYCLE: submitEOI + allocate
+    //  Uses template 777 (existing on Base mainnet) and a MockERC20 payment token.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// Build party-values sized to TEMPLATE_ID's partyFields.
+    /// Slot 0 = name, slot 1 = eoa hex string, remaining slots = "".
+    function _lifecyclePartyValues(string memory name_, address eoa_)
+        internal view returns (string[] memory pv)
+    {
+        (, , , string[] memory pFields) = CyberAgreementRegistry(REGISTRY)
+            .getTemplateDetails(TEMPLATE_ID);
+        pv = new string[](pFields.length);
+        if (pFields.length > 0) pv[0] = name_;
+        if (pFields.length > 1) pv[1] = eoa_.toHexString();
+    }
+
+    /// Build global-values sized to TEMPLATE_ID's globalFields.
+    /// Slot 0 = "Seed Round", remaining slots = "".
+    function _lifecycleGlobalValues()
+        internal view returns (string[] memory gv)
+    {
+        (, , string[] memory gFields, ) = CyberAgreementRegistry(REGISTRY)
+            .getTemplateDetails(TEMPLATE_ID);
+        gv = new string[](gFields.length);
+        if (gFields.length > 0) gv[0] = "Seed Round";
+    }
+
+    /// Escrow signature parameterised for a specific paymentToken, templateId, and roundType.
+    function _escrowSigFull(
+        address rm_,
+        address corp_,
+        uint256 signerPk_,
+        uint256 startTime_,
+        uint256 endTime_,
+        address paymentToken_,
+        bytes32 templateId_,
+        RoundType roundType_
+    ) internal view returns (bytes memory sig) {
+        bytes32 roundId_ = keccak256(abi.encodePacked(
+            SecuritySeries.SeriesSeed,
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            uint8(roundType_),
+            startTime_, endTime_,
+            templateId_,
+            paymentToken_,
+            PRICE_PER_UNIT, VALUATION, corp_
+        ));
+        bytes32 domainSep = keccak256(abi.encode(
+            EIP712Lib.EIP712_DOMAIN_TYPEHASH,
+            keccak256(bytes("RoundManager")),
+            keccak256(bytes("1")),
+            block.chainid, rm_
+        ));
+        bytes32 structHash = keccak256(abi.encode(
+            EIP712Lib.ESCROWEDSIGNATUREDATA_TYPEHASH,
+            roundId_,
+            uint8(SecuritySeries.SeriesSeed),
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            uint8(roundType_),
+            startTime_, endTime_,
+            templateId_,
+            paymentToken_,
+            PRICE_PER_UNIT, VALUATION, corp_
+        ));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPk_, digest);
+        sig = abi.encodePacked(r, s, v);
+    }
+
+    /// Deploy a corp + round using payToken and TEMPLATE_ID.
+    function _deployLifecycle(uint256 salt_, RoundType roundType_)
+        internal
+        returns (address corp_, address rm_, bytes32 roundId_)
+    {
+        (address predCorp, address predRM) = _predict(salt_);
+        uint256 start = block.timestamp - 1;
+        uint256 end   = block.timestamp + 30 days;
+
+        string[] memory officerPv = _lifecyclePartyValues("Alice Officer", officer);
+
+        bytes memory escrowSig = _escrowSigFull(
+            predRM, predCorp, officerPk,
+            start, end,
+            address(payToken), TEMPLATE_ID, roundType_
+        );
+        bytes memory metaSig = _metaSig(
+            salt_, address(this), true, true, true,
+            _officer(officer, "Alice Officer"),
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            extensionData,
+            officerPv,
+            legalDetails, certDataArr, new address[](0),
+            officerPk
+        );
+
+        (corp_, , , , rm_, roundId_) = pumpFactory.deployCyberCorpAndCreateRoundFor(
+            salt_,
+            SecuritySeries.SeriesSeed,
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            address(this),
+            _officer(officer, "Alice Officer"),
+            legalDetails, extensionData, certDataArr,
+            TEMPLATE_ID,
+            address(payToken), PRICE_PER_UNIT, VALUATION,
+            officerPv,
+            escrowSig,
+            metaSig,
+            roundType_,
+            new address[](0),
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            start, end,
+            true, true, true
+        );
+    }
+
+    /// Compute the investor's EIP-712 EOI signature for TEMPLATE_ID.
+    function _eoiSig(
+        uint256 eoiSalt_,
+        string[] memory globalValues_,
+        string[] memory investorPv_
+    ) internal view returns (bytes memory) {
+        CyberAgreementRegistry reg = CyberAgreementRegistry(REGISTRY);
+        (
+            string memory legalUri,
+            ,
+            string[] memory gFields,
+            string[] memory pFields
+        ) = reg.getTemplateDetails(TEMPLATE_ID);
+        address[] memory parties = new address[](2);
+        parties[0] = officer;
+        parties[1] = investor;
+        bytes32 contractId = keccak256(
+            abi.encode(TEMPLATE_ID, eoiSalt_, globalValues_, parties)
+        );
+        return CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            reg.DOMAIN_SEPARATOR(),
+            reg.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            legalUri,
+            gFields,
+            pFields,
+            globalValues_,
+            investorPv_,
+            investorPk
+        );
+    }
+
+    function _emptyLex() internal pure returns (LexChexDetails memory) {
+        return LexChexDetails({
+            request: MintRequest({
+                uuid: 0, owner: address(0),
+                investorName: "", investorType: "",
+                investorJurisdiction: "", investorContact: "",
+                mintPrice: 0, expiry: 0, paymentToken: address(0)
+            }),
+            templateId: bytes32(0),
+            salt: 0,
+            globalValues: new string[](0),
+            parties: new address[](0),
+            partyValues: new string[][](0),
+            agreementSignature: ""
+        });
+    }
+
+    /// FCFS round: submitEOI auto-triggers allocate — full life cycle in one tx.
+    function test_HappyPath_SubmitEOI_FCFS() public {
+        (, address rm, bytes32 roundId) = _deployLifecycle(300001, RoundType.FCFS);
+
+        string[] memory globalValues = _lifecycleGlobalValues();
+        string[] memory investorPv   = _lifecyclePartyValues("Test Investor", investor);
+        uint256 eoiSalt      = 1;
+        uint256 investAmount = MIN_TICKET;
+
+        payToken.mint(investor, investAmount);
+        vm.startPrank(investor);
+        payToken.approve(rm, investAmount);
+
+        EOI memory eoi = EOI({
+            name: "Test Investor",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "investor@test.com",
+            minAmount: investAmount,
+            maxAmount: investAmount,
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
+        });
+
+        (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
+            roundId, eoi,
+            globalValues, investorPv,
+            _eoiSig(eoiSalt, globalValues, investorPv),
+            eoiSalt, new address[](0), bytes32(0)
+        );
+        vm.stopPrank();
+
+        assertTrue(
+            CyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
+            "agreement must be finalized after FCFS submitEOI"
+        );
+        assertEq(
+            RoundManager(rm).getRound(roundId).raised,
+            investAmount,
+            "raised must equal investAmount"
+        );
+    }
+
+    /// FounderApproved round: submitEOI parks the EOI, then officer calls allocate.
+    function test_HappyPath_SubmitEOI_FounderApproved_Allocate() public {
+        (, address rm, bytes32 roundId) = _deployLifecycle(300002, RoundType.FounderApproved);
+
+        string[] memory globalValues = _lifecycleGlobalValues();
+        string[] memory investorPv   = _lifecyclePartyValues("Test Investor", investor);
+        uint256 eoiSalt      = 2;
+        uint256 investAmount = MIN_TICKET;
+
+        payToken.mint(investor, investAmount);
+        vm.startPrank(investor);
+        payToken.approve(rm, investAmount);
+
+        EOI memory eoi = EOI({
+            name: "Test Investor",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "investor@test.com",
+            minAmount: investAmount,
+            maxAmount: investAmount,
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
+        });
+
+        (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
+            roundId, eoi,
+            globalValues, investorPv,
+            _eoiSig(eoiSalt, globalValues, investorPv),
+            eoiSalt, new address[](0), bytes32(0)
+        );
+        vm.stopPrank();
+
+        // EOI is parked (escrow PAID) but agreement not yet finalized
+        assertFalse(
+            CyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
+            "must not be finalized before allocate"
+        );
+
+        // Officer approves and allocates
+        vm.prank(officer);
+        RoundManager(rm).allocate(agreementId, investAmount);
+
+        assertTrue(
+            CyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
+            "agreement must be finalized after allocate"
+        );
+        assertEq(
+            RoundManager(rm).getRound(roundId).raised,
+            investAmount,
+            "raised must equal investAmount"
         );
     }
 }
