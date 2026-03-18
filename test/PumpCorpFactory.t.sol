@@ -80,6 +80,7 @@ contract PumpCorpFactoryTest is Test {
     CyberCertData[] internal certDataArr;
     string[]        internal legalDetails;
     bytes[]         internal extensionData;
+    string[]        internal officerPartyValues;
 
     /// As of 2026/03/18, we haven't deployed the dependent `RoundManager` with `restrictEndTimeReduction`
     /// to Base mainnet yet, so we will simulate the upgrade here
@@ -121,6 +122,7 @@ contract PumpCorpFactoryTest is Test {
 
         // ── Lifecycle setup ──────────────────────────────────────────────────
         payToken = new MockERC20("Test Token", "TT", 9);
+        officerPartyValues = _lifecyclePartyValues("Alice Officer", officer);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -145,17 +147,6 @@ contract PumpCorpFactoryTest is Test {
         returns (CompanyOfficer memory)
     {
         return CompanyOfficer({eoa: eoa, name: name, contact: "officer@corp.com", title: "CEO"});
-    }
-
-    /// roundPartyValues expected by PumpCorpFactory: [0]=name, [1]=EOA hex string.
-    function _partyValues(address eoa, string memory name)
-        internal
-        pure
-        returns (string[] memory pv)
-    {
-        pv    = new string[](2);
-        pv[0] = name;
-        pv[1] = eoa.toHexString();
     }
 
     /// Build party-values sized to TEMPLATE_ID's partyFields.
@@ -251,7 +242,7 @@ contract PumpCorpFactoryTest is Test {
             _officer(officer, "Alice Officer"),
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
             extensionData,
-            _partyValues(officer, "Alice Officer"),
+            officerPartyValues,
             legalDetails,
             certDataArr,
             new address[](0),
@@ -360,7 +351,7 @@ contract PumpCorpFactoryTest is Test {
         uint256 start = block.timestamp - 1;
         uint256 end   = block.timestamp + 30 days;
 
-        string[] memory officerPv = _lifecyclePartyValues("Alice Officer", officer);
+        string[] memory officerPv = officerPartyValues;
 
         bytes memory escrowSig = _escrowSigFull(
             predRM, predCorp, officerPk,
@@ -515,7 +506,7 @@ contract PumpCorpFactoryTest is Test {
 
         // Attacker's officer struct + matching partyValues pointing to attacker
         CompanyOfficer memory fakeOff = _officer(attacker, "Attacker");
-        string[] memory fakePv = _partyValues(attacker, fakeOff.name);
+        string[] memory fakePv = _lifecyclePartyValues(fakeOff.name, attacker);
 
         // Attacker cannot use his own signatures
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
@@ -538,7 +529,7 @@ contract PumpCorpFactoryTest is Test {
                 _officer(officer, "Alice Officer"),
                 "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
                 extensionData,
-                _partyValues(officer, "Alice Officer"),
+                officerPartyValues,
                 legalDetails,
                 certDataArr,
                 new address[](0),
@@ -585,7 +576,7 @@ contract PumpCorpFactoryTest is Test {
         bytes memory attackerSig = _escrowSigFull(predRM, predCorp, attackerPk, start, end, address(0), TEMPLATE_ID, RoundType.FCFS);
 
         CompanyOfficer memory claimedOff = _officer(officer, "Alice Officer");
-        string[] memory pv = _partyValues(officer, claimedOff.name);
+        string[] memory pv = _lifecyclePartyValues(claimedOff.name, officer);
 
         vm.expectRevert(RoundManager.InvalidEscrowedSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRoundFor(
@@ -619,7 +610,7 @@ contract PumpCorpFactoryTest is Test {
         bytes memory attackerSig = _metaSigDefault(salt, attackerPk);
 
         CompanyOfficer memory claimedOff = _officer(officer, "Alice Officer");
-        string[] memory pv = _partyValues(officer, claimedOff.name);
+        string[] memory pv = _lifecyclePartyValues(claimedOff.name, officer);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRoundFor(
@@ -789,7 +780,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"),
+            officerPartyValues,
             _escrowSigFull(predRMA, predCorpA, officerPk, start, end, address(0), TEMPLATE_ID, RoundType.FCFS), // signed with saltA
             _metaSigDefault(saltB, officerPk),
             RoundType.FCFS, new address[](0),
@@ -818,7 +809,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"),
+            officerPartyValues,
             _escrowSigFull(predRMB, predCorpB, officerPk, start, end, address(0), TEMPLATE_ID, RoundType.FCFS),
             _metaSigDefault(saltA, officerPk), // signed with saltA
             RoundType.FCFS, new address[](0),
@@ -850,7 +841,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             _metaSigDefault(salt, officerPk),
             RoundType.FCFS, new address[](0),
             RAISE_CAP * 100, // ← tampered: 100× raise cap
@@ -879,7 +870,7 @@ contract PumpCorpFactoryTest is Test {
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT,
             VALUATION / 10, // ← tampered: 10× lower valuation
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             _metaSigDefault(salt, officerPk),
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -907,7 +898,7 @@ contract PumpCorpFactoryTest is Test {
             TEMPLATE_ID,
             address(0xCAFEBABE), // ← tampered payment token
             PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             _metaSigDefault(salt, officerPk),
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -936,7 +927,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             _metaSigDefault(salt, officerPk),
             RoundType.FounderApproved, // ← tampered
             new address[](0),
@@ -964,7 +955,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             _metaSigDefault(salt, officerPk),
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -992,7 +983,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"),
+            officerPartyValues,
             "",  // empty escrowed sig
             _metaSigDefault(salt, officerPk),
             RoundType.FCFS, new address[](0),
@@ -1018,7 +1009,7 @@ contract PumpCorpFactoryTest is Test {
 
         // Attacker forges a meta sig with their own key, redirecting payment to themselves.
         // The factory checks that the meta sig signer == officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, attacker, true, true, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, _partyValues(officer, "Alice Officer"), legalDetails, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, attacker, true, true, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, officerPartyValues, legalDetails, certDataArr, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRoundFor(
@@ -1030,7 +1021,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), officerEscrowedSig,
+            officerPartyValues, officerEscrowedSig,
             attackerMetaSig,
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -1048,7 +1039,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), officerEscrowedSig,
+            officerPartyValues, officerEscrowedSig,
             _metaSigDefault(salt, officerPk), // ← signed by officer, not attacker
             RoundType.FCFS,
             new address[](0),
@@ -1073,7 +1064,7 @@ contract PumpCorpFactoryTest is Test {
         altLegal[0] = "Attacker-substituted legal details";
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, _partyValues(officer, "Alice Officer"), altLegal, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, officerPartyValues, altLegal, certDataArr, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRoundFor(
@@ -1086,7 +1077,7 @@ contract PumpCorpFactoryTest is Test {
             extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), officerSig,
+            officerPartyValues, officerSig,
             attackerMetaSig,
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -1105,7 +1096,7 @@ contract PumpCorpFactoryTest is Test {
             extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), officerSig,
+            officerPartyValues, officerSig,
             _metaSigDefault(salt, officerPk),
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -1146,7 +1137,7 @@ contract PumpCorpFactoryTest is Test {
         });
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, _partyValues(officer, "Alice Officer"), legalDetails, altCert, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, officerPartyValues, legalDetails, altCert, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRoundFor(
@@ -1159,7 +1150,7 @@ contract PumpCorpFactoryTest is Test {
             altCert,                    // ← substituted cert
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             attackerMetaSig,
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -1178,7 +1169,7 @@ contract PumpCorpFactoryTest is Test {
             altCert,                    // ← substituted cert
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             _metaSigDefault(salt, officerPk),
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -1210,7 +1201,7 @@ contract PumpCorpFactoryTest is Test {
         });
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, _partyValues(officer, "Alice Officer"), legalDetails, altCert, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, officerPartyValues, legalDetails, altCert, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRoundFor(
@@ -1223,7 +1214,7 @@ contract PumpCorpFactoryTest is Test {
             altCert, // ← substituted cert
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             attackerMetaSig,
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -1242,7 +1233,7 @@ contract PumpCorpFactoryTest is Test {
             altCert, // ← substituted cert
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             _metaSigDefault(salt, officerPk),
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -1275,7 +1266,7 @@ contract PumpCorpFactoryTest is Test {
             contact: "officer@corp.com",
             title:   "CEO"
         });
-        string[] memory pv = _partyValues(officer, "Dr. Impostor");
+        string[] memory pv = _lifecyclePartyValues("Dr. Impostor", officer);
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
         bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, true, fakeNameOfficer, "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, pv, legalDetails, certDataArr, new address[](0), attackerPk);
@@ -1334,7 +1325,7 @@ contract PumpCorpFactoryTest is Test {
         });
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, true, altTitleOfficer, "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, _partyValues(officer, "Alice Officer"), legalDetails, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, true, altTitleOfficer, "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, officerPartyValues, legalDetails, certDataArr, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRoundFor(
@@ -1346,7 +1337,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             attackerMetaSig,
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -1364,7 +1355,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             _metaSigDefault(salt, officerPk),
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -1389,7 +1380,7 @@ contract PumpCorpFactoryTest is Test {
         bytes memory sig = _escrowSigFull(predRM, predCorp, officerPk, start, end, address(0), TEMPLATE_ID, RoundType.FCFS);
 
         // Attacker cannot use his own signatures
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), false, true, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, _partyValues(officer, "Alice Officer"), legalDetails, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), false, true, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, officerPartyValues, legalDetails, certDataArr, new address[](0), attackerPk);
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,
@@ -1400,7 +1391,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             attackerMetaSig,
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -1421,7 +1412,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             _metaSigDefault(salt, officerPk),
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -1442,7 +1433,7 @@ contract PumpCorpFactoryTest is Test {
         bytes memory sig = _escrowSigFull(predRM, predCorp, officerPk, start, end, address(0), TEMPLATE_ID, RoundType.FCFS);
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, false, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, _partyValues(officer, "Alice Officer"), legalDetails, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, false, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, officerPartyValues, legalDetails, certDataArr, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRoundFor(
@@ -1454,7 +1445,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             attackerMetaSig,
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -1474,7 +1465,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             _metaSigDefault(salt, officerPk),
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -1495,7 +1486,7 @@ contract PumpCorpFactoryTest is Test {
         bytes memory sig = _escrowSigFull(predRM, predCorp, officerPk, start, end, address(0), TEMPLATE_ID, RoundType.FCFS);
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
-        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, false, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, _partyValues(officer, "Alice Officer"), legalDetails, certDataArr, new address[](0), attackerPk);
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, false, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, officerPartyValues, legalDetails, certDataArr, new address[](0), attackerPk);
 
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRoundFor(
@@ -1507,7 +1498,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             attackerMetaSig,
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -1528,7 +1519,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             _metaSigDefault(salt, officerPk),
             RoundType.FCFS, new address[](0),
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
@@ -1568,7 +1559,7 @@ contract PumpCorpFactoryTest is Test {
             _officer(officer, "Alice Officer"),
             "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
             extensionData,
-            _partyValues(officer, "Alice Officer"),
+            officerPartyValues,
             legalDetails,
             certDataArr,
             new address[](0),
@@ -1585,7 +1576,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             attackerMetaSig,
             RoundType.FCFS,
             conditions,   // ← malicious condition injected
@@ -1604,7 +1595,7 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(0), PRICE_PER_UNIT, VALUATION,
-            _partyValues(officer, "Alice Officer"), sig,
+            officerPartyValues, sig,
             _metaSigDefault(salt, officerPk),
             RoundType.FCFS,
             conditions,   // ← malicious condition injected
