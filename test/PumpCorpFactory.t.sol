@@ -28,7 +28,7 @@ contract AlwaysFalseCondition {
 ///         swap in a different officer or alter key corp/round parameters.
 ///
 /// Run with (timeout = 5m):
-///   forge test --use solc:0.8.28 --via-ir --fork-url $END_PT_BASE_SEPOLIA -vvv --mp PumpCorpFactory.t.sol
+///   forge test --use solc:0.8.28 --via-ir --fork-url $END_PT_BASE -vvv --mp PumpCorpFactory.t.sol
 contract PumpCorpFactoryTest is Test {
     using Strings for address;
 
@@ -39,10 +39,10 @@ contract PumpCorpFactoryTest is Test {
     address internal officer  = vm.addr(officerPk);
     address internal attacker = vm.addr(attackerPk);
 
-    // ── Base Sepolia live deployments (DeploymentConstants.coreV2) ────────────
+    // ── Live deployments (DeploymentConstants.coreV2) ────────────
     address internal metalexSafe = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
     DeploymentConstants.CoreDeployment internal net =
-        DeploymentConstants.coreV2(DeploymentConstants.BASE_SEPOLIA);
+        DeploymentConstants.coreV2(DeploymentConstants.BASE);
 
     // Convenience aliases
     address internal REGISTRY                 = net.cyberAgreementRegistry;
@@ -70,13 +70,12 @@ contract PumpCorpFactoryTest is Test {
     string[]        internal legalDetails;
     bytes[]         internal extensionData;
 
-    /// As of 2026/03/16, we haven't deployed the dependent `RoundManager` with `restrictEndTimeReduction`
-    /// to Base Sepolia yet, so we will simulate the upgrade here
+    /// As of 2026/03/18, we haven't deployed the dependent `RoundManager` with `restrictEndTimeReduction`
+    /// to Base mainnet yet, so we will simulate the upgrade here
     function setUp() public {
-        assertEq(block.chainid, DeploymentConstants.BASE_SEPOLIA, "Fork test: Base Sepolia only @ block 38956871");
-        vm.rollFork(38956871);
-        // Deploy a fresh BorgAuth + PumpCorpFactory pointing at the Sepolia infra,
-        // exactly as the deploy script does (minus the broadcast).
+        assertEq(block.chainid, DeploymentConstants.BASE, "Fork test: Base only @ block 43534187");
+        vm.rollFork(43534187);
+
         address deployer = address(this);
         BorgAuth auth = new BorgAuth(deployer);
 
@@ -98,6 +97,11 @@ contract PumpCorpFactoryTest is Test {
             )
         );
 
+        // Simulate granting PumpCorpFactory owner access to LeXcheX
+        vm.startPrank(metalexSafe);
+        BorgAuth(pumpFactory.lexchexAuth()).updateRole(address(pumpFactory), 99);
+        vm.stopPrank();
+
         string[] memory legend = new string[](1);
         legend[0] = "SEED SAFE";
         certDataArr.push(CyberCertData({
@@ -115,7 +119,7 @@ contract PumpCorpFactoryTest is Test {
         extensionData   = new bytes[](1);
         extensionData[0] = "";
 
-        // Upgrade the Sepolia RoundManagerFactory to use the locally compiled RoundManager
+        // Upgrade the RoundManagerFactory to use the locally compiled RoundManager
         // (which includes the `restrictEndTimeReduction` field) so that createRound calls
         // encode/decode correctly against the new struct layout.
         RoundManagerFactory rmFactory = RoundManagerFactory(ROUND_MANAGER_FACTORY);
