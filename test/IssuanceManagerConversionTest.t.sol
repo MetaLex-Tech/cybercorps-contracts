@@ -359,6 +359,8 @@ contract IssuanceManagerConversionTest is Test {
 
     function test_convertScripToCert_AllowsNonOwnerMintPath() public {
         ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
+        uint256 amount = 100 ether;
+        uint256 sourceCertId = _mintCert(certPrinter, otherInvestor, amount);
 
         ITransferRestrictionHook[] memory hooks = new ITransferRestrictionHook[](0);
         ICondition[] memory certToScrip = new ICondition[](0);
@@ -379,18 +381,22 @@ contract IssuanceManagerConversionTest is Test {
             true
         );
 
-        // Mint scrip to investor via issuance manager
-        uint256 amount = 100 ether;
-        vm.prank(address(issuanceManager));
-        ICyberScrip(scrip).mint(investor, amount);
+        vm.prank(otherInvestor);
+        issuanceManager.scripifyCert(
+            address(certPrinter),
+            sourceCertId,
+            amount,
+            investor
+        );
+        assertEq(ICyberScrip(scrip).balanceOf(investor), amount);
 
         // Non-owner should be able to convert and mint a cert via IssuanceManager
         vm.prank(investor);
         issuanceManager.convertScripToCert(address(certPrinter), amount);
 
-        assertEq(certPrinter.totalSupply(), 1);
-        assertEq(certPrinter.ownerOf(0), investor);
-        CertificateDetails memory details = certPrinter.getCertificateDetails(0);
+        assertEq(certPrinter.totalSupply(), 2);
+        assertEq(certPrinter.ownerOf(1), investor);
+        CertificateDetails memory details = certPrinter.getCertificateDetails(1);
         assertEq(details.unitsRepresented, amount);
     }
 
@@ -408,7 +414,7 @@ contract IssuanceManagerConversionTest is Test {
         });
 
         vm.prank(owner);
-        uint256 certId = issuanceManager.createCert(
+        uint256 certId = issuanceManager.createCertAndAssign(
             address(certPrinter),
             investor,
             details
@@ -466,8 +472,10 @@ contract IssuanceManagerConversionTest is Test {
         issuanceManager.convertScripToCert(address(certPrinter), scripAmount);
         assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
 
-        assertEq(certPrinter.totalSupply(), 2);
-        assertEq(certPrinter.ownerOf(1), investor);
+        assertEq(certPrinter.totalSupply(), 1);
+        assertEq(certPrinter.ownerOf(0), investor);
+        CertificateDetails memory restored = certPrinter.getCertificateDetails(0);
+        assertEq(restored.unitsRepresented, 1000);
     }
 
     function test_ScripRatio_AppliesOnScripifyAndConvert() public {
@@ -484,7 +492,11 @@ contract IssuanceManagerConversionTest is Test {
         });
 
         vm.prank(owner);
-        issuanceManager.createCert(address(certPrinter), investor, details);
+        issuanceManager.createCertAndAssign(
+            address(certPrinter),
+            investor,
+            details
+        );
 
         address scrip = issuanceManager.deployCyberScrip(
             address(certPrinter),
@@ -511,11 +523,11 @@ contract IssuanceManagerConversionTest is Test {
         vm.prank(investor);
         issuanceManager.convertScripToCert(address(certPrinter), 8);
 
-        assertEq(certPrinter.totalSupply(), 2);
+        assertEq(certPrinter.totalSupply(), 1);
         CertificateDetails memory newDetails = certPrinter.getCertificateDetails(
-            1
+            0
         );
-        assertEq(newDetails.unitsRepresented, 4);
+        assertEq(newDetails.unitsRepresented, 10);
     }
 
     function test_ScripifyWhitelist_EnabledBlocksNonWhitelisted() public {
@@ -532,7 +544,7 @@ contract IssuanceManagerConversionTest is Test {
         });
 
         vm.prank(owner);
-        uint256 certId = issuanceManager.createCert(
+        uint256 certId = issuanceManager.createCertAndAssign(
             address(certPrinter),
             investor,
             details
@@ -572,7 +584,7 @@ contract IssuanceManagerConversionTest is Test {
         });
 
         vm.prank(owner);
-        uint256 certId = issuanceManager.createCert(
+        uint256 certId = issuanceManager.createCertAndAssign(
             address(certPrinter),
             investor,
             details
@@ -613,7 +625,7 @@ contract IssuanceManagerConversionTest is Test {
         });
 
         vm.prank(owner);
-        uint256 certId = issuanceManager.createCert(
+        uint256 certId = issuanceManager.createCertAndAssign(
             address(certPrinter),
             investor,
             details
@@ -716,7 +728,11 @@ contract IssuanceManagerConversionTest is Test {
             extensionData: ""
         });
 
-        issuanceManager.createCert(address(certPrinter), investor, details);
+        issuanceManager.createCertAndAssign(
+            address(certPrinter),
+            investor,
+            details
+        );
 
         issuanceManager.deployCyberScrip(
             address(certPrinter),
@@ -837,10 +853,10 @@ contract IssuanceManagerConversionTest is Test {
         issuanceManager.convertScripToCert(address(certPrinter), 40);
 
         assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
-        assertEq(certPrinter.totalSupply(), 2);
-        assertEq(certPrinter.ownerOf(1), investor);
-        CertificateDetails memory converted = certPrinter.getCertificateDetails(1);
-        assertEq(converted.unitsRepresented, 10);
+        assertEq(certPrinter.totalSupply(), 1);
+        assertEq(certPrinter.ownerOf(0), investor);
+        CertificateDetails memory converted = certPrinter.getCertificateDetails(0);
+        assertEq(converted.unitsRepresented, 75);
     }
 
     function test_convertScripToCert_revertGatesAndConditionValidation() public {
@@ -861,6 +877,8 @@ contract IssuanceManagerConversionTest is Test {
             )
         );
 
+        uint256 sourceCertId = _mintCert(certPrinter, otherInvestor, 134);
+
         address scrip = issuanceManager.deployCyberScrip(
             address(certPrinter),
             new ITransferRestrictionHook[](0),
@@ -876,9 +894,14 @@ contract IssuanceManagerConversionTest is Test {
             true
         );
 
-        vm.prank(address(issuanceManager));
-        ICyberScrip(scrip).mint(investor, 200);
-        assertEq(ICyberScrip(scrip).balanceOf(investor), 200);
+        vm.prank(otherInvestor);
+        issuanceManager.scripifyCert(
+            address(certPrinter),
+            sourceCertId,
+            134,
+            investor
+        );
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 201);
 
         // Fails minimum
         vm.prank(investor);
@@ -899,10 +922,10 @@ contract IssuanceManagerConversionTest is Test {
         vm.prank(investor);
         issuanceManager.convertScripToCert(address(certPrinter), 150);
 
-        assertEq(ICyberScrip(scrip).balanceOf(investor), 50);
-        assertEq(certPrinter.totalSupply(), 1);
-        assertEq(certPrinter.ownerOf(0), investor);
-        CertificateDetails memory newCert = certPrinter.getCertificateDetails(0);
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 51);
+        assertEq(certPrinter.totalSupply(), 2);
+        assertEq(certPrinter.ownerOf(1), investor);
+        CertificateDetails memory newCert = certPrinter.getCertificateDetails(1);
         assertEq(newCert.unitsRepresented, 100); // 150 * 2 / 3
     }
 
@@ -921,7 +944,11 @@ contract IssuanceManagerConversionTest is Test {
             extensionData: "Original extension"
         });
         vm.prank(owner);
-        issuanceManager.createCert(address(certPrinter), investor, original);
+        issuanceManager.createCertAndAssign(
+            address(certPrinter),
+            investor,
+            original
+        );
 
         // Mark existing cert as voided while investor still owns it.
         issuanceManager.voidCertificate(address(certPrinter), 0);
@@ -943,18 +970,23 @@ contract IssuanceManagerConversionTest is Test {
             true
         );
 
-        // 20 scrip -> 10 units at ratio 2:1
-        vm.prank(address(issuanceManager));
-        ICyberScrip(scrip).mint(investor, 20);
+        uint256 sourceCertId = _mintCert(certPrinter, otherInvestor, 10);
+        vm.prank(otherInvestor);
+        issuanceManager.scripifyCert(
+            address(certPrinter),
+            sourceCertId,
+            10,
+            investor
+        );
         vm.prank(investor);
         issuanceManager.convertScripToCert(address(certPrinter), 20);
 
-        // Current recertification path mints a new cert when no legal-owner record exists.
         assertEq(certPrinter.totalSupply(), 2);
-        assertEq(certPrinter.ownerOf(1), investor);
         assertEq(certPrinter.ownerOf(0), investor);
+        assertEq(certPrinter.ownerOf(1), otherInvestor);
+        assertFalse(certPrinter.isVoided(0));
 
-        CertificateDetails memory reformed = certPrinter.getCertificateDetails(1);
+        CertificateDetails memory reformed = certPrinter.getCertificateDetails(0);
         assertEq(reformed.unitsRepresented, 10);
         assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
     }
@@ -1001,8 +1033,10 @@ contract IssuanceManagerConversionTest is Test {
         vm.prank(investor);
         issuanceManager.convertScripToCert(address(certPrinter), 5);
         assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
-        assertEq(certPrinter.totalSupply(), 2);
-        assertEq(certPrinter.ownerOf(1), investor);
+        assertEq(certPrinter.totalSupply(), 1);
+        assertEq(certPrinter.ownerOf(0), investor);
+        CertificateDetails memory restored = certPrinter.getCertificateDetails(0);
+        assertEq(restored.unitsRepresented, 10);
     }
 
     function _deployPrinter(
@@ -1037,7 +1071,11 @@ contract IssuanceManagerConversionTest is Test {
             extensionData: ""
         });
         vm.prank(owner);
-        tokenId = issuanceManager.createCert(address(certPrinter), to, details);
+        tokenId = issuanceManager.createCertAndAssign(
+            address(certPrinter),
+            to,
+            details
+        );
     }
 }
 

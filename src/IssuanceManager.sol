@@ -303,7 +303,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         tokenId = cert.totalSupply();
 
-        cert.safeMintAndAssign(investor, tokenId, _details);
+        cert.safeMintAndAssign(investor, tokenId, _details, "");
         string memory tokenURI = cert.tokenURI(tokenId);
         emit CertificateCreated(
             tokenId,
@@ -342,7 +342,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         tokenId = cert.totalSupply();
 
-        cert.safeMintAndAssign(investor, tokenId, _details);
+        cert.safeMintAndAssign(investor, tokenId, _details, investorName);
 
         Endorsement memory newEndorsement = Endorsement({
             endorser: address(this),
