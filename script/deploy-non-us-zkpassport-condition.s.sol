@@ -10,7 +10,7 @@ import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 contract DeployNonUsZkPassportConditionScript is Script {
     function run() public returns (BorgAuth zkpassportAuth, NonUSNationalityCondition zkpassportCondition) {
         return runWithArgs(
-            "zkpassport.v1",
+            "zkpassport.v1.dev1",
             vm.envUint("PRIVATE_KEY_MAIN"),
             vm.envString("ZKPASSPORT_DOMAIN"),
             vm.envString("ZKPASSPORT_SCOPE"),
