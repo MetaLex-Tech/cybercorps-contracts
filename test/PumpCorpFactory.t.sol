@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.28;
 
-import {Test, console} from "forge-std/Test.sol";
+import {Test, console2} from "forge-std/Test.sol";
 import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {NonUSNationalityConditionHelper} from "./NonUSNationalityConditionForkTest.t.sol";
+import {DeployNonUsZkPassportConditionScript} from "../script/deploy-non-us-zkpassport-condition.s.sol";
 import {DeployPumpCorpFactoryScript} from "../script/deploy-pump-factory.s.sol";
 import {PumpCorpFactory, PumpCorpFactoryLib} from "../src/PumpCorpFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
@@ -15,9 +17,11 @@ import {Round, RoundType} from "../src/libs/RoundLib.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberCertData} from "../src/interfaces/IRoundManager.sol";
 import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
+import {NonUSNationalityCondition} from "../src/libs/conditions/NonUSNationalityCondition.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
+import {ProofVerificationParams} from "../src/interfaces/IZKPassportVerifier.sol";
 import {MockERC20} from "./mock/MockERC20.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
@@ -59,6 +63,11 @@ contract PumpCorpFactoryTest is Test {
     address internal DEAL_MANAGER_FACTORY     = net.dealManagerFactory;
     address internal URI_BUILDER              = net.uriBuilder;
 
+    // ── Fresh zkPassport condition deployed in setUp ───────────────────────────────
+    string internal constant expectedDomain = "localhost";
+    string internal constant expectedScope = "non-us-non-sanctioned";
+    NonUSNationalityCondition internal zkpassportCondition;
+
     // ── Fresh PumpCorpFactory deployed in setUp ───────────────────────────────
     PumpCorpFactory internal pumpFactory;
     RoundManagerFactory internal rmFactory;
@@ -85,14 +94,25 @@ contract PumpCorpFactoryTest is Test {
     /// As of 2026/03/18, we haven't deployed the dependent `RoundManager` with `restrictEndTimeReduction`
     /// to Base mainnet yet, so we will simulate the upgrade here
     function setUp() public {
-        assertEq(block.chainid, DeploymentConstants.BASE, "Fork test: Base only @ block 43534187");
-        vm.rollFork(43534187);
+        assertEq(block.chainid, DeploymentConstants.BASE, "Fork test: Base only @ block 43552581");
+        vm.rollFork(43552581);
 
         (deployer, deployerPk) = makeAddrAndKey("deployer");
         (officer, officerPk) = makeAddrAndKey("officer");
         (attacker, attackerPk) = makeAddrAndKey("attacker");
         (investor, investorPk) = makeAddrAndKey("investor");
 
+        // Deploy zkPassport condition
+        (, zkpassportCondition) = (new DeployNonUsZkPassportConditionScript()).runWithArgs(
+            "PumpCorpFactoryTest",
+            deployerPk,
+            expectedDomain,
+            expectedScope,
+            2592000, // maxValidityPeriod,
+            DeploymentConstants.BASE // chainId
+        );
+
+        // Deploy PumpCorpFactory
         (pumpFactory, rmFactory) = (new DeployPumpCorpFactoryScript()).runWithArgs(
             "PumpCorpFactoryTest",
             deployerPk
@@ -343,30 +363,33 @@ contract PumpCorpFactoryTest is Test {
     }
 
     /// Deploy a corp + round using payToken and TEMPLATE_ID.
-    function _deployLifecycle(uint256 salt_, RoundType roundType_)
-    internal
-    returns (address corp_, address rm_, bytes32 roundId_)
+    function _deployLifecycle(
+        uint256 salt_,
+        RoundType roundType_,
+        bool useZkPassport
+    ) internal returns (address corp_, address rm_, bytes32 roundId_)
     {
-        (address predCorp, address predRM) = _predict(salt_);
         uint256 start = block.timestamp - 1;
         uint256 end   = block.timestamp + 30 days;
 
-        string[] memory officerPv = officerPartyValues;
+        bytes memory escrowSig;
+        {
+            (address predCorp, address predRM) = _predict(salt_);
+            escrowSig = _escrowSigFull(
+                predRM, predCorp, officerPk,
+                start, end,
+                address(payToken), TEMPLATE_ID, roundType_
+            );
+        }
 
-        bytes memory escrowSig = _escrowSigFull(
-            predRM, predCorp, officerPk,
-            start, end,
-            address(payToken), TEMPLATE_ID, roundType_
-        );
-        bytes memory metaSig = _metaSig(
-            salt_, address(this), true, true, true,
-            _officer(officer, "Alice Officer"),
-            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
-            extensionData,
-            officerPv,
-            legalDetails, certDataArr, new address[](0),
-            officerPk
-        );
+        address[] memory conditions;
+
+        if (useZkPassport) {
+            conditions = new address[](1);
+            conditions[0] = address(zkpassportCondition);
+        } else {
+            conditions = new address[](0);
+        }
 
         (corp_, , , , rm_, roundId_) = pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt_,
@@ -377,11 +400,19 @@ contract PumpCorpFactoryTest is Test {
             legalDetails, extensionData, certDataArr,
             TEMPLATE_ID,
             address(payToken), PRICE_PER_UNIT, VALUATION,
-            officerPv,
+            officerPartyValues,
             escrowSig,
-            metaSig,
+            _metaSig(
+                salt_, address(this), true, true, true,
+                _officer(officer, "Alice Officer"),
+                "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+                extensionData,
+                officerPartyValues,
+                legalDetails, certDataArr, conditions,
+                officerPk
+            ),
             roundType_,
-            new address[](0),
+            conditions,
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
             start, end,
             true, true, true
@@ -394,7 +425,7 @@ contract PumpCorpFactoryTest is Test {
 
     /// FCFS round: submitEOI auto-triggers allocate — full life cycle in one tx.
     function test_HappyPath_SubmitEOI_FCFS() public {
-        (, address rm, bytes32 roundId) = _deployLifecycle(300001, RoundType.FCFS);
+        (, address rm, bytes32 roundId) = _deployLifecycle(300001, RoundType.FCFS, false);
 
         string[] memory globalValues = _lifecycleGlobalValues();
         string[] memory investorPv   = _lifecyclePartyValues("Test Investor", investor);
@@ -436,9 +467,65 @@ contract PumpCorpFactoryTest is Test {
         );
     }
 
+    /// FCFS round: submitEOI auto-triggers allocate — full life cycle in one tx, with zkPassport
+    function test_HappyPath_SubmitEOI_FCFS_zkpassportCondition() public {
+        (, address rm, bytes32 roundId) = _deployLifecycle(300003, RoundType.FCFS, true);
+
+        string[] memory globalValues = _lifecycleGlobalValues();
+        string[] memory investorPv   = _lifecyclePartyValues("Test Investor", investor);
+        uint256 eoiSalt      = 1;
+        EOI memory eoi;
+
+        {
+            uint256 investAmount = MIN_TICKET;
+
+            payToken.mint(investor, investAmount);
+            vm.startPrank(investor);
+            payToken.approve(rm, investAmount);
+
+            eoi = EOI({
+                name: "Test Investor",
+                investorType: "Individual",
+                jurisdiction: "US",
+                contact: "investor@test.com",
+                minAmount: investAmount,
+                maxAmount: investAmount,
+                expiry: block.timestamp + 7 days,
+                naturalPerson: false,
+                lexchexDetails: _emptyLex()
+            });
+        }
+
+        bytes memory eoiSig = _eoiSig(eoiSalt, globalValues, investorPv);
+
+        // EOI submission should fail without a valid zkPassport
+        vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
+        RoundManager(rm).submitEOI(
+            roundId, eoi,
+            globalValues, investorPv,
+            eoiSig,
+            eoiSalt, new address[](0), bytes32(0)
+        );
+
+        // Submit zkPassport proof
+        // Assume the proof is for investor wallet and was signed before block 43552581
+        (ProofVerificationParams memory proofParams, ) = NonUSNationalityConditionHelper.parseProofFromJson("test/res/sample-non-us-sanctioned-countries-sanctioned-list-proof-call-base.json");
+        zkpassportCondition.submitProof(proofParams, false);
+
+        // Now EOI submission should pass
+        RoundManager(rm).submitEOI(
+            roundId, eoi,
+            globalValues, investorPv,
+            eoiSig,
+            eoiSalt, new address[](0), bytes32(0)
+        );
+
+        vm.stopPrank();
+    }
+
     /// FounderApproved round: submitEOI parks the EOI, then officer calls allocate.
     function test_HappyPath_SubmitEOI_FounderApproved_Allocate() public {
-        (, address rm, bytes32 roundId) = _deployLifecycle(300002, RoundType.FounderApproved);
+        (, address rm, bytes32 roundId) = _deployLifecycle(300002, RoundType.FounderApproved, false);
 
         string[] memory globalValues = _lifecycleGlobalValues();
         string[] memory investorPv   = _lifecyclePartyValues("Test Investor", investor);

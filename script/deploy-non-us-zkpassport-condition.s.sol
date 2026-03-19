@@ -5,18 +5,32 @@ import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
 import {NonUSNationalityCondition} from "../src/libs/conditions/NonUSNationalityCondition.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
+import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 
-contract BaseScript is Script {
-    function run() public {
+contract DeployNonUsZkPassportConditionScript is Script {
+    function run() public returns (BorgAuth zkpassportAuth, NonUSNationalityCondition zkpassportCondition) {
+        return runWithArgs(
+            "zkpassport.v1",
+            vm.envUint("PRIVATE_KEY_MAIN"),
+            vm.envString("ZKPASSPORT_DOMAIN"),
+            vm.envString("ZKPASSPORT_SCOPE"),
+            vm.envUint("ZKPASSPORT_MAX_VALIDITY_PERIOD"),
+            DeploymentConstants.BASE
+        );
+    }
+
+    function runWithArgs(
+        string memory saltStr,
+        uint256 deployerPrivateKey,
+        string memory expectedDomain,
+        string memory expectedScope,
+        uint256 maxValidityPeriod,
+        uint256 chainId
+    ) public returns (BorgAuth zkpassportAuth, NonUSNationalityCondition zkpassportCondition) {
+
         bytes32 salt = keccak256(abi.encodePacked("zkpassport.v1"));
 
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         address deployerAddress = vm.addr(deployerPrivateKey);
-        string memory expectedDomain = vm.envString("ZKPASSPORT_DOMAIN");
-        string memory expectedScope = vm.envString("ZKPASSPORT_SCOPE");
-        address verifier = vm.envOr("ZKPASSPORT_VERIFIER", address(0));
-        uint256 maxValidityPeriod = vm.envUint("ZKPASSPORT_MAX_VALIDITY_PERIOD");
-        BorgAuth coreAuth = BorgAuth(vm.envAddress("CORE_AUTH_ADDRESS"));
 
         string[] memory outCountries = new string[](9);
         outCountries[0] = "IRN";
@@ -31,14 +45,13 @@ contract BaseScript is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        // TODO WIP: share with lexchexAuth?
-        BorgAuth zkpassportAuth = new BorgAuth{salt: salt}(deployerAddress);
+        zkpassportAuth = new BorgAuth{salt: salt}(deployerAddress);
 
-        NonUSNationalityCondition condition = new NonUSNationalityCondition{salt: salt}(
+        zkpassportCondition = new NonUSNationalityCondition{salt: salt}(
             address(zkpassportAuth),
             expectedDomain,
             expectedScope,
-            verifier,
+            address(0), // verifier (use default)
             maxValidityPeriod,
             outCountries
         );
@@ -46,7 +59,7 @@ contract BaseScript is Script {
         vm.stopBroadcast();
 
         console2.log("zkpassportAuth:", address(zkpassportAuth));
-        console2.log("NonUSNationalityCondition:", address(condition));
+        console2.log("NonUSNationalityCondition:", address(zkpassportCondition));
         console2.log("Expected domain:", expectedDomain);
         console2.log("Expected scope:", expectedScope);
     }
