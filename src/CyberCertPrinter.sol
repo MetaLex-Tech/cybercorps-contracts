@@ -147,6 +147,10 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         _safeMint(to, tokenId);
         CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId] = CyberCertPrinterStorage.cyberCertStorage().defaultLegend;
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
+        CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails(
+            "",
+            to
+        );
         emit CyberCertPrinter_CertificateCreated(tokenId);
         return tokenId;
     }
@@ -180,8 +184,12 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     ) external onlyIssuanceManager returns (uint256) {
         if(ownerOf(tokenId) != from) revert InvalidTokenId();
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
+        CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails(
+            "",
+            to
+        );
         string memory issuerName = IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName();
-        emit CertificateAssigned(tokenId, to, issuerName, issuerName);
+        emit CertificateAssigned(tokenId, to, "", issuerName);
         return tokenId;
     }
     

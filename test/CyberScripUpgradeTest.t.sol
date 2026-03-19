@@ -78,6 +78,8 @@ contract CyberScripUpgradeTest is Test {
     string internal constant RPC_ENV_VAR = "FORK_RPC_URL";
     address internal constant METALEX_SAFE =
         0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
+    address internal constant LEXCHEX_OWNER =
+        0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
 
     bytes32 internal constant EIP712_DOMAIN_TYPEHASH =
         keccak256(
@@ -1394,6 +1396,14 @@ contract CyberScripUpgradeTest is Test {
         IssuanceManagerFactory imFactory = IssuanceManagerFactory(
             deployment.issuanceManagerFactory
         );
+
+        address lxAuth = corpFactory.lexchexAuth();
+        vm.startPrank(LEXCHEX_OWNER);
+        BorgAuth(lxAuth).updateRole(
+            address(corpFactory),
+            BorgAuth(lxAuth).OWNER_ROLE()
+        );
+        vm.stopPrank();
 
         address stable = corpFactory.stable();
         bytes32 templateId = bytes32(

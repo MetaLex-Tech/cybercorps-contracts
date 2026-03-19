@@ -77,6 +77,9 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     error ScripRatioRemainder();
     error ScripToCertMinimumNotMet();
     error ScripifyNotWhitelisted();
+    error RecertificationApprovalRequired();
+    error InvalidInvestor();
+    error InvalidInvestorName();
     event ScripifiedCert(
         address indexed certAddress,
         uint256 indexed id,
@@ -120,6 +123,15 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         bool enableForceTransfer,
         bool enableForceBurn,
         bool enableFreeze
+    );
+    event RecertificationApprovalSet(
+        address indexed certAddress,
+        address indexed investor,
+        string investorName
+    );
+    event RecertificationApprovalCleared(
+        address indexed certAddress,
+        address indexed investor
     );
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -296,24 +308,23 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         address investor,
         CertificateDetails memory _details
     ) public onlyOwnerOrSelf returns (uint256 tokenId) {
-        if (
-            bytes(ICyberCorp(IssuanceManagerStorage.getCORP()).cyberCORPName())
-                .length == 0
-        ) revert CompanyDetailsNotSet();
-        ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
-        tokenId = cert.totalSupply();
+        return
+            createCertAndAssignWithName(certAddress, investor, _details, "");
+    }
 
-        cert.safeMintAndAssign(investor, tokenId, _details, "");
-        string memory tokenURI = cert.tokenURI(tokenId);
-        emit CertificateCreated(
-            tokenId,
-            certAddress,
-            _details.investmentAmountUSD,
-            _details.issuerUSDValuationAtTimeOfInvestment,
-            _details,
-            tokenURI
-        );
-        return tokenId;
+    function createCertAndAssignWithName(
+        address certAddress,
+        address investor,
+        CertificateDetails memory _details,
+        string memory investorName
+    ) public onlyOwnerOrSelf returns (uint256 tokenId) {
+        return
+            IssuanceManagerStorage.executeCreateCertAndAssign(
+                certAddress,
+                investor,
+                _details,
+                investorName
+            );
     }
 
     /// @notice Creates, assigns, signs, and endorses a new certificate in one transaction
@@ -335,57 +346,16 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         bytes32 agreementId,
         string memory investorName
     ) public onlyOwnerOrSelf returns (uint256 tokenId) {
-        if (
-            bytes(ICyberCorp(IssuanceManagerStorage.getCORP()).cyberCORPName())
-                .length == 0
-        ) revert CompanyDetailsNotSet();
-        ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
-        tokenId = cert.totalSupply();
-
-        cert.safeMintAndAssign(investor, tokenId, _details, investorName);
-
-        Endorsement memory newEndorsement = Endorsement({
-            endorser: address(this),
-            timestamp: block.timestamp,
-            signatureHash: endorsementSignature,
-            registry: registry,
-            agreementId: agreementId,
-            endorsee: investor,
-            endorseeName: investorName
-        });
-        cert.addEndorsement(tokenId, newEndorsement);
-
-        bytes memory escrowedOfficerSignature = "";
-        address corp = IssuanceManagerStorage.getCORP();
-        try ICyberCorp(corp).getEscrowedOfficerSignatureCount() returns (
-            uint256 count
-        ) {
-            if (count > 0) {
-                try
-                    ICyberCorp(corp).getEscrowedOfficerSignature(0)
-                returns (bytes memory sig) {
-                    escrowedOfficerSignature = sig;
-                } catch {}
-            }
-        } catch {}
-
-        if (endorsementSignature.length > 0) {
-            cert.addIssuerSignature(tokenId, endorsementSignature);
-        }
-        if (escrowedOfficerSignature.length > 0) {
-            cert.addIssuerSignature(tokenId, escrowedOfficerSignature);
-        }
-
-        string memory tokenURI = cert.tokenURI(tokenId);
-        emit CertificateCreated(
-            tokenId,
-            certAddress,
-            _details.investmentAmountUSD,
-            _details.issuerUSDValuationAtTimeOfInvestment,
-            _details,
-            tokenURI
-        );
-        return tokenId;
+        return
+            IssuanceManagerStorage.executeCreateCertSignAndAssign(
+                certAddress,
+                investor,
+                _details,
+                endorsementSignature,
+                registry,
+                agreementId,
+                investorName
+            );
     }
 
     /// @notice Adds an issuer's signature to a certificate
@@ -548,14 +518,6 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         bytecode = abi.encodePacked(
             sourceCodeBytes,
             abi.encode(IssuanceManagerStorage.getCyberCertPrinterBeacon(), "")
-        );
-    }
-
-    function _getBytecodeScrip() private view returns (bytes memory bytecode) {
-        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
-        bytecode = abi.encodePacked(
-            sourceCodeBytes,
-            abi.encode(IssuanceManagerStorage.getCyberScripBeacon(), "")
         );
     }
 
@@ -786,75 +748,22 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         bool enableForceBurn,
         bool enableFreeze
     ) onlyOwner external returns (address) {
-        if (scripRatioNumerator == 0 || scripRatioDenominator == 0) {
-            revert InvalidScripRatio();
-        }
-        bytes32 salt = keccak256(abi.encodePacked(certAddress, address(this)));
-        address newScrip = Create2.deploy(0, salt, _getBytecodeScrip());
-        emit CyberScripDeployed(
-            certAddress,
-            newScrip,
-            scripRatioNumerator,
-            scripRatioDenominator,
-            enableForceTransfer,
-            enableForceBurn,
-            enableFreeze
-        );
-        ICyberScrip(newScrip).initialize(
-            address(AUTH),
-            certAddress,
-            address(this),
-            string(
-                abi.encodePacked("scrip", ICyberCertPrinter(certAddress).name())
-            ),
-            string(
-                abi.encodePacked(
-                    "scrip",
-                    ICyberCertPrinter(certAddress).symbol()
-                )
-            ),
-            typeRestrictionHooks,
-            enableForceTransfer,
-            enableForceBurn,
-            enableFreeze
-        );
-        IssuanceManagerStorage.setScripifiedCert(certAddress, newScrip);
-        IssuanceManagerStorage.setCertToScripConditions(
-            certAddress,
-            certToScripConditions
-        );
-        IssuanceManagerStorage.setScripToCertConditions(
-            certAddress,
-            scripToCertConditions
-        );
-        IssuanceManagerStorage.setScripToCertMinimum(
-            certAddress,
-            scripToCertMinimum
-        );
-        IssuanceManagerStorage.setScripRatio(
-            certAddress,
-            scripRatioNumerator,
-            scripRatioDenominator
-        );
-        emit ScripToCertMinimumSet(certAddress, scripToCertMinimum);
-        IssuanceManagerStorage.setScripifyWhitelistEnabled(
-            certAddress,
-            scripifyWhitelistEnabled
-        );
-        emit ScripifyWhitelistEnabledSet(certAddress, scripifyWhitelistEnabled);
-        for (uint256 i = 0; i < scripifyWhitelistIds.length; i++) {
-            IssuanceManagerStorage.setScripifyWhitelisted(
+        return
+            IssuanceManagerStorage.executeDeployCyberScrip(
                 certAddress,
-                scripifyWhitelistIds[i],
-                true
+                address(AUTH),
+                typeRestrictionHooks,
+                certToScripConditions,
+                scripToCertConditions,
+                scripToCertMinimum,
+                scripRatioNumerator,
+                scripRatioDenominator,
+                scripifyWhitelistIds,
+                scripifyWhitelistEnabled,
+                enableForceTransfer,
+                enableForceBurn,
+                enableFreeze
             );
-            emit ScripifyWhitelistUpdated(
-                certAddress,
-                scripifyWhitelistIds[i],
-                true
-            );
-        }
-        return newScrip;
     }
 
     function setScripRestrictionHooks(
@@ -936,6 +845,53 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
 
     function getScripToCertMinimum(address certAddress) external view returns (uint256) {
         return IssuanceManagerStorage.getScripToCertMinimum(certAddress);
+    }
+
+    function setRecertificationApproval(
+        address certAddress,
+        address investor,
+        string calldata investorName,
+        CertificateDetails calldata details
+    ) external onlyAdmin {
+        if (investor == address(0)) revert InvalidInvestor();
+        if (bytes(investorName).length == 0) revert InvalidInvestorName();
+        IssuanceManagerStorage.setRecertificationApproval(
+            certAddress,
+            investor,
+            investorName,
+            details
+        );
+        emit RecertificationApprovalSet(certAddress, investor, investorName);
+    }
+
+    function clearRecertificationApproval(
+        address certAddress,
+        address investor
+    ) external onlyAdmin {
+        IssuanceManagerStorage.clearRecertificationApproval(
+            certAddress,
+            investor
+        );
+        emit RecertificationApprovalCleared(certAddress, investor);
+    }
+
+    function getRecertificationApproval(
+        address certAddress,
+        address investor
+    )
+        external
+        view
+        returns (
+            bool approved,
+            string memory investorName,
+            CertificateDetails memory details
+        )
+    {
+        return
+            IssuanceManagerStorage.getRecertificationApprovalData(
+                certAddress,
+                investor
+            );
     }
 
     function getScripifyWhitelistEnabled(
