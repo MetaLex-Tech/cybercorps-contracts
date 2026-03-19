@@ -702,7 +702,7 @@ contract CyberScripUpgradeTest is Test {
         vm.prank(investor);
         issuanceManager.scripifyCert(address(certPrinter), certId, 10, address(0));
 
-        (uint256 totalTrackedBefore,) = issuanceManager.getScripPoolTotals(
+        uint256 totalTrackedBefore = issuanceManager.getScripPoolTotals(
             address(certPrinter)
         );
         (bool isScripifiedBefore, uint256 scripifiedUnitsBefore,) = issuanceManager
@@ -715,7 +715,7 @@ contract CyberScripUpgradeTest is Test {
         vm.prank(companyOwner);
         issuanceManager.forceScripBurn(address(certPrinter), investor, 8);
 
-        (uint256 totalTrackedAfter,) = issuanceManager.getScripPoolTotals(
+        uint256 totalTrackedAfter = issuanceManager.getScripPoolTotals(
             address(certPrinter)
         );
         (bool isScripifiedAfter, uint256 scripifiedUnitsAfter,) = issuanceManager
@@ -799,19 +799,6 @@ contract CyberScripUpgradeTest is Test {
         assertEq(ICyberScrip(scrip).balanceOf(investor), 10);
         assertEq(ICyberScrip(scrip).balanceOf(otherInvestor), 20);
         assertEq(ICyberScrip(scrip).balanceOf(thirdHolder), 50);
-        assertEq(issuanceManager.getScripPoolUserAmount(address(certPrinter), investor), 10);
-        assertEq(
-            issuanceManager.getScripPoolUserAmount(address(certPrinter), otherInvestor),
-            20
-        );
-        assertEq(
-            issuanceManager.getScripPoolUserAmount(address(certPrinter), thirdHolder),
-            50
-        );
-        assertEq(
-            issuanceManager.getScripPoolUserAmount(address(certPrinter), newInvestor),
-            0
-        );
 
         vm.prank(investor);
         ICyberScrip(scrip).transfer(newInvestor, 2);
@@ -825,22 +812,7 @@ contract CyberScripUpgradeTest is Test {
         assertEq(ICyberScrip(scrip).balanceOf(thirdHolder), 40);
         assertEq(ICyberScrip(scrip).balanceOf(newInvestor), 16);
 
-        // ERC20 transfers do not move pool ownership.
-        assertEq(issuanceManager.getScripPoolUserAmount(address(certPrinter), investor), 10);
-        assertEq(
-            issuanceManager.getScripPoolUserAmount(address(certPrinter), otherInvestor),
-            20
-        );
-        assertEq(
-            issuanceManager.getScripPoolUserAmount(address(certPrinter), thirdHolder),
-            50
-        );
-        assertEq(
-            issuanceManager.getScripPoolUserAmount(address(certPrinter), newInvestor),
-            0
-        );
-
-        (uint256 totalTrackedBefore,) = issuanceManager.getScripPoolTotals(
+        uint256 totalTrackedBefore = issuanceManager.getScripPoolTotals(
             address(certPrinter)
         );
         assertEq(totalTrackedBefore, 80);
@@ -853,23 +825,10 @@ contract CyberScripUpgradeTest is Test {
         assertEq(ICyberScrip(scrip).balanceOf(thirdHolder), 40);
         assertEq(ICyberScrip(scrip).balanceOf(newInvestor), 0);
 
-        (uint256 totalTrackedAfter,) = issuanceManager.getScripPoolTotals(
+        uint256 totalTrackedAfter = issuanceManager.getScripPoolTotals(
             address(certPrinter)
         );
         assertEq(totalTrackedAfter, 64);
-        assertEq(issuanceManager.getScripPoolUserAmount(address(certPrinter), investor), 8);
-        assertEq(
-            issuanceManager.getScripPoolUserAmount(address(certPrinter), otherInvestor),
-            16
-        );
-        assertEq(
-            issuanceManager.getScripPoolUserAmount(address(certPrinter), thirdHolder),
-            40
-        );
-        assertEq(
-            issuanceManager.getScripPoolUserAmount(address(certPrinter), newInvestor),
-            0
-        );
 
         assertEq(
             certPrinter.getCertificateDetails(certIdA).unitsRepresented,

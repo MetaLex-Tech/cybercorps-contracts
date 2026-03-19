@@ -118,8 +118,6 @@ library IssuanceManagerStorage {
         mapping(address => mapping(uint256 => bool)) scripifyWhitelist;
         mapping(address => mapping(uint256 => CertScripState)) certScripStates;
         mapping(address => CertScripUnitPool) certScripUnitPools;
-        mapping(address => ScripPoolState) scripPoolStates;
-        mapping(address => mapping(address => ScripUserInfo)) scripPoolUsers;
         mapping(address => mapping(address => RecertificationApproval))
             recertificationApprovals;
     }
@@ -140,19 +138,9 @@ library IssuanceManagerStorage {
         uint256 maxUnitsRepresented;
     }
 
-    struct ScripPoolState {
-        uint256 totalTrackedScrip;
-        uint256 accReductionPerShare;
-    }
-
     struct CertScripUnitPool {
         uint256 totalScripifiedUnits;
         uint256 accReductionPerShare;
-    }
-
-    struct ScripUserInfo {
-        uint256 amount;
-        uint256 reductionDebt;
     }
 
     struct RecertificationApproval {
@@ -339,42 +327,6 @@ library IssuanceManagerStorage {
         return issuanceManagerStorage().certScripStates[certAddress][id];
     }
 
-    function getScripPoolState(
-        address certAddress
-    ) internal view returns (ScripPoolState storage) {
-        return issuanceManagerStorage().scripPoolStates[certAddress];
-    }
-
-    function getScripPoolUserInfo(
-        address certAddress,
-        address account
-    ) internal view returns (ScripUserInfo storage) {
-        return issuanceManagerStorage().scripPoolUsers[certAddress][account];
-    }
-
-    function getScripPoolUserAmount(
-        address certAddress,
-        address account
-    ) internal view returns (uint256) {
-        ScripPoolState storage pool = getScripPoolState(certAddress);
-        ScripUserInfo storage user = getScripPoolUserInfo(certAddress, account);
-        return _currentAmount(user.amount, user.reductionDebt, pool.accReductionPerShare);
-    }
-
-    function getScripPoolUserPosition(
-        address certAddress,
-        address account
-    )
-        internal
-        view
-        returns (uint256 recordedAmount, uint256 reductionDebt, uint256 currentAmount)
-    {
-        ScripUserInfo storage user = getScripPoolUserInfo(certAddress, account);
-        recordedAmount = user.amount;
-        reductionDebt = user.reductionDebt;
-        currentAmount = getScripPoolUserAmount(certAddress, account);
-    }
-
     function getRecertificationApproval(
         address certAddress,
         address investor
@@ -431,13 +383,21 @@ library IssuanceManagerStorage {
 
     function getScripPoolTotals(
         address certAddress
+    ) internal view returns (uint256 totalTrackedScrip) {
+        address scripAddress = getScripifiedCert(certAddress);
+        if (scripAddress == address(0)) return 0;
+        totalTrackedScrip = ICyberScrip(scripAddress).totalSupply();
+    }
+
+    function getCertScripUnitPoolTotals(
+        address certAddress
     )
         internal
         view
-        returns (uint256 totalTrackedScrip, uint256 accReductionPerShare)
+        returns (uint256 totalScripifiedUnits, uint256 accReductionPerShare)
     {
-        ScripPoolState storage pool = getScripPoolState(certAddress);
-        totalTrackedScrip = pool.totalTrackedScrip;
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[certAddress];
+        totalScripifiedUnits = pool.totalScripifiedUnits;
         accReductionPerShare = pool.accReductionPerShare;
     }
 
@@ -666,7 +626,6 @@ library IssuanceManagerStorage {
         _depositCertScripUnits(certAddress, id, amountWad);
         details.unitsRepresented = details.unitsRepresented - amountWad;
         certificate.updateCertificateDetails(id, details);
-        _depositScripPool(certAddress, account, scripAmount);
         ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
         emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
     }
@@ -722,7 +681,6 @@ library IssuanceManagerStorage {
             approval.details = approvedDetails;
         }
 
-        _reduceScripPool(certAddress, amount);
         if (selection.foundActive) {
             uint256 pooledUnitsWad = _consumeOwnCertScripUnits(
                 certAddress,
@@ -789,7 +747,6 @@ library IssuanceManagerStorage {
         units = units / numerator;
         uint256 unitsWad = units * 1e18;
 
-        _reduceScripPool(certAddress, amount);
         _reduceCertScripUnitsPool(certAddress, unitsWad);
         ICyberScrip(scripifiedCert).forceBurn(account, amount);
     }
@@ -901,31 +858,6 @@ library IssuanceManagerStorage {
         }
     }
 
-    function _depositScripPool(
-        address certAddress,
-        address account,
-        uint256 scripAmount
-    ) internal {
-        ScripPoolState storage pool = getScripPoolState(certAddress);
-        ScripUserInfo storage user = getScripPoolUserInfo(certAddress, account);
-        _syncUserScripPoolPosition(certAddress, account);
-        pool.totalTrackedScrip = pool.totalTrackedScrip + scripAmount;
-        user.amount = user.amount + scripAmount;
-        user.reductionDebt =
-            (user.amount * pool.accReductionPerShare) /
-            ACC_REDUCTION_PRECISION;
-    }
-
-    function _reduceScripPool(address certAddress, uint256 burnedScripAmount) internal {
-        ScripPoolState storage pool = getScripPoolState(certAddress);
-        if (burnedScripAmount > pool.totalTrackedScrip) revert ConditionCheckFailed();
-        if (pool.totalTrackedScrip == 0) revert ConditionCheckFailed();
-        pool.accReductionPerShare =
-            pool.accReductionPerShare +
-            ((burnedScripAmount * ACC_REDUCTION_PRECISION) / pool.totalTrackedScrip);
-        pool.totalTrackedScrip = pool.totalTrackedScrip - burnedScripAmount;
-    }
-
     function _depositCertScripUnits(
         address certAddress,
         uint256 tokenId,
@@ -984,19 +916,6 @@ library IssuanceManagerStorage {
         pool.totalScripifiedUnits = pool.totalScripifiedUnits - directUnits;
 
         return requestedUnits - directUnits;
-    }
-
-    function _syncUserScripPoolPosition(address certAddress, address account) internal {
-        ScripPoolState storage pool = getScripPoolState(certAddress);
-        ScripUserInfo storage user = getScripPoolUserInfo(certAddress, account);
-        user.amount = _currentAmount(
-            user.amount,
-            user.reductionDebt,
-            pool.accReductionPerShare
-        );
-        user.reductionDebt =
-            (user.amount * pool.accReductionPerShare) /
-            ACC_REDUCTION_PRECISION;
     }
 
     function _syncCertScripPosition(address certAddress, uint256 tokenId) internal {
