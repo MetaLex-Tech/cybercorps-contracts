@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
 import {NonUSNationalityCondition} from "../src/libs/conditions/NonUSNationalityCondition.sol";
+import {OrCondition} from "../src/libs/conditions/OrCondition.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 
@@ -32,6 +33,9 @@ contract DeployNonUsZkPassportConditionScript is Script {
 
         address deployerAddress = vm.addr(deployerPrivateKey);
 
+        DeploymentConstants.CoreDeployment memory deployment = DeploymentConstants
+            .coreV2(chainId);
+
         string[] memory outCountries = new string[](9);
         outCountries[0] = "IRN";
         outCountries[1] = "IRQ";
@@ -56,10 +60,18 @@ contract DeployNonUsZkPassportConditionScript is Script {
             outCountries
         );
 
+        // Deploy OrCondition (zkPassport || LexChex)
+        address[] memory orAddrs = new address[](2);
+        orAddrs[0] = address(zkpassportCondition);
+        orAddrs[1] = deployment.lexchexCondition;
+        OrCondition orCondition = new OrCondition(orAddrs);
+
         vm.stopBroadcast();
 
         console2.log("zkpassportAuth:", address(zkpassportAuth));
         console2.log("NonUSNationalityCondition:", address(zkpassportCondition));
+        console2.log("LexChexCondition:", address(deployment.lexchexCondition));
+        console2.log("OrCondition(zkPassport || lexchex):", address(orCondition));
         console2.log("Expected domain:", expectedDomain);
         console2.log("Expected scope:", expectedScope);
     }
