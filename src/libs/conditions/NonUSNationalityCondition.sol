@@ -161,11 +161,4 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
         return proofExpiry[counterparty] >= block.timestamp;
     }
 
-    function supportsInterface(
-        bytes4 interfaceId
-    ) external view override returns (bool) {
-        return
-            interfaceId == type(ICondition).interfaceId ||
-            interfaceId == type(IERC165).interfaceId;
-    }
 }
