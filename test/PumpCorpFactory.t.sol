@@ -18,6 +18,10 @@ import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpCon
 import {CyberCertData} from "../src/interfaces/IRoundManager.sol";
 import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
 import {NonUSNationalityCondition} from "../src/libs/conditions/NonUSNationalityCondition.sol";
+import {LexChexCondition} from "../src/libs/conditions/lexchexCondition.sol";
+import {OrCondition} from "../src/libs/conditions/OrCondition.sol";
+import {LeXcheX} from "../src/creds/lexchex.sol";
+import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
@@ -63,10 +67,18 @@ contract PumpCorpFactoryTest is Test {
     address internal DEAL_MANAGER_FACTORY     = net.dealManagerFactory;
     address internal URI_BUILDER              = net.uriBuilder;
 
+    // ── Live LexChex addresses on Base ───────────────────────────────────────
+    address internal LEXCHEX                  = net.lexchex;
+    address internal LEXCHEX_CONDITION        = net.lexchexCondition;
+    address internal LEXCHEX_AUTH             = net.lexchexAuth;
+
     // ── Fresh zkPassport condition deployed in setUp ───────────────────────────────
     string internal constant expectedDomain = "localhost";
     string internal constant expectedScope = "non-us-non-sanctioned";
     NonUSNationalityCondition internal zkpassportCondition;
+
+    // ── OrCondition: zkpassportCondition || LEXCHEX_CONDITION ────────────────
+    OrCondition internal orCondition;
 
     // ── Fresh PumpCorpFactory deployed in setUp ───────────────────────────────
     PumpCorpFactory internal pumpFactory;
@@ -111,6 +123,12 @@ contract PumpCorpFactoryTest is Test {
             2592000, // maxValidityPeriod,
             DeploymentConstants.BASE // chainId
         );
+
+        // Deploy OrCondition (zkPassport || LexChex)
+        address[] memory orAddrs = new address[](2);
+        orAddrs[0] = address(zkpassportCondition);
+        orAddrs[1] = LEXCHEX_CONDITION;
+        orCondition = new OrCondition(orAddrs);
 
         // Deploy PumpCorpFactory
         (pumpFactory, rmFactory) = (new DeployPumpCorpFactoryScript()).runWithArgs(
@@ -366,7 +384,7 @@ contract PumpCorpFactoryTest is Test {
     function _deployLifecycle(
         uint256 salt_,
         RoundType roundType_,
-        bool useZkPassport
+        address[] memory conditions
     ) internal returns (address corp_, address rm_, bytes32 roundId_)
     {
         uint256 start = block.timestamp - 1;
@@ -380,15 +398,6 @@ contract PumpCorpFactoryTest is Test {
                 start, end,
                 address(payToken), TEMPLATE_ID, roundType_
             );
-        }
-
-        address[] memory conditions;
-
-        if (useZkPassport) {
-            conditions = new address[](1);
-            conditions[0] = address(zkpassportCondition);
-        } else {
-            conditions = new address[](0);
         }
 
         (corp_, , , , rm_, roundId_) = pumpFactory.deployCyberCorpAndCreateRoundFor(
@@ -425,7 +434,7 @@ contract PumpCorpFactoryTest is Test {
 
     /// FCFS round: submitEOI auto-triggers allocate — full life cycle in one tx.
     function test_HappyPath_SubmitEOI_FCFS() public {
-        (, address rm, bytes32 roundId) = _deployLifecycle(300001, RoundType.FCFS, false);
+        (, address rm, bytes32 roundId) = _deployLifecycle(300001, RoundType.FCFS, new address[](0));
 
         string[] memory globalValues = _lifecycleGlobalValues();
         string[] memory investorPv   = _lifecyclePartyValues("Test Investor", investor);
@@ -469,7 +478,9 @@ contract PumpCorpFactoryTest is Test {
 
     /// FCFS round: submitEOI auto-triggers allocate — full life cycle in one tx, with zkPassport
     function test_HappyPath_SubmitEOI_FCFS_zkpassportCondition() public {
-        (, address rm, bytes32 roundId) = _deployLifecycle(300003, RoundType.FCFS, true);
+        address[] memory zkConds = new address[](1);
+        zkConds[0] = address(zkpassportCondition);
+        (, address rm, bytes32 roundId) = _deployLifecycle(300003, RoundType.FCFS, zkConds);
 
         string[] memory globalValues = _lifecycleGlobalValues();
         string[] memory investorPv   = _lifecyclePartyValues("Test Investor", investor);
@@ -525,7 +536,7 @@ contract PumpCorpFactoryTest is Test {
 
     /// FounderApproved round: submitEOI parks the EOI, then officer calls allocate.
     function test_HappyPath_SubmitEOI_FounderApproved_Allocate() public {
-        (, address rm, bytes32 roundId) = _deployLifecycle(300002, RoundType.FounderApproved, false);
+        (, address rm, bytes32 roundId) = _deployLifecycle(300002, RoundType.FounderApproved, new address[](0));
 
         string[] memory globalValues = _lifecycleGlobalValues();
         string[] memory investorPv   = _lifecyclePartyValues("Test Investor", investor);
@@ -1688,6 +1699,198 @@ contract PumpCorpFactoryTest is Test {
             conditions,   // ← malicious condition injected
             RAISE_CAP, MIN_TICKET, MAX_TICKET,
             start, end, true, true, true
+        );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  OR CONDITION — zkPassport || LexChex
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// Grant this test contract admin rights on LEXCHEX and mint a valid LexChex to `to`.
+    function _mintLexChex(address to) internal {
+        uint256 adminRole = BorgAuth(LEXCHEX_AUTH).ADMIN_ROLE();
+        vm.prank(metalexSafe);
+        BorgAuth(LEXCHEX_AUTH).updateRole(address(this), adminRole);
+
+        LeXcheX(LEXCHEX).mint(to, Accreditation({
+            uuid: 0,
+            agreementId: bytes32(0),
+            registryAddress: address(0),
+            investorName: "Test Investor",
+            investorType: "Individual",
+            investorJurisdiction: "XX",
+            investorContact: "investor@test.com",
+            issuanceDate: block.timestamp,
+            expiryDate: block.timestamp + 365 days,
+            voided: "",
+            signature: ""
+        }));
+    }
+
+    /// Neither credential present → AgreementConditionsNotMet.
+    function test_OrCondition_BlocksWhenNeitherCredentialPresent() public {
+        address[] memory conds = new address[](1);
+        conds[0] = address(orCondition);
+        (, address rm, bytes32 roundId) = _deployLifecycle(400001, RoundType.FCFS, conds);
+
+        string[] memory globalValues = _lifecycleGlobalValues();
+        string[] memory investorPv   = _lifecyclePartyValues("Test Investor", investor);
+        uint256 investAmount = MIN_TICKET;
+
+        payToken.mint(investor, investAmount);
+        vm.startPrank(investor);
+        payToken.approve(rm, investAmount);
+
+        EOI memory eoi = EOI({
+            name: "Test Investor",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "investor@test.com",
+            minAmount: investAmount,
+            maxAmount: investAmount,
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
+        });
+
+        bytes memory eoiSig = _eoiSig(1, globalValues, investorPv);
+        vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
+        RoundManager(rm).submitEOI(
+            roundId, eoi,
+            globalValues, investorPv,
+            eoiSig,
+            1, new address[](0), bytes32(0)
+        );
+        vm.stopPrank();
+    }
+
+    /// LexChex only (no zkPassport) → EOI succeeds.
+    function test_OrCondition_PassesWithLexChexOnly() public {
+        address[] memory conds = new address[](1);
+        conds[0] = address(orCondition);
+        (, address rm, bytes32 roundId) = _deployLifecycle(400002, RoundType.FCFS, conds);
+
+        _mintLexChex(investor);
+
+        string[] memory globalValues = _lifecycleGlobalValues();
+        string[] memory investorPv   = _lifecyclePartyValues("Test Investor", investor);
+        uint256 investAmount = MIN_TICKET;
+
+        payToken.mint(investor, investAmount);
+        vm.startPrank(investor);
+        payToken.approve(rm, investAmount);
+
+        EOI memory eoi = EOI({
+            name: "Test Investor",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "investor@test.com",
+            minAmount: investAmount,
+            maxAmount: investAmount,
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
+        });
+
+        (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
+            roundId, eoi,
+            globalValues, investorPv,
+            _eoiSig(1, globalValues, investorPv),
+            1, new address[](0), bytes32(0)
+        );
+        vm.stopPrank();
+
+        assertTrue(
+            CyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
+            "agreement must be finalized after FCFS submitEOI with LexChex"
+        );
+    }
+
+    /// zkPassport only (no LexChex) → EOI succeeds.
+    function test_OrCondition_PassesWithZkPassportOnly() public {
+        address[] memory conds = new address[](1);
+        conds[0] = address(orCondition);
+        (, address rm, bytes32 roundId) = _deployLifecycle(400003, RoundType.FCFS, conds);
+
+        string[] memory globalValues = _lifecycleGlobalValues();
+        string[] memory investorPv   = _lifecyclePartyValues("Test Investor", investor);
+        uint256 investAmount = MIN_TICKET;
+
+        payToken.mint(investor, investAmount);
+        vm.startPrank(investor);
+        payToken.approve(rm, investAmount);
+
+        EOI memory eoi = EOI({
+            name: "Test Investor",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "investor@test.com",
+            minAmount: investAmount,
+            maxAmount: investAmount,
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
+        });
+
+        (ProofVerificationParams memory proofParams, ) = NonUSNationalityConditionHelper.parseProofFromJson("test/res/sample-non-us-sanctioned-countries-sanctioned-list-proof-call-base.json");
+        zkpassportCondition.submitProof(proofParams, false);
+
+        (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
+            roundId, eoi,
+            globalValues, investorPv,
+            _eoiSig(1, globalValues, investorPv),
+            1, new address[](0), bytes32(0)
+        );
+        vm.stopPrank();
+
+        assertTrue(
+            CyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
+            "agreement must be finalized after FCFS submitEOI with zkPassport"
+        );
+    }
+
+    /// Both credentials present → EOI succeeds.
+    function test_OrCondition_PassesWithBoth() public {
+        address[] memory conds = new address[](1);
+        conds[0] = address(orCondition);
+        (, address rm, bytes32 roundId) = _deployLifecycle(400004, RoundType.FCFS, conds);
+
+        _mintLexChex(investor);
+
+        string[] memory globalValues = _lifecycleGlobalValues();
+        string[] memory investorPv   = _lifecyclePartyValues("Test Investor", investor);
+        uint256 investAmount = MIN_TICKET;
+
+        payToken.mint(investor, investAmount);
+        vm.startPrank(investor);
+        payToken.approve(rm, investAmount);
+
+        EOI memory eoi = EOI({
+            name: "Test Investor",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "investor@test.com",
+            minAmount: investAmount,
+            maxAmount: investAmount,
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
+        });
+
+        (ProofVerificationParams memory proofParams, ) = NonUSNationalityConditionHelper.parseProofFromJson("test/res/sample-non-us-sanctioned-countries-sanctioned-list-proof-call-base.json");
+        zkpassportCondition.submitProof(proofParams, false);
+
+        (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
+            roundId, eoi,
+            globalValues, investorPv,
+            _eoiSig(1, globalValues, investorPv),
+            1, new address[](0), bytes32(0)
+        );
+        vm.stopPrank();
+
+        assertTrue(
+            CyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
+            "agreement must be finalized after FCFS submitEOI with both credentials"
         );
     }
 }
