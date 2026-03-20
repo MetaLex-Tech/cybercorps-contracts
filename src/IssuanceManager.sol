@@ -911,14 +911,25 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         return IssuanceManagerStorage.getCertScripifiedStatus(certAddress, id);
     }
 
+    /// @notice `totalTrackedScrip` is CyberScrip `totalSupply`. Second value is vault price per
+    ///         nominal share: `totalAssetsWad * 1e27 / totalNominalShares` (ray), or 0 if empty.
     function getScripPoolTotals(
         address certAddress
     )
         external
         view
-        returns (uint256 totalTrackedScrip, uint256 accReductionPerShare)
+        returns (uint256 totalTrackedScrip, uint256 pricePerShareRay)
     {
         return IssuanceManagerStorage.getScripPoolTotals(certAddress);
+    }
+
+    /// @notice Underlying units (wad) and total nominal shares in the scripified-units vault.
+    function getCertScripUnitVault(address certAddress)
+        external
+        view
+        returns (uint256 totalAssetsWad, uint256 totalNominalShares)
+    {
+        return IssuanceManagerStorage.getCertScripUnitVault(certAddress);
     }
 
     function getScripPoolUserAmount(

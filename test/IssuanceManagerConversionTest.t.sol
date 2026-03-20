@@ -358,7 +358,8 @@ contract IssuanceManagerConversionTest is Test {
 
     function test_convertScripToCert_AllowsNonOwnerMintPath() public {
         ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
-        uint256 amount = 100 ether;
+        // Integer unit count; _mintCert stores unitsRepresented as units * 1e18
+        uint256 amount = 100;
         uint256 sourceCertId = _mintCert(certPrinter, otherInvestor, amount);
 
         ITransferRestrictionHook[] memory hooks = new ITransferRestrictionHook[](0);
@@ -405,7 +406,7 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(certPrinter.totalSupply(), 2);
         assertEq(certPrinter.ownerOf(1), investor);
         CertificateDetails memory details = certPrinter.getCertificateDetails(1);
-        assertEq(details.unitsRepresented, amount);
+        assertEq(details.unitsRepresented, amount * 1e18);
         assertEq(details.legalDetails, approvalDetails.legalDetails);
         assertEq(details.extensionData, approvalDetails.extensionData);
     }
@@ -418,7 +419,7 @@ contract IssuanceManagerConversionTest is Test {
             signingOfficerTitle: "Title",
             investmentAmountUSD: 1000,
             issuerUSDValuationAtTimeOfInvestment: 10000,
-            unitsRepresented: 1000,
+            unitsRepresented: 1000 * 1e18,
             legalDetails: "",
             extensionData: ""
         });
@@ -485,7 +486,7 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(certPrinter.totalSupply(), 1);
         assertEq(certPrinter.ownerOf(0), investor);
         CertificateDetails memory restored = certPrinter.getCertificateDetails(0);
-        assertEq(restored.unitsRepresented, 1000);
+        assertEq(restored.unitsRepresented, 1000 * 1e18);
     }
 
     function test_ScripRatio_AppliesOnScripifyAndConvert() public {
@@ -496,7 +497,7 @@ contract IssuanceManagerConversionTest is Test {
             signingOfficerTitle: "Title",
             investmentAmountUSD: 1000,
             issuerUSDValuationAtTimeOfInvestment: 10000,
-            unitsRepresented: 10,
+            unitsRepresented: 10 * 1e18,
             legalDetails: "",
             extensionData: ""
         });
@@ -537,7 +538,7 @@ contract IssuanceManagerConversionTest is Test {
         CertificateDetails memory newDetails = certPrinter.getCertificateDetails(
             0
         );
-        assertEq(newDetails.unitsRepresented, 10);
+        assertEq(newDetails.unitsRepresented, 10 * 1e18);
     }
 
     function test_ScripifyWhitelist_EnabledBlocksNonWhitelisted() public {
@@ -548,7 +549,7 @@ contract IssuanceManagerConversionTest is Test {
             signingOfficerTitle: "Title",
             investmentAmountUSD: 1000,
             issuerUSDValuationAtTimeOfInvestment: 10000,
-            unitsRepresented: 10,
+            unitsRepresented: 10 * 1e18,
             legalDetails: "",
             extensionData: ""
         });
@@ -588,7 +589,7 @@ contract IssuanceManagerConversionTest is Test {
             signingOfficerTitle: "Title",
             investmentAmountUSD: 1000,
             issuerUSDValuationAtTimeOfInvestment: 10000,
-            unitsRepresented: 10,
+            unitsRepresented: 10 * 1e18,
             legalDetails: "",
             extensionData: ""
         });
@@ -629,7 +630,7 @@ contract IssuanceManagerConversionTest is Test {
             signingOfficerTitle: "Title",
             investmentAmountUSD: 1000,
             issuerUSDValuationAtTimeOfInvestment: 10000,
-            unitsRepresented: 10,
+            unitsRepresented: 10 * 1e18,
             legalDetails: "",
             extensionData: ""
         });
@@ -733,7 +734,7 @@ contract IssuanceManagerConversionTest is Test {
             signingOfficerTitle: "Title",
             investmentAmountUSD: 1000,
             issuerUSDValuationAtTimeOfInvestment: 10000,
-            unitsRepresented: 10,
+            unitsRepresented: 10 * 1e18,
             legalDetails: "",
             extensionData: ""
         });
@@ -866,7 +867,7 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(certPrinter.totalSupply(), 1);
         assertEq(certPrinter.ownerOf(0), investor);
         CertificateDetails memory converted = certPrinter.getCertificateDetails(0);
-        assertEq(converted.unitsRepresented, 75);
+        assertEq(converted.unitsRepresented, 75 * 1e18);
     }
 
     function test_convertScripToCert_revertGatesAndConditionValidation() public {
@@ -945,7 +946,7 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(certPrinter.totalSupply(), 2);
         assertEq(certPrinter.ownerOf(1), investor);
         CertificateDetails memory newCert = certPrinter.getCertificateDetails(1);
-        assertEq(newCert.unitsRepresented, 100); // 150 * 2 / 3
+        assertEq(newCert.unitsRepresented, 100 * 1e18); // 150 * 2 / 3
     }
 
     function test_convertScripToCert_ignoresVoidedCertAndMintsNewCertificate()
@@ -958,7 +959,7 @@ contract IssuanceManagerConversionTest is Test {
             signingOfficerTitle: "General Counsel",
             investmentAmountUSD: 3_000_000,
             issuerUSDValuationAtTimeOfInvestment: 33_000_000,
-            unitsRepresented: 500,
+            unitsRepresented: 500 * 1e18,
             legalDetails: "Original legal details",
             extensionData: "Original extension"
         });
@@ -1019,7 +1020,7 @@ contract IssuanceManagerConversionTest is Test {
         assertTrue(certPrinter.isVoided(0));
 
         CertificateDetails memory reformed = certPrinter.getCertificateDetails(2);
-        assertEq(reformed.unitsRepresented, 10);
+        assertEq(reformed.unitsRepresented, 10 * 1e18);
         assertEq(reformed.legalDetails, approvalDetails.legalDetails);
         assertEq(reformed.extensionData, approvalDetails.extensionData);
         assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
@@ -1092,7 +1093,7 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(certPrinter.totalSupply(), 2);
         assertEq(certPrinter.ownerOf(1), investor);
         CertificateDetails memory restored = certPrinter.getCertificateDetails(1);
-        assertEq(restored.unitsRepresented, 5);
+        assertEq(restored.unitsRepresented, 5 * 1e18);
         assertEq(restored.legalDetails, approvedDetails.legalDetails);
         assertEq(restored.extensionData, approvedDetails.extensionData);
         (approved,,) = issuanceManager.getRecertificationApproval(
@@ -1451,24 +1452,35 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(ICyberScrip(scrip).balanceOf(newInvestorOne), 0);
         assertEq(ICyberScrip(scrip).balanceOf(newInvestorTwo), 0);
 
-        uint256 totalActiveUnits = activeA.unitsRepresented / 1e18 +
-            activeB.unitsRepresented / 1e18 +
-            activeC.unitsRepresented / 1e18 +
-            activeD.unitsRepresented / 1e18 +
-            activeNewOne.unitsRepresented / 1e18 +
-            activeNewTwo.unitsRepresented / 1e18;
-        uint256 totalScripifiedUnits = (scripifiedA / 1e18) +
-            (scripifiedB / 1e18) +
-            (scripifiedC / 1e18) +
-            (scripifiedD / 1e18) +
-            (scripifiedNewOne / 1e18) +
-            (scripifiedNewTwo / 1e18);
-        // Rounding in the reduction indices can make per-cert scripified units
-        // slightly less than the pool's tracked scrip. We only require that:
-        // 1) total scripified units do not exceed the pool's tracked scrip, and
-        // 2) active units plus the pool's tracked scrip always equal the original total.
-        assertEq(totalScripifiedUnits, totalTrackedScrip);
-        assertEq(totalActiveUnits + totalTrackedScrip, 400);
+        uint256 totalActiveWad = activeA.unitsRepresented +
+            activeB.unitsRepresented +
+            activeC.unitsRepresented +
+            activeD.unitsRepresented +
+            activeNewOne.unitsRepresented +
+            activeNewTwo.unitsRepresented;
+        uint256 totalScripifiedWad = scripifiedA +
+            scripifiedB +
+            scripifiedC +
+            scripifiedD +
+            scripifiedNewOne +
+            scripifiedNewTwo;
+        // Per-cert claims use integer division (floor); summing (scrip/wad)/1e18 per cert truncates
+        // again and can under-count vs vault. Sum wads first — multi-step fixed-point can differ by ≤1 wei.
+        (uint256 vaultAssetsWad,) = issuanceManager.getCertScripUnitVault(
+            address(certPrinter)
+        );
+        assertApproxEqAbs(
+            totalScripifiedWad,
+            vaultAssetsWad,
+            1,
+            "scripified wad sum vs vault totalAssetsWad"
+        );
+        assertApproxEqAbs(
+            totalActiveWad + totalScripifiedWad,
+            400e18,
+            1,
+            "active + scripified units vs pool cap"
+        );
 
         (bool approvalStillSetOne,,) = issuanceManager.getRecertificationApproval(
             address(certPrinter),
@@ -1635,9 +1647,20 @@ contract IssuanceManagerConversionTest is Test {
         assertFalse(isScripifiedB);
         assertEq(scripifiedB / 1e18, 0);
         assertTrue(isScripifiedC);
-        assertEq(scripifiedC / 1e18, 6);
+        // Vault share→asset conversion can floor nominal claims by ≤1 unit vs naive expectations
+        assertApproxEqAbs(
+            scripifiedC,
+            6 * 1e18,
+            1 * 1e18,
+            "holder C scripified wad (rounding)"
+        );
         assertTrue(isScripifiedD);
-        assertEq(scripifiedD / 1e18, 6);
+        assertApproxEqAbs(
+            scripifiedD,
+            6 * 1e18,
+            1 * 1e18,
+            "holder D scripified wad (rounding)"
+        );
         assertTrue(isScripifiedE);
         assertEq(scripifiedE / 1e18, 54);
         assertFalse(isScripifiedNewOne);
@@ -1663,13 +1686,51 @@ contract IssuanceManagerConversionTest is Test {
         CertificateDetails memory newCertOne = certPrinter.getCertificateDetails(5);
         CertificateDetails memory newCertTwo = certPrinter.getCertificateDetails(6);
 
-        assertEq(effectiveA.unitsRepresented / 1e18, 54);
-        assertEq(effectiveB.unitsRepresented / 1e18, 140);
-        assertEq(effectiveC.unitsRepresented / 1e18, 86);
-        assertEq(effectiveD.unitsRepresented / 1e18, 86);
-        assertEq(effectiveE.unitsRepresented / 1e18, 54);
-        assertEq(newCertOne.unitsRepresented / 1e18, 60);
-        assertEq(newCertTwo.unitsRepresented / 1e18, 20);
+        // Effective details are active + scripified vault claim (full wad). Compare in wad
+        // space — do not divide by 1e18 first (that floors whole units and caused 85 vs 86).
+        uint256 wadRoundingTol = 100 * 1e9; // 100 gwei
+        assertApproxEqAbs(
+            effectiveA.unitsRepresented,
+            activeA.unitsRepresented + scripifiedA,
+            wadRoundingTol,
+            "effective A == active + scripified (wad)"
+        );
+        assertApproxEqAbs(
+            effectiveB.unitsRepresented,
+            activeB.unitsRepresented + scripifiedB,
+            wadRoundingTol,
+            "effective B == active + scripified (wad)"
+        );
+        assertApproxEqAbs(
+            effectiveC.unitsRepresented,
+            activeC.unitsRepresented + scripifiedC,
+            wadRoundingTol,
+            "effective C == active + scripified (wad)"
+        );
+        assertApproxEqAbs(
+            effectiveD.unitsRepresented,
+            activeD.unitsRepresented + scripifiedD,
+            wadRoundingTol,
+            "effective D == active + scripified (wad)"
+        );
+        assertApproxEqAbs(
+            effectiveE.unitsRepresented,
+            activeE.unitsRepresented + scripifiedE,
+            wadRoundingTol,
+            "effective E == active + scripified (wad)"
+        );
+        assertApproxEqAbs(
+            newCertOne.unitsRepresented,
+            activeNewOne.unitsRepresented + scripifiedNewOne,
+            wadRoundingTol,
+            "new cert one effective (wad)"
+        );
+        assertApproxEqAbs(
+            newCertTwo.unitsRepresented,
+            activeNewTwo.unitsRepresented + scripifiedNewTwo,
+            wadRoundingTol,
+            "new cert two effective (wad)"
+        );
         assertEq(newCertOne.legalDetails, approvalOne.legalDetails);
         assertEq(newCertOne.extensionData, approvalOne.extensionData);
         assertEq(newCertTwo.legalDetails, approvalTwo.legalDetails);
@@ -1687,22 +1748,37 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(ICyberScrip(scrip).balanceOf(newInvestorOne), 0);
         assertEq(ICyberScrip(scrip).balanceOf(newInvestorTwo), 0);
 
-        uint256 totalActiveUnits = activeA.unitsRepresented / 1e18 +
-            activeB.unitsRepresented / 1e18 +
-            activeC.unitsRepresented / 1e18 +
-            activeD.unitsRepresented / 1e18 +
-            activeE.unitsRepresented / 1e18 +
-            activeNewOne.unitsRepresented / 1e18 +
-            activeNewTwo.unitsRepresented / 1e18;
-        uint256 totalScripifiedUnits = (scripifiedA / 1e18) +
-            (scripifiedB / 1e18) +
-            (scripifiedC / 1e18) +
-            (scripifiedD / 1e18) +
-            (scripifiedE / 1e18) +
-            (scripifiedNewOne / 1e18) +
-            (scripifiedNewTwo / 1e18);
-        assertEq(totalScripifiedUnits, totalTrackedScrip);
-        assertEq(totalActiveUnits + totalScripifiedUnits, 500);
+        uint256 totalActiveWadFive = activeA.unitsRepresented +
+            activeB.unitsRepresented +
+            activeC.unitsRepresented +
+            activeD.unitsRepresented +
+            activeE.unitsRepresented +
+            activeNewOne.unitsRepresented +
+            activeNewTwo.unitsRepresented;
+        uint256 totalScripifiedWadFive = scripifiedA +
+            scripifiedB +
+            scripifiedC +
+            scripifiedD +
+            scripifiedE +
+            scripifiedNewOne +
+            scripifiedNewTwo;
+        (uint256 vaultAssetsWadFive,) = issuanceManager.getCertScripUnitVault(
+            address(certPrinter)
+        );
+        // More holders / conversions → slightly larger aggregated rounding vs vault assets
+        uint256 fiveHolderWadTol = 3;
+        assertApproxEqAbs(
+            totalScripifiedWadFive,
+            vaultAssetsWadFive,
+            fiveHolderWadTol,
+            "scripified wad sum vs vault totalAssetsWad (five holders)"
+        );
+        assertApproxEqAbs(
+            totalActiveWadFive + totalScripifiedWadFive,
+            500e18,
+            fiveHolderWadTol,
+            "active + scripified units vs pool cap (five holders)"
+        );
 
         (bool approvalStillSetOne,,) = issuanceManager.getRecertificationApproval(
             address(certPrinter),

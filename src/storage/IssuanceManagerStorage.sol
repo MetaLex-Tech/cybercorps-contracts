@@ -63,9 +63,8 @@ library IssuanceManagerStorage {
     error CompanyDetailsNotSet();
     error InvalidScripRatio();
 
-    // Higher precision reduces index-based truncation ("dust") in lazy accounting.
-    // This value is intentionally larger than the wad scaling used for `unitsRepresented`.
-    uint256 internal constant ACC_REDUCTION_PRECISION = 1e40;
+    /// @dev Ray precision for vault price-per-share (assets per 1 nominal share, 1e27 = 1.0).
+    uint256 internal constant VAULT_RAY = 1e27;
 
     event ScripifiedCert(
         address indexed certAddress,
@@ -118,8 +117,6 @@ library IssuanceManagerStorage {
         mapping(address => mapping(uint256 => bool)) scripifyWhitelist;
         mapping(address => mapping(uint256 => CertScripState)) certScripStates;
         mapping(address => CertScripUnitPool) certScripUnitPools;
-        mapping(address => ScripPoolState) scripPoolStates;
-        mapping(address => mapping(address => ScripUserInfo)) scripPoolUsers;
         mapping(address => mapping(address => RecertificationApproval))
             recertificationApprovals;
     }
@@ -134,25 +131,20 @@ library IssuanceManagerStorage {
         uint256 activeTokenId;
     }
 
+    /// @notice Per-certificate vault position: nominal shares in the scripified-units vault.
+    ///         Claim on underlying (wad) = vaultNominalShares * totalAssetsWad / totalNominalShares.
+    /// @dev Three slots preserve layout vs legacy (amount, reductionDebt, maxUnitsRepresented).
     struct CertScripState {
-        uint256 amount;
-        uint256 reductionDebt;
+        uint256 vaultNominalShares;
+        /// @dev Legacy `reductionDebt` slot — unused after ERC4626 vault migration.
+        uint256 deprecatedMasterChefDebtSlot;
         uint256 maxUnitsRepresented;
     }
 
-    struct ScripPoolState {
-        uint256 totalTrackedScrip;
-        uint256 accReductionPerShare;
-    }
-
+    /// @notice ERC4626-style pool for scripified certificate units (underlying in 18-dec wad).
     struct CertScripUnitPool {
-        uint256 totalScripifiedUnits;
-        uint256 accReductionPerShare;
-    }
-
-    struct ScripUserInfo {
-        uint256 amount;
-        uint256 reductionDebt;
+        uint256 totalAssetsWad;
+        uint256 totalNominalShares;
     }
 
     struct RecertificationApproval {
@@ -339,26 +331,40 @@ library IssuanceManagerStorage {
         return issuanceManagerStorage().certScripStates[certAddress][id];
     }
 
-    function getScripPoolState(
-        address certAddress
-    ) internal view returns (ScripPoolState storage) {
-        return issuanceManagerStorage().scripPoolStates[certAddress];
-    }
-
-    function getScripPoolUserInfo(
+    /// @notice Underlying wad claim for one certificate’s vault position (pro-rata on total pool).
+    function _assetsOfVaultPosition(
         address certAddress,
-        address account
-    ) internal view returns (ScripUserInfo storage) {
-        return issuanceManagerStorage().scripPoolUsers[certAddress][account];
+        uint256 tokenId
+    ) internal view returns (uint256 assetsWad) {
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+            certAddress
+        ];
+        if (pool.totalNominalShares == 0) {
+            return 0;
+        }
+        CertScripState storage certState = getCertScripState(certAddress, tokenId);
+        return
+            certState.vaultNominalShares * pool.totalAssetsWad / pool.totalNominalShares;
     }
 
+    /// @dev Sum of scrip-token-equivalent held by `account` across all certs where they are legal owner.
+    ///      Transfers of ERC20 do not change legal-owner vault claims.
     function getScripPoolUserAmount(
         address certAddress,
         address account
-    ) internal view returns (uint256) {
-        ScripPoolState storage pool = getScripPoolState(certAddress);
-        ScripUserInfo storage user = getScripPoolUserInfo(certAddress, account);
-        return _currentAmount(user.amount, user.reductionDebt, pool.accReductionPerShare);
+    ) internal view returns (uint256 scripEquivalent) {
+        (uint256 num, uint256 den) = _getScripRatioOrDefault(certAddress);
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        uint256 supply = certificate.totalSupply();
+        for (uint256 i = 0; i < supply; i++) {
+            uint256 tokenId = certificate.tokenByIndex(i);
+            if (certificate.legalOwnerOf(tokenId) != account) {
+                continue;
+            }
+            uint256 assetsWad = _assetsOfVaultPosition(certAddress, tokenId);
+            if (assetsWad == 0) continue;
+            scripEquivalent += (assetsWad / 1e18) * num / den;
+        }
     }
 
     function getScripPoolUserPosition(
@@ -369,9 +375,8 @@ library IssuanceManagerStorage {
         view
         returns (uint256 recordedAmount, uint256 reductionDebt, uint256 currentAmount)
     {
-        ScripUserInfo storage user = getScripPoolUserInfo(certAddress, account);
-        recordedAmount = user.amount;
-        reductionDebt = user.reductionDebt;
+        recordedAmount = 0;
+        reductionDebt = 0;
         currentAmount = getScripPoolUserAmount(certAddress, account);
     }
 
@@ -429,16 +434,33 @@ library IssuanceManagerStorage {
         ];
     }
 
+    /// @return totalTrackedScrip ERC20 scrip total supply (canonical circulating scrip).
+    /// @return pricePerShareRay underlying wad per nominal vault share, ray precision (0 if empty vault).
     function getScripPoolTotals(
         address certAddress
     )
         internal
         view
-        returns (uint256 totalTrackedScrip, uint256 accReductionPerShare)
+        returns (uint256 totalTrackedScrip, uint256 pricePerShareRay)
     {
-        ScripPoolState storage pool = getScripPoolState(certAddress);
-        totalTrackedScrip = pool.totalTrackedScrip;
-        accReductionPerShare = pool.accReductionPerShare;
+        address scrip = getScripifiedCert(certAddress);
+        totalTrackedScrip = scrip == address(0) ? 0 : ICyberScrip(scrip).totalSupply();
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+            certAddress
+        ];
+        pricePerShareRay = pool.totalNominalShares == 0
+            ? 0
+            : pool.totalAssetsWad * VAULT_RAY / pool.totalNominalShares;
+    }
+
+    function getCertScripUnitVault(
+        address certAddress
+    ) internal view returns (uint256 totalAssetsWad, uint256 totalNominalShares) {
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+            certAddress
+        ];
+        totalAssetsWad = pool.totalAssetsWad;
+        totalNominalShares = pool.totalNominalShares;
     }
 
     function getCertScripifiedStatus(
@@ -459,16 +481,7 @@ library IssuanceManagerStorage {
         address certAddress,
         uint256 id
     ) internal view returns (uint256) {
-        CertScripState storage certState = getCertScripState(certAddress, id);
-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
-            certAddress
-        ];
-        return
-            _currentAmount(
-                certState.amount,
-                certState.reductionDebt,
-                pool.accReductionPerShare
-            );
+        return _assetsOfVaultPosition(certAddress, id);
     }
 
     function selectRecertToken(
@@ -666,7 +679,6 @@ library IssuanceManagerStorage {
         _depositCertScripUnits(certAddress, id, amountWad);
         details.unitsRepresented = details.unitsRepresented - amountWad;
         certificate.updateCertificateDetails(id, details);
-        _depositScripPool(certAddress, account, scripAmount);
         ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
         emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
     }
@@ -722,18 +734,29 @@ library IssuanceManagerStorage {
             approval.details = approvedDetails;
         }
 
-        _reduceScripPool(certAddress, amount);
         if (selection.foundActive) {
-            uint256 pooledUnitsWad = _consumeOwnCertScripUnits(
+            // Redeem vault shares for this certificate up to pool claim; burn nominals. Conversion
+            // above claim is still backed by burned scrip, so dilute remaining pool pro-rata via
+            // _withdrawVaultAssets (same economics as excess scrip burning without a cert position).
+            uint256 claimWad = _assetsOfVaultPosition(
                 certAddress,
-                selection.activeTokenId,
-                unitsWad
+                selection.activeTokenId
             );
-            if (pooledUnitsWad > 0) {
-                _reduceCertScripUnitsPool(certAddress, pooledUnitsWad);
+            uint256 fromVaultWad = unitsWad < claimWad ? unitsWad : claimWad;
+            uint256 redeemedWad;
+            if (fromVaultWad > 0) {
+                redeemedWad = _redeemVaultForCert(
+                    certAddress,
+                    selection.activeTokenId,
+                    fromVaultWad
+                );
+            }
+            if (unitsWad > redeemedWad) {
+                _withdrawVaultAssets(certAddress, unitsWad - redeemedWad);
             }
         } else {
-            _reduceCertScripUnitsPool(certAddress, unitsWad);
+            // No active cert: socialized withdrawal from the shared vault (nominals unchanged).
+            _withdrawVaultAssets(certAddress, unitsWad);
         }
         ICyberScrip(scripifiedCert).burnFrom(account, amount);
 
@@ -789,8 +812,7 @@ library IssuanceManagerStorage {
         units = units / numerator;
         uint256 unitsWad = units * 1e18;
 
-        _reduceScripPool(certAddress, amount);
-        _reduceCertScripUnitsPool(certAddress, unitsWad);
+        _withdrawVaultAssets(certAddress, unitsWad);
         ICyberScrip(scripifiedCert).forceBurn(account, amount);
     }
 
@@ -901,137 +923,89 @@ library IssuanceManagerStorage {
         }
     }
 
-    function _depositScripPool(
-        address certAddress,
-        address account,
-        uint256 scripAmount
-    ) internal {
-        ScripPoolState storage pool = getScripPoolState(certAddress);
-        ScripUserInfo storage user = getScripPoolUserInfo(certAddress, account);
-        _syncUserScripPoolPosition(certAddress, account);
-        pool.totalTrackedScrip = pool.totalTrackedScrip + scripAmount;
-        user.amount = user.amount + scripAmount;
-        user.reductionDebt =
-            (user.amount * pool.accReductionPerShare) /
-            ACC_REDUCTION_PRECISION;
-    }
-
-    function _reduceScripPool(address certAddress, uint256 burnedScripAmount) internal {
-        ScripPoolState storage pool = getScripPoolState(certAddress);
-        if (burnedScripAmount > pool.totalTrackedScrip) revert ConditionCheckFailed();
-        if (pool.totalTrackedScrip == 0) revert ConditionCheckFailed();
-        pool.accReductionPerShare =
-            pool.accReductionPerShare +
-            ((burnedScripAmount * ACC_REDUCTION_PRECISION) / pool.totalTrackedScrip);
-        pool.totalTrackedScrip = pool.totalTrackedScrip - burnedScripAmount;
-    }
-
+    /// @notice Deposit units (wad) into the shared vault; mint nominal shares to this certificate.
     function _depositCertScripUnits(
         address certAddress,
         uint256 tokenId,
-        uint256 units
+        uint256 assetsWad
     ) internal {
         IssuanceManagerData storage ds = issuanceManagerStorage();
         CertScripUnitPool storage pool = ds.certScripUnitPools[certAddress];
         CertScripState storage certState = ds.certScripStates[certAddress][tokenId];
-        _syncCertScripPosition(certAddress, tokenId);
-        pool.totalScripifiedUnits = pool.totalScripifiedUnits + units;
-        certState.amount = certState.amount + units;
-        certState.reductionDebt =
-            (certState.amount * pool.accReductionPerShare) /
-            ACC_REDUCTION_PRECISION;
+
+        uint256 sharesMinted = pool.totalNominalShares == 0
+            ? assetsWad
+            : assetsWad * pool.totalNominalShares / pool.totalAssetsWad;
+        if (sharesMinted == 0) revert ConditionCheckFailed();
+
+        certState.vaultNominalShares += sharesMinted;
+        pool.totalNominalShares += sharesMinted;
+        pool.totalAssetsWad += assetsWad;
     }
 
-    function _reduceCertScripUnitsPool(
+    /// @notice ERC4626-style withdraw: burn this certificate's nominal shares and pull `assetsWad`
+    ///         from the vault (exact asset burn; shares burnt round up).
+    function _redeemVaultForCert(
         address certAddress,
-        uint256 burnedUnits
+        uint256 tokenId,
+        uint256 assetsWad
+    ) internal returns (uint256 assetsRemovedWad) {
+        if (assetsWad == 0) return 0;
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+            certAddress
+        ];
+        CertScripState storage certState = getCertScripState(certAddress, tokenId);
+        uint256 S = pool.totalNominalShares;
+        uint256 T = pool.totalAssetsWad;
+        if (S == 0 || T == 0) revert ConditionCheckFailed();
+
+        uint256 claimWad = certState.vaultNominalShares * T / S;
+        if (assetsWad > claimWad) revert ConditionCheckFailed();
+
+        uint256 sharesBurned = (assetsWad * S + T - 1) / T;
+        if (sharesBurned > certState.vaultNominalShares) {
+            sharesBurned = certState.vaultNominalShares;
+            assetsWad = sharesBurned * T / S;
+        }
+
+        certState.vaultNominalShares -= sharesBurned;
+        pool.totalNominalShares -= sharesBurned;
+        pool.totalAssetsWad -= assetsWad;
+
+        if (pool.totalAssetsWad == 0) {
+            _zeroAllVaultNominals(certAddress);
+        }
+        return assetsWad;
+    }
+
+    /// @notice Remove underlying from vault; all certificate positions diluted pro-rata
+    ///         (nominal shares unchanged, price per share in underlying drops).
+    function _withdrawVaultAssets(
+        address certAddress,
+        uint256 assetsOutWad
     ) internal {
         CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
             certAddress
         ];
-        if (burnedUnits > pool.totalScripifiedUnits) revert ConditionCheckFailed();
-        if (pool.totalScripifiedUnits == 0) revert ConditionCheckFailed();
-        pool.accReductionPerShare =
-            pool.accReductionPerShare +
-            ((burnedUnits * ACC_REDUCTION_PRECISION) / pool.totalScripifiedUnits);
-        pool.totalScripifiedUnits = pool.totalScripifiedUnits - burnedUnits;
+        if (assetsOutWad > pool.totalAssetsWad) revert ConditionCheckFailed();
+        if (pool.totalAssetsWad == 0) revert ConditionCheckFailed();
+
+        pool.totalAssetsWad -= assetsOutWad;
+        if (pool.totalAssetsWad == 0) {
+            _zeroAllVaultNominals(certAddress);
+        }
     }
 
-    function _consumeOwnCertScripUnits(
-        address certAddress,
-        uint256 tokenId,
-        uint256 requestedUnits
-    ) internal returns (uint256 pooledUnits) {
+    function _zeroAllVaultNominals(address certAddress) internal {
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        uint256 supply = certificate.totalSupply();
+        for (uint256 i = 0; i < supply; i++) {
+            uint256 tokenId = certificate.tokenByIndex(i);
+            getCertScripState(certAddress, tokenId).vaultNominalShares = 0;
+        }
         CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
             certAddress
         ];
-        CertScripState storage certState = getCertScripState(certAddress, tokenId);
-        _syncCertScripPosition(certAddress, tokenId);
-
-        uint256 directUnits = certState.amount;
-        if (directUnits > requestedUnits) {
-            directUnits = requestedUnits;
-        }
-        if (directUnits == 0) {
-            return requestedUnits;
-        }
-        if (directUnits > pool.totalScripifiedUnits) revert ConditionCheckFailed();
-
-        certState.amount = certState.amount - directUnits;
-        certState.reductionDebt =
-            (certState.amount * pool.accReductionPerShare) /
-            ACC_REDUCTION_PRECISION;
-        pool.totalScripifiedUnits = pool.totalScripifiedUnits - directUnits;
-
-        return requestedUnits - directUnits;
-    }
-
-    function _syncUserScripPoolPosition(address certAddress, address account) internal {
-        ScripPoolState storage pool = getScripPoolState(certAddress);
-        ScripUserInfo storage user = getScripPoolUserInfo(certAddress, account);
-        user.amount = _currentAmount(
-            user.amount,
-            user.reductionDebt,
-            pool.accReductionPerShare
-        );
-        user.reductionDebt =
-            (user.amount * pool.accReductionPerShare) /
-            ACC_REDUCTION_PRECISION;
-    }
-
-    function _syncCertScripPosition(address certAddress, uint256 tokenId) internal {
-        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
-            certAddress
-        ];
-        CertScripState storage certState = getCertScripState(certAddress, tokenId);
-        certState.amount = _currentAmount(
-            certState.amount,
-            certState.reductionDebt,
-            pool.accReductionPerShare
-        );
-        certState.reductionDebt =
-            (certState.amount * pool.accReductionPerShare) /
-            ACC_REDUCTION_PRECISION;
-    }
-
-    function _currentAmount(
-        uint256 amount,
-        uint256 reductionDebt,
-        uint256 accReductionPerShare
-    ) internal pure returns (uint256) {
-        if (amount == 0) {
-            return 0;
-        }
-        uint256 accruedReduction = (amount * accReductionPerShare) /
-            ACC_REDUCTION_PRECISION;
-        if (accruedReduction <= reductionDebt) {
-            return amount;
-        }
-
-        uint256 pendingReduction = accruedReduction - reductionDebt;
-        if (pendingReduction >= amount) {
-            return 0;
-        }
-        return amount - pendingReduction;
+        pool.totalNominalShares = 0;
     }
 }
