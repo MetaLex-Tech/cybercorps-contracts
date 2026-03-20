@@ -939,17 +939,6 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         return IssuanceManagerStorage.getScripPoolUserAmount(certAddress, account);
     }
 
-    function getScripPoolUserPosition(
-        address certAddress,
-        address account
-    )
-        external
-        view
-        returns (uint256 recordedAmount, uint256 reductionDebt, uint256 currentAmount)
-    {
-        return IssuanceManagerStorage.getScripPoolUserPosition(certAddress, account);
-    }
-
     function isScripifyWhitelisted(
         address certAddress,
         uint256 id

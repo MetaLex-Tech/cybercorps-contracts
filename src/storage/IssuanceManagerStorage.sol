@@ -178,14 +178,6 @@ library IssuanceManagerStorage {
         return issuanceManagerStorage().printers;
     }
 
-    function getPrinterAt(uint256 index) internal view returns (address) {
-        return issuanceManagerStorage().printers[index];
-    }
-
-    function getPrintersCount() internal view returns (uint256) {
-        return issuanceManagerStorage().printers.length;
-    }
-
     // Setters
     function setCORP(address _corp) internal {
         issuanceManagerStorage().CORP = _corp;
@@ -367,19 +359,6 @@ library IssuanceManagerStorage {
         }
     }
 
-    function getScripPoolUserPosition(
-        address certAddress,
-        address account
-    )
-        internal
-        view
-        returns (uint256 recordedAmount, uint256 reductionDebt, uint256 currentAmount)
-    {
-        recordedAmount = 0;
-        reductionDebt = 0;
-        currentAmount = getScripPoolUserAmount(certAddress, account);
-    }
-
     function getRecertificationApproval(
         address certAddress,
         address investor
@@ -482,13 +461,6 @@ library IssuanceManagerStorage {
         uint256 id
     ) internal view returns (uint256) {
         return _assetsOfVaultPosition(certAddress, id);
-    }
-
-    function selectRecertToken(
-        address certAddress,
-        address account
-    ) external view returns (RecertSelection memory selection) {
-        return _selectRecertToken(certAddress, account);
     }
 
     function executeCreateCertAndAssign(
