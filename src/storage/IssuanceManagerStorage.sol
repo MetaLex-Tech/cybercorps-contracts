@@ -65,6 +65,14 @@ library IssuanceManagerStorage {
     error SignatureRequired();
     error InvalidInvestor();
     error InvalidInvestorName();
+    error InvalidAmount();
+    error CertificateVoided();
+    error NotLegalOwner();
+    error AmountExceedsAvailableUnits();
+    error ZeroSharesMinted();
+    error EmptyVault();
+    error VaultRedemptionExceedsClaim();
+    error VaultWithdrawalExceedsAssets();
 
     /// @dev Ray precision for vault price-per-share (assets per 1 nominal share, 1e27 = 1.0).
     uint256 internal constant VAULT_RAY = 1e27;
@@ -793,7 +801,7 @@ library IssuanceManagerStorage {
         address target,
         address account
     ) external {
-        if (amount == 0) revert ConditionCheckFailed();
+        if (amount == 0) revert InvalidAmount();
 
         address scripifiedCert = getScripifiedCert(certAddress);
         if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
@@ -821,9 +829,8 @@ library IssuanceManagerStorage {
         }
 
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
-        if (certificate.isVoided(id)) revert ConditionCheckFailed();
-        if (certificate.legalOwnerOf(id) != account)
-            revert ConditionCheckFailed();
+        if (certificate.isVoided(id)) revert CertificateVoided();
+        if (certificate.legalOwnerOf(id) != account) revert NotLegalOwner();
 
         address toSend = target;
         if (toSend == address(0)) toSend = account;
@@ -832,7 +839,9 @@ library IssuanceManagerStorage {
             .getActiveCertificateDetails(id);
         // Treat unitsRepresented as 18-dec fixed point internally.
         uint256 amountWad = amount * 1e18;
-        if (amountWad > details.unitsRepresented) revert ConditionCheckFailed();
+        if (amountWad > details.unitsRepresented) {
+            revert AmountExceedsAvailableUnits();
+        }
 
         (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(
             certAddress
@@ -976,7 +985,7 @@ library IssuanceManagerStorage {
         address account,
         uint256 amount
     ) external {
-        if (amount == 0) revert ConditionCheckFailed();
+        if (amount == 0) revert InvalidAmount();
 
         address scripifiedCert = getScripifiedCert(certAddress);
         if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
@@ -1184,7 +1193,7 @@ library IssuanceManagerStorage {
         uint256 sharesMinted = pool.totalNominalShares == 0
             ? assetsWad
             : assetsWad * pool.totalNominalShares / pool.totalAssetsWad;
-        if (sharesMinted == 0) revert ConditionCheckFailed();
+        if (sharesMinted == 0) revert ZeroSharesMinted();
 
         certState.vaultNominalShares += sharesMinted;
         pool.totalNominalShares += sharesMinted;
@@ -1205,10 +1214,10 @@ library IssuanceManagerStorage {
         CertScripState storage certState = getCertScripState(certAddress, tokenId);
         uint256 S = pool.totalNominalShares;
         uint256 T = pool.totalAssetsWad;
-        if (S == 0 || T == 0) revert ConditionCheckFailed();
+        if (S == 0 || T == 0) revert EmptyVault();
 
         uint256 claimWad = certState.vaultNominalShares * T / S;
-        if (assetsWad > claimWad) revert ConditionCheckFailed();
+        if (assetsWad > claimWad) revert VaultRedemptionExceedsClaim();
 
         uint256 sharesBurned = (assetsWad * S + T - 1) / T;
         if (sharesBurned > certState.vaultNominalShares) {
@@ -1235,8 +1244,10 @@ library IssuanceManagerStorage {
         CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
             certAddress
         ];
-        if (assetsOutWad > pool.totalAssetsWad) revert ConditionCheckFailed();
-        if (pool.totalAssetsWad == 0) revert ConditionCheckFailed();
+        if (pool.totalAssetsWad == 0) revert EmptyVault();
+        if (assetsOutWad > pool.totalAssetsWad) {
+            revert VaultWithdrawalExceedsAssets();
+        }
 
         pool.totalAssetsWad -= assetsOutWad;
         if (pool.totalAssetsWad == 0) {
