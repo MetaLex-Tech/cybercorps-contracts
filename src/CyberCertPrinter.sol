@@ -193,11 +193,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         return tokenId;
     }
     
-    // Simplified mint for backward compatibility
-    function safeMint(address to, uint256 tokenId) external onlyIssuanceManager {
-        _safeMint(to, tokenId);
-    }
-    
     // Add endorsement (for transfers in secondary market)
     function addEndorsement(uint256 tokenId, Endorsement memory newEndorsement) public {
         if(msg.sender != CyberCertPrinterStorage.cyberCertStorage().issuanceManager && msg.sender != ownerOf(tokenId)) revert InvalidEndorsement();
