@@ -116,6 +116,9 @@ library CyberCertPrinterStorage {
         CyberCertPrinterStorage.CyberCertStorage storage s = cyberCertStorage();
         string[] memory certLegend = s.certLegend[tokenId];
         ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
+        CertificateDetails memory effectiveDetails = getCertificateDetails(
+            tokenId
+        );
 
         // Get registry and agreementId from first endorsement if it exists
         address registry = address(0);
@@ -135,7 +138,7 @@ library CyberCertPrinterStorage {
             s.securitySeries,
             s.certificateUri,
             certLegend,
-            s.certificateDetails[tokenId],
+            effectiveDetails,
             s.endorsements[tokenId],
             s.owners[tokenId],
             registry,
@@ -147,8 +150,34 @@ library CyberCertPrinterStorage {
     }
 
     // Internal getters for complex types
-    function getCertificateDetails(uint256 tokenId) internal view returns (CertificateDetails storage) {
+    function getStoredCertificateDetails(uint256 tokenId) internal view returns (CertificateDetails storage) {
         return cyberCertStorage().certificateDetails[tokenId];
+    }
+
+    function getActiveCertificateDetails(
+        uint256 tokenId
+    ) internal view returns (CertificateDetails memory details) {
+        details = cyberCertStorage().certificateDetails[tokenId];
+    }
+
+    function getCertificateDetails(
+        uint256 tokenId
+    ) internal view returns (CertificateDetails memory details) {
+        CyberCertStorage storage s = cyberCertStorage();
+        details = getActiveCertificateDetails(tokenId);
+
+        (
+            bool isScripified,
+            uint256 scripifiedUnits,
+            uint256 _maxUnitsRepresented
+        ) = IIssuanceManager(s.issuanceManager).getCertScripifiedStatus(
+                address(this),
+                tokenId
+            );
+
+        if (isScripified) {
+            details.unitsRepresented = details.unitsRepresented + scripifiedUnits;
+        }
     }
 
     function getEndorsements(uint256 tokenId) internal view returns (Endorsement[] storage) {

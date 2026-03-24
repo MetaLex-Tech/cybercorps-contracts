@@ -76,6 +76,10 @@ contract POCMockCertPrinter {
         return _details[tokenId];
     }
 
+    function getActiveCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory) {
+        return _details[tokenId];
+    }
+
     function safeMint(uint256 tokenId, address to, CertificateDetails memory details) external returns (uint256) {
         return _mint(tokenId, to, details);
     }

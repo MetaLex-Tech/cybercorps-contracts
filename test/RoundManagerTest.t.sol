@@ -358,6 +358,7 @@ library CyberCorpHelper {
                     roundType,
                     publicRound,
                     true,
+                    false,
                     raiseCap,
                     minTicket,
                     maxTicket,
@@ -443,6 +444,7 @@ library CyberCorpHelper {
                     roundType,
                     publicRound,
                     true,
+                    false,
                     raiseCap,
                     minTicket,
                     maxTicket,
@@ -920,6 +922,7 @@ contract RoundManagerTest is Test {
                     RoundType.FounderApproved,
                     false,
                     true,
+                    false,
                     RAISE_CAP,
                     MIN_TICKET,
                     MAX_TICKET,
@@ -2149,6 +2152,7 @@ contract RoundManagerTest is Test {
                     RoundType.FounderApproved,
                     false,
                     true,
+                    false,
                     100_000 * 10 ** 6,
                     1_000 * 10 ** 6,
                     50_000 * 10 ** 6,
@@ -2528,6 +2532,7 @@ contract RoundManagerTest is Test {
                     RoundType.FCFS,
                     false,
                     true,
+                    false,
                     RAISE_CAP,
                     MIN_TICKET,
                     MAX_TICKET,
@@ -2590,6 +2595,26 @@ contract RoundManagerTest is Test {
         assertEq(price, 42);
         assertEq(decimals_, 2);
     }
+
+    function test_RevertIf_CreateRound_AlreadyExists() public {
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManager.RoundAlreadyExists.selector);
+        CyberCorpHelper.createRound(
+            RoundManager(roundManager),
+            address(paymentToken),
+            CyberCorpHelper.TEMPLATE_ID,
+            RAISE_CAP,
+            MIN_TICKET,
+            MAX_TICKET,
+            PRICE_PER_UNIT,
+            VALUATION,
+            RoundType.FounderApproved,
+            corpOwnerPrivKey,
+            corp,
+            false
+        );
+    }
+
 }
 
 // Separate FCFS tests in their own contract to avoid the original setUp()
@@ -2769,6 +2794,7 @@ contract RoundManagerFCFSTest is Test {
                     RoundType.FCFS,
                     true,
                     true,
+                    false,
                     1,
                     1,
                     1,
@@ -4013,7 +4039,8 @@ contract CyberCorpFactoryPublicRoundTest is Test {
             startTime,
             endTime,
             true,
-            true
+            true,
+            false
         );
 
         // Validations

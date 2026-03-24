@@ -72,7 +72,8 @@ interface ICyberCertPrinter is IERC721 {
     function safeMintAndAssign(
         address to,
         uint256 tokenId,
-        CertificateDetails memory details
+        CertificateDetails memory details,
+        string memory investorName
     ) external returns (uint256);
     function assignCert(
         address from,
@@ -100,8 +101,12 @@ interface ICyberCertPrinter is IERC721 {
     ) external;
     function burn(uint256 tokenId) external;
     function voidCert(uint256 tokenId) external;
+    function unvoidCert(uint256 tokenId) external;
     function isVoided(uint256 tokenId) external view returns (bool);
     function getCertificateDetails(
+        uint256 tokenId
+    ) external view returns (CertificateDetails memory);
+    function getActiveCertificateDetails(
         uint256 tokenId
     ) external view returns (CertificateDetails memory);
     function getIssuerSignatureCount(uint256 tokenId) external view returns (uint256);

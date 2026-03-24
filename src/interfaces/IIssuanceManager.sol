@@ -116,6 +116,13 @@ interface IIssuanceManager {
         CertificateDetails memory _details
     ) external returns (uint256 tokenId);
 
+    function createCertAndAssignWithName(
+        address certAddress,
+        address investor,
+        CertificateDetails memory _details,
+        string calldata investorName
+    ) external returns (uint256 tokenId);
+
     function createCertSignAndAssign(
         address certAddress,
         address investor,
@@ -251,6 +258,30 @@ interface IIssuanceManager {
         address certAddress
     ) external view returns (uint256);
 
+    function setRecertificationApproval(
+        address certAddress,
+        address investor,
+        string calldata investorName,
+        CertificateDetails calldata details
+    ) external;
+
+    function clearRecertificationApproval(
+        address certAddress,
+        address investor
+    ) external;
+
+    function getRecertificationApproval(
+        address certAddress,
+        address investor
+    )
+        external
+        view
+        returns (
+            bool approved,
+            string memory investorName,
+            CertificateDetails memory details
+        );
+
     function setScripifyWhitelistEnabled(
         address certAddress,
         bool enabled
@@ -274,6 +305,14 @@ interface IIssuanceManager {
         address certAddress,
         uint256 id
     ) external view returns (bool);
+
+    function getCertScripifiedStatus(
+        address certAddress,
+        uint256 id
+    )
+        external
+        view
+        returns (bool isScripified, uint256 scripifiedUnits, uint256 maxUnitsRepresented);
 
     function convertScripToCert(
         address certAddress,
