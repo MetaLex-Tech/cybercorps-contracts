@@ -70,7 +70,7 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
         }
 
         // Enforce freeze checks for normal transfers (not mint/burn)
-        if (from != address(0) && to != address(0)) {
+        if (to != address(0)) {
             if (s.canFreeze) {
                 if (s.frozen[from]) revert AccountFrozen(from);
                 if (s.frozen[to]) revert AccountFrozen(to);

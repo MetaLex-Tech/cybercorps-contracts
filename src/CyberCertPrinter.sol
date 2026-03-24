@@ -147,6 +147,10 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         _safeMint(to, tokenId);
         CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId] = CyberCertPrinterStorage.cyberCertStorage().defaultLegend;
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
+        CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails(
+            "",
+            to
+        );
         emit CyberCertPrinter_CertificateCreated(tokenId);
         return tokenId;
     }
@@ -155,14 +159,19 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     function safeMintAndAssign(
         address to, 
         uint256 tokenId,
-        CertificateDetails memory details
+        CertificateDetails memory details,
+        string memory investorName
     ) external onlyIssuanceManager returns (uint256) {
         _safeMint(to, tokenId);
         CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId] = CyberCertPrinterStorage.cyberCertStorage().defaultLegend;
         // Store agreement details
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
+        CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails(
+            investorName,
+            to
+        );
         string memory issuerName = IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName();
-        emit CertificateAssigned(tokenId, to, issuerName, issuerName);
+        emit CertificateAssigned(tokenId, to, investorName, issuerName);
         emit CyberCertPrinter_CertificateCreated(tokenId);
         return tokenId;
     }
@@ -175,14 +184,13 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     ) external onlyIssuanceManager returns (uint256) {
         if(ownerOf(tokenId) != from) revert InvalidTokenId();
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
+        CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails(
+            "",
+            to
+        );
         string memory issuerName = IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName();
-        emit CertificateAssigned(tokenId, to, issuerName, issuerName);
+        emit CertificateAssigned(tokenId, to, "", issuerName);
         return tokenId;
-    }
-    
-    // Simplified mint for backward compatibility
-    function safeMint(address to, uint256 tokenId) external onlyIssuanceManager {
-        _safeMint(to, tokenId);
     }
     
     // Add endorsement (for transfers in secondary market)
