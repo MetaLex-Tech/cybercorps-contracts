@@ -271,6 +271,8 @@ contract NonUSNationalityConditionTest is Test {
         uint256 proofTimestamp = block.timestamp;
         uint256 validityPeriod = 1 days;
         ProofVerificationParams memory params = _buildParams(investor, proofTimestamp, validityPeriod);
+        vm.expectEmit(true, false, false, true);
+        emit NonUSNationalityCondition.ProofSubmitted(investor, proofTimestamp + validityPeriod);
         vm.prank(investor);
         condition.submitProof(params, false);
         assertEq(condition.proofExpiry(investor), proofTimestamp + validityPeriod);
