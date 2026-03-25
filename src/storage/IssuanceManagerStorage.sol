@@ -55,7 +55,6 @@ import "./CyberCertPrinterStorage.sol";
 library IssuanceManagerStorage {
     error ConditionCheckFailed();
     error ScripifiedCertNotAllowed();
-    error ScripRatioRemainder();
     error ScripToCertMinimumNotMet();
     error ScripifyNotWhitelisted();
     error ScripifyOverMax();
@@ -385,7 +384,7 @@ library IssuanceManagerStorage {
             }
             uint256 assetsWad = _assetsOfVaultPosition(certAddress, tokenId);
             if (assetsWad == 0) continue;
-            scripEquivalent += (assetsWad / 1e18) * num / den;
+            scripEquivalent += assetsWad * num / den;
         }
     }
 
@@ -837,9 +836,8 @@ library IssuanceManagerStorage {
 
         CertificateDetails memory details = certificate
             .getActiveCertificateDetails(id);
-        // Treat unitsRepresented as 18-dec fixed point internally.
-        uint256 amountWad = amount * 1e18;
-        if (amountWad > details.unitsRepresented) {
+
+        if (amount > details.unitsRepresented) {
             revert AmountExceedsAvailableUnits();
         }
 
@@ -847,7 +845,6 @@ library IssuanceManagerStorage {
             certAddress
         );
         uint256 scripAmount = amount * numerator;
-        if (scripAmount % denominator != 0) revert ScripRatioRemainder();
         scripAmount = scripAmount / denominator;
         CertScripState storage certState = getCertScripState(certAddress, id);
         uint256 currentScripifiedUnits = getCurrentCertScripifiedUnits(
@@ -858,12 +855,12 @@ library IssuanceManagerStorage {
         if (totalUnits > certState.maxUnitsRepresented) {
             certState.maxUnitsRepresented = totalUnits;
         }
-        if (currentScripifiedUnits + amountWad > certState.maxUnitsRepresented) {
+        if (currentScripifiedUnits + amount > certState.maxUnitsRepresented) {
             revert ScripifyOverMax();
         }
 
-        _depositCertScripUnits(certAddress, id, amountWad);
-        details.unitsRepresented = details.unitsRepresented - amountWad;
+        _depositCertScripUnits(certAddress, id, amount);
+        details.unitsRepresented = details.unitsRepresented - amount;
         certificate.updateCertificateDetails(id, details);
         ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
         emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
@@ -884,9 +881,8 @@ library IssuanceManagerStorage {
             certAddress
         );
         uint256 units = amount * denominator;
-        if (units % numerator != 0) revert ScripRatioRemainder();
         units = units / numerator;
-        uint256 unitsWad = units * 1e18;
+
 
         ICondition[] storage conditions = getScripToCertConditions(certAddress);
         for (uint256 i = 0; i < conditions.length; i++) {
@@ -928,7 +924,7 @@ library IssuanceManagerStorage {
                 certAddress,
                 selection.activeTokenId
             );
-            uint256 fromVaultWad = unitsWad < claimWad ? unitsWad : claimWad;
+            uint256 fromVaultWad = units < claimWad ? units : claimWad;
             uint256 redeemedWad;
             if (fromVaultWad > 0) {
                 redeemedWad = _redeemVaultForCert(
@@ -937,12 +933,12 @@ library IssuanceManagerStorage {
                     fromVaultWad
                 );
             }
-            if (unitsWad > redeemedWad) {
-                _withdrawVaultAssets(certAddress, unitsWad - redeemedWad);
+            if (units > redeemedWad) {
+                _withdrawVaultAssets(certAddress, units - redeemedWad);
             }
         } else {
             // No active cert: socialized withdrawal from the shared vault (nominals unchanged).
-            _withdrawVaultAssets(certAddress, unitsWad);
+            _withdrawVaultAssets(certAddress, units);
         }
         ICyberScrip(scripifiedCert).burnFrom(account, amount);
 
@@ -951,7 +947,7 @@ library IssuanceManagerStorage {
                 .getActiveCertificateDetails(selection.activeTokenId);
             activeDetails.unitsRepresented =
                 activeDetails.unitsRepresented +
-                unitsWad;
+                units;
             certificate.updateCertificateDetails(
                 selection.activeTokenId,
                 activeDetails
@@ -963,7 +959,7 @@ library IssuanceManagerStorage {
             );
         } else {
             CertificateDetails memory details = approval.details;
-            details.unitsRepresented = unitsWad;
+            details.unitsRepresented = units;
             uint256 createdTokenId = IIssuanceManager(address(this))
                 .createCertAndAssignWithName(
                     certAddress,
@@ -994,11 +990,9 @@ library IssuanceManagerStorage {
             certAddress
         );
         uint256 units = amount * denominator;
-        if (units % numerator != 0) revert ScripRatioRemainder();
         units = units / numerator;
-        uint256 unitsWad = units * 1e18;
 
-        _withdrawVaultAssets(certAddress, unitsWad);
+        _withdrawVaultAssets(certAddress, units);
         ICyberScrip(scripifiedCert).forceBurn(account, amount);
     }
 
