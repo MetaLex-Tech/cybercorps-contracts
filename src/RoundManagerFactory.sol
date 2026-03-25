@@ -42,6 +42,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "./RoundManager.sol";
+import {FeeOverride} from "./interfaces/IRoundManagerFactory.sol";
 import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "openzeppelin-contracts/utils/Create2.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
@@ -60,7 +61,7 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
     event RoundManagerDeployed(address roundManager, string version);
     event RefImplementationSet(address refImplementation, string version);
     event TokenWhitelistUpdated(address token, bool isWhitelisted);
-    event InstanceFeeOverrideSet(address indexed roundManager, bool has, uint256 ratio);
+    event InstanceFeeOverrideSet(address indexed roundManager, bool enabled, uint256 ratio);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -147,7 +148,7 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
     /// @return Fee ratio (same unit as BASIS_POINTS)
     function getDefaultFeeRatio() external view returns (uint256) {
         RoundManagerFactoryStorage.RoundManagerFactoryData storage s = RoundManagerFactoryStorage.roundManagerFactoryStorage();
-        RoundManagerFactoryStorage.FeeOverride storage fo = s.instanceFeeOverrides[msg.sender];
+        FeeOverride storage fo = s.instanceFeeOverrides[msg.sender];
         return fo.enabled ? fo.ratio : s.defaultFeeRatio;
     }
 
@@ -159,15 +160,15 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
 
     /// @notice Get the per-instance fee override for a specific RoundManager
     /// @return Fee override configs
-    function getInstanceFeeOverride(address roundManager) external view returns (RoundManagerFactoryStorage.FeeOverride memory) {
+    function getInstanceFeeOverride(address roundManager) external view returns (FeeOverride memory) {
         return RoundManagerFactoryStorage.roundManagerFactoryStorage().instanceFeeOverrides[roundManager];
     }
 
     /// @notice Set a per-instance fee override for a specific RoundManager
-    /// @dev Only callable by the factory owner. Pass has=false to remove the override.
+    /// @dev Only callable by the factory owner. Pass enabled=false to remove the override.
     function setInstanceFeeOverride(address roundManager, bool enabled, uint256 ratio) external onlyOwner {
         if (ratio > RoundManagerFactoryStorage.BASIS_POINTS) revert InvalidFeeRatio();
-        RoundManagerFactoryStorage.roundManagerFactoryStorage().instanceFeeOverrides[roundManager] = RoundManagerFactoryStorage.FeeOverride(enabled, ratio);
+        RoundManagerFactoryStorage.roundManagerFactoryStorage().instanceFeeOverrides[roundManager] = FeeOverride(enabled, ratio);
         emit InstanceFeeOverrideSet(roundManager, enabled, ratio);
     }
 

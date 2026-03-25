@@ -42,6 +42,8 @@
 
 pragma solidity 0.8.28;
 
+import {FeeOverride} from "../interfaces/IRoundManagerFactory.sol";
+
 /// @title RoundManagerFactoryStorage
 /// @notice Storage library for the RoundManagerFactory contract that handles persistent data storage
 /// @dev Uses the unstructured storage pattern to manage factory-related data
@@ -50,11 +52,6 @@ library RoundManagerFactoryStorage {
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.round.manager.factory.storage.v1");
 
     uint256 public constant BASIS_POINTS = 10000; // 100%
-
-    struct FeeOverride {
-        bool enabled;
-        uint256 ratio;
-    }
 
     /// @notice Main storage layout struct that holds all persisted data
     /// @dev Uses unstructured storage pattern to avoid storage collisions
