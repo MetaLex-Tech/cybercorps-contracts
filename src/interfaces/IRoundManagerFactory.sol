@@ -53,7 +53,7 @@ interface IRoundManagerFactory {
 
     function getDefaultFeeRatio() external view returns (uint256);
     function getUnderlyingDefaultFeeRatio() external view returns (uint256);
-    function getInstanceFeeOverride(address roundManager) external returns (FeeOverride);
+    function getInstanceFeeOverride(address roundManager) external view returns (FeeOverride);
     function setInstanceFeeOverride(address roundManager, bool has, uint256 ratio) external;
     function getPlatformPayable() external view returns (address);
     function isWhitelistedToken(address token) external view returns (bool);
