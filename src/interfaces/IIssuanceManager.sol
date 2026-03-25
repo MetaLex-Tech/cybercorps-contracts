@@ -77,6 +77,13 @@ interface IIssuanceManager {
     event CertPrinterBeaconImplementationUpgraded(address implementation);
     event ScripBeaconImplementationUpgraded(address implementation);
     event ScripToCertMinimumSet(address indexed certAddress, uint256 minimum);
+    event ScripAddedToExistingCert(
+        address indexed certAddress,
+        address indexed user,
+        uint256 indexed certId,
+        uint256 oldUnitsRepresented,
+        uint256 newUnitsRepresented
+    );
 
     // Issuance Manager Functions
     function initialize(

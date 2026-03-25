@@ -1119,6 +1119,14 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(ICyberScrip(scrip).balanceOf(investor), 50 * 1e18);
         assertEq(ICyberScrip(scrip).balanceOf(otherInvestor), 150 * 1e18);
 
+        vm.expectEmit(true, true, true, true);
+        emit IssuanceManager.ScripAddedToExistingCert(
+            address(certPrinter),
+            otherInvestor,
+            otherInvestorCertId,
+            0,
+            150 * 1e18
+        );
         vm.prank(otherInvestor);
         issuanceManager.convertScripToCert(address(certPrinter), 150 * 1e18);
 

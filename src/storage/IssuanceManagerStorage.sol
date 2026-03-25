@@ -125,6 +125,13 @@ library IssuanceManagerStorage {
         address indexed certAddress,
         address indexed investor
     );
+    event ScripAddedToExistingCert(
+        address indexed certAddress,
+        address indexed user,
+        uint256 indexed certId,
+        uint256 oldUnitsRepresented,
+        uint256 newUnitsRepresented
+    );
 
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.issuancemanager.storage.v1");
@@ -945,6 +952,7 @@ library IssuanceManagerStorage {
         if (selection.foundActive) {
             CertificateDetails memory activeDetails = certificate
                 .getActiveCertificateDetails(selection.activeTokenId);
+            uint256 oldUnitsRepresented = activeDetails.unitsRepresented;
             activeDetails.unitsRepresented =
                 activeDetails.unitsRepresented +
                 units;
@@ -955,6 +963,13 @@ library IssuanceManagerStorage {
             _setCertMaxFromCurrent(
                 certAddress,
                 selection.activeTokenId,
+                activeDetails.unitsRepresented
+            );
+            emit ScripAddedToExistingCert(
+                certAddress,
+                account,
+                selection.activeTokenId,
+                oldUnitsRepresented,
                 activeDetails.unitsRepresented
             );
         } else {
