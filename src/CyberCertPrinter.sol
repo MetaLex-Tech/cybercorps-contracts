@@ -245,8 +245,8 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     function _update(address to, uint256 tokenId, address auth) internal virtual override returns (address) {
         address from = _ownerOf(tokenId);
         
-        // Skip restriction checks for minting (from == address(0)) and burning (to == address(0))
-        if (from != address(0) && to != address(0)) {
+        // Skip restriction checks for burning (to == address(0))
+        if (to != address(0)) {
             // This is a transfer, check built-in transferability flag and per-token override
             bool globalTransferable = CyberCertPrinterStorage.cyberCertStorage().transferable;
             bool tokenTransferable = CyberCertPrinterStorage.isTokenTransferable(tokenId);
