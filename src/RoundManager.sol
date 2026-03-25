@@ -568,7 +568,7 @@ contract RoundManager is
     /// in the future, it could be determined through a governance process.
     /// @return Fee amount
     function computeFee(uint256 size) public override view returns (uint256) {
-        return size * IRoundManagerFactory(RoundManagerStorage.getUpgradeFactory()).getDefaultFeeRatio() / RoundManagerFactoryStorage.BASIS_POINTS;
+        return size * IRoundManagerFactory(RoundManagerStorage.getUpgradeFactory()).getFeeRatio() / RoundManagerFactoryStorage.BASIS_POINTS;
     }
 
     /// @notice Gets the payable address for the fees

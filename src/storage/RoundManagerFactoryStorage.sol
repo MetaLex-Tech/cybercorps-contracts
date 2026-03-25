@@ -51,6 +51,11 @@ library RoundManagerFactoryStorage {
 
     uint256 public constant BASIS_POINTS = 10000; // 100%
 
+    struct FeeOverride {
+        bool enabled;
+        uint256 ratio;
+    }
+
     /// @notice Main storage layout struct that holds all persisted data
     /// @dev Uses unstructured storage pattern to avoid storage collisions
     struct RoundManagerFactoryData {
@@ -59,6 +64,7 @@ library RoundManagerFactoryStorage {
         address platformPayable; // Recipient of platform fees
         uint256 defaultFeeRatio; // total fee as % of ticket size (BASIS_POINTS = 100%)
         mapping(address => bool) whitelistedTokens;
+        mapping(address => FeeOverride) instanceFeeOverrides; // RoundManager -> FeeOverride
     }
 
     /// @notice Retrieves the storage reference for the RoundManagerFactoryData struct
@@ -101,5 +107,14 @@ library RoundManagerFactoryStorage {
 
     function setWhitelistedToken(address token, bool status) internal {
         roundManagerFactoryStorage().whitelistedTokens[token] = status;
+    }
+
+    function getInstanceFeeOverride(address roundManager) internal view returns (bool, uint256) {
+        FeeOverride storage fo = roundManagerFactoryStorage().instanceFeeOverrides[roundManager];
+        return (fo.enabled, fo.ratio);
+    }
+
+    function setInstanceFeeOverride(address roundManager, bool enabled, uint256 ratio) internal {
+        roundManagerFactoryStorage().instanceFeeOverrides[roundManager] = FeeOverride(enabled, ratio);
     }
 }

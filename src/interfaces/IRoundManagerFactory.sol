@@ -47,6 +47,8 @@ interface IRoundManagerFactory {
     function getRefImplementation() external view returns (address);
 
     function getDefaultFeeRatio() external view returns (uint256);
+    function getFeeRatio() external view returns (uint256);
+    function setInstanceFeeOverride(address roundManager, bool has, uint256 ratio) external;
     function getPlatformPayable() external view returns (address);
     function isWhitelistedToken(address token) external view returns (bool);
     function setWhitelistedToken(address token, bool isWhitelisted) external;

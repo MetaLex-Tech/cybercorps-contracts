@@ -60,6 +60,7 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
     event RoundManagerDeployed(address roundManager, string version);
     event RefImplementationSet(address refImplementation, string version);
     event TokenWhitelistUpdated(address token, bool isWhitelisted);
+    event InstanceFeeOverrideSet(address indexed roundManager, bool has, uint256 ratio);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -142,6 +143,24 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
     /// @return Fee ratio (same unit as BASIS_POINTS
     function getDefaultFeeRatio() external view returns (uint256) {
         return RoundManagerFactoryStorage.getDefaultFeeRatio();
+    }
+
+    /// @notice Get the effective fee ratio for the calling RoundManager instance.
+    /// @dev Returns the instance-specific override if set, otherwise the global default.
+    ///      Intended to be called by RoundManager instances (msg.sender = the RoundManager address).
+    /// @return Fee ratio (same unit as BASIS_POINTS)
+    function getFeeRatio() external view returns (uint256) {
+        (bool enabled, uint256 ratio) = RoundManagerFactoryStorage.getInstanceFeeOverride(msg.sender);
+        if (enabled) return ratio;
+        return RoundManagerFactoryStorage.getDefaultFeeRatio();
+    }
+
+    /// @notice Set a per-instance fee override for a specific RoundManager
+    /// @dev Only callable by the factory owner. Pass has=false to remove the override.
+    function setInstanceFeeOverride(address roundManager, bool enabled, uint256 ratio) external onlyOwner {
+        if (ratio > RoundManagerFactoryStorage.BASIS_POINTS) revert InvalidFeeRatio();
+        RoundManagerFactoryStorage.setInstanceFeeOverride(roundManager, enabled, ratio);
+        emit InstanceFeeOverrideSet(roundManager, enabled, ratio);
     }
 
     /// @notice Set the fee ratio

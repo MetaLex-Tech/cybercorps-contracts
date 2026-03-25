@@ -206,4 +206,69 @@ contract RoundManagerFactoryTest is Test {
         vm.expectRevert(RoundManagerFactory.InvalidFeeRatio.selector);
         rmFactory.setDefaultFeeRatio(RoundManagerFactoryStorage.BASIS_POINTS + 1);
     }
+
+    function test_GetFeeRatio_FallsBackToGlobalDefault() public {
+        vm.prank(owner);
+        rmFactory.setDefaultFeeRatio(500);
+
+        // Any address with no instance override returns the global default
+        vm.prank(address(0x1234));
+        assertEq(rmFactory.getFeeRatio(), 500);
+    }
+
+    function test_SetInstanceFeeOverride() public {
+        address rm = rmFactory.deployRoundManager(keccak256("test_SetInstanceFeeOverride"));
+
+        vm.startPrank(owner);
+        rmFactory.setDefaultFeeRatio(500);
+        rmFactory.setInstanceFeeOverride(rm, true, 0);
+        vm.stopPrank();
+
+        // getFeeRatio called from rm should return 0, not the global 500
+        vm.prank(rm);
+        assertEq(rmFactory.getFeeRatio(), 0);
+    }
+
+    function test_RevertIf_SetInstanceFeeOverrideNonOwner() public {
+        address rm = rmFactory.deployRoundManager(keccak256("test_SetInstanceFeeOverrideNonOwner"));
+
+        vm.prank(companyOwner);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, ownerRole, companyOwner));
+        rmFactory.setInstanceFeeOverride(rm, true, 0);
+    }
+
+    function test_RevertIf_SetInstanceFeeOverrideInvalid() public {
+        address rm = rmFactory.deployRoundManager(keccak256("test_SetInstanceFeeOverrideInvalid"));
+
+        vm.prank(owner);
+        vm.expectRevert(RoundManagerFactory.InvalidFeeRatio.selector);
+        rmFactory.setInstanceFeeOverride(rm, true, RoundManagerFactoryStorage.BASIS_POINTS + 1);
+    }
+
+    function test_ClearInstanceFeeOverride() public {
+        address rm = rmFactory.deployRoundManager(keccak256("test_ClearInstanceFeeOverride"));
+
+        vm.startPrank(owner);
+        rmFactory.setDefaultFeeRatio(500);
+        rmFactory.setInstanceFeeOverride(rm, true, 0);
+        vm.stopPrank();
+
+        vm.prank(rm);
+        assertEq(rmFactory.getFeeRatio(), 0, "override should be active");
+
+        vm.prank(owner);
+        rmFactory.setInstanceFeeOverride(rm, false, 0);
+
+        vm.prank(rm);
+        assertEq(rmFactory.getFeeRatio(), 500, "should fall back to global default after override cleared");
+    }
+
+    function test_InstanceFeeOverrideSet_EventEmitted() public {
+        address rm = rmFactory.deployRoundManager(keccak256("test_InstanceFeeOverrideSet_EventEmitted"));
+
+        vm.expectEmit(true, false, false, true);
+        emit RoundManagerFactory.InstanceFeeOverrideSet(rm, true, 0);
+        vm.prank(owner);
+        rmFactory.setInstanceFeeOverride(rm, true, 0);
+    }
 }
