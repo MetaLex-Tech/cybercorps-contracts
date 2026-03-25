@@ -188,11 +188,11 @@ contract RoundManagerFactoryTest is Test {
 
     function test_SetDefaultFeeRatio() public  {
         uint256 newValue = 123;
-        assertNotEq(rmFactory.getDefaultFeeRatio(), newValue, "Unexpected defaultFeeRatio before set");
+        assertNotEq(rmFactory.getUnderlyingDefaultFeeRatio(), newValue, "Unexpected defaultFeeRatio before set");
 
         vm.prank(owner);
         rmFactory.setDefaultFeeRatio(newValue);
-        assertEq(rmFactory.getDefaultFeeRatio(), newValue, "Unexpected defaultFeeRatio after set");
+        assertEq(rmFactory.getUnderlyingDefaultFeeRatio(), newValue, "Unexpected defaultFeeRatio after set");
     }
 
     function test_RevertIf_SetDefaultFeeRatioNonOwner() public {
@@ -213,7 +213,7 @@ contract RoundManagerFactoryTest is Test {
 
         // Any address with no instance override returns the global default
         vm.prank(address(0x1234));
-        assertEq(rmFactory.getFeeRatio(), 500);
+        assertEq(rmFactory.getDefaultFeeRatio(), 500);
     }
 
     function test_SetInstanceFeeOverride() public {
@@ -224,9 +224,9 @@ contract RoundManagerFactoryTest is Test {
         rmFactory.setInstanceFeeOverride(rm, true, 0);
         vm.stopPrank();
 
-        // getFeeRatio called from rm should return 0, not the global 500
+        // getDefaultFeeRatio called from rm should return 0, not the global 500
         vm.prank(rm);
-        assertEq(rmFactory.getFeeRatio(), 0);
+        assertEq(rmFactory.getDefaultFeeRatio(), 0);
     }
 
     function test_RevertIf_SetInstanceFeeOverrideNonOwner() public {
@@ -254,13 +254,13 @@ contract RoundManagerFactoryTest is Test {
         vm.stopPrank();
 
         vm.prank(rm);
-        assertEq(rmFactory.getFeeRatio(), 0, "override should be active");
+        assertEq(rmFactory.getDefaultFeeRatio(), 0, "override should be active");
 
         vm.prank(owner);
         rmFactory.setInstanceFeeOverride(rm, false, 0);
 
         vm.prank(rm);
-        assertEq(rmFactory.getFeeRatio(), 500, "should fall back to global default after override cleared");
+        assertEq(rmFactory.getDefaultFeeRatio(), 500, "should fall back to global default after override cleared");
     }
 
     function test_InstanceFeeOverrideSet_EventEmitted() public {

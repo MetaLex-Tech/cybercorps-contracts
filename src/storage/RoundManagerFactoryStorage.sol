@@ -108,13 +108,4 @@ library RoundManagerFactoryStorage {
     function setWhitelistedToken(address token, bool status) internal {
         roundManagerFactoryStorage().whitelistedTokens[token] = status;
     }
-
-    function getInstanceFeeOverride(address roundManager) internal view returns (bool, uint256) {
-        FeeOverride storage fo = roundManagerFactoryStorage().instanceFeeOverrides[roundManager];
-        return (fo.enabled, fo.ratio);
-    }
-
-    function setInstanceFeeOverride(address roundManager, bool enabled, uint256 ratio) internal {
-        roundManagerFactoryStorage().instanceFeeOverrides[roundManager] = FeeOverride(enabled, ratio);
-    }
 }

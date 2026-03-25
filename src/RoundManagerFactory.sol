@@ -139,27 +139,35 @@ contract RoundManagerFactory is UUPSUpgradeable, BorgAuthACL {
         RoundManagerFactoryStorage.setPlatformPayable(platformPayable);
     }
 
-    /// @notice Get the fee ratio
-    /// @return Fee ratio (same unit as BASIS_POINTS
-    function getDefaultFeeRatio() external view returns (uint256) {
-        return RoundManagerFactoryStorage.getDefaultFeeRatio();
-    }
-
     /// @notice Get the effective fee ratio for the calling RoundManager instance.
     /// @dev Returns the instance-specific override if set, otherwise the global default.
     ///      Intended to be called by RoundManager instances (msg.sender = the RoundManager address).
+    ///      We intentionally name it `getDefaultFeeRatio` for backward compatibility so that older RoundManagers can
+    ///      still utilize the fee overrides.
     /// @return Fee ratio (same unit as BASIS_POINTS)
-    function getFeeRatio() external view returns (uint256) {
-        (bool enabled, uint256 ratio) = RoundManagerFactoryStorage.getInstanceFeeOverride(msg.sender);
-        if (enabled) return ratio;
-        return RoundManagerFactoryStorage.getDefaultFeeRatio();
+    function getDefaultFeeRatio() external view returns (uint256) {
+        RoundManagerFactoryStorage.RoundManagerFactoryData storage s = RoundManagerFactoryStorage.roundManagerFactoryStorage();
+        RoundManagerFactoryStorage.FeeOverride storage fo = s.instanceFeeOverrides[msg.sender];
+        return fo.enabled ? fo.ratio : s.defaultFeeRatio;
+    }
+
+    /// @notice Get the underlying default fee ratio without overrides
+    /// @return Fee ratio (same unit as BASIS_POINTS
+    function getUnderlyingDefaultFeeRatio() external view returns (uint256) {
+        return RoundManagerFactoryStorage.roundManagerFactoryStorage().defaultFeeRatio;
+    }
+
+    /// @notice Get the per-instance fee override for a specific RoundManager
+    /// @return Fee override configs
+    function getInstanceFeeOverride(address roundManager) external view returns (RoundManagerFactoryStorage.FeeOverride memory) {
+        return RoundManagerFactoryStorage.roundManagerFactoryStorage().instanceFeeOverrides[roundManager];
     }
 
     /// @notice Set a per-instance fee override for a specific RoundManager
     /// @dev Only callable by the factory owner. Pass has=false to remove the override.
     function setInstanceFeeOverride(address roundManager, bool enabled, uint256 ratio) external onlyOwner {
         if (ratio > RoundManagerFactoryStorage.BASIS_POINTS) revert InvalidFeeRatio();
-        RoundManagerFactoryStorage.setInstanceFeeOverride(roundManager, enabled, ratio);
+        RoundManagerFactoryStorage.roundManagerFactoryStorage().instanceFeeOverrides[roundManager] = RoundManagerFactoryStorage.FeeOverride(enabled, ratio);
         emit InstanceFeeOverrideSet(roundManager, enabled, ratio);
     }
 
