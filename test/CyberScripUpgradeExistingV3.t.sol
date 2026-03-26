@@ -285,7 +285,7 @@ contract CyberScripUpgradeExistingV3Test is Test {
         issuanceManager.convertScripToCert(address(certPrinter), 80);
 
         vm.prank(investor);
-        vm.expectRevert(IssuanceManager.ScripRatioRemainder.selector);
+        vm.expectRevert(IssuanceManager.ConditionCheckFailed.selector);
         issuanceManager.convertScripToCert(address(certPrinter), 100);
 
         vm.prank(investor);

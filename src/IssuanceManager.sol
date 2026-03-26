@@ -67,7 +67,6 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     error ConditionCheckFailed();
     error NotRefImplementation();
     error InvalidScripRatio();
-    error ScripRatioRemainder();
     error ScripToCertMinimumNotMet();
     error ScripifyNotWhitelisted();
     error RecertificationApprovalRequired();
@@ -125,6 +124,13 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     event RecertificationApprovalCleared(
         address indexed certAddress,
         address indexed investor
+    );
+    event ScripAddedToExistingCert(
+        address indexed certAddress,
+        address indexed user,
+        uint256 indexed certId,
+        uint256 oldUnitsRepresented,
+        uint256 newUnitsRepresented
     );
 
     /// @custom:oz-upgrades-unsafe-allow constructor
