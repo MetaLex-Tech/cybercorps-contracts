@@ -125,6 +125,14 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         address indexed certAddress,
         address indexed investor
     );
+    event ScripRecertified(
+        address indexed certAddress,
+        address indexed user,
+        uint256 indexed certId,
+        uint256 scripAmount,
+        uint256 oldUnitsRepresented,
+        uint256 newUnitsRepresented
+    );
     event ScripAddedToExistingCert(
         address indexed certAddress,
         address indexed user,
@@ -904,11 +912,18 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         return IssuanceManagerStorage.getCertScripUnitVault(certAddress);
     }
 
-    function getScripPoolUserAmount(
+    function getScripPoolAmountById(
         address certAddress,
-        address account
+        uint256 id
     ) external view returns (uint256) {
-        return IssuanceManagerStorage.getScripPoolUserAmount(certAddress, account);
+        return IssuanceManagerStorage.getScripPoolAmountById(certAddress, id);
+    }
+
+    function getScripPoolSharesById(
+        address certAddress,
+        uint256 id
+    ) external view returns (uint256) {
+        return IssuanceManagerStorage.getScripPoolSharesById(certAddress, id);
     }
 
     function isScripifyWhitelisted(
