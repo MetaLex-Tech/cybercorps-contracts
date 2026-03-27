@@ -29,7 +29,7 @@ contract DeployNonUsZkPassportConditionScript is Script {
         uint256 chainId
     ) public returns (BorgAuth zkpassportAuth, NonUSNationalityCondition zkpassportCondition) {
 
-        bytes32 salt = keccak256(abi.encodePacked("zkpassport.v1.0.1-dev0"));
+        bytes32 salt = keccak256(abi.encodePacked("zkpassport.v1.0.1-dev1"));
 
         address deployerAddress = vm.addr(deployerPrivateKey);
 
@@ -68,11 +68,16 @@ contract DeployNonUsZkPassportConditionScript is Script {
 
         vm.stopBroadcast();
 
-        console2.log("zkpassportAuth:", address(zkpassportAuth));
-        console2.log("NonUSNationalityCondition:", address(zkpassportCondition));
+        console2.log("==== Configs ====");
         console2.log("LexChexCondition:", address(deployment.lexchexCondition));
-        console2.log("OrCondition(zkPassport || lexchex):", address(orCondition));
         console2.log("Expected domain:", expectedDomain);
         console2.log("Expected scope:", expectedScope);
+        console2.log("");
+
+        console2.log("==== Deployed ====");
+        console2.log("zkpassportAuth:", address(zkpassportAuth));
+        console2.log("NonUSNationalityCondition:", address(zkpassportCondition));
+        console2.log("OrCondition(zkPassport || lexchex):", address(orCondition));
+        console2.log("");
     }
 }
