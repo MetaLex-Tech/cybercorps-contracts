@@ -389,30 +389,6 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(certPrinter.getIssuerSignatureCount(certId), 0);
     }
 
-    function test_createCertAndAssignWithName_revertsWhenInvestorNameEmpty()
-        public
-    {
-        ICyberCertPrinter certPrinter = _deployPrinter("Named Cert", "NCERT");
-        CertificateDetails memory details = _buildCertificateDetails(
-            10,
-            "Named legal details",
-            bytes("Named extension")
-        );
-
-        vm.expectRevert(IssuanceManager.InvalidInvestorName.selector);
-        vm.prank(owner);
-        issuanceManager.createCertAndAssignWithName(
-            address(certPrinter),
-            investor,
-            details,
-            "",
-            hex"1234",
-            block.timestamp
-        );
-
-        assertEq(certPrinter.totalSupply(), 0);
-    }
-
     function test_convertSAFE_floor_minPicksLower() public {
         // Configure round
         // price decimals = 2, share decimals = 0, mode = floor

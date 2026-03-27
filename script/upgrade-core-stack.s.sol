@@ -33,7 +33,7 @@ interface IUUPS {
 contract BaseScript is Script {
     using ERC1967ProxyLib for address;
     bytes32 internal constant UPGRADE_SALT =
-        keccak256("MetaLexCyberCorp.CoreStack.UpgradeV2.0.5");
+        keccak256("MetaLexCyberCorp.CoreStack.UpgradeV2.0.6");
 
     struct UpgradeImplementations {
         address cyberCorpImpl;
