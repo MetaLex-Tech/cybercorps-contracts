@@ -290,21 +290,32 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         CertificateDetails memory _details
     ) public onlyOwnerOrSelf returns (uint256 tokenId) {
         return
-            createCertAndAssignWithName(certAddress, investor, _details, "");
+            createCertAndAssignWithName(
+                certAddress,
+                investor,
+                _details,
+                "",
+                bytes(""),
+                block.timestamp
+            );
     }
 
     function createCertAndAssignWithName(
         address certAddress,
         address investor,
         CertificateDetails memory _details,
-        string memory investorName
+        string memory investorName,
+        bytes memory endorsementSignature,
+        uint256 timestamp
     ) public onlyOwnerOrSelf returns (uint256 tokenId) {
         return
             IssuanceManagerStorage.executeCreateCertAndAssign(
                 certAddress,
                 investor,
                 _details,
-                investorName
+                investorName,
+                endorsementSignature,
+                timestamp
             );
     }
 

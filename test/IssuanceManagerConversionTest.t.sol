@@ -316,6 +316,103 @@ contract IssuanceManagerConversionTest is Test {
         mockRM = new MockRoundManagerForConversion();
     }
 
+    function test_createCertAndAssignWithName_storesEndorsementSignatureAndTimestamp()
+        public
+    {
+        ICyberCertPrinter certPrinter = _deployPrinter("Signed Cert", "SCERT");
+        CertificateDetails memory details = CertificateDetails({
+            signingOfficerName: "Officer",
+            signingOfficerTitle: "Title",
+            investmentAmountUSD: 1000,
+            issuerUSDValuationAtTimeOfInvestment: 10000,
+            unitsRepresented: 25 * 1e18,
+            legalDetails: "Signed legal details",
+            extensionData: "Signed extension"
+        });
+        bytes memory endorsementSignature = hex"1234abcd";
+        uint256 endorsementTimestamp = 1_717_171_717;
+
+        vm.prank(owner);
+        uint256 certId = issuanceManager.createCertAndAssignWithName(
+            address(certPrinter),
+            investor,
+            details,
+            "Signed Investor",
+            endorsementSignature,
+            endorsementTimestamp
+        );
+
+        Endorsement memory endorsement = CyberCertPrinter(address(certPrinter))
+            .getEndorsementHistory(certId, 0);
+
+        assertEq(endorsement.endorser, address(issuanceManager));
+        assertEq(endorsement.endorseeName, "Signed Investor");
+        assertEq(endorsement.registry, address(0));
+        assertEq(endorsement.agreementId, bytes32(0));
+        assertEq(endorsement.timestamp, endorsementTimestamp);
+        assertEq(endorsement.signatureHash, endorsementSignature);
+        assertEq(endorsement.endorsee, investor);
+
+        assertEq(certPrinter.getIssuerSignatureCount(certId), 1);
+        assertEq(certPrinter.getIssuerSignatureAt(certId, 0), endorsementSignature);
+    }
+
+    function test_createCertAndAssignWithName_withoutSignature_skipsIssuerSignatureStorage()
+        public
+    {
+        ICyberCertPrinter certPrinter = _deployPrinter("Unsigned Cert", "UCERT");
+        CertificateDetails memory details = _buildCertificateDetails(
+            25,
+            "Unsigned legal details",
+            bytes("Unsigned extension")
+        );
+        uint256 endorsementTimestamp = 1_717_171_718;
+
+        vm.prank(owner);
+        uint256 certId = issuanceManager.createCertAndAssignWithName(
+            address(certPrinter),
+            investor,
+            details,
+            "Unsigned Investor",
+            bytes(""),
+            endorsementTimestamp
+        );
+
+        Endorsement memory endorsement = CyberCertPrinter(address(certPrinter))
+            .getEndorsementHistory(certId, 0);
+
+        assertEq(certPrinter.ownerOf(certId), investor);
+        assertEq(endorsement.endorser, address(issuanceManager));
+        assertEq(endorsement.endorseeName, "Unsigned Investor");
+        assertEq(endorsement.timestamp, endorsementTimestamp);
+        assertEq(endorsement.signatureHash, bytes(""));
+        assertEq(certPrinter.getIssuerSignatureCount(certId), 0);
+    }
+
+    function test_createCertAndAssignWithName_revertsWhenInvestorNameEmpty()
+        public
+    {
+        ICyberCertPrinter certPrinter = _deployPrinter("Named Cert", "NCERT");
+        CertificateDetails memory details = _buildCertificateDetails(
+            10,
+            "Named legal details",
+            bytes("Named extension")
+        );
+
+        vm.expectRevert(IssuanceManager.InvalidInvestorName.selector);
+        vm.prank(owner);
+        issuanceManager.createCertAndAssignWithName(
+            address(certPrinter),
+            investor,
+            details,
+            "",
+            hex"1234",
+            block.timestamp
+        );
+
+        assertEq(certPrinter.totalSupply(), 0);
+    }
+
     function test_convertSAFE_floor_minPicksLower() public {
         // Configure round
         // price decimals = 2, share decimals = 0, mode = floor

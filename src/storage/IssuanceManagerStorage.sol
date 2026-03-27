@@ -565,14 +565,40 @@ library IssuanceManagerStorage {
         address certAddress,
         address investor,
         CertificateDetails memory details,
-        string memory investorName
+        string memory investorName,
+        bytes memory endorsementSignature,
+        uint256 timestamp
     ) external returns (uint256 tokenId) {
-        (, tokenId, ) = _mintAssignedCert(
+        ICyberCertPrinter cert;
+        string memory tokenURI;
+        (cert, tokenId, tokenURI) = _mintAssignedCert(
             certAddress,
             investor,
             details,
             investorName
         );
+
+        Endorsement memory newEndorsement = Endorsement({
+            endorser: address(this),
+            timestamp: timestamp,
+            signatureHash: endorsementSignature,
+            registry: address(0),
+            agreementId: 0,
+            endorsee: investor,
+            endorseeName: investorName
+        });
+        cert.addEndorsement(tokenId, newEndorsement);
+
+        bytes memory escrowedOfficerSignature = _getEscrowedOfficerSignature();
+
+        if (endorsementSignature.length > 0) {
+            cert.addIssuerSignature(tokenId, endorsementSignature);
+        }
+        if (escrowedOfficerSignature.length > 0) {
+            cert.addIssuerSignature(tokenId, escrowedOfficerSignature);
+        }
+
+        _emitCertificateCreated(tokenId, certAddress, details, tokenURI);
     }
 
     function executeCreateCertSignAndAssign(
@@ -995,7 +1021,9 @@ library IssuanceManagerStorage {
                     certAddress,
                     account,
                     details,
-                    approval.investorName
+                    approval.investorName,
+                    bytes(""),
+                    block.timestamp
                 );
             clearRecertificationApproval(certAddress, account);
             _setCertMaxFromCurrent(
