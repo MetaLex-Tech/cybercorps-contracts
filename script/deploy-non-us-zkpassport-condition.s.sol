@@ -29,7 +29,7 @@ contract DeployNonUsZkPassportConditionScript is Script {
         uint256 chainId
     ) public returns (BorgAuth zkpassportAuth, NonUSNationalityCondition zkpassportCondition) {
 
-        bytes32 salt = keccak256(abi.encodePacked("zkpassport.v1"));
+        bytes32 salt = keccak256(abi.encodePacked("zkpassport.v1.0.1-dev0"));
 
         address deployerAddress = vm.addr(deployerPrivateKey);
 
