@@ -145,7 +145,7 @@ forge test --via-ir --fork-url <your-base-sepolia-rpc-endpoint> -vvvv
 
 ## Deployments
 
-CyberCorps is live on Ethereum mainnet and L2s (Arbitrum, Base). MetaLeX Labs uses its own protocol — the [Cyber.Fund](https://metalex.substack.com/p/metalexs-cyberraise-v2-automate-your) SAFE certificates are visible onchain as cyberCERTs.
+CyberCorps is live on Ethereum mainnet and L2s (Arbitrum, Base). MetaLeX Labs uses its own protocol — the [cyberRaise](https://metalex.substack.com/p/metalexs-cyberraise-v2-automate-your) SAFE certificates are visible onchain as cyberCERTs.
 
 ---
 
