@@ -29,6 +29,7 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
     function run() public {
         return
             runWithArgs(
+                DeploymentConstants.BASE,
                 "PumpCorpFactory.deploy.v1.0.2-dev2",
                 vm.envUint("PRIVATE_KEY_MAIN"), // deployerPrivateKey
                 vm.envUint("FOUNDER_KEY_MAIN"), // founderPrivateKey
@@ -41,6 +42,7 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
     }
 
     function runWithArgs(
+        uint256 chainId,
         string memory saltStr,
         uint256 deployerPrivateKey,
         uint256 founderPrivateKey,
@@ -50,7 +52,8 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
     ) public {
         // (1) Deploy factory contracts
 
-        (PumpCorpFactory pumpCorpFactory, RoundManagerFactory rmFactory) = (new DeployPumpCorpFactoryScript()).runWithArgs(
+        (PumpCorpFactory pumpCorpFactory, RoundManagerFactory rmFactory, ) = (new DeployPumpCorpFactoryScript()).runWithArgs(
+            chainId,
             saltStr,
             deployerPrivateKey
         );
@@ -63,7 +66,7 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
         bytes32 salt = bytes32(keccak256(bytes(saltStr)));
 
         DeploymentConstants.CoreDeployment memory deployment = DeploymentConstants
-            .coreV2(DeploymentConstants.BASE);
+            .coreV2(chainId);
 
         console2.log("==== Configs ====");
         console2.log("salt string: %s", saltStr);

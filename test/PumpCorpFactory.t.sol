@@ -59,7 +59,7 @@ contract PumpCorpFactoryTest is Test {
     // ── Live deployments (DeploymentConstants.coreV2) ────────────
     address internal metalexSafe = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
     DeploymentConstants.CoreDeployment internal net =
-        DeploymentConstants.coreV2(DeploymentConstants.BASE);
+        DeploymentConstants.coreV2(block.chainid);
 
     // Convenience aliases
     address internal REGISTRY                 = net.cyberAgreementRegistry;
@@ -108,6 +108,7 @@ contract PumpCorpFactoryTest is Test {
     function setUp() public {
         assertEq(block.chainid, DeploymentConstants.BASE, "Fork test: Base only @ block 43552581");
         vm.rollFork(43552581);
+//        assertEq(block.chainid, DeploymentConstants.BASE_SEPOLIA, "For test: Base Sepolia only");
 
         (deployer, deployerPk) = makeAddrAndKey("deployer");
         (officer, officerPk) = makeAddrAndKey("officer");
@@ -121,7 +122,7 @@ contract PumpCorpFactoryTest is Test {
             expectedDomain,
             expectedScope,
             2592000, // maxValidityPeriod,
-            DeploymentConstants.BASE // chainId
+            block.chainid
         );
 
         // Deploy OrCondition (zkPassport || LexChex)
@@ -131,7 +132,8 @@ contract PumpCorpFactoryTest is Test {
         orCondition = new OrCondition(orAddrs);
 
         // Deploy PumpCorpFactory
-        (pumpFactory, rmFactory) = (new DeployPumpCorpFactoryScript()).runWithArgs(
+        (pumpFactory, rmFactory, ) = (new DeployPumpCorpFactoryScript()).runWithArgs(
+            block.chainid,
             "PumpCorpFactoryTest",
             deployerPk
         );

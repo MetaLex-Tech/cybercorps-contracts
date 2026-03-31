@@ -25,26 +25,29 @@ import {MockERC20} from "../test/mock/MockERC20.sol";
 
 contract DeployPumpCorpFactoryScript is Script {
 
-    function run() public returns (PumpCorpFactory pumpCorpFactory, RoundManagerFactory rmFactory) {
+    function run() public returns (PumpCorpFactory pumpCorpFactory, RoundManagerFactory rmFactory, IssuanceManagerFactory imFactory) {
         return
             runWithArgs(
+                DeploymentConstants.BASE,
                 "PumpCorpFactory.deploy.v1.0.2-dev2",
                 vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
             );
     }
 
     function runWithArgs(
+        uint256 chainId,
         string memory saltStr,
         uint256 deployerPrivateKey
-    ) public returns (PumpCorpFactory pumpCorpFactory, RoundManagerFactory rmFactory) {
+    ) public returns (PumpCorpFactory pumpCorpFactory, RoundManagerFactory rmFactory, IssuanceManagerFactory imFactory) {
         address deployerAddress = vm.addr(deployerPrivateKey);
 
         bytes32 salt = bytes32(keccak256(bytes(saltStr)));
 
         DeploymentConstants.CoreDeployment memory deployment = DeploymentConstants
-            .coreV2(DeploymentConstants.BASE);
+            .coreV2(chainId);
 
         console2.log("==== Configs ====");
+        console2.log("chainId: %d", chainId);
         console2.log("salt string: %s", saltStr);
         console2.log("deployer: %s", deployerAddress);
         console2.log(
@@ -53,6 +56,7 @@ contract DeployPumpCorpFactoryScript is Script {
         );
         console2.log("CyberCorpSingleFactory:", deployment.cyberCorpSingleFactory);
         console2.log("DealManagerFactory:", deployment.dealManagerFactory);
+        console2.log("RoundManagerFactory:", deployment.roundManagerFactory);
         console2.log("CertificateUriBuilder:", deployment.uriBuilder);
         console2.log("");
 
@@ -62,42 +66,46 @@ contract DeployPumpCorpFactoryScript is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        // (1) Deploy factory contracts
+//        // (1) Deploy factory contracts
+//
+//        BorgAuth auth = new BorgAuth{salt: salt}(deployerAddress);
+//
+//        // TODO WIP: as of 2026/03/16 we haven't deployed the new RoundManagerFactory with restrictEndTimeReduction yet,
+//        //  so we deploy a dev one here for now
+//        rmFactory = RoundManagerFactory(address(
+//            new ERC1967Proxy{salt: salt}(
+//                address(new RoundManagerFactory{salt: salt}()),
+//                abi.encodeWithSelector(
+//                    RoundManagerFactory.initialize.selector,
+//                    address(deployment.auth),
+//                    address(new RoundManager())
+//                )
+//            )
+//        ));
+//
+//        // TODO WIP: as of 2026/03/16 the on-chain IssuanceManager and CyberCertPrinter lack addOfficerSignature/addIssuerSignature,
+//        //  so we deploy a new factory pointing to locally compiled implementations
+//        imFactory = IssuanceManagerFactory(address(
+//            new ERC1967Proxy{salt: salt}(
+//                address(new IssuanceManagerFactory{salt: salt}()),
+//                abi.encodeWithSelector(
+//                    IssuanceManagerFactory.initialize.selector,
+//                    address(deployment.auth),
+//                    address(new IssuanceManager()),
+//                    address(new CyberCertPrinter()),
+//                    address(new CyberScrip())
+//                )
+//            )
+//        ));
+//
+//        console2.log("==== Deployed (for dev purposes) ====");
+//        console2.log("IssuanceManagerFactory:", address(imFactory));
+//        console2.log("RoundManagerFactory:", address(rmFactory));
+//        console2.log("");
 
-        BorgAuth auth = new BorgAuth{salt: salt}(deployerAddress);
-
-        // TODO WIP: as of 2026/03/16 we haven't deployed the new RoundManagerFactory with restrictEndTimeReduction yet,
-        //  so we deploy a dev one here for now
-        rmFactory = RoundManagerFactory(address(
-            new ERC1967Proxy{salt: salt}(
-                address(new RoundManagerFactory{salt: salt}()),
-                abi.encodeWithSelector(
-                    RoundManagerFactory.initialize.selector,
-                    address(deployment.auth),
-                    address(new RoundManager())
-                )
-            )
-        ));
-
-        // TODO WIP: as of 2026/03/16 the on-chain IssuanceManager and CyberCertPrinter lack addOfficerSignature/addIssuerSignature,
-        //  so we deploy a new factory pointing to locally compiled implementations
-        address tempNewIssuanceManagerFactory = address(
-            new ERC1967Proxy{salt: salt}(
-                address(new IssuanceManagerFactory{salt: salt}()),
-                abi.encodeWithSelector(
-                    IssuanceManagerFactory.initialize.selector,
-                    address(deployment.auth),
-                    address(new IssuanceManager()),
-                    address(new CyberCertPrinter()),
-                    address(new CyberScrip())
-                )
-            )
-        );
-
-        console2.log("==== Deployed (for dev purposes) ====");
-        console2.log("IssuanceManagerFactory:", tempNewIssuanceManagerFactory);
-        console2.log("RoundManagerFactory:", address(rmFactory));
-        console2.log("");
+        // In production, the IssuanceManagerFactory and RoundManagerFactory should be upgraded by now so we will just use it
+        rmFactory = RoundManagerFactory(deployment.roundManagerFactory);
+        imFactory = IssuanceManagerFactory(deployment.issuanceManagerFactory);
 
         pumpCorpFactory = PumpCorpFactory(
             address(
@@ -105,9 +113,9 @@ contract DeployPumpCorpFactoryScript is Script {
                     address(new PumpCorpFactory{salt: salt}()),
                     abi.encodeWithSelector(
                         PumpCorpFactory.initialize.selector,
-                        address(auth),
+                        deployment.auth,
                         deployment.cyberAgreementRegistry,
-                        tempNewIssuanceManagerFactory,
+                        address(imFactory),
                         deployment.cyberCorpSingleFactory,
                         deployment.dealManagerFactory,
                         rmFactory,
@@ -120,7 +128,6 @@ contract DeployPumpCorpFactoryScript is Script {
         vm.stopBroadcast();
 
         console2.log("==== Deployed ====");
-        console2.log("Auth:", address(auth));
         console2.log("PumpCorpFactory (proxy):", address(pumpCorpFactory));
         console2.log("");
     }
