@@ -77,6 +77,14 @@ interface IIssuanceManager {
     event CertPrinterBeaconImplementationUpgraded(address implementation);
     event ScripBeaconImplementationUpgraded(address implementation);
     event ScripToCertMinimumSet(address indexed certAddress, uint256 minimum);
+    event ScripRecertified(
+        address indexed certAddress,
+        address indexed user,
+        uint256 indexed certId,
+        uint256 scripAmount,
+        uint256 oldUnitsRepresented,
+        uint256 newUnitsRepresented
+    );
     event ScripAddedToExistingCert(
         address indexed certAddress,
         address indexed user,
@@ -127,7 +135,9 @@ interface IIssuanceManager {
         address certAddress,
         address investor,
         CertificateDetails memory _details,
-        string calldata investorName
+        string calldata investorName,
+        bytes calldata endorsementSignature,
+        uint256 timestamp
     ) external returns (uint256 tokenId);
 
     function createCertSignAndAssign(
@@ -320,6 +330,16 @@ interface IIssuanceManager {
         external
         view
         returns (bool isScripified, uint256 scripifiedUnits, uint256 maxUnitsRepresented);
+
+    function getScripPoolAmountById(
+        address certAddress,
+        uint256 id
+    ) external view returns (uint256);
+
+    function getScripPoolSharesById(
+        address certAddress,
+        uint256 id
+    ) external view returns (uint256);
 
     function convertScripToCert(
         address certAddress,

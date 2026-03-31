@@ -284,9 +284,6 @@ contract CyberScripUpgradeExistingV3Test is Test {
         vm.expectRevert(IssuanceManager.ScripToCertMinimumNotMet.selector);
         issuanceManager.convertScripToCert(address(certPrinter), 80);
 
-        vm.prank(investor);
-        vm.expectRevert(IssuanceManager.ConditionCheckFailed.selector);
-        issuanceManager.convertScripToCert(address(certPrinter), 100);
 
         vm.prank(investor);
         vm.expectRevert(IssuanceManager.ConditionCheckFailed.selector);
@@ -399,12 +396,12 @@ contract CyberScripUpgradeExistingV3Test is Test {
         _assertActiveUnitsZero(fixture);
         _assertStoredUnits(fixture, 10e18, 20e18, 50e18);
         _assertBalances(fixture, 10, 20, 50, 0);
-        _assertPoolAmounts(fixture, 10, 20, 50, 0);
+        _assertPoolAmountsById(fixture, 10, 20, 50);
 
         _transferToNewInvestor(fixture);
 
         _assertBalances(fixture, 8, 16, 40, 16);
-        _assertPoolAmounts(fixture, 10, 20, 50, 0);
+        _assertPoolAmountsById(fixture, 10, 20, 50);
 
         (uint256 totalTrackedBefore,) = fixture.issuanceManager.getScripPoolTotals(
             address(fixture.certPrinter)
@@ -426,12 +423,19 @@ contract CyberScripUpgradeExistingV3Test is Test {
             address(fixture.certPrinter)
         );
         assertEq(totalTrackedAfter, 64);
-        _assertPoolAmounts(fixture, 8, 16, 40, 0);
+        _assertPoolAmountsById(fixture, 8, 16, 40);
         _assertStoredUnits(fixture, 8e18, 16e18, 40e18);
 
         uint256 newCertId = 3;
         assertEq(fixture.certPrinter.totalSupply(), 4);
         assertEq(fixture.certPrinter.ownerOf(newCertId), fixture.newInvestor);
+        assertEq(
+            fixture.issuanceManager.getScripPoolAmountById(
+                address(fixture.certPrinter),
+                newCertId
+            ),
+            0
+        );
         assertEq(
             fixture.certPrinter.getCertificateDetails(newCertId).unitsRepresented,
             16e18
@@ -515,6 +519,7 @@ contract CyberScripUpgradeExistingV3Test is Test {
             companyOwner,
             officer
         );
+
 
         uint256 ownerRole = BorgAuth(auth).OWNER_ROLE();
         vm.prank(address(corpFactory));
@@ -903,40 +908,32 @@ contract CyberScripUpgradeExistingV3Test is Test {
         );
     }
 
-    function _assertPoolAmounts(
+    function _assertPoolAmountsById(
         MultiHolderFixture memory fixture,
-        uint256 investorAmt,
-        uint256 otherInvestorAmt,
-        uint256 thirdHolderAmt,
-        uint256 newInvestorAmt
+        uint256 certAmtA,
+        uint256 certAmtB,
+        uint256 certAmtC
     ) internal view {
         assertEq(
-            fixture.issuanceManager.getScripPoolUserAmount(
+            fixture.issuanceManager.getScripPoolAmountById(
                 address(fixture.certPrinter),
-                investor
+                fixture.certIdA
             ),
-            investorAmt
+            certAmtA
         );
         assertEq(
-            fixture.issuanceManager.getScripPoolUserAmount(
+            fixture.issuanceManager.getScripPoolAmountById(
                 address(fixture.certPrinter),
-                otherInvestor
+                fixture.certIdB
             ),
-            otherInvestorAmt
+            certAmtB
         );
         assertEq(
-            fixture.issuanceManager.getScripPoolUserAmount(
+            fixture.issuanceManager.getScripPoolAmountById(
                 address(fixture.certPrinter),
-                fixture.thirdHolder
+                fixture.certIdC
             ),
-            thirdHolderAmt
-        );
-        assertEq(
-            fixture.issuanceManager.getScripPoolUserAmount(
-                address(fixture.certPrinter),
-                fixture.newInvestor
-            ),
-            newInvestorAmt
+            certAmtC
         );
     }
 }

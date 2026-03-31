@@ -125,6 +125,14 @@ library IssuanceManagerStorage {
         address indexed certAddress,
         address indexed investor
     );
+    event ScripRecertified(
+        address indexed certAddress,
+        address indexed user,
+        uint256 indexed certId,
+        uint256 scripAmount,
+        uint256 oldUnitsRepresented,
+        uint256 newUnitsRepresented
+    );
     event ScripAddedToExistingCert(
         address indexed certAddress,
         address indexed user,
@@ -375,24 +383,23 @@ library IssuanceManagerStorage {
             certState.vaultNominalShares * pool.totalAssetsWad / pool.totalNominalShares;
     }
 
-    /// @dev Sum of scrip-token-equivalent held by `account` across all certs where they are legal owner.
-    ///      Transfers of ERC20 do not change legal-owner vault claims.
-    function getScripPoolUserAmount(
+    /// @dev Scrip-token-equivalent claim for a single certificate's vault position.
+    function getScripPoolAmountById(
         address certAddress,
-        address account
+        uint256 tokenId
     ) internal view returns (uint256 scripEquivalent) {
         (uint256 num, uint256 den) = _getScripRatioOrDefault(certAddress);
-        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
-        uint256 supply = certificate.totalSupply();
-        for (uint256 i = 0; i < supply; i++) {
-            uint256 tokenId = certificate.tokenByIndex(i);
-            if (certificate.legalOwnerOf(tokenId) != account) {
-                continue;
-            }
-            uint256 assetsWad = _assetsOfVaultPosition(certAddress, tokenId);
-            if (assetsWad == 0) continue;
-            scripEquivalent += assetsWad * num / den;
-        }
+        uint256 assetsWad = _assetsOfVaultPosition(certAddress, tokenId);
+        if (assetsWad == 0) return 0;
+        return assetsWad * num / den;
+    }
+
+    /// @dev Nominal vault shares held by a single certificate.
+    function getScripPoolSharesById(
+        address certAddress,
+        uint256 tokenId
+    ) internal view returns (uint256 shares) {
+        return getCertScripState(certAddress, tokenId).vaultNominalShares;
     }
 
     function getRecertificationApproval(
@@ -558,14 +565,40 @@ library IssuanceManagerStorage {
         address certAddress,
         address investor,
         CertificateDetails memory details,
-        string memory investorName
+        string memory investorName,
+        bytes memory endorsementSignature,
+        uint256 timestamp
     ) external returns (uint256 tokenId) {
-        (, tokenId, ) = _mintAssignedCert(
+        ICyberCertPrinter cert;
+        string memory tokenURI;
+        (cert, tokenId, tokenURI) = _mintAssignedCert(
             certAddress,
             investor,
             details,
             investorName
         );
+
+        Endorsement memory newEndorsement = Endorsement({
+            endorser: address(this),
+            timestamp: timestamp,
+            signatureHash: endorsementSignature,
+            registry: address(0),
+            agreementId: 0,
+            endorsee: investor,
+            endorseeName: investorName
+        });
+        cert.addEndorsement(tokenId, newEndorsement);
+
+        bytes memory escrowedOfficerSignature = _getEscrowedOfficerSignature();
+
+        if (endorsementSignature.length > 0) {
+            cert.addIssuerSignature(tokenId, endorsementSignature);
+        }
+        if (escrowedOfficerSignature.length > 0) {
+            cert.addIssuerSignature(tokenId, escrowedOfficerSignature);
+        }
+
+        _emitCertificateCreated(tokenId, certAddress, details, tokenURI);
     }
 
     function executeCreateCertSignAndAssign(
@@ -972,6 +1005,14 @@ library IssuanceManagerStorage {
                 oldUnitsRepresented,
                 activeDetails.unitsRepresented
             );
+            emit ScripRecertified(
+                certAddress,
+                account,
+                selection.activeTokenId,
+                amount,
+                oldUnitsRepresented,
+                activeDetails.unitsRepresented
+            );
         } else {
             CertificateDetails memory details = approval.details;
             details.unitsRepresented = units;
@@ -980,12 +1021,22 @@ library IssuanceManagerStorage {
                     certAddress,
                     account,
                     details,
-                    approval.investorName
+                    approval.investorName,
+                    bytes(""),
+                    block.timestamp
                 );
             clearRecertificationApproval(certAddress, account);
             _setCertMaxFromCurrent(
                 certAddress,
                 createdTokenId,
+                details.unitsRepresented
+            );
+            emit ScripRecertified(
+                certAddress,
+                account,
+                createdTokenId,
+                amount,
+                0,
                 details.unitsRepresented
             );
         }

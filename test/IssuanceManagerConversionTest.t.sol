@@ -316,6 +316,79 @@ contract IssuanceManagerConversionTest is Test {
         mockRM = new MockRoundManagerForConversion();
     }
 
+    function test_createCertAndAssignWithName_storesEndorsementSignatureAndTimestamp()
+        public
+    {
+        ICyberCertPrinter certPrinter = _deployPrinter("Signed Cert", "SCERT");
+        CertificateDetails memory details = CertificateDetails({
+            signingOfficerName: "Officer",
+            signingOfficerTitle: "Title",
+            investmentAmountUSD: 1000,
+            issuerUSDValuationAtTimeOfInvestment: 10000,
+            unitsRepresented: 25 * 1e18,
+            legalDetails: "Signed legal details",
+            extensionData: "Signed extension"
+        });
+        bytes memory endorsementSignature = hex"1234abcd";
+        uint256 endorsementTimestamp = 1_717_171_717;
+
+        vm.prank(owner);
+        uint256 certId = issuanceManager.createCertAndAssignWithName(
+            address(certPrinter),
+            investor,
+            details,
+            "Signed Investor",
+            endorsementSignature,
+            endorsementTimestamp
+        );
+
+        Endorsement memory endorsement = CyberCertPrinter(address(certPrinter))
+            .getEndorsementHistory(certId, 0);
+
+        assertEq(endorsement.endorser, address(issuanceManager));
+        assertEq(endorsement.endorseeName, "Signed Investor");
+        assertEq(endorsement.registry, address(0));
+        assertEq(endorsement.agreementId, bytes32(0));
+        assertEq(endorsement.timestamp, endorsementTimestamp);
+        assertEq(endorsement.signatureHash, endorsementSignature);
+        assertEq(endorsement.endorsee, investor);
+
+        assertEq(certPrinter.getIssuerSignatureCount(certId), 1);
+        assertEq(certPrinter.getIssuerSignatureAt(certId, 0), endorsementSignature);
+    }
+
+    function test_createCertAndAssignWithName_withoutSignature_skipsIssuerSignatureStorage()
+        public
+    {
+        ICyberCertPrinter certPrinter = _deployPrinter("Unsigned Cert", "UCERT");
+        CertificateDetails memory details = _buildCertificateDetails(
+            25,
+            "Unsigned legal details",
+            bytes("Unsigned extension")
+        );
+        uint256 endorsementTimestamp = 1_717_171_718;
+
+        vm.prank(owner);
+        uint256 certId = issuanceManager.createCertAndAssignWithName(
+            address(certPrinter),
+            investor,
+            details,
+            "Unsigned Investor",
+            bytes(""),
+            endorsementTimestamp
+        );
+
+        Endorsement memory endorsement = CyberCertPrinter(address(certPrinter))
+            .getEndorsementHistory(certId, 0);
+
+        assertEq(certPrinter.ownerOf(certId), investor);
+        assertEq(endorsement.endorser, address(issuanceManager));
+        assertEq(endorsement.endorseeName, "Unsigned Investor");
+        assertEq(endorsement.timestamp, endorsementTimestamp);
+        assertEq(endorsement.signatureHash, bytes(""));
+        assertEq(certPrinter.getIssuerSignatureCount(certId), 0);
+    }
+
     function test_convertSAFE_floor_minPicksLower() public {
         // Configure round
         // price decimals = 2, share decimals = 0, mode = floor
@@ -400,8 +473,37 @@ contract IssuanceManagerConversionTest is Test {
         );
 
         // Non-owner should be able to convert and mint a cert via IssuanceManager
+        vm.recordLogs();
         vm.prank(investor);
         issuanceManager.convertScripToCert(address(certPrinter), amount * 1e18);
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 recertifiedTopic = keccak256(
+            "ScripRecertified(address,address,uint256,uint256,uint256,uint256)"
+        );
+        bool sawRecertified;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (
+                logs[i].emitter == address(issuanceManager) &&
+                logs[i].topics.length == 4 &&
+                logs[i].topics[0] == recertifiedTopic &&
+                address(uint160(uint256(logs[i].topics[1]))) == address(certPrinter) &&
+                address(uint160(uint256(logs[i].topics[2]))) == investor &&
+                uint256(logs[i].topics[3]) == 1
+            ) {
+                (
+                    uint256 scripAmount,
+                    uint256 oldUnitsRepresented,
+                    uint256 newUnitsRepresented
+                ) = abi.decode(logs[i].data, (uint256, uint256, uint256));
+                assertEq(scripAmount, amount * 1e18);
+                assertEq(oldUnitsRepresented, 0);
+                assertEq(newUnitsRepresented, amount * 1e18);
+                sawRecertified = true;
+                break;
+            }
+        }
+        assertTrue(sawRecertified);
 
         assertEq(certPrinter.totalSupply(), 2);
         assertEq(certPrinter.ownerOf(1), investor);
@@ -1118,12 +1220,37 @@ contract IssuanceManagerConversionTest is Test {
         ICyberScrip(scrip).transfer(otherInvestor, 50 * 1e18);
         assertEq(ICyberScrip(scrip).balanceOf(investor), 50 * 1e18);
         assertEq(ICyberScrip(scrip).balanceOf(otherInvestor), 150 * 1e18);
+        assertEq(
+            issuanceManager.getScripPoolAmountById(address(certPrinter), investorCertId),
+            100 * 1e18
+        );
+        assertEq(
+            issuanceManager.getScripPoolAmountById(address(certPrinter), otherInvestorCertId),
+            100 * 1e18
+        );
+        assertEq(
+            issuanceManager.getScripPoolSharesById(address(certPrinter), investorCertId),
+            100 * 1e18
+        );
+        assertEq(
+            issuanceManager.getScripPoolSharesById(address(certPrinter), otherInvestorCertId),
+            100 * 1e18
+        );
 
         vm.expectEmit(true, true, true, true);
         emit IssuanceManager.ScripAddedToExistingCert(
             address(certPrinter),
             otherInvestor,
             otherInvestorCertId,
+            0,
+            150 * 1e18
+        );
+        vm.expectEmit(true, true, true, true);
+        emit IssuanceManager.ScripRecertified(
+            address(certPrinter),
+            otherInvestor,
+            otherInvestorCertId,
+            150 * 1e18,
             0,
             150 * 1e18
         );
@@ -1155,6 +1282,22 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(otherFinal.unitsRepresented, 150 * 1e18);
         assertEq(ICyberScrip(scrip).balanceOf(investor), 50 * 1e18);
         assertEq(ICyberScrip(scrip).balanceOf(otherInvestor), 0);
+        assertEq(
+            issuanceManager.getScripPoolAmountById(address(certPrinter), investorCertId),
+            50 * 1e18
+        );
+        assertEq(
+            issuanceManager.getScripPoolAmountById(address(certPrinter), otherInvestorCertId),
+            0
+        );
+        assertEq(
+            issuanceManager.getScripPoolSharesById(address(certPrinter), investorCertId),
+            100 * 1e18
+        );
+        assertEq(
+            issuanceManager.getScripPoolSharesById(address(certPrinter), otherInvestorCertId),
+            0
+        );
     }
 
     function test_ComplexScripPoolAccounting_FourHolders_MixedRecertificationsAndNewInvestors()
