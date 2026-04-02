@@ -90,10 +90,21 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     event RestrictionHookSet(uint256 indexed id, address indexed hookAddress);
     event GlobalRestrictionHookSet(address indexed hookAddress);
     event GlobalTransferableSet(bool indexed transferable);
+    event LegendAdded(uint256 indexed tokenId, uint256 legendIndex, bytes32 legendHash);
+    event LegendRemoved(uint256 indexed tokenId, uint256 legendIndex, bytes32 legendHash);
+    event LegendRemovalRequested(uint256 indexed tokenId, uint256 legendIndex, string justification);
+    event DefaultLegendAdded(uint256 legendIndex, bytes32 legendHash);
+    event DefaultLegendRemoved(uint256 legendIndex, bytes32 legendHash);
     
     
     modifier onlyIssuanceManager() {
         if (msg.sender != CyberCertPrinterStorage.cyberCertStorage().issuanceManager) revert NotIssuanceManager();
+        _;
+    }
+
+    modifier onlyIssuanceManagerOrExtension() {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        if (msg.sender != s.issuanceManager && msg.sender != s.extension) revert NotIssuanceManager();
         _;
     }
 
@@ -109,6 +120,9 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
         s.issuanceManager = _issuanceManager;
         s.defaultLegend = _defaultLegend;
+        for (uint256 i = 0; i < _defaultLegend.length; i++) {
+            s.defaultLegendHashes.push(keccak256(bytes(_defaultLegend[i])));
+        }
         s.securityType = _securityType;
         s.securitySeries = _securitySeries;
         s.certificateUri = _certificateUri;
@@ -144,22 +158,28 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     ) external onlyIssuanceManager returns (uint256) {
 
         _safeMint(to, tokenId);
-        CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId] = CyberCertPrinterStorage.cyberCertStorage().defaultLegend;
-        CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
+        _ensureDefaultLegendHashes();
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        s.certLegend[tokenId] = s.defaultLegend;
+        s.certLegendHashes[tokenId] = s.defaultLegendHashes;
+        s.certificateDetails[tokenId] = details;
         emit CyberCertPrinter_CertificateCreated(tokenId);
         return tokenId;
     }
 
     // Restricted minting with full agreement details
     function safeMintAndAssign(
-        address to, 
+        address to,
         uint256 tokenId,
         CertificateDetails memory details
     ) external onlyIssuanceManager returns (uint256) {
         _safeMint(to, tokenId);
-        CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId] = CyberCertPrinterStorage.cyberCertStorage().defaultLegend;
+        _ensureDefaultLegendHashes();
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        s.certLegend[tokenId] = s.defaultLegend;
+        s.certLegendHashes[tokenId] = s.defaultLegendHashes;
         // Store agreement details
-        CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
+        s.certificateDetails[tokenId] = details;
         string memory issuerName = IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName();
         emit CyberCertPrinter_CertificateCreated(tokenId);
         return tokenId;
@@ -383,22 +403,53 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         return CyberCertPrinterStorage.cyberCertStorage().endorsementRequired;
     }
 
-    function addDefaultLegend(string memory newLegend) external onlyIssuanceManager {
+    /// @dev Backfill defaultLegendHashes for proxies deployed before hash tracking was added.
+    function _ensureDefaultLegendHashes() internal {
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        uint256 textLen = s.defaultLegend.length;
+        uint256 hashLen = s.defaultLegendHashes.length;
+        if (hashLen < textLen) {
+            for (uint256 i = hashLen; i < textLen; i++) {
+                s.defaultLegendHashes.push(keccak256(bytes(s.defaultLegend[i])));
+            }
+        }
+    }
+
+    /// @dev Backfill certLegendHashes for tokens minted before hash tracking was added.
+    function _ensureCertLegendHashes(uint256 tokenId) internal {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        uint256 textLen = s.certLegend[tokenId].length;
+        uint256 hashLen = s.certLegendHashes[tokenId].length;
+        if (hashLen < textLen) {
+            for (uint256 i = hashLen; i < textLen; i++) {
+                s.certLegendHashes[tokenId].push(keccak256(bytes(s.certLegend[tokenId][i])));
+            }
+        }
+    }
+
+    function addDefaultLegend(string memory newLegend) external onlyIssuanceManager {
+        _ensureDefaultLegendHashes();
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        bytes32 h = keccak256(bytes(newLegend));
         s.defaultLegend.push(newLegend);
+        s.defaultLegendHashes.push(h);
+        emit DefaultLegendAdded(s.defaultLegend.length - 1, h);
     }
 
     function removeDefaultLegendAt(uint256 index) external onlyIssuanceManager {
+        _ensureDefaultLegendHashes();
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
         if (index >= s.defaultLegend.length) revert InvalidLegendIndex();
 
-        // Move the last element to the index being removed (if it's not the last element)
-        // and then pop the last element
+        bytes32 removedHash = s.defaultLegendHashes[index];
         uint256 lastIndex = s.defaultLegend.length - 1;
         if (index != lastIndex) {
             s.defaultLegend[index] = s.defaultLegend[lastIndex];
+            s.defaultLegendHashes[index] = s.defaultLegendHashes[lastIndex];
         }
         s.defaultLegend.pop();
+        s.defaultLegendHashes.pop();
+        emit DefaultLegendRemoved(index, removedHash);
     }
 
     function getDefaultLegendAt(uint256 index) external view returns (string memory) {
@@ -412,33 +463,53 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         return CyberCertPrinterStorage.cyberCertStorage().defaultLegend.length;
     }
 
-    function addCertLegend(uint256 tokenId, string memory newLegend) external onlyIssuanceManager {
+    function addCertLegend(uint256 tokenId, string memory newLegend) external onlyIssuanceManagerOrExtension {
+        _ensureCertLegendHashes(tokenId);
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        bytes32 h = keccak256(bytes(newLegend));
         s.certLegend[tokenId].push(newLegend);
+        s.certLegendHashes[tokenId].push(h);
+        emit LegendAdded(tokenId, s.certLegend[tokenId].length - 1, h);
     }
 
     function removeCertLegendAt(uint256 tokenId, uint256 index) external onlyIssuanceManager {
+        _ensureCertLegendHashes(tokenId);
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
         if (index >= s.certLegend[tokenId].length) revert InvalidLegendIndex();
 
-        // Move the last element to the index being removed (if it's not the last element)
-        // and then pop the last element
+        bytes32 removedHash = s.certLegendHashes[tokenId][index];
         uint256 lastIndex = s.certLegend[tokenId].length - 1;
         if (index != lastIndex) {
             s.certLegend[tokenId][index] = s.certLegend[tokenId][lastIndex];
+            s.certLegendHashes[tokenId][index] = s.certLegendHashes[tokenId][lastIndex];
         }
         s.certLegend[tokenId].pop();
-    }   
+        s.certLegendHashes[tokenId].pop();
+        emit LegendRemoved(tokenId, index, removedHash);
+    }
+
+    /// @notice Request legend removal (informational audit trail; actual removal requires removeCertLegendAt)
+    function requestCertLegendRemoval(uint256 tokenId, uint256 legendIndex, string calldata justification) external {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        if (legendIndex >= s.certLegend[tokenId].length) revert InvalidLegendIndex();
+        emit LegendRemovalRequested(tokenId, legendIndex, justification);
+    }
 
     function getCertLegendAt(uint256 tokenId, uint256 index) external view returns (string memory) {
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
         if (index >= s.certLegend[tokenId].length) revert InvalidLegendIndex();
-        
+
         return s.certLegend[tokenId][index];
-    }   
+    }
 
     function getCertLegendCount(uint256 tokenId) external view returns (uint256) {
         return CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId].length;
+    }
+
+    /// @notice Get all legends and their hashes for a certificate
+    function getCertLegends(uint256 tokenId) external view returns (string[] memory texts, bytes32[] memory hashes) {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        return (s.certLegend[tokenId], s.certLegendHashes[tokenId]);
     }
 
     function getExtension(uint256 tokenId) external view returns (address) {
