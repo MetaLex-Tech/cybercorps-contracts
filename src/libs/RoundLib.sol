@@ -81,6 +81,38 @@ struct Round {
     bool restrictEndTimeReduction; // if true, owner cannot reduce endTime after creation
 }
 
+struct RoundLegacy {
+    bytes32 id;
+    SecuritySeries seriesType;
+    uint256 raiseCap;
+    uint256 minTicket;
+    uint256 maxTicket;
+    RoundType roundType;
+    uint256 startTime;
+    uint256 endTime;
+    bytes32 templateId;
+    address[] certPrinter;
+    address paymentToken;
+    uint256 pricePerUnit;
+    uint256 valuation;
+    uint256 raised;
+    address[] roundConditions;
+    // Normalized round price and primary security sold to new money
+    uint256 roundPricePerShare; // normalized to priceDecimals
+    uint8 roundPriceDecimals;
+    SecurityClass primarySecurityClass;
+    SecuritySeries primarySecuritySeries;
+    address authorityOfficer;
+    string officerName;
+    string officerTitle;
+    string[] legalDetails;
+    bytes[] extensionData;
+    string[] roundPartyValues;
+    bytes escrowedSignature;
+    bool publicRound;
+    bool allowTimedOffers; // if false, ignore EOI expiries and use round end
+}
+
 library RoundLib {
     function draft() internal pure returns (Round memory) {
         Round memory round; // all default values

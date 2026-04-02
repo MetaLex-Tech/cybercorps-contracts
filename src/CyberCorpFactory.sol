@@ -411,10 +411,81 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         uint256 startTime,
         uint256 endTime,
         bool publicRound,
+        bool allowTimedOffers
+    )
+        external
+        returns (
+            address cyberCorpAddress,
+            address authAddress,
+            address issuanceManagerAddress,
+            address dealManagerAddress,
+            address roundManagerAddress,
+            bytes32 roundId
+        )
+    {
+        return deployCyberCorpAndCreateRound(
+            salt,
+            seriesType,
+            companyName,
+            companyType,
+            companyJurisdiction,
+            companyContactDetails,
+            defaultDisputeResolution,
+            _companyPayable,
+            _officer,
+            legalDetails,
+            extensionData,
+            certData,
+            templateId,
+            paymentToken,
+            pricePerUnit,
+            valuation,
+            roundPartyValues,
+            escrowedSignature,
+            roundType,
+            conditions,
+            raiseCap,
+            minTicket,
+            maxTicket,
+            startTime,
+            endTime,
+            publicRound,
+            allowTimedOffers,
+            false // backward compatiblity
+        );
+    }
+
+    function deployCyberCorpAndCreateRound(
+        uint256 salt,
+        SecuritySeries seriesType,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        address _companyPayable,
+        CompanyOfficer memory _officer,
+        string[] memory legalDetails,
+        bytes[] memory extensionData,
+        RM_CyberCertData[] memory certData,
+        bytes32 templateId,
+        address paymentToken,
+        uint256 pricePerUnit,
+        uint256 valuation,
+        string[] memory roundPartyValues,
+        bytes memory escrowedSignature,
+        RoundType roundType,
+        address[] memory conditions,
+        uint256 raiseCap,
+        uint256 minTicket,
+        uint256 maxTicket,
+        uint256 startTime,
+        uint256 endTime,
+        bool publicRound,
         bool allowTimedOffers,
         bool restrictEndTimeReduction
     )
-        external
+        public
         returns (
             address cyberCorpAddress,
             address authAddress,

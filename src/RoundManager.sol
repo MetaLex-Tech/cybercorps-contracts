@@ -192,6 +192,46 @@ contract RoundManager is
         return RoundManagerStorage.getLexChex();
     }
 
+    function createRound(
+        RoundLegacy memory roundDraft,
+        CyberCertData[] memory certData
+    ) external onlyOwner returns (bytes32) {
+        return createRound(
+            Round({
+                id: roundDraft.id,
+                seriesType: roundDraft.seriesType,
+                raiseCap: roundDraft.raiseCap,
+                minTicket: roundDraft.minTicket,
+                maxTicket: roundDraft.maxTicket,
+                roundType: roundDraft.roundType,
+                startTime: roundDraft.startTime,
+                endTime: roundDraft.endTime,
+                templateId: roundDraft.templateId,
+                certPrinter: roundDraft.certPrinter,
+                paymentToken: roundDraft.paymentToken,
+                pricePerUnit: roundDraft.pricePerUnit,
+                valuation: roundDraft.valuation,
+                raised: roundDraft.raised,
+                roundConditions: roundDraft.roundConditions,
+                roundPricePerShare: roundDraft.roundPricePerShare,
+                roundPriceDecimals: roundDraft.roundPriceDecimals,
+                primarySecurityClass: roundDraft.primarySecurityClass,
+                primarySecuritySeries: roundDraft.primarySecuritySeries,
+                authorityOfficer: roundDraft.authorityOfficer,
+                officerName: roundDraft.officerName,
+                officerTitle: roundDraft.officerTitle,
+                legalDetails: roundDraft.legalDetails,
+                extensionData: roundDraft.extensionData,
+                roundPartyValues: roundDraft.roundPartyValues,
+                escrowedSignature: roundDraft.escrowedSignature,
+                publicRound: roundDraft.publicRound,
+                allowTimedOffers: roundDraft.allowTimedOffers,
+                restrictEndTimeReduction: false // backward compatibility
+            }),
+            certData
+        );
+    }
+
     /// @notice Creates a new fundraising round
     /// @param roundDraft partially-filled round info created by RoundLib
     /// @param certData certificate info
@@ -199,7 +239,7 @@ contract RoundManager is
     function createRound(
         Round memory roundDraft,
         CyberCertData[] memory certData
-    ) external onlyOwner returns (bytes32) {
+    ) public onlyOwner returns (bytes32) {
         // Validate lengths of per-cert details
         if (roundDraft.legalDetails.length != certData.length) revert InvalidCert();
         if (roundDraft.extensionData.length != certData.length) revert InvalidCert();
