@@ -4,6 +4,8 @@ pragma solidity ^0.8.28;
 library DeploymentConstants {
     error UnsupportedChain(uint256 chainId);
 
+    uint256 internal constant BASE = 8453;
+
     uint256 internal constant ETH_SEPOLIA = 11155111;
     uint256 internal constant BASE_SEPOLIA = 84532;
 
@@ -17,6 +19,9 @@ library DeploymentConstants {
         address cyberAgreementRegistry;
         address uriBuilder;
         address lexchexAuth;
+        address lexchex;
+        address lexchexMinter;
+        address lexchexCondition;
     }
 
     /// @notice Latest CyberCorps V2 deployment constants.
@@ -37,7 +42,10 @@ library DeploymentConstants {
                     roundManagerFactory: 0x9E2A3a07711Ce4b5A2F4D62a5c8f8B5307Af9C34,
                     cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
                     uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
-                    lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2
+                    lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
+                    lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
+                    lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
+                    lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42
                 });
         }
         else {
@@ -51,7 +59,10 @@ library DeploymentConstants {
                     roundManagerFactory: 0xc9d5d0DeDD124f9351E5880469f25AB41869aeb9,
                     cyberAgreementRegistry: 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134,
                     uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
-                    lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2
+                    lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
+                    lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
+                    lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
+                    lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42
                 });
         }
     }
