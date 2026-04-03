@@ -347,8 +347,4 @@ contract CyberCertPrinterTest is Test {
         vm.expectRevert(abi.encodeWithSelector(CyberCertPrinter.HolderLimitExceeded.selector, uint256(1)));
         cert.assignCert(investor1, 1, investor2, _details());
     }
-
-    function test_UpgradeCyberCertPrinter() public {
-        // TODO WIP
-    }
 }

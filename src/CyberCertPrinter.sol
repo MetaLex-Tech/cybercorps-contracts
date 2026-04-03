@@ -145,11 +145,10 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         address to,
         CertificateDetails memory details
     ) external onlyIssuanceManager returns (uint256) {
-
+        _updateLegalHolder(tokenId, to);
         _safeMint(to, tokenId);
         CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId] = CyberCertPrinterStorage.cyberCertStorage().defaultLegend;
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
-        _updateLegalHolder(tokenId, to);
         CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails(
             "",
             to
@@ -165,11 +164,11 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         CertificateDetails memory details,
         string memory investorName
     ) external onlyIssuanceManager returns (uint256) {
+        _updateLegalHolder(tokenId, to);
         _safeMint(to, tokenId);
         CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId] = CyberCertPrinterStorage.cyberCertStorage().defaultLegend;
         // Store agreement details
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
-        _updateLegalHolder(tokenId, to);
         CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails(
             investorName,
             to
@@ -187,8 +186,8 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         CertificateDetails memory details
     ) external onlyIssuanceManager returns (uint256) {
         if(ownerOf(tokenId) != from) revert InvalidTokenId();
-        CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
         _updateLegalHolder(tokenId, to);
+        CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
         CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails(
             "",
             to
@@ -302,16 +301,16 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
             //check endorsement and update owners
             if(from == ownerAddress) {
                 if(!CyberCertPrinterStorage.cyberCertStorage().endorsementRequired) {
-                        emit CertificateAssigned(tokenId, to, "", IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName());
                         _updateLegalHolder(tokenId, to);
+                        emit CertificateAssigned(tokenId, to, "", IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName());
                         CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails("", to);
                 }
                 else if(CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId].length > 0) {
                     Endorsement memory endorsement = CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId][CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId].length - 1];
                     if (endorsement.endorsee == to) {
                         // Endorsement exists; ownership will be updated
-                        emit CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName());
                         _updateLegalHolder(tokenId, endorsement.endorsee);
+                        emit CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName());
                         CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
                     }
                 }
@@ -322,8 +321,8 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
                 Endorsement memory endorsement = CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId][CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId].length - 1];
                 if(endorsement.endorsee != to && ownerAddress != to) revert EndorsementNotSignedOrInvalid();
 
-                emit CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName());
                 _updateLegalHolder(tokenId, endorsement.endorsee);
+                emit CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName());
                 CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
             }
             else revert EndorsementNotSignedOrInvalid();
