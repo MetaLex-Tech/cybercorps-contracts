@@ -347,4 +347,75 @@ contract CyberCertPrinterTest is Test {
         vm.expectRevert(abi.encodeWithSelector(CyberCertPrinter.HolderLimitExceeded.selector, uint256(1)));
         cert.assignCert(investor1, 1, investor2, _details());
     }
+
+    // -------------------------------------------------------------------------
+    // Fix 1: lazy guard — pre-upgrade tokens (legalHolderTokenCount == 0 but
+    //         owners[tokenId].ownerAddress != address(0)) must not underflow
+    // -------------------------------------------------------------------------
+
+    // Simulates state after upgrading an existing printer: owners[tokenId] is set
+    // but legalHolderTokenCount was never populated (new storage slots start at 0).
+    // Verifies burn / assignCert / transfer do not revert in this state.
+    function test_PreUpgradeToken_BurnDoesNotUnderflow() public {
+        _mint(1, investor1);
+
+        // Simulate post-upgrade inconsistency: zero out the counts that safeMint populated,
+        // leaving owners[1] = investor1 intact (as they would be on an upgraded printer).
+        bytes32 base = keccak256("cybercorp.cert.printer.storage.v1");
+        // legalHolderCount is at base+14; verify first so we know slots are correct.
+        bytes32 countSlot = bytes32(uint256(base) + 14);
+        assertEq(uint256(vm.load(address(cert), countSlot)), 1, "slot sanity: legalHolderCount");
+        vm.store(address(cert), countSlot, bytes32(0));
+        // legalHolderTokenCount is at base+16; zero out investor1's entry.
+        bytes32 mapSlot = bytes32(uint256(base) + 16);
+        bytes32 entrySlot = keccak256(abi.encode(investor1, mapSlot));
+        vm.store(address(cert), entrySlot, bytes32(0));
+
+        // burn must not revert
+        vm.prank(im);
+        cert.burn(1);
+        assertEq(cert.legalHolderCount(), 0);
+    }
+
+    function test_PreUpgradeToken_AssignCertDoesNotUnderflow() public {
+        _mint(1, investor1);
+
+        bytes32 base = keccak256("cybercorp.cert.printer.storage.v1");
+        bytes32 countSlot = bytes32(uint256(base) + 14);
+        vm.store(address(cert), countSlot, bytes32(0));
+        bytes32 entrySlot = keccak256(abi.encode(investor1, bytes32(uint256(base) + 16)));
+        vm.store(address(cert), entrySlot, bytes32(0));
+
+        // assignCert must not revert; new holder should be tracked going forward
+        vm.prank(im);
+        cert.assignCert(investor1, 1, investor2, _details());
+        assertEq(cert.legalHolderCount(), 1);
+        assertEq(cert.legalOwnerOf(1), investor2);
+    }
+
+    // -------------------------------------------------------------------------
+    // Fix 2: burn clears owners[tokenId] — reusing a burned token ID must not
+    //         underflow legalHolderTokenCount
+    // -------------------------------------------------------------------------
+
+    function test_Burn_ClearsOwners() public {
+        _mint(1, investor1);
+        assertEq(cert.legalOwnerOf(1), investor1);
+        vm.prank(im);
+        cert.burn(1);
+        vm.expectRevert(CyberCertPrinter.TokenDoesNotExist.selector);
+        cert.legalOwnerOf(1);
+    }
+
+    function test_Burn_ReuseTokenId_NoUnderflow() public {
+        _mint(1, investor1);
+        assertEq(cert.legalHolderCount(), 1);
+        vm.prank(im);
+        cert.burn(1);
+        assertEq(cert.legalHolderCount(), 0);
+        // Re-mint the same tokenId to a different investor (simulates ID reuse via totalSupply())
+        _mint(1, investor2);
+        assertEq(cert.legalHolderCount(), 1);
+        assertEq(cert.legalOwnerOf(1), investor2);
+    }
 }

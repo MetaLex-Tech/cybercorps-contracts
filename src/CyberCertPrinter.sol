@@ -241,6 +241,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         // Clear agreement details
         delete CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId];
         delete CyberCertPrinterStorage.cyberCertStorage().issuerSignatures[tokenId];
+        delete CyberCertPrinterStorage.cyberCertStorage().owners[tokenId];
     }
 
     /// @dev Updates legal holder count when a token's legal owner changes.
@@ -254,7 +255,9 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
             if (s.legalHolderCount >= s.maxLegalHolderCount) revert HolderLimitExceeded(s.maxLegalHolderCount);
         }
 
-        if (oldOwner != address(0)) {
+        // Account for legacy live contracts whose data has not been migrated.
+        // By doing this we are effectively doing a "lazy migration" and the accounting will be eventually corrected
+        if (oldOwner != address(0) && s.legalHolderTokenCount[oldOwner] > 0) {
             s.legalHolderTokenCount[oldOwner] -= 1;
             if (s.legalHolderTokenCount[oldOwner] == 0) s.legalHolderCount -= 1;
         }
