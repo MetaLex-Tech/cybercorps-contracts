@@ -145,7 +145,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         address to,
         CertificateDetails memory details
     ) external onlyIssuanceManager returns (uint256) {
-        _updateLegalHolder(tokenId, to);
+        CyberCertPrinterStorage.updateLegalHolder(tokenId, to);
         _safeMint(to, tokenId);
         CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId] = CyberCertPrinterStorage.cyberCertStorage().defaultLegend;
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
@@ -164,7 +164,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         CertificateDetails memory details,
         string memory investorName
     ) external onlyIssuanceManager returns (uint256) {
-        _updateLegalHolder(tokenId, to);
+        CyberCertPrinterStorage.updateLegalHolder(tokenId, to);
         _safeMint(to, tokenId);
         CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId] = CyberCertPrinterStorage.cyberCertStorage().defaultLegend;
         // Store agreement details
@@ -186,7 +186,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         CertificateDetails memory details
     ) external onlyIssuanceManager returns (uint256) {
         if(ownerOf(tokenId) != from) revert InvalidTokenId();
-        _updateLegalHolder(tokenId, to);
+        CyberCertPrinterStorage.updateLegalHolder(tokenId, to);
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
         CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails(
             "",
@@ -235,7 +235,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
 
     // Restricted burning
     function burn(uint256 tokenId) external onlyIssuanceManager {
-        _updateLegalHolder(tokenId, address(0));
+        CyberCertPrinterStorage.updateLegalHolder(tokenId, address(0));
         _burn(tokenId);
         
         // Clear agreement details
@@ -244,101 +244,12 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         delete CyberCertPrinterStorage.cyberCertStorage().owners[tokenId];
     }
 
-    /// @dev Updates legal holder count when a token's legal owner changes.
-    ///      Must be called BEFORE writing to owners[tokenId].
-    function _updateLegalHolder(uint256 tokenId, address newOwner) private {
-        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
-        address oldOwner = s.owners[tokenId].ownerAddress;
-        if (oldOwner == newOwner) return;
-
-        if (newOwner != address(0) && s.maxLegalHolderCount > 0 && s.legalHolderTokenCount[newOwner] == 0) {
-            if (s.legalHolderCount >= s.maxLegalHolderCount) revert HolderLimitExceeded(s.maxLegalHolderCount);
-        }
-
-        // Account for legacy live contracts whose data has not been migrated.
-        // By doing this we are effectively doing a "lazy migration" and the accounting will be eventually corrected
-        if (oldOwner != address(0) && s.legalHolderTokenCount[oldOwner] > 0) {
-            s.legalHolderTokenCount[oldOwner] -= 1;
-            if (s.legalHolderTokenCount[oldOwner] == 0) s.legalHolderCount -= 1;
-        }
-
-        if (newOwner != address(0)) {
-            if (s.legalHolderTokenCount[newOwner] == 0) s.legalHolderCount += 1;
-            s.legalHolderTokenCount[newOwner] += 1;
-        }
-    }
-
-    /**
-     * @dev Override _update to enforce transferability restrictions
-     * This function is called for all token transfers, mints, and burns
-     */
     function _update(address to, uint256 tokenId, address auth) internal virtual override returns (address) {
         address from = _ownerOf(tokenId);
-        
-        // Skip restriction checks for minting (from == address(0)) and burning (to == address(0))
         if (from != address(0) && to != address(0)) {
-            // This is a transfer, check built-in transferability flag and per-token override
-            bool globalTransferable = CyberCertPrinterStorage.cyberCertStorage().transferable;
-            bool tokenTransferable = CyberCertPrinterStorage.isTokenTransferable(tokenId);
-            if (!globalTransferable && !tokenTransferable && from != ICyberCorp(IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).CORP()).dealManager() && from != ICyberCorp(IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).CORP()).roundManager()) revert TokenNotTransferable();
-            
-            // Check security type-specific hook if it exists
-          /*  ITransferRestrictionHook typeHook = CyberCertPrinterStorage.cyberCertStorage().restrictionHooksById[tokenId];
-            
-            if (address(typeHook) != address(0)) {
-                (bool allowed, string memory reason) = typeHook.checkTransferRestriction(
-                    from, to, tokenId, ""
-                );
-                if (!allowed) revert TransferRestricted(reason);
-            }*/
-            
-            // Check global hook if it exists
-            if (address(CyberCertPrinterStorage.cyberCertStorage().globalRestrictionHook) != address(0)) {
-                (bool allowed, string memory reason) = CyberCertPrinterStorage.cyberCertStorage().globalRestrictionHook.checkTransferRestriction(
-                    from, to, tokenId, ""
-                );
-                if (!allowed) revert TransferRestricted(reason);
-            }
-
-            address ownerAddress = CyberCertPrinterStorage.cyberCertStorage().owners[tokenId].ownerAddress;
-            //check endorsement and update owners
-            if(from == ownerAddress) {
-                if(!CyberCertPrinterStorage.cyberCertStorage().endorsementRequired) {
-                        _updateLegalHolder(tokenId, to);
-                        emit CertificateAssigned(tokenId, to, "", IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName());
-                        CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails("", to);
-                }
-                else if(CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId].length > 0) {
-                    Endorsement memory endorsement = CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId][CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId].length - 1];
-                    if (endorsement.endorsee == to) {
-                        // Endorsement exists; ownership will be updated
-                        _updateLegalHolder(tokenId, endorsement.endorsee);
-                        emit CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName());
-                        CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
-                    }
-                }
-            // NOTE: we don't revert in this block: Owner is able to transfer to another address without an endorsement, but it does not update the owner
-            }
-            else if(CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId].length > 0) {
-                // Token is not being transferred from the current owner. It can only be transferrred to the latest endorsee, or the current owner
-                Endorsement memory endorsement = CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId][CyberCertPrinterStorage.cyberCertStorage().endorsements[tokenId].length - 1];
-                if(endorsement.endorsee != to && ownerAddress != to) revert EndorsementNotSignedOrInvalid();
-
-                _updateLegalHolder(tokenId, endorsement.endorsee);
-                emit CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(CyberCertPrinterStorage.cyberCertStorage().issuanceManager).companyName());
-                CyberCertPrinterStorage.cyberCertStorage().owners[tokenId] = OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
-            }
-            else revert EndorsementNotSignedOrInvalid();
-
+            CyberCertPrinterStorage.validateAndUpdateTransfer(tokenId, from, to);
         }
-        // Emit custom transfer event for indexing
-        emit CyberCertTransfer(
-            from,
-            to,
-            tokenId
-        );
-        
-        // Call the parent implementation to handle the actual transfer
+        emit CyberCertTransfer(from, to, tokenId);
         return super._update(to, tokenId, auth);
     }
     
