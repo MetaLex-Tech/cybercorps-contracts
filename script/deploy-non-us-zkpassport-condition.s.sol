@@ -11,7 +11,7 @@ import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 contract DeployNonUsZkPassportConditionScript is Script {
     function run() public returns (BorgAuth zkpassportAuth, NonUSNationalityCondition zkpassportCondition) {
         return runWithArgs(
-            "zkpassport.v1.dev1",
+            "zkpassport.v1.dev2",
             vm.envUint("PRIVATE_KEY_MAIN"),
             vm.envString("ZKPASSPORT_DOMAIN"),
             vm.envString("ZKPASSPORT_SCOPE"),
@@ -29,7 +29,7 @@ contract DeployNonUsZkPassportConditionScript is Script {
         uint256 chainId
     ) public returns (BorgAuth zkpassportAuth, NonUSNationalityCondition zkpassportCondition) {
 
-        bytes32 salt = keccak256(abi.encodePacked("zkpassport.v1.0.1-dev2"));
+        bytes32 salt = keccak256(bytes(saltStr));
 
         address deployerAddress = vm.addr(deployerPrivateKey);
 

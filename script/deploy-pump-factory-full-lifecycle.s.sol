@@ -286,11 +286,11 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
         roundGlobalValues[4] = "arbitration"; // disputeResolution
         
         string[] memory investorPartyValues = new string[](5);
-        roundFirstPartyValues[0] = investorName; // name
-        roundFirstPartyValues[1] = vm.toString(investorAddress); // evmAddress (string form)
-        roundFirstPartyValues[2] = investorContact; // contactDetails
-        roundFirstPartyValues[3] = investorType; // investorType
-        roundFirstPartyValues[4] = investorJurisdiction; // investorJurisdiction
+        investorPartyValues[0] = investorName; // name
+        investorPartyValues[1] = vm.toString(investorAddress); // evmAddress (string form)
+        investorPartyValues[2] = investorContact; // contactDetails
+        investorPartyValues[3] = investorType; // investorType
+        investorPartyValues[4] = investorJurisdiction; // investorJurisdiction
 
         vm.startBroadcast(investorPrivateKey);
         
