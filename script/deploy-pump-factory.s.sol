@@ -28,8 +28,9 @@ contract DeployPumpCorpFactoryScript is Script {
     function run() public returns (PumpCorpFactory pumpCorpFactory, RoundManagerFactory rmFactory, IssuanceManagerFactory imFactory) {
         return
             runWithArgs(
+                // Production
                 DeploymentConstants.BASE,
-                "PumpCorpFactory.deploy.v1.0.2-dev2",
+                "PumpCorp.V1.0.0",
                 vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
             );
     }

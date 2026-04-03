@@ -11,12 +11,21 @@ import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 contract DeployNonUsZkPassportConditionScript is Script {
     function run() public returns (BorgAuth zkpassportAuth, NonUSNationalityCondition zkpassportCondition) {
         return runWithArgs(
-            "zkpassport.v1.dev2",
+            // Production
+            "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.0.0",
             vm.envUint("PRIVATE_KEY_MAIN"),
-            vm.envString("ZKPASSPORT_DOMAIN"),
-            vm.envString("ZKPASSPORT_SCOPE"),
-            vm.envUint("ZKPASSPORT_MAX_VALIDITY_PERIOD"),
+            "pump.metalex.tech",
+            "non-us-non-sanctioned",
+            2592000, // 3600 * 24 * 30 days
             DeploymentConstants.BASE
+
+//            // Staging
+//            "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.0.0.staging",
+//            vm.envUint("PRIVATE_KEY_MAIN"),
+//            "staging.pump.metalex.tech",
+//            "non-us-non-sanctioned",
+//            2592000, // 3600 * 24 * 30 days
+//            DeploymentConstants.BASE
         );
     }
 

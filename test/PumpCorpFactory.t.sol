@@ -45,6 +45,9 @@ contract AlwaysFalseCondition {
 contract PumpCorpFactoryTest is Test {
     using Strings for address;
 
+    string saltStrZkpassport = "PumpCorpFactoryTest.zkpassport";
+    string saltStrPump = "PumpCorpFactoryTest.pump";
+
     // ── Actors ────────────────────────────────────────────────────────────────
     uint256 internal deployerPk;
     uint256 internal officerPk;
@@ -103,8 +106,8 @@ contract PumpCorpFactoryTest is Test {
     bytes[]         internal extensionData;
     string[]        internal officerPartyValues;
 
-    /// As of 2026/03/18, we haven't deployed the dependent `RoundManager` with `restrictEndTimeReduction`
-    /// to Base mainnet yet, so we will simulate the upgrade here
+    /// *** WARNING ***: As of 2026/03/18, we haven't deployed the dependent `RoundManager` with `restrictEndTimeReduction`
+    /// to Base mainnet yet, so we need to make sure the upgrade is simulated here
     function setUp() public {
         assertEq(block.chainid, DeploymentConstants.BASE, "Fork test: Base only @ block 43552581");
         vm.rollFork(43552581);
@@ -117,7 +120,7 @@ contract PumpCorpFactoryTest is Test {
 
         // Deploy zkPassport condition
         (, zkpassportCondition) = (new DeployNonUsZkPassportConditionScript()).runWithArgs(
-            "PumpCorpFactoryTest",
+            saltStrZkpassport,
             deployerPk,
             expectedDomain,
             expectedScope,
@@ -134,7 +137,7 @@ contract PumpCorpFactoryTest is Test {
         // Deploy PumpCorpFactory
         (pumpFactory, rmFactory, ) = (new DeployPumpCorpFactoryScript()).runWithArgs(
             block.chainid,
-            "PumpCorpFactoryTest",
+            saltStrPump,
             deployerPk
         );
 
