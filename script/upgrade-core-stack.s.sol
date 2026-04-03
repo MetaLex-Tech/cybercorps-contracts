@@ -15,6 +15,8 @@ import {DealManager} from "../src/DealManager.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
+import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
+import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import {IssuerApprovalRecertificationCondition} from "../src/libs/conditions/IssuerApprovalRecertificationCondition.sol";
 import {ERC1967ProxyLib} from "../test/libs/ERC1967ProxyLib.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
@@ -33,13 +35,16 @@ interface IUUPS {
 contract BaseScript is Script {
     using ERC1967ProxyLib for address;
     bytes32 internal constant UPGRADE_SALT =
-        keccak256("MetaLexCyberCorp.CoreStack.UpgradeV2.0.6");
+        keccak256("MetaLexCyberCorp.CoreStack.UpgradeV2.0.8");
 
     struct UpgradeImplementations {
+        address cyberCorpFactoryImpl;
         address cyberCorpImpl;
         address issuanceManagerImpl;
         address dealManagerImpl;
         address roundManagerImpl;
+        address certificateUriBuilderImpl;
+        address certificateImageBuilderImpl;
         address cyberCertPrinterImpl;
         address cyberScripImpl;
         address issuerApprovalRecertificationCondition;
@@ -68,6 +73,10 @@ contract BaseScript is Script {
             "CYBERCORP_FACTORY",
             deployment.cyberCorpFactory
         );
+        address uriBuilderProxyAddr = vm.envOr(
+            "URI_BUILDER",
+            deployment.uriBuilder
+        );
 
         CyberCorpFactory cyberCorpFactory = CyberCorpFactory(
             cyberCorpFactoryProxyAddr
@@ -84,6 +93,8 @@ contract BaseScript is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         UpgradeImplementations memory impls = _deployNewImplementations();
+        _upgradeCyberCorpFactory(cyberCorpFactoryProxyAddr, impls);
+        _upgradeUriBuilderStack(uriBuilderProxyAddr, impls);
         _updateFactoryReferences(cyberCorpFactory, impls);
         _upgradeCyberCorpStacks(cyberCorps, impls);
 
@@ -94,6 +105,9 @@ contract BaseScript is Script {
         internal
         returns (UpgradeImplementations memory impls)
     {
+        impls.cyberCorpFactoryImpl = address(
+            new CyberCorpFactory{salt: UPGRADE_SALT}()
+        );
         impls.cyberCorpImpl = address(new CyberCorp{salt: UPGRADE_SALT}());
         impls.issuanceManagerImpl = address(
             new IssuanceManager{salt: UPGRADE_SALT}()
@@ -101,6 +115,12 @@ contract BaseScript is Script {
         impls.dealManagerImpl = address(new DealManager{salt: UPGRADE_SALT}());
         impls.roundManagerImpl = address(
             new RoundManager{salt: UPGRADE_SALT}()
+        );
+        impls.certificateUriBuilderImpl = address(
+            new CertificateUriBuilder{salt: UPGRADE_SALT}()
+        );
+        impls.certificateImageBuilderImpl = address(
+            new CertificateImageBuilderContract{salt: UPGRADE_SALT}()
         );
         impls.cyberCertPrinterImpl = address(
             new CyberCertPrinter{salt: UPGRADE_SALT}()
@@ -110,6 +130,10 @@ contract BaseScript is Script {
             new IssuerApprovalRecertificationCondition{salt: UPGRADE_SALT}()
         );
 
+        console2.log(
+            "New CyberCorpFactory implementation:",
+            impls.cyberCorpFactoryImpl
+        );
         console2.log("New CyberCorp implementation:", impls.cyberCorpImpl);
         console2.log(
             "New IssuanceManager implementation:",
@@ -118,6 +142,14 @@ contract BaseScript is Script {
         console2.log("New DealManager implementation:", impls.dealManagerImpl);
         console2.log("New RoundManager implementation:", impls.roundManagerImpl);
         console2.log(
+            "New CertificateUriBuilder implementation:",
+            impls.certificateUriBuilderImpl
+        );
+        console2.log(
+            "New CertificateImageBuilder implementation:",
+            impls.certificateImageBuilderImpl
+        );
+        console2.log(
             "New CyberCertPrinter implementation:",
             impls.cyberCertPrinterImpl
         );
@@ -125,6 +157,36 @@ contract BaseScript is Script {
         console2.log(
             "New IssuerApprovalRecertificationCondition:",
             impls.issuerApprovalRecertificationCondition
+        );
+    }
+
+    function _upgradeCyberCorpFactory(
+        address cyberCorpFactoryProxyAddr,
+        UpgradeImplementations memory impls
+    ) internal {
+        address oldCyberCorpFactoryImpl = cyberCorpFactoryProxyAddr
+            .getErc1967Implementation();
+
+        console2.log("Upgrading CyberCorpFactory:", cyberCorpFactoryProxyAddr);
+        console2.log(
+            "  old CyberCorpFactory impl:",
+            oldCyberCorpFactoryImpl
+        );
+
+        IUUPS(cyberCorpFactoryProxyAddr).upgradeToAndCall(
+            impls.cyberCorpFactoryImpl,
+            ""
+        );
+
+        vm.assertEq(
+            cyberCorpFactoryProxyAddr.getErc1967Implementation(),
+            impls.cyberCorpFactoryImpl,
+            "CyberCorpFactory upgrade failed"
+        );
+
+        console2.log(
+            "  new CyberCorpFactory impl:",
+            cyberCorpFactoryProxyAddr.getErc1967Implementation()
         );
     }
 
@@ -190,6 +252,45 @@ contract BaseScript is Script {
 
         console2.log(
             "Factory refs updated: CyberCorp, IssuanceManager, DealManager, RoundManager, CyberCertPrinter, CyberScrip"
+        );
+    }
+
+    function _upgradeUriBuilderStack(
+        address uriBuilderProxyAddr,
+        UpgradeImplementations memory impls
+    ) internal {
+        address oldUriBuilderImpl = uriBuilderProxyAddr.getErc1967Implementation();
+        CertificateUriBuilder uriBuilder = CertificateUriBuilder(uriBuilderProxyAddr);
+        address oldImageBuilderImpl = uriBuilder.imageBuilder();
+
+        console2.log("Upgrading CertificateUriBuilder:", uriBuilderProxyAddr);
+        console2.log("  old CertificateUriBuilder impl:", oldUriBuilderImpl);
+        console2.log("  old CertificateImageBuilder impl:", oldImageBuilderImpl);
+
+        IUUPS(uriBuilderProxyAddr).upgradeToAndCall(
+            impls.certificateUriBuilderImpl,
+            ""
+        );
+        uriBuilder.setImageBuilder(impls.certificateImageBuilderImpl);
+
+        vm.assertEq(
+            uriBuilderProxyAddr.getErc1967Implementation(),
+            impls.certificateUriBuilderImpl,
+            "CertificateUriBuilder upgrade failed"
+        );
+        vm.assertEq(
+            uriBuilder.imageBuilder(),
+            impls.certificateImageBuilderImpl,
+            "CertificateImageBuilder update failed"
+        );
+
+        console2.log(
+            "  new CertificateUriBuilder impl:",
+            uriBuilderProxyAddr.getErc1967Implementation()
+        );
+        console2.log(
+            "  new CertificateImageBuilder impl:",
+            uriBuilder.imageBuilder()
         );
     }
 

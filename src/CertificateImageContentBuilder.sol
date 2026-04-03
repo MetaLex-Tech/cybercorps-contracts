@@ -128,6 +128,7 @@ library CertificateImageContentBuilder {
         if (_series == SecuritySeries.SeriesE) return "Series E";
         if (_series == SecuritySeries.SeriesF) return "Series F";
         if (_series == SecuritySeries.NA) return "";
+        if (_series == SecuritySeries.ACE) return "ACE";
         return "";
     }
 
