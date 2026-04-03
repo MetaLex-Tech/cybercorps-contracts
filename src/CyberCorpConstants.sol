@@ -66,7 +66,8 @@ enum SecuritySeries {
     SeriesD,
     SeriesE,
     SeriesF,
-    NA
+    NA,
+    ACE
 }
 
 enum SecurityStatus {

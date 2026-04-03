@@ -1130,10 +1130,10 @@ library IssuanceManagerStorage {
         address account
     ) internal view returns (RecertSelection memory selection) {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
-        uint256 supply = certificate.totalSupply();
+        uint256 ownedBalance = certificate.balanceOf(account);
 
-        for (uint256 i = 0; i < supply; i++) {
-            uint256 tokenId = certificate.tokenByIndex(i);
+        for (uint256 i = 0; i < ownedBalance; i++) {
+            uint256 tokenId = certificate.tokenOfOwnerByIndex(account, i);
             if (certificate.legalOwnerOf(tokenId) != account) continue;
             if (certificate.isVoided(tokenId)) continue;
             selection.foundActive = true;

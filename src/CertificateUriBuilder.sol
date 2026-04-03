@@ -119,6 +119,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         if (_series == SecuritySeries.SeriesE) return "SeriesE";
         if (_series == SecuritySeries.SeriesF) return "SeriesF";
         if (_series == SecuritySeries.NA) return "NA";
+        if (_series == SecuritySeries.ACE) return "ACE";
         return "Unknown";
     }
 
