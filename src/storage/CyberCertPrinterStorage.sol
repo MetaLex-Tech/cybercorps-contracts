@@ -100,7 +100,9 @@ library CyberCertPrinterStorage {
         // New variables must be appended below to preserve storage layout for upgrades
         mapping(uint256 => bool) tokenTransferable;
         mapping(uint256 => bytes[]) issuerSignatures;
-        
+        uint256 legalHolderCount;
+        uint256 maxLegalHolderCount;
+        mapping(address => uint256) legalHolderTokenCount;
     }
 
     // Returns the storage layout
