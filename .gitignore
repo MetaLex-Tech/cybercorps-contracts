@@ -21,5 +21,4 @@ docs/
 # IDE
 /.idea/
 /.vscode/
-/.claude/local.md
-/.claude/settings.local.json
+/.claude/
