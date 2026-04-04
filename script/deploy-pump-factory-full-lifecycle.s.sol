@@ -31,7 +31,7 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
             runWithArgs(
                 // Staging
                 DeploymentConstants.BASE,
-                "PumpCorp.V1.0.0.staging.dev1",
+                "PumpCorp.V1.0.0.staging.dev2",
                 vm.envUint("PRIVATE_KEY_MAIN"), // deployerPrivateKey
                 vm.envUint("FOUNDER_KEY_MAIN"), // founderPrivateKey
                 vm.envUint("INVESTOR_KEY_MAIN"), // investorPrivateKey
@@ -51,7 +51,7 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
     ) public {
         // (1) Deploy factory contracts
 
-        (PumpCorpFactory pumpCorpFactory, RoundManagerFactory rmFactory, , ) = (new DeployPumpCorpFactoryScript()).runWithArgs(
+        (PumpCorpFactory pumpCorpFactory, RoundManagerFactory rmFactory, , , ) = (new DeployPumpCorpFactoryScript()).runWithArgs(
             chainId,
             saltStr,
             deployerPrivateKey
@@ -105,7 +105,7 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
         // TODO WIP: remove before production
         // (3) Create corp and round
 
-        uint256 corpSaltUint = uint256(keccak256(bytes("PumpCorpFactory.test-corp")));
+        uint256 corpSaltUint = uint256(keccak256(bytes(string.concat(saltStr, "-corp"))));
         bytes32 corpSalt = keccak256(abi.encodePacked(corpSaltUint));
         string memory companyName = "Test Corp";
         string memory companyType = "series limited liability company";
@@ -151,7 +151,7 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
         address predictedRM = RoundManagerFactory(rmFactory).computeRoundManagerAddress(corpSalt);
 
         // Define shared round parameters
-        SecuritySeries roundSeriesType = SecuritySeries.SeriesA;
+        SecuritySeries roundSeriesType = SecuritySeries.ACE;
         uint256 roundRaiseCap = 100000000000;
         uint256 roundMinTicket = 1;
         uint256 roundMaxTicket = 10000000;
@@ -329,7 +329,7 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
         });
 
         memeToken.approve(roundManager, type(uint256).max);
-        uint256 eoiSaltUint = uint256(keccak256(bytes("PumpCorpFactory.test-eoi")));
+        uint256 eoiSaltUint = uint256(keccak256(bytes(string.concat(saltStr, "-eoi"))));
         (bytes32 agreementId, uint256 tokenId) = RoundManager(roundManager).submitEOI(
             roundId,
             eoi,

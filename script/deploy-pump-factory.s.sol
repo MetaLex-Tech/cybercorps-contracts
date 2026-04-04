@@ -16,6 +16,8 @@ import {RoundManager} from "../src/RoundManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
+import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {CompanyOfficer, SecuritySeries, SecurityClass} from "../src/CyberCorpConstants.sol";
@@ -29,6 +31,7 @@ contract DeployPumpCorpFactoryScript is Script {
         PumpCorpFactory pumpCorpFactory,
         RoundManagerFactory rmFactory,
         IssuanceManagerFactory imFactory,
+        CertificateUriBuilder uriBuilder,
         BorgAuth pumpAuth
     ) {
         return
@@ -53,6 +56,7 @@ contract DeployPumpCorpFactoryScript is Script {
         PumpCorpFactory pumpCorpFactory,
         RoundManagerFactory rmFactory,
         IssuanceManagerFactory imFactory,
+        CertificateUriBuilder uriBuilder,
         BorgAuth pumpAuth
     ) {
         address deployerAddress = vm.addr(deployerPrivateKey);
@@ -114,15 +118,30 @@ contract DeployPumpCorpFactoryScript is Script {
 //            )
 //        ));
 //
+//        // TODO WIP: as of 2026/03/16 the on-chain CertificateUriBuilder lack ACE securitySeries
+//        //  so we deploy a new one pointing to locally compiled implementations
+//        uriBuilder = CertificateUriBuilder(address(
+//            new ERC1967Proxy{salt: salt}(
+//                address(new CertificateUriBuilder{salt: salt}()),
+//                abi.encodeWithSelector(
+//                    CertificateUriBuilder.initialize.selector,
+//                    address(pumpAuth)
+//                )
+//            )
+//        ));
+//        uriBuilder.setImageBuilder(address(new CertificateImageBuilderContract()));
+//
 //        console2.log("==== Deployed (for dev purposes) ====");
 //        console2.log("PumpAuth:", address(pumpAuth));
 //        console2.log("IssuanceManagerFactory:", address(imFactory));
 //        console2.log("RoundManagerFactory:", address(rmFactory));
+//        console2.log("CertificateUriBuilder:", address(uriBuilder));
 //        console2.log("");
 
         // In production, the IssuanceManagerFactory and RoundManagerFactory should be upgraded by now so we will just use it
         rmFactory = RoundManagerFactory(deployment.roundManagerFactory);
         imFactory = IssuanceManagerFactory(deployment.issuanceManagerFactory);
+        uriBuilder = CertificateUriBuilder(deployment.uriBuilder);
         pumpAuth = BorgAuth(deployment.auth);
 
         pumpCorpFactory = PumpCorpFactory(
@@ -137,7 +156,7 @@ contract DeployPumpCorpFactoryScript is Script {
                         deployment.cyberCorpSingleFactory,
                         deployment.dealManagerFactory,
                         rmFactory,
-                        deployment.uriBuilder
+                        uriBuilder
                     )
                 )
             )
