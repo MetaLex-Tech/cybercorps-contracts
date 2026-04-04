@@ -14,15 +14,15 @@ contract DeployNonUsZkPassportConditionScript is Script {
             // Production
             "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.0.0",
             vm.envUint("PRIVATE_KEY_MAIN"),
-            "pump.metalex.tech",
+            "ace.metalex.tech",
             "non-us-non-sanctioned",
             2592000, // 3600 * 24 * 30 days
             DeploymentConstants.BASE
 
 //            // Staging
-//            "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.0.0.staging",
+//            "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.0.0.staging.dev1",
 //            vm.envUint("PRIVATE_KEY_MAIN"),
-//            "staging.pump.metalex.tech",
+//            "staging.ace.metalex.tech",
 //            "non-us-non-sanctioned",
 //            2592000, // 3600 * 24 * 30 days
 //            DeploymentConstants.BASE
@@ -78,6 +78,9 @@ contract DeployNonUsZkPassportConditionScript is Script {
         vm.stopBroadcast();
 
         console2.log("==== Configs ====");
+        console2.log("chainId: %d", chainId);
+        console2.log("salt string: %s", saltStr);
+        console2.log("deployer: %s", deployerAddress);
         console2.log("LexChexCondition:", address(deployment.lexchexCondition));
         console2.log("Expected domain:", expectedDomain);
         console2.log("Expected scope:", expectedScope);

@@ -29,13 +29,12 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
     function run() public {
         return
             runWithArgs(
+                // Staging
                 DeploymentConstants.BASE,
-                "PumpCorpFactory.deploy.v1.0.2-dev2",
+                "PumpCorp.V1.0.0.staging.dev1",
                 vm.envUint("PRIVATE_KEY_MAIN"), // deployerPrivateKey
                 vm.envUint("FOUNDER_KEY_MAIN"), // founderPrivateKey
                 vm.envUint("INVESTOR_KEY_MAIN"), // investorPrivateKey
-
-                // TODO WIP: update for production
                 0x5ff4e90Efa2B88cf3cA92D63d244a78a88219Abf, // test corp payable
                 0x5ff4e90Efa2B88cf3cA92D63d244a78a88219Abf // test officer EOA
             );
@@ -52,7 +51,7 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
     ) public {
         // (1) Deploy factory contracts
 
-        (PumpCorpFactory pumpCorpFactory, RoundManagerFactory rmFactory, ) = (new DeployPumpCorpFactoryScript()).runWithArgs(
+        (PumpCorpFactory pumpCorpFactory, RoundManagerFactory rmFactory, , ) = (new DeployPumpCorpFactoryScript()).runWithArgs(
             chainId,
             saltStr,
             deployerPrivateKey
@@ -89,6 +88,11 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
         );
 
         vm.startBroadcast(deployerPrivateKey);
+
+        // (1) In staging, reassign the dev LeXcheX to pumpCorpFactory and grant it owner role
+        BorgAuth lexchexAuth = BorgAuth(0x7F55596De9D4224520EBCf5256d3d9d3708e0F71);
+        pumpCorpFactory.setLexchexAuth(address(lexchexAuth));
+        lexchexAuth.updateRole(address(pumpCorpFactory), 99);
 
         // (2) Deploy test meme token
         MockERC20 memeToken = new MockERC20("Test Token", "TEST", 9);

@@ -135,7 +135,7 @@ contract PumpCorpFactoryTest is Test {
         orCondition = new OrCondition(orAddrs);
 
         // Deploy PumpCorpFactory
-        (pumpFactory, rmFactory, ) = (new DeployPumpCorpFactoryScript()).runWithArgs(
+        (pumpFactory, rmFactory, , ) = (new DeployPumpCorpFactoryScript()).runWithArgs(
             block.chainid,
             saltStrPump,
             deployerPk
