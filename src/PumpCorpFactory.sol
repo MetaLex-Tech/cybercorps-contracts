@@ -638,6 +638,9 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
 
         address roundManagerAddress = IRoundManagerFactory(roundManagerFactory).deployRoundManager(salt);
 
+        // Zero-out fees for this instance
+        IRoundManagerFactory(roundManagerFactory).setInstanceFeeOverride(roundManagerAddress, true, 0);
+
         // Initialize RoundManager
         IRoundManagerInit(roundManagerAddress).initialize(
             address(BorgAuthACL(cyberCorpAddress).AUTH()),

@@ -89,6 +89,7 @@ contract DeployPumpCorpFactoryScript is Script {
 //        // (1) Deploy factory contracts
 //
 //        pumpAuth = new BorgAuth{salt: salt}(deployerAddress);
+//        pumpAuth.updateRole(deployment.metalexSafe, 99);
 //
 //        // TODO WIP: as of 2026/03/16 we haven't deployed the new RoundManagerFactory with restrictEndTimeReduction yet,
 //        //  so we deploy a dev one here for now

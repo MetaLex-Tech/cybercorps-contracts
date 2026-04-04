@@ -10,6 +10,7 @@ import {DeployPumpCorpFactoryScript} from "../script/deploy-pump-factory.s.sol";
 import {PumpCorpFactory, PumpCorpFactoryLib} from "../src/PumpCorpFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
+import {FeeOverride} from "../src/interfaces/IRoundManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {EIP712Lib} from "../src/libs/EIP712Lib.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
@@ -60,9 +61,9 @@ contract PumpCorpFactoryTest is Test {
     address internal investor;
 
     // ── Live deployments (DeploymentConstants.coreV2) ────────────
-    address internal metalexSafe = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
     DeploymentConstants.CoreDeployment internal net =
         DeploymentConstants.coreV2(block.chainid);
+    address internal metalexSafe = net.metalexSafe;
 
     // Convenience aliases
     address internal REGISTRY                 = net.cyberAgreementRegistry;
@@ -135,15 +136,17 @@ contract PumpCorpFactoryTest is Test {
         orCondition = new OrCondition(orAddrs);
 
         // Deploy PumpCorpFactory
-        (pumpFactory, rmFactory, , ) = (new DeployPumpCorpFactoryScript()).runWithArgs(
+        BorgAuth pumpAuth;
+        (pumpFactory, rmFactory, , , pumpAuth) = (new DeployPumpCorpFactoryScript()).runWithArgs(
             block.chainid,
             saltStrPump,
             deployerPk
         );
 
-        // Simulate granting PumpCorpFactory owner access to LeXcheX
+        // Simulate granting PumpCorpFactory owner access to LeXcheX and to RoundManagerFactory auth
         vm.startPrank(metalexSafe);
         BorgAuth(pumpFactory.lexchexAuth()).updateRole(address(pumpFactory), 99);
+        BorgAuth(pumpAuth).updateRole(address(pumpFactory), 99);
         vm.stopPrank();
 
         string[] memory legend = new string[](1);
@@ -434,6 +437,19 @@ contract PumpCorpFactoryTest is Test {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    //  FEE OVERRIDE
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    function test_FeeOverride_ZeroOnDeployedRoundManager() public {
+        (, address rm, ) = _deployLifecycle(299999, RoundType.FCFS, new address[](0));
+
+        FeeOverride memory fo = rmFactory.getInstanceFeeOverride(rm);
+        assertTrue(fo.enabled, "fee override must be enabled");
+        assertEq(fo.ratio, 0, "fee ratio must be zero");
+        assertEq(RoundManager(rm).computeFee(1 ether), 0, "computeFee must return 0");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     //  HAPPY PATH
     // ═══════════════════════════════════════════════════════════════════════════
 
@@ -478,6 +494,17 @@ contract PumpCorpFactoryTest is Test {
             RoundManager(rm).getRound(roundId).raised,
             investAmount,
             "raised must equal investAmount"
+        );
+        // No fees: companyPayable receives full investAmount, fee recipient receives nothing
+        assertEq(
+            payToken.balanceOf(address(this)),
+            investAmount,
+            "companyPayable must receive full investAmount (no fee deducted)"
+        );
+        assertEq(
+            payToken.balanceOf(rmFactory.getPlatformPayable()),
+            0,
+            "fee recipient must receive zero"
         );
     }
 

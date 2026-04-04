@@ -10,6 +10,7 @@ library DeploymentConstants {
     uint256 internal constant BASE_SEPOLIA = 84532;
 
     struct CoreDeployment {
+        address metalexSafe;
         address auth;
         address cyberCorpFactory;
         address issuanceManagerFactory;
@@ -34,6 +35,7 @@ library DeploymentConstants {
         if (chainId == BASE_SEPOLIA) {
             return
                 CoreDeployment({
+                    metalexSafe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C,
                     auth: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01,
                     cyberCorpFactory: 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2,
                     issuanceManagerFactory: 0xbbD386D237f3b407E6511A52488850b1Da0cCad2,
@@ -51,6 +53,7 @@ library DeploymentConstants {
         else {
             return
                 CoreDeployment({
+                    metalexSafe: 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C,
                     auth: 0x033012a1eDA6e2E00D12CD37c5b63B9440ef5E01,
                     cyberCorpFactory: 0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2,
                     issuanceManagerFactory: 0xD353972D7955F421d94d0eA8c42c88c417F7155A,
