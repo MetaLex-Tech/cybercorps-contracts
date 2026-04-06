@@ -97,7 +97,9 @@ contract BaseScript is Script {
         _upgradeUriBuilderStack(uriBuilderProxyAddr, impls);
         _updateFactoryReferences(cyberCorpFactory, impls);
         _upgradeCyberCorpStacks(cyberCorps, impls);
-
+        BorgAuth(auth).zeroOwner();
+        //log that owner has been zeroed
+        console2.log("Deployer auth has been zeroed");
         vm.stopBroadcast();
     }
 

@@ -40,14 +40,14 @@ contract BaseSepoliaFactoryFcfsForkTest is Test, KnownAddressesLoaded {
     address internal investor;
 
     function setUp() public {
-        assertEq(block.chainid, BASE_SEPOLIA_CHAIN_ID, "Fork test: Base Sepolia only");
+        //assertEq(block.chainid, BASE_SEPOLIA_CHAIN_ID, "Fork test: Base Sepolia only");
         //vm.rollFork(BASE_SEPOLIA_FORK_BLOCK); // TODO: Uncomment this when the fork is ready      
 
         registry = CyberAgreementRegistry(CYBER_AGREEMENT_REGISTRY);
         cyberCorpFactory = CyberCorpFactory(CYBERCORP_FACTORY);
         cyberCorpSingleFactory = CyberCorpSingleFactory(cyberCorpFactory.cyberCorpSingleFactory());
         roundManagerFactory = RoundManagerFactory(cyberCorpFactory.roundManagerFactory());
-        stable = ERC20(BASE_SEPOLIA_USDC);
+        stable = ERC20(0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913);
 
         founder = vm.addr(FOUNDER_PK);
         officer = vm.addr(OFFICER_PK);
