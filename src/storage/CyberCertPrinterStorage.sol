@@ -73,6 +73,13 @@ struct OwnerDetails {
     address ownerAddress;
 }
 
+event CertificateAssigned(uint256 indexed tokenId, address indexed newOwner, string newOwnerName, string issuerName);
+
+error TokenNotTransferable();
+error TransferRestricted(string reason);
+error EndorsementNotSignedOrInvalid();
+error HolderLimitExceeded(uint256 maxHolderCount);
+
 library CyberCertPrinterStorage {
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.cert.printer.storage.v1");
@@ -100,7 +107,9 @@ library CyberCertPrinterStorage {
         // New variables must be appended below to preserve storage layout for upgrades
         mapping(uint256 => bool) tokenTransferable;
         mapping(uint256 => bytes[]) issuerSignatures;
-        
+        uint256 legalHolderCount;
+        uint256 maxLegalHolderCount;
+        mapping(address => uint256) legalHolderTokenCount;
     }
 
     // Returns the storage layout
@@ -260,4 +269,71 @@ library CyberCertPrinterStorage {
         return cyberCertStorage().certificateDetails[tokenId].extensionData;
     }
 
-} 
+    function _updateLegalHolder(uint256 tokenId, address newOwner) internal {
+        CyberCertStorage storage s = cyberCertStorage();
+        address oldOwner = s.owners[tokenId].ownerAddress;
+        if (oldOwner == newOwner) return;
+
+        if (newOwner != address(0) && s.maxLegalHolderCount > 0 && s.legalHolderTokenCount[newOwner] == 0) {
+            if (s.legalHolderCount >= s.maxLegalHolderCount) revert HolderLimitExceeded(s.maxLegalHolderCount);
+        }
+
+        if (oldOwner != address(0) && s.legalHolderTokenCount[oldOwner] > 0) {
+            s.legalHolderTokenCount[oldOwner] -= 1;
+            if (s.legalHolderTokenCount[oldOwner] == 0) s.legalHolderCount -= 1;
+        }
+
+        if (newOwner != address(0)) {
+            if (s.legalHolderTokenCount[newOwner] == 0) s.legalHolderCount += 1;
+            s.legalHolderTokenCount[newOwner] += 1;
+        }
+    }
+
+    function updateLegalHolder(uint256 tokenId, address newOwner) external {
+        _updateLegalHolder(tokenId, newOwner);
+    }
+
+    function validateAndUpdateTransfer(uint256 tokenId, address from, address to) external {
+        CyberCertStorage storage s = cyberCertStorage();
+
+        ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
+        if (!s.transferable && !s.tokenTransferable[tokenId]
+            && from != corp.dealManager() && from != corp.roundManager()) {
+            revert TokenNotTransferable();
+        }
+
+        if (address(s.globalRestrictionHook) != address(0)) {
+            (bool allowed, string memory reason) =
+                s.globalRestrictionHook.checkTransferRestriction(from, to, tokenId, "");
+            if (!allowed) revert TransferRestricted(reason);
+        }
+
+        address ownerAddress = s.owners[tokenId].ownerAddress;
+        string memory issuerName = IIssuanceManager(s.issuanceManager).companyName();
+
+        if (from == ownerAddress) {
+            if (!s.endorsementRequired) {
+                _updateLegalHolder(tokenId, to);
+                emit CertificateAssigned(tokenId, to, "", issuerName);
+                s.owners[tokenId] = OwnerDetails("", to);
+            } else if (s.endorsements[tokenId].length > 0) {
+                Endorsement memory e = s.endorsements[tokenId][s.endorsements[tokenId].length - 1];
+                if (e.endorsee == to) {
+                    _updateLegalHolder(tokenId, e.endorsee);
+                    emit CertificateAssigned(tokenId, to, e.endorseeName, issuerName);
+                    s.owners[tokenId] = OwnerDetails(e.endorseeName, e.endorsee);
+                }
+            }
+            // NOTE: no revert — owner may transfer without updating legal record
+        } else if (s.endorsements[tokenId].length > 0) {
+            Endorsement memory e = s.endorsements[tokenId][s.endorsements[tokenId].length - 1];
+            if (e.endorsee != to && ownerAddress != to) revert EndorsementNotSignedOrInvalid();
+            _updateLegalHolder(tokenId, e.endorsee);
+            emit CertificateAssigned(tokenId, to, e.endorseeName, issuerName);
+            s.owners[tokenId] = OwnerDetails(e.endorseeName, e.endorsee);
+        } else {
+            revert EndorsementNotSignedOrInvalid();
+        }
+    }
+
+}
