@@ -3908,24 +3908,10 @@ contract CyberCorpTest is Test {
         vm.startPrank(testAddress);
         bytes32 check = bytes32(bytes("ABV_safe_t"));
         console.logBytes32(check);
-     console.log("blackhaven_safe_t");
-        check = bytes32(bytes("blackhaven_safe_t"));
+     console.log("ace_safev1");
+        check = bytes32(bytes("ace_safev1"));
         console.logBytes32(check);
-        check = bytes32(bytes("mlx_safe_reg_s_v1_3"));
-        console.logBytes32(check);
-        check = bytes32(bytes("mlx_safe_tw_reg_d_v1_3"));
-        console.logBytes32(check);
-        check = bytes32(bytes("mlx_safe_tw_reg_s_v1_3"));
-        console.logBytes32(check);
-        check = bytes32(bytes("mlx_safte_reg_d_v1_3"));
-        console.logBytes32(check);
-        check = bytes32(bytes("mlx_safte_reg_s_v1_3"));
-        console.logBytes32(check);
-        check = bytes32(bytes("mlx_saft_reg_d_v1_3"));
-        console.logBytes32(check);
-        check = bytes32(bytes("mlx_saft_reg_s_v1_3"));
-        console.logBytes32(check);
-
+     
         bytes32 salt = bytes32(keccak256("TestSAFTE"));
 
         address safteExtension = address(new ERC1967Proxy{salt: salt}(
