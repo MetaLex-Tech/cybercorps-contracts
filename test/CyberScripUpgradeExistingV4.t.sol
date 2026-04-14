@@ -768,7 +768,8 @@ contract CyberScripUpgradeExistingV3Test is Test {
             certAddress,
             investorAddr,
             investorName,
-            details
+            details,
+            hex"01"
         );
     }
 

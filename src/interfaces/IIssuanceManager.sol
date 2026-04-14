@@ -279,7 +279,8 @@ interface IIssuanceManager {
         address certAddress,
         address investor,
         string calldata investorName,
-        CertificateDetails calldata details
+        CertificateDetails calldata details,
+        bytes calldata officerSignature
     ) external;
 
     function clearRecertificationApproval(
@@ -296,7 +297,9 @@ interface IIssuanceManager {
         returns (
             bool approved,
             string memory investorName,
-            CertificateDetails memory details
+            CertificateDetails memory details,
+            bytes memory officerSignature,
+            uint256 endorsementTimestamp
         );
 
     function setScripifyWhitelistEnabled(

@@ -846,13 +846,15 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         address certAddress,
         address investor,
         string calldata investorName,
-        CertificateDetails calldata details
+        CertificateDetails calldata details,
+        bytes calldata officerSignature
     ) external onlyAdmin {
         IssuanceManagerStorage.executeSetRecertificationApproval(
             certAddress,
             investor,
             investorName,
-            details
+            details,
+            officerSignature
         );
     }
 
@@ -875,7 +877,9 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         returns (
             bool approved,
             string memory investorName,
-            CertificateDetails memory details
+            CertificateDetails memory details,
+            bytes memory officerSignature,
+            uint256 endorsementTimestamp
         )
     {
         return

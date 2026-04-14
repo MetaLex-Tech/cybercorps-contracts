@@ -195,6 +195,10 @@ library IssuanceManagerStorage {
         bool approved;
         string investorName;
         CertificateDetails details;
+        /// @dev CyberCorp officer signature bytes, applied as issuer signature on the new certificate at conversion.
+        bytes officerSignature;
+        /// @dev Timestamp recorded when approval is set (endorsement / signature context).
+        uint256 endorsementTimestamp;
     }
 
     // Returns the storage layout
@@ -420,7 +424,9 @@ library IssuanceManagerStorage {
         returns (
             bool approved,
             string memory investorName,
-            CertificateDetails memory details
+            CertificateDetails memory details,
+            bytes memory officerSignature,
+            uint256 endorsementTimestamp
         )
     {
         RecertificationApproval storage approval = getRecertificationApproval(
@@ -430,20 +436,25 @@ library IssuanceManagerStorage {
         approved = approval.approved;
         investorName = approval.investorName;
         details = approval.details;
+        officerSignature = approval.officerSignature;
+        endorsementTimestamp = approval.endorsementTimestamp;
     }
 
     function setRecertificationApproval(
         address certAddress,
         address investor,
         string memory investorName,
-        CertificateDetails memory details
+        CertificateDetails memory details,
+        bytes memory officerSignature
     ) internal {
         issuanceManagerStorage().recertificationApprovals[certAddress][
             investor
         ] = RecertificationApproval({
             approved: true,
             investorName: investorName,
-            details: details
+            details: details,
+            officerSignature: officerSignature,
+            endorsementTimestamp: block.timestamp
         });
     }
 
@@ -948,12 +959,17 @@ library IssuanceManagerStorage {
             (
                 bool approved,
                 string memory investorName,
-                CertificateDetails memory approvedDetails
+                CertificateDetails memory approvedDetails,
+                bytes memory officerSignature,
+                uint256 endorsementTimestamp
             ) = getRecertificationApprovalData(certAddress, account);
             if (!approved) revert RecertificationApprovalRequired();
+            if (officerSignature.length == 0) revert SignatureRequired();
             approval.approved = approved;
             approval.investorName = investorName;
             approval.details = approvedDetails;
+            approval.officerSignature = officerSignature;
+            approval.endorsementTimestamp = endorsementTimestamp;
         }
 
         if (selection.foundActive) {
@@ -1022,8 +1038,8 @@ library IssuanceManagerStorage {
                     account,
                     details,
                     approval.investorName,
-                    bytes(""),
-                    block.timestamp
+                    approval.officerSignature,
+                    approval.endorsementTimestamp
                 );
             clearRecertificationApproval(certAddress, account);
             _setCertMaxFromCurrent(
@@ -1109,11 +1125,19 @@ library IssuanceManagerStorage {
         address certAddress,
         address investor,
         string memory investorName,
-        CertificateDetails memory details
+        CertificateDetails memory details,
+        bytes memory officerSignature
     ) external {
         if (investor == address(0)) revert InvalidInvestor();
         if (bytes(investorName).length == 0) revert InvalidInvestorName();
-        setRecertificationApproval(certAddress, investor, investorName, details);
+        if (officerSignature.length == 0) revert SignatureRequired();
+        setRecertificationApproval(
+            certAddress,
+            investor,
+            investorName,
+            details,
+            officerSignature
+        );
         emit RecertificationApprovalSet(certAddress, investor, investorName);
     }
 

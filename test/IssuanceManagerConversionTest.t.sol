@@ -1126,7 +1126,8 @@ contract IssuanceManagerConversionTest is Test {
             address(certPrinter),
             investor,
             "Approved Investor",
-            _buildCertificateDetails(999, "Approved legal details", bytes("approved extension"))
+            _buildCertificateDetails(999, "Approved legal details", bytes("approved extension")),
+            hex"01"
         );
 
         CertificateDetails memory approvedDetails = _buildCertificateDetails(
@@ -1134,17 +1135,21 @@ contract IssuanceManagerConversionTest is Test {
             "Approved legal details",
             bytes("approved extension")
         );
+        bytes memory officerSig = hex"0badc0de";
         vm.prank(owner);
         issuanceManager.setRecertificationApproval(
             address(certPrinter),
             investor,
             "Approved Investor",
-            approvedDetails
+            approvedDetails,
+            officerSig
         );
         (
             bool approved,
             string memory investorName,
-            CertificateDetails memory stagedDetails
+            CertificateDetails memory stagedDetails,
+            bytes memory storedOfficerSig,
+            uint256 endorsementTs
         ) = issuanceManager.getRecertificationApproval(
             address(certPrinter),
             investor
@@ -1153,6 +1158,8 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(investorName, "Approved Investor");
         assertEq(stagedDetails.legalDetails, approvedDetails.legalDetails);
         assertEq(stagedDetails.extensionData, approvedDetails.extensionData);
+        assertEq(keccak256(storedOfficerSig), keccak256(officerSig));
+        assertEq(endorsementTs, block.timestamp);
 
         vm.prank(investor);
         issuanceManager.convertScripToCert(address(certPrinter), 5 * 1e18);
@@ -1163,7 +1170,7 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(restored.unitsRepresented, 5 * 1e18);
         assertEq(restored.legalDetails, approvedDetails.legalDetails);
         assertEq(restored.extensionData, approvedDetails.extensionData);
-        (approved,,) = issuanceManager.getRecertificationApproval(
+        (approved,,,,) = issuanceManager.getRecertificationApproval(
             address(certPrinter),
             investor
         );
@@ -1600,11 +1607,11 @@ contract IssuanceManagerConversionTest is Test {
             "active + scripified units vs pool cap"
         );
 
-        (bool approvalStillSetOne,,) = issuanceManager.getRecertificationApproval(
+        (bool approvalStillSetOne,,,,) = issuanceManager.getRecertificationApproval(
             address(certPrinter),
             newInvestorOne
         );
-        (bool approvalStillSetTwo,,) = issuanceManager.getRecertificationApproval(
+        (bool approvalStillSetTwo,,,,) = issuanceManager.getRecertificationApproval(
             address(certPrinter),
             newInvestorTwo
         );
@@ -1898,11 +1905,11 @@ contract IssuanceManagerConversionTest is Test {
             "active + scripified units vs pool cap (five holders)"
         );
 
-        (bool approvalStillSetOne,,) = issuanceManager.getRecertificationApproval(
+        (bool approvalStillSetOne,,,,) = issuanceManager.getRecertificationApproval(
             address(certPrinter),
             newInvestorOne
         );
-        (bool approvalStillSetTwo,,) = issuanceManager.getRecertificationApproval(
+        (bool approvalStillSetTwo,,,,) = issuanceManager.getRecertificationApproval(
             address(certPrinter),
             newInvestorTwo
         );
@@ -1959,7 +1966,8 @@ contract IssuanceManagerConversionTest is Test {
             address(certPrinter),
             investorAddress,
             investorName,
-            details
+            details,
+            hex"01"
         );
     }
 
