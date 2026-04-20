@@ -49,6 +49,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "../interfaces/ICyberCorp.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/ICyberCertPrinter.sol";
+import "../CyberCorpConstants.sol";
 import "../interfaces/ICondition.sol";
 import {LexScrowStorage, Escrow, Token, TokenType, EscrowStatus} from "../storage/LexScrowStorage.sol";
 
@@ -142,8 +143,37 @@ abstract contract LexScroWLite is Initializable {
                         officerSignature
                     );
                 }
+                // Second escrowed officer signature for share/stock instrument types (matches RoundManager.allocate)
+                try ICyberCertPrinter(escrow.corpAssets[i].tokenAddress).securityType() returns (
+                    SecurityClass securityClass
+                ) {
+                    if (_isStockSecurityClass(securityClass)) {
+                        bytes memory secondEscrowedSignature = "";
+                        try ICyberCorp(corp).getEscrowedOfficerSignatureCount() returns (uint256 count) {
+                            if (count > 1) {
+                                try ICyberCorp(corp).getEscrowedOfficerSignature(1) returns (bytes memory sig) {
+                                    secondEscrowedSignature = sig;
+                                } catch {}
+                            }
+                        } catch {}
+                        if (secondEscrowedSignature.length > 0) {
+                            ICyberCertPrinter(escrow.corpAssets[i].tokenAddress).addIssuerSignature(
+                                escrow.corpAssets[i].tokenId,
+                                secondEscrowedSignature
+                            );
+                        }
+                    }
+                } catch {}
             }
         }
+    }
+
+    /// @dev Same classification as RoundManagerStorage._isStockSecurityClass for dual officer signatures
+    function _isStockSecurityClass(SecurityClass cls) private pure returns (bool) {
+        return cls == SecurityClass.CommonStock ||
+            cls == SecurityClass.PreferredStock ||
+            cls == SecurityClass.RestrictedStockPurchaseAgreement ||
+            cls == SecurityClass.RestrictedStockUnit;
     }
 
     /// @notice Pull buyer assets into escrow and mark the escrow as PAID

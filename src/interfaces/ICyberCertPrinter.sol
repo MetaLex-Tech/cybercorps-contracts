@@ -137,4 +137,6 @@ interface ICyberCertPrinter is IERC721 {
     function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256);
     function legalOwnerOf(uint256 tokenId) external view returns (address);
     function setTokenTransferable(uint256 tokenId, bool value) external;
+    /// @notice Security instrument class for this printer (used for e.g. dual officer signatures on stock certs)
+    function securityType() external view returns (SecurityClass);
 }
