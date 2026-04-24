@@ -137,8 +137,9 @@ library IssuanceManagerStorage {
         address indexed certAddress,
         address indexed user,
         uint256 indexed certId,
-        uint256 oldUnitsRepresented,
-        uint256 newUnitsRepresented
+        uint256 scripsAdded,
+        uint256 newUnitsRepresented,
+        uint256 newUnitsScripified
     );
 
     // Storage slot for our struct
@@ -1014,12 +1015,17 @@ library IssuanceManagerStorage {
                 selection.activeTokenId,
                 activeDetails.unitsRepresented
             );
+            CertificateDetails memory effectiveDetails = certificate
+                .getCertificateDetails(selection.activeTokenId);
+            CertificateDetails memory activeAfter = certificate
+                .getActiveCertificateDetails(selection.activeTokenId);
             emit ScripAddedToExistingCert(
                 certAddress,
                 account,
                 selection.activeTokenId,
-                oldUnitsRepresented,
-                activeDetails.unitsRepresented
+                amount,
+                effectiveDetails.unitsRepresented,
+                effectiveDetails.unitsRepresented - activeAfter.unitsRepresented
             );
             emit ScripRecertified(
                 certAddress,

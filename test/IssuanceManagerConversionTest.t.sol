@@ -1249,8 +1249,9 @@ contract IssuanceManagerConversionTest is Test {
             address(certPrinter),
             otherInvestor,
             otherInvestorCertId,
-            0,
-            150 * 1e18
+            150 * 1e18,
+            150 * 1e18,
+            0
         );
         vm.expectEmit(true, true, true, true);
         emit IssuanceManager.ScripRecertified(

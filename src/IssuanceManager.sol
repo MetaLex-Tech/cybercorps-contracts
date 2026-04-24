@@ -137,8 +137,9 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         address indexed certAddress,
         address indexed user,
         uint256 indexed certId,
-        uint256 oldUnitsRepresented,
-        uint256 newUnitsRepresented
+        uint256 scripsAdded,
+        uint256 newUnitsRepresented,
+        uint256 newUnitsScripified
     );
 
     /// @custom:oz-upgrades-unsafe-allow constructor

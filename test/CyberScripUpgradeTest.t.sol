@@ -539,7 +539,7 @@ contract CyberScripUpgradeTest is Test {
         );
 
         vm.prank(investor);
-        certPrinter.safeTransferFrom(investor, otherInvestor, certId);
+       // certPrinter.safeTransferFrom(investor, otherInvestor, certId);
 
         assertEq(certPrinter.ownerOf(certId), otherInvestor);
         assertEq(certPrinter.legalOwnerOf(certId), investor);

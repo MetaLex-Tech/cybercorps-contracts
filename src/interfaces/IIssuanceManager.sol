@@ -89,8 +89,9 @@ interface IIssuanceManager {
         address indexed certAddress,
         address indexed user,
         uint256 indexed certId,
-        uint256 oldUnitsRepresented,
-        uint256 newUnitsRepresented
+        uint256 scripsAdded,
+        uint256 newUnitsRepresented,
+        uint256 newUnitsScripified
     );
 
     // Issuance Manager Functions
