@@ -80,7 +80,11 @@ library IssuanceManagerStorage {
         address indexed certAddress,
         uint256 indexed id,
         address indexed scripifiedCert,
-        uint256 amount
+        uint256 amount,
+        uint256 newUnitsRepresented,
+        uint256 newCertNominalShares,
+        uint256 newTotalAssetsWad,
+        uint256 newTotalNominalShares
     );
     event CertPrinterCreated(
         address indexed certificate,
@@ -130,8 +134,10 @@ library IssuanceManagerStorage {
         address indexed user,
         uint256 indexed certId,
         uint256 scripAmount,
-        uint256 oldUnitsRepresented,
-        uint256 newUnitsRepresented
+        uint256 newUnitsRepresented,
+        uint256 newCertNominalShares,
+        uint256 newTotalAssetsWad,
+        uint256 newTotalNominalShares
     );
     event ScripAddedToExistingCert(
         address indexed certAddress,
@@ -915,7 +921,19 @@ library IssuanceManagerStorage {
         details.unitsRepresented = details.unitsRepresented - amount;
         certificate.updateCertificateDetails(id, details);
         ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
-        emit ScripifiedCert(certAddress, id, scripifiedCert, amount);
+        (uint256 newTotalAssetsWad, uint256 newTotalNominalShares) = getCertScripUnitVault(
+            certAddress
+        );
+        emit ScripifiedCert(
+            certAddress,
+            id,
+            scripifiedCert,
+            amount,
+            details.unitsRepresented,
+            getScripPoolSharesById(certAddress, id),
+            newTotalAssetsWad,
+            newTotalNominalShares
+        );
     }
 
     function executeConvertScripToCert(
@@ -1002,7 +1020,6 @@ library IssuanceManagerStorage {
         if (selection.foundActive) {
             CertificateDetails memory activeDetails = certificate
                 .getActiveCertificateDetails(selection.activeTokenId);
-            uint256 oldUnitsRepresented = activeDetails.unitsRepresented;
             activeDetails.unitsRepresented =
                 activeDetails.unitsRepresented +
                 units;
@@ -1019,6 +1036,10 @@ library IssuanceManagerStorage {
                 .getCertificateDetails(selection.activeTokenId);
             CertificateDetails memory activeAfter = certificate
                 .getActiveCertificateDetails(selection.activeTokenId);
+            (
+                uint256 newTotalAssetsWad,
+                uint256 newTotalNominalShares
+            ) = getCertScripUnitVault(certAddress);
             emit ScripAddedToExistingCert(
                 certAddress,
                 account,
@@ -1032,8 +1053,10 @@ library IssuanceManagerStorage {
                 account,
                 selection.activeTokenId,
                 amount,
-                oldUnitsRepresented,
-                activeDetails.unitsRepresented
+                effectiveDetails.unitsRepresented,
+                getScripPoolSharesById(certAddress, selection.activeTokenId),
+                newTotalAssetsWad,
+                newTotalNominalShares
             );
         } else {
             CertificateDetails memory details = approval.details;
@@ -1053,13 +1076,21 @@ library IssuanceManagerStorage {
                 createdTokenId,
                 details.unitsRepresented
             );
+            CertificateDetails memory effectiveDetails = certificate
+                .getCertificateDetails(createdTokenId);
+            (
+                uint256 newTotalAssetsWad,
+                uint256 newTotalNominalShares
+            ) = getCertScripUnitVault(certAddress);
             emit ScripRecertified(
                 certAddress,
                 account,
                 createdTokenId,
                 amount,
-                0,
-                details.unitsRepresented
+                effectiveDetails.unitsRepresented,
+                getScripPoolSharesById(certAddress, createdTokenId),
+                newTotalAssetsWad,
+                newTotalNominalShares
             );
         }
     }

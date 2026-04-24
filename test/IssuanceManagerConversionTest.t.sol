@@ -479,7 +479,7 @@ contract IssuanceManagerConversionTest is Test {
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
         bytes32 recertifiedTopic = keccak256(
-            "ScripRecertified(address,address,uint256,uint256,uint256,uint256)"
+            "ScripRecertified(address,address,uint256,uint256,uint256,uint256,uint256,uint256)"
         );
         bool sawRecertified;
         for (uint256 i = 0; i < logs.length; i++) {
@@ -1259,8 +1259,10 @@ contract IssuanceManagerConversionTest is Test {
             otherInvestor,
             otherInvestorCertId,
             150 * 1e18,
+            150 * 1e18,
             0,
-            150 * 1e18
+            50 * 1e18,
+            100 * 1e18
         );
         vm.prank(otherInvestor);
         issuanceManager.convertScripToCert(address(certPrinter), 150 * 1e18);

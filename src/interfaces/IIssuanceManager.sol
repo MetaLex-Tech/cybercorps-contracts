@@ -53,7 +53,12 @@ interface IIssuanceManager {
     event ScripifiedCert(
         address indexed certAddress,
         uint256 indexed id,
-        address indexed scripifiedCert
+        address indexed scripifiedCert,
+        uint256 amount,
+        uint256 newUnitsRepresented,
+        uint256 newCertNominalShares,
+        uint256 newTotalAssetsWad,
+        uint256 newTotalNominalShares
     );
     event CertPrinterCreated(
         address indexed certificate,
@@ -82,8 +87,10 @@ interface IIssuanceManager {
         address indexed user,
         uint256 indexed certId,
         uint256 scripAmount,
-        uint256 oldUnitsRepresented,
-        uint256 newUnitsRepresented
+        uint256 newUnitsRepresented,
+        uint256 newCertNominalShares,
+        uint256 newTotalAssetsWad,
+        uint256 newTotalNominalShares
     );
     event ScripAddedToExistingCert(
         address indexed certAddress,
