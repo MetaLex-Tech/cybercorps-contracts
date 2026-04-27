@@ -1,96 +1,93 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-import {Script} from "forge-std/Script.sol";
-import {console2} from "forge-std/console2.sol";
-import {ParentCoFactory} from "../src/ParentCoFactory.sol";
+import "./libs/SafeUtils.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
-import {GnosisTransaction} from "./libs/safe.sol";
+import {CompanyOfficer} from "../src/CyberCorpConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
-import {CompanyOfficer} from "../src/CyberCorpConstants.sol";
+import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
+import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {GnosisTransaction} from "./libs/safe.sol";
+import {ParentCoFactory} from "../src/ParentCoFactory.sol";
+import {Script} from "forge-std/Script.sol";
+import {console2} from "forge-std/console2.sol";
 
 contract DeployParentCoFactoryScript is Script {
     uint256 internal constant BASE_SEPOLIA_CHAIN_ID = 84532;
-    address internal constant BASE_USDC =
-        0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    uint256 internal constant BASE_CHAIN_ID = 8453;
 
     function run() public returns (ParentCoFactory parentCoFactory, GnosisTransaction[] memory safeTxs) {
+
         // production
-//        CompanyOfficer[] memory parentCoOfficers = new CompanyOfficer[](3);
+
+        address[] memory eoas = vm.envAddress("PARENT_CO_OFFICER_EOAS", ",");
+        string[] memory names = vm.envString("PARENT_CO_OFFICER_NAMES", ",");
+        string[] memory contacts = vm.envString("PARENT_CO_OFFICER_CONTACTS", ",");
+        string[] memory titles = vm.envString("PARENT_CO_OFFICER_TITLES", ",");
+        CompanyOfficer[] memory parentCoOfficers = new CompanyOfficer[](eoas.length);
+        for (uint256 i = 0; i < eoas.length ; i++) {
+            parentCoOfficers[i] = CompanyOfficer({
+                eoa: eoas[i],
+                name: names[i],
+                contact: contacts[i],
+                title: titles[i]
+            });
+        }
+
+        return runWithArgs({
+            chainId: DeploymentConstants.BASE,
+            deployerPrivateKey: vm.envUint("PRIVATE_KEY_MAIN"),
+            saltStr: "ParentCoFactory.deploy.v1",
+            segCoTemplateId: keccak256("ParentCo.SegCo.v1"),
+            segCoDocName: "UMIA FOUNDER/OPERATOR LEGAL PACK",
+            segCoDocUri: "ipfs://bafybeicqgnzaa4zm7nlkrnuuf7xdyhughisnougerjliewynjtdaioiv5e",
+            boardConsentTemplateId: keccak256("ParentCo.BoardConsent.v1"),
+            boardConsentName: "ACTION BY UNANIMOUS WRITTEN CONSENT OF THE BOARD OF DIRECTORS OF UMIA LAUNCHER SPC",
+            boardConsentUri: "ipfs://bafkreicr65qbif4vprnt5l2ovzqjbywwgmnply3sz7neb6qzjbb2njcrw4",
+            parentCoPayable: 0x299FF70C049c0a6d591319fA7BaD86e24a671436,
+            parentCoName: "UMIA LAUNCHER, SPC",
+            parentCoType: "Segregated Portfolio Company",
+            parentCoJurisdiction: "Cayman Islands",
+            parentCoContactDetails: "c/o TTA Corporate Services Limited, Harbour Place, 2nd Floor, North Wing, 103 South Church Street, P.O. Box 472, George Town, Grand Cayman KY1-1106, Cayman Islands",
+            parentCoDefaultDisputeResolution: "confidential, binding arbitration",
+            parentCoOfficers: parentCoOfficers
+        });
+
+//        // testnet
+//
+//        CompanyOfficer[] memory parentCoOfficers = new CompanyOfficer[](2);
 //        parentCoOfficers[0] = CompanyOfficer({
-//            eoa: address(0), // TODO TBD
-//            name: "", // TODO TBC
-//            contact: "", // TODO TBD
+//            eoa: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
+//            name: "Test Officer 1",
+//            contact: "test1@parentco.example",
 //            title: "Director"
 //        });
 //        parentCoOfficers[1] = CompanyOfficer({
-//            eoa: address(0), // TODO TBD
-//            name: "", // TODO TBC
-//            contact: "", // TODO TBD
-//            title: "Director"
-//        });
-//        parentCoOfficers[2] = CompanyOfficer({
-//            eoa: address(0), // TODO TBD
-//            name: "", // TODO TBC
-//            contact: "", // TODO TBD
+//            eoa: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
+//            name: "Test Officer 2",
+//            contact: "test2@parentco.example",
 //            title: "Director"
 //        });
 //
 //        return runWithArgs({
-//            chainId: BASE_USDC,
+//            chainId: DeploymentConstants.BASE_SEPOLIA,
 //            deployerPrivateKey: vm.envUint("PRIVATE_KEY_MAIN"),
-//            saltStr: "ParentCoFactory.deploy.v1",
-//            segCoTemplateId: keccak256("ParentCo.SegCo.v1"),
-//            segCoDocName: "UMIA FOUNDER/OPERATOR LEGAL PACK",
-//            segCoDocUri: "ipfs://bafybeicqgnzaa4zm7nlkrnuuf7xdyhughisnougerjliewynjtdaioiv5e",
-//            boardConsentTemplateId: keccak256("ParentCo.BoardConsent.v1"),
-//            boardConsentName: "ACTION BY UNANIMOUS WRITTEN CONSENT OF THE BOARD OF DIRECTORS OF UMIA LAUNCHER SPC",
-//            boardConsentUri: "ipfs://bafkreicr65qbif4vprnt5l2ovzqjbywwgmnply3sz7neb6qzjbb2njcrw4",
-//            parentCoPayable: 0x299FF70C049c0a6d591319fA7BaD86e24a671436,
-//            parentCoName: "UMIA LAUNCHER, SPC",
-//            parentCoType: "Segregated Portfolio Company",
-//            parentCoJurisdiction: "Cayman Islands",
-//            parentCoContactDetails: "c/o TTA Corporate Services Limited, Harbour Place, 2nd Floor, North Wing, 103 South Church Street, P.O. Box 472, George Town, Grand Cayman KY1-1106, Cayman Islands",
-//            parentCoDefaultDisputeResolution: "confidential, binding arbitration",
+//            saltStr: "ParentCoFactory.deploy.v2",
+//            segCoTemplateId: keccak256("ParentCo.Test2.SegCo.v1"),
+//            segCoDocName: "FOUNDER/OPERATOR LEGAL PACK",
+//            segCoDocUri: "ipfs://parentco-test-segco-template",
+//            boardConsentTemplateId: keccak256("ParentCo.Test2.BoardConsent.v1"),
+//            boardConsentName: "ParentCo Test Board Consent",
+//            boardConsentUri: "ipfs://parentco-test-board-consent-template",
+//            parentCoPayable: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
+//            parentCoName: "Test ParentCo LLC",
+//            parentCoType: "limited liability company",
+//            parentCoJurisdiction: "Delaware",
+//            parentCoContactDetails: "test@parentco.example",
+//            parentCoDefaultDisputeResolution: "binding arbitration",
 //            parentCoOfficers: parentCoOfficers
 //        });
-
-        // testnet
-        CompanyOfficer[] memory parentCoOfficers = new CompanyOfficer[](2);
-        parentCoOfficers[0] = CompanyOfficer({
-            eoa: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
-            name: "Test Officer 1",
-            contact: "test1@parentco.example",
-            title: "Director"
-        });
-        parentCoOfficers[1] = CompanyOfficer({
-            eoa: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
-            name: "Test Officer 2",
-            contact: "test2@parentco.example",
-            title: "Director"
-        });
-
-        return runWithArgs({
-            chainId: BASE_SEPOLIA_CHAIN_ID,
-            deployerPrivateKey: vm.envUint("PRIVATE_KEY_MAIN"),
-            saltStr: "ParentCoFactory.deploy.v2",
-            segCoTemplateId: keccak256("ParentCo.Test2.SegCo.v1"),
-            segCoDocName: "FOUNDER/OPERATOR LEGAL PACK",
-            segCoDocUri: "ipfs://parentco-test-segco-template",
-            boardConsentTemplateId: keccak256("ParentCo.Test2.BoardConsent.v1"),
-            boardConsentName: "ParentCo Test Board Consent",
-            boardConsentUri: "ipfs://parentco-test-board-consent-template",
-            parentCoPayable: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
-            parentCoName: "Test ParentCo LLC",
-            parentCoType: "limited liability company",
-            parentCoJurisdiction: "Delaware",
-            parentCoContactDetails: "test@parentco.example",
-            parentCoDefaultDisputeResolution: "binding arbitration",
-            parentCoOfficers: parentCoOfficers
-        });
     }
 
     function runWithArgs(
@@ -122,6 +119,16 @@ contract DeployParentCoFactoryScript is Script {
 
         address deployerAddress = vm.addr(deployerPrivateKey);
         bytes32 salt = bytes32(keccak256(bytes(saltStr)));
+
+        console2.log("==== Configs ====");
+        for (uint256 i = 0; i < parentCoOfficers.length; i++) {
+            console2.log("parentCoOfficers %d:", i);
+            console2.log("  EOA: %s", parentCoOfficers[i].eoa);
+            console2.log("  name: %s", parentCoOfficers[i].name);
+            console2.log("  contact: %s", parentCoOfficers[i].contact);
+            console2.log("  title: %s", parentCoOfficers[i].title);
+            console2.log("");
+        }
 
         vm.startBroadcast(deployerPrivateKey);
 
@@ -170,6 +177,7 @@ contract DeployParentCoFactoryScript is Script {
             parentCoFactoryAuth.updateRole(parentCoOfficers[i].eoa, parentCoFactoryAuth.OWNER_ROLE());
         parentCoFactoryAuth.updateRole(parentCoPayable, parentCoFactoryAuth.OWNER_ROLE());
 
+        console2.log("==== Deployed ====");
         console2.log("ParentCoFactory Auth:", address(parentCoFactoryAuth));
         console2.log(
             "CyberAgreementRegistry:",
@@ -231,15 +239,12 @@ contract DeployParentCoFactoryScript is Script {
             )
         });
 
-        console2.log("Safe Txs for creating templates:");
-        for (uint256 i = 0 ; i < safeTxs.length ; i++) {
-            console2.log("  #", i);
-            console2.log("    to:", safeTxs[i].to);
-            console2.log("    value:", safeTxs[i].value);
-            console2.log("    data:");
-            console2.logBytes(safeTxs[i].data);
-            console2.log("");
-        }
+        string memory safeTxJson = SafeUtils.formatSafeTxJson(safeTxs);
+
+        console2.log("Safe tx JSON (can be imported to Safe Transaction Builder):");
+        console2.log("==== JSON data start ====");
+        console2.log(safeTxJson);
+        console2.log("==== JSON data end ====");
 
         vm.stopBroadcast();
     }
