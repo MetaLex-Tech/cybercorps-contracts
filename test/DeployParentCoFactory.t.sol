@@ -10,6 +10,7 @@ import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {ParentCoFactory} from "../src/ParentCoFactory.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {CompanyOfficer} from "../src/CyberCorpConstants.sol";
+import {BorgAuth} from "../src/libs/auth.sol";
 
 contract DeployParentCoFactoryTest is Test {
     DeploymentConstants.CoreDeployment coreDeployment;
@@ -129,6 +130,29 @@ contract DeployParentCoFactoryTest is Test {
 
         vm.expectRevert();
         corp.companyOfficers(2);
+    }
+
+    function test_parentCoMultisigIsCorpPayable() public {
+        CyberCorp corp = CyberCorp(parentCoFactory.parentCorp());
+        assertEq(corp.companyPayable(), parentCoMultisig);
+    }
+
+    function test_corpPayableIsOwnerOfParentCoFactory() public {
+        uint256 ownerRole = parentCoFactory.AUTH().OWNER_ROLE();
+        assertGe(parentCoFactory.userRoles(parentCoMultisig), ownerRole);
+    }
+
+    function test_parentCoOfficersAreOwnersOfParentCoFactory() public {
+        uint256 ownerRole = parentCoFactory.AUTH().OWNER_ROLE();
+        assertGe(parentCoFactory.userRoles(parentCoOfficer1), ownerRole);
+        assertGe(parentCoFactory.userRoles(parentCoOfficer2), ownerRole);
+    }
+
+    function test_parentCoOfficersAreOwnersOfParentCyberCorp() public {
+        CyberCorp corp = CyberCorp(parentCoFactory.parentCorp());
+        uint256 ownerRole = corp.AUTH().OWNER_ROLE();
+        assertGe(corp.userRoles(parentCoOfficer1), ownerRole);
+        assertGe(corp.userRoles(parentCoOfficer2), ownerRole);
     }
 
     function test_deploySubCorp_revertIfEscrowSignerNotOfficer() public {
