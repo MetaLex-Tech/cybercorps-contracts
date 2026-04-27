@@ -18,45 +18,87 @@ contract DeployParentCoFactoryScript is Script {
         0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
 
     function run() public returns (ParentCoFactory parentCoFactory, GnosisTransaction[] memory safeTxs) {
-        return
-            runWithArgs(
-                // TODO need production arguments
-//                {
-//                    stable: 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913, // Base USDC
-//                }
+        // production
+//        CompanyOfficer[] memory parentCoOfficers = new CompanyOfficer[](3);
+//        parentCoOfficers[0] = CompanyOfficer({
+//            eoa: address(0), // TODO TBD
+//            name: "", // TODO TBC
+//            contact: "", // TODO TBD
+//            title: "Director"
+//        });
+//        parentCoOfficers[1] = CompanyOfficer({
+//            eoa: address(0), // TODO TBD
+//            name: "", // TODO TBC
+//            contact: "", // TODO TBD
+//            title: "Director"
+//        });
+//        parentCoOfficers[2] = CompanyOfficer({
+//            eoa: address(0), // TODO TBD
+//            name: "", // TODO TBC
+//            contact: "", // TODO TBD
+//            title: "Director"
+//        });
+//
+//        return runWithArgs({
+//            chainId: BASE_USDC,
+//            deployerPrivateKey: vm.envUint("PRIVATE_KEY_MAIN"),
+//            saltStr: "ParentCoFactory.deploy.v1",
+//            segCoTemplateId: keccak256("ParentCo.SegCo.v1"),
+//            segCoDocName: "UMIA FOUNDER/OPERATOR LEGAL PACK",
+//            segCoDocUri: "ipfs://bafybeicqgnzaa4zm7nlkrnuuf7xdyhughisnougerjliewynjtdaioiv5e",
+//            boardConsentTemplateId: keccak256("ParentCo.BoardConsent.v1"),
+//            boardConsentName: "ACTION BY UNANIMOUS WRITTEN CONSENT OF THE BOARD OF DIRECTORS OF UMIA LAUNCHER SPC",
+//            boardConsentUri: "ipfs://bafkreicr65qbif4vprnt5l2ovzqjbywwgmnply3sz7neb6qzjbb2njcrw4",
+//            parentCoPayable: 0x299FF70C049c0a6d591319fA7BaD86e24a671436,
+//            parentCoName: "UMIA LAUNCHER, SPC",
+//            parentCoType: "Segregated Portfolio Company",
+//            parentCoJurisdiction: "Cayman Islands",
+//            parentCoContactDetails: "c/o TTA Corporate Services Limited, Harbour Place, 2nd Floor, North Wing, 103 South Church Street, P.O. Box 472, George Town, Grand Cayman KY1-1106, Cayman Islands",
+//            parentCoDefaultDisputeResolution: "confidential, binding arbitration",
+//            parentCoOfficers: parentCoOfficers,
+//            parentEscrowSig: hex"" // TODO TBD
+//        });
 
-                // Base sepolia
-                {
-                    chainId: BASE_SEPOLIA_CHAIN_ID,
-                    deployerPrivateKey: vm.envUint("PRIVATE_KEY_MAIN"),
-                    saltStr: "ParentCoFactory.deploy.v2",
-                    paymentToken: 0x036CbD53842c5426634e7929541eC2318f3dCF7e, // Base Sepolia USDC
-                    segCoTemplateId: keccak256("ParentCo.Test2.SegCo.v1"),
-                    segCoDocName: "FOUNDER/OPERATOR LEGAL PACK",
-                    segCoDocUri: "ipfs://parentco-test-segco-template",
-                    boardConsentTemplateId: keccak256("ParentCo.Test2.BoardConsent.v1"),
-                    boardConsentName: "ParentCo Test Board Consent",
-                    boardConsentUri: "ipfs://parentco-test-board-consent-template",
-                    parentCoPayable: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
-                    parentCoOfficerAddress: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
-                    parentCoName: "Test ParentCo LLC",
-                    parentCoType: "limited liability company",
-                    parentCoJurisdiction: "Delaware",
-                    parentCoContactDetails: "test@parentco.example",
-                    parentCoDefaultDisputeResolution: "binding arbitration",
-                    parentCoOfficerName: "Test ParentCo Officer",
-                    parentCoOfficerContact: "test@parentco.example",
-                    parentCoOfficerTitle: "Director",
-                    parentEscrowSig: hex"73f62ac9b08c813401a02a16a920a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1a"
-                }
-            );
+        // testnet
+        CompanyOfficer[] memory parentCoOfficers = new CompanyOfficer[](2);
+        parentCoOfficers[0] = CompanyOfficer({
+            eoa: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
+            name: "Test Officer 1",
+            contact: "test1@parentco.example",
+            title: "Director"
+        });
+        parentCoOfficers[1] = CompanyOfficer({
+            eoa: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
+            name: "Test Officer 2",
+            contact: "test2@parentco.example",
+            title: "Director"
+        });
+
+        return runWithArgs({
+            chainId: BASE_SEPOLIA_CHAIN_ID,
+            deployerPrivateKey: vm.envUint("PRIVATE_KEY_MAIN"),
+            saltStr: "ParentCoFactory.deploy.v2",
+            segCoTemplateId: keccak256("ParentCo.Test2.SegCo.v1"),
+            segCoDocName: "FOUNDER/OPERATOR LEGAL PACK",
+            segCoDocUri: "ipfs://parentco-test-segco-template",
+            boardConsentTemplateId: keccak256("ParentCo.Test2.BoardConsent.v1"),
+            boardConsentName: "ParentCo Test Board Consent",
+            boardConsentUri: "ipfs://parentco-test-board-consent-template",
+            parentCoPayable: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
+            parentCoName: "Test ParentCo LLC",
+            parentCoType: "limited liability company",
+            parentCoJurisdiction: "Delaware",
+            parentCoContactDetails: "test@parentco.example",
+            parentCoDefaultDisputeResolution: "binding arbitration",
+            parentCoOfficers: parentCoOfficers,
+            parentEscrowSig: hex"73f62ac9b08c813401a02a16a920a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1a"
+        });
     }
 
     function runWithArgs(
         uint256 chainId,
         uint256 deployerPrivateKey,
         string memory saltStr,
-        address paymentToken,
         bytes32 segCoTemplateId,
         string memory segCoDocName,
         string memory segCoDocUri,
@@ -64,19 +106,18 @@ contract DeployParentCoFactoryScript is Script {
         string memory boardConsentName,
         string memory boardConsentUri,
         address parentCoPayable,
-        address parentCoOfficerAddress,
         string memory parentCoName,
         string memory parentCoType,
         string memory parentCoJurisdiction,
         string memory parentCoContactDetails,
         string memory parentCoDefaultDisputeResolution,
-        string memory parentCoOfficerName,
-        string memory parentCoOfficerContact,
-        string memory parentCoOfficerTitle,
+        CompanyOfficer[] memory parentCoOfficers,
         bytes memory parentEscrowSig
     ) public returns (ParentCoFactory parentCoFactory, GnosisTransaction[] memory safeTxs) {
-        DeploymentConstants.CoreDeployment memory deployment = DeploymentConstants
-            .coreV2(chainId);
+        DeploymentConstants.Deps memory deps = DeploymentConstants.deps(chainId);
+        DeploymentConstants.CoreDeployment memory deployment = DeploymentConstants.coreV2(chainId);
+
+        address paymentToken = deps.usdc;
 
         CyberAgreementRegistry registry = CyberAgreementRegistry(
             deployment.cyberAgreementRegistry
@@ -110,10 +151,7 @@ contract DeployParentCoFactoryScript is Script {
 
         // Configure ParentCo officer and escrowed signature BEFORE revoking deployer ownership
 
-        parentCoFactory.setParentCoOfficerEOA(parentCoOfficerAddress);
-        parentCoFactory.setParentCoOfficerName(parentCoOfficerName);
-        parentCoFactory.setParentCoOfficerContact(parentCoOfficerContact);
-        parentCoFactory.setParentCoOfficerTitle(parentCoOfficerTitle);
+        parentCoFactory.setParentCoOfficers(parentCoOfficers);
 
         (
             address parentCorp,
@@ -133,7 +171,8 @@ contract DeployParentCoFactoryScript is Script {
 
         parentCoFactory.setParentCoSignatureHash(parentEscrowSig);
 
-        parentCoFactoryAuth.updateRole(parentCoOfficerAddress, parentCoFactoryAuth.OWNER_ROLE());
+        for (uint256 i = 0; i < parentCoOfficers.length; i++)
+            parentCoFactoryAuth.updateRole(parentCoOfficers[i].eoa, parentCoFactoryAuth.OWNER_ROLE());
         parentCoFactoryAuth.updateRole(parentCoPayable, parentCoFactoryAuth.OWNER_ROLE());
 
         console2.log("ParentCoFactory Auth:", address(parentCoFactoryAuth));

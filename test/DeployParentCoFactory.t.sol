@@ -8,62 +8,122 @@ import {GnosisTransaction} from "../script/libs/safe.sol";
 import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {ParentCoFactory} from "../src/ParentCoFactory.sol";
+import {CyberCorp} from "../src/CyberCorp.sol";
 import {CompanyOfficer} from "../src/CyberCorpConstants.sol";
 
 contract DeployParentCoFactoryTest is Test {
-    DeploymentConstants.CoreDeployment deployment;
+    DeploymentConstants.CoreDeployment coreDeployment;
+    DeploymentConstants.Deps deps;
 
     CyberAgreementRegistry registry;
 
     ParentCoFactory parentCoFactory;
-    address parentCoPayable;
+    address parentCoMultisig;
+    address parentCoOfficer1;
+    uint256 parentCoOfficer1PrivKey;
+    address parentCoOfficer2;
+    uint256 parentCoOfficer2PrivKey;
 
     bytes32 segCoTemplateId = keccak256("ParentCo.SegCo.v1");
     bytes32 boardConsentTemplateId = keccak256("ParentCo.BoardConsent.v1");
 
+    address subCorpPayable;
     address subCorpOfficer;
     uint256 subCorpOfficerPrivKey;
 
     function setUp() public {
-        deployment = DeploymentConstants
-            .coreV2(block.chainid);
+        coreDeployment = DeploymentConstants.coreV2(block.chainid);
+        deps = DeploymentConstants.deps(block.chainid);
 
-        registry = CyberAgreementRegistry(deployment.cyberAgreementRegistry);
+        registry = CyberAgreementRegistry(coreDeployment.cyberAgreementRegistry);
 
-        (parentCoPayable, ) = makeAddrAndKey("parentCoPayable");
+        (parentCoMultisig, ) = makeAddrAndKey("parentCoMultisig");
+        (parentCoOfficer1, parentCoOfficer1PrivKey) = makeAddrAndKey("parentCoOfficer1");
+        (parentCoOfficer2, parentCoOfficer2PrivKey) = makeAddrAndKey("parentCoOfficer2");
+        (subCorpPayable, ) = makeAddrAndKey("subCorpPayable");
         (subCorpOfficer, subCorpOfficerPrivKey) = makeAddrAndKey("subCorpOfficer");
+
+        CompanyOfficer[] memory parentCoOfficers = new CompanyOfficer[](2);
+        parentCoOfficers[0] = CompanyOfficer({
+            eoa: parentCoOfficer1,
+            name: "Test ParentCo Officer 1",
+            contact: "test1@parentco.example",
+            title: "Director"
+        });
+        parentCoOfficers[1] = CompanyOfficer({
+            eoa: parentCoOfficer2,
+            name: "Test ParentCo Officer 2",
+            contact: "test2@parentco.example",
+            title: "Director"
+        });
 
         GnosisTransaction[] memory safeTxs;
         (parentCoFactory, safeTxs) = (new DeployParentCoFactoryScript()).runWithArgs({
             chainId: block.chainid,
             deployerPrivateKey: vm.envUint("PRIVATE_KEY_MAIN"),
             saltStr: "ParentCoFactory.deploy.v1",
-            paymentToken: 0x036CbD53842c5426634e7929541eC2318f3dCF7e, // Base Sepolia USDC
             segCoTemplateId: segCoTemplateId,
             segCoDocName: "FOUNDER/OPERATOR LEGAL PACK",
             segCoDocUri: "ipfs://parentco-test-segco-template",
             boardConsentTemplateId: boardConsentTemplateId,
             boardConsentName: "ParentCo Board Consent",
             boardConsentUri: "ipfs://parentco-test-board-consent-template",
-            parentCoPayable: parentCoPayable,
-            parentCoOfficerAddress: parentCoPayable,
+            parentCoPayable: parentCoMultisig,
             parentCoName: "Test ParentCo LLC",
             parentCoType: "limited liability company",
             parentCoJurisdiction: "Delaware",
             parentCoContactDetails: "test@parentco.example",
             parentCoDefaultDisputeResolution: "binding arbitration",
-            parentCoOfficerName: "Test ParentCo Officer",
-            parentCoOfficerContact: "test@parentco.example",
-            parentCoOfficerTitle: "Director",
+            parentCoOfficers: parentCoOfficers,
             parentEscrowSig: hex"73f62ac9b08c813401a02a16a920a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1a" // TODO simulate escrow sig
         });
 
         // simulate MetaLeX safe executing safe txs
         for (uint256 i = 0; i < safeTxs.length; i++) {
-            vm.prank(deployment.metalexSafe);
+            vm.prank(coreDeployment.metalexSafe);
             (bool success,) = safeTxs[i].to.call{value: safeTxs[i].value}(safeTxs[i].data);
             vm.assertTrue(success);
         }
+    }
+
+    function test_parentCoOfficersInFactory() public {
+        (address eoa0, string memory name0, string memory contact0, string memory title0) = parentCoFactory.parentCoOfficers(0);
+        assertEq(eoa0, parentCoOfficer1);
+        assertEq(name0, "Test ParentCo Officer 1");
+        assertEq(contact0, "test1@parentco.example");
+        assertEq(title0, "Director");
+
+        (address eoa1, string memory name1, string memory contact1, string memory title1) = parentCoFactory.parentCoOfficers(1);
+        assertEq(eoa1, parentCoOfficer2);
+        assertEq(name1, "Test ParentCo Officer 2");
+        assertEq(contact1, "test2@parentco.example");
+        assertEq(title1, "Director");
+
+        vm.expectRevert();
+        parentCoFactory.parentCoOfficers(2);
+    }
+
+    function test_parentCorpOfficersInCyberCorp() public {
+        CyberCorp corp = CyberCorp(parentCoFactory.parentCorp());
+
+        (address eoa0, string memory name0, string memory contact0, string memory title0) = corp.companyOfficers(0);
+        assertEq(eoa0, parentCoOfficer1);
+        assertEq(name0, "Test ParentCo Officer 1");
+        assertEq(contact0, "test1@parentco.example");
+        assertEq(title0, "Director");
+
+        (address eoa1, string memory name1, string memory contact1, string memory title1) = corp.companyOfficers(1);
+        assertEq(eoa1, parentCoOfficer2);
+        assertEq(name1, "Test ParentCo Officer 2");
+        assertEq(contact1, "test2@parentco.example");
+        assertEq(title1, "Director");
+
+        assertTrue(corp.isCyberCORPOfficer(parentCoOfficer1));
+        assertTrue(corp.isCyberCORPOfficer(parentCoOfficer2));
+        assertFalse(corp.isCyberCORPOfficer(parentCoMultisig));
+
+        vm.expectRevert();
+        corp.companyOfficers(2);
     }
 
     // TODO WIP: verify results
@@ -99,7 +159,7 @@ contract DeployParentCoFactoryTest is Test {
 
         // Pre-compute agreement id and signer signature expected by signContractFor.
         address[] memory agreementParties = new address[](2);
-        agreementParties[0] = parentCoPayable;
+        agreementParties[0] = parentCoOfficer1;
         agreementParties[1] = subCorpOfficer;
         bytes32 agreementId = keccak256(
             abi.encode(segCoTemplateId, subCorpSalt, globalValues, agreementParties)
@@ -141,7 +201,7 @@ contract DeployParentCoFactoryTest is Test {
             subCompanyJurisdiction,
             subCompanyContact,
             subDisputeResolution,
-            parentCoPayable,
+            subCorpPayable,
             subOfficer,
             segCoTemplateId,
             boardConsentTemplateId,

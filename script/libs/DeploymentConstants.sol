@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 library DeploymentConstants {
     error UnsupportedChain(uint256 chainId);
 
+    uint256 internal constant ETH = 1;
     uint256 internal constant BASE = 8453;
 
     uint256 internal constant ETH_SEPOLIA = 11155111;
@@ -23,6 +24,10 @@ library DeploymentConstants {
         address lexchex;
         address lexchexMinter;
         address lexchexCondition;
+    }
+
+    struct Deps {
+        address usdc;
     }
 
     /// @notice Latest CyberCorps V2 deployment constants.
@@ -67,6 +72,32 @@ library DeploymentConstants {
                     lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42
                 });
+        }
+    }
+
+    function deps(uint256 chainId)
+        internal
+        pure
+        returns (Deps memory deps)
+    {
+        if (chainId == ETH) {
+            return Deps({
+                usdc: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+            });
+        } else if (chainId == BASE) {
+            return Deps({
+                usdc: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+            });
+        } else if (chainId == ETH_SEPOLIA) {
+            return Deps({
+                usdc: 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
+            });
+        } else if (chainId == BASE_SEPOLIA) {
+            return Deps({
+                usdc: 0x036CbD53842c5426634e7929541eC2318f3dCF7e
+            });
+        } else {
+            revert UnsupportedChain(chainId);
         }
     }
 }
