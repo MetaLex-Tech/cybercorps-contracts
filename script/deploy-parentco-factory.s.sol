@@ -7,6 +7,7 @@ import {ParentCoFactory} from "../src/ParentCoFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
+import {GnosisTransaction} from "./libs/safe.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {CompanyOfficer} from "../src/CyberCorpConstants.sol";
@@ -16,7 +17,7 @@ contract DeployParentCoFactoryScript is Script {
     address internal constant BASE_USDC =
         0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
 
-    function run() public returns (ParentCoFactory parentCoFactory) {
+    function run() public returns (ParentCoFactory parentCoFactory, GnosisTransaction[] memory safeTxs) {
         return
             runWithArgs(
                 // TODO need production arguments
@@ -36,8 +37,8 @@ contract DeployParentCoFactoryScript is Script {
                     boardConsentTemplateId: keccak256("ParentCo.Test2.BoardConsent.v1"),
                     boardConsentName: "ParentCo Test Board Consent",
                     boardConsentUri: "ipfs://parentco-test-board-consent-template",
-                    parentCorpPayable: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
-                    parentCorpOfficerAddress: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
+                    parentCoPayable: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
+                    parentCoOfficerAddress: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
                     parentCoName: "Test ParentCo LLC",
                     parentCoType: "limited liability company",
                     parentCoJurisdiction: "Delaware",
@@ -46,8 +47,7 @@ contract DeployParentCoFactoryScript is Script {
                     parentCoOfficerName: "Test ParentCo Officer",
                     parentCoOfficerContact: "test@parentco.example",
                     parentCoOfficerTitle: "Director",
-                    parentEscrowSig: hex"73f62ac9b08c813401a02a16a920a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1a",
-                    deployTestSubCorp: true
+                    parentEscrowSig: hex"73f62ac9b08c813401a02a16a920a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1a"
                 }
             );
     }
@@ -73,9 +73,8 @@ contract DeployParentCoFactoryScript is Script {
         string memory parentCoOfficerName,
         string memory parentCoOfficerContact,
         string memory parentCoOfficerTitle,
-        bytes memory parentEscrowSig,
-        bool deployTestSubCorp
-    ) public returns (ParentCoFactory parentCoFactory) {
+        bytes memory parentEscrowSig
+    ) public returns (ParentCoFactory parentCoFactory, GnosisTransaction[] memory safeTxs) {
         DeploymentConstants.CoreDeployment memory deployment = DeploymentConstants
             .coreV2(chainId);
 
@@ -84,7 +83,7 @@ contract DeployParentCoFactoryScript is Script {
         );
 
         address deployerAddress = vm.addr(deployerPrivateKey);
-        bytes32 salt = bytes32(keccak256(saltStr));
+        bytes32 salt = bytes32(keccak256(bytes(saltStr)));
 
         vm.startBroadcast(deployerPrivateKey);
 
@@ -123,7 +122,7 @@ contract DeployParentCoFactoryScript is Script {
             address parentDealMgr,
             address parentRoundMgr
         ) = parentCoFactory.createParentCorp(
-                bytes32(keccak256(parentCoName)), // use parent corp name as the salt str
+                bytes32(keccak256(bytes(parentCoName))), // use parent corp name as the salt str
                 parentCoName,
                 parentCoType,
                 parentCoJurisdiction,
@@ -155,7 +154,6 @@ contract DeployParentCoFactoryScript is Script {
         console2.log("ParentRoundMgr:", parentRoundMgr);
         console2.log("");
 
-        // TODO create multisig txs instead
         // Create (or no-op if already present) templates used by deployCorpContractFor.
 
         string[] memory globalFields = new string[](8);
@@ -172,136 +170,40 @@ contract DeployParentCoFactoryScript is Script {
         partyFields[0] = "name";
         partyFields[1] = "contactDetails";
 
-        try
-            registry.createTemplate(
+        safeTxs = new GnosisTransaction[](2);
+        // create Founder Sig Pack template
+        safeTxs[0] = GnosisTransaction({
+            to: address(registry),
+            value: 0,
+            data: abi.encodeWithSelector(
+                registry.createTemplate.selector,
                 segCoTemplateId,
                 segCoDocName,
                 segCoDocUri,
                 globalFields,
                 partyFields
             )
-        {
-            console2.log("Founder Sig Pack template created:");
-            console2.log(segCoTemplateId);
-            console2.log("  name: %s", segCoDocName);
-            console2.log("  URI: %s", segCoDocUri);
-        } catch {
-            console2.log("Founder Sig Pack template already exists, skipped");
-        }
-
-        try
-            registry.createTemplate(
+        });
+        safeTxs[1] = GnosisTransaction({
+            to: address(registry),
+            value: 0,
+            data: abi.encodeWithSelector(
+                registry.createTemplate.selector,
                 boardConsentTemplateId,
                 boardConsentName,
                 boardConsentUri,
                 globalFields,
                 partyFields
             )
-        {
-            console2.log("Board Consent template created:");
-            console2.log(boardConsentTemplateId);
-            console2.log("  name: %s", boardConsentName);
-            console2.log("  URI: %s", boardConsentUri);
-        } catch {
-            console2.log("Board Consent template already exists, skipped");
-        }
+        });
 
-        console2.log("");
-
-        if (deployTestSubCorp) {
-
-            // Build SubCorp inputs matching ParentCoFactory's strict field checks.
-            uint256 subCorpSalt = uint256(keccak256("ParentCo.Test2.SubCorp.v1"));
-            string memory subCompanyName = "Test SubCo SPV 1";
-            string memory subCompanyType = "series limited liability company";
-            string memory subCompanyJurisdiction = "Delaware";
-            string memory subCompanyContact = "subco@parentco.example";
-            string memory subDisputeResolution = "binding arbitration";
-
-            string[] memory globalValues = new string[](8);
-            globalValues[0] = "Test Founder";
-            globalValues[1] = "Test ParentCo Enterprise";
-            globalValues[2] = subCompanyName;
-            globalValues[3] = subCompanyType;
-            globalValues[4] = subCompanyJurisdiction;
-            globalValues[5] = subCompanyContact;
-            globalValues[6] = "TSC1";
-            globalValues[7] = "Test SubCo One";
-
-            string[] memory partyValues = new string[](2);
-            partyValues[0] = "Test Deployer Officer";
-            partyValues[1] = "deployer@parentco.example";
-
-            CompanyOfficer memory subOfficer = CompanyOfficer({
-                eoa: deployerAddress,
-                name: partyValues[0],
-                contact: partyValues[1],
-                title: "Founder"
-            });
-
-            // Pre-compute agreement id and signer signature expected by signContractFor.
-            address[] memory agreementParties = new address[](2);
-            agreementParties[0] = parentCoOfficerAddress;
-            agreementParties[1] = deployerAddress;
-            bytes32 agreementId = keccak256(
-                abi.encode(segCoTemplateId, subCorpSalt, globalValues, agreementParties)
-            );
-
-            (
-                string memory legalContractUri,
-                ,
-                string[] memory templateGlobalFields,
-                string[] memory templatePartyFields
-            ) = registry.getTemplateDetails(segCoTemplateId);
-
-            bytes memory deployerSignature = CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                registry.DOMAIN_SEPARATOR(),
-                registry.SIGNATUREDATA_TYPEHASH(),
-                agreementId,
-                legalContractUri,
-                templateGlobalFields,
-                templatePartyFields,
-                globalValues,
-                partyValues,
-                deployerPrivateKey
-            );
-
-            (
-                address subCorp,
-                address subAuth,
-                address subIssuance,
-                address subDealMgr,
-                address subRoundMgr,
-                address[] memory subCertPrinters,
-                bytes32 subAgreementId,
-                uint256[] memory subCertIds
-            ) = parentCoFactory.deployCorpContractFor(
-                    subCorpSalt,
-                    subCompanyName,
-                    subCompanyType,
-                    subCompanyJurisdiction,
-                    subCompanyContact,
-                    subDisputeResolution,
-                    parentCoPayable,
-                    subOfficer,
-                segCoTemplateId,
-                    boardConsentTemplateId,
-                    globalValues,
-                    partyValues,
-                    deployerSignature,
-                    deployerAddress
-                );
-
-            console2.log("SubCorp:", subCorp);
-            console2.log("SubAuth:", subAuth);
-            console2.log("SubIssuance:", subIssuance);
-            console2.log("SubDealMgr:", subDealMgr);
-            console2.log("SubRoundMgr:", subRoundMgr);
-            console2.log("SubAgreementId:");
-            console2.logBytes32(subAgreementId);
-            console2.log("SubCertPrinters count:", subCertPrinters.length);
-            console2.log("SubCertIds count:", subCertIds.length);
+        console2.log("Safe Txs for creating templates:");
+        for (uint256 i = 0 ; i < safeTxs.length ; i++) {
+            console2.log("  #", i);
+            console2.log("    to:", safeTxs[i].to);
+            console2.log("    value:", safeTxs[i].value);
+            console2.log("    data:");
+            console2.logBytes(safeTxs[i].data);
             console2.log("");
         }
 
