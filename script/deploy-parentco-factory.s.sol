@@ -55,8 +55,7 @@ contract DeployParentCoFactoryScript is Script {
 //            parentCoJurisdiction: "Cayman Islands",
 //            parentCoContactDetails: "c/o TTA Corporate Services Limited, Harbour Place, 2nd Floor, North Wing, 103 South Church Street, P.O. Box 472, George Town, Grand Cayman KY1-1106, Cayman Islands",
 //            parentCoDefaultDisputeResolution: "confidential, binding arbitration",
-//            parentCoOfficers: parentCoOfficers,
-//            parentEscrowSig: hex"" // TODO TBD
+//            parentCoOfficers: parentCoOfficers
 //        });
 
         // testnet
@@ -90,8 +89,7 @@ contract DeployParentCoFactoryScript is Script {
             parentCoJurisdiction: "Delaware",
             parentCoContactDetails: "test@parentco.example",
             parentCoDefaultDisputeResolution: "binding arbitration",
-            parentCoOfficers: parentCoOfficers,
-            parentEscrowSig: hex"73f62ac9b08c813401a02a16a920a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1a"
+            parentCoOfficers: parentCoOfficers
         });
     }
 
@@ -111,8 +109,7 @@ contract DeployParentCoFactoryScript is Script {
         string memory parentCoJurisdiction,
         string memory parentCoContactDetails,
         string memory parentCoDefaultDisputeResolution,
-        CompanyOfficer[] memory parentCoOfficers,
-        bytes memory parentEscrowSig
+        CompanyOfficer[] memory parentCoOfficers
     ) public returns (ParentCoFactory parentCoFactory, GnosisTransaction[] memory safeTxs) {
         DeploymentConstants.Deps memory deps = DeploymentConstants.deps(chainId);
         DeploymentConstants.CoreDeployment memory deployment = DeploymentConstants.coreV2(chainId);
@@ -168,8 +165,6 @@ contract DeployParentCoFactoryScript is Script {
                 parentCoDefaultDisputeResolution,
                 parentCoPayable
             );
-
-        parentCoFactory.setParentCoSignatureHash(parentEscrowSig);
 
         for (uint256 i = 0; i < parentCoOfficers.length; i++)
             parentCoFactoryAuth.updateRole(parentCoOfficers[i].eoa, parentCoFactoryAuth.OWNER_ROLE());

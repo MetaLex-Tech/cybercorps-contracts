@@ -74,8 +74,7 @@ contract DeployParentCoFactoryTest is Test {
             parentCoJurisdiction: "Delaware",
             parentCoContactDetails: "test@parentco.example",
             parentCoDefaultDisputeResolution: "binding arbitration",
-            parentCoOfficers: parentCoOfficers,
-            parentEscrowSig: hex"73f62ac9b08c813401a02a16a920a106e525ac65dff992dccfd2cb42e5423db6725bb1b4d6e0244a635665f4965514512253613e3b032491f7ec85c2f657154e1a" // TODO simulate escrow sig
+            parentCoOfficers: parentCoOfficers
         });
 
         // simulate MetaLeX safe executing safe txs
@@ -84,6 +83,12 @@ contract DeployParentCoFactoryTest is Test {
             (bool success,) = safeTxs[i].to.call{value: safeTxs[i].value}(safeTxs[i].data);
             vm.assertTrue(success);
         }
+
+        // Set escrow sig: parentCoOfficer1 signs the factory-specific EIP-712 authorization
+        bytes32 escrowDigest = parentCoFactory.escrowAuthorizationHash();
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(parentCoOfficer1PrivKey, escrowDigest);
+        vm.prank(parentCoOfficer1);
+        parentCoFactory.setParentCoSignatureHash(abi.encodePacked(r, s, v));
     }
 
     function test_parentCoOfficersInFactory() public {
@@ -124,6 +129,42 @@ contract DeployParentCoFactoryTest is Test {
 
         vm.expectRevert();
         corp.companyOfficers(2);
+    }
+
+    function test_deploySubCorp_revertIfEscrowSignerNotOfficer() public {
+        (, uint256 nonOfficerKey) = makeAddrAndKey("nonOfficer");
+        bytes32 escrowDigest = parentCoFactory.escrowAuthorizationHash();
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(nonOfficerKey, escrowDigest);
+        vm.prank(parentCoOfficer1);
+        parentCoFactory.setParentCoSignatureHash(abi.encodePacked(r, s, v));
+
+        CompanyOfficer memory dummyOfficer = CompanyOfficer({eoa: address(0), name: "", contact: "", title: ""});
+        string[] memory empty = new string[](0);
+        vm.expectRevert(ParentCoFactory.UnauthorizedEscrowSigner.selector);
+        parentCoFactory.deployCorpContractFor(
+            0, "", "", "", "", "", address(0), dummyOfficer,
+            bytes32(0), bytes32(0), empty, empty, hex"", address(0)
+        );
+    }
+
+    function test_deploySubCorp_revertIfEscrowSigForWrongFactory() public {
+        // Officer signs a valid EIP-712 sig but with address(0) as the factory field
+        bytes32 wrongDigest = keccak256(abi.encodePacked(
+            "\x19\x01",
+            parentCoFactory.DOMAIN_SEPARATOR(),
+            keccak256(abi.encode(parentCoFactory.ESCROW_AUTHORIZATION_TYPEHASH(), address(0)))
+        ));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(parentCoOfficer1PrivKey, wrongDigest);
+        vm.prank(parentCoOfficer1);
+        parentCoFactory.setParentCoSignatureHash(abi.encodePacked(r, s, v));
+
+        CompanyOfficer memory dummyOfficer = CompanyOfficer({eoa: address(0), name: "", contact: "", title: ""});
+        string[] memory empty = new string[](0);
+        vm.expectRevert(ParentCoFactory.UnauthorizedEscrowSigner.selector);
+        parentCoFactory.deployCorpContractFor(
+            0, "", "", "", "", "", address(0), dummyOfficer,
+            bytes32(0), bytes32(0), empty, empty, hex"", address(0)
+        );
     }
 
     // TODO WIP: verify results
