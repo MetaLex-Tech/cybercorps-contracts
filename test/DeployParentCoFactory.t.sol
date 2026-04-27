@@ -35,6 +35,15 @@ contract DeployParentCoFactoryTest is Test {
     address subCorpOfficer;
     uint256 subCorpOfficerPrivKey;
 
+    struct SubCorpResult {
+        address subCorp;
+        address subAuth;
+        address subIssuance;
+        address subDealMgr;
+        bytes32 expectedSegCoId;
+        bytes32 expectedBoardConsentId;
+    }
+
     function setUp() public {
         coreDeployment = DeploymentConstants.coreV2(block.chainid);
         deps = DeploymentConstants.deps(block.chainid);
@@ -91,10 +100,96 @@ contract DeployParentCoFactoryTest is Test {
         }
 
         // Set escrow sig: parentCoOfficer1 signs the factory-specific EIP-712 authorization
-        bytes32 escrowDigest = parentCoFactory.escrowAuthorizationHash();
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(parentCoOfficer1PrivKey, escrowDigest);
+        bytes memory escrowSig = _createParentCoSignatureHash(parentCoOfficer1PrivKey);
         vm.prank(parentCoOfficer1);
-        parentCoFactory.setParentCoSignatureHash(abi.encodePacked(r, s, v));
+        parentCoFactory.setParentCoSignatureHash(escrowSig);
+    }
+
+    function _deploySubCorp() internal returns (SubCorpResult memory r) {
+        uint256 subCorpSalt = uint256(keccak256("ParentCo.Test2.SubCorp.v1"));
+        string memory subCompanyName = "Test SubCo SPV 1";
+        string memory subCompanyType = "series limited liability company";
+        string memory subCompanyJurisdiction = "Delaware";
+        string memory subCompanyContact = "subco@parentco.example";
+        string memory subDisputeResolution = "binding arbitration";
+
+        string[] memory globalValues = new string[](8);
+        globalValues[0] = "Test Founder";
+        globalValues[1] = "Test ParentCo Enterprise";
+        globalValues[2] = subCompanyName;
+        globalValues[3] = subCompanyType;
+        globalValues[4] = subCompanyJurisdiction;
+        globalValues[5] = subCompanyContact;
+        globalValues[6] = "TSC1";
+        globalValues[7] = "Test SubCo One";
+
+        string[] memory partyValues = new string[](2);
+        partyValues[0] = "Test Deployer Officer";
+        partyValues[1] = "deployer@parentco.example";
+
+        CompanyOfficer memory subOfficer = CompanyOfficer({
+            eoa: subCorpOfficer,
+            name: partyValues[0],
+            contact: partyValues[1],
+            title: "Founder"
+        });
+
+        // Pre-compute expected agreement IDs (registry: keccak256(abi.encode(templateId, salt, globalValues, parties)))
+        // parentCoOfficer1 is the escrow signer set in setUp
+        address[] memory segCoParties = new address[](2);
+        segCoParties[0] = parentCoOfficer1;
+        segCoParties[1] = subCorpOfficer;
+        r.expectedSegCoId = keccak256(abi.encode(segCoTemplateId, subCorpSalt, globalValues, segCoParties));
+
+        address[] memory boardConsentParties = new address[](1);
+        boardConsentParties[0] = parentCoOfficer1;
+        r.expectedBoardConsentId = keccak256(abi.encode(boardConsentTemplateId, subCorpSalt, globalValues, boardConsentParties));
+
+        (
+            string memory legalContractUri,
+            ,
+            string[] memory templateGlobalFields,
+            string[] memory templatePartyFields
+        ) = registry.getTemplateDetails(segCoTemplateId);
+
+        bytes memory subCorpOwnerSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            r.expectedSegCoId,
+            legalContractUri,
+            templateGlobalFields,
+            templatePartyFields,
+            globalValues,
+            partyValues,
+            subCorpOfficerPrivKey
+        );
+
+        (
+            r.subCorp,
+            r.subAuth,
+            r.subIssuance,
+            r.subDealMgr,
+            ,
+            ,
+            ,
+
+        ) = parentCoFactory.deployCorpContractFor(
+            subCorpSalt,
+            subCompanyName,
+            subCompanyType,
+            subCompanyJurisdiction,
+            subCompanyContact,
+            subDisputeResolution,
+            subCorpPayable,
+            subOfficer,
+            segCoTemplateId,
+            boardConsentTemplateId,
+            globalValues,
+            partyValues,
+            subCorpOwnerSignature,
+            subCorpOfficer
+        );
     }
 
     function test_parentCoOfficersInFactory() public {
@@ -166,10 +261,9 @@ contract DeployParentCoFactoryTest is Test {
 
     function test_deploySubCorp_revertIfEscrowSignerNotOfficer() public {
         (, uint256 nonOfficerKey) = makeAddrAndKey("nonOfficer");
-        bytes32 escrowDigest = parentCoFactory.escrowAuthorizationHash();
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(nonOfficerKey, escrowDigest);
+        bytes memory nonOfficerSig = _createParentCoSignatureHash(nonOfficerKey);
         vm.prank(parentCoOfficer1);
-        parentCoFactory.setParentCoSignatureHash(abi.encodePacked(r, s, v));
+        parentCoFactory.setParentCoSignatureHash(nonOfficerSig);
 
         CompanyOfficer memory dummyOfficer = CompanyOfficer({eoa: address(0), name: "", contact: "", title: ""});
         string[] memory empty = new string[](0);
@@ -200,9 +294,61 @@ contract DeployParentCoFactoryTest is Test {
         );
     }
 
-    // TODO WIP: verify results
-    function test_deploySubCorp() public {
-        // Build SubCorp inputs matching ParentCoFactory's strict field checks.
+    function test_deploySubCorp_returnsNonZeroAddresses() public {
+        SubCorpResult memory r = _deploySubCorp();
+        assertTrue(r.subCorp != address(0));
+        assertTrue(r.subAuth != address(0));
+        assertTrue(r.subIssuance != address(0));
+        assertTrue(r.subDealMgr != address(0));
+        assertTrue(r.subCorp != r.subAuth);
+        assertTrue(r.subCorp != r.subIssuance);
+        assertTrue(r.subCorp != r.subDealMgr);
+    }
+
+    function test_deploySubCorp_subCorpOfficerCorrect() public {
+        SubCorpResult memory r = _deploySubCorp();
+        CyberCorp corp = CyberCorp(r.subCorp);
+
+        (address eoa, string memory name, string memory contact, string memory title) = corp.companyOfficers(0);
+        assertEq(eoa, subCorpOfficer);
+        assertEq(name, "Test Deployer Officer");
+        assertEq(contact, "deployer@parentco.example");
+        assertEq(title, "Founder");
+        assertTrue(corp.isCyberCORPOfficer(subCorpOfficer));
+    }
+
+    function test_deploySubCorp_subCorpPayableCorrect() public {
+        SubCorpResult memory r = _deploySubCorp();
+        assertEq(CyberCorp(r.subCorp).companyPayable(), subCorpPayable);
+    }
+
+    function test_deploySubCorp_subCorpAuthRoles() public {
+        SubCorpResult memory r = _deploySubCorp();
+        BorgAuth subAuth = BorgAuth(r.subAuth);
+        uint256 ownerRole = subAuth.OWNER_ROLE();
+        assertGe(subAuth.userRoles(subCorpOfficer), ownerRole);
+    }
+
+    function test_deploySubCorp_agreementSignedByBothParties() public {
+        SubCorpResult memory r = _deploySubCorp();
+        assertTrue(registry.hasSigned(r.expectedSegCoId, parentCoOfficer1));
+        assertTrue(registry.hasSigned(r.expectedSegCoId, subCorpOfficer));
+        assertTrue(registry.allPartiesSigned(r.expectedSegCoId));
+    }
+
+    function test_deploySubCorp_boardConsentSigned() public {
+        SubCorpResult memory r = _deploySubCorp();
+        assertTrue(registry.hasSigned(r.expectedBoardConsentId, parentCoOfficer1));
+        address[] memory parties = registry.getParties(r.expectedBoardConsentId);
+        assertEq(parties.length, 1);
+        assertEq(parties[0], parentCoOfficer1);
+    }
+
+    function test_deploySubCorp_officer2CanSetEscrowAndDeploy() public {
+        bytes memory sig = _createParentCoSignatureHash(parentCoOfficer2PrivKey);
+        vm.prank(parentCoOfficer2);
+        parentCoFactory.setParentCoSignatureHash(sig);
+
         uint256 subCorpSalt = uint256(keccak256("ParentCo.Test2.SubCorp.v1"));
         string memory subCompanyName = "Test SubCo SPV 1";
         string memory subCompanyType = "series limited liability company";
@@ -231,13 +377,11 @@ contract DeployParentCoFactoryTest is Test {
             title: "Founder"
         });
 
-        // Pre-compute agreement id and signer signature expected by signContractFor.
-        address[] memory agreementParties = new address[](2);
-        agreementParties[0] = parentCoOfficer1;
-        agreementParties[1] = subCorpOfficer;
-        bytes32 agreementId = keccak256(
-            abi.encode(segCoTemplateId, subCorpSalt, globalValues, agreementParties)
-        );
+        // With officer2 as escrow signer, party[0] = parentCoOfficer2
+        address[] memory segCoParties = new address[](2);
+        segCoParties[0] = parentCoOfficer2;
+        segCoParties[1] = subCorpOfficer;
+        bytes32 agreementId = keccak256(abi.encode(segCoTemplateId, subCorpSalt, globalValues, segCoParties));
 
         (
             string memory legalContractUri,
@@ -246,7 +390,7 @@ contract DeployParentCoFactoryTest is Test {
             string[] memory templatePartyFields
         ) = registry.getTemplateDetails(segCoTemplateId);
 
-        bytes memory subCorpOwnerSignature = CyberAgreementUtils.signAgreementTypedData(
+        bytes memory agreementSig = CyberAgreementUtils.signAgreementTypedData(
             vm,
             registry.DOMAIN_SEPARATOR(),
             registry.SIGNATUREDATA_TYPEHASH(),
@@ -259,16 +403,7 @@ contract DeployParentCoFactoryTest is Test {
             subCorpOfficerPrivKey
         );
 
-        (
-            address subCorp,
-            address subAuth,
-            address subIssuance,
-            address subDealMgr,
-            address subRoundMgr,
-            address[] memory subCertPrinters,
-            bytes32 subAgreementId,
-            uint256[] memory subCertIds
-        ) = parentCoFactory.deployCorpContractFor(
+        (address subCorp,,,,,, bytes32 retId,) = parentCoFactory.deployCorpContractFor(
             subCorpSalt,
             subCompanyName,
             subCompanyType,
@@ -281,19 +416,257 @@ contract DeployParentCoFactoryTest is Test {
             boardConsentTemplateId,
             globalValues,
             partyValues,
-            subCorpOwnerSignature,
+            agreementSig,
             subCorpOfficer
         );
 
-        console2.log("SubCorp:", subCorp);
-        console2.log("SubAuth:", subAuth);
-        console2.log("SubIssuance:", subIssuance);
-        console2.log("SubDealMgr:", subDealMgr);
-        console2.log("SubRoundMgr:", subRoundMgr);
-        console2.log("SubAgreementId:");
-        console2.logBytes32(subAgreementId);
-        console2.log("SubCertPrinters count:", subCertPrinters.length);
-        console2.log("SubCertIds count:", subCertIds.length);
-        console2.log("");
+        assertTrue(subCorp != address(0));
+        assertTrue(registry.hasSigned(agreementId, parentCoOfficer2));
+        assertTrue(registry.hasSigned(agreementId, subCorpOfficer));
+    }
+
+    function test_deploySubCorp_revertIfPartyValuesTooShort() public {
+        uint256 subCorpSalt = uint256(keccak256("ParentCo.Test2.SubCorp.v1"));
+        CompanyOfficer memory subOfficer = CompanyOfficer({
+            eoa: subCorpOfficer,
+            name: "Test Deployer Officer",
+            contact: "deployer@parentco.example",
+            title: "Founder"
+        });
+        string[] memory globalValues = new string[](8);
+        globalValues[0] = "Test Founder";
+        globalValues[1] = "Test ParentCo Enterprise";
+        globalValues[2] = "Test SubCo SPV 1";
+        globalValues[3] = "series limited liability company";
+        globalValues[4] = "Delaware";
+        globalValues[5] = "subco@parentco.example";
+        globalValues[6] = "TSC1";
+        globalValues[7] = "Test SubCo One";
+        string[] memory shortPartyValues = new string[](1);
+        shortPartyValues[0] = "Test Deployer Officer";
+
+        vm.expectRevert(ParentCoFactory.GlobalOrPartyValuesMismatch.selector);
+        parentCoFactory.deployCorpContractFor(
+            subCorpSalt, "Test SubCo SPV 1", "series limited liability company",
+            "Delaware", "subco@parentco.example", "binding arbitration",
+            subCorpPayable, subOfficer, segCoTemplateId, boardConsentTemplateId,
+            globalValues, shortPartyValues, hex"", subCorpOfficer
+        );
+    }
+
+    function test_deploySubCorp_revertIfOfficerNameMismatch() public {
+        uint256 subCorpSalt = uint256(keccak256("ParentCo.Test2.SubCorp.v1"));
+        CompanyOfficer memory subOfficer = CompanyOfficer({
+            eoa: subCorpOfficer,
+            name: "Test Deployer Officer",
+            contact: "deployer@parentco.example",
+            title: "Founder"
+        });
+        string[] memory globalValues = new string[](8);
+        globalValues[0] = "Test Founder";
+        globalValues[1] = "Test ParentCo Enterprise";
+        globalValues[2] = "Test SubCo SPV 1";
+        globalValues[3] = "series limited liability company";
+        globalValues[4] = "Delaware";
+        globalValues[5] = "subco@parentco.example";
+        globalValues[6] = "TSC1";
+        globalValues[7] = "Test SubCo One";
+        string[] memory partyValues = new string[](2);
+        partyValues[0] = "WRONG NAME"; // != officer.name
+        partyValues[1] = "deployer@parentco.example";
+
+        vm.expectRevert(ParentCoFactory.GlobalOrPartyValuesMismatch.selector);
+        parentCoFactory.deployCorpContractFor(
+            subCorpSalt, "Test SubCo SPV 1", "series limited liability company",
+            "Delaware", "subco@parentco.example", "binding arbitration",
+            subCorpPayable, subOfficer, segCoTemplateId, boardConsentTemplateId,
+            globalValues, partyValues, hex"", subCorpOfficer
+        );
+    }
+
+    function test_deploySubCorp_revertIfOfficerContactMismatch() public {
+        uint256 subCorpSalt = uint256(keccak256("ParentCo.Test2.SubCorp.v1"));
+        CompanyOfficer memory subOfficer = CompanyOfficer({
+            eoa: subCorpOfficer,
+            name: "Test Deployer Officer",
+            contact: "deployer@parentco.example",
+            title: "Founder"
+        });
+        string[] memory globalValues = new string[](8);
+        globalValues[0] = "Test Founder";
+        globalValues[1] = "Test ParentCo Enterprise";
+        globalValues[2] = "Test SubCo SPV 1";
+        globalValues[3] = "series limited liability company";
+        globalValues[4] = "Delaware";
+        globalValues[5] = "subco@parentco.example";
+        globalValues[6] = "TSC1";
+        globalValues[7] = "Test SubCo One";
+        string[] memory partyValues = new string[](2);
+        partyValues[0] = "Test Deployer Officer";
+        partyValues[1] = "wrong@email.com"; // != officer.contact
+
+        vm.expectRevert(ParentCoFactory.GlobalOrPartyValuesMismatch.selector);
+        parentCoFactory.deployCorpContractFor(
+            subCorpSalt, "Test SubCo SPV 1", "series limited liability company",
+            "Delaware", "subco@parentco.example", "binding arbitration",
+            subCorpPayable, subOfficer, segCoTemplateId, boardConsentTemplateId,
+            globalValues, partyValues, hex"", subCorpOfficer
+        );
+    }
+
+    function test_deploySubCorp_revertIfCompanyNameMismatch() public {
+        uint256 subCorpSalt = uint256(keccak256("ParentCo.Test2.SubCorp.v1"));
+        CompanyOfficer memory subOfficer = CompanyOfficer({
+            eoa: subCorpOfficer,
+            name: "Test Deployer Officer",
+            contact: "deployer@parentco.example",
+            title: "Founder"
+        });
+        string[] memory globalValues = new string[](8);
+        globalValues[0] = "Test Founder";
+        globalValues[1] = "Test ParentCo Enterprise";
+        globalValues[2] = "WRONG COMPANY NAME"; // != companyName arg below
+        globalValues[3] = "series limited liability company";
+        globalValues[4] = "Delaware";
+        globalValues[5] = "subco@parentco.example";
+        globalValues[6] = "TSC1";
+        globalValues[7] = "Test SubCo One";
+        string[] memory partyValues = new string[](2);
+        partyValues[0] = "Test Deployer Officer";
+        partyValues[1] = "deployer@parentco.example";
+
+        vm.expectRevert(ParentCoFactory.GlobalOrPartyValuesMismatch.selector);
+        parentCoFactory.deployCorpContractFor(
+            subCorpSalt, "Test SubCo SPV 1", "series limited liability company",
+            "Delaware", "subco@parentco.example", "binding arbitration",
+            subCorpPayable, subOfficer, segCoTemplateId, boardConsentTemplateId,
+            globalValues, partyValues, hex"", subCorpOfficer
+        );
+    }
+
+    function test_deploySubCorp_revertIfCompanyTypeMismatch() public {
+        uint256 subCorpSalt = uint256(keccak256("ParentCo.Test2.SubCorp.v1"));
+        CompanyOfficer memory subOfficer = CompanyOfficer({
+            eoa: subCorpOfficer,
+            name: "Test Deployer Officer",
+            contact: "deployer@parentco.example",
+            title: "Founder"
+        });
+        string[] memory globalValues = new string[](8);
+        globalValues[0] = "Test Founder";
+        globalValues[1] = "Test ParentCo Enterprise";
+        globalValues[2] = "Test SubCo SPV 1";
+        globalValues[3] = "WRONG TYPE"; // != companyType arg below
+        globalValues[4] = "Delaware";
+        globalValues[5] = "subco@parentco.example";
+        globalValues[6] = "TSC1";
+        globalValues[7] = "Test SubCo One";
+        string[] memory partyValues = new string[](2);
+        partyValues[0] = "Test Deployer Officer";
+        partyValues[1] = "deployer@parentco.example";
+
+        vm.expectRevert(ParentCoFactory.GlobalOrPartyValuesMismatch.selector);
+        parentCoFactory.deployCorpContractFor(
+            subCorpSalt, "Test SubCo SPV 1", "series limited liability company",
+            "Delaware", "subco@parentco.example", "binding arbitration",
+            subCorpPayable, subOfficer, segCoTemplateId, boardConsentTemplateId,
+            globalValues, partyValues, hex"", subCorpOfficer
+        );
+    }
+
+    function test_deploySubCorp_revertIfJurisdictionMismatch() public {
+        uint256 subCorpSalt = uint256(keccak256("ParentCo.Test2.SubCorp.v1"));
+        CompanyOfficer memory subOfficer = CompanyOfficer({
+            eoa: subCorpOfficer,
+            name: "Test Deployer Officer",
+            contact: "deployer@parentco.example",
+            title: "Founder"
+        });
+        string[] memory globalValues = new string[](8);
+        globalValues[0] = "Test Founder";
+        globalValues[1] = "Test ParentCo Enterprise";
+        globalValues[2] = "Test SubCo SPV 1";
+        globalValues[3] = "series limited liability company";
+        globalValues[4] = "Nevada"; // != companyJurisdiction arg below
+        globalValues[5] = "subco@parentco.example";
+        globalValues[6] = "TSC1";
+        globalValues[7] = "Test SubCo One";
+        string[] memory partyValues = new string[](2);
+        partyValues[0] = "Test Deployer Officer";
+        partyValues[1] = "deployer@parentco.example";
+
+        vm.expectRevert(ParentCoFactory.GlobalOrPartyValuesMismatch.selector);
+        parentCoFactory.deployCorpContractFor(
+            subCorpSalt, "Test SubCo SPV 1", "series limited liability company",
+            "Delaware", "subco@parentco.example", "binding arbitration",
+            subCorpPayable, subOfficer, segCoTemplateId, boardConsentTemplateId,
+            globalValues, partyValues, hex"", subCorpOfficer
+        );
+    }
+
+    function test_deploySubCorp_revertIfContactDetailsMismatch() public {
+        uint256 subCorpSalt = uint256(keccak256("ParentCo.Test2.SubCorp.v1"));
+        CompanyOfficer memory subOfficer = CompanyOfficer({
+            eoa: subCorpOfficer,
+            name: "Test Deployer Officer",
+            contact: "deployer@parentco.example",
+            title: "Founder"
+        });
+        string[] memory globalValues = new string[](8);
+        globalValues[0] = "Test Founder";
+        globalValues[1] = "Test ParentCo Enterprise";
+        globalValues[2] = "Test SubCo SPV 1";
+        globalValues[3] = "series limited liability company";
+        globalValues[4] = "Delaware";
+        globalValues[5] = "wrong@contact.com"; // != companyContactDetails arg below
+        globalValues[6] = "TSC1";
+        globalValues[7] = "Test SubCo One";
+        string[] memory partyValues = new string[](2);
+        partyValues[0] = "Test Deployer Officer";
+        partyValues[1] = "deployer@parentco.example";
+
+        vm.expectRevert(ParentCoFactory.GlobalOrPartyValuesMismatch.selector);
+        parentCoFactory.deployCorpContractFor(
+            subCorpSalt, "Test SubCo SPV 1", "series limited liability company",
+            "Delaware", "subco@parentco.example", "binding arbitration",
+            subCorpPayable, subOfficer, segCoTemplateId, boardConsentTemplateId,
+            globalValues, partyValues, hex"", subCorpOfficer
+        );
+    }
+
+    function test_deploySubCorp_revertIfOfficerEoaMismatch() public {
+        uint256 subCorpSalt = uint256(keccak256("ParentCo.Test2.SubCorp.v1"));
+        CompanyOfficer memory subOfficer = CompanyOfficer({
+            eoa: address(1), // != deployer arg below
+            name: "Test Deployer Officer",
+            contact: "deployer@parentco.example",
+            title: "Founder"
+        });
+        string[] memory globalValues = new string[](8);
+        globalValues[0] = "Test Founder";
+        globalValues[1] = "Test ParentCo Enterprise";
+        globalValues[2] = "Test SubCo SPV 1";
+        globalValues[3] = "series limited liability company";
+        globalValues[4] = "Delaware";
+        globalValues[5] = "subco@parentco.example";
+        globalValues[6] = "TSC1";
+        globalValues[7] = "Test SubCo One";
+        string[] memory partyValues = new string[](2);
+        partyValues[0] = "Test Deployer Officer";
+        partyValues[1] = "deployer@parentco.example";
+
+        vm.expectRevert(ParentCoFactory.OfficerValuesMismatch.selector);
+        parentCoFactory.deployCorpContractFor(
+            subCorpSalt, "Test SubCo SPV 1", "series limited liability company",
+            "Delaware", "subco@parentco.example", "binding arbitration",
+            subCorpPayable, subOfficer, segCoTemplateId, boardConsentTemplateId,
+            globalValues, partyValues, hex"", subCorpOfficer
+        );
+    }
+
+    function _createParentCoSignatureHash(uint256 privKey) internal returns (bytes memory) {
+        bytes32 escrowDigest = parentCoFactory.escrowAuthorizationHash();
+        (uint8 v, bytes32 r_, bytes32 s) = vm.sign(privKey, escrowDigest);
+        return abi.encodePacked(r_, s, v);
     }
 }
