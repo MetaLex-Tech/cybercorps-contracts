@@ -18,6 +18,9 @@ contract DeployParentCoFactoryTest is Test {
 
     CyberAgreementRegistry registry;
 
+    address deployer;
+    uint256 deployerPrivKey;
+
     ParentCoFactory parentCoFactory;
     address parentCoMultisig;
     address parentCoOfficer1;
@@ -37,6 +40,8 @@ contract DeployParentCoFactoryTest is Test {
         deps = DeploymentConstants.deps(block.chainid);
 
         registry = CyberAgreementRegistry(coreDeployment.cyberAgreementRegistry);
+
+        (deployer, deployerPrivKey) = makeAddrAndKey("deployer");
 
         (parentCoMultisig, ) = makeAddrAndKey("parentCoMultisig");
         (parentCoOfficer1, parentCoOfficer1PrivKey) = makeAddrAndKey("parentCoOfficer1");
@@ -61,7 +66,7 @@ contract DeployParentCoFactoryTest is Test {
         GnosisTransaction[] memory safeTxs;
         (parentCoFactory, safeTxs) = (new DeployParentCoFactoryScript()).runWithArgs({
             chainId: block.chainid,
-            deployerPrivateKey: vm.envUint("PRIVATE_KEY_MAIN"),
+            deployerPrivateKey: deployerPrivKey,
             saltStr: "ParentCoFactory.deploy.v1",
             segCoTemplateId: segCoTemplateId,
             segCoDocName: "FOUNDER/OPERATOR LEGAL PACK",
@@ -130,6 +135,10 @@ contract DeployParentCoFactoryTest is Test {
 
         vm.expectRevert();
         corp.companyOfficers(2);
+    }
+
+    function test_deployerHasSelfRevokedOwnerOfParentCoFactory() public {
+        assertEq(parentCoFactory.userRoles(deployer), 0);
     }
 
     function test_parentCoMultisigIsCorpPayable() public {

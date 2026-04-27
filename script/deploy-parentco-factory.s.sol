@@ -58,13 +58,13 @@ contract DeployParentCoFactoryScript is Script {
 //
 //        CompanyOfficer[] memory parentCoOfficers = new CompanyOfficer[](2);
 //        parentCoOfficers[0] = CompanyOfficer({
-//            eoa: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
+//            eoa: 0x8E9603BcB5D974Ed9C870510F3665F67CE5c5bDe,
 //            name: "Test Officer 1",
 //            contact: "test1@parentco.example",
 //            title: "Director"
 //        });
 //        parentCoOfficers[1] = CompanyOfficer({
-//            eoa: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
+//            eoa: 0xE8ABA57F64Db674E35fADBb497c3bea4bD69F787,
 //            name: "Test Officer 2",
 //            contact: "test2@parentco.example",
 //            title: "Director"
@@ -80,7 +80,7 @@ contract DeployParentCoFactoryScript is Script {
 //            boardConsentTemplateId: keccak256("ParentCo.Test2.BoardConsent.v1"),
 //            boardConsentName: "ParentCo Test Board Consent",
 //            boardConsentUri: "ipfs://parentco-test-board-consent-template",
-//            parentCoPayable: 0x42069BaBe92462393FaFdc653A88F958B64EC9A3,
+//            parentCoPayable: 0x8E9603BcB5D974Ed9C870510F3665F67CE5c5bDe,
 //            parentCoName: "Test ParentCo LLC",
 //            parentCoType: "limited liability company",
 //            parentCoJurisdiction: "Delaware",
@@ -121,6 +121,7 @@ contract DeployParentCoFactoryScript is Script {
         bytes32 salt = bytes32(keccak256(bytes(saltStr)));
 
         console2.log("==== Configs ====");
+        console2.log("deployer: %s", deployerAddress);
         for (uint256 i = 0; i < parentCoOfficers.length; i++) {
             console2.log("parentCoOfficers %d:", i);
             console2.log("  EOA: %s", parentCoOfficers[i].eoa);
@@ -129,6 +130,11 @@ contract DeployParentCoFactoryScript is Script {
             console2.log("  title: %s", parentCoOfficers[i].title);
             console2.log("");
         }
+        console2.log("UMIA FOUNDER/OPERATOR LEGAL PACK template ID:");
+        console2.logBytes32(segCoTemplateId);
+        console2.log("ACTION BY UNANIMOUS WRITTEN CONSENT OF THE BOARD OF DIRECTORS OF UMIA LAUNCHER SPC template ID:");
+        console2.logBytes32(boardConsentTemplateId);
+        console2.log("");
 
         vm.startBroadcast(deployerPrivateKey);
 
@@ -176,6 +182,9 @@ contract DeployParentCoFactoryScript is Script {
         for (uint256 i = 0; i < parentCoOfficers.length; i++)
             parentCoFactoryAuth.updateRole(parentCoOfficers[i].eoa, parentCoFactoryAuth.OWNER_ROLE());
         parentCoFactoryAuth.updateRole(parentCoPayable, parentCoFactoryAuth.OWNER_ROLE());
+
+        // Deployer to self-revoke ownership
+        parentCoFactoryAuth.zeroOwner();
 
         console2.log("==== Deployed ====");
         console2.log("ParentCoFactory Auth:", address(parentCoFactoryAuth));
