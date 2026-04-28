@@ -28,6 +28,8 @@ contract DeployParentCoFactoryTest is Test {
     address parentCoOfficer2;
     uint256 parentCoOfficer2PrivKey;
 
+    CompanyOfficer[] parentCoOfficers;
+
     bytes32 segCoTemplateId = keccak256("ParentCo.SegCo.v1");
     bytes32 boardConsentTemplateId = keccak256("ParentCo.BoardConsent.v1");
 
@@ -58,19 +60,18 @@ contract DeployParentCoFactoryTest is Test {
         (subCorpPayable, ) = makeAddrAndKey("subCorpPayable");
         (subCorpOfficer, subCorpOfficerPrivKey) = makeAddrAndKey("subCorpOfficer");
 
-        CompanyOfficer[] memory parentCoOfficers = new CompanyOfficer[](2);
-        parentCoOfficers[0] = CompanyOfficer({
+        parentCoOfficers.push(CompanyOfficer({
             eoa: parentCoOfficer1,
             name: "Test ParentCo Officer 1",
             contact: "test1@parentco.example",
             title: "Director"
-        });
-        parentCoOfficers[1] = CompanyOfficer({
+        }));
+        parentCoOfficers.push(CompanyOfficer({
             eoa: parentCoOfficer2,
             name: "Test ParentCo Officer 2",
             contact: "test2@parentco.example",
             title: "Director"
-        });
+        }));
 
         GnosisTransaction[] memory safeTxs;
         (parentCoFactory, safeTxs) = (new DeployParentCoFactoryScript()).runWithArgs({
@@ -100,7 +101,11 @@ contract DeployParentCoFactoryTest is Test {
         }
 
         // Set escrow sig: parentCoOfficer1 signs the factory-specific EIP-712 authorization
-        bytes memory escrowSig = _createParentCoSignatureHash(parentCoOfficer1PrivKey);
+        bytes memory escrowSig = _createParentCoSignatureHash(
+            parentCoOfficer1PrivKey,
+            parentCoOfficers[0].name,
+            parentCoOfficers[0].contact
+        );
         vm.prank(parentCoOfficer1);
         parentCoFactory.setParentCoSignatureHash(escrowSig);
     }
@@ -261,9 +266,32 @@ contract DeployParentCoFactoryTest is Test {
 
     function test_deploySubCorp_revertIfEscrowSignerNotOfficer() public {
         (, uint256 nonOfficerKey) = makeAddrAndKey("nonOfficer");
-        bytes memory nonOfficerSig = _createParentCoSignatureHash(nonOfficerKey);
+        bytes memory nonOfficerSig = _createParentCoSignatureHash(
+            nonOfficerKey,
+            parentCoOfficers[0].name,
+            parentCoOfficers[0].contact
+        );
         vm.prank(parentCoOfficer1);
         parentCoFactory.setParentCoSignatureHash(nonOfficerSig);
+
+        CompanyOfficer memory dummyOfficer = CompanyOfficer({eoa: address(0), name: "", contact: "", title: ""});
+        string[] memory empty = new string[](0);
+        vm.expectRevert(ParentCoFactory.UnauthorizedEscrowSigner.selector);
+        parentCoFactory.deployCorpContractFor(
+            0, "", "", "", "", "", address(0), dummyOfficer,
+            bytes32(0), bytes32(0), empty, empty, hex"", address(0)
+        );
+    }
+
+    function test_deploySubCorp_revertIfOfficerSignsWithAnotherOfficersIdentity() public {
+        // officer2 signs using officer1's name+contact — should not authenticate as officer1
+        bytes memory spoofedSig = _createParentCoSignatureHash(
+            parentCoOfficer2PrivKey,
+            parentCoOfficers[0].name,
+            parentCoOfficers[0].contact
+        );
+        vm.prank(parentCoOfficer1);
+        parentCoFactory.setParentCoSignatureHash(spoofedSig);
 
         CompanyOfficer memory dummyOfficer = CompanyOfficer({eoa: address(0), name: "", contact: "", title: ""});
         string[] memory empty = new string[](0);
@@ -345,7 +373,11 @@ contract DeployParentCoFactoryTest is Test {
     }
 
     function test_deploySubCorp_officer2CanSetEscrowAndDeploy() public {
-        bytes memory sig = _createParentCoSignatureHash(parentCoOfficer2PrivKey);
+        bytes memory sig = _createParentCoSignatureHash(
+            parentCoOfficer2PrivKey,
+            parentCoOfficers[1].name,
+            parentCoOfficers[1].contact
+        );
         vm.prank(parentCoOfficer2);
         parentCoFactory.setParentCoSignatureHash(sig);
 
@@ -664,8 +696,8 @@ contract DeployParentCoFactoryTest is Test {
         );
     }
 
-    function _createParentCoSignatureHash(uint256 privKey) internal returns (bytes memory) {
-        bytes32 escrowDigest = parentCoFactory.escrowAuthorizationHash();
+    function _createParentCoSignatureHash(uint256 privKey, string memory name, string memory contact) internal returns (bytes memory) {
+        bytes32 escrowDigest = parentCoFactory.escrowAuthorizationHash(name, contact);
         (uint8 v, bytes32 r_, bytes32 s) = vm.sign(privKey, escrowDigest);
         return abi.encodePacked(r_, s, v);
     }

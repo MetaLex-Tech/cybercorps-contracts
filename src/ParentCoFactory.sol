@@ -193,7 +193,7 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
                 address(this)
             )
         );
-        ESCROW_AUTHORIZATION_TYPEHASH = keccak256("EscrowAuthorization(address factory)");
+        ESCROW_AUTHORIZATION_TYPEHASH = keccak256("EscrowAuthorization(string name,string contact)");
     }
 
     function setParentCoSignatureHash(bytes memory _parentCoSignatureHash) public onlyOwner {
@@ -210,12 +210,21 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             parentCoOfficers.push(_officers[i]);
     }
 
-    function escrowAuthorizationHash() public view returns (bytes32) {
+    /// @notice Authorization should include everything used to escrow-sign:
+    /// - escrow contract (implicit)
+    /// - EOA (implicit)
+    /// - name (explicit)
+    /// - contact (explicit)
+    function escrowAuthorizationHash(string memory name, string memory contact) public view returns (bytes32) {
         return keccak256(
             abi.encodePacked(
                 "\x19\x01",
                 DOMAIN_SEPARATOR,
-                keccak256(abi.encode(ESCROW_AUTHORIZATION_TYPEHASH, address(this)))
+                keccak256(abi.encode(
+                    ESCROW_AUTHORIZATION_TYPEHASH,
+                    keccak256(bytes(name)),
+                    keccak256(bytes(contact))
+                ))
             )
         );
     }
@@ -420,10 +429,13 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         )
     {
         // Resolve which officer pre-signed the escrow authorization
-        address escrowSigner = escrowAuthorizationHash().recover(parentCoSignatureHash);
         CompanyOfficer memory signingOfficer;
         bool signerFound;
         for (uint256 i = 0; i < parentCoOfficers.length; i++) {
+            address escrowSigner = escrowAuthorizationHash(
+                parentCoOfficers[i].name,
+                parentCoOfficers[i].contact
+            ).recover(parentCoSignatureHash);
             if (parentCoOfficers[i].eoa == escrowSigner) {
                 signingOfficer = parentCoOfficers[i];
                 signerFound = true;
