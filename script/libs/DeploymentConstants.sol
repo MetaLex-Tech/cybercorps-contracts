@@ -26,6 +26,12 @@ library DeploymentConstants {
         address lexchexCondition;
     }
 
+    struct UmiaDeployment {
+        address parentCoFactory;
+        bytes32 segCoTemplateId;
+        bytes32 boardConsentTemplateId;
+    }
+
     struct Deps {
         address usdc;
     }
@@ -72,6 +78,22 @@ library DeploymentConstants {
                     lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42
                 });
+        }
+    }
+
+    function umia(uint256 chainId)
+        internal
+        pure
+        returns (UmiaDeployment memory deployment)
+    {
+        if (chainId == BASE_SEPOLIA) {
+            return UmiaDeployment({
+                parentCoFactory: 0x478ee34c618E9339Ae2DD8100Df7ec535eb24D29,
+                segCoTemplateId: 0xb6da5c8e53767592c0eeb4c5c0d77eae7e1e2e795190e7237d837b3fbc98ed75,
+                boardConsentTemplateId: 0xc02175e98621a996529fb751b30e0b7a8344ece3b00f46a29c1e904c9da87a46
+            });
+        } else {
+            revert UnsupportedChain(chainId);
         }
     }
 
