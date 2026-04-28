@@ -73,7 +73,7 @@ contract DeployParentCoFactoryScript is Script {
 //        return runWithArgs({
 //            chainId: DeploymentConstants.BASE_SEPOLIA,
 //            deployerPrivateKey: vm.envUint("PRIVATE_KEY_MAIN"),
-//            saltStr: "ParentCoFactory.deploy.v2",
+//            saltStr: "ParentCoFactory.deploy.v2.dev0",
 //            segCoTemplateId: keccak256("ParentCo.Test2.SegCo.v1"),
 //            segCoDocName: "FOUNDER/OPERATOR LEGAL PACK",
 //            segCoDocUri: "ipfs://parentco-test-segco-template",
@@ -81,7 +81,7 @@ contract DeployParentCoFactoryScript is Script {
 //            boardConsentName: "ParentCo Test Board Consent",
 //            boardConsentUri: "ipfs://parentco-test-board-consent-template",
 //            parentCoPayable: 0x8E9603BcB5D974Ed9C870510F3665F67CE5c5bDe,
-//            parentCoName: "Test ParentCo LLC",
+//            parentCoName: "Test ParentCo LLC dev0",
 //            parentCoType: "limited liability company",
 //            parentCoJurisdiction: "Delaware",
 //            parentCoContactDetails: "test@parentco.example",
@@ -122,6 +122,7 @@ contract DeployParentCoFactoryScript is Script {
 
         console2.log("==== Configs ====");
         console2.log("deployer: %s", deployerAddress);
+        console2.log("saltStr: %s", saltStr);
         for (uint256 i = 0; i < parentCoOfficers.length; i++) {
             console2.log("parentCoOfficers %d:", i);
             console2.log("  EOA: %s", parentCoOfficers[i].eoa);
