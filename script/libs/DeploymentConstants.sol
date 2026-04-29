@@ -86,7 +86,13 @@ library DeploymentConstants {
         pure
         returns (UmiaDeployment memory deployment)
     {
-        if (chainId == BASE_SEPOLIA) {
+        if (chainId == BASE) {
+            return UmiaDeployment({
+                parentCoFactory: 0x50512F70A37C90C9AFCe2074AEA5E9F99Dd21Df1,
+                segCoTemplateId: 0xd9e0fbb89f8e4e973f05d6b40b6a41e3a9af845b604e9acc7aa4f2a0c37009d8,
+                boardConsentTemplateId: 0x93ac1365e39b1d8237c84cf969b752ffbb717f7d8144eb47562b4060bcd91c30
+            });
+        } else if (chainId == BASE_SEPOLIA) {
             return UmiaDeployment({
                 parentCoFactory: 0x478ee34c618E9339Ae2DD8100Df7ec535eb24D29,
                 segCoTemplateId: 0xb6da5c8e53767592c0eeb4c5c0d77eae7e1e2e795190e7237d837b3fbc98ed75,
