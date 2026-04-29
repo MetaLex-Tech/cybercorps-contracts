@@ -179,10 +179,6 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
         emit FounderOverrideUpdated(_manager, _investor, _approved, msg.sender);
     }
 
-    function isFounderOverrideApproved(address _manager, address _investor) external view returns (bool) {
-        return founderOverrides[_manager][_investor];
-    }
-
     /// @notice Condition check used by LexScroWLite.conditionCheck
     function checkCondition(
         address _contract,

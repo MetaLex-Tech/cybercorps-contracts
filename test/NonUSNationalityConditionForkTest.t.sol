@@ -141,7 +141,7 @@ contract NonUSNationalityConditionForkTest is Test {
 
         condition.setFounderOverride(address(manager), investor, true);
 
-        assertTrue(condition.isFounderOverrideApproved(address(manager), investor));
+        assertTrue(condition.founderOverrides(address(manager), investor));
         assertTrue(condition.checkCondition(address(manager), bytes4(0), abi.encode(agreementId)));
     }
 

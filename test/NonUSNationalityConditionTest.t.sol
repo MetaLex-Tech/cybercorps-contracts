@@ -344,8 +344,28 @@ contract NonUSNationalityConditionTest is Test {
 
         condition.setFounderOverride(address(manager), investor, true);
 
-        assertTrue(condition.isFounderOverrideApproved(address(manager), investor));
+        assertTrue(condition.founderOverrides(address(manager), investor));
         assertTrue(condition.checkCondition(address(manager), bytes4(0), abi.encode(agreementId)));
+    }
+
+    function test_SetFounderOverride_PublicMappingGetter() public {
+        BorgAuth managerAuth = new BorgAuth(address(this));
+        MockManager manager = new MockManager(address(managerAuth));
+        address investor = address(0xA11CE);
+
+        assertFalse(condition.founderOverrides(address(manager), investor));
+        condition.setFounderOverride(address(manager), investor, true);
+        assertTrue(condition.founderOverrides(address(manager), investor));
+    }
+
+    function test_SetFounderOverride_EmitsFounderOverrideUpdated() public {
+        BorgAuth managerAuth = new BorgAuth(address(this));
+        MockManager manager = new MockManager(address(managerAuth));
+        address investor = address(0xA11CE);
+
+        vm.expectEmit(true, true, true, true);
+        emit NonUSNationalityCondition.FounderOverrideUpdated(address(manager), investor, true, address(this));
+        condition.setFounderOverride(address(manager), investor, true);
     }
 
     function test_SetFounderOverride_RevokeOverride() public {
@@ -358,7 +378,7 @@ contract NonUSNationalityConditionTest is Test {
         condition.setFounderOverride(address(manager), investor, true);
         condition.setFounderOverride(address(manager), investor, false);
 
-        assertFalse(condition.isFounderOverrideApproved(address(manager), investor));
+        assertFalse(condition.founderOverrides(address(manager), investor));
         assertFalse(condition.checkCondition(address(manager), bytes4(0), abi.encode(agreementId)));
     }
 
