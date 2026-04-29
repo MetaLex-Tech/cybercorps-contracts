@@ -249,7 +249,7 @@ contract DeployParentCoFactoryScript is Script {
             )
         });
 
-        string memory safeTxJson = SafeUtils.formatSafeTxJson(safeTxs);
+        string memory safeTxJson = SafeUtils.formatSafeTxJson(safeTxs, chainId);
 
         console2.log("Safe tx JSON (can be imported to Safe Transaction Builder):");
         console2.log("==== JSON data start ====");

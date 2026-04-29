@@ -35,7 +35,7 @@ library SafeUtils {
         bytes data;
     }
 
-    function formatSafeTxJson(GnosisTransaction[] memory safeTxs) internal returns (string memory) {
+    function formatSafeTxJson(GnosisTransaction[] memory safeTxs, uint256 chainId) internal returns (string memory) {
         SafeTx[] memory convertedSafeTxs = new SafeTx[](safeTxs.length);
         for (uint256 i = 0; i < safeTxs.length; i++) {
             convertedSafeTxs[i] = SafeTx({
@@ -50,7 +50,7 @@ library SafeUtils {
             "SafeTxImport(string version,string chainId,uint256 createdAt,SafeTxMeta meta,SafeTx[] transactions)SafeTxMeta(string name,string description,string txBuilderVersion,string createdFromSafeAddress,string createdFromOwnerAddress,string checksum)SafeTx(address to,string value,bytes data)",
             abi.encode(SafeTxImport({
                 version: "1.0",
-                chainId: "1",
+                chainId: vm.toString(chainId),
                 createdAt: block.timestamp * 1000,
                 meta: SafeTxMeta({
                     name: "Transactions Batch",
