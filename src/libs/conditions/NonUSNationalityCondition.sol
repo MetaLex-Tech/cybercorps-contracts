@@ -8,6 +8,10 @@ import "../LexScroWLite.sol";
 import "../auth.sol";
 import "../../interfaces/IZKPassportVerifier.sol";
 
+interface ICyberCorpManager {
+    function AUTH() external view returns (address);
+}
+
 /// @title NonUSNationalityCondition
 /// @notice Round condition requiring a valid, non-US ZKPassport proof for the participant
 contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
@@ -21,6 +25,8 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
     error ProofExpired();
     error ProofAlreadyUsed();
     error MaxValidityPeriodExceeded();
+    error InvalidManager();
+    error InvalidInvestor();
 
     event ProofSubmitted(
         address indexed account,
@@ -29,6 +35,12 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
 
     event MaxValidityPeriodUpdated(uint256 maxValidityPeriod);
     event ExcludedCountriesUpdated(string[] countries);
+    event FounderOverrideUpdated(
+        address indexed manager,
+        address indexed investor,
+        bool approved,
+        address indexed approver
+    );
 
     // Deterministic verifier address from ZKPassport docs.
     address public constant DEFAULT_ZKPASSPORT_VERIFIER =
@@ -41,6 +53,8 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
 
     mapping(address => uint256) public proofExpiry;
     mapping(bytes32 => bool) public usedProofIdentifiers;
+    // manager → investor → approved
+    mapping(address => mapping(address => bool)) public founderOverrides;
 
     string[] public excludedCountries;
 
@@ -149,6 +163,26 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
         emit ProofSubmitted(msg.sender, expiresAt);
     }
 
+    function setFounderOverride(
+        address _manager,
+        address _investor,
+        bool _approved
+    ) external {
+        if (_manager == address(0)) revert InvalidManager();
+        if (_investor == address(0)) revert InvalidInvestor();
+
+        // only the manager of the deal/round can set overrides
+        BorgAuth auth = BorgAuth(ICyberCorpManager(_manager).AUTH());
+        auth.onlyRole(auth.OWNER_ROLE(), msg.sender);
+
+        founderOverrides[_manager][_investor] = _approved;
+        emit FounderOverrideUpdated(_manager, _investor, _approved, msg.sender);
+    }
+
+    function isFounderOverrideApproved(address _manager, address _investor) external view returns (bool) {
+        return founderOverrides[_manager][_investor];
+    }
+
     /// @notice Condition check used by LexScroWLite.conditionCheck
     function checkCondition(
         address _contract,
@@ -158,7 +192,8 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
         LexScroWLite lexScrow = LexScroWLite(_contract);
         bytes32 agreementId = abi.decode(data, (bytes32));
         address counterparty = lexScrow.getEscrowDetails(agreementId).counterParty;
+        // check overrides first, then the ZK proof
+        if (founderOverrides[_contract][counterparty]) return true;
         return proofExpiry[counterparty] >= block.timestamp;
     }
-
 }
