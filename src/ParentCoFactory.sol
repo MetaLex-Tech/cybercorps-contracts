@@ -156,6 +156,8 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         address oldRoundManagerFactory
     );
 
+    event RoundManagerDeployed(address indexed cyberCorp, address indexed roundManager);
+
     event UriBuilderUpdated(address indexed uriBuilder, address oldUriBuilder);
     event RegistryAddressUpdated(address indexed registryAddress, address oldRegistryAddress);
 
@@ -357,6 +359,8 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         );
 
         ICyberCorp(cyberCorpAddress).setRoundManager(roundManagerAddress);
+
+        emit RoundManagerDeployed(cyberCorpAddress, roundManagerAddress);
 
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
