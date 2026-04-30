@@ -439,6 +439,17 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         IssuanceManagerStorage.executeVoidCertificate(certAddress, tokenId);
     }
 
+    /// @notice Restores a voided certificate to assigned status
+    /// @dev Only callable by admin
+    /// @param certAddress Address of the certificate printer contract
+    /// @param tokenId ID of the certificate to unvoid
+    function unvoidCertificate(
+        address certAddress,
+        uint256 tokenId
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeUnvoidCertificate(certAddress, tokenId);
+    }
+
     /// @notice Sets the global transferability status for a certificate contract
     /// @dev Only callable by admin
     /// @param certAddress Address of the certificate printer contract

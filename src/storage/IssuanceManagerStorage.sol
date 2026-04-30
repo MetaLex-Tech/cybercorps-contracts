@@ -692,6 +692,10 @@ library IssuanceManagerStorage {
         ICyberCertPrinter(certAddress).voidCert(tokenId);
     }
 
+    function executeUnvoidCertificate(address certAddress, uint256 tokenId) external {
+        ICyberCertPrinter(certAddress).unvoidCert(tokenId);
+    }
+
     function executeSetGlobalTransferable(
         address certAddress,
         bool transferable

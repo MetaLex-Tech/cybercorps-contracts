@@ -183,6 +183,11 @@ interface IIssuanceManager {
         uint256 tokenId
     ) external;
 
+    function unvoidCertificate(
+        address certAddress,
+        uint256 tokenId
+    ) external;
+
     function setGlobalTransferable(
         address certAddress,
         bool transferable

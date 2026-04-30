@@ -88,6 +88,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     event CyberCertTransfer(address indexed from, address indexed to, uint256 indexed tokenId);
     event CertificateAssigned(uint256 indexed tokenId, address indexed newOwner, string newOwnerName, string issuerName);
     event CertificateVoided(uint256 indexed tokenId, uint256 timestamp);
+    event CertificateUnvoided(uint256 indexed tokenId, uint256 timestamp);
     event RestrictionHookSet(uint256 indexed id, address indexed hookAddress);
     event GlobalRestrictionHookSet(address indexed hookAddress);
     event GlobalTransferableSet(bool indexed transferable);
@@ -348,6 +349,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     function unvoidCert(uint256 tokenId) external onlyIssuanceManager {
         if (!_exists(tokenId)) revert TokenDoesNotExist();
         CyberCertPrinterStorage.setSecurityStatus(tokenId, SecurityStatus.Assigned);
+        emit CertificateUnvoided(tokenId, block.timestamp);
     }
 
     function isVoided(uint256 tokenId) external view returns (bool) {
