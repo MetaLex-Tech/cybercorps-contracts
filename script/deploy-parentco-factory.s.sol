@@ -73,7 +73,7 @@ contract DeployParentCoFactoryScript is Script {
 //        return runWithArgs({
 //            chainId: DeploymentConstants.BASE_SEPOLIA,
 //            deployerPrivateKey: vm.envUint("PRIVATE_KEY_MAIN"),
-//            saltStr: "ParentCoFactory.deploy.v2.dev0",
+//            saltStr: "ParentCoFactory.deploy.v2.dev1",
 //            segCoTemplateId: keccak256("ParentCo.Test2.SegCo.v1"),
 //            segCoDocName: "FOUNDER/OPERATOR LEGAL PACK",
 //            segCoDocUri: "ipfs://parentco-test-segco-template",
@@ -81,13 +81,12 @@ contract DeployParentCoFactoryScript is Script {
 //            boardConsentName: "ParentCo Test Board Consent",
 //            boardConsentUri: "ipfs://parentco-test-board-consent-template",
 //            parentCoPayable: 0x8E9603BcB5D974Ed9C870510F3665F67CE5c5bDe,
-//            parentCoName: "Test ParentCo LLC dev0",
+//            parentCoName: "Test ParentCo LLC dev1",
 //            parentCoType: "limited liability company",
 //            parentCoJurisdiction: "Delaware",
 //            parentCoContactDetails: "test@parentco.example",
 //            parentCoDefaultDisputeResolution: "binding arbitration",
-//            parentCoOfficers: parentCoOfficers,
-//            parentCoSignatureHash: hex"15756f79dff911500a995b7b5af0d43ce5a9e25878831dec6fe63375199c964f0b9be1f4f77788492e0cb29dceca0e62069bd0a8f0c20e3a4d1ed6e88a4b19a81b"
+//            parentCoOfficers: parentCoOfficers
 //        });
     }
 
