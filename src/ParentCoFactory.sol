@@ -342,8 +342,25 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             dealManagerFactory
         );
 
+        if (ICyberCorp(cyberCorpAddress).roundManager() != address(0)) {
+            revert RoundManagerAlreadyExists();
+        }
+
+        roundManagerAddress = IRoundManagerFactory(roundManagerFactory).deployRoundManager(salt);
+
+        IRoundManagerInit(roundManagerAddress).initialize(
+            address(BorgAuthACL(cyberCorpAddress).AUTH()),
+            cyberCorpAddress,
+            registryAddress,
+            ICyberCorpLocal(cyberCorpAddress).issuanceManager(),
+            roundManagerFactory
+        );
+
+        ICyberCorp(cyberCorpAddress).setRoundManager(roundManagerAddress);
+
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
+        BorgAuth(authAddress).updateRole(roundManagerAddress, 99);
 
         emit CorpDeployed(cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress, roundManagerAddress, address(0), 0, _officer.eoa);
     }

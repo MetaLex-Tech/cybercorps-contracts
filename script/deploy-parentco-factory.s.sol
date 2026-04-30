@@ -52,7 +52,7 @@ contract DeployParentCoFactoryScript is Script {
             parentCoContactDetails: "c/o TTA Corporate Services Limited, Harbour Place, 2nd Floor, North Wing, 103 South Church Street, P.O. Box 472, George Town, Grand Cayman KY1-1106, Cayman Islands",
             parentCoDefaultDisputeResolution: "confidential, binding arbitration",
             parentCoOfficers: parentCoOfficers
-        });
+            });
 
 //        // testnet
 //
@@ -86,7 +86,8 @@ contract DeployParentCoFactoryScript is Script {
 //            parentCoJurisdiction: "Delaware",
 //            parentCoContactDetails: "test@parentco.example",
 //            parentCoDefaultDisputeResolution: "binding arbitration",
-//            parentCoOfficers: parentCoOfficers
+//            parentCoOfficers: parentCoOfficers,
+//            parentCoSignatureHash: hex"15756f79dff911500a995b7b5af0d43ce5a9e25878831dec6fe63375199c964f0b9be1f4f77788492e0cb29dceca0e62069bd0a8f0c20e3a4d1ed6e88a4b19a81b"
 //        });
     }
 
