@@ -94,9 +94,28 @@ interface ICyberAgreementRegistry {
         address[] memory parties,
         string[][] memory partyValues,
         bytes32 secretHash,
-        address finalizer, 
+        address finalizer,
         uint256 expiry
     ) external returns (bytes32);
+
+    function createContract(
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        bytes32 secretHash,
+        address finalizer,
+        uint256 expiry,
+        bytes32[] memory partyViewingPubKeys,
+        bytes[] memory partyCapsules
+    ) external returns (bytes32);
+
+    function registerViewingPubKey(bytes32 pubKey) external;
+
+    function getCapsule(bytes32 contractId, address party) external view returns (bytes memory);
+
+    function getAgreementViewingPubKey(bytes32 contractId, address party) external view returns (bytes32);
 
     function signContract(
         bytes32 contractId,

@@ -76,6 +76,8 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         bytes32 secretHash;
         uint256 expiry;
         address[] voidRequestedBy;
+        mapping(address => bytes32) viewingPubKeys; // STK: Ed25519 viewing pubkey per party
+        mapping(address => bytes) capsules;          // STK: 72-byte ECDH capsule per party
     }
 
     // This data is what is signed by each party
@@ -112,8 +114,11 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     mapping(address => Delegation) public delegations;
 
-    // Upgrade notes: Reduced gap to account for delegation mapping (41 - 1 = 40)
-    uint256[40] private __gap;
+    // STK: global on-chain registry of Ed25519 viewing pubkeys (set by each account for themselves)
+    mapping(address => bytes32) public viewingPubKeys;
+
+    // Upgrade notes: Reduced gap to account for 2 mappings (41 - 2 = 39)
+    uint256[39] private __gap;
 
     event TemplateCreated(
         bytes32 indexed templateId,
@@ -153,6 +158,8 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     event DelegationSet(address indexed delegator, address indexed delegate, uint256 expiry);
     event DelegationRevoked(address indexed delegator, address indexed delegate);
+    event ViewingPubKeyRegistered(address indexed party, bytes32 pubKey);
+    event CapsuleStored(bytes32 indexed contractId, address indexed party, bytes32 viewingPubKey);
 
     error TemplateAlreadyExists();
     error TemplateDoesNotExist();
@@ -175,6 +182,10 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     error InvalidSecret();
     error MismatchedPartyValuesLength();
     error FinalizerNotDefined();
+    error MismatchedViewingPubKeysLength();
+    error MismatchedCapsulesLength();
+    error InvalidCapsuleLength();
+    error ViewingPubKeyMismatch();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {}
@@ -253,6 +264,47 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         address finalizer,
         uint256 expiry
     ) public returns (bytes32 contractId) {
+        return _createContract(templateId, salt, globalValues, parties, partyValues, secretHash, finalizer, expiry);
+    }
+
+    function createContract(
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        bytes32 secretHash,
+        address finalizer,
+        uint256 expiry,
+        bytes32[] memory partyViewingPubKeys,
+        bytes[] memory partyCapsules
+    ) external returns (bytes32 contractId) {
+        if (partyViewingPubKeys.length != parties.length) revert MismatchedViewingPubKeysLength();
+        if (partyCapsules.length != parties.length) revert MismatchedCapsulesLength();
+
+        contractId = _createContract(templateId, salt, globalValues, parties, partyValues, secretHash, finalizer, expiry);
+
+        for (uint256 i = 0; i < parties.length; i++) {
+            if (partyCapsules[i].length != 72) revert InvalidCapsuleLength();
+            bytes32 registered = viewingPubKeys[parties[i]];
+            if (registered != bytes32(0) && partyViewingPubKeys[i] != registered)
+                revert ViewingPubKeyMismatch();
+            agreements[contractId].viewingPubKeys[parties[i]] = partyViewingPubKeys[i];
+            agreements[contractId].capsules[parties[i]] = partyCapsules[i];
+            emit CapsuleStored(contractId, parties[i], partyViewingPubKeys[i]);
+        }
+    }
+
+    function _createContract(
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        bytes32 secretHash,
+        address finalizer,
+        uint256 expiry
+    ) internal returns (bytes32 contractId) {
         contractId = keccak256(
             abi.encode(templateId, salt, globalValues, parties)
         );
@@ -413,6 +465,19 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             fillUnallocated,
             secret
         );
+    }
+
+    function registerViewingPubKey(bytes32 pubKey) external {
+        viewingPubKeys[msg.sender] = pubKey;
+        emit ViewingPubKeyRegistered(msg.sender, pubKey);
+    }
+
+    function getCapsule(bytes32 contractId, address party) external view returns (bytes memory) {
+        return agreements[contractId].capsules[party];
+    }
+
+    function getAgreementViewingPubKey(bytes32 contractId, address party) external view returns (bytes32) {
+        return agreements[contractId].viewingPubKeys[party];
     }
 
     function setDelegation(address delegate, uint256 expiry) external {
