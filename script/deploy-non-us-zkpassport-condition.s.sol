@@ -12,20 +12,31 @@ contract DeployNonUsZkPassportConditionScript is Script {
     function run() public returns (BorgAuth zkpassportAuth, NonUSNationalityCondition zkpassportCondition) {
         return runWithArgs(
             // Production
-            "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.0.0",
+            "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.1.0",
             vm.envUint("PRIVATE_KEY_MAIN"),
             "ace.metalex.tech",
             "non-us-non-sanctioned",
             2592000, // 3600 * 24 * 30 days
-            DeploymentConstants.BASE
+            DeploymentConstants.BASE,
+            false // ownedByDeployer
 
-//            // Staging
-//            "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.0.0.staging.dev1",
+//            // Staging (localhost)
+//            "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.1.0.staging.dev1",
+//            vm.envUint("PRIVATE_KEY_MAIN"),
+//            "localhost",
+//            "non-us-non-sanctioned",
+//            2592000, // 3600 * 24 * 30 days
+//            DeploymentConstants.BASE,
+//            true // ownedByDeployer
+
+//            // Staging (staging.ace.metalex.tech)
+//            "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.1.0.staging.dev1-staging.ace.metalex.tech",
 //            vm.envUint("PRIVATE_KEY_MAIN"),
 //            "staging.ace.metalex.tech",
 //            "non-us-non-sanctioned",
 //            2592000, // 3600 * 24 * 30 days
-//            DeploymentConstants.BASE
+//            DeploymentConstants.BASE,
+//            true // ownedByDeployer
         );
     }
 
@@ -35,7 +46,8 @@ contract DeployNonUsZkPassportConditionScript is Script {
         string memory expectedDomain,
         string memory expectedScope,
         uint256 maxValidityPeriod,
-        uint256 chainId
+        uint256 chainId,
+        bool ownedByDeployer // for test because our staging env is Base mainnet
     ) public returns (BorgAuth zkpassportAuth, NonUSNationalityCondition zkpassportCondition) {
 
         bytes32 salt = keccak256(bytes(saltStr));
@@ -74,6 +86,15 @@ contract DeployNonUsZkPassportConditionScript is Script {
         orAddrs[0] = address(zkpassportCondition);
         orAddrs[1] = deployment.lexchexCondition;
         OrCondition orCondition = new OrCondition(orAddrs);
+
+        if (!ownedByDeployer) {
+            // Assign ownership to MetaLeX multisig
+            zkpassportAuth.updateRole(deployment.metalexSafe, zkpassportAuth.OWNER_ROLE());
+
+            // Deployer to self-revoke ownership
+            zkpassportAuth.zeroOwner();
+            console2.log("Transferred ownership to %s:", deployment.metalexSafe);
+        }
 
         vm.stopBroadcast();
 
