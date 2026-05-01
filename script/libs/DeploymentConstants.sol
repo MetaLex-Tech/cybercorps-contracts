@@ -86,9 +86,9 @@ library DeploymentConstants {
         pure
         returns (UmiaDeployment memory deployment)
     {
-        if (chainId == BASE) {
+        if (chainId == ETH) {
             return UmiaDeployment({
-                parentCoFactory: 0x50512F70A37C90C9AFCe2074AEA5E9F99Dd21Df1,
+                parentCoFactory: 0x5c6D411600774c8fE1Aa805d78F03202d7FCD47F,
                 segCoTemplateId: 0xd9e0fbb89f8e4e973f05d6b40b6a41e3a9af845b604e9acc7aa4f2a0c37009d8,
                 boardConsentTemplateId: 0x93ac1365e39b1d8237c84cf969b752ffbb717f7d8144eb47562b4060bcd91c30
             });
