@@ -92,9 +92,15 @@ library DeploymentConstants {
                 segCoTemplateId: 0xd9e0fbb89f8e4e973f05d6b40b6a41e3a9af845b604e9acc7aa4f2a0c37009d8,
                 boardConsentTemplateId: 0x93ac1365e39b1d8237c84cf969b752ffbb717f7d8144eb47562b4060bcd91c30
             });
+        } else if (chainId == ETH_SEPOLIA) {
+            return UmiaDeployment({
+                parentCoFactory: 0x0c6Fc81BEd7f91f7a3b3594CCc66484893634Bf9,
+                segCoTemplateId: 0xb6da5c8e53767592c0eeb4c5c0d77eae7e1e2e795190e7237d837b3fbc98ed75,
+                boardConsentTemplateId: 0xc02175e98621a996529fb751b30e0b7a8344ece3b00f46a29c1e904c9da87a46
+            });
         } else if (chainId == BASE_SEPOLIA) {
             return UmiaDeployment({
-                parentCoFactory: 0x478ee34c618E9339Ae2DD8100Df7ec535eb24D29,
+                parentCoFactory: 0xC1304898FAfF45cA2B07C0f4E10B77843eD5a47B,
                 segCoTemplateId: 0xb6da5c8e53767592c0eeb4c5c0d77eae7e1e2e795190e7237d837b3fbc98ed75,
                 boardConsentTemplateId: 0xc02175e98621a996529fb751b30e0b7a8344ece3b00f46a29c1e904c9da87a46
             });

@@ -71,7 +71,7 @@ contract DeployParentCoFactoryScript is Script {
 //        });
 //
 //        return runWithArgs({
-//            chainId: DeploymentConstants.BASE_SEPOLIA,
+//            chainId: DeploymentConstants.ETH_SEPOLIA,
 //            deployerPrivateKey: vm.envUint("PRIVATE_KEY_MAIN"),
 //            saltStr: "ParentCoFactory.deploy.v2.dev1",
 //            segCoTemplateId: keccak256("ParentCo.Test2.SegCo.v1"),
