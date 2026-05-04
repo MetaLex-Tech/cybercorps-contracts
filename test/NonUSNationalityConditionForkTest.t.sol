@@ -16,6 +16,31 @@ import {NonUSNationalityCondition} from "../src/libs/conditions/NonUSNationality
 import {BorgAuth} from "../src/libs/auth.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 
+contract MockManager {
+    BorgAuth public AUTH;
+    mapping(bytes32 => address) public counterpartyByAgreementId;
+
+    constructor(address auth) { AUTH = BorgAuth(auth); }
+
+    function setCounterparty(bytes32 agreementId, address counterparty) external {
+        counterpartyByAgreementId[agreementId] = counterparty;
+    }
+
+    function getEscrowDetails(bytes32 agreementId) external view returns (Escrow memory esc) {
+        Token[] memory corpAssets = new Token[](0);
+        Token[] memory buyerAssets = new Token[](0);
+        esc = Escrow({
+            agreementId: agreementId,
+            counterParty: counterpartyByAgreementId[agreementId],
+            corpAssets: corpAssets,
+            buyerAssets: buyerAssets,
+            signature: "",
+            expiry: block.timestamp + 1 days,
+            status: EscrowStatus.PAID
+        });
+    }
+}
+
 library NonUSNationalityConditionHelper {
     using stdJson for string;
 
@@ -105,6 +130,19 @@ contract NonUSNationalityConditionForkTest is Test {
         vm.prank(account);
         condition.submitProof(params, false);
         assertEq(condition.proofExpiry(account), signedTimestamp + params.serviceConfig.validityPeriodInSeconds, "unexpected proof expiry");
+    }
+
+    function test_FounderOverride_HappyPath() public {
+        BorgAuth managerAuth = new BorgAuth(address(this));
+        MockManager manager = new MockManager(address(managerAuth));
+        address investor = address(0xA11CE);
+        bytes32 agreementId = keccak256("agreement-fork-override");
+        manager.setCounterparty(agreementId, investor);
+
+        condition.setFounderOverride(address(manager), investor, true);
+
+        assertTrue(condition.founderOverrides(address(manager), investor));
+        assertTrue(condition.checkCondition(address(manager), bytes4(0), abi.encode(agreementId)));
     }
 
     /// @notice Real proof of non-FRA nationality should not pass since we want non-US + non-sanctioned proof

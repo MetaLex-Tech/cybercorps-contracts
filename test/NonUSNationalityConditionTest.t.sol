@@ -110,6 +110,32 @@ contract MockZKPassportVerifier is IZKPassportVerifier {
     }
 }
 
+// TODO rename it
+contract MockManager {
+    BorgAuth public AUTH;
+    mapping(bytes32 => address) public counterpartyByAgreementId;
+
+    constructor(address auth) { AUTH = BorgAuth(auth); }
+
+    function setCounterparty(bytes32 agreementId, address counterparty) external {
+        counterpartyByAgreementId[agreementId] = counterparty;
+    }
+
+    function getEscrowDetails(bytes32 agreementId) external view returns (Escrow memory esc) {
+        Token[] memory corpAssets = new Token[](0);
+        Token[] memory buyerAssets = new Token[](0);
+        esc = Escrow({
+            agreementId: agreementId,
+            counterParty: counterpartyByAgreementId[agreementId],
+            corpAssets: corpAssets,
+            buyerAssets: buyerAssets,
+            signature: "",
+            expiry: block.timestamp + 1 days,
+            status: EscrowStatus.PAID
+        });
+    }
+}
+
 contract NonUSNationalityConditionTest is Test {
     string internal constant EXPECTED_DOMAIN = "app.example";
     string internal constant EXPECTED_SCOPE = "non-us-round";
@@ -305,6 +331,114 @@ contract NonUSNationalityConditionTest is Test {
         vm.warp(block.timestamp + 2 days);
         bool result = condition.checkCondition(address(escrowSource), bytes4(0), abi.encode(agreementId));
         assertFalse(result);
+    }
+
+    // --- founder override tests ---
+
+    function test_SetFounderOverride_HappyPath() public {
+        BorgAuth managerAuth = new BorgAuth(address(this));
+        MockManager manager = new MockManager(address(managerAuth));
+        address investor = address(0xA11CE);
+        bytes32 agreementId = keccak256("agreement-override");
+        manager.setCounterparty(agreementId, investor);
+
+        condition.setFounderOverride(address(manager), investor, true);
+
+        assertTrue(condition.founderOverrides(address(manager), investor));
+        assertTrue(condition.checkCondition(address(manager), bytes4(0), abi.encode(agreementId)));
+    }
+
+    function test_SetFounderOverride_PublicMappingGetter() public {
+        BorgAuth managerAuth = new BorgAuth(address(this));
+        MockManager manager = new MockManager(address(managerAuth));
+        address investor = address(0xA11CE);
+
+        assertFalse(condition.founderOverrides(address(manager), investor));
+        condition.setFounderOverride(address(manager), investor, true);
+        assertTrue(condition.founderOverrides(address(manager), investor));
+    }
+
+    function test_SetFounderOverride_EmitsFounderOverrideUpdated() public {
+        BorgAuth managerAuth = new BorgAuth(address(this));
+        MockManager manager = new MockManager(address(managerAuth));
+        address investor = address(0xA11CE);
+
+        vm.expectEmit(true, true, true, true);
+        emit NonUSNationalityCondition.FounderOverrideUpdated(address(manager), investor, true, address(this));
+        condition.setFounderOverride(address(manager), investor, true);
+    }
+
+    function test_SetFounderOverride_RevokeOverride() public {
+        BorgAuth managerAuth = new BorgAuth(address(this));
+        MockManager manager = new MockManager(address(managerAuth));
+        address investor = address(0xA11CE);
+        bytes32 agreementId = keccak256("agreement-revoke");
+        manager.setCounterparty(agreementId, investor);
+
+        condition.setFounderOverride(address(manager), investor, true);
+        condition.setFounderOverride(address(manager), investor, false);
+
+        assertFalse(condition.founderOverrides(address(manager), investor));
+        assertFalse(condition.checkCondition(address(manager), bytes4(0), abi.encode(agreementId)));
+    }
+
+    function test_CheckCondition_FounderOverrideTakesPrecedence() public {
+        BorgAuth managerAuth = new BorgAuth(address(this));
+        MockManager manager = new MockManager(address(managerAuth));
+        address investor = address(0xA11CE);
+        bytes32 agreementId = keccak256("agreement-expired");
+        manager.setCounterparty(agreementId, investor);
+
+        ProofVerificationParams memory params = _buildParams(investor, block.timestamp, 1 days);
+        vm.prank(investor);
+        condition.submitProof(params, false);
+
+        vm.warp(block.timestamp + 2 days);
+        assertFalse(condition.checkCondition(address(manager), bytes4(0), abi.encode(agreementId)));
+
+        condition.setFounderOverride(address(manager), investor, true);
+        assertTrue(condition.checkCondition(address(manager), bytes4(0), abi.encode(agreementId)));
+    }
+
+    function test_CheckCondition_OverrideScopedToManager() public {
+        BorgAuth managerAuthA = new BorgAuth(address(this));
+        MockManager managerA = new MockManager(address(managerAuthA));
+        BorgAuth managerAuthB = new BorgAuth(address(this));
+        MockManager managerB = new MockManager(address(managerAuthB));
+        address investor = address(0xA11CE);
+        bytes32 agreementId = keccak256("agreement-scoped");
+        managerA.setCounterparty(agreementId, investor);
+        managerB.setCounterparty(agreementId, investor);
+
+        condition.setFounderOverride(address(managerA), investor, true);
+
+        assertTrue(condition.checkCondition(address(managerA), bytes4(0), abi.encode(agreementId)));
+        assertFalse(condition.checkCondition(address(managerB), bytes4(0), abi.encode(agreementId)));
+    }
+
+    function test_RevertWhen_SetFounderOverride_Unauthorized() public {
+        BorgAuth managerAuth = new BorgAuth(address(this));
+        MockManager manager = new MockManager(address(managerAuth));
+        address attacker = address(0xDEAD);
+
+        vm.prank(attacker);
+        vm.expectRevert(
+            abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, uint256(99), attacker)
+        );
+        condition.setFounderOverride(address(manager), address(0xA11CE), true);
+    }
+
+    function test_RevertWhen_SetFounderOverride_InvalidManager() public {
+        vm.expectRevert(NonUSNationalityCondition.InvalidManager.selector);
+        condition.setFounderOverride(address(0), address(0xA11CE), true);
+    }
+
+    function test_RevertWhen_SetFounderOverride_InvalidInvestor() public {
+        BorgAuth managerAuth = new BorgAuth(address(this));
+        MockManager manager = new MockManager(address(managerAuth));
+
+        vm.expectRevert(NonUSNationalityCondition.InvalidInvestor.selector);
+        condition.setFounderOverride(address(manager), address(0), true);
     }
 
     // --- access control tests ---

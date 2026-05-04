@@ -126,7 +126,8 @@ contract PumpCorpFactoryTest is Test {
             expectedDomain,
             expectedScope,
             2592000, // maxValidityPeriod,
-            block.chainid
+            block.chainid,
+            false
         );
 
         // Deploy OrCondition (zkPassport || LexChex)
