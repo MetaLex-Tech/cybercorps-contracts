@@ -278,20 +278,25 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         uint256 expiry,
         bytes32[] memory partyViewingPubKeys,
         bytes[] memory partyCapsules
-    ) external returns (bytes32 contractId) {
-        if (partyViewingPubKeys.length != parties.length) revert MismatchedViewingPubKeysLength();
-        if (partyCapsules.length != parties.length) revert MismatchedCapsulesLength();
+    ) public returns (bytes32 contractId) {
+        bool hasECDH = partyViewingPubKeys.length > 0 || partyCapsules.length > 0;
+        if (hasECDH) {
+            if (partyViewingPubKeys.length != parties.length) revert MismatchedViewingPubKeysLength();
+            if (partyCapsules.length != parties.length) revert MismatchedCapsulesLength();
+        }
 
         contractId = _createContract(templateId, salt, globalValues, parties, partyValues, secretHash, finalizer, expiry);
 
-        for (uint256 i = 0; i < parties.length; i++) {
-            if (partyCapsules[i].length != 72) revert InvalidCapsuleLength();
-            bytes32 registered = viewingPubKeys[parties[i]];
-            if (registered != bytes32(0) && partyViewingPubKeys[i] != registered)
-                revert ViewingPubKeyMismatch();
-            agreements[contractId].viewingPubKeys[parties[i]] = partyViewingPubKeys[i];
-            agreements[contractId].capsules[parties[i]] = partyCapsules[i];
-            emit CapsuleStored(contractId, parties[i], partyViewingPubKeys[i]);
+        if (hasECDH) {
+            for (uint256 i = 0; i < parties.length; i++) {
+                if (partyCapsules[i].length != 72) revert InvalidCapsuleLength();
+                bytes32 registered = viewingPubKeys[parties[i]];
+                if (registered != bytes32(0) && partyViewingPubKeys[i] != registered)
+                    revert ViewingPubKeyMismatch();
+                agreements[contractId].viewingPubKeys[parties[i]] = partyViewingPubKeys[i];
+                agreements[contractId].capsules[parties[i]] = partyCapsules[i];
+                emit CapsuleStored(contractId, parties[i], partyViewingPubKeys[i]);
+            }
         }
     }
 
@@ -390,6 +395,68 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         );
     }
 
+    function createStandaloneContractAndSign(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        uint256 expiry,
+        bytes calldata signature,
+        bytes32[] memory partyViewingPubKeys,
+        bytes[] memory partyCapsules
+    ) external returns (bytes32 contractId) {
+        return createStandaloneContractAndSignFor(
+            title,
+            legalContractUri,
+            globalFields,
+            partyFields,
+            salt,
+            globalValues,
+            parties,
+            partyValues,
+            expiry,
+            msg.sender,
+            signature,
+            partyViewingPubKeys,
+            partyCapsules
+        );
+    }
+
+    /// @notice See `createStandaloneContractAndSignFor()`
+    function createStandaloneContractAndSignFor(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        uint256 expiry,
+        address signer,
+        bytes calldata signature
+    ) public returns (bytes32 contractId) {
+        return createStandaloneContractAndSignFor(
+            title,
+            legalContractUri,
+            globalFields,
+            partyFields,
+            salt,
+            globalValues,
+            parties,
+            partyValues,
+            expiry,
+            signer,
+            signature,
+            new bytes32[](0),
+            new bytes[](0)
+        );
+    }
+
     /// @notice Create a standalone agreement that:
     /// - Proposer can prepare & sign an agreement in one tx. For single-party agreements that means one tx and done
     /// - Standalone means it creates its own template just-in-time if needed. No more waiting for admin to create the template for you
@@ -408,7 +475,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         string[][] memory partyValues,
         uint256 expiry,
         address signer,
-        bytes calldata signature
+        bytes calldata signature,
+        bytes32[] memory partyViewingPubKeys,
+        bytes[] memory partyCapsules
     ) public returns (bytes32 contractId) {
         // Derive template ID
         bytes32 templateId = keccak256(abi.encode(
@@ -437,7 +506,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             partyValues,
             "", // secretHash
             address(0), // fixed finalizer, see notice above
-            expiry
+            expiry,
+            partyViewingPubKeys,
+            partyCapsules
         );
 
         signContractFor(

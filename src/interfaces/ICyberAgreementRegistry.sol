@@ -111,6 +111,37 @@ interface ICyberAgreementRegistry {
         bytes[] memory partyCapsules
     ) external returns (bytes32);
 
+    function createStandaloneContractAndSign(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        uint256 expiry,
+        bytes calldata signature,
+        bytes32[] memory partyViewingPubKeys,
+        bytes[] memory partyCapsules
+    ) external returns (bytes32);
+
+    function createStandaloneContractAndSignFor(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        uint256 expiry,
+        address signer,
+        bytes calldata signature,
+        bytes32[] memory partyViewingPubKeys,
+        bytes[] memory partyCapsules
+    ) external returns (bytes32);
+
     function registerViewingPubKey(bytes32 pubKey) external;
 
     function getCapsule(bytes32 contractId, address party) external view returns (bytes memory);

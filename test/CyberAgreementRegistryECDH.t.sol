@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
+import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 
 contract CyberAgreementRegistryECDHTest is Test {
     CyberAgreementRegistry registry;
@@ -137,6 +138,23 @@ contract CyberAgreementRegistryECDHTest is Test {
         vm.prank(partyA);
         bytes32 contractId = registry.createContract(
             TEMPLATE_ID, 0, globalValues, p, v, bytes32(0), address(0), 0
+        );
+
+        assertEq(registry.getCapsule(contractId, partyA).length, 0);
+        assertEq(registry.getCapsule(contractId, partyB).length, 0);
+        assertEq(registry.getAgreementViewingPubKey(contractId, partyA), bytes32(0));
+        assertEq(registry.getAgreementViewingPubKey(contractId, partyB), bytes32(0));
+    }
+
+    // ── createContract (10-param) — zero-length ECDH arrays ─────────────────
+
+    function test_createContract_10param_emptyECDHArrays_stkGettersReturnEmpty() public {
+        (address[] memory p, string[][] memory v) = _parties();
+
+        vm.prank(partyA);
+        bytes32 contractId = registry.createContract(
+            TEMPLATE_ID, 0, globalValues, p, v, bytes32(0), address(0), 0,
+            new bytes32[](0), new bytes[](0)
         );
 
         assertEq(registry.getCapsule(contractId, partyA).length, 0);
@@ -300,6 +318,224 @@ contract CyberAgreementRegistryECDHTest is Test {
             pubKeys, capsules
         );
 
+        assertEq(registry.getAgreementViewingPubKey(contractId, partyA), pubKeys[0]);
+        assertEq(registry.getAgreementViewingPubKey(contractId, partyB), pubKeys[1]);
+    }
+
+    // ── createStandaloneContractAndSignFor (13-param) — zero-length ECDH arrays
+
+    function test_createStandaloneContractAndSignFor_emptyECDHArrays_stkGettersReturnEmpty() public {
+        uint256 salt = 100;
+        (address[] memory p, string[][] memory v) = _parties();
+
+        bytes32 contractId = _standaloneContractId(salt, p);
+        bytes memory sig = _signForPartyA(contractId, v[0]);
+
+        vm.prank(partyA);
+        bytes32 returnedId = registry.createStandaloneContractAndSignFor(
+            STANDALONE_TITLE, LEGAL_URI, globalFields, partyFields,
+            salt, globalValues, p, v, 0,
+            partyA, sig,
+            new bytes32[](0), new bytes[](0)
+        );
+
+        assertEq(returnedId, contractId);
+        assertEq(registry.getCapsule(contractId, partyA).length, 0);
+        assertEq(registry.getCapsule(contractId, partyB).length, 0);
+        assertEq(registry.getAgreementViewingPubKey(contractId, partyA), bytes32(0));
+        assertEq(registry.getAgreementViewingPubKey(contractId, partyB), bytes32(0));
+    }
+
+    // ── createStandaloneContractAndSign ECDH ─────────────────────────────────
+
+    string constant STANDALONE_TITLE = "Standalone Test";
+
+    function _standaloneTemplateId() internal view returns (bytes32) {
+        return keccak256(abi.encode(STANDALONE_TITLE, LEGAL_URI, globalFields, partyFields));
+    }
+
+    function _standaloneContractId(uint256 salt, address[] memory p) internal view returns (bytes32) {
+        return keccak256(abi.encode(_standaloneTemplateId(), salt, globalValues, p));
+    }
+
+    function _signForPartyA(bytes32 contractId, string[] memory partyValues) internal view returns (bytes memory) {
+        return CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            LEGAL_URI,
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues,
+            partyAKey
+        );
+    }
+
+    function test_createStandaloneContractAndSign_storesCapsulesAndPubKeys() public {
+        uint256 salt = 1;
+        (address[] memory p, string[][] memory v) = _parties();
+        (bytes memory capsA, bytes memory capsB) = _capsules72();
+        bytes32[] memory pubKeys = new bytes32[](2);
+        pubKeys[0] = bytes32(uint256(0xAAAA));
+        pubKeys[1] = bytes32(uint256(0xBBBB));
+        bytes[] memory capsules = new bytes[](2);
+        capsules[0] = capsA;
+        capsules[1] = capsB;
+
+        bytes32 contractId = _standaloneContractId(salt, p);
+        bytes memory sig = _signForPartyA(contractId, v[0]);
+
+        vm.prank(partyA);
+        bytes32 returnedId = registry.createStandaloneContractAndSign(
+            STANDALONE_TITLE, LEGAL_URI, globalFields, partyFields,
+            salt, globalValues, p, v, 0,
+            sig, pubKeys, capsules
+        );
+
+        assertEq(returnedId, contractId);
+        assertEq(registry.getCapsule(contractId, partyA), capsA);
+        assertEq(registry.getCapsule(contractId, partyB), capsB);
+        assertEq(registry.getAgreementViewingPubKey(contractId, partyA), pubKeys[0]);
+        assertEq(registry.getAgreementViewingPubKey(contractId, partyB), pubKeys[1]);
+    }
+
+    function test_createStandaloneContractAndSign_emitsCapsuleStored() public {
+        uint256 salt = 2;
+        (address[] memory p, string[][] memory v) = _parties();
+        (bytes memory capsA,) = _capsules72();
+        bytes32 pubKeyA = bytes32(uint256(0xAAAA));
+        bytes32[] memory pubKeys = new bytes32[](2);
+        pubKeys[0] = pubKeyA;
+        pubKeys[1] = bytes32(uint256(0xBBBB));
+        bytes[] memory capsules = new bytes[](2);
+        capsules[0] = capsA;
+        capsules[1] = new bytes(72);
+
+        bytes32 contractId = _standaloneContractId(salt, p);
+        bytes memory sig = _signForPartyA(contractId, v[0]);
+
+        vm.prank(partyA);
+        vm.expectEmit(true, true, false, true);
+        emit CyberAgreementRegistry.CapsuleStored(contractId, partyA, pubKeyA);
+        registry.createStandaloneContractAndSign(
+            STANDALONE_TITLE, LEGAL_URI, globalFields, partyFields,
+            salt, globalValues, p, v, 0,
+            sig, pubKeys, capsules
+        );
+    }
+
+    function test_createStandaloneContractAndSign_revertsOnMismatchedPubKeysLength() public {
+        uint256 salt = 3;
+        (address[] memory p, string[][] memory v) = _parties();
+        bytes32[] memory pubKeys = new bytes32[](1);
+        bytes[] memory capsules = new bytes[](2);
+        capsules[0] = new bytes(72);
+        capsules[1] = new bytes(72);
+
+        bytes32 contractId = _standaloneContractId(salt, p);
+        bytes memory sig = _signForPartyA(contractId, v[0]);
+
+        vm.prank(partyA);
+        vm.expectRevert(CyberAgreementRegistry.MismatchedViewingPubKeysLength.selector);
+        registry.createStandaloneContractAndSign(
+            STANDALONE_TITLE, LEGAL_URI, globalFields, partyFields,
+            salt, globalValues, p, v, 0,
+            sig, pubKeys, capsules
+        );
+    }
+
+    function test_createStandaloneContractAndSign_revertsOnMismatchedCapsulesLength() public {
+        uint256 salt = 4;
+        (address[] memory p, string[][] memory v) = _parties();
+        bytes32[] memory pubKeys = new bytes32[](2);
+        bytes[] memory capsules = new bytes[](1);
+        capsules[0] = new bytes(72);
+
+        bytes32 contractId = _standaloneContractId(salt, p);
+        bytes memory sig = _signForPartyA(contractId, v[0]);
+
+        vm.prank(partyA);
+        vm.expectRevert(CyberAgreementRegistry.MismatchedCapsulesLength.selector);
+        registry.createStandaloneContractAndSign(
+            STANDALONE_TITLE, LEGAL_URI, globalFields, partyFields,
+            salt, globalValues, p, v, 0,
+            sig, pubKeys, capsules
+        );
+    }
+
+    function test_createStandaloneContractAndSign_revertsOnInvalidCapsuleLength() public {
+        uint256 salt = 5;
+        (address[] memory p, string[][] memory v) = _parties();
+        bytes32[] memory pubKeys = new bytes32[](2);
+        bytes[] memory capsules = new bytes[](2);
+        capsules[0] = new bytes(71);
+        capsules[1] = new bytes(72);
+
+        bytes32 contractId = _standaloneContractId(salt, p);
+        bytes memory sig = _signForPartyA(contractId, v[0]);
+
+        vm.prank(partyA);
+        vm.expectRevert(CyberAgreementRegistry.InvalidCapsuleLength.selector);
+        registry.createStandaloneContractAndSign(
+            STANDALONE_TITLE, LEGAL_URI, globalFields, partyFields,
+            salt, globalValues, p, v, 0,
+            sig, pubKeys, capsules
+        );
+    }
+
+    function test_createStandaloneContractAndSign_revertsOnViewingPubKeyMismatch() public {
+        bytes32 registeredKey = bytes32(uint256(0xAAAA));
+        vm.prank(partyA);
+        registry.registerViewingPubKey(registeredKey);
+
+        uint256 salt = 6;
+        (address[] memory p, string[][] memory v) = _parties();
+        bytes32[] memory pubKeys = new bytes32[](2);
+        pubKeys[0] = bytes32(uint256(0xBEEF));
+        pubKeys[1] = bytes32(uint256(0xBBBB));
+        bytes[] memory capsules = new bytes[](2);
+        capsules[0] = new bytes(72);
+        capsules[1] = new bytes(72);
+
+        bytes32 contractId = _standaloneContractId(salt, p);
+        bytes memory sig = _signForPartyA(contractId, v[0]);
+
+        vm.prank(partyA);
+        vm.expectRevert(CyberAgreementRegistry.ViewingPubKeyMismatch.selector);
+        registry.createStandaloneContractAndSign(
+            STANDALONE_TITLE, LEGAL_URI, globalFields, partyFields,
+            salt, globalValues, p, v, 0,
+            sig, pubKeys, capsules
+        );
+    }
+
+    function test_createStandaloneContractAndSignFor_storesCapsulesAndPubKeys() public {
+        uint256 salt = 7;
+        (address[] memory p, string[][] memory v) = _parties();
+        (bytes memory capsA, bytes memory capsB) = _capsules72();
+        bytes32[] memory pubKeys = new bytes32[](2);
+        pubKeys[0] = bytes32(uint256(0xAAAA));
+        pubKeys[1] = bytes32(uint256(0xBBBB));
+        bytes[] memory capsules = new bytes[](2);
+        capsules[0] = capsA;
+        capsules[1] = capsB;
+
+        bytes32 contractId = _standaloneContractId(salt, p);
+        bytes memory sig = _signForPartyA(contractId, v[0]);
+
+        vm.prank(partyA);
+        bytes32 returnedId = registry.createStandaloneContractAndSignFor(
+            STANDALONE_TITLE, LEGAL_URI, globalFields, partyFields,
+            salt, globalValues, p, v, 0,
+            partyA, sig,
+            pubKeys, capsules
+        );
+
+        assertEq(returnedId, contractId);
+        assertEq(registry.getCapsule(contractId, partyA), capsA);
+        assertEq(registry.getCapsule(contractId, partyB), capsB);
         assertEq(registry.getAgreementViewingPubKey(contractId, partyA), pubKeys[0]);
         assertEq(registry.getAgreementViewingPubKey(contractId, partyB), pubKeys[1]);
     }

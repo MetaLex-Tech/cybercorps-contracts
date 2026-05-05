@@ -18,7 +18,7 @@ contract DeployCyberAgreementRegistryScript is Script {
         // staging
         return runWithArgs({
             deployerPrivateKey: vm.envUint("PRIVATE_KEY_MAIN"),
-            saltStr: "CyberAgreementRegistry.encryption.v1.dev0",
+            saltStr: "CyberAgreementRegistry.encryption.v1.dev1",
             auth: BorgAuth(address(0)) // deploy a new one
         });
     }
