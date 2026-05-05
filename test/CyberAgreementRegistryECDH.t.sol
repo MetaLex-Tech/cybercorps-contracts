@@ -4,7 +4,7 @@ import {Test} from "forge-std/Test.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
-contract CyberAgreementRegistryTest is Test {
+contract CyberAgreementRegistryECDHTest is Test {
     CyberAgreementRegistry registry;
 
     address owner;
