@@ -66,7 +66,8 @@ enum SecuritySeries {
     SeriesD,
     SeriesE,
     SeriesF,
-    NA
+    NA,
+    ACE
 }
 
 enum SecurityStatus {
@@ -105,6 +106,20 @@ enum UnlockingIntervalType {
     hourly,
     daily,
     monthly
+}
+
+struct CertificateSVGParams {
+    string corpName;
+    SecurityClass securityType;
+    SecuritySeries securitySeries;
+    string officerName;
+    string officerTitle;
+    uint256 units;
+    uint256 valuation;
+    string jurisdiction;
+    string ownerName;
+    uint256 tokenId;
+    string certificateUri;
 }
 
 

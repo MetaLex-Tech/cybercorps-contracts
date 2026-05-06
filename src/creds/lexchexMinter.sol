@@ -67,6 +67,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
     error MintFailed();
     error AccreditationDoesNotExist();
     error AccreditationVoided();
+    error RequestOwnerMismatch();
 
     // Events
     event MintRequested(address indexed requester, uint256 mintPrice, bytes32 agreementId);
@@ -215,7 +216,7 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
     /// @notice Admin-only path to mint for autominting with certain conditions in investing
     /// @dev Mirrors requestMint but gated by onlyAdmin and skips _verifyAuthoritySignature
     function requestMintFor(
-        MintRequest calldata request,
+        MintRequest memory request,
         bytes32 _templateId,
         uint256 _salt,
         string[] memory _globalValues,
@@ -331,6 +332,10 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
         if(bytes(acc.voided).length > 0) {
             revert AccreditationVoided();
         }
+        // Bind signed subject to the actual token owner to prevent cross-account renewals.
+        if (LeXcheX(lexchex).ownerOf(tokenId) != request.owner) {
+            revert RequestOwnerMismatch();
+        }
 
         // Note an expired token could still be renewed
 
@@ -372,6 +377,10 @@ contract LeXcheXMinter is Initializable, UUPSUpgradeable, BorgAuthACL {
         // Check that the accreditation has not been voided
         if(bytes(acc.voided).length > 0) {
             revert AccreditationVoided();
+        }
+        // Keep admin path consistent and avoid mutating a token for a different subject.
+        if (LeXcheX(lexchex).ownerOf(tokenId) != request.owner) {
+            revert RequestOwnerMismatch();
         }
 
         // Handle payment using safeTransferFrom

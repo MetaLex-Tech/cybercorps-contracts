@@ -41,10 +41,113 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
+import "openzeppelin-contracts/proxy/beacon/BeaconProxy.sol";
 import "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
+import "openzeppelin-contracts/utils/Create2.sol";
 import "../interfaces/ICondition.sol";
+import "../interfaces/ICyberCertPrinter.sol";
+import "../interfaces/ICyberCorp.sol";
+import "../interfaces/ICyberScrip.sol";
+import "../interfaces/IIssuanceManager.sol";
+import "../interfaces/ITransferRestrictionHook.sol";
+import "./CyberCertPrinterStorage.sol";
 
 library IssuanceManagerStorage {
+    error ConditionCheckFailed();
+    error ScripifiedCertNotAllowed();
+    error ScripToCertMinimumNotMet();
+    error ScripifyNotWhitelisted();
+    error ScripifyOverMax();
+    error RecertificationApprovalRequired();
+    error CompanyDetailsNotSet();
+    error InvalidScripRatio();
+    error SignatureRequired();
+    error InvalidInvestor();
+    error InvalidInvestorName();
+    error InvalidAmount();
+    error CertificateVoided();
+    error NotLegalOwner();
+    error AmountExceedsAvailableUnits();
+    error ZeroSharesMinted();
+    error EmptyVault();
+    error VaultRedemptionExceedsClaim();
+    error VaultWithdrawalExceedsAssets();
+
+    /// @dev Ray precision for vault price-per-share (assets per 1 nominal share, 1e27 = 1.0).
+    uint256 internal constant VAULT_RAY = 1e27;
+
+    event ScripifiedCert(
+        address indexed certAddress,
+        uint256 indexed id,
+        address indexed scripifiedCert,
+        uint256 amount,
+        uint256 newUnitsRepresented,
+        uint256 newCertNominalShares,
+        uint256 newTotalAssetsWad,
+        uint256 newTotalNominalShares
+    );
+    event CertPrinterCreated(
+        address indexed certificate,
+        address indexed corp,
+        string[] ledger,
+        string name,
+        string ticker,
+        SecurityClass securityType,
+        SecuritySeries securitySeries,
+        string certificateUri
+    );
+    event CertificateCreated(
+        uint256 indexed tokenId,
+        address indexed certificate,
+        uint256 amount,
+        uint256 cap,
+        CertificateDetails details,
+        string tokenURI
+    );
+    event ScripToCertMinimumSet(address indexed certAddress, uint256 minimum);
+    event ScripifyWhitelistEnabledSet(address indexed certAddress, bool enabled);
+    event ScripifyWhitelistUpdated(
+        address indexed certAddress,
+        uint256 indexed id,
+        bool isWhitelisted
+    );
+    event CyberScripDeployed(
+        address indexed certPrinterAddress,
+        address indexed cyberScripAddress,
+        uint256 scripRatioNumerator,
+        uint256 scripRatioDenominator,
+        bool enableForceTransfer,
+        bool enableForceBurn,
+        bool enableFreeze
+    );
+    event RecertificationApprovalSet(
+        address indexed certAddress,
+        address indexed investor,
+        string investorName
+    );
+    event RecertificationApprovalCleared(
+        address indexed certAddress,
+        address indexed investor
+    );
+    event ScripRecertified(
+        address indexed certAddress,
+        address indexed user,
+        uint256 indexed certId,
+        uint256 scripAmount,
+        uint256 newUnitsRepresented,
+        uint256 newCertNominalShares,
+        uint256 newTotalAssetsWad,
+        uint256 newTotalNominalShares
+    );
+    event ScripAddedToExistingCert(
+        address indexed certAddress,
+        address indexed user,
+        uint256 indexed certId,
+        uint256 scripsAdded,
+        uint256 newUnitsRepresented,
+        uint256 newUnitsScripified
+    );
+
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.issuancemanager.storage.v1");
 
@@ -59,6 +162,50 @@ library IssuanceManagerStorage {
         mapping(address => address) scripifiedCert;
         mapping(address => ICondition[]) certToScripConditions;
         mapping(address => ICondition[]) scripToCertConditions;
+        mapping(address => uint256) scripToCertMinimums;
+        mapping(address => ScripRatio) scripRatios;
+        mapping(address => bool) scripifyWhitelistEnabled;
+        mapping(address => mapping(uint256 => bool)) scripifyWhitelist;
+        mapping(address => mapping(uint256 => CertScripState)) certScripStates;
+        mapping(address => CertScripUnitPool) certScripUnitPools;
+        mapping(address => mapping(address => RecertificationApproval))
+            recertificationApprovals;
+    }
+
+    struct ScripRatio {
+        uint256 numerator;
+        uint256 denominator;
+    }
+
+    struct RecertSelection {
+        bool foundActive;
+        uint256 activeTokenId;
+    }
+
+    /// @notice Per-certificate vault position: nominal shares in the scripified-units vault.
+    ///         Claim on underlying (wad) = vaultNominalShares * totalAssetsWad / totalNominalShares.
+    /// @dev Three slots preserve layout vs legacy (amount, reductionDebt, maxUnitsRepresented).
+    struct CertScripState {
+        uint256 vaultNominalShares;
+        /// @dev Legacy `reductionDebt` slot — unused after ERC4626 vault migration.
+        uint256 deprecatedMasterChefDebtSlot;
+        uint256 maxUnitsRepresented;
+    }
+
+    /// @notice ERC4626-style pool for scripified certificate units (underlying in 18-dec wad).
+    struct CertScripUnitPool {
+        uint256 totalAssetsWad;
+        uint256 totalNominalShares;
+    }
+
+    struct RecertificationApproval {
+        bool approved;
+        string investorName;
+        CertificateDetails details;
+        /// @dev CyberCorp officer signature bytes, applied as issuer signature on the new certificate at conversion.
+        bytes officerSignature;
+        /// @dev Timestamp recorded when approval is set (endorsement / signature context).
+        uint256 endorsementTimestamp;
     }
 
     // Returns the storage layout
@@ -84,14 +231,6 @@ library IssuanceManagerStorage {
 
     function getPrinters() internal view returns (address[] storage) {
         return issuanceManagerStorage().printers;
-    }
-
-    function getPrinterAt(uint256 index) internal view returns (address) {
-        return issuanceManagerStorage().printers[index];
-    }
-
-    function getPrintersCount() internal view returns (uint256) {
-        return issuanceManagerStorage().printers.length;
     }
 
     // Setters
@@ -178,10 +317,1086 @@ library IssuanceManagerStorage {
         }
     }
 
+    function getScripToCertMinimum(address certAddress) internal view returns (uint256) {
+        return issuanceManagerStorage().scripToCertMinimums[certAddress];
+    }
+
+    function setScripToCertMinimum(address certAddress, uint256 minimum) internal {
+        issuanceManagerStorage().scripToCertMinimums[certAddress] = minimum;
+    }
+
+    function isScripifyWhitelisted(
+        address certAddress,
+        uint256 id
+    ) internal view returns (bool) {
+        return issuanceManagerStorage().scripifyWhitelist[certAddress][id];
+    }
+
+    function setScripifyWhitelistEnabled(
+        address certAddress,
+        bool enabled
+    ) internal {
+        issuanceManagerStorage().scripifyWhitelistEnabled[certAddress] = enabled;
+    }
+
+    function getScripifyWhitelistEnabled(
+        address certAddress
+    ) internal view returns (bool) {
+        return issuanceManagerStorage().scripifyWhitelistEnabled[certAddress];
+    }
+
+    function setScripifyWhitelisted(
+        address certAddress,
+        uint256 id,
+        bool isWhitelisted
+    ) internal {
+        issuanceManagerStorage().scripifyWhitelist[certAddress][id] = isWhitelisted;
+    }
+
     function setCertToScripConditions(address certAddress, ICondition[] memory conditions) internal {
         delete issuanceManagerStorage().certToScripConditions[certAddress];
         for (uint i = 0; i < conditions.length; i++) {
             issuanceManagerStorage().certToScripConditions[certAddress].push(conditions[i]);
         }
+    }
+
+    function getScripRatio(address certAddress) internal view returns (ScripRatio storage) {
+        return issuanceManagerStorage().scripRatios[certAddress];
+    }
+
+    function setScripRatio(address certAddress, uint256 numerator, uint256 denominator) internal {
+        issuanceManagerStorage().scripRatios[certAddress] = ScripRatio({
+            numerator: numerator,
+            denominator: denominator
+        });
+    }
+
+    function getCertScripState(
+        address certAddress,
+        uint256 id
+    ) internal view returns (CertScripState storage) {
+        return issuanceManagerStorage().certScripStates[certAddress][id];
+    }
+
+    /// @notice Underlying wad claim for one certificate’s vault position (pro-rata on total pool).
+    function _assetsOfVaultPosition(
+        address certAddress,
+        uint256 tokenId
+    ) internal view returns (uint256 assetsWad) {
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+            certAddress
+        ];
+        if (pool.totalNominalShares == 0) {
+            return 0;
+        }
+        CertScripState storage certState = getCertScripState(certAddress, tokenId);
+        return
+            certState.vaultNominalShares * pool.totalAssetsWad / pool.totalNominalShares;
+    }
+
+    /// @dev Scrip-token-equivalent claim for a single certificate's vault position.
+    function getScripPoolAmountById(
+        address certAddress,
+        uint256 tokenId
+    ) internal view returns (uint256 scripEquivalent) {
+        (uint256 num, uint256 den) = _getScripRatioOrDefault(certAddress);
+        uint256 assetsWad = _assetsOfVaultPosition(certAddress, tokenId);
+        if (assetsWad == 0) return 0;
+        return assetsWad * num / den;
+    }
+
+    /// @dev Nominal vault shares held by a single certificate.
+    function getScripPoolSharesById(
+        address certAddress,
+        uint256 tokenId
+    ) internal view returns (uint256 shares) {
+        return getCertScripState(certAddress, tokenId).vaultNominalShares;
+    }
+
+    function getRecertificationApproval(
+        address certAddress,
+        address investor
+    ) internal view returns (RecertificationApproval storage) {
+        return issuanceManagerStorage().recertificationApprovals[certAddress][
+            investor
+        ];
+    }
+
+    function getRecertificationApprovalData(
+        address certAddress,
+        address investor
+    )
+        internal
+        view
+        returns (
+            bool approved,
+            string memory investorName,
+            CertificateDetails memory details,
+            bytes memory officerSignature,
+            uint256 endorsementTimestamp
+        )
+    {
+        RecertificationApproval storage approval = getRecertificationApproval(
+            certAddress,
+            investor
+        );
+        approved = approval.approved;
+        investorName = approval.investorName;
+        details = approval.details;
+        officerSignature = approval.officerSignature;
+        endorsementTimestamp = approval.endorsementTimestamp;
+    }
+
+    function setRecertificationApproval(
+        address certAddress,
+        address investor,
+        string memory investorName,
+        CertificateDetails memory details,
+        bytes memory officerSignature
+    ) internal {
+        issuanceManagerStorage().recertificationApprovals[certAddress][
+            investor
+        ] = RecertificationApproval({
+            approved: true,
+            investorName: investorName,
+            details: details,
+            officerSignature: officerSignature,
+            endorsementTimestamp: block.timestamp
+        });
+    }
+
+    function clearRecertificationApproval(
+        address certAddress,
+        address investor
+    ) internal {
+        delete issuanceManagerStorage().recertificationApprovals[certAddress][
+            investor
+        ];
+    }
+
+    /// @return totalTrackedScrip ERC20 scrip total supply (canonical circulating scrip).
+    /// @return pricePerShareRay underlying wad per nominal vault share, ray precision (0 if empty vault).
+    function getScripPoolTotals(
+        address certAddress
+    )
+        internal
+        view
+        returns (uint256 totalTrackedScrip, uint256 pricePerShareRay)
+    {
+        address scrip = getScripifiedCert(certAddress);
+        totalTrackedScrip = scrip == address(0) ? 0 : ICyberScrip(scrip).totalSupply();
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+            certAddress
+        ];
+        pricePerShareRay = pool.totalNominalShares == 0
+            ? 0
+            : pool.totalAssetsWad * VAULT_RAY / pool.totalNominalShares;
+    }
+
+    function getCertScripUnitVault(
+        address certAddress
+    ) internal view returns (uint256 totalAssetsWad, uint256 totalNominalShares) {
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+            certAddress
+        ];
+        totalAssetsWad = pool.totalAssetsWad;
+        totalNominalShares = pool.totalNominalShares;
+    }
+
+    function getCertScripifiedStatus(
+        address certAddress,
+        uint256 id
+    )
+        internal
+        view
+        returns (bool isScripified, uint256 scripifiedUnits, uint256 maxUnitsRepresented)
+    {
+        CertScripState storage certState = getCertScripState(certAddress, id);
+        scripifiedUnits = getCurrentCertScripifiedUnits(certAddress, id);
+        isScripified = scripifiedUnits > 0;
+        maxUnitsRepresented = certState.maxUnitsRepresented;
+    }
+
+    function getCurrentCertScripifiedUnits(
+        address certAddress,
+        uint256 id
+    ) internal view returns (uint256) {
+        return _assetsOfVaultPosition(certAddress, id);
+    }
+
+    function executeCreateCertPrinter(
+        string[] memory ledger,
+        string memory name,
+        string memory ticker,
+        string memory certificateUri,
+        SecurityClass securityType,
+        SecuritySeries securitySeries,
+        address extension
+    ) external returns (address newCert) {
+        bytes32 salt = keccak256(abi.encodePacked(getPrinters().length, address(this)));
+        newCert = Create2.deploy(0, salt, _getBytecodeCertPrinter());
+        addPrinter(newCert);
+        ICyberCertPrinter(newCert).initialize(
+            ledger,
+            name,
+            ticker,
+            certificateUri,
+            address(this),
+            securityType,
+            securitySeries,
+            extension
+        );
+        emit CertPrinterCreated(
+            newCert,
+            getCORP(),
+            ledger,
+            name,
+            ticker,
+            securityType,
+            securitySeries,
+            certificateUri
+        );
+    }
+
+    function executeCreateCert(
+        address certAddress,
+        address to,
+        CertificateDetails memory details
+    ) external returns (uint256 id) {
+        ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
+        uint256 tokenId = cert.totalSupply();
+        id = cert.safeMint(tokenId, to, details);
+        _emitCertificateCreated(tokenId, certAddress, details, cert.tokenURI(tokenId));
+    }
+
+    function executeAssignCert(
+        address certAddress,
+        address from,
+        uint256 tokenId,
+        address investor,
+        CertificateDetails memory details
+    ) external {
+        ICyberCertPrinter(certAddress).assignCert(from, tokenId, investor, details);
+    }
+
+    function executeCreateCertAndAssign(
+        address certAddress,
+        address investor,
+        CertificateDetails memory details,
+        string memory investorName,
+        bytes memory endorsementSignature,
+        uint256 timestamp
+    ) external returns (uint256 tokenId) {
+        ICyberCertPrinter cert;
+        string memory tokenURI;
+        (cert, tokenId, tokenURI) = _mintAssignedCert(
+            certAddress,
+            investor,
+            details,
+            investorName
+        );
+
+        Endorsement memory newEndorsement = Endorsement({
+            endorser: address(this),
+            timestamp: timestamp,
+            signatureHash: endorsementSignature,
+            registry: address(0),
+            agreementId: 0,
+            endorsee: investor,
+            endorseeName: investorName
+        });
+        cert.addEndorsement(tokenId, newEndorsement);
+
+        bytes memory escrowedOfficerSignature = _getEscrowedOfficerSignature();
+
+        if (endorsementSignature.length > 0) {
+            cert.addIssuerSignature(tokenId, endorsementSignature);
+        }
+        if (escrowedOfficerSignature.length > 0) {
+            cert.addIssuerSignature(tokenId, escrowedOfficerSignature);
+        }
+
+        _emitCertificateCreated(tokenId, certAddress, details, tokenURI);
+    }
+
+    function executeCreateCertSignAndAssign(
+        address certAddress,
+        address investor,
+        CertificateDetails memory details,
+        bytes memory endorsementSignature,
+        address registry,
+        bytes32 agreementId,
+        string memory investorName
+    ) external returns (uint256 tokenId) {
+        ICyberCertPrinter cert;
+        string memory tokenURI;
+        (cert, tokenId, tokenURI) = _mintAssignedCert(
+            certAddress,
+            investor,
+            details,
+            investorName
+        );
+
+        Endorsement memory newEndorsement = Endorsement({
+            endorser: address(this),
+            timestamp: block.timestamp,
+            signatureHash: endorsementSignature,
+            registry: registry,
+            agreementId: agreementId,
+            endorsee: investor,
+            endorseeName: investorName
+        });
+        cert.addEndorsement(tokenId, newEndorsement);
+
+        bytes memory escrowedOfficerSignature = _getEscrowedOfficerSignature();
+
+        if (endorsementSignature.length > 0) {
+            cert.addIssuerSignature(tokenId, endorsementSignature);
+        }
+        if (escrowedOfficerSignature.length > 0) {
+            cert.addIssuerSignature(tokenId, escrowedOfficerSignature);
+        }
+
+        _emitCertificateCreated(tokenId, certAddress, details, tokenURI);
+    }
+
+    function executeAddIssuerSignature(
+        address certAddress,
+        uint256 tokenId,
+        bytes memory signature
+    ) external {
+        if (signature.length == 0) revert SignatureRequired();
+        ICyberCertPrinter(certAddress).addIssuerSignature(tokenId, signature);
+    }
+
+    function executeEndorseCertificate(
+        address certAddress,
+        uint256 tokenId,
+        address endorser,
+        bytes memory signature,
+        bytes32 agreementId
+    ) external {
+        Endorsement memory newEndorsement = Endorsement({
+            endorser: endorser,
+            timestamp: block.timestamp,
+            signatureHash: signature,
+            registry: address(0),
+            agreementId: agreementId,
+            endorsee: address(0),
+            endorseeName: ""
+        });
+        ICyberCertPrinter(certAddress).addEndorsement(tokenId, newEndorsement);
+    }
+
+    function executeVoidCertificate(address certAddress, uint256 tokenId) external {
+        ICyberCertPrinter(certAddress).voidCert(tokenId);
+    }
+
+    function executeUnvoidCertificate(address certAddress, uint256 tokenId) external {
+        ICyberCertPrinter(certAddress).unvoidCert(tokenId);
+    }
+
+    function executeSetGlobalTransferable(
+        address certAddress,
+        bool transferable
+    ) external {
+        ICyberCertPrinter(certAddress).setGlobalTransferable(transferable);
+    }
+
+    function executeSetRestrictionHook(
+        address certAddress,
+        uint256 id,
+        address hookAddress
+    ) external {
+        ICyberCertPrinter(certAddress).setRestrictionHook(id, hookAddress);
+    }
+
+    function executeSetGlobalRestrictionHook(
+        address certAddress,
+        address hookAddress
+    ) external {
+        ICyberCertPrinter(certAddress).setGlobalRestrictionHook(hookAddress);
+    }
+
+    function executeSetTokenTransferable(
+        address certAddress,
+        uint256 tokenId,
+        bool value
+    ) external {
+        ICyberCertPrinter(certAddress).setTokenTransferable(tokenId, value);
+    }
+
+    function executeSetScripRatio(
+        address certAddress,
+        uint256 numerator,
+        uint256 denominator
+    ) external {
+        if (numerator == 0 || denominator == 0) revert InvalidScripRatio();
+        setScripRatio(certAddress, numerator, denominator);
+    }
+
+    function executeSetScripToCertMinimum(
+        address certAddress,
+        uint256 minimum
+    ) external {
+        setScripToCertMinimum(certAddress, minimum);
+        emit ScripToCertMinimumSet(certAddress, minimum);
+    }
+
+    function executeSetScripifyWhitelistEnabled(
+        address certAddress,
+        bool enabled
+    ) external {
+        setScripifyWhitelistEnabled(certAddress, enabled);
+        emit ScripifyWhitelistEnabledSet(certAddress, enabled);
+    }
+
+    function executeSetScripifyWhitelistIds(
+        address certAddress,
+        uint256[] memory ids,
+        bool isWhitelisted
+    ) external {
+        for (uint256 i = 0; i < ids.length; i++) {
+            setScripifyWhitelisted(certAddress, ids[i], isWhitelisted);
+            emit ScripifyWhitelistUpdated(certAddress, ids[i], isWhitelisted);
+        }
+    }
+
+    function executeAddDefaultLegend(
+        address certAddress,
+        string memory newLegend
+    ) external {
+        ICyberCertPrinter(certAddress).addDefaultLegend(newLegend);
+    }
+
+    function executeRemoveDefaultLegendAt(
+        address certAddress,
+        uint256 index
+    ) external {
+        ICyberCertPrinter(certAddress).removeDefaultLegendAt(index);
+    }
+
+    function executeAddCertLegend(
+        address certAddress,
+        uint256 tokenId,
+        string memory newLegend
+    ) external {
+        ICyberCertPrinter(certAddress).addCertLegend(tokenId, newLegend);
+    }
+
+    function executeRemoveCertLegendAt(
+        address certAddress,
+        uint256 tokenId,
+        uint256 index
+    ) external {
+        ICyberCertPrinter(certAddress).removeCertLegendAt(tokenId, index);
+    }
+
+    function executeDeployCyberScrip(
+        address certAddress,
+        address auth,
+        ITransferRestrictionHook[] memory typeRestrictionHooks,
+        ICondition[] memory certToScripConditions,
+        ICondition[] memory scripToCertConditions,
+        uint256 scripToCertMinimum,
+        uint256 scripRatioNumerator,
+        uint256 scripRatioDenominator,
+        uint256[] memory scripifyWhitelistIds,
+        bool scripifyWhitelistEnabled,
+        bool enableForceTransfer,
+        bool enableForceBurn,
+        bool enableFreeze
+    ) external returns (address newScrip) {
+        if (scripRatioNumerator == 0 || scripRatioDenominator == 0) {
+            revert InvalidScripRatio();
+        }
+
+        bytes32 salt = keccak256(abi.encodePacked(certAddress, address(this)));
+        newScrip = Create2.deploy(0, salt, _getBytecodeScrip());
+        emit CyberScripDeployed(
+            certAddress,
+            newScrip,
+            scripRatioNumerator,
+            scripRatioDenominator,
+            enableForceTransfer,
+            enableForceBurn,
+            enableFreeze
+        );
+
+        ICyberScrip(newScrip).initialize(
+            auth,
+            certAddress,
+            address(this),
+            string(
+                abi.encodePacked("scrip", ICyberCertPrinter(certAddress).name())
+            ),
+            string(
+                abi.encodePacked("scrip", ICyberCertPrinter(certAddress).symbol())
+            ),
+            typeRestrictionHooks,
+            enableForceTransfer,
+            enableForceBurn,
+            enableFreeze
+        );
+
+        setScripifiedCert(certAddress, newScrip);
+        setCertToScripConditions(certAddress, certToScripConditions);
+        setScripToCertConditions(certAddress, scripToCertConditions);
+        setScripToCertMinimum(certAddress, scripToCertMinimum);
+        setScripRatio(certAddress, scripRatioNumerator, scripRatioDenominator);
+        emit ScripToCertMinimumSet(certAddress, scripToCertMinimum);
+
+        setScripifyWhitelistEnabled(certAddress, scripifyWhitelistEnabled);
+        emit ScripifyWhitelistEnabledSet(certAddress, scripifyWhitelistEnabled);
+
+        for (uint256 i = 0; i < scripifyWhitelistIds.length; i++) {
+            setScripifyWhitelisted(certAddress, scripifyWhitelistIds[i], true);
+            emit ScripifyWhitelistUpdated(certAddress, scripifyWhitelistIds[i], true);
+        }
+    }
+
+    function executeScripifyCert(
+        address certAddress,
+        uint256 id,
+        uint256 amount,
+        address target,
+        address account
+    ) external {
+        if (amount == 0) revert InvalidAmount();
+
+        address scripifiedCert = getScripifiedCert(certAddress);
+        if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
+
+        if (getScripifyWhitelistEnabled(certAddress)) {
+            if (!isScripifyWhitelisted(certAddress, id)) {
+                revert ScripifyNotWhitelisted();
+            }
+        }
+        
+        ICondition[] storage conditions = getCertToScripConditions(certAddress);
+        bytes4 selector = bytes4(
+            keccak256("scripifyCert(address,uint256,uint256,address)")
+        );
+        for (uint256 i = 0; i < conditions.length; i++) {
+            if (
+                !conditions[i].checkCondition(
+                    certAddress,
+                    selector,
+                    abi.encode(id, amount, target)
+                )
+            ) {
+                revert ConditionCheckFailed();
+            }
+        }
+
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        if (certificate.isVoided(id)) revert CertificateVoided();
+        if (certificate.legalOwnerOf(id) != account) revert NotLegalOwner();
+
+        address toSend = target;
+        if (toSend == address(0)) toSend = account;
+
+        CertificateDetails memory details = certificate
+            .getActiveCertificateDetails(id);
+
+        if (amount > details.unitsRepresented) {
+            revert AmountExceedsAvailableUnits();
+        }
+
+        (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(
+            certAddress
+        );
+        uint256 scripAmount = amount * numerator;
+        scripAmount = scripAmount / denominator;
+        CertScripState storage certState = getCertScripState(certAddress, id);
+        uint256 currentScripifiedUnits = getCurrentCertScripifiedUnits(
+            certAddress,
+            id
+        );
+        uint256 totalUnits = details.unitsRepresented + currentScripifiedUnits;
+        if (totalUnits > certState.maxUnitsRepresented) {
+            certState.maxUnitsRepresented = totalUnits;
+        }
+        if (currentScripifiedUnits + amount > certState.maxUnitsRepresented) {
+            revert ScripifyOverMax();
+        }
+
+        _depositCertScripUnits(certAddress, id, amount);
+        details.unitsRepresented = details.unitsRepresented - amount;
+        certificate.updateCertificateDetails(id, details);
+        ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
+        (uint256 newTotalAssetsWad, uint256 newTotalNominalShares) = getCertScripUnitVault(
+            certAddress
+        );
+        emit ScripifiedCert(
+            certAddress,
+            id,
+            scripifiedCert,
+            amount,
+            details.unitsRepresented,
+            getScripPoolSharesById(certAddress, id),
+            newTotalAssetsWad,
+            newTotalNominalShares
+        );
+    }
+
+    function executeConvertScripToCert(
+        address certAddress,
+        uint256 amount,
+        address account,
+        bytes4 convertSelector
+    ) external {
+        address scripifiedCert = getScripifiedCert(certAddress);
+        if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
+        uint256 minimum = getScripToCertMinimum(certAddress);
+        if (minimum > 0 && amount < minimum) revert ScripToCertMinimumNotMet();
+
+        (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(
+            certAddress
+        );
+        uint256 units = amount * denominator;
+        units = units / numerator;
+
+
+        ICondition[] storage conditions = getScripToCertConditions(certAddress);
+        for (uint256 i = 0; i < conditions.length; i++) {
+            if (
+                !conditions[i].checkCondition(
+                    certAddress,
+                    convertSelector,
+                    abi.encode(amount, account)
+                )
+            ) {
+                revert ConditionCheckFailed();
+            }
+        }
+
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        RecertSelection memory selection = _selectRecertToken(
+            certAddress,
+            account
+        );
+        bool requiresApproval = !selection.foundActive;
+        RecertificationApproval memory approval;
+        if (requiresApproval) {
+            (
+                bool approved,
+                string memory investorName,
+                CertificateDetails memory approvedDetails,
+                bytes memory officerSignature,
+                uint256 endorsementTimestamp
+            ) = getRecertificationApprovalData(certAddress, account);
+            if (!approved) revert RecertificationApprovalRequired();
+            if (officerSignature.length == 0) revert SignatureRequired();
+            approval.approved = approved;
+            approval.investorName = investorName;
+            approval.details = approvedDetails;
+            approval.officerSignature = officerSignature;
+            approval.endorsementTimestamp = endorsementTimestamp;
+        }
+
+        if (selection.foundActive) {
+            // Redeem vault shares for this certificate up to pool claim; burn nominals. Conversion
+            // above claim is still backed by burned scrip, so dilute remaining pool pro-rata via
+            // _withdrawVaultAssets (same economics as excess scrip burning without a cert position).
+            uint256 claimWad = _assetsOfVaultPosition(
+                certAddress,
+                selection.activeTokenId
+            );
+            uint256 fromVaultWad = units < claimWad ? units : claimWad;
+            uint256 redeemedWad;
+            if (fromVaultWad > 0) {
+                redeemedWad = _redeemVaultForCert(
+                    certAddress,
+                    selection.activeTokenId,
+                    fromVaultWad
+                );
+            }
+            if (units > redeemedWad) {
+                _withdrawVaultAssets(certAddress, units - redeemedWad);
+            }
+        } else {
+            // No active cert: socialized withdrawal from the shared vault (nominals unchanged).
+            _withdrawVaultAssets(certAddress, units);
+        }
+        ICyberScrip(scripifiedCert).burnFrom(account, amount);
+
+        if (selection.foundActive) {
+            CertificateDetails memory activeDetails = certificate
+                .getActiveCertificateDetails(selection.activeTokenId);
+            activeDetails.unitsRepresented =
+                activeDetails.unitsRepresented +
+                units;
+            certificate.updateCertificateDetails(
+                selection.activeTokenId,
+                activeDetails
+            );
+            _setCertMaxFromCurrent(
+                certAddress,
+                selection.activeTokenId,
+                activeDetails.unitsRepresented
+            );
+            CertificateDetails memory effectiveDetails = certificate
+                .getCertificateDetails(selection.activeTokenId);
+            CertificateDetails memory activeAfter = certificate
+                .getActiveCertificateDetails(selection.activeTokenId);
+            (
+                uint256 newTotalAssetsWad,
+                uint256 newTotalNominalShares
+            ) = getCertScripUnitVault(certAddress);
+            emit ScripAddedToExistingCert(
+                certAddress,
+                account,
+                selection.activeTokenId,
+                amount,
+                effectiveDetails.unitsRepresented,
+                effectiveDetails.unitsRepresented - activeAfter.unitsRepresented
+            );
+            emit ScripRecertified(
+                certAddress,
+                account,
+                selection.activeTokenId,
+                amount,
+                effectiveDetails.unitsRepresented,
+                getScripPoolSharesById(certAddress, selection.activeTokenId),
+                newTotalAssetsWad,
+                newTotalNominalShares
+            );
+        } else {
+            CertificateDetails memory details = approval.details;
+            details.unitsRepresented = units;
+            uint256 createdTokenId = IIssuanceManager(address(this))
+                .createCertAndAssignWithName(
+                    certAddress,
+                    account,
+                    details,
+                    approval.investorName,
+                    approval.officerSignature,
+                    approval.endorsementTimestamp
+                );
+            clearRecertificationApproval(certAddress, account);
+            _setCertMaxFromCurrent(
+                certAddress,
+                createdTokenId,
+                details.unitsRepresented
+            );
+            CertificateDetails memory effectiveDetails = certificate
+                .getCertificateDetails(createdTokenId);
+            (
+                uint256 newTotalAssetsWad,
+                uint256 newTotalNominalShares
+            ) = getCertScripUnitVault(certAddress);
+            emit ScripRecertified(
+                certAddress,
+                account,
+                createdTokenId,
+                amount,
+                effectiveDetails.unitsRepresented,
+                getScripPoolSharesById(certAddress, createdTokenId),
+                newTotalAssetsWad,
+                newTotalNominalShares
+            );
+        }
+    }
+
+    function executeForceScripBurn(
+        address certAddress,
+        address account,
+        uint256 amount
+    ) external {
+        if (amount == 0) revert InvalidAmount();
+
+        address scripifiedCert = getScripifiedCert(certAddress);
+        if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
+
+        (uint256 numerator, uint256 denominator) = _getScripRatioOrDefault(
+            certAddress
+        );
+        uint256 units = amount * denominator;
+        units = units / numerator;
+
+        _withdrawVaultAssets(certAddress, units);
+        ICyberScrip(scripifiedCert).forceBurn(account, amount);
+    }
+
+    function executeSetScripRestrictionHooks(
+        address certAddress,
+        ITransferRestrictionHook[] memory hooks
+    ) external {
+        ICyberScrip(_getScripifiedCertOrRevert(certAddress)).setRestrictionHook(hooks);
+    }
+
+    function executeDisableScripForceTransfer(address certAddress) external {
+        ICyberScrip(_getScripifiedCertOrRevert(certAddress)).disableForceTransfer();
+    }
+
+    function executeDisableScripForceBurn(address certAddress) external {
+        ICyberScrip(_getScripifiedCertOrRevert(certAddress)).disableForceBurn();
+    }
+
+    function executeDisableScripFreeze(address certAddress) external {
+        ICyberScrip(_getScripifiedCertOrRevert(certAddress)).disableFreeze();
+    }
+
+    function executeSetScripFrozen(
+        address certAddress,
+        address account,
+        bool isFrozen
+    ) external {
+        ICyberScrip(_getScripifiedCertOrRevert(certAddress)).setFrozen(
+            account,
+            isFrozen
+        );
+    }
+
+    function executeForceScripTransfer(
+        address certAddress,
+        address from,
+        address to,
+        uint256 amount
+    ) external {
+        ICyberScrip(_getScripifiedCertOrRevert(certAddress)).forceTransfer(
+            from,
+            to,
+            amount
+        );
+    }
+
+    function executeSetRecertificationApproval(
+        address certAddress,
+        address investor,
+        string memory investorName,
+        CertificateDetails memory details,
+        bytes memory officerSignature
+    ) external {
+        if (investor == address(0)) revert InvalidInvestor();
+        if (bytes(investorName).length == 0) revert InvalidInvestorName();
+        if (officerSignature.length == 0) revert SignatureRequired();
+        setRecertificationApproval(
+            certAddress,
+            investor,
+            investorName,
+            details,
+            officerSignature
+        );
+        emit RecertificationApprovalSet(certAddress, investor, investorName);
+    }
+
+    function executeClearRecertificationApproval(
+        address certAddress,
+        address investor
+    ) external {
+        clearRecertificationApproval(certAddress, investor);
+        emit RecertificationApprovalCleared(certAddress, investor);
+    }
+
+    function _selectRecertToken(
+        address certAddress,
+        address account
+    ) internal view returns (RecertSelection memory selection) {
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        uint256 ownedBalance = certificate.balanceOf(account);
+
+        for (uint256 i = 0; i < ownedBalance; i++) {
+            uint256 tokenId = certificate.tokenOfOwnerByIndex(account, i);
+            if (certificate.legalOwnerOf(tokenId) != account) continue;
+            if (certificate.isVoided(tokenId)) continue;
+            selection.foundActive = true;
+            selection.activeTokenId = tokenId;
+            return selection;
+        }
+    }
+
+    function _mintAssignedCert(
+        address certAddress,
+        address investor,
+        CertificateDetails memory details,
+        string memory investorName
+    )
+        internal
+        returns (ICyberCertPrinter cert, uint256 tokenId, string memory tokenURI)
+    {
+        _requireCompanyDetailsSet();
+        cert = ICyberCertPrinter(certAddress);
+        tokenId = cert.totalSupply();
+        cert.safeMintAndAssign(investor, tokenId, details, investorName);
+        tokenURI = cert.tokenURI(tokenId);
+        _emitCertificateCreated(tokenId, certAddress, details, tokenURI);
+    }
+
+    function _requireCompanyDetailsSet() internal view {
+        if (bytes(ICyberCorp(getCORP()).cyberCORPName()).length == 0) {
+            revert CompanyDetailsNotSet();
+        }
+    }
+
+    function _emitCertificateCreated(
+        uint256 tokenId,
+        address certAddress,
+        CertificateDetails memory details,
+        string memory tokenURI
+    ) internal {
+        emit CertificateCreated(
+            tokenId,
+            certAddress,
+            details.investmentAmountUSD,
+            details.issuerUSDValuationAtTimeOfInvestment,
+            details,
+            tokenURI
+        );
+    }
+
+    function _getEscrowedOfficerSignature()
+        internal
+        view
+        returns (bytes memory escrowedOfficerSignature)
+    {
+        address corp = getCORP();
+        try ICyberCorp(corp).getEscrowedOfficerSignatureCount() returns (
+            uint256 count
+        ) {
+            if (count > 0) {
+                try ICyberCorp(corp).getEscrowedOfficerSignature(0) returns (
+                    bytes memory sig
+                ) {
+                    escrowedOfficerSignature = sig;
+                } catch {}
+            }
+        } catch {}
+    }
+
+    function _getBytecodeCertPrinter() internal view returns (bytes memory bytecode) {
+        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
+        bytecode = abi.encodePacked(
+            sourceCodeBytes,
+            abi.encode(getCyberCertPrinterBeacon(), "")
+        );
+    }
+
+    function _getBytecodeScrip() internal view returns (bytes memory bytecode) {
+        bytes memory sourceCodeBytes = type(BeaconProxy).creationCode;
+        bytecode = abi.encodePacked(
+            sourceCodeBytes,
+            abi.encode(getCyberScripBeacon(), "")
+        );
+    }
+
+    function _getScripRatioOrDefault(
+        address certAddress
+    ) internal view returns (uint256 numerator, uint256 denominator) {
+        ScripRatio storage ratio = getScripRatio(certAddress);
+        numerator = ratio.numerator;
+        denominator = ratio.denominator;
+        if (numerator == 0 || denominator == 0) {
+            return (1, 1);
+        }
+    }
+
+    function _setCertMaxFromCurrent(
+        address certAddress,
+        uint256 tokenId,
+        uint256 currentUnits
+    ) internal {
+        CertScripState storage certState = getCertScripState(certAddress, tokenId);
+        uint256 currentTotal = currentUnits +
+            getCurrentCertScripifiedUnits(certAddress, tokenId);
+        if (currentTotal > certState.maxUnitsRepresented) {
+            certState.maxUnitsRepresented = currentTotal;
+        }
+    }
+
+    /// @notice Deposit units (wad) into the shared vault; mint nominal shares to this certificate.
+    function _depositCertScripUnits(
+        address certAddress,
+        uint256 tokenId,
+        uint256 assetsWad
+    ) internal {
+        IssuanceManagerData storage ds = issuanceManagerStorage();
+        CertScripUnitPool storage pool = ds.certScripUnitPools[certAddress];
+        CertScripState storage certState = ds.certScripStates[certAddress][tokenId];
+
+        uint256 sharesMinted = pool.totalNominalShares == 0
+            ? assetsWad
+            : assetsWad * pool.totalNominalShares / pool.totalAssetsWad;
+        if (sharesMinted == 0) revert ZeroSharesMinted();
+
+        certState.vaultNominalShares += sharesMinted;
+        pool.totalNominalShares += sharesMinted;
+        pool.totalAssetsWad += assetsWad;
+    }
+
+    /// @notice ERC4626-style withdraw: burn this certificate's nominal shares and pull `assetsWad`
+    ///         from the vault (exact asset burn; shares burnt round up).
+    function _redeemVaultForCert(
+        address certAddress,
+        uint256 tokenId,
+        uint256 assetsWad
+    ) internal returns (uint256 assetsRemovedWad) {
+        if (assetsWad == 0) return 0;
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+            certAddress
+        ];
+        CertScripState storage certState = getCertScripState(certAddress, tokenId);
+        uint256 S = pool.totalNominalShares;
+        uint256 T = pool.totalAssetsWad;
+        if (S == 0 || T == 0) revert EmptyVault();
+
+        uint256 claimWad = certState.vaultNominalShares * T / S;
+        if (assetsWad > claimWad) revert VaultRedemptionExceedsClaim();
+
+        uint256 sharesBurned = (assetsWad * S + T - 1) / T;
+        if (sharesBurned > certState.vaultNominalShares) {
+            sharesBurned = certState.vaultNominalShares;
+            assetsWad = sharesBurned * T / S;
+        }
+
+        certState.vaultNominalShares -= sharesBurned;
+        pool.totalNominalShares -= sharesBurned;
+        pool.totalAssetsWad -= assetsWad;
+
+        if (pool.totalAssetsWad == 0) {
+            _zeroAllVaultNominals(certAddress);
+        }
+        return assetsWad;
+    }
+
+    /// @notice Remove underlying from vault; all certificate positions diluted pro-rata
+    ///         (nominal shares unchanged, price per share in underlying drops).
+    function _withdrawVaultAssets(
+        address certAddress,
+        uint256 assetsOutWad
+    ) internal {
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+            certAddress
+        ];
+        if (pool.totalAssetsWad == 0) revert EmptyVault();
+        if (assetsOutWad > pool.totalAssetsWad) {
+            revert VaultWithdrawalExceedsAssets();
+        }
+
+        pool.totalAssetsWad -= assetsOutWad;
+        if (pool.totalAssetsWad == 0) {
+            _zeroAllVaultNominals(certAddress);
+        }
+    }
+
+    function _getScripifiedCertOrRevert(
+        address certAddress
+    ) internal view returns (address scripifiedCert) {
+        scripifiedCert = getScripifiedCert(certAddress);
+        if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
+    }
+
+    function _zeroAllVaultNominals(address certAddress) internal {
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        uint256 supply = certificate.totalSupply();
+        for (uint256 i = 0; i < supply; i++) {
+            uint256 tokenId = certificate.tokenByIndex(i);
+            getCertScripState(certAddress, tokenId).vaultNominalShares = 0;
+        }
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+            certAddress
+        ];
+        pool.totalNominalShares = 0;
     }
 }

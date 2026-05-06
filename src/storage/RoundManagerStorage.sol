@@ -421,6 +421,35 @@ library RoundManagerStorage {
                 address(this),
                 details
             );
+
+            //add officer signature from round escrowed signature
+            issuanceManager.addOfficerSignature(
+                round.certPrinter[i],
+                certIds[i],
+                round.escrowedSignature
+            );
+        }
+
+        if (_isStockSecurityClass(round.primarySecurityClass)) {
+            bytes memory secondEscrowedSignature = "";
+            address corp = LexScrowStorage.getCorp();
+            try ICyberCorp(corp).getEscrowedOfficerSignatureCount() returns (uint256 count) {
+                if (count > 1) {
+                    try ICyberCorp(corp).getEscrowedOfficerSignature(1) returns (bytes memory sig) {
+                        secondEscrowedSignature = sig;
+                    } catch {}
+                }
+            } catch {}
+
+            if (secondEscrowedSignature.length > 0) {
+                for (uint256 i = 0; i < round.certPrinter.length; i++) {
+                    issuanceManager.addOfficerSignature(
+                        round.certPrinter[i],
+                        certIds[i],
+                        secondEscrowedSignature
+                    );
+                }
+            }
         }
 
         escrow.signature = round.escrowedSignature;
@@ -562,5 +591,13 @@ library RoundManagerStorage {
 
     function getLexChexMinter() internal view returns (address) {
         return roundManagerStorage().lexChexMinter;
+    }
+
+    function _isStockSecurityClass(SecurityClass cls) private pure returns (bool) {
+        return
+            cls == SecurityClass.CommonStock ||
+            cls == SecurityClass.PreferredStock ||
+            cls == SecurityClass.RestrictedStockPurchaseAgreement ||
+            cls == SecurityClass.RestrictedStockUnit;
     }
 }

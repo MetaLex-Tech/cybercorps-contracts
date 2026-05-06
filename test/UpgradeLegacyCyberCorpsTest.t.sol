@@ -496,7 +496,7 @@ contract UpgradeLegacyCyberCorpsTest is Test {
         assertEq(issuanceManagerAddress.getErc1967Beacon(), address(0), "new IssuanceManager should not be a BeaconProxy");
         assertEq(dealManagerAddress.getErc1967Beacon(), address(0), "new DealManager should not be a BeaconProxy");
         assertEq(roundManagerAddress.getErc1967Beacon(), address(0), "new RoundManager should not be a BeaconProxy");
-        assertEq(certPrinterAddress[0].getErc1967Beacon(), IIssuanceManager(issuanceManagerAddress).cyberCertPrinterBeacon(), "new CyberCertPrinter should still be a BeaconProxy");
+        assertEq(certPrinterAddress[0].getErc1967Beacon(), address(IIssuanceManager(issuanceManagerAddress).cyberCertPrinterBeacon()), "new CyberCertPrinter should still be a BeaconProxy");
     }
 
     function test_EnableFeesNewCorp() public {

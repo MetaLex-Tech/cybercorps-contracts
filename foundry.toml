@@ -4,7 +4,11 @@ out = "out"
 libs = ["lib", "dependencies"]
 optimizer = true
 optimizer_runs = 15
-fs_permissions = [{ access = "read", path = "./script/res" }]
+extra_output_files = ['abi']
+fs_permissions = [
+    { access = "read", path = "./script/res" },
+    { access = "read", path = "./test/res" }
+]
 
 [fmt]
 sort_imports = true

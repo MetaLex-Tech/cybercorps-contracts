@@ -34,10 +34,10 @@ contract BaseScript is Script {
         address multisig = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
          uint256 currentChainId = block.chainid;
         address stable;
-        address minter = 0xb8fA82FE034DCa53de30Ba6BC9B571c406C2AFA4;
+        address minter = 0x5ff4e90Efa2B88cf3cA92D63d244a78a88219Abf;
 
         BorgAuth lexchexAuth = BorgAuth(0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2);
-        lexchexAuth.updateRole(address(minter), lexchexAuth.ADMIN_ROLE());
+        lexchexAuth.updateRole(address(minter), lexchexAuth.OWNER_ROLE());
 
 
         //CyberAgreementRegistry(registry).createTemplate(bytes32(uint256(25)), "MetaLeX cyberSAFT reg D v.1.0", "ipfs://bafybeif6fqgexescp4g2hbb6fjkk3ifrqpopc2lv2oue5tiq6h3t2pmgc4", globalFieldsSafT, partyFieldsSaft);

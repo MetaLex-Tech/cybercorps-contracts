@@ -50,7 +50,7 @@ import "./interfaces/ICyberCorpSingleFactory.sol";
 /// @notice Main contract representing a corporation's on-chain presence and management
 /// @dev Implements UUPS upgradeable pattern and BorgAuth access control
 contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
-    string public constant DEPLOY_VERSION = "3"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "4"; // For version-tracking on all deployment and future upgrades
 
     // cyberCORP details
     /// @notice Legal name of the entity, including designation (e.g., "Inc." or "LLC")
@@ -78,13 +78,19 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
 
     /// @notice Address of the round manager contract
     address public roundManager;
+    /// @notice Escrowed officer signatures that can be applied to certificates
+    bytes[] public escrowedOfficerSignatures;
 
     event CyberCORPDetailsUpdated(string cyberCORPName, string cyberCORPType, string cyberCORPJurisdiction, string cyberCORPContactDetails, string defaultDisputeResolution);
     event OfficerAdded(address indexed officer, uint256 index);
     event OfficerRemoved(address indexed officer, uint256 index);
     event CompanyPayableUpdated(address indexed companyPayable, address indexed oldCompanyPayable);
+    event EscrowedOfficerSignatureAdded(uint256 indexed index, address indexed officer);
+    event EscrowedOfficerSignatureUpdated(uint256 indexed index, address indexed officer);
 
     error NotRefImplementation();
+    error SignatureRequired();
+    error InvalidEscrowSignatureIndex();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -219,6 +225,42 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         address oldCompanyPayable = companyPayable;
         companyPayable = _companyPayable;
         emit CompanyPayableUpdated(companyPayable, oldCompanyPayable);
+    }
+
+    /// @notice Adds a reusable escrowed officer signature
+    /// @dev Officer role (200+) required
+    function addEscrowedOfficerSignature(bytes calldata signature) external onlyRole(200) {
+        if (signature.length == 0) revert SignatureRequired();
+        escrowedOfficerSignatures.push(signature);
+        emit EscrowedOfficerSignatureAdded(
+            escrowedOfficerSignatures.length - 1,
+            msg.sender
+        );
+    }
+
+    /// @notice Updates an existing reusable escrowed officer signature
+    /// @dev Officer role (200+) required
+    function setEscrowedOfficerSignature(
+        uint256 index,
+        bytes calldata signature
+    ) external onlyRole(200) {
+        if (index >= escrowedOfficerSignatures.length) revert InvalidEscrowSignatureIndex();
+        if (signature.length == 0) revert SignatureRequired();
+        escrowedOfficerSignatures[index] = signature;
+        emit EscrowedOfficerSignatureUpdated(index, msg.sender);
+    }
+
+    /// @notice Reads an escrowed officer signature by index
+    function getEscrowedOfficerSignature(
+        uint256 index
+    ) external view returns (bytes memory) {
+        if (index >= escrowedOfficerSignatures.length) revert InvalidEscrowSignatureIndex();
+        return escrowedOfficerSignatures[index];
+    }
+
+    /// @notice Gets total escrowed officer signature count
+    function getEscrowedOfficerSignatureCount() external view returns (uint256) {
+        return escrowedOfficerSignatures.length;
     }
 
     // ========================
