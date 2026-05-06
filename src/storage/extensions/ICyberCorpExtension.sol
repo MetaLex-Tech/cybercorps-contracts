@@ -18,15 +18,15 @@ o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o8888
                                                                                                       
                                                                                                       
                                                                                                       
-  .oooooo.                .o8                            .oooooo.                                     
- d8P'  `Y8b              "888                           d8P'  `Y8b                                    
+ .oooooo.                .o8                            .oooooo.                                     
+d8P'  `Y8b              "888                           d8P'  `Y8b                                    
 888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.      
 888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b     
 888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888     
 `88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
  `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P 
              .o..P'                                                                     888           
-             `Y8P'                                                                     o888o          
+             `Y8P'                                                                     o888o           
 _______________________________________________________________________________________________________
 
 All software, documentation and other files and information in this repository (collectively, the "Software")
@@ -39,46 +39,9 @@ distributed, transmitted, sublicensed, sold, or otherwise used in any form or by
 mechanical, including photocopying, recording, or by any information storage and retrieval system, 
 except with the express prior written permission of the copyright holder.*/
 
-import {CompanyOfficer} from "../CyberCorpConstants.sol";
-
 pragma solidity 0.8.28;
 
-interface ICyberCorp {
-    function initialize(
-        address _auth,
-        string memory _cyberCORPName,
-        string memory _cyberCORPType,
-        string memory _cyberCORPJurisdiction,
-        string memory _cyberCORPContactDetails,
-        string memory _defaultDisputeResolution,
-        address _issuanceManager,
-        address _companyPayable,
-        CompanyOfficer memory _officer,
-        address _upgradeFactory,
-        address _roundManager 
-    ) external;
-    function cyberCORPName() external view returns (string memory);
-    function cyberCORPJurisdiction() external view returns (string memory);
-    function cyberCORPContactDetails() external view returns (string memory);
-    function defaultDisputeResolution() external view returns (string memory);
-    function companyPayable() external view returns (address);
-    function companyOfficers() external view returns (address[] memory);
-    function cyberCORPType() external view returns (string memory);
-    function dealManager() external view returns (address);
-    function setDealManager(address _dealManager) external;
-    function setRoundManager(address _roundManager) external;   
-    function roundManager() external view returns (address);
-    function addEscrowedOfficerSignature(bytes calldata signature) external;
-    function setEscrowedOfficerSignature(uint256 index, bytes calldata signature) external;
-    function getEscrowedOfficerSignature(uint256 index) external view returns (bytes memory);
-    function getEscrowedOfficerSignatureCount() external view returns (uint256);
-    function extension() external view returns (address);
-    function extensionType() external view returns (bytes32);
-    function extensionData() external view returns (bytes memory);
-    function setExtension(address _extension, bytes32 _extensionType) external;
-    function setExtensionData(bytes calldata _extensionData) external;
-    function clearExtension() external;
-    function getExtensionURI() external view returns (string memory);
-
+interface ICyberCorpExtension {
+    function supportsExtensionType(bytes32 extensionType) external pure returns (bool);
+    function getExtensionURI(bytes memory data) external view returns (string memory);
 }
-
