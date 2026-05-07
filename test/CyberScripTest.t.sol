@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "../test/mock/TestableCyberScrip.sol";
 import "../test/mock/MockTransferHook.sol";
+import "../src/libs/auth.sol";
 
 contract CyberScripTest is Test {
     TestableCyberScrip public cyberScrip;
@@ -14,6 +15,10 @@ contract CyberScripTest is Test {
     address public user1;
     address public user2;
     MockTransferHook public mockHook;
+
+    event FreezeStatusUpdated(address indexed account, bool frozen);
+    event ComplianceFeatureDisabledEvent(string feature);
+    event MaxHolderCountUpdated(uint256 maxHolderCount);
 
     function setUp() public {
         owner = address(this);
@@ -28,6 +33,9 @@ contract CyberScripTest is Test {
         // Setup transfer restriction hooks
         ITransferRestrictionHook[] memory hooks = new ITransferRestrictionHook[](1);
         hooks[0] = ITransferRestrictionHook(address(mockHook));
+        bytes32 salt = keccak256("CyberScripTest");
+        //deploy auth
+        address auth = address(new BorgAuth{salt: salt}(owner));
 
         // Deploy CyberScrip (testable)
         cyberScrip = TestableCyberScrip(address(
@@ -35,6 +43,7 @@ contract CyberScripTest is Test {
                 address(new TestableCyberScrip()),
                 abi.encodeWithSelector(
                     CyberScrip.initialize.selector,
+                    auth,
                     certPrinter,
                     issuanceManager,
                     "Test CyberScrip",
@@ -48,7 +57,7 @@ contract CyberScripTest is Test {
         ));
 
         // Mint initial balance for user1
-        cyberScrip.mint(user1, 1000 ether);
+        cyberScrip.unrestrictedMint(user1, 1000 ether);
     }
 
     function test_Initialization() public {
@@ -124,6 +133,7 @@ contract CyberScripTest is Test {
                 address(new TestableCyberScrip()),
                 abi.encodeWithSelector(
                     CyberScrip.initialize.selector,
+                    makeAddr("auth"),
                     certPrinter,
                     issuanceManager,
                     "Disabled",
@@ -135,7 +145,7 @@ contract CyberScripTest is Test {
                 )
             )
         ));
-        disabled.mint(user1, 1000 ether);
+        disabled.unrestrictedMint(user1, 1000 ether);
 
         vm.startPrank(issuanceManager);
         vm.expectRevert(abi.encodeWithSignature("ComplianceFeatureDisabled()"));
@@ -258,15 +268,170 @@ contract CyberScripTest is Test {
     // Additional coverage
     // ------------------------
 
+    function test_HolderCount_InitAndTransferAllUpdates() public {
+        assertEq(cyberScrip.holderCount(), 1);
+
+        vm.startPrank(user1);
+        cyberScrip.transfer(user2, 100 ether);
+        vm.stopPrank();
+        assertEq(cyberScrip.holderCount(), 2);
+
+        vm.startPrank(user1);
+        cyberScrip.transfer(user2, 900 ether);
+        vm.stopPrank();
+        assertEq(cyberScrip.holderCount(), 1);
+    }
+
+    function test_HolderCount_BurnToZero() public {
+        vm.prank(issuanceManager);
+        cyberScrip.burnFrom(user1, 1000 ether);
+        assertEq(cyberScrip.holderCount(), 0);
+    }
+
+    function test_MaxHolderCountBlocksTransfer() public {
+        vm.prank(issuanceManager);
+        cyberScrip.setMaxHolderCount(1);
+
+        vm.startPrank(user1);
+        vm.expectRevert(
+            abi.encodeWithSignature("HolderLimitExceeded(uint256)", 1)
+        );
+        cyberScrip.transfer(user2, 1 ether);
+        vm.stopPrank();
+    }
+
+    function test_MaxHolderCountBlocksMint() public {
+        vm.prank(issuanceManager);
+        cyberScrip.setMaxHolderCount(1);
+
+        vm.prank(issuanceManager);
+        vm.expectRevert(
+            abi.encodeWithSignature("HolderLimitExceeded(uint256)", 1)
+        );
+        cyberScrip.mint(user2, 1 ether);
+    }
+
+    function test_SetMaxHolderCount_EmitsEvent() public {
+        vm.expectEmit(false, false, false, true);
+        emit MaxHolderCountUpdated(2);
+        vm.prank(issuanceManager);
+        cyberScrip.setMaxHolderCount(2);
+        assertEq(cyberScrip.maxHolderCount(), 2);
+    }
+
+    function test_FreezeStatusUpdatedEventAndGetter() public {
+        vm.expectEmit(true, false, false, true);
+        emit FreezeStatusUpdated(user1, true);
+        vm.prank(issuanceManager);
+        cyberScrip.setFrozen(user1, true);
+        assertTrue(cyberScrip.frozen(user1));
+    }
+
+    function test_DisableForceTransfer_EmitsEvent() public {
+        vm.expectEmit(false, false, false, true);
+        emit ComplianceFeatureDisabledEvent("forceTransfer");
+        vm.prank(issuanceManager);
+        cyberScrip.disableForceTransfer();
+        assertFalse(cyberScrip.canForceTransfer());
+    }
+
+    function test_DisableForceBurn_EmitsEvent() public {
+        vm.expectEmit(false, false, false, true);
+        emit ComplianceFeatureDisabledEvent("forceBurn");
+        vm.prank(issuanceManager);
+        cyberScrip.disableForceBurn();
+        assertFalse(cyberScrip.canForceBurn());
+    }
+
+    function test_DisableFreeze_EmitsEvent() public {
+        vm.expectEmit(false, false, false, true);
+        emit ComplianceFeatureDisabledEvent("freeze");
+        vm.prank(issuanceManager);
+        cyberScrip.disableFreeze();
+        assertFalse(cyberScrip.canFreeze());
+    }
+
+    function test_TransferRestrictionHooksLengthAndAccessor() public {
+        assertEq(cyberScrip.transferRestrictionHooksLength(), 1);
+        assertEq(
+            address(cyberScrip.transferRestrictionHooks(0)),
+            address(mockHook)
+        );
+    }
+
+    function test_CanTransfer_TrueForSelfOrZeroAmount() public {
+        assertTrue(cyberScrip.canTransfer(user1, user1, 1 ether));
+        assertTrue(cyberScrip.canTransfer(user1, user2, 0));
+    }
+
+    function test_CanTransfer_TrueForMintOrBurn() public {
+        assertTrue(cyberScrip.canTransfer(address(0), user1, 1 ether));
+        assertTrue(cyberScrip.canTransfer(user1, address(0), 1 ether));
+    }
+
+    function test_CanTransfer_FalseWhenFrozen() public {
+        vm.prank(issuanceManager);
+        cyberScrip.setFrozen(user1, true);
+        assertFalse(cyberScrip.canTransfer(user1, user2, 1 ether));
+    }
+
+    function test_CanTransfer_FalseWhenHookDenies() public {
+        mockHook.setAllowTransfers(false);
+        assertFalse(cyberScrip.canTransfer(user1, user2, 1 ether));
+    }
+
+    function test_CanTransfer_RespectsHolderLimit() public {
+        vm.prank(issuanceManager);
+        cyberScrip.setMaxHolderCount(1);
+        assertFalse(cyberScrip.canTransfer(user1, user2, 1 ether));
+    }
+
+    function test_CanTransfer_AllowsTransferToExistingHolderAtLimit() public {
+        vm.startPrank(user1);
+        cyberScrip.transfer(user2, 1 ether);
+        vm.stopPrank();
+
+        vm.prank(issuanceManager);
+        cyberScrip.setMaxHolderCount(2);
+
+        assertTrue(cyberScrip.canTransfer(user1, user2, 1 ether));
+    }
+
+    function test_WillCreateNewHolder_Behavior() public {
+        assertTrue(cyberScrip.willCreateNewHolder(user2, 1 ether));
+        assertFalse(cyberScrip.willCreateNewHolder(user1, 1 ether));
+        assertFalse(cyberScrip.willCreateNewHolder(user2, 0));
+        assertFalse(cyberScrip.willCreateNewHolder(address(0), 1 ether));
+    }
+
+    function test_CurrentHolderCount_MatchesStorage() public {
+        assertEq(cyberScrip.currentHolderCount(), cyberScrip.holderCount());
+    }
+
+    function test_RemainingSlots_Unlimited() public {
+        assertEq(cyberScrip.remainingSlots(), type(uint256).max);
+    }
+
+    function test_RemainingSlots_WithLimit() public {
+        vm.prank(issuanceManager);
+        cyberScrip.setMaxHolderCount(2);
+        assertEq(cyberScrip.remainingSlots(), 1);
+
+        vm.startPrank(user1);
+        cyberScrip.transfer(user2, 1 ether);
+        vm.stopPrank();
+        assertEq(cyberScrip.remainingSlots(), 0);
+    }
+
     function test_MintBypassesHooksAndFreeze() public {
         // Disable transfers in hook and freeze recipient
         mockHook.setAllowTransfers(false);
         vm.startPrank(issuanceManager);
         cyberScrip.setFrozen(user2, true);
-        vm.stopPrank();
 
         // Mint to frozen recipient should still work (from == address(0))
         cyberScrip.mint(user2, 123 ether);
+        vm.stopPrank();
         assertEq(cyberScrip.balanceOf(user2), 123 ether);
     }
 
@@ -403,5 +568,59 @@ contract CyberScripTest is Test {
         vm.expectRevert(abi.encodeWithSignature("NotIssuanceManager()"));
         cyberScrip.setRestrictionHook(newHooks);
         vm.stopPrank();
+    }
+
+    // ========================
+    // Bridge Simulation Tests (IssuanceManager scripify/convert)
+    // ========================
+
+    function test_Bridge_FullScripifySimulation() public {
+        // In a real scripifyCert (full), the IssuanceManager would:
+        // 1. Receive the Cert, 2. Void it, 3. Mint scrip
+        uint256 amount = 5000 ether;
+
+        vm.prank(issuanceManager);
+        cyberScrip.mint(user2, amount);
+
+        assertEq(cyberScrip.balanceOf(user2), amount);
+        assertEq(cyberScrip.totalSupply(), 1000 ether + amount); // 1000 from setUp
+    }
+
+    function test_Bridge_PartialScripifySimulation() public {
+        // In a real scripifyCert (partial), the IssuanceManager would:
+        // 1. Reduce units on Cert, 2. Mint scrip
+        uint256 amount = 250 ether;
+
+        vm.prank(issuanceManager);
+        cyberScrip.mint(user1, amount);
+
+        assertEq(cyberScrip.balanceOf(user1), 1000 ether + amount);
+    }
+
+    function test_Bridge_ConvertScripToCertSimulation() public {
+        // In a real convertScripToCert, the IssuanceManager would:
+        // 1. Burn scrip, 2. Unvoid or Mint new Cert
+        uint256 amountToConvertBack = 400 ether;
+
+        // User1 has 1000 ether from setUp
+        vm.prank(issuanceManager);
+        cyberScrip.burnFrom(user1, amountToConvertBack);
+
+        assertEq(cyberScrip.balanceOf(user1), 600 ether);
+        assertEq(cyberScrip.totalSupply(), 1000 ether - amountToConvertBack);
+    }
+
+    function test_RevertWhen_UnauthorizedBridgeMint() public {
+        // Ensure only the designated issuanceManager can mint (crucial for bridge security)
+        vm.prank(user1);
+        vm.expectRevert(abi.encodeWithSignature("NotIssuanceManager()"));
+        cyberScrip.mint(user1, 100 ether);
+    }
+
+    function test_RevertWhen_UnauthorizedBridgeBurn() public {
+        // Ensure only the designated issuanceManager can burn (crucial for bridge security)
+        vm.prank(user1);
+        vm.expectRevert(abi.encodeWithSignature("NotIssuanceManager()"));
+        cyberScrip.burnFrom(user1, 100 ether);
     }
 }

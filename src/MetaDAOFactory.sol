@@ -509,5 +509,3 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
 }
-
-

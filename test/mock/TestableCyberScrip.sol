@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import "../../src/CyberScrip.sol";
 
 contract TestableCyberScrip is CyberScrip {
-    function mint(address to, uint256 amount) external {
+    function unrestrictedMint(address to, uint256 amount) public {
         _mint(to, amount);
     }
 }

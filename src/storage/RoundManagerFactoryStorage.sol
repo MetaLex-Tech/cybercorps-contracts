@@ -42,6 +42,8 @@
 
 pragma solidity 0.8.28;
 
+import {FeeOverride} from "../interfaces/IRoundManagerFactory.sol";
+
 /// @title RoundManagerFactoryStorage
 /// @notice Storage library for the RoundManagerFactory contract that handles persistent data storage
 /// @dev Uses the unstructured storage pattern to manage factory-related data
@@ -59,6 +61,7 @@ library RoundManagerFactoryStorage {
         address platformPayable; // Recipient of platform fees
         uint256 defaultFeeRatio; // total fee as % of ticket size (BASIS_POINTS = 100%)
         mapping(address => bool) whitelistedTokens;
+        mapping(address => FeeOverride) instanceFeeOverrides; // RoundManager -> FeeOverride
     }
 
     /// @notice Retrieves the storage reference for the RoundManagerFactoryData struct

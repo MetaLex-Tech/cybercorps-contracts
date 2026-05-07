@@ -124,6 +124,24 @@ abstract contract LexScroWLite is Initializable {
         for(uint256 i = 0; i < escrow.corpAssets.length; i++) {
             if(escrow.corpAssets[i].tokenType == TokenType.ERC721) {
                 ICyberCertPrinter(escrow.corpAssets[i].tokenAddress).addEndorsement(escrow.corpAssets[i].tokenId, newEndorsement);
+                // check if there is an escrowed officer signature in cybercorp
+                bytes memory officerSignature = "";
+                address corp = LexScrowStorage.getCorp();
+                try ICyberCorp(corp).getEscrowedOfficerSignatureCount() returns (
+                    uint256 count
+                ) {
+                    if (count > 0) {
+                        try ICyberCorp(corp).getEscrowedOfficerSignature(0) returns (bytes memory sig) {
+                            officerSignature = sig;
+                        } catch {}
+                    }
+                } catch {}
+                if (officerSignature.length > 0) {
+                    ICyberCertPrinter(escrow.corpAssets[i].tokenAddress).addIssuerSignature(
+                        escrow.corpAssets[i].tokenId,
+                        officerSignature
+                    );
+                }
             }
         }
     }

@@ -228,7 +228,8 @@ contract UpgradePublicRoundsTest is Test {
                 block.timestamp - 1,
                 block.timestamp + 14 days,
                 true,
-                true
+                true,
+                false
             );
         }
 
@@ -289,10 +290,11 @@ contract UpgradePublicRoundsTest is Test {
                 block.timestamp - 1,
                 block.timestamp + 21 days,
                 true,
-                true
+                true,
+                false
             );
         }
-        
+
         vm.stopPrank();
 
         // Prepare bob for submission
@@ -591,7 +593,8 @@ contract UpgradePublicRoundsTest is Test {
             startTime,
             endTime,
             true, // publicRound
-            true // allowTimedOffers
+            true, // allowTimedOffers
+            false // restrictEndTimeReduction
         );
         vm.stopPrank();
 

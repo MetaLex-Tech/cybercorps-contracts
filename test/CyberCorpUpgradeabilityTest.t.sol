@@ -440,7 +440,15 @@ contract CyberCorpUpgradeabilityTest is Test {
                     cyberCertPrinterAddrs[0], // certAddress
                     new ITransferRestrictionHook[](0), // typeRestrictionHooks
                     new ICondition[](0), // certToScripConditions
-                    new ICondition[](0) // scripToCertConditions
+                    new ICondition[](0), // scripToCertConditions
+                    0, // scripToCertMinimum
+                    1, // scripRatioNumerator
+                    1, // scripRatioDenominator
+                    new uint256[](0), // scripifyWhitelistIds
+                    false, // scripifyWhitelistEnabled
+                    true, // enableForceTransfer
+                    true, // enableForceBurn
+                    true // enableFreeze
                 )
         );
 
