@@ -11,23 +11,31 @@ import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHo
 import {ICondition} from "../src/interfaces/ICondition.sol";
 import {TestableCyberScrip} from "./mock/TestableCyberScrip.sol";
 import {MockTransferHook} from "./mock/MockTransferHook.sol";
+import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 
 contract MockCertPrinterBasic {
     string private _name;
     string private _symbol;
+    mapping(uint256 => address) private _owners;
+    mapping(uint256 => CertificateDetails) private _details;
 
     constructor(string memory name_, string memory symbol_) {
         _name = name_;
         _symbol = symbol_;
     }
 
-    function name() external view returns (string memory) {
-        return _name;
+    function name() external view returns (string memory) { return _name; }
+    function symbol() external view returns (string memory) { return _symbol; }
+
+    function mockMintCert(uint256 id, address owner_, uint256 units) external {
+        _owners[id] = owner_;
+        _details[id].unitsRepresented = units;
     }
 
-    function symbol() external view returns (string memory) {
-        return _symbol;
-    }
+    function isVoided(uint256) external pure returns (bool) { return false; }
+    function legalOwnerOf(uint256 id) external view returns (address) { return _owners[id]; }
+    function getActiveCertificateDetails(uint256 id) external view returns (CertificateDetails memory) { return _details[id]; }
+    function updateCertificateDetails(uint256 id, CertificateDetails calldata det) external { _details[id] = det; }
 }
 
 contract IssuanceManagerScripComplianceTest is Test {
@@ -85,15 +93,26 @@ contract IssuanceManagerScripComplianceTest is Test {
         hooks[0] = ITransferRestrictionHook(address(allowHook));
         ICondition[] memory emptyConditions = new ICondition[](0);
 
+        uint256[] memory emptyIds = new uint256[](0);
         address scripAddr = issuanceManager.deployCyberScrip(
             address(cert),
             hooks,
             emptyConditions,
-            emptyConditions
+            emptyConditions,
+            0,
+            1,
+            1,
+            emptyIds,
+            false,
+            true,
+            true,
+            true
         );
         scrip = TestableCyberScrip(scripAddr);
 
-        scrip.mint(user1, 100 ether);
+        cert.mockMintCert(0, user1, 100 ether);
+        vm.prank(user1);
+        issuanceManager.scripifyCert(address(cert), 0, 100 ether, address(0));
     }
 
     function test_setScripRestrictionHooks_updatesHook() public {
