@@ -83,7 +83,7 @@ The protocol is built to satisfy the requirements of corporate, LLC, partnership
 
 | Factory | Purpose |
 |---|---|
-| **PumpCorpFactory** | Powers *ACE* (Asset Conversion to Equity), MetaLeX's product for converting token communities into equity stakeholders of the issuing corporation. Used in the Pump.fun / Baton Corporation pilot. Supports party specific allocations and global price/cap configuration with Reg S compliance defaults. |
+| **PumpCorpFactory** | Powers *ACE* (Asset Conversion to Equity), MetaLeX's product for converting token communities into equity stakeholders of the issuing corporation. Supports party specific allocations and global price/cap configuration with Reg S compliance defaults. |
 | **MetaDAOFactory** | Deploys MetaDAO style futarchy governance corporations (segregated portfolio company structures) with onchain prediction market governance. |
 | **ParentCoFactory** | Deploys parent and subsidiary cyberCORP structures for holding company configurations. |
 
@@ -172,7 +172,7 @@ Post negotiation settlement for secondary trades of fund interests, LLC membersh
 
 ### ACE (Asset Conversion to Equity)
 
-Live at [ace.metalex.tech](https://ace.metalex.tech). Powered by `PumpCorpFactory` and the `ACESAFEExtension`, ACE lets a token community convert into equity stakeholders of an issuing corporation through a structured Reg S compliant offering with zkPassport based jurisdictional gating. The Pump.fun / Baton Corporation pilot is the first production deployment of this architecture.
+Live at [ace.metalex.tech](https://ace.metalex.tech). Powered by `PumpCorpFactory` and the `ACESAFEExtension`, ACE lets a token community convert into equity stakeholders of an issuing corporation through a structured Reg S compliant offering with zkPassport based jurisdictional gating. 
 
 ### LiquiLeX
 
@@ -202,7 +202,7 @@ CyberCorps is live on Ethereum mainnet, Arbitrum, and Base.
 
 MetaLeX dogfoods the protocol with its own Delaware C-corp. The [cyberRAISE](https://metalex.substack.com/p/metalexs-cyberraise-v2-automate-your) SAFE certificates from MetaLeX's prior fundraises are visible onchain as cyberCERTs, and MetaLeX's official stock ledger is maintained via this contract suite, making MetaLeX (so far as we are aware) the first company to keep its DGCL §224 stock ledger natively onchain rather than at a transfer agent or on Carta.
 
-ACE is live in production via [ace.metalex.tech](https://ace.metalex.tech), with a Pump.fun / Baton Corporation pilot demonstrating the architecture for token-community-to-equity conversions.
+ACE is live in production via [ace.metalex.tech](https://ace.metalex.tech).
 
 The protocol has been used or piloted across Delaware C-corps, Delaware LLCs, Cayman SPCs (via `MetaDAOFactory`), and structures designed for non-US holders under Regulation S.
 
