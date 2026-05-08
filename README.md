@@ -35,7 +35,7 @@ ________________________________________________________________________________
 
 **Natively tokenized private securities on Ethereum, anchored in each issuer's governing law.**
 
-CyberCorps is MetaLeX's smart contract protocol for turning a legal entity (a Delaware C-corp or LLC, a Cayman LLC or SPC, a BVI fund, an English company, or any analogous structure) into a *cyberCORP*: an onchain entity that issues legally constitutive digital securities, maintains its register of holders, conducts fundraising rounds, and settles deals through a composable system of contracts where the blockchain *is* the official register, not a pointer to one.
+CyberCorps is MetaLeX's smart contract protocol for turning a legal entity (a Delaware C-corp or LLC, a Cayman LLC or SPC, a BVI fund, an English company, or any analogous structure) into a *cyberCORP*: an onchain entity that issues legally constitutive digital securities, maintains its register of holders, conducts fundraising rounds, and settles deals through a composable system of contracts where the blockchain can *be* the official register, not merely a pointer to an offchain ledger/intermediated system.
 
 The protocol is entity-type and jurisdiction agnostic. Delaware C-corp stock is the most fully worked-out reference implementation, with deeply integrated templates and statutory mappings, but the contract architecture treats entity type, jurisdiction, and governing law as configuration. LLC membership interests, LP interests, segregated portfolio company shares, and non-US equity all flow through the same primitives.
 
