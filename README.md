@@ -45,24 +45,6 @@ Live on **Ethereum mainnet**, **Arbitrum**, and **Base**.
 
 ---
 
-## Constitutive vs. Pointer Tokenization
-
-Most "tokenized securities" today are pointer tokens. The official cap table lives at a transfer agent, on Carta, or in a law firm's filing cabinet, and the chain is a notification layer. Onchain transfers are not the legal transfer; they are a request to update an offchain register that the issuer or its agents may decline to honor. The blockchain does no essential work and could be removed without changing the underlying legal reality.
-
-CyberCorps enables the opposite approach. A cyberCORP's governing documents (certificate of incorporation and bylaws, operating agreement, articles of association, partnership agreement, fund constitutional documents, or analogous instrument under the entity's governing law) can designate the onchain contract system as the entity's official register of holders, with the fungible scrip layer authorized by the same instruments. Under that designation, the legal state transition function and the chain state transition function are unified: changing onchain state is the legal change. There is no offchain register to reconcile against, no transfer agent to instruct, and no possibility of the chain and the legal record diverging.
-
-Delaware corporate law is the most fully worked-out worked example, with statutory hooks at DGCL §224 (any books and records, including the stock ledger, may be kept in any form, including a blockchain) and §155 (scrip authorization). Comparable provisions or contractual workarounds exist under Delaware LLC law, Cayman, BVI, English, and other corporate and fund regimes. The protocol does not assume any specific statute; it assumes the entity's governing law permits the onchain register to be designated as authoritative through the entity's governing documents.
-
-This is what allows cyberCORPs to deliver real disintermediation. A *cyberCERT* (Ledger Entry Token) is the register entry, not a pointer to one. A *cyberSCRIP* is itself a security in scrip form, with a deterministic in-protocol tieback to the cyberCERT it was minted from. Not a wrapper, not a derivative, not a receipt for a receipt.
-
-### Both Modes Are Supported
-
-The contracts do not force constitutive tokenization. They behave the same way whether or not the issuer's governing documents designate the onchain register as authoritative. An issuer can run the same contract suite in pointer mode by declining to make that designation in its constitutional documents and continuing to maintain its authoritative register offchain through a transfer agent, a cap table provider, a fund administrator's books, or any analogous arrangement. In that configuration, cyberCERTs and cyberSCRIPs operate as a notification, display, or instruction layer for an authoritative register that lives elsewhere.
-
-MetaLeX's view is that constitutive mode is where the protocol realizes its full value: real disintermediation, a unified legal and chain state transition function, an in-protocol tieback between cyberSCRIP and the authoritative register, and no reconciliation surface between onchain state and offchain books. Pointer mode is a fully supported configuration and may be the appropriate choice for issuers operating under regulatory regimes that require an offchain authoritative register, for issuers whose existing transfer agent or fund administrator arrangements are not yet ready to accommodate constitutive designation, or for transitional setups working toward constitutive designation later. The legal architecture sits in the entity's governing documents, outside the contracts.
-
----
-
 ## Architecture
 
 The protocol is built to satisfy the requirements of corporate, LLC, partnership, and fund governing law, with [Delaware General Corporation Law](https://delcode.delaware.gov/title8/) (DGCL §§151, 155, 158, 202, 219, 224) as the primary worked-out statutory reference. Each component knows its relationship to the others, and every authority required to mutate state corresponds to an explicit role under BorgAuth, mapping cleanly to the governance roles defined in the entity's constitutional documents (officers, managers, general partners, directors, or analogues).
@@ -158,6 +140,24 @@ The plain English version: a cyberCERT is your interest in the entity as it live
 - **Two recertification paths.** Existing registered holders de-scripify directly onto their existing cyberCERTs without further approval. New holders must first receive registration approval (with stockholder name, certificate details, and officer signature pre-set by the issuer), after which presentment mints a fresh cyberCERT with the approved metadata.
 - **Scripified Share Pool.** ERC-4626 style vault accounting tracks each registered holder's scripified units, with proportional withdrawal on de-scripification.
 - **Granular admin renunciation.** Force transfer, force burn, freeze, and blocklist powers each have independent, permanent disable toggles.
+
+---
+
+## Constitutive vs. Pointer Tokenization
+
+Most "tokenized securities" today are pointer tokens. The official cap table lives at a transfer agent, on Carta, or in a law firm's filing cabinet, and the chain is a notification layer. Onchain transfers are not the legal transfer; they are a request to update an offchain register that the issuer or its agents may decline to honor. The blockchain does no essential work and could be removed without changing the underlying legal reality.
+
+CyberCorps enables the opposite approach. A cyberCORP's governing documents (certificate of incorporation and bylaws, operating agreement, articles of association, partnership agreement, fund constitutional documents, or analogous instrument under the entity's governing law) can designate the onchain contract system as the entity's official register of holders, with the fungible scrip layer authorized by the same instruments. Under that designation, the legal state transition function and the chain state transition function are unified: changing onchain state is the legal change. There is no offchain register to reconcile against, no transfer agent to instruct, and no possibility of the chain and the legal record diverging.
+
+Delaware corporate law is the most fully worked-out worked example, with statutory hooks at DGCL §224 (any books and records, including the stock ledger, may be kept in any form, including a blockchain) and §155 (scrip authorization). Comparable provisions or contractual workarounds exist under Delaware LLC law, Cayman, BVI, English, and other corporate and fund regimes. The protocol does not assume any specific statute; it assumes the entity's governing law permits the onchain register to be designated as authoritative through the entity's governing documents.
+
+This is what allows cyberCORPs to deliver real disintermediation. A *cyberCERT* (Ledger Entry Token) is the register entry, not a pointer to one. A *cyberSCRIP* is itself a security in scrip form, with a deterministic in-protocol tieback to the cyberCERT it was minted from. Not a wrapper, not a derivative, not a receipt for a receipt.
+
+### Both Modes Are Supported
+
+The contracts do not force constitutive tokenization. They behave the same way whether or not the issuer's governing documents designate the onchain register as authoritative. An issuer can run the same contract suite in pointer mode by declining to make that designation in its constitutional documents and continuing to maintain its authoritative register offchain through a transfer agent, a cap table provider, a fund administrator's books, or any analogous arrangement. In that configuration, cyberCERTs and cyberSCRIPs operate as a notification, display, or instruction layer for an authoritative register that lives elsewhere.
+
+MetaLeX's view is that constitutive mode is where the protocol realizes its full value: real disintermediation, a unified legal and chain state transition function, an in-protocol tieback between cyberSCRIP and the authoritative register, and no reconciliation surface between onchain state and offchain books. Pointer mode is a fully supported configuration and may be the appropriate choice for issuers operating under regulatory regimes that require an offchain authoritative register, for issuers whose existing transfer agent or fund administrator arrangements are not yet ready to accommodate constitutive designation, or for transitional setups working toward constitutive designation later. The legal architecture sits in the entity's governing documents, outside the contracts.
 
 ---
 
