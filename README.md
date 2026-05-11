@@ -35,7 +35,7 @@ ________________________________________________________________________________
 
 **Natively tokenized private securities on Ethereum, anchored in each issuer's governing law.**
 
-CyberCorps is MetaLeX's smart contract protocol for turning a legal entity (a Delaware C-corp or LLC, a Cayman LLC or SPC, a BVI fund, an English company, or any analogous structure) into a *cyberCORP*: an onchain entity that issues legally constitutive digital securities, maintains its register of holders, conducts fundraising rounds, and settles deals through a composable system of contracts where the blockchain can *be* the official register, not merely a pointer to an offchain ledger/intermediated system.
+CyberCorps is MetaLeX's smart contract protocol for turning a legal entity (a Delaware C-corp or LLC, a Cayman LLC or SPC, a BVI fund, an English company, or any analogous structure) into a *cyberCORP*: an onchain entity that issues legally constitutive digital securities, maintains its register of holders, conducts fundraising rounds, and settles deals through a composable system of contracts designed for the blockchain to *be* the official register rather than a pointer to an offchain ledger or intermediated system.
 
 The protocol is entity-type and jurisdiction agnostic. Delaware C-corp stock is the most fully worked-out reference implementation, with deeply integrated templates and statutory mappings, but the contract architecture treats entity type, jurisdiction, and governing law as configuration. LLC membership interests, LP interests, segregated portfolio company shares, and non-US equity all flow through the same primitives.
 
@@ -54,6 +54,12 @@ CyberCorps takes the opposite approach. Each cyberCORP's governing documents (ce
 Delaware corporate law is the most fully worked-out worked example, with statutory hooks at DGCL §224 (any books and records, including the stock ledger, may be kept in any form, including a blockchain) and §155 (scrip authorization). Comparable provisions or contractual workarounds exist under Delaware LLC law, Cayman, BVI, English, and other corporate and fund regimes. The protocol does not assume any specific statute; it assumes the entity's governing law permits the onchain register to be designated as authoritative through the entity's governing documents.
 
 This is what allows cyberCORPs to deliver real disintermediation. A *cyberCERT* (Ledger Entry Token) is the register entry, not a pointer to one. A *cyberSCRIP* is itself a security in scrip form, with a deterministic in-protocol tieback to the cyberCERT it was minted from. Not a wrapper, not a derivative, not a receipt for a receipt.
+
+### Both Modes Are Supported
+
+The contracts do not force constitutive tokenization. They behave the same way whether or not the issuer's governing documents designate the onchain register as authoritative. An issuer can run the same contract suite in pointer mode by declining to make that designation in its constitutional documents and continuing to maintain its authoritative register offchain through a transfer agent, a cap table provider, a fund administrator's books, or any analogous arrangement. In that configuration, cyberCERTs and cyberSCRIPs operate as a notification, display, or instruction layer for an authoritative register that lives elsewhere.
+
+MetaLeX's view is that constitutive mode is where the protocol realizes its full value: real disintermediation, a unified legal and chain state transition function, an in-protocol tieback between cyberSCRIP and the authoritative register, and no reconciliation surface between onchain state and offchain books. Pointer mode is a fully supported configuration and may be the appropriate choice for issuers operating under regulatory regimes that require an offchain authoritative register, for issuers whose existing transfer agent or fund administrator arrangements are not yet ready to accommodate constitutive designation, or for transitional setups working toward constitutive designation later. The legal architecture sits in the entity's governing documents, outside the contracts.
 
 ---
 
