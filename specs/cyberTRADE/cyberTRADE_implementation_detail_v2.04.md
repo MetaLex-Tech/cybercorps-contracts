@@ -321,22 +321,22 @@ The minimal change is twofold: redirect `buyerAssets` to the seller (already in 
 
 The whitelist check is at **proposal time**, not finalization, so the address cannot be made invalid mid‑deal by a factory‑level remove; the remove takes effect for new deals only.
 
-### 3.4 Per‑SPV `settlementMode` — escape hatch for NFT escrow
+### 3.4 Per‑SPV settlement configuration knobs
 
-The unified pathway works for all the standard cases discussed in the spec. A small number of deployments may want the legacy NFT‑escrow flow — for example, if a particular SPV's counsel insists on a DTC‑style "depository holds the asset, settlement instructs book entry" model where the escrow contract literally custodies the cert during pendency. To preserve that option:
+Three per-SPV configuration flags govern variations in how secondary trades behave for a given SPV. All three default to the simple/fast case; all three are designed for at the protocol layer and either built or deferred at deployment time. They are set on the SPV's cyberCORP (or DealManager) at onboarding and are not changed thereafter without a coordinated migration.
 
-```solidity
-// On the SPV's cyberCORP or its DealManager
-enum SettlementMode { UNIFIED, NFT_ESCROW }
-SettlementMode settlementMode; // default UNIFIED, set per-SPV at onboarding
-```
+| Flag | Default | Alternative | Effect |
+|---|---|---|---|
+| `settlementMode` | `UNIFIED` | `NFT_ESCROW` | UNIFIED: payment-only escrow; ownership change via `IssuanceManager.executeSecondaryTransfer` (§8). NFT_ESCROW: legacy Pathway A — Direct Custody sellers also deposit the cert into `LexScroWLite`; the cert transfers to the buyer at finalize. Built when a deployment's counsel specifically wants on-chain NFT escrow. |
+| `qmsMode` | `false` | `true` | Default: agreement finalizes at `acceptOffer`. QMS mode: agreement enters a 15-day cool-off and only finalizes after `qmsListedAt + 15 days`; `TimeSettlementPeriodCondition` extended so total time from listing to settlement is ≥45 days. Preserves Treas. Reg. §1.7704‑1(g) QMS safe harbor. See §4.7. Built when a 3(c)(7) deployment or counsel opinion demands QMS. |
+| `endorserOfRecord` | `SELLER` | `LEDGER_ADMINISTRATOR` | SELLER (default): the `Endorsement.endorser` field on the seller's cert records the seller's address — the natural reading of "the registered owner endorsed this transfer to the named endorsee," with the seller's signature attached as `signatureHash` and the IssuanceManager only the on-chain executor. LEDGER_ADMINISTRATOR: the administrator multisig is recorded as `endorser` (operational executor of record), with the seller's signature still attached as `signatureHash`. Useful for SPVs whose counsel prefers the administrator be the named endorser on the cert and the seller's authorization be referenced through the signature. |
 
-When `settlementMode == NFT_ESCROW`:
+**`settlementMode = NFT_ESCROW`** — the legacy NFT-escrow opt-in. The unified pathway works for all the standard cases discussed in the spec. A small number of deployments may want the legacy NFT‑escrow flow — for example, if a particular SPV's counsel insists on a DTC‑style "depository holds the asset, settlement instructs book entry" model where the escrow contract literally custodies the cert during pendency. When `settlementMode == NFT_ESCROW`:
 
 - `OfferRegistry.acceptOffer` for a Direct Custody seller routes through the legacy Pathway A flow: the seller is prompted to deposit the cert (after a split for partial sales), the cert lives in `LexScroWLite` during pendency, and `finalizeEscrow` transfers the cert to the buyer plus reconciles `OwnerDetails` via `_update`.
 - Administered Custody sellers under `NFT_ESCROW` mode still use the unified pathway, because there is no cert to escrow (the cert is already in the multisig). There is no useful third option.
 
-For the initial deployment, all SPVs use `UNIFIED`. `NFT_ESCROW` is designed for, not built. Add it when a deployment's counsel specifically requests it. The dispatch in `LexScroWLite.finalizeEscrow` is a single additional branch and does not complicate the unified-mode path.
+For the initial deployment, all SPVs use the defaults (`UNIFIED`, `qmsMode = false`, `endorserOfRecord = SELLER`). The non-default branches are designed for, not built. Add them when a specific deployment's counsel or operating model requires them. The dispatch is a single additional branch in each affected code path and does not complicate the default-mode behavior.
 
 ### 3.5 Partial sales
 
@@ -479,9 +479,11 @@ Concretely the function:
 1. **Validates offeror eligibility and the asset side.**
    - For `SELL`: caller is the registered owner of `interestEntryTokenId` (via `OwnerDetails.ownerAddress` for Administered Custody, or `IERC721.ownerOf` for Direct Custody — read both, accept either). This is the "no phantom sells" rule from spec §4.4. `offerorEndorsementSignature` must be non‑empty; recovers to the offeror against the `OpenEndorsement` typed data (§4.3).
    - For `BUY`: caller has approved `OfferRegistry` (or the holding-escrow contract) to pull `consideration` of `paymentToken`. `offerorEndorsementSignature` must be empty. The bid's seller-side restrictions (if any — e.g., "only registered owners of cert IDs in {x,y,z}") are encoded in `restrictions.explicitAllowlist` or `additionalTerms`.
-   - SPV is registered (a mapping of approved cyberCORP addresses, owner‑managed initially).
+   - SPV is registered (a mapping of approved cyberCORP addresses, owner‑managed initially). SPV registration also requires the SPV's `CyberCertPrinter` to have `endorsementRequired = true` set globally — see the precondition note below.
    - `integrator`, if non‑zero, is `approvedIntegrators[integrator]` on `DealManagerFactory`.
    - `paymentToken` is on a per‑SPV allowlist (USDC/USDT initially, configured per cyberCORP).
+
+   **Precondition: `endorsementRequired = true` on the SPV's cert printer.** The endorsement-lock that protects against the seller transferring their cert during pendency (§4.4) depends on `CyberCertPrinter._update` enforcing the `endorsementRequired` check — i.e., rejecting any transfer whose recipient does not match the most recent endorsement's endorsee. If a cyberCORP's cert printer has `endorsementRequired = false`, the materialized endorsement at `acceptOffer` is recorded but is not enforced as a transfer lock, and a Direct Custody seller could move the cert to a third party during pendency, breaking the trade. The OfferRegistry's SPV-registration function (`registerSPV(cyberCorp)`) must therefore check that the cyberCORP's cert printer has `endorsementRequired = true` (read via `CyberCertPrinter.endorsementRequired()`), and revert otherwise. Existing SPVs without this configuration must enable it before being registered; for SPVs that never want the secondary-trade flow, the precondition does not apply.
 
 2. **Creates a partially-signed trade agreement record.** Calls `CyberAgreementRegistry.createOpenAgreement(templateId = templateFor(exemptionPathway), partyA = offeror, partyAValues, partyASignature = offerorAgreementSignature, expiry = validUntil, openToMatching = true)`. The agreement record now has `parties = [offeror]`, `signedAt[offeror] = block.timestamp`, `finalized = false`, `openToMatching = true`. It is **waiting for any qualifying party B to attach** (§7). The agreement template internally maps "party A / party B" to "seller / buyer" or "buyer / seller" based on which side posted, so the same template files render correctly for either initiation direction.
 
@@ -583,13 +585,27 @@ Whichever side **posts** signs and commits its bundle at `postOffer`. Whichever 
 | `acceptOffer` signature bundle | Buyer bundle (agreement B + USDC approval) | Seller bundle (agreement B + open endorsement) |
 | `acceptOffer` on-chain state change | Agreement finalized; cert endorsed via pre-signed signature; trade escrow opens; awaiting buyer deposit | Agreement finalized; cert endorsed via signature signed at acceptance; trade escrow opens in `PAID` state |
 | Buyer payment deposit | Separate step after `acceptOffer` (§10.4) | Already deposited at `postOffer`; migrated at `acceptOffer` |
-| Side of `restrictions` filter | Counterparty (buyer) eligibility | Counterparty (seller) eligibility — typically open to any registered owner with required cert metadata |
+| Side of `restrictions` filter | Counterparty (buyer) eligibility — accredited, QP, non‑US, Soulbound badge, explicit allowlist | Counterparty (seller) eligibility — most typical case is open to any registered owner with no extra filter (any holder of ≥ `units` of the named SPV can fill); for targeted bids, `restrictions.explicitAllowlist` selects specific sellers; niche filters (non‑affiliate, syndicate badge held) reuse existing `restrictions` fields or ride on `additionalTerms`. The existing `CounterpartyRestrictions` struct serves both sides without extension. |
 | Cancel-before-acceptance | Releases endorsement intent; no funds movement | Refunds bid commitment from holding escrow |
 | Counterparty visibility filter (UI/indexer, §4.8) | Surface to eligible buyers | Surface to eligible registered owners |
 
 Everything below the dashed line of `acceptOffer` is shared code: same `ICondition` set, same `TimeSettlementPeriodCondition`, same keeper, same `IssuanceManager.executeSecondaryTransfer`, same FIX receipt emission, same fee split. The unified settlement pathway in §3 and §8 is side-agnostic by construction.
 
 **Webapp implications.** §10.1 distinguishes "Post Sell Offer" and "Post Bid" entry points but shares the underlying form components (`AssetInput`, `EmbeddedAgreement`, `CounterpartyRestrictionsInput`). §10.3 (acceptance view) similarly renders both directions; the only visible difference is which side's reps appear in the buyer-bundle vs seller-bundle review and whether the acceptor's "Sign and Accept" prompts for a payment approval (sell-offer acceptance) or an endorsement signature (bid acceptance). §10.4 (deposit + settlement view) is degenerate for bid-initiated trades — the escrow is already in `PAID` state at acceptance, so the view skips the buyer deposit step and goes straight to the conditions / settlement timer.
+
+**Bid-commitment yield: none.** The bidder's payment tokens sit in the `LexScroWLite` holding escrow as principal-only, idle. The protocol does not deposit them into yield-bearing venues during the bid's pendency, and the bidder does not earn yield while their commitment is outstanding. This keeps the holding-escrow mechanics simple, avoids exposing bidder principal to DeFi venue risk, and avoids tax-character complications (yield earned on funds posted as a §4(a)(7) trade commitment is awkward to classify). Bidders should size their commitments and `validUntil` durations accordingly.
+
+**Holding-escrow lifecycle — questions to finalize before building.** §4.5 specifies that bid commitments live in a `LexScroWLite` holding escrow keyed by `offerId` and refund on cancel/expiry, but several implementation choices are not yet pinned. Resolve these before writing the OfferRegistry contract:
+
+1. **Expiry alignment.** Does the holding escrow inherit `validUntil` from the offer as its expiry, or does it carry a separate (longer or shorter) expiry? Recommend: inherits `validUntil` exactly; the offer and the funds commitment expire together.
+2. **Refund permissions.** Who can call the refund function on the holding escrow? Permissionless once expired? Bidder-only? BorgAuth-gated? Recommend: permissionless on expiry; bidder-only before expiry via `cancelOffer`.
+3. **Partial bid acceptance.** Can a seller fill 150 of a 200-unit bid? If yes, how does the holding escrow split — pro rata (150/200 of the principal migrates into the trade settlement escrow, 50/200 remains in the holding escrow as a residual claim on further partial fills)? Or do partial fills require the bidder to re-post a new bid for the residual after each fill? Recommend: pro rata split, with the offer's `unitsAccepted` and `status` (PARTIALLY_ACCEPTED vs FULLY_ACCEPTED) tracking the cumulative fill state, and the holding escrow holding the residual principal until further fills, cancel, or expiry.
+4. **Multiple sellers filling one bid.** Naturally handled if (3) supports pro rata. Each filling seller signs an `acceptOffer` for their slice; each acceptance migrates that slice's principal from the holding escrow into a separate trade settlement escrow. Confirm: yes, allowed by construction.
+5. **Concurrency / first-mover semantics on bid acceptance.** Two sellers race to fill the same bid units; whichever transaction lands first wins. The loser's transaction reverts (insufficient remaining `unitsOffered - unitsAccepted`). No queue, no priority. Confirm: yes, standard.
+6. **Holding-escrow contract: extend `LexScroWLite` or new contract?** Options: (a) reuse `LexScroWLite` with a single-asset escrow holding only payment tokens, status flowing from `PENDING` to `MIGRATED` (instead of `PAID`) on partial fills, to `VOIDED` on cancel/expiry; (b) new lightweight `BidCommitmentEscrow` contract with simpler state machine. Recommend: option (a), reuse `LexScroWLite`, because the existing escrow primitives (`expiry`, `voidAndRefund`, `handleCounterPartyPayment`) cover most of what's needed; option (b) only if extending `LexScroWLite` proves invasive.
+7. **`OfferRegistry` ↔ holding escrow trust path.** When `acceptOffer` migrates funds from the holding escrow into the trade settlement escrow, what authorizes the migration? Recommend: `LexScroWLite` exposes a `migrateTo(targetEscrowId, amount)` function callable only by the `OfferRegistry` (BorgAuth-gated), with a hash-commitment from `postOffer` (offerId → holdingEscrowId) that `acceptOffer` re-verifies.
+
+Decisions on each of these go into the OfferRegistry's storage layout and the `LexScroWLite` extension. The defaults above are conservative; deviations should be documented when chosen.
 
 ### 4.6 Contract-formation model
 
@@ -869,7 +885,7 @@ Access control via BorgAuth: only addresses holding the `SECONDARY_TRANSFER_ROLE
 
 5. **Append a mirror endorsement on the new cert.** Call `addEndorsement(newCertId, {endorser: intent.sellerAddress, signatureHash: <ref to seller's open-endorsement>, registry: CyberAgreementRegistry, agreementId: intent.agreementId, endorsee: buyer, endorseeName: buyerName, timestamp: block.timestamp})`. This makes the buyer's new cert self‑describing: looking at the cert alone reveals its origin (which agreement, which seller, which voided/decremented predecessor cert) without requiring a separate registry lookup.
 
-   For Administered Custody, the endorser slot may instead be filled with the ledger administrator multisig as the operational executor, with the seller's signature still attached as `signatureHash` — preserving the seller's pre-signed authorization as the legal anchor while reflecting that the multisig is the holder of record. The choice is configurable per SPV.
+   For Administered Custody, the endorser slot may instead be filled with the ledger administrator multisig as the operational executor, with the seller's signature still attached as `signatureHash` — preserving the seller's pre-signed authorization as the legal anchor while reflecting that the multisig is the holder of record. The choice is the `endorserOfRecord` per-SPV configuration knob enumerated in §3.4. Default is `SELLER`.
 
 6. **Emit events.** `SecondaryTransferExecuted(intent.agreementId, intent.sellerCertId, newCertId, intent.sellerAddress, buyer, intent.units, intent.isFullSale)`. The DealManager separately emits `DealFinalized` and `FIXTradeReceipt` (§9).
 
@@ -1027,7 +1043,12 @@ GET /api/spvs/:cyberCorp/fix-receipts
 
 Eligibility filtering for `/api/offers` is server‑side: the route joins `user_spv_entitlement`, `user_seasoning`, and the user's LeXcheX credential cache; it never returns an offer the user is ineligible to see. This is the implementation of the spec's "UI‑level visibility gating" (§4.4, §11.1B).
 
-A keeper component (separate Node process, deployed alongside the indexer) subscribes to `DealProposed`, `BuyerDeposit`, `SellerDeposit` and calls `signAndFinalizeDeal` when both deposits are in and `TimeSettlementPeriodCondition` clears, per §10.4 of the spec.
+A keeper component (separate Node process, deployed alongside the indexer) does two things:
+
+1. **Auto-finalize ready deals.** Subscribes to `DealProposed`, `BuyerDeposit`, `SellerDeposit` and calls `DealManager.signAndFinalizeDeal` once both required deposits are in and `TimeSettlementPeriodCondition` clears, per §10.4 of the spec.
+2. **Auto-void stuck deals on expiry.** Subscribes to deal `expiry` timestamps and, when an open deal passes its `expiry` without reaching finalize, calls `DealManager.voidExpiredDeal` (or the equivalent void function on `LexScroWLite`) to release escrowed assets back to their owners. Includes both trade-settlement escrows (refund buyer payment, release any seller endorsement-lock via void endorsement on the seller's cert) and bid-commitment holding escrows (refund bidder principal). This eliminates the failure mode where escrowed funds sit indefinitely after expiry because no party manually called void.
+
+Both auto-finalize and auto-void are convenience layers, not trust layers: either party can call the underlying functions directly at any time. The keeper exists so users don't have to.
 
 ---
 
@@ -1061,6 +1082,8 @@ Items in v2.04 that should be corrected or refined when the spec is next revised
 12. **Pre‑signed open endorsement at `postOffer`.** The cyberCORPs `Endorsement` struct (`src/CyberCertPrinter.sol`) requires `endorsee` to be a known address. The binding-offer + unified-pathway architecture requires the seller to authorize transfer at posting, when the endorsee is not yet known. This detail document introduces the **open endorsement** pattern (§4.3): the seller signs an EIP-712 `OpenEndorsement` typed structure that omits the endorsee but binds the authorization to a specific `offerId`; at `acceptOffer`, the IssuanceManager combines the seller's pre-signed `signatureHash` with the now-known buyer's address and name to materialize the full `Endorsement` struct on the cert. This mirrors negotiable-instruments-law "indorsement in blank" and preserves the seller as the legal endorser of record, even though the writing of the endorsement to the cert is performed by the IssuanceManager under BorgAuth. No change to the on-chain `Endorsement` struct is required; only the `IssuanceManager.attachOpenEndorsement` entry point and the OfferRegistry's storage of the pre-signed signature. The cyberCORPs Bylaws may want a small drafting update to acknowledge that endorsements may be pre-signed in open form when authorizing transfer through the OfferRegistry/DealManager flow.
 
 13. **Buy-side parity and bid commitments (§4.5).** The OfferRegistry surface supports both sell-initiated and buy-initiated trades. The mechanics are symmetric: each side contributes a two-signature EIP-712 bundle (agreement-side signature + side-specific commitment), and whichever side posts signs at `postOffer` while the other side signs at `acceptOffer`. The downstream flow from `acceptOffer` through finalize is identical regardless of initiation direction. The asymmetric commitment artifact is: for sell offers, the seller's open-endorsement is the pre-signed commitment; for bids, the buyer's payment deposited into a `LexScroWLite` holding escrow is the commitment, custodied by the protocol from posting until acceptance, void, or expiry. The cyberCORPs Bylaws (and the spec's discussion of the offer registry in §7.1 / §4.4) should be updated to recognize bid-side initiation as a first-class flow on equal footing with sell offers, with the holding-escrow commitment as the buy-side analog of the seller's open endorsement.
+
+14. **`endorsementRequired = true` precondition for SPVs using cyberTRADE.** The endorsement-lock that protects a Direct Custody seller's cert during pendency (§4.4) depends on `CyberCertPrinter._update` enforcing the `endorsementRequired` check. SPVs whose cert printers were initialized with `endorsementRequired = false` would silently lack this protection — the materialized endorsement at `acceptOffer` would be recorded but not enforced as a transfer lock, allowing the seller to move the cert mid-pendency. The OfferRegistry's `registerSPV` function therefore enforces `CyberCertPrinter.endorsementRequired() == true` and reverts otherwise. SPVs that wish to use cyberTRADE for secondary trading must enable this flag at cert-printer initialization (preferable) or via the printer's setter (if available) before SPV registration. The spec's §4.4 / §9 should reflect this precondition in the SPV-onboarding checklist.
 
 ---
 
@@ -1123,3 +1146,197 @@ Webapp (`metalex-tech/metalex-webapp`):
 - `apps/cybercorps-indexer/src/api/{rounds,deals,cybercerts,cybercorps}/...-routes.ts` — REST route patterns; new `offers-routes.ts` follows them.
 
 These pointers, plus the structural changes in §3–§11, are the bridge from the v2.04 spec to a working implementation that fits the cybercorps protocol and the metalex webapp as they exist today.
+
+---
+
+## Appendix A — End-to-End Worked Trades (Unified Pathway)
+
+Reference walkthroughs through the architecture in §3–§9. The intent is to give an implementer a concrete step-by-step trace they can match against the protocol code as they build. Legal/regulatory framing lives in the body sections above and is not repeated here.
+
+### A.0 Setup (shared by both walkthroughs)
+
+**SPV X.** Delaware LLC, 3(c)(1), 100-holder cap, USDC on Arbitrum. Onboarded with defaults: `settlementMode = UNIFIED`, `qmsMode = false`, `endorserOfRecord = SELLER`. `CyberCertPrinter.endorsementRequired = true` (precondition for OfferRegistry registration, §4.2). Disclosure package URI current; GP underlying-asset provenance attestation hash recorded.
+
+**Contracts deployed for SPV X.** `cyberCorp`, `IssuanceManager`, `CyberCertPrinter` (with `FundInterestExtension` bound), `DealManager`, `CyberAgreementRegistry`, plus the per-SPV conditions (`HolderCapCondition`, `LegionSoulboundCondition`, etc.). The `DealManager` holds the `SECONDARY_TRANSFER_ROLE` on the SPV's BorgAuth, granting it the authority to call `IssuanceManager.executeSecondaryTransfer`.
+
+**Shared infrastructure.** Single `OfferRegistry` deployed protocol-wide. Single `GlobalKillCondition` (bilateral MetaLeX/Legion admins). `TimeSettlementPeriodCondition` with default 24h. `DealManagerFactory` with Legion whitelisted as an integrator at 40% fee share.
+
+**Trade-agreement templates.** `TEMPLATE_4A7` registered in `CyberAgreementRegistry`, IPFS-hosted.
+
+**Cast of characters.**
+
+| Party | Role | Custody | Wallet | LeXcheX state |
+|---|---|---|---|---|
+| Alice | Existing LP in SPV X, holds cert #42 = 1000 units, `acquisitionDate = 2024-01-15` | Administered (cert in ledger administrator multisig; `OwnerDetails = {Alice Doe, 0xAlice}`) | `0xAlice` (Legion-provisioned MPC wallet) | KYC + accredited, current |
+| Bob | Prospective buyer, whitelisted on Legion's UI for SPV X, seasoned 30+ days | Direct (cert will be minted to his wallet) | `0xBob` (Legion-provisioned MPC wallet) | KYC + accredited + Legion-SPV-X Soulbound, current |
+| Carol | Prospective buyer | Direct | `0xCarol` | KYC + accredited + Legion-SPV-X Soulbound, current |
+| Dave | Existing LP in SPV X, holds cert #87 = 500 units, `acquisitionDate = 2024-06-01` | Administered | `0xDave` | KYC + accredited, current |
+
+---
+
+### A.1 Sell-Initiated Trade (Alice posts; Bob accepts)
+
+Alice wants to sell 200 of her 1000 units for 50,000 USDC under Section 4(a)(7).
+
+#### Phase 1 — Alice posts the offer
+
+Alice opens her SPV X holder dashboard, sees cert #42, clicks "Post Offer to Sell." Offer Builder loads with cert #42 pre-selected and her 4(a)(7) template rendered.
+
+She fills in: side = SELL, units = 200, consideration = 50,000 USDC, exemption = 4(a)(7), validUntil = now + 30d, counterparty restrictions = {accredited, Legion-SPV-X Soulbound}.
+
+She clicks "Sign and Post Offer." Her wallet prompts her once with a bundled EIP-712 typed-data payload containing:
+- **Agreement signature**: party-A-as-seller signature on TEMPLATE_4A7 with her partyAValues populated (her affiliate-status disclosure, governing-document references, etc.).
+- **Open-endorsement signature**: signature on `OpenEndorsement{offerId, spvCyberCorp = SPV X, certId = 42, units = 200, agreementId, exemptionBasis = "4A7", validUntil}`.
+
+The transaction lands. `OfferRegistry.postOffer`:
+1. Validates Alice is `OwnerDetails.ownerAddress[42]` (she is). ✓
+2. SPV X is registered, Legion is an approved integrator, USDC is on SPV X's allowlist, the cert printer has `endorsementRequired = true`. ✓
+3. Calls `CyberAgreementRegistry.createOpenAgreement(TEMPLATE_4A7, partyA = Alice, partyAValues, partyASignature, validUntil, openToMatching = true)`. Agreement record created, `agreementId` returned.
+4. Stores the `Offer` struct: `{side: SELL, offeror: Alice, certId: 42, units: 200, consideration: 50_000e6, exemptionPathway: SECTION_4A7, validUntil, restrictions, integrator: Legion, agreementId, offerorEndorsementSignature, bidCommitmentEscrowId: 0, status: LIVE}`.
+5. Emits `OfferPosted(offerId, ...)`.
+
+**State after Phase 1:** Offer is LIVE. Agreement is partially signed (Alice as A; openToMatching = true). Cert #42 is untouched in the multisig. No funds have moved.
+
+#### Phase 2 — Bob discovers and accepts
+
+The Ponder indexer ingests `OfferPosted` and writes a row to the `offer` table. `/api/offers` is called by Bob's authenticated session and returns Alice's offer (Bob passes the eligibility filter: accredited, Soulbound, seasoned).
+
+Bob clicks the offer, lands on the Acceptance view. The view runs his side of the compliance checklist (KYC ✓, accreditation ✓, Soulbound ✓, ERISA negative attestation needed, tax info on file ✓). Bob clicks the ERISA checkbox and the 4(a)(7) information-package acknowledgment modal (records his acknowledgment in `partyBValues`).
+
+Bob clicks "Sign and Accept." His wallet prompts him once with an EIP-712 typed-data payload containing:
+- **Agreement signature**: party-B-as-buyer signature on the same TEMPLATE_4A7 with his `partyBValues` populated (accredited rep, ERISA negative attestation, information-package acknowledgment, tax-info covenant).
+- **USDC approval** (implicit, runs as part of the transaction bundle): `USDC.approve(DealManager, 50_000e6)`.
+
+The transaction lands. `OfferRegistry.acceptOffer(offerId, units = 200, partyBValues, acceptorAgreementSignature, acceptorEndorsementSignature = empty)`:
+1. Validates offer LIVE, within validUntil, units within range. ✓
+2. Validates Bob satisfies `restrictions` via LeXcheX. ✓
+3. Calls `CyberAgreementRegistry.attachAndSignAsPartyB(agreementId, partyB = Bob, partyBValues, partyBSignature)`. Agreement → `finalized = true`, `openToMatching = false`. `AgreementSignedCondition` now passes.
+4. Calls `IssuanceManager.attachOpenEndorsement(certId = 42, units = 200, endorsee = Bob, endorseeName = "Bob Smith" from LeXcheX)`. The IssuanceManager assembles the `Endorsement` struct: `{endorser: Alice (per endorserOfRecord = SELLER), timestamp: now, signatureHash: offer.offerorEndorsementSignature, registry: CyberAgreementRegistry, agreementId, endorsee: Bob, endorseeName: "Bob Smith"}` and calls `CyberCertPrinter.addEndorsement(42, ...)`. The cert now has an endorsement-lock; any transfer of #42 to anyone other than Bob will fail in `_update`.
+5. Calls `DealManager.proposeSecondaryDeal(seller = Alice, buyer = Bob, paymentToken = USDC, paymentAmount = 50_000e6, sellerCertId = 42, units = 200, isFullSale = false, agreementId, conditions = [4(a)(7) condition set], expiry = now + 7d, feeDestination = Legion, offerId, exemptionBasis = "4A7")`. Creates the escrow with `tradeType = SECONDARY_TRADE`, `corpAssets = []`, `buyerAssets = [{USDC, 50_000e6, isFee: true}]`, `sellerAddress = Alice`, `counterParty = Bob`, `xferIntent = {sellerCertId: 42, units: 200, buyer: Bob, isFullSale: false, agreementId, exemptionBasis: "4A7"}`.
+6. Emits `OfferAccepted(offerId, dealId, ...)` and `DealProposed(dealId, ...)`. Sets offer status = FULLY_ACCEPTED.
+
+**State after Phase 2:** Contract formed. Endorsement-lock active on cert #42. Escrow in `PENDING` state awaiting Bob's payment deposit.
+
+#### Phase 3 — Bob deposits payment
+
+The webapp routes Bob to the Deposit + Settlement view. Only the buyer deposit row is shown (Alice has no deposit step). Bob clicks "Deposit Payment" → `DealManager.depositPayment(dealId)` (or the LexScroWLite equivalent). 50,000 USDC pulled from `0xBob` into the escrow. Status → `PAID`. Emits `BuyerDeposit`. `TimeSettlementPeriodCondition` clock starts.
+
+#### Phase 4 — 24-hour window + conditions
+
+24 hours pass. All conditions evaluate continuously:
+- `AccreditedInvestorCondition`: Bob accredited in LeXcheX. ✓
+- `KYCAMLCondition`: both parties' KYC current. ✓
+- `Section4a7DisclosureCondition`: SPV X's disclosure URI fresh + Bob's acknowledgment recorded in agreement. ✓
+- `ERISACondition`: Bob's negative attestation in agreement. ✓
+- `HolderCapCondition`: SPV X currently at 87 holders; adding Bob → 88; ≤ 100. ✓
+- `TaxInfoCondition`: Bob's W-9 on file. ✓
+- `AgreementSignedCondition`: agreement finalized. ✓
+- `LegionSoulboundCondition`: Bob holds the SPV-X badge. ✓
+- `GlobalKillCondition`: kill flag low. ✓
+- `TimeSettlementPeriodCondition`: 24h elapsed since `BuyerDeposit`. ✓ (after 24h)
+
+#### Phase 5 — Finalization (keeper)
+
+Keeper detects the ready state and calls `DealManager.signAndFinalizeDeal(dealId)`. Inside:
+
+1. Re-evaluate all conditions. All pass.
+2. Compute fee split. Protocol fee = 50,000 × 50 bps = 250 USDC. Integrator share = 250 × 40% = 100 USDC to Legion. MetaLeX share = 150 USDC. Net to Alice = 49,750 USDC.
+3. Branch on `tradeType` and seller's custody: SECONDARY_TRADE + Administered → call `IssuanceManager.executeSecondaryTransfer(xferIntent, buyer = Bob, buyerName = "Bob Smith", buyerCustodyMode = DIRECT, ledgerAdministratorMultisig = N/A)`.
+4. `executeSecondaryTransfer` (BorgAuth-gated to DealManager via SECONDARY_TRANSFER_ROLE):
+   - Confirms the endorsement on cert #42 matching `agreementId` is present (it is — added at Phase 2 step 4). Leaves it in place as the chain-of-title record.
+   - `CertPrinter.updateCertificateDetails(42, ...)`: decrement `unitsRepresented` from 1000 to 800; update `FundInterestExtension.lastTrade` to record the FIX trade fields.
+   - `CertPrinter.safeMintAndAssign(to = 0xBob, name = "Bob Smith", ownerAddress = 0xBob, ...)`. New cert tokenId = 87 (next sequential). Cert data: `unitsRepresented = 200`, `OwnerDetails = {Bob Smith, 0xBob}`, `extensionData` encoded with `FundInterestData{acquisitionDate = now, tackedFromAcquisitionDate = 0, exemptionBasis = "4A7", custodyMode = DIRECT, lastTrade = <full FIX record>, ...}`, applicable 4(a)(7) restriction legends.
+   - `CertPrinter.addEndorsement(87, ...)`: mirror endorsement on the new cert: `{endorser: Alice, signatureHash: offer.offerorEndorsementSignature, registry, agreementId, endorsee: Bob, endorseeName: "Bob Smith", timestamp: now}`.
+5. Route USDC: 49,750 to `0xAlice`, 100 to Legion, 150 to MetaLeX `platformPayable`.
+6. Emit `DealFinalized(dealId)`, `FeePaid(dealId, Legion, 100, 150)`, `FIXTradeReceipt(dealId, offerId, fixID, ...)`, `SecondaryTransferExecuted(...)`. Plus the ERC-721 `Transfer(0x0 → 0xBob, 87)` mint event, `CertificateAssigned(87, ...)`, `CertificateDetailsUpdated(42)`, `EndorsementAdded(42)`, `EndorsementAdded(87)`.
+7. Escrow status → `FINALIZED`.
+
+#### Phase 6 — Post-settlement state
+
+- Cert #42 in administrator multisig: `OwnerDetails = {Alice}`, 800 units, original `acquisitionDate = 2024-01-15`, endorsement array now has one entry recording the 200-unit transfer to Bob under `agreementId`.
+- Cert #87 in Bob's wallet `0xBob`: `OwnerDetails = {Bob Smith, 0xBob}`, 200 units, `acquisitionDate = today`. Bob holds the ERC-721 directly.
+- SPV X holder count: 87 → 88.
+- Alice's webapp dashboard shows 800 units. Bob's wallet shows the new cert and the webapp dashboard shows him as a SPV X holder with 200 units.
+
+---
+
+### A.2 Bid-Initiated Trade (Carol posts; Dave accepts)
+
+Carol wants to buy 500 units of SPV X for 125,000 USDC. She posts a bid. Dave is a Direct-Custody-less LP whose 500 units (cert #87, `acquisitionDate = 2024-06-01`) match the bid and decides to fill it.
+
+#### Phase 1 — Carol posts the bid
+
+Carol opens the Bid Builder. Fills in: side = BUY, units = 500, consideration = 125,000 USDC, exemption = 4(a)(7), validUntil = now + 14d, counterparty restrictions = empty (any registered owner of SPV X eligible).
+
+She clicks "Sign and Post Bid." Her wallet prompts her with an EIP-712 bundle:
+- **Agreement signature**: party-A-as-buyer signature on TEMPLATE_4A7 with her `partyAValues` (accredited rep, ERISA negative attestation, information-package acknowledgment, tax-info covenant, etc.).
+- **USDC approval**: `USDC.approve(OfferRegistry, 125_000e6)`.
+
+The transaction lands. `OfferRegistry.postOffer(side = BUY, tokenIdOrZero = 0, units = 500, ..., offerorEndorsementSignature = empty)`:
+1. Validates BUY-side conditions: Carol has approved `OfferRegistry` for 125_000e6 USDC, SPV X registered, Legion approved integrator, USDC on allowlist.
+2. Calls `CyberAgreementRegistry.createOpenAgreement(TEMPLATE_4A7, partyA = Carol, partyAValues, partyASignature, validUntil = now + 14d, openToMatching = true)`. Returns `agreementId`.
+3. Opens a `LexScroWLite` holding escrow keyed by the new `offerId` and pulls 125,000 USDC from Carol into it. Returns `bidCommitmentEscrowId`.
+4. Stores the `Offer` struct with `side: BUY, offerorEndorsementSignature: empty, bidCommitmentEscrowId, agreementId, status: LIVE`.
+5. Emits `OfferPosted(offerId, side: BUY, bidCommitmentEscrowId, ...)`.
+
+**State after Phase 1:** Bid is LIVE. Carol's 125,000 USDC is custodied by `LexScroWLite` keyed to this bid. Agreement is partially signed (Carol as A; openToMatching = true). No cert has moved.
+
+#### Phase 2 — Discovery and Dave accepts
+
+The indexer surfaces the bid to registered owners of SPV X with ≥500 units. Dave's session pulls `/api/offers` and the bid appears. He reviews — 125,000 USDC for his 500 units is a price he likes.
+
+Dave clicks "Accept Bid." The acceptance view runs his side of the compliance checklist (KYC ✓, holding period elapsed (under 1 year, but this is a 4(a)(7) trade — the seller-side requirement is the SPV's 90-day-outstanding check, not Rule 144 hold), affiliate disclosure (he's not an affiliate), Reg-S distribution-compliance N/A, tax info on file ✓).
+
+Dave clicks "Sign and Accept Bid." His wallet prompts him once with an EIP-712 bundle:
+- **Agreement signature**: party-B-as-seller signature on the same TEMPLATE_4A7 with his `partyBValues` (affiliate-status disclosure, governing-document references).
+- **Open-endorsement signature**: signature on `OpenEndorsement{offerId, spvCyberCorp = SPV X, certId = 87, units = 500, agreementId, exemptionBasis = "4A7", validUntil}`.
+
+The transaction lands. `OfferRegistry.acceptOffer(offerId, units = 500, partyBValues, acceptorAgreementSignature, acceptorEndorsementSignature)`:
+1. Validates bid LIVE, within validUntil, units = 500 ≤ unitsOffered.
+2. Validates Dave is a registered owner of cert #87 with ≥500 units. ✓ (And he satisfies any counterparty restrictions — empty in this bid.)
+3. Calls `CyberAgreementRegistry.attachAndSignAsPartyB(agreementId, partyB = Dave, partyBValues, partyBSignature)`. Agreement → finalized.
+4. Calls `IssuanceManager.attachOpenEndorsement(certId = 87, units = 500, endorsee = Carol, endorseeName = "Carol Jones")`. Constructs the `Endorsement`: `{endorser: Dave, timestamp: now, signatureHash: acceptorEndorsementSignature, registry, agreementId, endorsee: Carol, endorseeName: "Carol Jones"}`. Adds to cert #87. Endorsement-lock active.
+5. **Migrates the holding escrow into the trade settlement escrow.** Calls `LexScroWLite.migrateTo(bidCommitmentEscrowId, 125_000e6, newTradeEscrowId)`. Carol's 125,000 USDC moves from the holding escrow into the trade's settlement escrow, which opens in `PAID` state immediately.
+6. Calls `DealManager.proposeSecondaryDeal(seller = Dave, buyer = Carol, sellerCertId = 87, units = 500, isFullSale = true, ...)`. Records `tradeType = SECONDARY_TRADE`, `sellerAddress = Dave`, `counterParty = Carol`, `xferIntent`.
+7. Emits `OfferAccepted`, `DealProposed`. Offer status = FULLY_ACCEPTED.
+
+**State after Phase 2:** Contract formed. Endorsement-lock active on cert #87. Trade settlement escrow already in `PAID` state — no buyer deposit step needed. `TimeSettlementPeriodCondition` clock starts.
+
+#### Phase 3 — (skipped: no buyer deposit needed)
+
+#### Phase 4 — 24-hour window + conditions
+
+Same as Phase 4 of A.1, with the relevant condition set evaluated against Dave (seller) and Carol (buyer).
+
+#### Phase 5 — Finalization
+
+Keeper calls `signAndFinalizeDeal`. `executeSecondaryTransfer` runs:
+- Cert #87 is voided (isFullSale = true): `CertPrinter.voidCert(87)`. SecurityStatus → Void. Endorsement array retained as historical record.
+- New cert minted to Carol via `safeMintAndAssign(to = 0xCarol, name = "Carol Jones", ownerAddress = 0xCarol, ...)`. New tokenId = 88. `unitsRepresented = 500`, `acquisitionDate = today`, custody mode = DIRECT (Carol's election), full 4(a)(7) FIX record.
+- Mirror endorsement appended on cert #88.
+- Payment routed: 125,000 × 50bps = 625 protocol fee; 250 to Legion, 375 to MetaLeX, 124,375 to Dave.
+
+#### Phase 6 — Post-settlement state
+
+- Cert #87: Voided. Sits in administrator multisig with endorsement and `SecurityStatus.Void`. Historical record only.
+- Cert #88: Lives in Carol's wallet `0xCarol`. 500 units of SPV X. `OwnerDetails = {Carol Jones, 0xCarol}`. Carol now appears as an SPV X holder in the webapp and on chain.
+- SPV X holder count: Dave departed (-1, since #87 was his only cert) + Carol joined (+1) = net zero. Still 87.
+
+---
+
+### A.3 Variants
+
+The walkthroughs above cover (A.1) Administered seller → Direct buyer via sell offer, and (A.2) Direct buyer → Administered seller via bid. Other combinations differ in only one or two lines each:
+
+| Variant | Difference vs. A.1/A.2 |
+|---|---|
+| Both Administered (sell offer) | At Phase 5 mint, `safeMintAndAssign(to = ledgerAdministratorMultisig, name = buyerName, ownerAddress = buyer)`. New cert lives in the multisig with the buyer as registered owner. Otherwise identical. |
+| Both Direct (sell offer) | At Phase 1, the seller's cert is in their own wallet; the endorsement-lock at Phase 2 step 4 prevents transfer to anyone other than the buyer. At Phase 5 mint, new cert goes to buyer's wallet. |
+| Sell offer, Direct seller | Same as both-Direct above; the endorsement-lock is the structural protection during pendency. |
+| Bid, Administered bidder | At Phase 1, Carol's funds still flow into the holding escrow; Carol's custody mode affects only where her new cert lands at Phase 5. |
+| Partial sale (full sale's analog under bid) | At Phase 5, instead of `voidCert(87)`, call `updateCertificateDetails(87, ...)` to decrement `unitsRepresented`. Mint a new cert for the sold portion. The unsold remainder stays with the original holder. |
+| QMS mode (per-SPV opt-in, deferred build) | Phase 2 step 3 attaches party B but does not finalize; agreement enters `qmsCoolOff` until day 15. Phase 5 keeper waits 45 days from `qmsListedAt`. |
+| NFT_ESCROW mode (per-SPV opt-in, deferred build) | Phase 2 / 3 adds a seller deposit step: the seller approves and deposits the cert into LexScroWLite. At Phase 5, the cert transfers from escrow to the buyer's wallet (or to the multisig). |
+| `endorserOfRecord = LEDGER_ADMINISTRATOR` | The `Endorsement.endorser` field on both certs is the administrator multisig; `signatureHash` remains the seller's signature. Everything else identical. |
+
+---
