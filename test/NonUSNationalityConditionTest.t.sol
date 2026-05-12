@@ -314,6 +314,31 @@ contract NonUSNationalityConditionTest is Test {
         assertEq(condition.proofExpiry(investor), secondTimestamp + validityPeriod);
     }
 
+    function test_RevertWhen_ProofAlreadyUsed_AtExpiryBlock() public {
+        address investor = address(0xA11CE);
+        uint256 firstTimestamp = 1000;
+        uint256 validityPeriod = 1 days;
+        uint256 firstExpiry = firstTimestamp + validityPeriod;
+
+        vm.warp(firstTimestamp);
+        vm.prank(investor);
+        condition.submitProof(_buildParams(investor, firstTimestamp, validityPeriod), false);
+
+        vm.warp(firstExpiry);
+        vm.prank(investor);
+        vm.expectRevert(NonUSNationalityCondition.ProofAlreadyUsed.selector);
+        condition.submitProof(_buildParams(investor, firstExpiry, validityPeriod), false);
+    }
+
+    function test_RevertWhen_FutureTimestamp_ExceedsMaxValidityWindow() public {
+        address investor = address(0xA11CE);
+        uint256 futureTimestamp = block.timestamp + 1;
+        ProofVerificationParams memory params = _buildParams(investor, futureTimestamp, MAX_VALIDITY_PERIOD);
+        vm.prank(investor);
+        vm.expectRevert(NonUSNationalityCondition.MaxValidityPeriodExceeded.selector);
+        condition.submitProof(params, false);
+    }
+
     function test_SubmitProof_HappyPath() public {
         address investor = address(0xA11CE);
         uint256 proofTimestamp = block.timestamp;

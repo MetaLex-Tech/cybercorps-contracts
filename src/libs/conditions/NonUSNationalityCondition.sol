@@ -42,6 +42,7 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
         address indexed approver
     );
 
+    // TODO this should be upgradeable
     // Deterministic verifier address from ZKPassport docs.
     address public constant DEFAULT_ZKPASSPORT_VERIFIER =
         0x1D000001000EFD9a6371f4d90bB8920D5431c0D8;
@@ -123,7 +124,7 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
         (bool verified, bytes32 uniqueIdentifier, IZKPassportHelper helper) = verifier.verify(params);
         if (!verified || address(helper) == address(0)) revert InvalidProof();
 
-        if (uniqueIdentifierExpiry[uniqueIdentifier] > block.timestamp) revert ProofAlreadyUsed();
+        if (uniqueIdentifierExpiry[uniqueIdentifier] >= block.timestamp) revert ProofAlreadyUsed();
 
         if (
             !helper.verifyScopes(
@@ -153,10 +154,9 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
         );
 
         uint256 validityPeriod = params.serviceConfig.validityPeriodInSeconds;
-        if (validityPeriod > maxValidityPeriod) revert MaxValidityPeriodExceeded();
-
         uint256 expiresAt = proofTimestamp + validityPeriod;
         if (expiresAt < block.timestamp) revert ProofExpired();
+        if (expiresAt > block.timestamp + maxValidityPeriod) revert MaxValidityPeriodExceeded();
 
         proofExpiry[msg.sender] = expiresAt;
         uniqueIdentifierExpiry[uniqueIdentifier] = expiresAt;
