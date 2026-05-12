@@ -333,6 +333,8 @@ The `FundInterestExtension.restrictionHookOverride` field (§1.4) is the per‑t
 
 There is no precursor in the codebase. The proposed contract sits between the user's signed posting transaction and `DealManager.proposeSecondaryDeal`. It is intentionally **lean**: the spec is clear that visibility is gated at the UI layer (§4.4, §11.1B), not on‑chain, so this contract does **not** hold a permission ACL on who can read offers. Anyone can read; whether the webapp surfaces a given offer to a given user is decided by Legion's UI + LeXcheX.
 
+This document adopts the **binding-offer model** (Architecture B in the design discussion): the seller's posting signature is the legally operative offer, signed against a partially-populated trade agreement in `CyberAgreementRegistry`. The buyer's `acceptOffer` signature completes mutual assent and forms the binding contract. The on-chain condition set (`ICondition`) operates as **conditions precedent to performance**, not to formation — if a condition fails between acceptance and settlement expiry, performance is excused and assets return to their owners. See §4.5 for the framing and §4.6 for the QMS-mode deferral.
+
 ### 4.1 Storage and surface
 
 New file: `src/OfferRegistry.sol`. New file: `src/storage/OfferRegistryStorage.sol`.
@@ -366,35 +368,74 @@ struct Offer {
     address integrator;                  // must be DealManagerFactory-approved at posting
     OfferStatus status;
     uint256 unitsAccepted;               // sum of partial acceptances
+
+    // Contract-formation linkage (binding-offer model)
+    bytes32 agreementId;                 // CyberAgreementRegistry record created at postOffer,
+                                         // signed by offeror as party A, openToMatching = true
 }
 ```
 
 External functions:
 
 ```solidity
-function postOffer(...) external returns (bytes32 offerId);    // emits OfferPosted
-function cancelOffer(bytes32 offerId) external;                // offeror or BorgAuth admin
-function acceptOffer(bytes32 offerId, uint256 unitsAccepted, bytes calldata acknowledgments)
-    external returns (bytes32 dealId);                          // emits OfferAccepted + delegates to DealManager
+function postOffer(
+    address spv,
+    OfferSide side,
+    uint256 tokenIdOrZero,
+    uint256 units,
+    address paymentToken,
+    uint256 consideration,
+    ExemptionPathway exemptionPathway,
+    uint64  validUntil,
+    CounterpartyRestrictions calldata restrictions,
+    bytes calldata additionalTerms,
+    address integrator,
+    string[] calldata partyAValues,      // populated party-A side of the agreement
+    bytes calldata offerorSignature      // EIP-712 signature over the agreement digest
+) external returns (bytes32 offerId);
+
+function cancelOffer(bytes32 offerId) external;   // offeror or BorgAuth admin
+
+function acceptOffer(
+    bytes32 offerId,
+    uint256 unitsAccepted,
+    string[] calldata partyBValues,      // buyer's reps, acknowledgments, attestations
+    bytes calldata acceptorSignature     // EIP-712 signature; completes the agreement
+) external returns (bytes32 dealId);
+
 function getOffer(bytes32 offerId) external view returns (Offer memory);
 ```
 
-### 4.2 What `postOffer` checks
+### 4.2 What `postOffer` does
 
-- For `SELL`: caller is the registered owner of `interestEntryTokenId` (via `OwnerDetails.ownerAddress` for Administered Custody, or `IERC721.ownerOf` for Direct Custody — read both, accept either). This is the "no phantom sells" rule from §4.4.
-- SPV is registered (a mapping of approved cyberCORP addresses, owner‑managed initially).
-- `integrator`, if non‑zero, is `approvedIntegrators[integrator]` on `DealManagerFactory`.
-- `paymentToken` is on a per‑SPV allowlist (USDC/USDT initially, configured per cyberCORP).
+The seller's posting is structurally a signed irrevocable offer (subject to `validUntil` and to `cancelOffer` before any acceptance). Concretely the function:
 
-`postOffer` **does not lock the asset**; cancellation remains free until acceptance. This is the QMS "nonbinding listing" posture (§6.7 of the spec).
+1. Validates seller eligibility and ownership:
+   - For `SELL`: caller is the registered owner of `interestEntryTokenId` (via `OwnerDetails.ownerAddress` for Administered Custody, or `IERC721.ownerOf` for Direct Custody — read both, accept either). This is the "no phantom sells" rule from spec §4.4.
+   - SPV is registered (a mapping of approved cyberCORP addresses, owner‑managed initially).
+   - `integrator`, if non‑zero, is `approvedIntegrators[integrator]` on `DealManagerFactory`.
+   - `paymentToken` is on a per‑SPV allowlist (USDC/USDT initially, configured per cyberCORP).
+
+2. Creates a partially-signed trade agreement record:
+   - Calls `CyberAgreementRegistry.createOpenAgreement(templateId = templateFor(exemptionPathway), partyA = offeror, partyAValues, partyASignature = offerorSignature, expiry = validUntil, openToMatching = true)`.
+   - The agreement record now has `parties = [offeror]`, `signedAt[offeror] = block.timestamp`, `finalized = false`, `openToMatching = true`. It is **waiting for any qualifying party B to attach** (§7 below).
+
+3. Stores the `Offer` struct with the returned `agreementId` and `status = LIVE`. Emits `OfferPosted(offerId, agreementId, ...)`.
+
+**What `postOffer` does *not* do.** It does not lock the seller's asset. It does not transfer anything. It does not bind the seller against canceling — `cancelOffer` is callable by the offeror until an acceptance lands, and acts as a withdrawal of the offer in the standard contract-law sense. Once `acceptOffer` lands, the cancellation right ends; the offer has been accepted and the contract is formed.
 
 ### 4.3 What `acceptOffer` does
 
-1. Validates the offer is `LIVE` and within `validUntil`.
+`acceptOffer` is the single contract-formation event. In one transaction:
+
+1. Validates the offer is `LIVE` and within `validUntil`. Validates `unitsAccepted ≤ unitsOffered − unitsAccepted_already`.
 2. Validates the acceptor satisfies `restrictions`. The on‑chain check is structural: jurisdiction credentials, accreditation, QP, Soulbound category/tier — all queried via the LeXcheX adapter (`creds/` directory in the contracts repo — `LeXcheXAdapter.sol` exists; cyberTRADE adds a `LegionSoulboundAdapter.sol` for the Soulbound NFT category check).
-3. Calls `DealManager.proposeSecondaryDeal(...)` with the offer's pathway → maps to an agreement template ID in `CyberAgreementRegistry`, the appropriate `ICondition[]` set (built per `ExemptionPathway`), `feeDestination = integrator`, `offerId = offerId`.
-4. Returns the new `dealId`. Emits `OfferAccepted(offerId, dealId, acceptor, unitsAccepted)`.
-5. Updates `status` to `PARTIALLY_ACCEPTED` or `FULLY_ACCEPTED` and `unitsAccepted += unitsAccepted`.
+3. **Completes the trade agreement.** Calls `CyberAgreementRegistry.attachAndSignAsPartyB(agreementId, partyB = msg.sender, partyBValues, partyBSignature = acceptorSignature)`. The registry verifies the EIP-712 signature, appends `msg.sender` to `parties`, records `signedAt[msg.sender]`, and sets `finalized = true`, `openToMatching = false`. From this transaction onward, `AgreementSignedCondition.checkCondition(...)` returns true. **The contract is now binding on both sides.**
+4. Calls `DealManager.proposeSecondaryDeal(...)` with the offer's pathway → maps to the appropriate `ICondition[]` set (built per `ExemptionPathway`), `feeDestination = integrator`, `offerId = offerId`, and the just-finalized `agreementId`. The DealManager records the escrow with `tradeType = SECONDARY_TRADE`, `sellerAddress = offeror`, `counterParty = msg.sender`.
+5. Returns the new `dealId`. Emits `OfferAccepted(offerId, dealId, acceptor, unitsAccepted)`.
+6. Updates `status` to `PARTIALLY_ACCEPTED` or `FULLY_ACCEPTED` and increments `unitsAccepted`.
+
+**Implication:** there is no separate "seller countersigns the agreement" step (no Phase 3 in the Administered Custody trace). The seller's `postOffer` signature already covered the agreement. The flow downstream of `acceptOffer` is: buyer deposit → `TimeSettlementPeriod` clock → conditions clear → finalize. The buyer's deposit is performance of the buyer's payment obligation under an already-formed contract; the seller's transfer (or the administrator's mutation, under Administered Custody) is performance of the seller's transfer obligation.
 
 The mapping from `ExemptionPathway` to `ICondition[]` is the same configuration the DealManager already accepts on `proposeDeal`. For example:
 
@@ -408,7 +449,57 @@ The mapping from `ExemptionPathway` to `ICondition[]` is the same configuration 
 
 Per‑SPV additions (e.g., `QualifiedPurchaserCondition` for 3(c)(7) funds, `CFIUSCondition` for non‑fund‑exception SPVs, `LegionSoulboundCondition` for syndicate gating) are configured on the SPV's `DealManager` and inherited automatically — `OfferRegistry` does not need to know about them.
 
-### 4.4 Visibility lives at the UI layer; compliance lives at settlement
+### 4.5 Contract-formation model
+
+The architecture above treats the offer-and-acceptance flow as ordinary contract formation, with the on-chain condition set serving as conditions precedent to performance rather than to formation.
+
+**Seller's posting signature.** Alice's `postOffer` is a binding offer in the contract-law sense. It is an irrevocable commitment by Alice to sell the specified units at the specified consideration to *any* counterparty who (a) satisfies the offer's stated counterparty restrictions, (b) provides the buyer-side reps and acknowledgments the agreement requires, and (c) accepts within `validUntil`. "Irrevocable" is qualified only by Alice's right of withdrawal via `cancelOffer` before any acceptance — the standard right to withdraw an unaccepted offer.
+
+**Buyer's acceptance signature.** Bob's `acceptOffer` is acceptance. Because the trade agreement template at issuance already contains Alice's filled-in party-A side and her signature, Bob's signature completes mutual assent in the same transaction that attaches him as party B. The agreement record in `CyberAgreementRegistry` transitions from `openToMatching = true, finalized = false` to `openToMatching = false, finalized = true` atomically. The contract is binding from this transaction.
+
+**Conditions as conditions precedent to performance.** Every `ICondition` attached to the `DealManager` for this trade — accredited investor, KYC/AML, Soulbound, holder cap, tax info, Reg S compliance, ERISA, etc. — operates as a condition precedent to *settlement*, not to *contract formation*. The contract exists from the moment of acceptance. If a condition fails by the deal's expiry, performance is excused, the escrow voids, and assets return to their owners. This is consistent with standard commercial-contract drafting in which conditions to closing are distinct from offer-and-acceptance.
+
+**Why this maps cleanly onto the existing primitives.** The `DealManager` already supports this structure: it accepts a deal with a condition set, allows deposits, evaluates conditions at finalization, and voids on expiry if conditions fail. `LexScroWLite`'s `PENDING → PAID → FINALIZED` machine and its void/refund branches are the contract-law structure of "contract formed, performance pending, performance either completes or is excused" expressed in code. No additional state machine is required.
+
+**What the seller's offer says, in substance.** A plain-English rendering of the offer Alice signs at `postOffer`:
+
+> I, Alice, irrevocably offer to sell N units of SPV X for the consideration C in payment token T to any person who: (i) satisfies the counterparty restrictions specified herein, (ii) provides the buyer-side representations and acknowledgments enumerated in the attached trade agreement, and (iii) accepts this offer through the OfferRegistry protocol on or before `validUntil`. Acceptance is effected by countersigning the trade agreement and depositing the consideration into the protocol escrow. Performance of my transfer obligation is subject to the satisfaction of the conditions enumerated in the escrow's condition set; failure of any such condition by the deal expiry shall excuse performance and void the transaction. This offer may be withdrawn by me via `cancelOffer` at any time before acceptance.
+
+That is a perfectly conventional binding conditional offer. The protocol mechanizes it.
+
+**Where the buyer's substantive duties live.** The buyer-side reps and acknowledgments are encoded as `partyBValues` on the agreement (not as separate clicks or transactions). Bob's single EIP-712 signature at `acceptOffer` covers all of them. Examples by exemption pathway:
+
+| Pathway | Buyer-side `partyBValues` (representative) |
+|---|---|
+| `SECTION_4A7` | Accredited investor representation; receipt-of-information-package acknowledgment; ERISA negative attestation; tax info (W-9/W-8BEN) reference |
+| `SECTION_4A1_HALF` | Sophistication and information access representation; investment-intent representation |
+| `RULE_144` | Acknowledgment of restricted status; acknowledgment of acquisition-date reset |
+| `RULE_144A` | QIB status representation; 144A basis acknowledgment |
+| `REG_S` | Non-U.S. person representation; jurisdiction attestation; distribution-compliance-period acknowledgment |
+
+In every case, one signature from the buyer covers the full set; the conditions then verify the substantive truth of the attestations at settlement (LeXcheX queries, registry lookups). The webapp's Acceptance view surfaces each rep as a checkbox or rendered clause so the buyer is meaningfully consenting; the on-chain signature is over the agreed text.
+
+### 4.6 QMS mode — deferred enhancement
+
+The model in §4.1–§4.5 is fast: one seller signature, one buyer signature, 24-hour `TimeSettlementPeriod`, settlement. It does **not** preserve the Qualified Matching Service safe harbor under Treas. Reg. §1.7704-1(g), which requires (i) no binding agreement entered into during the first 15 calendar days after listing and (ii) no closing within 45 calendar days of listing. Under the binding-offer model, acceptance forms a binding agreement on day 0, which is incompatible with the 15-day rule.
+
+This is an explicit and considered trade-off:
+
+- **3(c)(1) funds** (the dominant initial use case): the §7704 risk is structurally bounded by the private-placement safe harbor (Treas. Reg. §1.7704-1(h), 100-partner ceiling), which `HolderCapCondition` enforces by construction. QMS is not required.
+- **3(c)(7) funds** (later use case): the 100-partner safe harbor is unavailable. PTP risk is managed by the 2% de minimis safe harbor (which active trading may exceed) and by the facts-and-circumstances analysis discussed in spec §6.7 (Davis Polk and Holland & Knight non-PTP opinions). Active 3(c)(7) deployments may want QMS available as a backstop.
+- **Future LP-interest secondaries with high turnover** or with counsel opinions requiring belt-and-suspenders treatment may also want QMS.
+
+For these reasons, **QMS mode is architected for but not built in the initial deployment**. The implementation contract is preserved by the following design notes; actual code lands later, on demand:
+
+1. **Per-SPV (or per-offer) `qmsMode` flag.** A boolean stored on the SPV's `OfferRegistry` configuration (or on the offer itself). Default `false`.
+2. **`qmsListedAt` timestamp.** When `qmsMode = true`, `postOffer` records `qmsListedAt = block.timestamp` on the offer.
+3. **`AgreementSignedCondition` behavior.** Extends to consult `qmsListedAt`: returns `true` only when `block.timestamp >= qmsListedAt + 15 days` *and* the agreement is finalized. Under QMS mode the buyer's `acceptOffer` still attaches and signs party B, but the agreement record is held in a `qmsCoolOff` substate (`finalized = false, qmsCoolOffUntil = qmsListedAt + 15 days`); after the 15 days elapse, the agreement transitions to `finalized = true` automatically on the next read (or via a no-cost transition function). This preserves the regulation's "no binding agreement entered into during the 15 calendar day period" language.
+4. **`TimeSettlementPeriodCondition` parameterization.** Already supports an arbitrary `delaySeconds`. Under QMS mode, set per-SPV to `max(24h, 45 days − (qmsCoolOffElapsed))` so total time from listing to settlement is ≥45 days.
+5. **Webapp deal-flow timeline.** The Acceptance and Deposit views render QMS-mode timelines distinctly (a real, multi-week timeline rather than a 24-hour wait). This is a pure UI change on top of the contract-level configuration.
+
+Until and unless QMS mode is built, the initial deployment runs purely in the binding-offer mode of §4.1–§4.5. The spec's §11.1B should be updated to reflect this stance: the platform relies on the private-placement safe harbor for 3(c)(1) funds and on facts-and-circumstances for 3(c)(7) funds in the initial deployment, with QMS held as a configurable future enhancement when a deployment's risk profile demands it.
+
+### 4.7 Visibility lives at the UI layer; compliance lives at settlement
 
 **Technical observation first.** On-chain storage is publicly readable. There is no meaningful way to make `OfferRegistry` storage "invisible" to a determined reader — anyone with a node, a block explorer, or a script can read the raw slots. A `requireWhitelisted(msg.sender)` modifier in front of a `getOffer` view function would be cosmetic, because the underlying storage is reachable anyway. Real on-chain hiding would require encryption (ZK, threshold encryption), which is heavy machinery the spec's regulatory analysis does not call for.
 
@@ -548,7 +639,49 @@ cyberTRADE adds five template IDs (one per exemption pathway), registered once b
 
 Every template's `globalFields` includes `gpUnderlyingProvenanceAttestationHash` from §4.1.0 of the spec; the on‑chain agreement record carries the GP's most‑recent provenance attestation as a hash. The Buyer cannot countersign without acknowledging that hash; this is what makes §4.1.0 a per‑trade record rather than only an onboarding artifact.
 
-The template registration happens in a deploy script under `script/RegisterTradeAgreementTemplates.s.sol`. Population per trade happens inside `OfferRegistry.acceptOffer` (which knows the exemption pathway from the offer) via `CyberAgreementRegistry.createContract`, with `globalValues` derived from the offer + the SPV's stored disclosure URIs.
+### 7.1 `openToMatching` agreements — small but necessary extension
+
+The binding-offer model in §4 requires a small additive capability on `CyberAgreementRegistry`: the ability to create an agreement record that is signed by party A but **left open for any qualifying party B to attach and sign**, until a counterparty does so or the offer expires. This is the only piece the current registry does not already do; otherwise the template, signing, finalization, and delegation surfaces are reused unchanged.
+
+Required additions to `src/CyberAgreementRegistry.sol`:
+
+```solidity
+struct AgreementData {
+    /* existing fields ... */
+    bool   openToMatching;        // true while waiting for a counterparty to attach
+    bytes32 partyADigest;         // EIP-712 digest party A signed over (for re-verification on attach)
+}
+
+function createOpenAgreement(
+    bytes32 templateId,
+    address partyA,
+    string[] calldata partyAValues,
+    string[] calldata globalValues,
+    bytes calldata partyASignature,
+    uint64 expiry,
+    address finalizer            // the OfferRegistry / DealManager that will close the agreement
+) external returns (bytes32 agreementId);
+
+function attachAndSignAsPartyB(
+    bytes32 agreementId,
+    address partyB,
+    string[] calldata partyBValues,
+    bytes calldata partyBSignature
+) external;                       // callable only by the registered finalizer (OfferRegistry)
+```
+
+Semantics:
+
+- `createOpenAgreement` is called by `OfferRegistry.postOffer`. It computes the EIP-712 digest from the template, global values, and party-A values; verifies `partyASignature` recovers to `partyA`; stores the agreement with `parties = [partyA]`, `signedAt[partyA] = block.timestamp`, `openToMatching = true`, `finalized = false`. The agreement is irrevocably bound by party A's signature, conditional only on a qualifying party B's attachment within `expiry`.
+- `attachAndSignAsPartyB` is called by `OfferRegistry.acceptOffer` (the registered `finalizer`). It computes the buyer-side EIP-712 digest, verifies `partyBSignature` recovers to `partyB`, appends `partyB` to `parties`, records `signedAt[partyB]`, sets `openToMatching = false` and `finalized = true`, and emits `AgreementFinalized`.
+- The existing `voidAgreement` flow still applies if both parties later agree to void, or if the deal voids by expiry (the registry registers `voided = true` and the `AgreementSignedCondition` then returns false).
+- Delegation continues to work: a party A delegate signs `partyASignature` on Alice's behalf, and the EIP-712 recovery resolves through the `Delegation` mapping.
+
+The `attachAndSignAsPartyB` access control — "only the registered finalizer can call" — is what guarantees that the agreement transitions to finalized only as part of an `OfferRegistry.acceptOffer` flow that has already validated the acceptor's counterparty restrictions. A bare-call to `attachAndSignAsPartyB` from outside the offer flow reverts.
+
+This capability is small enough to add as an additive change to `CyberAgreementRegistry` without breaking any existing primary-issuance subscription flow, which continues to use `createContract` (both parties known up-front).
+
+The template registration happens in a deploy script under `script/RegisterTradeAgreementTemplates.s.sol`. Per-trade population happens inside `OfferRegistry.postOffer` (which knows the seller, the exemption pathway, and the `globalValues` from the offer + the SPV's stored disclosure URIs) and inside `OfferRegistry.acceptOffer` (which fills in `partyBValues` and finalizes).
 
 ---
 
@@ -619,7 +752,7 @@ Closely modeled on `apps/web/src/app/(frame-layout)/lexscrow/propose/_forms/Prop
 - `EmbeddedAgreement` for the IPFS preview of the trade template (CyTE already renders an IPFS URI).
 - `DateInputField` for `validUntil`.
 - `FormSelectField` for the exemption pathway dropdown (`Rule 144 / 4(a)(7) / 4(a)(1½) / 144A / Reg S`) — drives which template is pre‑loaded into `EmbeddedAgreement`.
-- `TransactionActionButton` for "Sign and Post Offer", calling `OfferRegistry.postOffer` via `useWriteContract` (Wagmi), with the same react‑hook‑form + Zod pattern.
+- `TransactionActionButton` for "Sign and Post Offer", calling `OfferRegistry.postOffer` via `useWriteContract` (Wagmi), with the same react‑hook‑form + Zod pattern. Per the binding-offer model (§4.5), this single signature carries both the offer posting and the seller's signature on the partially-populated trade agreement; the seller will not be asked to sign again later.
 
 What CyTE does **not** have and must be added: a "Counterparty restrictions" sub‑form (accredited‑only, QP‑only, non‑US‑person, required Soulbound category/tier, explicit allowlist). This is a small new component under `packages/design-system/forms/components/CounterpartyRestrictionsInput.tsx`.
 
@@ -648,7 +781,7 @@ For cyberTRADE, the route is `apps/web/src/app/(frame-layout)/cybertrade/offer/[
 
 - a compliance checklist (KYC valid, accreditation valid, non‑US valid, QP valid, Soulbound held, ERISA negative, Reg S distribution compliance, tax info) — each item rendered with the same `useLexchexForAddress` + onchain reads from the cert and SPV state,
 - a 4(a)(7) information‑package acknowledgment modal that the acceptor must click‑through before the "Sign and Accept" button activates,
-- a `signAndAccept` call that hits `OfferRegistry.acceptOffer`, which in turn calls `DealManager.proposeSecondaryDeal` and `CyberAgreementRegistry.createContract`.
+- a single "Sign and Accept" action that signs an EIP-712 payload covering both the offer acceptance and the buyer-side reps/attestations (§4.5). This is the only buyer signature in the flow. It hits `OfferRegistry.acceptOffer`, which (a) attaches and signs the open agreement via `CyberAgreementRegistry.attachAndSignAsPartyB`, finalizing the contract, and (b) opens the escrow on `DealManager.proposeSecondaryDeal`. There is no separate countersign step — the seller's offer-posting signature already covered party A.
 
 ### 10.4 Countersign + Deposit + Settlement view
 
@@ -714,6 +847,7 @@ Items the spec lists as future enhancements that are not in this implementation 
 - **AMM liquidity for scrip (§13A).** Out of scope.
 - **Tag‑along / drag‑along / ROFR.** Not assumed for the initial SPVs (Addendum B).
 - **Manual per‑trade GP consent.** Generalized into `GPLPApprovalCondition` (§5), deployed only on SPVs whose governing documents require it (Addendum C). The condition exists in the protocol layer; no UI work beyond a "GP approval pending" status row in the trade detail view.
+- **QMS mode (§4.6).** Architected for via the `qmsMode` flag on offers, `qmsListedAt` timestamp, and the cool-off behavior on `AgreementSignedCondition` and `TimeSettlementPeriodCondition`. Not built in the initial deployment. The initial deployment relies on the §1.7704‑1(h) private-placement safe harbor for 3(c)(1) funds and on facts-and-circumstances analysis for 3(c)(7) funds. Build QMS mode when (i) a 3(c)(7) deployment with high turnover lands, or (ii) counsel for a particular SPV requires the belt-and-suspenders treatment.
 
 ---
 
@@ -729,6 +863,8 @@ Items in v2.04 that should be corrected or refined when the spec is next revised
 6. **§4.2.2 `acquisitionDate` placement.** Spec proposes adding to `CertificateDetails` "preferable" — this detail document recommends the extension (§1 above). Both are workable; placement in the extension is lower‑risk for the cyberTRADE workstream because it doesn't touch shared core storage.
 7. **§12 reference to `OfferRegistry`.** Spec correctly notes none exists. New file `src/OfferRegistry.sol` proposed in §4 above.
 8. **§10 reference to `CertsTable`.** The webapp already has a serviceable cap‑table view (`apps/cybercorps-web/src/app/(frame-layout)/cybercorps/mainframe/_components/CertsTable.tsx`); the GP monitoring view extends this rather than building new.
+9. **§7.3 contract-formation model — binding-offer adoption.** The spec's §7.3 describes a sequential "seller proposes, buyer countersigns" agreement flow that, in conjunction with the §11.1B QMS timing constraints (15-day no-binding-agreement period), implies two seller signatures. This detail document adopts **Architecture B (binding-offer model, §4.5)** for the initial deployment: the seller's `postOffer` signature is the legally operative offer on a partially-populated trade agreement, and the buyer's `acceptOffer` signature attaches to and finalizes the same agreement in one transaction. Conditions are conditions precedent to performance, not to formation. This collapses the trade-formation flow from two seller signatures to one, at the cost of forgoing QMS safe-harbor qualification. The trade-off is acceptable because (i) the initial pipeline is 3(c)(1) funds where the private-placement safe harbor handles §7704 by construction and (ii) QMS mode is preserved as a configurable future enhancement (§4.6). When the spec is next revised, §7.3 should be reframed to describe the binding-offer flow as the default and QMS as the opt-in. Spec §11.1B's QMS treatment should be re-titled "Future Enhancement: QMS Mode" rather than the primary regulatory posture.
+10. **`CyberAgreementRegistry.createOpenAgreement` / `attachAndSignAsPartyB` (§7.1).** The current `CyberAgreementRegistry` requires both parties' addresses at `createContract` time. The binding-offer model requires the ability to create an agreement signed by party A while leaving party B open until any qualifying counterparty attaches. This is a small additive change to the registry and does not alter the existing primary-issuance flow (which continues to use `createContract`).
 
 ---
 
@@ -742,15 +878,16 @@ A pragmatic order of work that lets each step ship independently:
 4. **`GlobalKillCondition` + `TimeSettlementPeriodCondition`**. Deployed and attached‑by‑default by `DealManagerFactory`. No behavioral effect on primary issuance because they pass when not raised / once delay elapses.
 5. **`DealManagerFactory` integrator whitelist + per‑deal `feeDestination`**. No behavioral change to existing deployments because `defaultIntegrator == 0` and `feeDestination == 0` keep the legacy flow.
 6. **`DealManager` secondary trade mode** (`tradeType`, `sellerAddress`, branched routing).
-7. **Trade agreement templates** registered in `CyberAgreementRegistry`.
-8. **Remaining `ICondition` implementations** (Holding period, accredited, KYC, ERISA, NonUS, RegS, holder cap, tax info, Soulbound, CFIUS, price anomaly, GPLP approval, 4(a)(7) disclosure, Rule 144 disclosure, legal opinion, 144A QIB).
-9. **`OfferRegistry`** contract.
-10. **Indexer schema additions** (Ponder).
-11. **Webapp UI**: offer builder → discovery → acceptance → deposit/settlement → GP monitoring. Components inherited from `ProposeLexscrowAgreementForm`, `SignLexscrowAgreement`, `ExecuteLexscrowAgreement`, `CertsTable`, `useLexchexForAddress`, `useFeeBasisPoints`.
-12. **Keeper + FIX receipt event consumer**.
-13. **Pathway F admin panel** for void / force transfer / Global Kill governance.
+7. **`CyberAgreementRegistry` additive surface** (`createOpenAgreement`, `attachAndSignAsPartyB`, `openToMatching` flag — §7.1). No change to existing `createContract` flow; primary issuance unaffected.
+8. **Trade agreement templates** registered in `CyberAgreementRegistry`.
+9. **Remaining `ICondition` implementations** (Holding period, accredited, KYC, ERISA, NonUS, RegS, holder cap, tax info, Soulbound, CFIUS, price anomaly, GPLP approval, 4(a)(7) disclosure, Rule 144 disclosure, legal opinion, 144A QIB).
+10. **`OfferRegistry`** contract.
+11. **Indexer schema additions** (Ponder).
+12. **Webapp UI**: offer builder → discovery → acceptance → deposit/settlement → GP monitoring. Components inherited from `ProposeLexscrowAgreementForm`, `SignLexscrowAgreement`, `ExecuteLexscrowAgreement`, `CertsTable`, `useLexchexForAddress`, `useFeeBasisPoints`.
+13. **Keeper + FIX receipt event consumer**.
+14. **Pathway F admin panel** for void / force transfer / Global Kill governance.
 
-Items 1–4 are protocol upgrades with no functional change to existing flows; they can land on `main` without coordinating with the webapp. Item 5 is the first change that requires coordinated webapp release (the integrator address must be supplied somewhere). Items 6–9 are the secondary‑trade core; items 10–13 are the UI / operations layer.
+Items 1–4 are protocol upgrades with no functional change to existing flows; they can land on `main` without coordinating with the webapp. Item 5 is the first change that requires coordinated webapp release (the integrator address must be supplied somewhere). Items 6–10 are the secondary‑trade core; items 11–14 are the UI / operations layer.
 
 ---
 
