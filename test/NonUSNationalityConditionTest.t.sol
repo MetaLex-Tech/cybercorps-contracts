@@ -7,6 +7,7 @@ import {NonUSNationalityCondition} from "../src/libs/conditions/NonUSNationality
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
 import {IERC165} from "@openzeppelin/contracts/interfaces/IERC165.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {
     BoundData,
     DisclosedData,
@@ -198,6 +199,13 @@ contract NonUSNationalityConditionTest is Test {
         assertEq(condition.excludedCountries(1), "NK");
     }
 
+    function test_UpdateExcludedCountries_EmptyArray() public {
+        string[] memory empty = new string[](0);
+        vm.expectEmit(false, false, false, true);
+        emit NonUSNationalityCondition.ExcludedCountriesUpdated(empty);
+        condition.updateExcludedCountries(empty);
+    }
+
     // --- submitProof tests ---
 
     function test_RevertWhen_InvalidProof_VerificationFailed() public {
@@ -339,6 +347,80 @@ contract NonUSNationalityConditionTest is Test {
         condition.submitProof(params, false);
     }
 
+    function test_RevertWhen_SybilAttempt_SameUniqueId_DifferentWallet() public {
+        address investor = address(0xA11CE);
+        address attacker = address(0xDEAD);
+        uint256 firstTimestamp = 1000;
+        uint256 validityPeriod = 1 days;
+
+        vm.warp(firstTimestamp);
+        vm.prank(investor);
+        condition.submitProof(_buildParams(investor, firstTimestamp, validityPeriod), false);
+
+        vm.prank(attacker);
+        vm.expectRevert(NonUSNationalityCondition.ProofAlreadyUsed.selector);
+        condition.submitProof(_buildParams(attacker, firstTimestamp, validityPeriod), false);
+    }
+
+    function test_UniqueIdentifier_AllowedForDifferentWalletAfterExpiry() public {
+        address investor = address(0xA11CE);
+        address newWallet = address(0xBEEF);
+        uint256 firstTimestamp = 1000;
+        uint256 validityPeriod = 1 days;
+        uint256 firstExpiry = firstTimestamp + validityPeriod;
+
+        vm.warp(firstTimestamp);
+        vm.prank(investor);
+        condition.submitProof(_buildParams(investor, firstTimestamp, validityPeriod), false);
+
+        uint256 secondTimestamp = firstExpiry + 1;
+        vm.warp(secondTimestamp);
+        vm.prank(newWallet);
+        condition.submitProof(_buildParams(newWallet, secondTimestamp, validityPeriod), false);
+
+        assertEq(condition.proofExpiry(newWallet), secondTimestamp + validityPeriod);
+    }
+
+    function test_SubmitProof_UniqueIdentifierExpiryIsWritten() public {
+        address investor = address(0xA11CE);
+        uint256 proofTimestamp = 1000;
+        uint256 validityPeriod = 1 days;
+
+        vm.warp(proofTimestamp);
+        vm.prank(investor);
+        condition.submitProof(_buildParams(investor, proofTimestamp, validityPeriod), false);
+
+        assertEq(condition.uniqueIdentifierExpiry(mockVerifier.uniqueId()), proofTimestamp + validityPeriod);
+    }
+
+    function test_SubmitProof_EarlyRenewal_DifferentUniqueId_OverwritesExpiry() public {
+        address investor = address(0xA11CE);
+        uint256 firstTimestamp = 1000;
+        uint256 validityPeriod = 1 days;
+
+        vm.warp(firstTimestamp);
+        vm.prank(investor);
+        condition.submitProof(_buildParams(investor, firstTimestamp, validityPeriod), false);
+        assertEq(condition.proofExpiry(investor), firstTimestamp + validityPeriod);
+
+        uint256 secondTimestamp = firstTimestamp + 12 hours;
+        vm.warp(secondTimestamp);
+        mockVerifier.setUniqueId(keccak256("second-proof-id"));
+        vm.prank(investor);
+        condition.submitProof(_buildParams(investor, secondTimestamp, validityPeriod), false);
+
+        assertEq(condition.proofExpiry(investor), secondTimestamp + validityPeriod);
+    }
+
+    function test_SubmitProof_ValidityPeriodAtMaxBoundary() public {
+        address investor = address(0xA11CE);
+        uint256 proofTimestamp = 1000;
+        vm.warp(proofTimestamp);
+        vm.prank(investor);
+        condition.submitProof(_buildParams(investor, proofTimestamp, MAX_VALIDITY_PERIOD), false);
+        assertEq(condition.proofExpiry(investor), proofTimestamp + MAX_VALIDITY_PERIOD);
+    }
+
     function test_SubmitProof_HappyPath() public {
         address investor = address(0xA11CE);
         uint256 proofTimestamp = block.timestamp;
@@ -378,6 +460,46 @@ contract NonUSNationalityConditionTest is Test {
         vm.warp(block.timestamp + 2 days);
         bool result = condition.checkCondition(address(escrowSource), bytes4(0), abi.encode(agreementId));
         assertFalse(result);
+    }
+
+    function test_CheckCondition_TrueAtExactExpiry() public {
+        bytes32 agreementId = keccak256("agreement-exact");
+        address investor = address(0xA11CE);
+        escrowSource.setCounterparty(agreementId, investor);
+
+        uint256 proofTimestamp = 1000;
+        uint256 validityPeriod = 1 days;
+        uint256 expiresAt = proofTimestamp + validityPeriod;
+
+        vm.warp(proofTimestamp);
+        vm.prank(investor);
+        condition.submitProof(_buildParams(investor, proofTimestamp, validityPeriod), false);
+
+        vm.warp(expiresAt);
+        assertTrue(condition.checkCondition(address(escrowSource), bytes4(0), abi.encode(agreementId)));
+    }
+
+    function test_CheckCondition_FalseOneSecondAfterExpiry() public {
+        bytes32 agreementId = keccak256("agreement-past");
+        address investor = address(0xA11CE);
+        escrowSource.setCounterparty(agreementId, investor);
+
+        uint256 proofTimestamp = 1000;
+        uint256 validityPeriod = 1 days;
+        uint256 expiresAt = proofTimestamp + validityPeriod;
+
+        vm.warp(proofTimestamp);
+        vm.prank(investor);
+        condition.submitProof(_buildParams(investor, proofTimestamp, validityPeriod), false);
+
+        vm.warp(expiresAt + 1);
+        assertFalse(condition.checkCondition(address(escrowSource), bytes4(0), abi.encode(agreementId)));
+    }
+
+    function test_CheckCondition_ZeroAddressCounterparty() public {
+        bytes32 agreementId = keccak256("agreement-zero-cp");
+        // counterparty not set — escrowSource returns address(0) by default
+        assertFalse(condition.checkCondition(address(escrowSource), bytes4(0), abi.encode(agreementId)));
     }
 
     // --- founder override tests ---
@@ -528,6 +650,20 @@ contract NonUSNationalityConditionTest is Test {
     function test_RevertWhen_UpdateMaxValidityPeriod_Zero() public {
         vm.expectRevert(NonUSNationalityCondition.InvalidMaxValidityPeriod.selector);
         condition.updateMaxValidityPeriod(0);
+    }
+
+    function test_RevertWhen_Initialize_CalledTwice() public {
+        string[] memory excludedCountries = new string[](1);
+        excludedCountries[0] = "USA";
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
+        condition.initialize(
+            address(zkpassportAuth),
+            EXPECTED_DOMAIN,
+            EXPECTED_SCOPE,
+            address(mockVerifier),
+            MAX_VALIDITY_PERIOD,
+            excludedCountries
+        );
     }
 
     // --- supportsInterface tests ---
