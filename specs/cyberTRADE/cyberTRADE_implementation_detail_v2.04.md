@@ -371,7 +371,7 @@ The `FundInterestExtension.restrictionHookOverride` field (§1.4) is the per‑t
 
 There is no precursor in the codebase. The proposed contract sits between the user's signed posting transaction and `DealManager.proposeSecondaryDeal`. It is intentionally **lean**: the spec is clear that visibility is gated at the UI layer (§4.4, §11.1B), not on‑chain, so this contract does **not** hold a permission ACL on who can read offers. Anyone can read; whether the webapp surfaces a given offer to a given user is decided by Legion's UI + LeXcheX.
 
-This document adopts the **binding-offer model** (Architecture B in the design discussion): the seller's posting signature is the legally operative offer, signed against a partially-populated trade agreement in `CyberAgreementRegistry`. The buyer's `acceptOffer` signature completes mutual assent and forms the binding contract. The on-chain condition set (`ICondition`) operates as **conditions precedent to performance**, not to formation — if a condition fails between acceptance and settlement expiry, performance is excused and assets return to their owners. See §4.5 for the framing and §4.6 for the QMS-mode deferral.
+This document adopts the **binding-offer model** (Architecture B in the design discussion): the offeror's posting signature is the legally operative offer (either a sell offer or a bid), signed against a partially-populated trade agreement in `CyberAgreementRegistry`. The acceptor's `acceptOffer` signature completes mutual assent and forms the binding contract. The on-chain condition set (`ICondition`) operates as **conditions precedent to performance**, not to formation — if a condition fails between acceptance and settlement expiry, performance is excused and assets return to their owners. See §4.5 for the symmetric buy-side / sell-side treatment, §4.6 for the contract-formation framing, and §4.7 for the QMS-mode deferral.
 
 ### 4.1 Storage and surface
 
@@ -407,15 +407,21 @@ struct Offer {
     OfferStatus status;
     uint256 unitsAccepted;               // sum of partial acceptances
 
-    // Contract-formation linkage (binding-offer model, §4.5)
+    // Contract-formation linkage (binding-offer model, §4.6)
     bytes32 agreementId;                 // CyberAgreementRegistry record created at postOffer,
                                          // signed by offeror as party A, openToMatching = true
 
-    // Pre-signed endorsement (§4.3 — required for unified settlement, §3)
+    // Sell-side commitment (populated only when side == SELL; §4.3)
     bytes   offerorEndorsementSignature; // EIP-712 signature by offeror over OPEN_ENDORSEMENT
                                          // typed data: {offerId, certId, units, agreementId, validUntil}
                                          // No endorsee fixed at posting — bound to "any qualifying
                                          // counterparty who accepts this offer" by reference to offerId.
+
+    // Buy-side commitment (populated only when side == BUY; §4.5)
+    bytes32 bidCommitmentEscrowId;       // dealId of the LexScroWLite holding escrow that custodies
+                                         // the bidder's payment tokens at postOffer time. Refunded on
+                                         // cancel/expiry; consumed into the trade's settlement escrow
+                                         // at acceptOffer.
 }
 ```
 
@@ -425,7 +431,7 @@ External functions:
 function postOffer(
     address spv,
     OfferSide side,
-    uint256 tokenIdOrZero,
+    uint256 tokenIdOrZero,                   // sell only; 0 for bids
     uint256 units,
     address paymentToken,
     uint256 consideration,
@@ -434,9 +440,11 @@ function postOffer(
     CounterpartyRestrictions calldata restrictions,
     bytes calldata additionalTerms,
     address integrator,
-    string[] calldata partyAValues,         // populated party-A side of the agreement
+    string[] calldata partyAValues,          // populated party-A side of the agreement
     bytes calldata offerorAgreementSignature,// EIP-712 signature over the agreement digest
-    bytes calldata offerorEndorsementSignature// EIP-712 signature over the open-endorsement digest (§4.3)
+    bytes calldata offerorEndorsementSignature// SELL only — EIP-712 over open-endorsement digest (§4.3)
+                                             // For BUY, pass empty bytes; bid commitment is the
+                                             // payment-token deposit consumed in the same call (§4.5)
 ) external returns (bytes32 offerId);
 
 function cancelOffer(bytes32 offerId) external;   // offeror or BorgAuth admin
@@ -444,8 +452,14 @@ function cancelOffer(bytes32 offerId) external;   // offeror or BorgAuth admin
 function acceptOffer(
     bytes32 offerId,
     uint256 unitsAccepted,
-    string[] calldata partyBValues,      // buyer's reps, acknowledgments, attestations
-    bytes calldata acceptorSignature     // EIP-712 signature; completes the agreement
+    string[] calldata partyBValues,          // acceptor's reps, acknowledgments, attestations
+                                             // For SELL offers (buyer accepts): buyer-side fields
+                                             // For BUY offers (seller accepts): seller-side fields
+    bytes calldata acceptorAgreementSignature,// EIP-712 signature; completes the agreement
+    bytes calldata acceptorEndorsementSignature// BUY only — seller (acceptor) signs the open
+                                             // endorsement at acceptance time. Pass empty bytes for
+                                             // SELL acceptances; the seller's endorsement was
+                                             // already pre-signed at postOffer (§4.5).
 ) external returns (bytes32 dealId);
 
 function getOffer(bytes32 offerId) external view returns (Offer memory);
@@ -453,28 +467,31 @@ function getOffer(bytes32 offerId) external view returns (Offer memory);
 
 ### 4.2 What `postOffer` does
 
-The seller's posting is structurally a signed irrevocable offer (subject to `validUntil` and to `cancelOffer` before any acceptance). Two signatures are collected at posting, both EIP‑712 typed:
+A posted offer (whether `SELL` or `BUY`) is structurally a signed irrevocable offer subject to `validUntil` and to `cancelOffer` before any acceptance. The mechanics differ between the two sides only in what asset the offeror commits and how. Two EIP‑712 signatures are always collected at posting:
 
-- the **agreement signature** — the seller's party‑A signature on the partially-populated trade agreement, used by `CyberAgreementRegistry.createOpenAgreement`;
-- the **open‑endorsement signature** — the seller's signature on an open endorsement intent (§4.3 below), used by `IssuanceManager.executeSecondaryTransfer` at finalize to record an attested chain‑of‑title entry on the seller's cert.
+- the **agreement signature** — the offeror's party‑A signature on the partially-populated trade agreement (party A fields are the *seller* fields when `side == SELL`, the *buyer* fields when `side == BUY`);
+- a **side-specific commitment** — for `SELL`, the open‑endorsement signature (§4.3); for `BUY`, a payment-token deposit into a holding escrow (§4.5).
 
-Both are produced by the seller's wallet in one signing step at "Sign and Post Offer" in the webapp; the EIP‑712 typed-data presentation bundles them so the seller sees and authorizes both in a single user action.
+Both are produced by the offeror's wallet in one signing step at "Sign and Post Offer / Post Bid" in the webapp; the EIP‑712 typed-data presentation bundles them so the user sees and authorizes both in a single user action.
 
 Concretely the function:
 
-1. Validates seller eligibility and ownership:
-   - For `SELL`: caller is the registered owner of `interestEntryTokenId` (via `OwnerDetails.ownerAddress` for Administered Custody, or `IERC721.ownerOf` for Direct Custody — read both, accept either). This is the "no phantom sells" rule from spec §4.4.
+1. **Validates offeror eligibility and the asset side.**
+   - For `SELL`: caller is the registered owner of `interestEntryTokenId` (via `OwnerDetails.ownerAddress` for Administered Custody, or `IERC721.ownerOf` for Direct Custody — read both, accept either). This is the "no phantom sells" rule from spec §4.4. `offerorEndorsementSignature` must be non‑empty; recovers to the offeror against the `OpenEndorsement` typed data (§4.3).
+   - For `BUY`: caller has approved `OfferRegistry` (or the holding-escrow contract) to pull `consideration` of `paymentToken`. `offerorEndorsementSignature` must be empty. The bid's seller-side restrictions (if any — e.g., "only registered owners of cert IDs in {x,y,z}") are encoded in `restrictions.explicitAllowlist` or `additionalTerms`.
    - SPV is registered (a mapping of approved cyberCORP addresses, owner‑managed initially).
    - `integrator`, if non‑zero, is `approvedIntegrators[integrator]` on `DealManagerFactory`.
    - `paymentToken` is on a per‑SPV allowlist (USDC/USDT initially, configured per cyberCORP).
 
-2. Creates a partially-signed trade agreement record:
-   - Calls `CyberAgreementRegistry.createOpenAgreement(templateId = templateFor(exemptionPathway), partyA = offeror, partyAValues, partyASignature = offerorAgreementSignature, expiry = validUntil, openToMatching = true)`.
-   - The agreement record now has `parties = [offeror]`, `signedAt[offeror] = block.timestamp`, `finalized = false`, `openToMatching = true`. It is **waiting for any qualifying party B to attach** (§7 below).
+2. **Creates a partially-signed trade agreement record.** Calls `CyberAgreementRegistry.createOpenAgreement(templateId = templateFor(exemptionPathway), partyA = offeror, partyAValues, partyASignature = offerorAgreementSignature, expiry = validUntil, openToMatching = true)`. The agreement record now has `parties = [offeror]`, `signedAt[offeror] = block.timestamp`, `finalized = false`, `openToMatching = true`. It is **waiting for any qualifying party B to attach** (§7). The agreement template internally maps "party A / party B" to "seller / buyer" or "buyer / seller" based on which side posted, so the same template files render correctly for either initiation direction.
 
-3. Stores the `Offer` struct, including `offerorEndorsementSignature`, with the returned `agreementId` and `status = LIVE`. Emits `OfferPosted(offerId, agreementId, ...)`.
+3. **Captures the side-specific commitment.**
+   - For `SELL`: stores `offerorEndorsementSignature` on the Offer; no asset moves at posting time. The seller's cert is not endorsed yet; the endorsement is materialized at `acceptOffer` (§4.4).
+   - For `BUY`: opens a holding escrow on `LexScroWLite` by calling an `OfferRegistry`-internal helper that pulls `consideration` of `paymentToken` from the bidder into an escrow keyed by the new `offerId`. Stores the resulting `bidCommitmentEscrowId` on the Offer. The bidder's funds are now custodied by the protocol; they will either be (a) consumed into the trade's settlement escrow at `acceptOffer`, (b) refunded to the bidder on `cancelOffer` or `validUntil` expiry.
 
-**What `postOffer` does *not* do.** It does not lock the seller's asset. It does not transfer anything. It does not write to the seller's cert. It does not bind the seller against canceling — `cancelOffer` is callable by the offeror until an acceptance lands, and acts as a withdrawal of the offer in the standard contract-law sense, retracting both the agreement signature and the endorsement signature in one operation. Once `acceptOffer` lands, the cancellation right ends; the offer has been accepted and the contract is formed.
+4. **Stores the Offer struct** with the returned `agreementId` and `status = LIVE`. Emits `OfferPosted(offerId, agreementId, side, bidCommitmentEscrowId, ...)`.
+
+**What `postOffer` does *not* do.** For `SELL`: it does not lock the seller's asset (no on-chain write to the cert); the seller is bound by signature, not by escrow. For `BUY`: it does lock the bidder's payment token via the holding escrow. Both sides remain free to `cancelOffer` until an acceptance lands; cancellation retracts the agreement signature, releases any pre‑signed endorsement, and refunds the bid commitment if one was deposited. Once `acceptOffer` lands, the cancellation right ends; the offer has been accepted and the contract is formed.
 
 ### 4.3 The open‑endorsement signature — what the seller is signing
 
@@ -500,19 +517,27 @@ At `acceptOffer` (§4.4), the IssuanceManager assembles the full `Endorsement` s
 
 ### 4.4 What `acceptOffer` does
 
-`acceptOffer` is the single contract-formation event and the moment when the seller's pre‑signed endorsement is materialized onto the cert. In one transaction:
+`acceptOffer` is the single contract-formation event. The mechanics are side‑aware: which party fills which side of the agreement, and which side's open commitment is materialized at acceptance, depends on whether the offer is `SELL` or `BUY`. The underlying logic is fully symmetric (see §4.5 for the symmetric statement).
 
-1. Validates the offer is `LIVE` and within `validUntil`. Validates `unitsAccepted ≤ unitsOffered − unitsAccepted_already`.
-2. Validates the acceptor satisfies `restrictions`. The on‑chain check is structural: jurisdiction credentials, accreditation, QP, Soulbound category/tier — all queried via the LeXcheX adapter (`creds/` directory in the contracts repo — `LeXcheXAdapter.sol` exists; cyberTRADE adds a `LegionSoulboundAdapter.sol` for the Soulbound NFT category check).
-3. **Completes the trade agreement.** Calls `CyberAgreementRegistry.attachAndSignAsPartyB(agreementId, partyB = msg.sender, partyBValues, partyBSignature = acceptorSignature)`. The registry verifies the EIP-712 signature, appends `msg.sender` to `parties`, records `signedAt[msg.sender]`, and sets `finalized = true`, `openToMatching = false`. From this transaction onward, `AgreementSignedCondition.checkCondition(...)` returns true. **The contract is now binding on both sides.**
-4. **Materializes the seller's endorsement on the cert (endorsement‑lock).** Calls `IssuanceManager.attachOpenEndorsement(offerId, certId, units, endorsee = msg.sender, endorseeName = leXcheXNameLookup(msg.sender))`. The IssuanceManager (under its standing BorgAuth role) constructs the full `Endorsement` struct using `signatureHash = offer.offerorEndorsementSignature` (the pre‑signed open endorsement from §4.3), `endorser = offer.offeror`, `registry = CyberAgreementRegistry`, `agreementId = offer.agreementId`, `timestamp = block.timestamp`, and the now‑known `endorsee` and `endorseeName`. The endorsement is appended to the seller's cert via `addEndorsement`. The seller's cert printer has `endorsementRequired = true`, so the `_update` hook will now reject any transfer of this cert to anyone other than `msg.sender` (the buyer). For Direct Custody this is a real transferability lock; for Administered Custody the cert never moves anyway, but the endorsement is still added because it is the chain‑of‑title record.
-5. Calls `DealManager.proposeSecondaryDeal(...)` with the offer's pathway → maps to the appropriate `ICondition[]` set (built per `ExemptionPathway`), `feeDestination = integrator`, `offerId = offerId`, and the just-finalized `agreementId`. The DealManager records the escrow with `tradeType = SECONDARY_TRADE`, `sellerAddress = offeror`, `counterParty = msg.sender`, `xferIntent` populated. `corpAssets` is empty.
-6. Returns the new `dealId`. Emits `OfferAccepted(offerId, dealId, acceptor, unitsAccepted)`.
-7. Updates `status` to `PARTIALLY_ACCEPTED` or `FULLY_ACCEPTED` and increments `unitsAccepted`.
+In one transaction:
 
-**Implication:** the seller signs once (at posting, covering both agreement and endorsement). The buyer signs once (at acceptance, covering the agreement). The endorsement on the seller's cert is materialized at acceptance using the seller's pre‑signed signature. There is no separate "seller countersigns the agreement" step and no separate "seller signs the endorsement after buyer is known" step. The flow downstream of `acceptOffer` is: buyer deposit → `TimeSettlementPeriod` clock → conditions clear → finalize. The buyer's deposit is performance of the buyer's payment obligation under an already-formed contract; the metadata mutation at finalize (§8) is performance of the seller's transfer obligation under the same contract.
+1. **Validates the offer is `LIVE` and within `validUntil`.** Validates `unitsAccepted ≤ unitsOffered − unitsAccepted_already`.
+2. **Validates the acceptor's eligibility.** Structural on‑chain check via the LeXcheX adapter (`creds/LeXcheXAdapter.sol`) and the `LegionSoulboundAdapter` — jurisdiction credentials, accreditation, QP, Soulbound category/tier, etc. For `SELL` offers the acceptor must satisfy the buyer-side restrictions in `restrictions`; for `BUY` offers the acceptor must be a registered owner of a cert satisfying the bid's terms (and any seller-side filters in `restrictions` or `additionalTerms`).
+3. **Completes the trade agreement.** Calls `CyberAgreementRegistry.attachAndSignAsPartyB(agreementId, partyB = msg.sender, partyBValues, partyBSignature = acceptorAgreementSignature)`. The registry verifies the EIP-712 signature, appends `msg.sender` to `parties`, records `signedAt[msg.sender]`, and sets `finalized = true`, `openToMatching = false`. From this transaction onward, `AgreementSignedCondition.checkCondition(...)` returns true. **The contract is now binding on both sides.**
+4. **Materializes the seller's endorsement on the seller's cert (endorsement‑lock).** This step always runs, but the source of the open‑endorsement signature differs by side:
+   - For `SELL` offers (offeror is seller; acceptor is buyer): `signatureHash = offer.offerorEndorsementSignature` — the seller's signature pre‑signed at `postOffer` (§4.3). `endorsee = msg.sender` (the buyer); `endorser = offer.offeror` (the seller).
+   - For `BUY` offers (offeror is buyer; acceptor is seller): `signatureHash = acceptorEndorsementSignature` — the seller's signature **provided at acceptance time** (the acceptor's `OpenEndorsement` bundle, signed in the same EIP‑712 typed-data prompt that produced `acceptorAgreementSignature`). `endorsee = offer.offeror` (the buyer); `endorser = msg.sender` (the seller, accepting the bid).
 
-**On void / cancel.** If the deal voids by expiry or by mutual `signToVoid`, the IssuanceManager appends a `voidEndorsement` record to the seller's cert that supersedes the prior endorsement‑lock. The `_update` hook treats a superseded endorsement as released; the cert is freely transferable again. The original endorsement remains in the array as a historical record of the attempted trade.
+   In both cases the IssuanceManager constructs the full `Endorsement` struct using `registry = CyberAgreementRegistry`, `agreementId = offer.agreementId`, `timestamp = block.timestamp`, the resolved endorsee name from LeXcheX, and appends it to the seller's cert via `addEndorsement`. The seller's cert printer has `endorsementRequired = true`, so `_update` will reject any subsequent transfer of this cert to anyone other than the named endorsee. For Direct Custody this is the pendency-period transferability lock; for Administered Custody the cert never moves anyway, but the endorsement is still added as the chain‑of‑title record.
+5. **Settles the asset commitments into the trade's settlement escrow.**
+   - For `SELL` offers: the buyer (acceptor) must subsequently deposit payment into the trade's `LexScroWLite` escrow as a separate user action (§10.4). The buyer's commitment is not yet on chain at `acceptOffer`; it is collected immediately afterward and the trade voids on expiry if the buyer fails to deposit.
+   - For `BUY` offers: the bidder's payment is already in a holding escrow (`offer.bidCommitmentEscrowId`) from `postOffer`. `acceptOffer` calls a `LexScroWLite` helper to **migrate** those funds from the holding escrow into the trade's settlement escrow in the same transaction. No separate buyer deposit step is needed — the buyer's commitment was already locked at posting time. The seller's "acceptance" thus immediately produces a `PAID`-state settlement escrow.
+6. **Calls `DealManager.proposeSecondaryDeal(...)`** with the offer's pathway → maps to the appropriate `ICondition[]` set (built per `ExemptionPathway`), `feeDestination = integrator`, `offerId = offerId`, and the just-finalized `agreementId`. The DealManager records the escrow with `tradeType = SECONDARY_TRADE`, `sellerAddress`, `counterParty`, `xferIntent` populated. `corpAssets` is empty. `sellerAddress` is `offer.offeror` for SELL offers and `msg.sender` for BUY offers; `counterParty` is `msg.sender` for SELL offers and `offer.offeror` for BUY offers.
+7. Returns the new `dealId`. Emits `OfferAccepted(offerId, dealId, acceptor, unitsAccepted)`. Updates `status` to `PARTIALLY_ACCEPTED` or `FULLY_ACCEPTED` and increments `unitsAccepted`.
+
+**Implication.** Every secondary trade involves exactly two EIP‑712 bundles: a seller bundle (agreement-seller-side signature + open-endorsement signature on the seller's cert) and a buyer bundle (agreement-buyer-side signature + payment commitment). On a `SELL` offer the seller bundle is signed at `postOffer` and the buyer bundle is split across `acceptOffer` + a subsequent payment deposit. On a `BUY` offer the buyer bundle is signed and committed at `postOffer` and the seller bundle is signed at `acceptOffer`. The flow downstream of `acceptOffer` is identical in both cases: `TimeSettlementPeriod` clock → conditions clear → finalize via `IssuanceManager.executeSecondaryTransfer` (§8).
+
+**On void / cancel.** If the deal voids by expiry or by mutual `signToVoid`, the IssuanceManager appends a `voidEndorsement` record to the seller's cert that supersedes the prior endorsement‑lock. The `_update` hook treats a superseded endorsement as released; the cert is freely transferable again. For voids of BUY-initiated trades that reached `acceptOffer`, the buyer's funds are released from the trade's settlement escrow back to the bidder. The original endorsement remains in the cert's array as a historical record of the attempted trade.
 
 The mapping from `ExemptionPathway` to `ICondition[]` is the same configuration the DealManager already accepts on `proposeDeal`. For example:
 
@@ -526,7 +551,47 @@ The mapping from `ExemptionPathway` to `ICondition[]` is the same configuration 
 
 Per‑SPV additions (e.g., `QualifiedPurchaserCondition` for 3(c)(7) funds, `CFIUSCondition` for non‑fund‑exception SPVs, `LegionSoulboundCondition` for syndicate gating) are configured on the SPV's `DealManager` and inherited automatically — `OfferRegistry` does not need to know about them.
 
-### 4.5 Contract-formation model
+### 4.5 Buy-side parity: bids and seller acceptance
+
+The OfferRegistry surface is symmetric: trades can be initiated from either side. A holder can post a sell offer that a qualifying buyer accepts; a prospective buyer can post a bid that a qualifying seller accepts. The downstream protocol flow from `acceptOffer` through finalization is identical in both directions. The mechanics differ only in *what is committed at posting* and *what is collected at acceptance*. This subsection states the symmetric model in one place so the asymmetries are not buried inside §4.2 / §4.4 branches.
+
+**The two bundles, irrespective of side.** Every secondary trade requires exactly two EIP‑712 bundles to come together:
+
+| Bundle | Signed by | Contents | Function |
+|---|---|---|---|
+| **Seller bundle** | The seller | (a) agreement-seller-side signature; (b) `OpenEndorsement` signature authorizing transfer of `units` from the seller's cert to whichever counterparty fulfills the offer | Authorizes ownership change of the cert and binds the seller as party A or B of the agreement |
+| **Buyer bundle** | The buyer | (a) agreement-buyer-side signature; (b) payment-token commitment (deposited into a holding escrow for bid postings, into the trade settlement escrow for sell-offer acceptances) | Authorizes payment and binds the buyer as party A or B of the agreement |
+
+Whichever side **posts** signs and commits its bundle at `postOffer`. Whichever side **accepts** signs and commits its bundle at `acceptOffer`. There are no other cases. The seller is always the legal endorser of record on the cert, regardless of who initiated the trade; the buyer is always the funder, regardless of who initiated the trade.
+
+**Bid posting walkthrough.** Bob is a prospective buyer. He posts a bid for 200 units of SPV X at 50,000 USDC.
+
+1. **Sign and Post Bid.** Bob's wallet signs an EIP‑712 typed-data bundle: (a) agreement-buyer-side signature on the 4(a)(7) trade agreement template (his accreditation rep, ERISA negative attestation, information-package acknowledgment, tax-info covenant); (b) approval to pull 50,000 USDC from his wallet.
+2. **`OfferRegistry.postOffer(side = BUY, ..., offerorEndorsementSignature = empty, ...)`.** The registry: (a) calls `CyberAgreementRegistry.createOpenAgreement` with Bob as party A and his buyer-side signature; (b) opens a `LexScroWLite` holding escrow keyed by the new `offerId` and pulls Bob's 50,000 USDC into it; (c) stores the `Offer` struct with `bidCommitmentEscrowId` set, `offerorEndorsementSignature` empty, `status = LIVE`.
+3. **Discovery.** The bid is surfaced through the indexer to whitelisted, eligible registered owners of SPV X interests who hold ≥200 units (filter computed by the indexer; §4.8).
+4. **Alice (eligible registered owner) chooses to fill the bid.** She opens the Bid Acceptance view in the webapp. She reviews the agreement and the bid terms. The compliance checklist for her side runs (holding period elapsed, no affiliate flag, no Reg-S distribution-compliance issue, etc.). She clicks "Sign and Accept Bid."
+5. **Her wallet signs an EIP‑712 bundle:** (a) agreement-seller-side signature; (b) `OpenEndorsement` signature on her cert authorizing transfer of 200 units to Bob (the offeror). The endorsee is known here because the bidder is identified from posting — this differs from the sell-side flow where the endorsement is signed before the counterparty is known.
+6. **`OfferRegistry.acceptOffer(offerId, units = 200, partyBValues = sellerFields, acceptorAgreementSignature, acceptorEndorsementSignature)`.** The registry: (a) calls `CyberAgreementRegistry.attachAndSignAsPartyB` to finalize the agreement; (b) calls `IssuanceManager.attachOpenEndorsement` to materialize Alice's endorsement on her cert (endorser = Alice, endorsee = Bob, signatureHash = `acceptorEndorsementSignature`); (c) migrates Bob's 50,000 USDC from the holding escrow into the trade's settlement escrow; (d) calls `DealManager.proposeSecondaryDeal(seller = Alice, buyer = Bob, ...)`. The escrow opens in `PAID` state immediately (no separate buyer deposit step — the funds were already committed at posting).
+7. **From here, the flow is identical to a sell-initiated trade.** `TimeSettlementPeriod` clock starts, conditions evaluate, keeper finalizes after 24h, `IssuanceManager.executeSecondaryTransfer` does the mutate‑and‑mint.
+
+**Asymmetries summary.**
+
+| Step | Sell offer (seller posts) | Bid (buyer posts) |
+|---|---|---|
+| `postOffer` signature bundle | Seller bundle (agreement A + open endorsement) | Buyer bundle (agreement A + USDC commitment) |
+| `postOffer` on-chain state change | Offer recorded; agreement openToMatching; cert untouched | Offer recorded; agreement openToMatching; USDC pulled into holding escrow |
+| `acceptOffer` signature bundle | Buyer bundle (agreement B + USDC approval) | Seller bundle (agreement B + open endorsement) |
+| `acceptOffer` on-chain state change | Agreement finalized; cert endorsed via pre-signed signature; trade escrow opens; awaiting buyer deposit | Agreement finalized; cert endorsed via signature signed at acceptance; trade escrow opens in `PAID` state |
+| Buyer payment deposit | Separate step after `acceptOffer` (§10.4) | Already deposited at `postOffer`; migrated at `acceptOffer` |
+| Side of `restrictions` filter | Counterparty (buyer) eligibility | Counterparty (seller) eligibility — typically open to any registered owner with required cert metadata |
+| Cancel-before-acceptance | Releases endorsement intent; no funds movement | Refunds bid commitment from holding escrow |
+| Counterparty visibility filter (UI/indexer, §4.8) | Surface to eligible buyers | Surface to eligible registered owners |
+
+Everything below the dashed line of `acceptOffer` is shared code: same `ICondition` set, same `TimeSettlementPeriodCondition`, same keeper, same `IssuanceManager.executeSecondaryTransfer`, same FIX receipt emission, same fee split. The unified settlement pathway in §3 and §8 is side-agnostic by construction.
+
+**Webapp implications.** §10.1 distinguishes "Post Sell Offer" and "Post Bid" entry points but shares the underlying form components (`AssetInput`, `EmbeddedAgreement`, `CounterpartyRestrictionsInput`). §10.3 (acceptance view) similarly renders both directions; the only visible difference is which side's reps appear in the buyer-bundle vs seller-bundle review and whether the acceptor's "Sign and Accept" prompts for a payment approval (sell-offer acceptance) or an endorsement signature (bid acceptance). §10.4 (deposit + settlement view) is degenerate for bid-initiated trades — the escrow is already in `PAID` state at acceptance, so the view skips the buyer deposit step and goes straight to the conditions / settlement timer.
+
+### 4.6 Contract-formation model
 
 The architecture above treats the offer-and-acceptance flow as ordinary contract formation, with the on-chain condition set serving as conditions precedent to performance rather than to formation.
 
@@ -556,9 +621,9 @@ That is a perfectly conventional binding conditional offer. The protocol mechani
 
 In every case, one signature from the buyer covers the full set; the conditions then verify the substantive truth of the attestations at settlement (LeXcheX queries, registry lookups). The webapp's Acceptance view surfaces each rep as a checkbox or rendered clause so the buyer is meaningfully consenting; the on-chain signature is over the agreed text.
 
-### 4.6 QMS mode — deferred enhancement
+### 4.7 QMS mode — deferred enhancement
 
-The model in §4.1–§4.5 is fast: one seller signature, one buyer signature, 24-hour `TimeSettlementPeriod`, settlement. It does **not** preserve the Qualified Matching Service safe harbor under Treas. Reg. §1.7704-1(g), which requires (i) no binding agreement entered into during the first 15 calendar days after listing and (ii) no closing within 45 calendar days of listing. Under the binding-offer model, acceptance forms a binding agreement on day 0, which is incompatible with the 15-day rule.
+The model in §4.1–§4.6 is fast: one bundle from each party (whichever side initiates), 24-hour `TimeSettlementPeriod`, settlement. It does **not** preserve the Qualified Matching Service safe harbor under Treas. Reg. §1.7704-1(g), which requires (i) no binding agreement entered into during the first 15 calendar days after listing and (ii) no closing within 45 calendar days of listing. Under the binding-offer model, acceptance forms a binding agreement on day 0, which is incompatible with the 15-day rule.
 
 This is an explicit and considered trade-off:
 
@@ -574,9 +639,9 @@ For these reasons, **QMS mode is architected for but not built in the initial de
 4. **`TimeSettlementPeriodCondition` parameterization.** Already supports an arbitrary `delaySeconds`. Under QMS mode, set per-SPV to `max(24h, 45 days − (qmsCoolOffElapsed))` so total time from listing to settlement is ≥45 days.
 5. **Webapp deal-flow timeline.** The Acceptance and Deposit views render QMS-mode timelines distinctly (a real, multi-week timeline rather than a 24-hour wait). This is a pure UI change on top of the contract-level configuration.
 
-Until and unless QMS mode is built, the initial deployment runs purely in the binding-offer mode of §4.1–§4.5. The spec's §11.1B should be updated to reflect this stance: the platform relies on the private-placement safe harbor for 3(c)(1) funds and on facts-and-circumstances for 3(c)(7) funds in the initial deployment, with QMS held as a configurable future enhancement when a deployment's risk profile demands it.
+Until and unless QMS mode is built, the initial deployment runs purely in the binding-offer mode of §4.1–§4.6. The spec's §11.1B should be updated to reflect this stance: the platform relies on the private-placement safe harbor for 3(c)(1) funds and on facts-and-circumstances for 3(c)(7) funds in the initial deployment, with QMS held as a configurable future enhancement when a deployment's risk profile demands it.
 
-### 4.7 Visibility lives at the UI layer; compliance lives at settlement
+### 4.8 Visibility lives at the UI layer; compliance lives at settlement
 
 **Technical observation first.** On-chain storage is publicly readable. There is no meaningful way to make `OfferRegistry` storage "invisible" to a determined reader — anyone with a node, a block explorer, or a script can read the raw slots. A `requireWhitelisted(msg.sender)` modifier in front of a `getOffer` view function would be cosmetic, because the underlying storage is reachable anyway. Real on-chain hiding would require encryption (ZK, threshold encryption), which is heavy machinery the spec's regulatory analysis does not call for.
 
@@ -870,7 +935,11 @@ Closely modeled on `apps/web/src/app/(frame-layout)/lexscrow/propose/_forms/Prop
 - `EmbeddedAgreement` for the IPFS preview of the trade template (CyTE already renders an IPFS URI).
 - `DateInputField` for `validUntil`.
 - `FormSelectField` for the exemption pathway dropdown (`Rule 144 / 4(a)(7) / 4(a)(1½) / 144A / Reg S`) — drives which template is pre‑loaded into `EmbeddedAgreement`.
-- `TransactionActionButton` for "Sign and Post Offer", calling `OfferRegistry.postOffer` via `useWriteContract` (Wagmi), with the same react‑hook‑form + Zod pattern. Per the binding-offer model (§4.5), the seller's signing step at posting produces **two EIP‑712 signatures presented in a single typed‑data payload**: (a) the signature on the partially-populated trade agreement (party A), and (b) the signature on the open endorsement (§4.3, authorizing transfer of the offered units to whichever qualifying counterparty accepts). The wallet shows both signatures in one bundled EIP‑712 prompt; the user experiences it as one signing action. The seller will not be asked to sign again at any later step.
+- `TransactionActionButton` for "Sign and Post Offer" / "Sign and Post Bid", calling `OfferRegistry.postOffer` via `useWriteContract` (Wagmi), with the same react‑hook‑form + Zod pattern. Per the binding-offer model (§4.6) and the symmetric framework (§4.5), the offeror's signing step at posting produces **two EIP‑712 signatures presented in a single typed‑data payload**, with the contents determined by side:
+  - **Post Sell Offer** (offeror = seller): (a) the signature on the partially-populated trade agreement (party A = seller fields), and (b) the open-endorsement signature on the seller's cert (§4.3, authorizing transfer of the offered units to whichever qualifying counterparty accepts). No payment movement at posting.
+  - **Post Bid** (offeror = buyer): (a) the signature on the partially-populated trade agreement (party A = buyer fields, including accreditation, ERISA negative attestation, info-package acknowledgment, tax-info covenant), and (b) an ERC-20 approval that lets `OfferRegistry.postOffer` pull `consideration` of `paymentToken` into a `LexScroWLite` holding escrow keyed by the new `offerId`.
+
+  The wallet shows both signatures in one bundled EIP‑712 prompt; the user experiences it as one signing action. The offeror will not be asked to sign again at any later step (until cancel or void, which produce their own self-contained signatures).
 
 What CyTE does **not** have and must be added: a "Counterparty restrictions" sub‑form (accredited‑only, QP‑only, non‑US‑person, required Soulbound category/tier, explicit allowlist). This is a small new component under `packages/design-system/forms/components/CounterpartyRestrictionsInput.tsx`.
 
@@ -899,14 +968,19 @@ For cyberTRADE, the route is `apps/web/src/app/(frame-layout)/cybertrade/offer/[
 
 - a compliance checklist (KYC valid, accreditation valid, non‑US valid, QP valid, Soulbound held, ERISA negative, Reg S distribution compliance, tax info) — each item rendered with the same `useLexchexForAddress` + onchain reads from the cert and SPV state,
 - a 4(a)(7) information‑package acknowledgment modal that the acceptor must click‑through before the "Sign and Accept" button activates,
-- a single "Sign and Accept" action that signs an EIP-712 payload covering both the offer acceptance and the buyer-side reps/attestations (§4.5). This is the only buyer signature in the flow. It hits `OfferRegistry.acceptOffer`, which (a) attaches and signs the open agreement via `CyberAgreementRegistry.attachAndSignAsPartyB`, finalizing the contract, and (b) opens the escrow on `DealManager.proposeSecondaryDeal`. There is no separate countersign step — the seller's offer-posting signature already covered party A.
+- a single "Sign and Accept" action that signs an EIP-712 typed-data bundle covering the acceptor's contribution to the trade (§4.5 for the full symmetric model). The bundle contents depend on which side the user is accepting:
+  - **Accepting a sell offer** (acceptor = buyer): (a) agreement-buyer-side signature; (b) ERC-20 approval allowing the trade's settlement escrow to pull `consideration` of `paymentToken` (collected on the deposit screen immediately afterward, §10.4).
+  - **Accepting a bid** (acceptor = seller): (a) agreement-seller-side signature; (b) open-endorsement signature on the seller's cert (the same `OpenEndorsement` typed structure used in sell-offer posting, but signed by the acceptor at acceptance time because the seller is the acceptor here).
+
+  The single transaction hits `OfferRegistry.acceptOffer`, which (a) attaches and signs the open agreement via `CyberAgreementRegistry.attachAndSignAsPartyB`, finalizing the contract; (b) materializes the seller's endorsement on the seller's cert via `IssuanceManager.attachOpenEndorsement`; (c) opens (or migrates from a holding escrow, for bid acceptance) the trade settlement escrow on `DealManager.proposeSecondaryDeal`. There is no separate countersign step — the offeror's posting signature already covered party A.
 
 ### 10.4 Deposit + Settlement view
 
-Closely modeled on `apps/web/src/app/(frame-layout)/lexscrow/double-token-lexscrow-agreement/[agreementAddress]/_forms/ExecuteLexscrowAgreement.tsx`. CyTE's `ExecuteLexscrowAgreement` already handles the deposit + finalize sequence under `LexScroWLite`. cyberTRADE simplifies it considerably under the unified pathway (§3):
+Closely modeled on `apps/web/src/app/(frame-layout)/lexscrow/double-token-lexscrow-agreement/[agreementAddress]/_forms/ExecuteLexscrowAgreement.tsx`. CyTE's `ExecuteLexscrowAgreement` already handles the deposit + finalize sequence under `LexScroWLite`. cyberTRADE simplifies it considerably under the unified pathway (§3); the exact shape of the view depends on how the trade was initiated:
 
-- **Only the buyer has a deposit step**, regardless of seller's or buyer's custody mode. The deposit is the payment token (USDC / USDT / etc.). The seller has no deposit step at all — there is no NFT escrow in the unified pathway (§3). The seller's contribution to settlement is the pre‑signed open endorsement attached at `acceptOffer` (§4.4), which is already on chain.
-- The status dashboard shows: agreement finalized (✓ at acceptance), endorsement‑lock active on seller's cert (✓ at acceptance), buyer payment deposited (pending → ✓), all conditions passing (live evaluation), `TimeSettlementPeriod` elapsed (countdown timer, default 24 hours), ready to finalize.
+- **Trade initiated from a sell offer (sell-side post → buy-side accept).** The buyer (acceptor) has a payment-deposit step here, after signing acceptance. The seller has no deposit step at all — there is no NFT escrow in the unified pathway, and the seller's open-endorsement was already materialized on the cert at `acceptOffer` (§4.4).
+- **Trade initiated from a bid (buy-side post → sell-side accept).** Neither party has a deposit step on this view. The buyer's payment was already deposited into the holding escrow at `postOffer` and migrated into the trade settlement escrow at `acceptOffer` (§4.5). The seller's open-endorsement was signed and applied at `acceptOffer`. The escrow is already `PAID` on entry to this view; the user lands directly on the conditions / settlement timer.
+- The status dashboard shows: agreement finalized (✓ at acceptance), endorsement‑lock active on seller's cert (✓ at acceptance), buyer payment deposited (pending → ✓ for sell-offer trades; ✓ on entry for bid-initiated trades), all conditions passing (live evaluation), `TimeSettlementPeriod` elapsed (countdown timer, default 24 hours), ready to finalize.
 - The "Settle" action is **hidden by default**: the keeper service (§10.4 of the spec) calls `signAndFinalizeDeal` once `TimeSettlementPeriodCondition` clears. A "Settle manually" affordance is shown if the keeper hasn't fired within a configurable grace period; this preserves user agency without putting the keeper in the trust path.
 - **Per‑SPV `settlementMode = NFT_ESCROW` rendering (deferred).** If a future SPV elects the legacy NFT-escrow mode (§3.4), the deposit view conditionally renders the seller's "approve and deposit Ledger Entry Token" step for Direct Custody sellers. This is a UI branch behind a feature flag; not built in the initial deployment because no SPV has been configured with `NFT_ESCROW`.
 
@@ -965,7 +1039,7 @@ Items the spec lists as future enhancements that are not in this implementation 
 - **AMM liquidity for scrip (§13A).** Out of scope.
 - **Tag‑along / drag‑along / ROFR.** Not assumed for the initial SPVs (Addendum B).
 - **Manual per‑trade GP consent.** Generalized into `GPLPApprovalCondition` (§5), deployed only on SPVs whose governing documents require it (Addendum C). The condition exists in the protocol layer; no UI work beyond a "GP approval pending" status row in the trade detail view.
-- **QMS mode (§4.6).** Architected for via the `qmsMode` flag on offers, `qmsListedAt` timestamp, and the cool-off behavior on `AgreementSignedCondition` and `TimeSettlementPeriodCondition`. Not built in the initial deployment. The initial deployment relies on the §1.7704‑1(h) private-placement safe harbor for 3(c)(1) funds and on facts-and-circumstances analysis for 3(c)(7) funds. Build QMS mode when (i) a 3(c)(7) deployment with high turnover lands, or (ii) counsel for a particular SPV requires the belt-and-suspenders treatment.
+- **QMS mode (§4.7).** Architected for via the `qmsMode` flag on offers, `qmsListedAt` timestamp, and the cool-off behavior on `AgreementSignedCondition` and `TimeSettlementPeriodCondition`. Not built in the initial deployment. The initial deployment relies on the §1.7704‑1(h) private-placement safe harbor for 3(c)(1) funds and on facts-and-circumstances analysis for 3(c)(7) funds. Build QMS mode when (i) a 3(c)(7) deployment with high turnover lands, or (ii) counsel for a particular SPV requires the belt-and-suspenders treatment.
 
 ---
 
@@ -981,10 +1055,12 @@ Items in v2.04 that should be corrected or refined when the spec is next revised
 6. **§4.2.2 `acquisitionDate` placement.** Spec proposes adding to `CertificateDetails` "preferable" — this detail document recommends the extension (§1 above). Both are workable; placement in the extension is lower‑risk for the cyberTRADE workstream because it doesn't touch shared core storage.
 7. **§12 reference to `OfferRegistry`.** Spec correctly notes none exists. New file `src/OfferRegistry.sol` proposed in §4 above.
 8. **§10 reference to `CertsTable`.** The webapp already has a serviceable cap‑table view (`apps/cybercorps-web/src/app/(frame-layout)/cybercorps/mainframe/_components/CertsTable.tsx`); the GP monitoring view extends this rather than building new.
-9. **§7.3 contract-formation model — binding-offer adoption.** The spec's §7.3 describes a sequential "seller proposes, buyer countersigns" agreement flow that, in conjunction with the §11.1B QMS timing constraints (15-day no-binding-agreement period), implies two seller signatures. This detail document adopts **Architecture B (binding-offer model, §4.5)** for the initial deployment: the seller's `postOffer` signature is the legally operative offer on a partially-populated trade agreement, and the buyer's `acceptOffer` signature attaches to and finalizes the same agreement in one transaction. Conditions are conditions precedent to performance, not to formation. This collapses the trade-formation flow from two seller signatures to one, at the cost of forgoing QMS safe-harbor qualification. The trade-off is acceptable because (i) the initial pipeline is 3(c)(1) funds where the private-placement safe harbor handles §7704 by construction and (ii) QMS mode is preserved as a configurable future enhancement (§4.6). When the spec is next revised, §7.3 should be reframed to describe the binding-offer flow as the default and QMS as the opt-in. Spec §11.1B's QMS treatment should be re-titled "Future Enhancement: QMS Mode" rather than the primary regulatory posture.
+9. **§7.3 contract-formation model — binding-offer adoption.** The spec's §7.3 describes a sequential "seller proposes, buyer countersigns" agreement flow that, in conjunction with the §11.1B QMS timing constraints (15-day no-binding-agreement period), implies two seller signatures. This detail document adopts **Architecture B (binding-offer model, §4.6)** for the initial deployment: the offeror's `postOffer` signature is the legally operative offer on a partially-populated trade agreement, and the acceptor's `acceptOffer` signature attaches to and finalizes the same agreement in one transaction. Conditions are conditions precedent to performance, not to formation. This collapses the trade-formation flow to one signature per side, at the cost of forgoing QMS safe-harbor qualification. The trade-off is acceptable because (i) the initial pipeline is 3(c)(1) funds where the private-placement safe harbor handles §7704 by construction and (ii) QMS mode is preserved as a configurable future enhancement (§4.7). When the spec is next revised, §7.3 should be reframed to describe the binding-offer flow as the default and QMS as the opt-in. Spec §11.1B's QMS treatment should be re-titled "Future Enhancement: QMS Mode" rather than the primary regulatory posture.
 10. **`CyberAgreementRegistry.createOpenAgreement` / `attachAndSignAsPartyB` (§7.1).** The current `CyberAgreementRegistry` requires both parties' addresses at `createContract` time. The binding-offer model requires the ability to create an agreement signed by party A while leaving party B open until any qualifying counterparty attaches. This is a small additive change to the registry and does not alter the existing primary-issuance flow (which continues to use `createContract`).
 11. **§7.4A pathway taxonomy — unified pathway adoption.** The spec's §7.4A enumerates six settlement pathways (A: escrow + transfer, B: endorsement + transfer, C: scrip intermediation, D: void + mint, E: metadata mutation, F: admin force transfer) and recommends Pathway A/B+A for Direct Custody and Pathway E for Administered Custody. This detail document adopts a **unified settlement pathway (§3, §8)** that effectively merges Pathway B (the seller's pre‑signed open endorsement) with Pathway D/E (void‑or‑decrement + fresh mint by IssuanceManager) for both custody modes. The motivation is structural symmetry: the cyberCORPs Bylaws and spec §2 both state that metadata mutation is the legally operative act and the ERC‑721 transfer is bookkeeping; the unified pathway treats them that way universally. Pathway A is retained as the per‑SPV `settlementMode = NFT_ESCROW` opt‑in (§3.4) for deployments whose counsel specifically wants on‑chain NFT escrow. Pathway F remains the off‑trade admin escape hatch. Spec §7.4A's pathway table should be revised in the next edit to lead with the unified pathway and treat A/B/C as alternative configurations rather than custody‑mode defaults.
 12. **Pre‑signed open endorsement at `postOffer`.** The cyberCORPs `Endorsement` struct (`src/CyberCertPrinter.sol`) requires `endorsee` to be a known address. The binding-offer + unified-pathway architecture requires the seller to authorize transfer at posting, when the endorsee is not yet known. This detail document introduces the **open endorsement** pattern (§4.3): the seller signs an EIP-712 `OpenEndorsement` typed structure that omits the endorsee but binds the authorization to a specific `offerId`; at `acceptOffer`, the IssuanceManager combines the seller's pre-signed `signatureHash` with the now-known buyer's address and name to materialize the full `Endorsement` struct on the cert. This mirrors negotiable-instruments-law "indorsement in blank" and preserves the seller as the legal endorser of record, even though the writing of the endorsement to the cert is performed by the IssuanceManager under BorgAuth. No change to the on-chain `Endorsement` struct is required; only the `IssuanceManager.attachOpenEndorsement` entry point and the OfferRegistry's storage of the pre-signed signature. The cyberCORPs Bylaws may want a small drafting update to acknowledge that endorsements may be pre-signed in open form when authorizing transfer through the OfferRegistry/DealManager flow.
+
+13. **Buy-side parity and bid commitments (§4.5).** The OfferRegistry surface supports both sell-initiated and buy-initiated trades. The mechanics are symmetric: each side contributes a two-signature EIP-712 bundle (agreement-side signature + side-specific commitment), and whichever side posts signs at `postOffer` while the other side signs at `acceptOffer`. The downstream flow from `acceptOffer` through finalize is identical regardless of initiation direction. The asymmetric commitment artifact is: for sell offers, the seller's open-endorsement is the pre-signed commitment; for bids, the buyer's payment deposited into a `LexScroWLite` holding escrow is the commitment, custodied by the protocol from posting until acceptance, void, or expiry. The cyberCORPs Bylaws (and the spec's discussion of the offer registry in §7.1 / §4.4) should be updated to recognize bid-side initiation as a first-class flow on equal footing with sell offers, with the holding-escrow commitment as the buy-side analog of the seller's open endorsement.
 
 ---
 
@@ -1002,13 +1078,13 @@ A pragmatic order of work that lets each step ship independently:
 8. **`CyberAgreementRegistry` additive surface** (`createOpenAgreement`, `attachAndSignAsPartyB`, `openToMatching` flag — §7.1). No change to existing `createContract` flow; primary issuance unaffected.
 9. **Trade agreement templates** registered in `CyberAgreementRegistry`.
 10. **Remaining `ICondition` implementations** (Holding period, accredited, KYC, ERISA, NonUS, RegS, holder cap, tax info, Soulbound, CFIUS, price anomaly, GPLP approval, 4(a)(7) disclosure, Rule 144 disclosure, legal opinion, 144A QIB).
-11. **`OfferRegistry`** contract (§4), including the pre‑signed open‑endorsement signature storage and the `acceptOffer` → `attachOpenEndorsement` + `attachAndSignAsPartyB` + `proposeSecondaryDeal` orchestration.
+11. **`OfferRegistry`** contract (§4), including: the pre‑signed open‑endorsement signature storage and `acceptOffer` → `attachOpenEndorsement` + `attachAndSignAsPartyB` + `proposeSecondaryDeal` orchestration for sell-side initiation; the bid-commitment holding escrow opened at `postOffer` and migrated into the trade settlement escrow at `acceptOffer` for buy-side initiation (§4.5). Both sides share the same `Offer` storage struct, the same agreement-template registry, the same condition set, and the same downstream settlement code.
 12. **Indexer schema additions** (Ponder).
 13. **Webapp UI**: offer builder → discovery → acceptance → deposit/settlement → GP monitoring. Components inherited from `ProposeLexscrowAgreementForm`, `SignLexscrowAgreement`, `ExecuteLexscrowAgreement`, `CertsTable`, `useLexchexForAddress`, `useFeeBasisPoints`. EIP‑712 typed‑data bundling at `postOffer` (agreement signature + open‑endorsement signature in one wallet prompt) is the only new signing pattern.
 14. **Keeper + FIX receipt event consumer**.
 15. **Pathway F admin panel** for void / force transfer / Global Kill governance.
 
-Items 1–4 are protocol upgrades with no functional change to existing flows; they can land on `main` without coordinating with the webapp. Item 5 is the first change that requires coordinated webapp release (the integrator address must be supplied somewhere). Items 6–11 are the secondary‑trade core; items 12–15 are the UI / operations layer. The legacy NFT‑escrow opt-in (§3.4) and QMS mode (§4.6) are deferred enhancements that ride on top of this sequence and are not built in the initial deployment.
+Items 1–4 are protocol upgrades with no functional change to existing flows; they can land on `main` without coordinating with the webapp. Item 5 is the first change that requires coordinated webapp release (the integrator address must be supplied somewhere). Items 6–11 are the secondary‑trade core; items 12–15 are the UI / operations layer. The legacy NFT‑escrow opt-in (§3.4) and QMS mode (§4.7) are deferred enhancements that ride on top of this sequence and are not built in the initial deployment.
 
 ---
 
