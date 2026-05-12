@@ -219,6 +219,8 @@ Both columns share every component below the top row.
 
 ## 3. DealManager Secondary‑Trade Mode (§12B.1 made concrete)
 
+This document adopts a **unified settlement pathway** for all secondary trades, regardless of either party's custody mode. The pathway treats metadata mutation (mutate-and-mint via `IssuanceManager`) as the universal legally operative act, consistent with the cyberCORPs Bylaws and spec §2's statement that "no change in record ownership shall be deemed to occur solely by virtue of any transfer of any Blockchain Token." The ERC‑721 transfer mechanic that distinguishes the spec's "Pathway A" from "Pathway E" is dropped from the default secondary settlement flow; only the buyer's payment is escrowed. The seller's cert never moves between wallets during settlement. Custody mode affects only one thing: where the buyer's newly minted cert is delivered. See §3.4 for the per‑SPV `settlementMode` opt-in that preserves the legacy NFT‑escrow flow for deployments whose counsel specifically wants it.
+
 ### 3.1 The current routing — verified
 
 `src/DealManager.sol` and `src/libs/LexScroWLite.sol`:
@@ -226,9 +228,9 @@ Both columns share every component below the top row.
 - `Escrow.corpAssets[]` are minted at `proposeDeal` time (or staged from existing inventory) and on `finalizeEscrow()` are pushed to `escrow.counterParty`.
 - `Escrow.buyerAssets[]` are pulled from `counterParty` in `handleCounterPartyPayment()` and on `finalizeEscrow()` are routed to `ICyberCorp(LexScrowStorage.getCorp()).companyPayable()`, with `computeFee(...)` taken off the top into `IDealManagerFactory(factory).getPlatformPayable()`.
 
-There is **no party role for "seller"**. The routing is purely positional. For a primary issuance this is fine — the company is selling, and `companyPayable` is the right destination. For a secondary trade, the seller is another LP and `companyPayable` is the wrong destination.
+There is **no party role for "seller"**. The routing is purely positional. For a primary issuance this is fine — the company is selling, and `companyPayable` is the right destination. For a secondary trade, the seller is another LP and `companyPayable` is the wrong destination; additionally, `corpAssets` should not be transferred at finalize because the buyer's new cert is freshly minted, not handed over from the seller.
 
-The spec's §12B.1(a) — "add a `tradeType` flag" — is the right minimal change. The implementation breakdown:
+The minimal change is twofold: redirect `buyerAssets` to the seller (already in the spec at §12B.1(a) as the `tradeType` flag), **and** make `corpAssets` empty for secondary trades, with the ownership change executed by a separate `IssuanceManager.executeSecondaryTransfer` call within the finalize transaction.
 
 ### 3.2 Concrete change set in `cybercorps-contracts`
 
@@ -237,16 +239,28 @@ The spec's §12B.1(a) — "add a `tradeType` flag" — is the right minimal chan
    ```solidity
    enum TradeType { PRIMARY_ISSUANCE, SECONDARY_TRADE }
 
+   struct SecondaryTransferIntent {
+       uint256 sellerCertId;
+       uint256 units;
+       address buyer;             // counterParty (also stored at top level)
+       bool    isFullSale;        // void seller cert if true; decrement if false
+       bytes32 agreementId;
+       bytes8  exemptionBasis;
+   }
+
    struct Escrow {
        /* existing fields ... */
        TradeType tradeType;
        address sellerAddress;     // populated only when tradeType == SECONDARY_TRADE
        address feeDestination;    // §3.3 — integrator share recipient, 0 = no split
        bytes32 offerId;           // §4 — link back to OfferRegistry (0 if none)
+       SecondaryTransferIntent xferIntent;  // populated only for SECONDARY_TRADE
    }
    ```
 
-2. **`src/DealManager.sol`** — add an alternative entry point that the `OfferRegistry.acceptOffer` flow calls:
+   For SECONDARY_TRADE escrows, `corpAssets` is **always empty**. The asset side of the trade is encoded in `xferIntent` and executed by `IssuanceManager` at finalize.
+
+2. **`src/DealManager.sol`** — add the entry point that `OfferRegistry.acceptOffer` calls:
 
    ```solidity
    function proposeSecondaryDeal(
@@ -254,30 +268,37 @@ The spec's §12B.1(a) — "add a `tradeType` flag" — is the right minimal chan
        address buyer,
        address paymentToken,
        uint256 paymentAmount,
-       uint256 tokenIdBeingTransferred,   // or 0 for split-and-mint flow
-       uint256 unitsBeingTransferred,
-       bytes32 agreementTemplateId,
-       string[] memory globalValues,
+       uint256 sellerCertId,
+       uint256 units,
+       bool    isFullSale,
+       bytes32 agreementId,                 // already finalized in CyberAgreementRegistry
        address[] memory conditions,
        uint256 expiry,
-       address feeDestination,            // §3.3
-       bytes32 offerId
+       address feeDestination,              // §3.3
+       bytes32 offerId,
+       bytes8  exemptionBasis
    ) external returns (bytes32 dealId);
    ```
 
-   This function does the analog of `proposeDeal` but: (a) sets `tradeType = SECONDARY_TRADE`, `sellerAddress = seller`, `feeDestination = feeDestination`, `offerId = offerId`; (b) **does not mint** the corp asset at proposal time — instead it accepts the seller's deposited cert (Pathway A) or, under Pathway B, accepts the cert that has been endorsed to the buyer; (c) registers the new agreement in `CyberAgreementRegistry` with the secondary template selected by `agreementTemplateId`.
+   This function: (a) sets `tradeType = SECONDARY_TRADE`, `sellerAddress = seller`, `feeDestination = feeDestination`, `offerId = offerId`; (b) populates `xferIntent`; (c) leaves `corpAssets` empty; (d) declares `buyerAssets = [{token: paymentToken, amount: paymentAmount, isFee: true}]`. No assets are minted at proposal time.
 
 3. **`src/libs/LexScroWLite.sol::finalizeEscrow`** — branch on `tradeType`:
 
    ```solidity
-   address paymentDest = (escrow.tradeType == TradeType.SECONDARY_TRADE)
-       ? escrow.sellerAddress
-       : ICyberCorp(LexScrowStorage.getCorp()).companyPayable();
+   if (escrow.tradeType == TradeType.SECONDARY_TRADE) {
+       // 1) Compute and pay the fee split (§3.3).
+       // 2) Transfer (paymentAmount - protocolFee) to escrow.sellerAddress.
+       // 3) Call IssuanceManager.executeSecondaryTransfer(escrow.xferIntent, buyer custody mode).
+       //    This decrements/voids the seller's cert and mints the buyer's new cert.
+       // 4) Skip the corpAssets transfer block entirely (corpAssets is empty).
+   } else {
+       // existing primary-issuance flow: corpAssets to counterParty, buyerAssets to companyPayable
+   }
    ```
 
-   Apply the fee split (§3.3) before transferring `paymentAmount - protocolFee` to `paymentDest`.
+4. **No NFT deposit step.** Under the unified pathway, the only deposit is the buyer's payment. The DealManager does not call `handleCounterPartyPayment` for any cert, only for the payment token. The webapp's deposit view has only one row for the buyer; the seller has no deposit step at all (§10.4).
 
-4. **Cert minting at finalize** — for a secondary settlement, the buyer's new cert is minted (via `IssuanceManager.safeMintAndAssign`, **not** `safeMint`, per §1 of the spec and the verified note that `safeMint` leaves `OwnerDetails.name` empty) with `FundInterestData.acquisitionDate = block.timestamp`, `lastTrade` populated, etc. The seller's cert is either `voidCert` (full sale) or `updateCertificateDetails` to decrement `unitsRepresented` (partial sale). This is the same `IssuanceManager` surface that `RoundManager.allocateEOIs` uses; the only new wiring is calling it from `DealManager.finalizeEscrow` instead of from `RoundManager`.
+5. **`IssuanceManager.executeSecondaryTransfer` — the new finalize-time entry point.** See §8 below for the full mechanics. In summary: it (a) appends the seller's pre‑signed endorsement (from §4) to the seller's cert as the chain‑of‑title record (or recognizes that the endorsement was already added at `acceptOffer` time — see §4.3), (b) voids or decrements the seller's cert per `isFullSale`, (c) calls `safeMintAndAssign` to mint the buyer's new cert with destination address chosen by the buyer's custody mode, (d) appends a mirror endorsement on the new cert pointing back to the seller's cert and the agreement. All in one transaction.
 
 ### 3.3 Fee split (§12B.4 made concrete)
 
@@ -300,16 +321,33 @@ The spec's §12B.1(a) — "add a `tradeType` flag" — is the right minimal chan
 
 The whitelist check is at **proposal time**, not finalization, so the address cannot be made invalid mid‑deal by a factory‑level remove; the remove takes effect for new deals only.
 
-### 3.4 Partial sales
+### 3.4 Per‑SPV `settlementMode` — escape hatch for NFT escrow
 
-Two routes exist in the codebase today; cyberTRADE should pick one per custody path:
+The unified pathway works for all the standard cases discussed in the spec. A small number of deployments may want the legacy NFT‑escrow flow — for example, if a particular SPV's counsel insists on a DTC‑style "depository holds the asset, settlement instructs book entry" model where the escrow contract literally custodies the cert during pendency. To preserve that option:
 
-- **Pathway A (escrow + transfer):** split the seller's cert before deposit. `IssuanceManager.updateCertificateDetails` decrements `unitsRepresented` on the seller's existing cert; `IssuanceManager.safeMintAndAssign` mints a new cert representing the sold units; the new cert is escrowed. This is the natural Direct‑Custody flow.
-- **Pathway E (metadata mutation):** the seller's cert stays put; on finalize, the ledger administrator decrements `unitsRepresented` on the seller's cert and mints a new cert to the buyer. This is the natural Administered‑Custody flow.
+```solidity
+// On the SPV's cyberCORP or its DealManager
+enum SettlementMode { UNIFIED, NFT_ESCROW }
+SettlementMode settlementMode; // default UNIFIED, set per-SPV at onboarding
+```
 
-Both are achievable today through the existing `IssuanceManager` surface; the difference is who calls it and when. Encoding this choice in `OfferRegistry`/`DealManager` requires a single boolean flag plus access control on the metadata‑mutation entry point (BorgAuth admin role for the ledger administrator).
+When `settlementMode == NFT_ESCROW`:
 
-### 3.5 Per‑token restriction hooks (§12B.2)
+- `OfferRegistry.acceptOffer` for a Direct Custody seller routes through the legacy Pathway A flow: the seller is prompted to deposit the cert (after a split for partial sales), the cert lives in `LexScroWLite` during pendency, and `finalizeEscrow` transfers the cert to the buyer plus reconciles `OwnerDetails` via `_update`.
+- Administered Custody sellers under `NFT_ESCROW` mode still use the unified pathway, because there is no cert to escrow (the cert is already in the multisig). There is no useful third option.
+
+For the initial deployment, all SPVs use `UNIFIED`. `NFT_ESCROW` is designed for, not built. Add it when a deployment's counsel specifically requests it. The dispatch in `LexScroWLite.finalizeEscrow` is a single additional branch and does not complicate the unified-mode path.
+
+### 3.5 Partial sales
+
+Under the unified pathway, partial sales need no split-first step. At finalize, `IssuanceManager.executeSecondaryTransfer`:
+
+- Decrements `unitsRepresented` on the seller's existing cert via `updateCertificateDetails` (and updates `FundInterestExtension` fields as needed).
+- Mints a new cert to the buyer for the sold units via `safeMintAndAssign`.
+
+Both operations happen in the same transaction as payment release. No intermediate cert exists; no extra signature is required from the seller for the split (the seller's pre‑signed endorsement at `postOffer` time authorizes the units to be carved off as part of the trade — see §4.2). Under the legacy `NFT_ESCROW` mode (§3.4), the spec's existing "split first, then escrow the new cert" sequence applies.
+
+### 3.6 Per‑token restriction hooks (§12B.2)
 
 `src/CyberCertPrinter.sol::_update`, lines around 257–264 in the current source, has the per‑token hook block commented out. The `restrictionHooksById` mapping exists in storage and has a setter, but `_update` does not evaluate it; only `globalRestrictionHook` is active.
 
@@ -323,9 +361,9 @@ if (address(tokenHook) != address(0)) {
 }
 ```
 
-Uncomment, deploy, and document that per-token hooks now fire on every transfer including DealManager-mediated ones (DealManager is the whitelisted transferer for the global `tokenTransferable` gate, but per-token hooks may still apply — this is the desired behavior, since it lets the GP impose, e.g., a `restrictionHookOverride` on a single affiliate's cert without restricting the entire printer).
+Uncomment, deploy, and document that per-token hooks now fire on every transfer. Under the unified pathway, the seller's cert is not transferred during settlement (it is voided or decremented in place), so per‑token hooks fire only when the seller separately tries to move their cert during pendency or post-settlement. The endorsement-lock added at `acceptOffer` (§4.3) provides the pendency-period transfer protection for Direct Custody sellers via the existing `endorsementRequired` check in `_update`; per‑token hooks are an additional configurable gate the GP can use for cert-specific policies (e.g., affiliate-specific restrictions).
 
-The `FundInterestExtension.restrictionHookOverride` field (§1.4) is the per‑token hook address; this only becomes meaningful when this uncomment lands.
+The `FundInterestExtension.restrictionHookOverride` field (§1.4) is the per‑token hook address; this only becomes meaningful when the uncomment lands.
 
 ---
 
@@ -369,9 +407,15 @@ struct Offer {
     OfferStatus status;
     uint256 unitsAccepted;               // sum of partial acceptances
 
-    // Contract-formation linkage (binding-offer model)
+    // Contract-formation linkage (binding-offer model, §4.5)
     bytes32 agreementId;                 // CyberAgreementRegistry record created at postOffer,
                                          // signed by offeror as party A, openToMatching = true
+
+    // Pre-signed endorsement (§4.3 — required for unified settlement, §3)
+    bytes   offerorEndorsementSignature; // EIP-712 signature by offeror over OPEN_ENDORSEMENT
+                                         // typed data: {offerId, certId, units, agreementId, validUntil}
+                                         // No endorsee fixed at posting — bound to "any qualifying
+                                         // counterparty who accepts this offer" by reference to offerId.
 }
 ```
 
@@ -390,8 +434,9 @@ function postOffer(
     CounterpartyRestrictions calldata restrictions,
     bytes calldata additionalTerms,
     address integrator,
-    string[] calldata partyAValues,      // populated party-A side of the agreement
-    bytes calldata offerorSignature      // EIP-712 signature over the agreement digest
+    string[] calldata partyAValues,         // populated party-A side of the agreement
+    bytes calldata offerorAgreementSignature,// EIP-712 signature over the agreement digest
+    bytes calldata offerorEndorsementSignature// EIP-712 signature over the open-endorsement digest (§4.3)
 ) external returns (bytes32 offerId);
 
 function cancelOffer(bytes32 offerId) external;   // offeror or BorgAuth admin
@@ -408,7 +453,14 @@ function getOffer(bytes32 offerId) external view returns (Offer memory);
 
 ### 4.2 What `postOffer` does
 
-The seller's posting is structurally a signed irrevocable offer (subject to `validUntil` and to `cancelOffer` before any acceptance). Concretely the function:
+The seller's posting is structurally a signed irrevocable offer (subject to `validUntil` and to `cancelOffer` before any acceptance). Two signatures are collected at posting, both EIP‑712 typed:
+
+- the **agreement signature** — the seller's party‑A signature on the partially-populated trade agreement, used by `CyberAgreementRegistry.createOpenAgreement`;
+- the **open‑endorsement signature** — the seller's signature on an open endorsement intent (§4.3 below), used by `IssuanceManager.executeSecondaryTransfer` at finalize to record an attested chain‑of‑title entry on the seller's cert.
+
+Both are produced by the seller's wallet in one signing step at "Sign and Post Offer" in the webapp; the EIP‑712 typed-data presentation bundles them so the seller sees and authorizes both in a single user action.
+
+Concretely the function:
 
 1. Validates seller eligibility and ownership:
    - For `SELL`: caller is the registered owner of `interestEntryTokenId` (via `OwnerDetails.ownerAddress` for Administered Custody, or `IERC721.ownerOf` for Direct Custody — read both, accept either). This is the "no phantom sells" rule from spec §4.4.
@@ -417,25 +469,50 @@ The seller's posting is structurally a signed irrevocable offer (subject to `val
    - `paymentToken` is on a per‑SPV allowlist (USDC/USDT initially, configured per cyberCORP).
 
 2. Creates a partially-signed trade agreement record:
-   - Calls `CyberAgreementRegistry.createOpenAgreement(templateId = templateFor(exemptionPathway), partyA = offeror, partyAValues, partyASignature = offerorSignature, expiry = validUntil, openToMatching = true)`.
+   - Calls `CyberAgreementRegistry.createOpenAgreement(templateId = templateFor(exemptionPathway), partyA = offeror, partyAValues, partyASignature = offerorAgreementSignature, expiry = validUntil, openToMatching = true)`.
    - The agreement record now has `parties = [offeror]`, `signedAt[offeror] = block.timestamp`, `finalized = false`, `openToMatching = true`. It is **waiting for any qualifying party B to attach** (§7 below).
 
-3. Stores the `Offer` struct with the returned `agreementId` and `status = LIVE`. Emits `OfferPosted(offerId, agreementId, ...)`.
+3. Stores the `Offer` struct, including `offerorEndorsementSignature`, with the returned `agreementId` and `status = LIVE`. Emits `OfferPosted(offerId, agreementId, ...)`.
 
-**What `postOffer` does *not* do.** It does not lock the seller's asset. It does not transfer anything. It does not bind the seller against canceling — `cancelOffer` is callable by the offeror until an acceptance lands, and acts as a withdrawal of the offer in the standard contract-law sense. Once `acceptOffer` lands, the cancellation right ends; the offer has been accepted and the contract is formed.
+**What `postOffer` does *not* do.** It does not lock the seller's asset. It does not transfer anything. It does not write to the seller's cert. It does not bind the seller against canceling — `cancelOffer` is callable by the offeror until an acceptance lands, and acts as a withdrawal of the offer in the standard contract-law sense, retracting both the agreement signature and the endorsement signature in one operation. Once `acceptOffer` lands, the cancellation right ends; the offer has been accepted and the contract is formed.
 
-### 4.3 What `acceptOffer` does
+### 4.3 The open‑endorsement signature — what the seller is signing
 
-`acceptOffer` is the single contract-formation event. In one transaction:
+The cert's `Endorsement` struct (`src/CyberCertPrinter.sol`) carries `{endorser, timestamp, signatureHash, registry, agreementId, endorsee, endorseeName}`. The cyberCORPs Bylaws describe endorsement as the registered owner's act authorizing transfer to a named endorsee. Under the binding-offer model, the endorsee is not known at posting — the seller is offering to "any qualifying counterparty." The seller's pre‑signed endorsement is therefore an **open endorsement** in the commercial-law sense: it is signed without naming a specific endorsee, and is bound to a particular offer (and through the offer's `counterpartyRestrictions`, to a particular class of qualifying counterparties) by reference to the `offerId`.
+
+This is analogous to an indorsement in blank or an indorsement to bearer in negotiable‑instruments law — the indorsement is the holder's authorization that the instrument is transferable in accordance with the indorsement's terms; the actual taker is determined by who properly performs in accordance with those terms.
+
+The EIP‑712 typed data the seller signs:
+
+```
+struct OpenEndorsement {
+    bytes32 offerId;
+    address spvCyberCorp;
+    uint256 certId;
+    uint256 units;
+    bytes32 agreementId;
+    bytes8  exemptionBasis;
+    uint64  validUntil;
+}
+```
+
+At `acceptOffer` (§4.4), the IssuanceManager assembles the full `Endorsement` struct by combining the seller's pre‑signed `signatureHash` with the now-known buyer's address and name (from LeXcheX), and writes the endorsement to the seller's cert. The endorsement is the legal record that the seller — by signature — authorized the transfer to the party who satisfied the offer's terms. Any auditor or counsel reviewing the chain of title can recover the seller's signature against the OpenEndorsement typed data and verify it.
+
+### 4.4 What `acceptOffer` does
+
+`acceptOffer` is the single contract-formation event and the moment when the seller's pre‑signed endorsement is materialized onto the cert. In one transaction:
 
 1. Validates the offer is `LIVE` and within `validUntil`. Validates `unitsAccepted ≤ unitsOffered − unitsAccepted_already`.
 2. Validates the acceptor satisfies `restrictions`. The on‑chain check is structural: jurisdiction credentials, accreditation, QP, Soulbound category/tier — all queried via the LeXcheX adapter (`creds/` directory in the contracts repo — `LeXcheXAdapter.sol` exists; cyberTRADE adds a `LegionSoulboundAdapter.sol` for the Soulbound NFT category check).
 3. **Completes the trade agreement.** Calls `CyberAgreementRegistry.attachAndSignAsPartyB(agreementId, partyB = msg.sender, partyBValues, partyBSignature = acceptorSignature)`. The registry verifies the EIP-712 signature, appends `msg.sender` to `parties`, records `signedAt[msg.sender]`, and sets `finalized = true`, `openToMatching = false`. From this transaction onward, `AgreementSignedCondition.checkCondition(...)` returns true. **The contract is now binding on both sides.**
-4. Calls `DealManager.proposeSecondaryDeal(...)` with the offer's pathway → maps to the appropriate `ICondition[]` set (built per `ExemptionPathway`), `feeDestination = integrator`, `offerId = offerId`, and the just-finalized `agreementId`. The DealManager records the escrow with `tradeType = SECONDARY_TRADE`, `sellerAddress = offeror`, `counterParty = msg.sender`.
-5. Returns the new `dealId`. Emits `OfferAccepted(offerId, dealId, acceptor, unitsAccepted)`.
-6. Updates `status` to `PARTIALLY_ACCEPTED` or `FULLY_ACCEPTED` and increments `unitsAccepted`.
+4. **Materializes the seller's endorsement on the cert (endorsement‑lock).** Calls `IssuanceManager.attachOpenEndorsement(offerId, certId, units, endorsee = msg.sender, endorseeName = leXcheXNameLookup(msg.sender))`. The IssuanceManager (under its standing BorgAuth role) constructs the full `Endorsement` struct using `signatureHash = offer.offerorEndorsementSignature` (the pre‑signed open endorsement from §4.3), `endorser = offer.offeror`, `registry = CyberAgreementRegistry`, `agreementId = offer.agreementId`, `timestamp = block.timestamp`, and the now‑known `endorsee` and `endorseeName`. The endorsement is appended to the seller's cert via `addEndorsement`. The seller's cert printer has `endorsementRequired = true`, so the `_update` hook will now reject any transfer of this cert to anyone other than `msg.sender` (the buyer). For Direct Custody this is a real transferability lock; for Administered Custody the cert never moves anyway, but the endorsement is still added because it is the chain‑of‑title record.
+5. Calls `DealManager.proposeSecondaryDeal(...)` with the offer's pathway → maps to the appropriate `ICondition[]` set (built per `ExemptionPathway`), `feeDestination = integrator`, `offerId = offerId`, and the just-finalized `agreementId`. The DealManager records the escrow with `tradeType = SECONDARY_TRADE`, `sellerAddress = offeror`, `counterParty = msg.sender`, `xferIntent` populated. `corpAssets` is empty.
+6. Returns the new `dealId`. Emits `OfferAccepted(offerId, dealId, acceptor, unitsAccepted)`.
+7. Updates `status` to `PARTIALLY_ACCEPTED` or `FULLY_ACCEPTED` and increments `unitsAccepted`.
 
-**Implication:** there is no separate "seller countersigns the agreement" step (no Phase 3 in the Administered Custody trace). The seller's `postOffer` signature already covered the agreement. The flow downstream of `acceptOffer` is: buyer deposit → `TimeSettlementPeriod` clock → conditions clear → finalize. The buyer's deposit is performance of the buyer's payment obligation under an already-formed contract; the seller's transfer (or the administrator's mutation, under Administered Custody) is performance of the seller's transfer obligation.
+**Implication:** the seller signs once (at posting, covering both agreement and endorsement). The buyer signs once (at acceptance, covering the agreement). The endorsement on the seller's cert is materialized at acceptance using the seller's pre‑signed signature. There is no separate "seller countersigns the agreement" step and no separate "seller signs the endorsement after buyer is known" step. The flow downstream of `acceptOffer` is: buyer deposit → `TimeSettlementPeriod` clock → conditions clear → finalize. The buyer's deposit is performance of the buyer's payment obligation under an already-formed contract; the metadata mutation at finalize (§8) is performance of the seller's transfer obligation under the same contract.
+
+**On void / cancel.** If the deal voids by expiry or by mutual `signToVoid`, the IssuanceManager appends a `voidEndorsement` record to the seller's cert that supersedes the prior endorsement‑lock. The `_update` hook treats a superseded endorsement as released; the cert is freely transferable again. The original endorsement remains in the array as a historical record of the attempted trade.
 
 The mapping from `ExemptionPathway` to `ICondition[]` is the same configuration the DealManager already accepts on `proposeDeal`. For example:
 
@@ -610,16 +687,18 @@ Configured with a `categoryHash` (e.g., `keccak256("LEGION_SPV_A_WHITELIST")`) a
 
 ## 6. Custody Election Under Existing CertPrinter
 
-The spec assumes Path 3 (Hybrid). The codebase has no notion of "Administered" vs "Direct" custody, but the existing CertPrinter primitives are sufficient — the work is conventions and a small registry, not new contract types.
+The spec assumes Path 3 (Hybrid). Under the unified settlement pathway adopted in §3, custody mode has a much smaller footprint than the spec's two-pathway framing suggests: it determines only **where the cert is delivered at mint time**, not how settlement runs. The existing CertPrinter primitives are sufficient; the only new artifact is a per-cert flag recording the elected mode.
 
 **Mechanic:**
 
-- Administered Custody: the cert's ERC‑721 `ownerOf` is the ledger administrator's multisig. `OwnerDetails.ownerAddress` is the LP. `OwnerDetails.name` is the LP's name. Transfers happen through `updateCertificateDetails` mutating `OwnerDetails` (legally operative) plus an `addEndorsement` for chain‑of‑title. `_update` is not called; the cert never moves between wallets.
-- Direct Custody: `IERC721.ownerOf` and `OwnerDetails.ownerAddress` are the same address (the LP's wallet). Transfers go through `_update` plus `addEndorsement`.
+- **Administered Custody.** The cert's ERC‑721 `ownerOf` is the ledger administrator's multisig. `OwnerDetails.ownerAddress` is the LP. `OwnerDetails.name` is the LP's name. The cert never moves between wallets, ever — not on primary issuance (mint to multisig), not on secondary trade (the seller's cert stays in the multisig; the buyer's new cert is minted to the multisig with the buyer as `OwnerDetails.ownerAddress`).
+- **Direct Custody.** `IERC721.ownerOf` and `OwnerDetails.ownerAddress` are the same address (the LP's wallet). Mints go to the LP's wallet. The cert does not move during secondary settlement (it is voided or decremented in place), but the LP retains the option to scripify, collateralize, or otherwise act on the cert outside of cyberTRADE — subject to the endorsement‑lock during any pending trade (§4.4) and to whatever transfer‑restriction hooks the GP has configured.
 
-**New artifact:** a small `CustodyRegistry` mapping `(cyberCorp, holderAddress) → CustodyMode`, or — preferably — extending `FundInterestExtension` with a `custodyMode` field so the choice rides with each cert. The webapp reads this to decide which deposit flow to show (§10.4 below).
+**Per‑cert flag:** `FundInterestExtension.custodyMode` (a `CustodyMode` enum: `ADMINISTERED | DIRECT`). Set at mint time (primary issuance from the LP's election in the cyberRAISE subscription flow; secondary settlement from the buyer's election in the prospective‑buyer onboarding flow). Read by `IssuanceManager.executeSecondaryTransfer` to decide the mint destination.
 
-**Settlement implication:** `DealManager.proposeSecondaryDeal` checks the seller's custody mode and selects Pathway A (Direct → escrow + transfer) or Pathway E (Administered → metadata mutation) accordingly. Both paths exist today inside `IssuanceManager`; the new code is the dispatch.
+**Settlement implication:** under the unified pathway, the seller's custody mode does **not** branch the settlement code path. The seller's cert is mutated in place regardless. The buyer's custody mode is read once, by `IssuanceManager.executeSecondaryTransfer`, to choose the `to` address for `safeMintAndAssign` — multisig or buyer wallet. That is the entire settlement-time effect of custody election.
+
+**Why the spec's Pathway A vs Pathway E distinction collapses.** Under the cyberCORPs Bylaws and spec §2, the legally operative act of transfer is the metadata mutation, not the ERC‑721 transfer. Pathway A's ERC‑721 escrow‑and‑transfer was an *additional* bookkeeping operation on top of the metadata mutation, executed only for Direct Custody. Dropping that bookkeeping leaves both custody modes settling through identical primitives. The asymmetry that remains — "where does the new cert physically sit?" — is a delivery question, not a settlement question. See §3.4 for the per‑SPV `settlementMode = NFT_ESCROW` opt‑in that preserves Pathway A for deployments whose counsel specifically wants on‑chain NFT escrow.
 
 ---
 
@@ -685,27 +764,66 @@ The template registration happens in a deploy script under `script/RegisterTrade
 
 ---
 
-## 8. Ledger Mutation Mechanics, Verified
+## 8. Ledger Mutation Mechanics — `IssuanceManager.executeSecondaryTransfer`
 
-The spec's §7.5 is correct that the metadata mutation is the legally operative act. Two verified codebase facts the implementation must honor:
+Under the unified settlement pathway (§3), every secondary trade — regardless of either party's custody mode, regardless of full vs partial sale — settles through a single new entry point on `IssuanceManager`. The function is called from `DealManager.finalizeEscrow` (or `signAndFinalizeDeal`) inside the same transaction as payment release.
 
-1. **Use `safeMintAndAssign`, not `safeMint`.** `CyberCertPrinter.safeMint` leaves `OwnerDetails.name` empty; `safeMintAndAssign` populates it and emits `CertificateAssigned`. Every cyberTRADE settlement must call `safeMintAndAssign` for the buyer's new cert. The spec calls this out (§7.5) — implementation must follow.
-2. **`updateCertificateDetails` does not auto‑update `OwnerDetails`.** The two are reconciled by `_update` on ERC‑721 transfer. Under Pathway E (metadata mutation, Administered Custody), the ledger administrator must call `updateOwnerDetails(tokenId, newOwner)` (a new admin function to add, BorgAuth‑gated) in the same transaction as `updateCertificateDetails`. Otherwise `OwnerDetails` is stale until a subsequent transfer reconciles it — and under Administered Custody there is no subsequent transfer.
+### 8.1 Signature and access control
 
-   Add to `src/CyberCertPrinter.sol`:
-   ```solidity
-   function updateOwnerDetails(uint256 tokenId, address newOwner, string calldata newName)
-       external
-       onlyIssuanceManagerOrAdmin
-   {
-       OwnerDetails storage od = CyberCertPrinterStorage.cyberCertStorage().ownerDetailsById[tokenId];
-       od.ownerAddress = newOwner;
-       od.name = newName;
-       emit OwnerDetailsUpdated(tokenId, newOwner, newName);
-   }
-   ```
+```solidity
+function executeSecondaryTransfer(
+    SecondaryTransferIntent calldata intent,  // from the DealManager escrow
+    address buyer,
+    string  calldata buyerName,               // from LeXcheXNameLookup
+    CustodyMode buyerCustodyMode,             // from buyer's profile
+    address ledgerAdministratorMultisig       // 0 if buyerCustodyMode == DIRECT
+) external returns (uint256 newCertId);
+```
 
-The endorsement record on the cert (`Endorsement{endorser, timestamp, signatureHash, registry, agreementId, endorsee, endorseeName}`) is the chain‑of‑title artifact. Every settlement appends one. Existing function: `addEndorsement(tokenId, ...)` callable by `IssuanceManager` or current `ownerOf`. Under Pathway E, the ledger administrator (which is `ownerOf` for the multisig‑held cert) adds the endorsement; under Pathway A/B, the seller adds it before depositing, or `DealManager.finalizeEscrow` adds it after deposit via the IssuanceManager.
+Access control via BorgAuth: only addresses holding the `SECONDARY_TRANSFER_ROLE` on the SPV's BorgAuth can call. The role is granted, at SPV onboarding, exclusively to the SPV's `DealManager`. No other contract or EOA holds it. This is the structural authorization that the cyberCORPs Bylaws contemplate when they vest the issuer-administrator with the authority to mutate the register.
+
+### 8.2 What it does — five steps, one transaction
+
+1. **Resolve the buyer name.** If `buyerName` is empty, call `LeXcheXNameLookup.nameOf(buyer)` to read the buyer's KYC‑verified legal name. The lookup is gated to be readable only by IssuanceManager during a finalize call (preserves PII privacy).
+
+2. **Append the chain‑of‑title endorsement on the seller's cert (if not already present).**
+
+   Under the standard flow (§4.4), the endorsement was already materialized at `acceptOffer` time using the seller's pre‑signed open‑endorsement signature, and it is sitting on the seller's cert as the endorsement‑lock. At finalize, the IssuanceManager checks for the existing endorsement matching `intent.agreementId` and, if present, leaves it in place — the existing endorsement is the chain‑of‑title artifact for this transfer.
+
+   If the existing endorsement is somehow missing (e.g., a future flow that didn't pre-sign at posting), the IssuanceManager constructs the endorsement from the trade-agreement data and appends it now. This is a fallback branch and is not exercised by the normal flow.
+
+3. **Mutate the seller's cert per `intent.isFullSale`.**
+   - Full sale: call `voidCert(intent.sellerCertId)`. Sets `SecurityStatus.Void`. The cert remains on chain as an immutable historical record; its endorsement array (with the just-confirmed transfer endorsement) provides the chain-of-title bridge to the new cert.
+   - Partial sale: call `updateCertificateDetails(intent.sellerCertId, ...)` to decrement `unitsRepresented` by `intent.units` and update the `FundInterestExtension.lastTrade` field on the seller's remaining cert (recording the partial transfer in FIX form). `OwnerDetails` on the seller's cert is unchanged — Alice is still the registered owner of the remainder.
+
+4. **Mint the buyer's new cert.** Call `safeMintAndAssign(to, name, ownerAddress, certDetails)` where:
+   - `to = (buyerCustodyMode == ADMINISTERED) ? ledgerAdministratorMultisig : buyer` — the ERC‑721 host address.
+   - `name = buyerName` — the buyer's legal name written into `OwnerDetails.name`.
+   - `ownerAddress = buyer` — the buyer's wallet address written into `OwnerDetails.ownerAddress`. **This is the registered owner regardless of where the cert physically sits.**
+   - `certDetails` populates `unitsRepresented = intent.units`, `signingOfficerName/Title` from the SPV's officer config, `legalDetails` with a reference to the voided/decremented source cert, and `extensionData` encoded from a fresh `FundInterestData` with `acquisitionDate = block.timestamp`, applicable `tackedFromAcquisitionDate` if the trade agreement asserts tacking, restriction legends per the exemption pathway, and a populated `lastTrade` FIX record.
+
+5. **Append a mirror endorsement on the new cert.** Call `addEndorsement(newCertId, {endorser: intent.sellerAddress, signatureHash: <ref to seller's open-endorsement>, registry: CyberAgreementRegistry, agreementId: intent.agreementId, endorsee: buyer, endorseeName: buyerName, timestamp: block.timestamp})`. This makes the buyer's new cert self‑describing: looking at the cert alone reveals its origin (which agreement, which seller, which voided/decremented predecessor cert) without requiring a separate registry lookup.
+
+   For Administered Custody, the endorser slot may instead be filled with the ledger administrator multisig as the operational executor, with the seller's signature still attached as `signatureHash` — preserving the seller's pre-signed authorization as the legal anchor while reflecting that the multisig is the holder of record. The choice is configurable per SPV.
+
+6. **Emit events.** `SecondaryTransferExecuted(intent.agreementId, intent.sellerCertId, newCertId, intent.sellerAddress, buyer, intent.units, intent.isFullSale)`. The DealManager separately emits `DealFinalized` and `FIXTradeReceipt` (§9).
+
+### 8.3 Verified codebase facts the implementation honors
+
+1. **Uses `safeMintAndAssign`, not `safeMint`.** `CyberCertPrinter.safeMint` leaves `OwnerDetails.name` empty; `safeMintAndAssign` populates it and emits `CertificateAssigned`. Every cyberTRADE settlement mint goes through `safeMintAndAssign`. The spec calls this out in §7.5; the unified pathway makes it the only mint path for secondary settlements.
+
+2. **`OwnerDetails` is set at mint time, not reconciled at transfer.** Under the unified pathway, the buyer's new cert is minted with `OwnerDetails.ownerAddress = buyer` from the start. There is no `_update` reconciliation step at settlement (the cert is not transferred between wallets at settlement — the cert is brand new). This sidesteps the `OwnerDetails` staleness problem the spec flags for Pathway E.
+
+3. **`updateOwnerDetails` is not needed for normal secondary settlement.** The spec's proposed `updateOwnerDetails(tokenId, newOwner, newName)` admin function (for Pathway E reconciliation) becomes unnecessary under the unified pathway, because the buyer's cert is freshly minted. The function may still be useful for the Pathway F admin escape hatch (§7.4A spec) — keep it on the wish‑list for admin tooling but it is not on the cyberTRADE secondary settlement critical path.
+
+4. **`addEndorsement` access control.** Currently callable by either `IssuanceManager` or current `ownerOf(tokenId)`. The unified pathway always calls it via `IssuanceManager.executeSecondaryTransfer`, so the `ownerOf` branch is irrelevant for cyberTRADE settlement. Existing primary‑issuance and admin flows that use the `ownerOf` branch are unaffected.
+
+### 8.4 What is unchanged
+
+- The buyer's new cert exists from settlement onward and can be queried by its tokenId.
+- The seller's cert exists from settlement onward in either void or decremented state; its endorsement array points to the new cert via the agreement ID and the transfer endorsement.
+- The chain of title is fully reconstructable from any cert by walking the endorsement array, looking up agreements by ID in `CyberAgreementRegistry`, and traversing voided certs.
+- All other CertPrinter primitives (`certLegend`, `securityStatus`, `tokenTransferable`, restriction hooks) are unchanged in semantics and continue to apply to the new cert from minting onward.
 
 ---
 
@@ -752,7 +870,7 @@ Closely modeled on `apps/web/src/app/(frame-layout)/lexscrow/propose/_forms/Prop
 - `EmbeddedAgreement` for the IPFS preview of the trade template (CyTE already renders an IPFS URI).
 - `DateInputField` for `validUntil`.
 - `FormSelectField` for the exemption pathway dropdown (`Rule 144 / 4(a)(7) / 4(a)(1½) / 144A / Reg S`) — drives which template is pre‑loaded into `EmbeddedAgreement`.
-- `TransactionActionButton` for "Sign and Post Offer", calling `OfferRegistry.postOffer` via `useWriteContract` (Wagmi), with the same react‑hook‑form + Zod pattern. Per the binding-offer model (§4.5), this single signature carries both the offer posting and the seller's signature on the partially-populated trade agreement; the seller will not be asked to sign again later.
+- `TransactionActionButton` for "Sign and Post Offer", calling `OfferRegistry.postOffer` via `useWriteContract` (Wagmi), with the same react‑hook‑form + Zod pattern. Per the binding-offer model (§4.5), the seller's signing step at posting produces **two EIP‑712 signatures presented in a single typed‑data payload**: (a) the signature on the partially-populated trade agreement (party A), and (b) the signature on the open endorsement (§4.3, authorizing transfer of the offered units to whichever qualifying counterparty accepts). The wallet shows both signatures in one bundled EIP‑712 prompt; the user experiences it as one signing action. The seller will not be asked to sign again at any later step.
 
 What CyTE does **not** have and must be added: a "Counterparty restrictions" sub‑form (accredited‑only, QP‑only, non‑US‑person, required Soulbound category/tier, explicit allowlist). This is a small new component under `packages/design-system/forms/components/CounterpartyRestrictionsInput.tsx`.
 
@@ -783,14 +901,14 @@ For cyberTRADE, the route is `apps/web/src/app/(frame-layout)/cybertrade/offer/[
 - a 4(a)(7) information‑package acknowledgment modal that the acceptor must click‑through before the "Sign and Accept" button activates,
 - a single "Sign and Accept" action that signs an EIP-712 payload covering both the offer acceptance and the buyer-side reps/attestations (§4.5). This is the only buyer signature in the flow. It hits `OfferRegistry.acceptOffer`, which (a) attaches and signs the open agreement via `CyberAgreementRegistry.attachAndSignAsPartyB`, finalizing the contract, and (b) opens the escrow on `DealManager.proposeSecondaryDeal`. There is no separate countersign step — the seller's offer-posting signature already covered party A.
 
-### 10.4 Countersign + Deposit + Settlement view
+### 10.4 Deposit + Settlement view
 
-Closely modeled on `apps/web/src/app/(frame-layout)/lexscrow/double-token-lexscrow-agreement/[agreementAddress]/_forms/ExecuteLexscrowAgreement.tsx`. CyTE's `ExecuteLexscrowAgreement` already handles the two‑party deposit + finalize sequence under `LexScroWLite`. For cyberTRADE:
+Closely modeled on `apps/web/src/app/(frame-layout)/lexscrow/double-token-lexscrow-agreement/[agreementAddress]/_forms/ExecuteLexscrowAgreement.tsx`. CyTE's `ExecuteLexscrowAgreement` already handles the deposit + finalize sequence under `LexScroWLite`. cyberTRADE simplifies it considerably under the unified pathway (§3):
 
-- Branch on the seller's custody mode (read from the offer's referenced `FundInterestExtension.custodyMode`):
-  - **Direct Custody**: seller deposit step shows "approve and deposit Ledger Entry Token" (ERC‑721 approval flow). Buyer deposit step shows "approve and deposit payment token".
-  - **Administered Custody**: seller deposit step is absent (the cert never leaves the multisig). Buyer deposit step is the only deposit. A status row shows "Awaiting ledger administrator authorization" until the administrator's multisig has signed the metadata mutation.
+- **Only the buyer has a deposit step**, regardless of seller's or buyer's custody mode. The deposit is the payment token (USDC / USDT / etc.). The seller has no deposit step at all — there is no NFT escrow in the unified pathway (§3). The seller's contribution to settlement is the pre‑signed open endorsement attached at `acceptOffer` (§4.4), which is already on chain.
+- The status dashboard shows: agreement finalized (✓ at acceptance), endorsement‑lock active on seller's cert (✓ at acceptance), buyer payment deposited (pending → ✓), all conditions passing (live evaluation), `TimeSettlementPeriod` elapsed (countdown timer, default 24 hours), ready to finalize.
 - The "Settle" action is **hidden by default**: the keeper service (§10.4 of the spec) calls `signAndFinalizeDeal` once `TimeSettlementPeriodCondition` clears. A "Settle manually" affordance is shown if the keeper hasn't fired within a configurable grace period; this preserves user agency without putting the keeper in the trust path.
+- **Per‑SPV `settlementMode = NFT_ESCROW` rendering (deferred).** If a future SPV elects the legacy NFT-escrow mode (§3.4), the deposit view conditionally renders the seller's "approve and deposit Ledger Entry Token" step for Direct Custody sellers. This is a UI branch behind a feature flag; not built in the initial deployment because no SPV has been configured with `NFT_ESCROW`.
 
 ### 10.5 GP Monitoring view
 
@@ -865,6 +983,8 @@ Items in v2.04 that should be corrected or refined when the spec is next revised
 8. **§10 reference to `CertsTable`.** The webapp already has a serviceable cap‑table view (`apps/cybercorps-web/src/app/(frame-layout)/cybercorps/mainframe/_components/CertsTable.tsx`); the GP monitoring view extends this rather than building new.
 9. **§7.3 contract-formation model — binding-offer adoption.** The spec's §7.3 describes a sequential "seller proposes, buyer countersigns" agreement flow that, in conjunction with the §11.1B QMS timing constraints (15-day no-binding-agreement period), implies two seller signatures. This detail document adopts **Architecture B (binding-offer model, §4.5)** for the initial deployment: the seller's `postOffer` signature is the legally operative offer on a partially-populated trade agreement, and the buyer's `acceptOffer` signature attaches to and finalizes the same agreement in one transaction. Conditions are conditions precedent to performance, not to formation. This collapses the trade-formation flow from two seller signatures to one, at the cost of forgoing QMS safe-harbor qualification. The trade-off is acceptable because (i) the initial pipeline is 3(c)(1) funds where the private-placement safe harbor handles §7704 by construction and (ii) QMS mode is preserved as a configurable future enhancement (§4.6). When the spec is next revised, §7.3 should be reframed to describe the binding-offer flow as the default and QMS as the opt-in. Spec §11.1B's QMS treatment should be re-titled "Future Enhancement: QMS Mode" rather than the primary regulatory posture.
 10. **`CyberAgreementRegistry.createOpenAgreement` / `attachAndSignAsPartyB` (§7.1).** The current `CyberAgreementRegistry` requires both parties' addresses at `createContract` time. The binding-offer model requires the ability to create an agreement signed by party A while leaving party B open until any qualifying counterparty attaches. This is a small additive change to the registry and does not alter the existing primary-issuance flow (which continues to use `createContract`).
+11. **§7.4A pathway taxonomy — unified pathway adoption.** The spec's §7.4A enumerates six settlement pathways (A: escrow + transfer, B: endorsement + transfer, C: scrip intermediation, D: void + mint, E: metadata mutation, F: admin force transfer) and recommends Pathway A/B+A for Direct Custody and Pathway E for Administered Custody. This detail document adopts a **unified settlement pathway (§3, §8)** that effectively merges Pathway B (the seller's pre‑signed open endorsement) with Pathway D/E (void‑or‑decrement + fresh mint by IssuanceManager) for both custody modes. The motivation is structural symmetry: the cyberCORPs Bylaws and spec §2 both state that metadata mutation is the legally operative act and the ERC‑721 transfer is bookkeeping; the unified pathway treats them that way universally. Pathway A is retained as the per‑SPV `settlementMode = NFT_ESCROW` opt‑in (§3.4) for deployments whose counsel specifically wants on‑chain NFT escrow. Pathway F remains the off‑trade admin escape hatch. Spec §7.4A's pathway table should be revised in the next edit to lead with the unified pathway and treat A/B/C as alternative configurations rather than custody‑mode defaults.
+12. **Pre‑signed open endorsement at `postOffer`.** The cyberCORPs `Endorsement` struct (`src/CyberCertPrinter.sol`) requires `endorsee` to be a known address. The binding-offer + unified-pathway architecture requires the seller to authorize transfer at posting, when the endorsee is not yet known. This detail document introduces the **open endorsement** pattern (§4.3): the seller signs an EIP-712 `OpenEndorsement` typed structure that omits the endorsee but binds the authorization to a specific `offerId`; at `acceptOffer`, the IssuanceManager combines the seller's pre-signed `signatureHash` with the now-known buyer's address and name to materialize the full `Endorsement` struct on the cert. This mirrors negotiable-instruments-law "indorsement in blank" and preserves the seller as the legal endorser of record, even though the writing of the endorsement to the cert is performed by the IssuanceManager under BorgAuth. No change to the on-chain `Endorsement` struct is required; only the `IssuanceManager.attachOpenEndorsement` entry point and the OfferRegistry's storage of the pre-signed signature. The cyberCORPs Bylaws may want a small drafting update to acknowledge that endorsements may be pre-signed in open form when authorizing transfer through the OfferRegistry/DealManager flow.
 
 ---
 
@@ -877,17 +997,18 @@ A pragmatic order of work that lets each step ship independently:
 3. **Activate per‑token restriction hooks** in `CyberCertPrinter._update`. Behind a printer-level feature flag if needed to avoid disturbing existing deployments.
 4. **`GlobalKillCondition` + `TimeSettlementPeriodCondition`**. Deployed and attached‑by‑default by `DealManagerFactory`. No behavioral effect on primary issuance because they pass when not raised / once delay elapses.
 5. **`DealManagerFactory` integrator whitelist + per‑deal `feeDestination`**. No behavioral change to existing deployments because `defaultIntegrator == 0` and `feeDestination == 0` keep the legacy flow.
-6. **`DealManager` secondary trade mode** (`tradeType`, `sellerAddress`, branched routing).
-7. **`CyberAgreementRegistry` additive surface** (`createOpenAgreement`, `attachAndSignAsPartyB`, `openToMatching` flag — §7.1). No change to existing `createContract` flow; primary issuance unaffected.
-8. **Trade agreement templates** registered in `CyberAgreementRegistry`.
-9. **Remaining `ICondition` implementations** (Holding period, accredited, KYC, ERISA, NonUS, RegS, holder cap, tax info, Soulbound, CFIUS, price anomaly, GPLP approval, 4(a)(7) disclosure, Rule 144 disclosure, legal opinion, 144A QIB).
-10. **`OfferRegistry`** contract.
-11. **Indexer schema additions** (Ponder).
-12. **Webapp UI**: offer builder → discovery → acceptance → deposit/settlement → GP monitoring. Components inherited from `ProposeLexscrowAgreementForm`, `SignLexscrowAgreement`, `ExecuteLexscrowAgreement`, `CertsTable`, `useLexchexForAddress`, `useFeeBasisPoints`.
-13. **Keeper + FIX receipt event consumer**.
-14. **Pathway F admin panel** for void / force transfer / Global Kill governance.
+6. **`DealManager` secondary trade mode** (`tradeType`, `sellerAddress`, `xferIntent`, payment-only escrow, payment routing to seller, fee split — §3.2). `corpAssets` empty for secondary trades; no NFT deposit step.
+7. **`IssuanceManager.executeSecondaryTransfer`** entry point (§8). BorgAuth‑gated to the SPV's DealManager. Implements the unified mutate‑and‑mint with endorsement‑lock and FIX stamping. The `attachOpenEndorsement` helper that `OfferRegistry.acceptOffer` calls also lives in `IssuanceManager`.
+8. **`CyberAgreementRegistry` additive surface** (`createOpenAgreement`, `attachAndSignAsPartyB`, `openToMatching` flag — §7.1). No change to existing `createContract` flow; primary issuance unaffected.
+9. **Trade agreement templates** registered in `CyberAgreementRegistry`.
+10. **Remaining `ICondition` implementations** (Holding period, accredited, KYC, ERISA, NonUS, RegS, holder cap, tax info, Soulbound, CFIUS, price anomaly, GPLP approval, 4(a)(7) disclosure, Rule 144 disclosure, legal opinion, 144A QIB).
+11. **`OfferRegistry`** contract (§4), including the pre‑signed open‑endorsement signature storage and the `acceptOffer` → `attachOpenEndorsement` + `attachAndSignAsPartyB` + `proposeSecondaryDeal` orchestration.
+12. **Indexer schema additions** (Ponder).
+13. **Webapp UI**: offer builder → discovery → acceptance → deposit/settlement → GP monitoring. Components inherited from `ProposeLexscrowAgreementForm`, `SignLexscrowAgreement`, `ExecuteLexscrowAgreement`, `CertsTable`, `useLexchexForAddress`, `useFeeBasisPoints`. EIP‑712 typed‑data bundling at `postOffer` (agreement signature + open‑endorsement signature in one wallet prompt) is the only new signing pattern.
+14. **Keeper + FIX receipt event consumer**.
+15. **Pathway F admin panel** for void / force transfer / Global Kill governance.
 
-Items 1–4 are protocol upgrades with no functional change to existing flows; they can land on `main` without coordinating with the webapp. Item 5 is the first change that requires coordinated webapp release (the integrator address must be supplied somewhere). Items 6–10 are the secondary‑trade core; items 11–14 are the UI / operations layer.
+Items 1–4 are protocol upgrades with no functional change to existing flows; they can land on `main` without coordinating with the webapp. Item 5 is the first change that requires coordinated webapp release (the integrator address must be supplied somewhere). Items 6–11 are the secondary‑trade core; items 12–15 are the UI / operations layer. The legacy NFT‑escrow opt-in (§3.4) and QMS mode (§4.6) are deferred enhancements that ride on top of this sequence and are not built in the initial deployment.
 
 ---
 
