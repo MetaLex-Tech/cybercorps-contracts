@@ -52,7 +52,7 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
     uint256 public maxValidityPeriod;
 
     mapping(address => uint256) public proofExpiry;
-    mapping(bytes32 => bool) public usedProofIdentifiers;
+    mapping(bytes32 => uint256) public uniqueIdentifierExpiry;
     // manager → investor → approved
     mapping(address => mapping(address => bool)) public founderOverrides;
 
@@ -123,8 +123,7 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
         (bool verified, bytes32 uniqueIdentifier, IZKPassportHelper helper) = verifier.verify(params);
         if (!verified || address(helper) == address(0)) revert InvalidProof();
 
-        if (usedProofIdentifiers[uniqueIdentifier]) revert ProofAlreadyUsed();
-        usedProofIdentifiers[uniqueIdentifier] = true;
+        if (uniqueIdentifierExpiry[uniqueIdentifier] > block.timestamp) revert ProofAlreadyUsed();
 
         if (
             !helper.verifyScopes(
@@ -160,6 +159,7 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
         if (expiresAt < block.timestamp) revert ProofExpired();
 
         proofExpiry[msg.sender] = expiresAt;
+        uniqueIdentifierExpiry[uniqueIdentifier] = expiresAt;
         emit ProofSubmitted(msg.sender, expiresAt);
     }
 

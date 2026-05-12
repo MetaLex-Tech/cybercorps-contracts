@@ -292,6 +292,28 @@ contract NonUSNationalityConditionTest is Test {
         condition.submitProof(params, false);
     }
 
+    function test_UniqueIdentifier_CanBeReusedAfterProofExpired() public {
+        address investor = address(0xA11CE);
+        uint256 validityPeriod = 1 days;
+
+        uint256 firstTimestamp = 1000;
+        uint256 firstExpiry = firstTimestamp + validityPeriod;
+
+        vm.warp(firstTimestamp);
+        ProofVerificationParams memory params = _buildParams(investor, firstTimestamp, validityPeriod);
+        vm.prank(investor);
+        condition.submitProof(params, false);
+
+        uint256 secondTimestamp = firstExpiry + 1;
+        vm.warp(secondTimestamp);
+
+        ProofVerificationParams memory renewalParams = _buildParams(investor, secondTimestamp, validityPeriod);
+        vm.prank(investor);
+        condition.submitProof(renewalParams, false);
+
+        assertEq(condition.proofExpiry(investor), secondTimestamp + validityPeriod);
+    }
+
     function test_SubmitProof_HappyPath() public {
         address investor = address(0xA11CE);
         uint256 proofTimestamp = block.timestamp;
