@@ -3,15 +3,16 @@ pragma solidity ^0.8.28;
 
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ShareExtension} from "../src/storage/extensions/ShareExtension.sol";
+import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 
 contract DeployShareExtensionScript is Script {
     bytes32 internal constant DEFAULT_SALT = keccak256("MetaLexCyberCorp-ShareExtension");
 
     function run() external returns (address implementation, address proxy) {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
-        address auth = vm.envAddress("AUTH_ADDRESS");
+        address auth = DeploymentConstants.coreV2(block.chainid).auth;
 
         vm.startBroadcast(deployerPrivateKey);
 
