@@ -408,16 +408,33 @@ The mapping from `ExemptionPathway` to `ICondition[]` is the same configuration 
 
 Per‑SPV additions (e.g., `QualifiedPurchaserCondition` for 3(c)(7) funds, `CFIUSCondition` for non‑fund‑exception SPVs, `LegionSoulboundCondition` for syndicate gating) are configured on the SPV's `DealManager` and inherited automatically — `OfferRegistry` does not need to know about them.
 
-### 4.4 Visibility is **not** on chain
+### 4.4 Visibility lives at the UI layer; compliance lives at settlement
 
-`OfferRegistry` storage is publicly readable. The webapp (§10) reads it through the indexer (§11) and filters by:
+**Technical observation first.** On-chain storage is publicly readable. There is no meaningful way to make `OfferRegistry` storage "invisible" to a determined reader — anyone with a node, a block explorer, or a script can read the raw slots. A `requireWhitelisted(msg.sender)` modifier in front of a `getOffer` view function would be cosmetic, because the underlying storage is reachable anyway. Real on-chain hiding would require encryption (ZK, threshold encryption), which is heavy machinery the spec's regulatory analysis does not call for.
 
-- the viewer's LeXcheX credentials (KYC, accreditation, QP, non‑US),
-- the viewer's Soulbound NFT badges (Legion's per‑SPV whitelist; §4.1.3A of the spec),
-- the viewer's seasoning timestamp,
-- per‑SPV access entitlements maintained server‑side in Legion's UI.
+So `OfferRegistry` does not pretend to gate who can read offers. It stores offers as plain state and lets the off‑chain stack decide who sees what.
 
-This separation is deliberate: putting the whitelist on chain would force the protocol to encode every SPV's eligibility logic, which doesn't compose with the "any UI can build on the same protocol" stance. The protocol enforces compliance at settlement (via `ICondition`); the UI enforces visibility at discovery.
+**Where the gates actually live.** cyberTRADE enforces two different things in two different places:
+
+1. **Visibility (off chain, in the UI + indexer).** The webapp (§10) reads offers through the indexer (§11) and the indexer filters before returning a list. The filter inputs are:
+   - the viewer's LeXcheX credentials (KYC, accreditation, QP, non‑US),
+   - the viewer's Soulbound NFT badges (Legion's per‑SPV whitelist; §4.1.3A of the spec),
+   - the viewer's seasoning timestamp (§11.1B of the spec),
+   - per‑SPV access entitlements maintained server‑side in Legion's UI.
+
+   A user who is not eligible for SPV A simply never sees SPV A's offers in their feed. This is the "no general solicitation" hygiene — the same posture Nasdaq Private Market, CAIS, and iCapital occupy by surfacing private offerings only through access-restricted portals to credentialed users (cf. E.F. Hutton 1982, Bateman Eichler 1985, IPONET 1996 line of no-action letters, discussed in spec §11.1B).
+
+2. **Compliance (on chain, in `ICondition`).** Even if a user bypassed the UI entirely — scraped the chain for an offer ID, called `OfferRegistry.acceptOffer` directly — the trade still could not *settle*. The `DealManager`'s condition set (`AccreditedInvestorCondition`, `QualifiedPurchaserCondition`, `KYCAMLCondition`, `LegionSoulboundCondition`, `NonUSPersonCondition`, etc.) would fail at finalization. Escrowed funds would return on void. This is the binding legal gate.
+
+The two layers do different jobs. Visibility keeps the offer-posting activity inside the preexisting-substantive-relationship perimeter (a §4(a)(2) / §4(a)(7) concern about *how the offer reaches users*). Compliance keeps the executed trade inside the exemption (a concern about *who is actually on the other side at closing*). Collapsing both into one on-chain ACL would give a worse contract without any additional regulatory protection, because the visibility question is about the channel, not about the data.
+
+**Why not encode the whitelist on chain anyway.** Even setting the regulatory analysis aside, on-chain eligibility logic is the wrong place:
+
+- Every whitelist add/remove becomes a gas-paying transaction; thousands of users across dozens of SPVs compounds quickly.
+- Eligibility rules vary per SPV (3(c)(1) cap, 3(c)(7) QP requirement, jurisdiction, syndicate badge, seasoning) and per pathway (4(a)(7), 144A, Reg S). Encoding the full rule space in `OfferRegistry` makes the contract brittle and SPV-specific.
+- Composability breaks. The spec is explicit that "any third party can build a UI on the same protocol" (§10.3, §11.1A). If `OfferRegistry` encoded Legion's specific whitelist logic, a whitelabel UI or fund-administrator portal couldn't use the same registry under its own access-control terms. With visibility at the UI layer, each operator independently applies its own gating under its own Covered User Interface Provider posture.
+
+**The scraper edge case.** A hostile third party could scrape on-chain offer state and republish it on a public site. If they did, *their* republication might constitute general solicitation — but the liability attaches to the republisher, not to the original offeror or to Legion. The original offer-poster's posture is governed by where they posted (Legion's access-restricted UI) and what surfacing Legion performed (only to whitelisted users), not by what a third party does later with public chain data. This is the same logic that applies to a leaked PPM: the leak does not retroactively convert a private placement into a public offering. If that asymmetry is uncomfortable for a particular deployment, the alternative is encryption (ZK offer pools, threshold-encrypted state) — substantially heavier, and not what spec §11.1B's analysis calls for.
 
 ---
 
