@@ -349,6 +349,15 @@ Both operations happen in the same transaction as payment release. No intermedia
 
 ### 3.6 Per‑token restriction hooks (§12B.2)
 
+**Hooks vs conditions — architectural distinction worth flagging.** The codebase has two orthogonal gating layers that this document occasionally conflates:
+
+| Layer | Contract type | Lives on | Fires when | Examples |
+|---|---|---|---|---|
+| **Restriction hooks** (`ITransferRestrictionHook`) | Hook contract | Cert printer (global or per-token) | ERC-721 `_update` runs (token movement) | `ToggleTransferHook`, `WhitelistTransferHook` |
+| **Conditions** (`ICondition`) | Condition contract | DealManager escrow or other operation context | Operation finalize runs (settlement, scrip conversion) | All §5 conditions; `LexChexCondition`; `NonUSNationalityCondition` |
+
+Hooks gate **token movement**; conditions gate **operations**. Under the unified pathway the seller's cert does not move during settlement, so the per-token restriction hook layer is mostly inactive during a normal cyberTRADE settlement — but it remains the correct layer for ad-hoc cert-specific transfer restrictions the GP wants to enforce (affiliate locks, jurisdiction restrictions on a specific cert, etc.). The two layers are deliberately separate; keep them so.
+
 `src/CyberCertPrinter.sol::_update`, lines around 257–264 in the current source, has the per‑token hook block commented out. The `restrictionHooksById` mapping exists in storage and has a setter, but `_update` does not evaluate it; only `globalRestrictionHook` is active.
 
 Required minimal change:
@@ -687,7 +696,7 @@ The two layers do different jobs. Visibility keeps the offer-posting activity in
 
 ---
 
-## 5. Conditions — concrete additions
+## 5. Conditions — reuse what exists, add what's missing
 
 The codebase has `src/interfaces/ICondition.sol`:
 
@@ -698,38 +707,54 @@ interface ICondition {
 }
 ```
 
-`data` is the encoded agreement ID; custom conditions read agreement parameters back through `DealManager` and `CyberAgreementRegistry`. cyberTRADE adds the conditions enumerated in §4.1.4 of the spec under `src/conditions/`:
+`data` is the encoded agreement ID; custom conditions read agreement parameters back through `DealManager` and `CyberAgreementRegistry`. The prior draft of this section listed twenty new condition contracts to build; second-pass review of `src/libs/conditions/` and `src/creds/` shows that a meaningful portion already exists and the new work is smaller than first stated.
+
+### 5.0 Existing primitives to reuse (verified)
+
+| Existing file | What it does | cyberTRADE use |
+|---|---|---|
+| `src/libs/conditions/baseCondition.sol` | Abstract `BaseCondition` base class | All new conditions extend this |
+| `src/libs/conditions/OrCondition.sol` | Logical-OR combinator over multiple conditions | Composability primitive; reuse as-is |
+| `src/libs/conditions/lexchexCondition.sol` | Checks `ILexChex.hasValidLexCheX(counterparty)` (generic "valid accreditation") | Foundation for type-specific accreditation conditions; parameterize by `investorType` filter on `Accreditation` |
+| `src/libs/conditions/NonUSNationalityCondition.sol` | zkPassport-verified non-US person check with OFAC blacklist and manager-controlled founder override | Reuse directly as the §4.1.4 / §6.5 spec "`NonUSPersonCondition`" — do not build new |
+| `src/libs/conditions/IssuerApprovalRecertificationCondition.sol` | Per-investor, per-cert approval gate (currently gates scrip-to-cert conversion) | Pattern foundation for `GPLPApprovalCondition`; generalize to gate per `dealId` rather than per `(certAddress, investor)` |
+| `src/creds/lexchex.sol` | LeXcheX core: ERC721Enumerable soulbound (ERC5484), `Accreditation` struct carrying `investorName`, `investorType`, `investorJurisdiction`, `expiryDate`, `voided`, `agreementId`; `hasValidLexCheX`, `isValid`, `getAccreditationByOwner`, `getTokenIdsByOwner` | Read directly via `ILexChex` from new conditions; **no `LeXcheXAdapter` needed**. The previously-proposed `LeXcheXNameLookup` reduces to `lexchex.accreditations(lexchex.getAccreditationByOwner(addr)).investorName` — no new contract |
+| `src/creds/lexchexMinter.sol` | Oracle-pattern minter; admin-EIP712-authorized issuance; creates `CyberAgreementRegistry` agreement alongside each accreditation; renewal flow | Reuse for the Legion-operator credentialing layer; deploy a Legion-controlled instance of LeXcheX + minter alongside the existing MetaLeX instance |
+| `src/interfaces/IZKPassportVerifier.sol`, `script/deploy-non-us-zkpassport-condition.s.sol` | zkPassport verifier interface + deploy script | Already wired into `NonUSNationalityCondition` |
+
+### 5.1 Conditions that genuinely need new code
+
+The remaining new conditions are narrower than the prior draft suggested:
 
 ```
-src/conditions/HolderCapCondition.sol
-src/conditions/AccreditedInvestorCondition.sol
-src/conditions/QualifiedPurchaserCondition.sol
-src/conditions/QualifiedInstitutionalBuyerCondition.sol
-src/conditions/KYCAMLCondition.sol
-src/conditions/HoldingPeriodCondition.sol
-src/conditions/Section4a7DisclosureCondition.sol
-src/conditions/Rule144DisclosureCondition.sol
-src/conditions/AgreementSignedCondition.sol
-src/conditions/ERISACondition.sol
-src/conditions/NonUSPersonCondition.sol
-src/conditions/RegSDistributionComplianceCondition.sol
-src/conditions/LegalOpinionCondition.sol
-src/conditions/LegionSoulboundCondition.sol
-src/conditions/CFIUSCondition.sol
-src/conditions/TaxInfoCondition.sol
-src/conditions/PriceAnomalyCondition.sol
-src/conditions/GPLPApprovalCondition.sol
-src/conditions/GlobalKillCondition.sol
-src/conditions/TimeSettlementPeriodCondition.sol
+src/conditions/HolderCapCondition.sol                    // ICA 3(c)(1) / 3(c)(7) cap check at finalize
+src/conditions/HoldingPeriodCondition.sol                // Rule 144 / Reg S hold from FundInterestExtension.acquisitionDate
+src/conditions/AccreditedInvestorCondition.sol           // ≅ LexChexCondition + filter Accreditation.investorType == ACCREDITED
+src/conditions/QualifiedPurchaserCondition.sol           // ≅ LexChexCondition + filter for QP
+src/conditions/QualifiedInstitutionalBuyerCondition.sol  // ≅ LexChexCondition + filter for QIB
+src/conditions/KYCAMLCondition.sol                       // Asserts both parties have valid LeXcheX; thin wrapper
+src/conditions/Section4a7DisclosureCondition.sol         // Checks SPV disclosure URI freshness + agreement acknowledgment
+src/conditions/Rule144DisclosureCondition.sol            // Checks Rule 144(c)(2) info package URI freshness
+src/conditions/AgreementSignedCondition.sol              // Checks CyberAgreementRegistry.isFinalized(agreementId)
+src/conditions/ERISACondition.sol                        // Reads ERISA negative attestation from agreement party values
+src/conditions/RegSDistributionComplianceCondition.sol   // Composes NonUSNationalityCondition + Reg S compliance-period elapsed
+src/conditions/LegalOpinionCondition.sol                 // Checks recorded GP/counsel sign-off or formal opinion (per-SPV configurable)
+src/conditions/CFIUSCondition.sol                        // Buyer-jurisdiction check; deployed only for non-fund-exception SPVs
+src/conditions/TaxInfoCondition.sol                      // Checks W-9/W-8BEN on file in agreement or auxiliary registry
+src/conditions/PriceAnomalyCondition.sol                 // Optional; checks trade price vs. GP-configured floor / NAV range
+src/conditions/GPLPApprovalCondition.sol                 // ≅ IssuerApprovalRecertificationCondition generalized to deal-level approval
+src/conditions/LegionSoulboundCondition.sol              // Filters Accreditation by category — see §5.4 below
+src/conditions/GlobalKillCondition.sol                   // Bilateral admin; protocol-wide; see §5.2
+src/conditions/TimeSettlementPeriodCondition.sol         // Per-deal time delay; see §5.3
 ```
 
-A few that warrant explicit mechanical detail:
+Most are 20–80 line contracts. The ones marked "≅" are parameterizations of existing primitives rather than new logic.
 
-### 5.1 `HoldingPeriodCondition`
+### 5.2 `HoldingPeriodCondition`
 
 Reads `FundInterestExtension.acquisitionDate` (and `tackedFromAcquisitionDate` if non‑zero) from the seller's cert via `CyberCertPrinter.getCertificate(tokenId).extensionData`, decodes via `FundInterestExtension`, applies the earlier date when tacking is asserted, and compares against the rule's required hold (one year for non‑reporting issuers under Rule 144; the Reg S compliance period derived from `regSCategory`). Pure on‑chain check, no oracle.
 
-### 5.2 `GlobalKillCondition` (§12B.5)
+### 5.3 `GlobalKillCondition` (§12B.5)
 
 Two admin slots: `metaLexAdmin` and `legionAdmin` (each can be an EOA or a BorgAuth role address). State:
 
@@ -746,7 +771,7 @@ Attached by `DealManagerFactory.deployDealManager(...)` to every new `DealManage
 
 This is one of the few conditions that is **constant across all deals** and shared across all DealManagers — deploy once at protocol initialization, address registered in `DealManagerFactoryStorage`.
 
-### 5.3 `TimeSettlementPeriodCondition` (§12B.6)
+### 5.4 `TimeSettlementPeriodCondition` (§12B.6)
 
 ```solidity
 struct DealClock {
@@ -760,9 +785,15 @@ uint64 delaySeconds; // default 86400
 
 Started by a hook on `DealManager` when the trigger condition first occurs. `checkCondition` returns `block.timestamp >= clock.startedAt + delaySeconds` and `clock.startedAt != 0`.
 
-### 5.4 `LegionSoulboundCondition`
+### 5.5 `LegionSoulboundCondition`
 
-Configured with a `categoryHash` (e.g., `keccak256("LEGION_SPV_A_WHITELIST")`) and an `address requiredIssuer`. Calls into `LegionSoulboundAdapter` which wraps the Soulbound NFT contract (deployed under Legion's custom credentialing layer in LeXcheX, §4.1.3A of the spec). The adapter pattern keeps the `ICondition` implementation thin and lets Legion rotate the underlying NFT contract without redeploying every condition that consumes it.
+The "Legion Soulbound NFT" of spec §4.1.3A is implemented as a **second LeXcheX deployment under Legion's operator key** — the existing `src/creds/lexchex.sol` is already soulbound (ERC5484, `BurnAuth.OwnerOnly`) and already has the `Accreditation` struct with `investorType`, `investorJurisdiction`, and other category fields. A Legion-operated instance issues Legion-specific accreditations (SPV-X whitelist, syndicate-circle badges, accredited-tier distinctions) without disturbing the canonical MetaLeX LeXcheX deployment.
+
+`LegionSoulboundCondition` is configured with: (a) the address of the Legion-operated LeXcheX contract, (b) the required `investorType` (or a custom category, if the `Accreditation` struct is extended with a `bytes32 category` field). At check time it calls `ILexChex(legionLexchex).getAccreditationByOwner(counterparty)` and asserts the returned `Accreditation` has `voided == ""`, `expiryDate >= block.timestamp`, and matches the required category.
+
+No separate "LegionSoulboundAdapter" is needed; the `ILexChex` interface is the adapter. If `Accreditation` needs a new field for fine-grained SPV-specific badges (the spec hints at "any number of categories" in §4.1.3A), it would be a forward-compatible extension to the existing storage struct via the existing namespaced-storage pattern.
+
+**Implication for the impl doc's earlier framing.** The previously-proposed `LeXcheXAdapter`, `LegionSoulboundAdapter`, and `LeXcheXNameLookup` are all unnecessary as new contracts: the canonical `ILexChex` interface plus a parallel Legion-operated deployment of the existing LeXcheX contract is the cleanest implementation. The "Legion-controlled custom credentialing layer" of spec §4.1.3A is realized by deploying LeXcheX + LeXcheXMinter with Legion's keys as the BorgAuth admin, not by writing new contracts.
 
 ---
 
@@ -841,7 +872,11 @@ The `attachAndSignAsPartyB` access control — "only the registered finalizer ca
 
 This capability is small enough to add as an additive change to `CyberAgreementRegistry` without breaking any existing primary-issuance subscription flow, which continues to use `createContract` (both parties known up-front).
 
-The template registration happens in a deploy script under `script/RegisterTradeAgreementTemplates.s.sol`. Per-trade population happens inside `OfferRegistry.postOffer` (which knows the seller, the exemption pathway, and the `globalValues` from the offer + the SPV's stored disclosure URIs) and inside `OfferRegistry.acceptOffer` (which fills in `partyBValues` and finalizes).
+The template registration follows the existing pattern in `script/template.s.sol`, `script/templatev2.s.sol`, and `script/add-spa-plus-templates.s.sol`. The new cyberTRADE templates land as `script/RegisterTradeAgreementTemplates.s.sol` modeled on these existing scripts. Per-trade population happens inside `OfferRegistry.postOffer` (which knows the seller, the exemption pathway, and the `globalValues` from the offer + the SPV's stored disclosure URIs) and inside `OfferRegistry.acceptOffer` (which fills in `partyBValues` and finalizes).
+
+**Existing templates directory.** The repo's `templates/` directory carries an extensive set of cyberSAFE / cyberSAFTE / cyberSAFT / cyberTokenWarrant variants in both Reg D and Reg S forms (`mlx_safe_reg_d_v1_3.md`, `mlx_safe_reg_s_v1_3.md`, `mlx_saft_reg_d_v1_3.md`, etc.) plus jurisdictionally-neutral variants and the MetaLeX LeXcheX Agreement. **There is no existing fund-interest subscription template and no secondary-trade template.** All five cyberTRADE trade-agreement templates are new drafting work for MetaLeX Pro. Naming convention is mixed in the existing set (`v 1.0` vs `v1_3`); the cyberTRADE templates should pick one and stick to it — recommend the `v1_3`-style file-system-friendly naming for the markdown sources, with the registered onchain `Template.title` carrying the human-readable version label.
+
+**Delegation is already in place.** `CyberAgreementRegistry.Delegation` plus the `useCyberAgreementRegistryDelegations` hook in the webapp already support a party delegating signing authority to another address with an expiry. Fund administrators or attorneys-in-fact signing on behalf of LPs is supported through this mechanism today; no additional protocol work is needed for the §4.1.6 spec language about delegation support.
 
 ---
 
@@ -941,48 +976,67 @@ Two layers (§12B.7):
 
 ## 10. Application Layer — Webapp Plan
 
-Building on what the explore agent verified about `metalex-webapp`. Almost every screen reuses an existing component or hook.
+The webapp has two distinct existing precedents that cyberTRADE inherits from for different parts of its flow:
+
+- **cyberSign** (`/cybersign/create`, `/cybersign/[chainId]/[agreementId]`) is the precedent for templated trade-agreement creation and per-party EIP-712 signing. cyberSign uses `CyberAgreementRegistry` directly, parses `globalFields` / `partyFields` from the registered template, supports delegation, and renders condition-status. **The Offer Builder and Acceptance view inherit from cyberSign**, not from CyTE.
+- **CyTE / LeXscroW** (`/lexscrow/propose`, `/lexscrow/double-token-lexscrow-agreement/[agreementAddress]`) is the precedent for **escrow deposit and settlement** — `LexScroWLite`-based two-party asset locks with finalize/void semantics. The Deposit + Settlement view inherits from CyTE's `ExecuteLexscrowAgreement`. CyTE renders a static IPFS document and is **not** a templated-agreement flow; it should not be the model for the trade-agreement creation step.
+
+The prior framing of CyTE as the "closest precedent" for the agreement step was a misreading: CyTE's `legalAgreementURI` is a single IPFS link with no globalFields/partyFields parsing, while cyberSign already implements exactly the per-party templated EIP-712 signing surface cyberTRADE needs. The correction matters because the wrong choice would force re-implementing field parsing, delegation, and per-party signature tracking that cyberSign already does.
+
+Other reusable infrastructure (verified in second-pass review):
+
+- **`useFormSession` / `FormStepsLayout` multi-step form pattern.** Used by cyberRAISE round creation. Manages step state via Jotai atoms, persists to localStorage, integrates with TanStack Form validation. The Offer Builder should reuse this for a structure→terms→review→sign flow rather than be a single-page form.
+- **`useDealsForX` hook family** (`useDealsForInvestor`, `useDealsForFounder`, `useDealsForCyberCorp`, `useDealById`, `useDealForCyberCert`, `useOpenDealsForInvestor`, `useExpiredDealsForInvestor`). These are direct precedents for cyberTRADE's `useOffersFor*` family.
+- **`useNotifications`** (`apps/cybercorps-web/src/features/notifications/hooks/useNotifications.ts`). Already aggregates pending EOIs, allocations, rejections, expirations, open deals, and finalized deals with 14-day auto-expiry. **cyberTRADE notifications plug into this; no new notification UI.** The existing pattern already avoids "specific opportunity for you" framing, which aligns with the Covered UI Provider §11.1A constraint.
+- **`useUploadPdfToPinata`** (`apps/cybercorps-web/src/features/api/upload/useUploadPdfToPinata.ts`). **Pinata is the IPFS provider.** Trade-agreement templates, disclosure packages, and any other IPFS-hosted assets go through this hook.
+- **`useCyberAgreementRegistryAgreementSummary` / `useCyberAgreementRegistryContractDetails` / `useCyberAgreementRegistryDelegations`** in `apps/web/src/features/cyber-agreement-registry/hooks/`. These already parse template field structures and read agreement / delegation state. Reused unchanged.
+- **`PublicRoundsList`** (`apps/cybercorps-web/src/app/(frame-layout)/cyberraise/public-rounds/`). The existing rounds-discovery page is the structural precedent for offer discovery under Covered UI Provider §11.5 — sortable, filterable, paginated, no recommendation labels. cyberTRADE's discover page should extend this component's pattern.
 
 ### 10.1 Offer Builder (post sell / post bid)
 
-Closely modeled on `apps/web/src/app/(frame-layout)/lexscrow/propose/_forms/ProposeLexscrowAgreement.tsx` and its design‑system form `packages/design-system/forms/ProposeLexscrowAgreementForm.tsx`. The CyTE form already captures: two parties (proposing / confirming), two locked assets, agreement URI, governing law, dispute resolution, expiry, chain. For cyberTRADE, the second party is unknown at posting, and the second asset is implicit (the consideration). Concrete reuses:
+Modeled on cyberSign's `CreateAgreementForm` (`apps/web/src/app/(frame-layout)/cybersign/create/`) combined with cyberRAISE's `CreateRoundForm` (`apps/cybercorps-web/src/features/rounds/forms/CreateRoundForm.tsx`) — both of which already do templated-agreement creation against `CyberAgreementRegistry`. The Offer Builder is a `useFormSession`-driven multi-step flow: (1) structure & exemption pathway, (2) units & consideration, (3) counterparty restrictions, (4) review & sign.
 
-- `AssetInput`, `AssetValueLabel` (units offered, payment‑token consideration).
-- `EmbeddedAgreement` for the IPFS preview of the trade template (CyTE already renders an IPFS URI).
-- `DateInputField` for `validUntil`.
-- `FormSelectField` for the exemption pathway dropdown (`Rule 144 / 4(a)(7) / 4(a)(1½) / 144A / Reg S`) — drives which template is pre‑loaded into `EmbeddedAgreement`.
-- `TransactionActionButton` for "Sign and Post Offer" / "Sign and Post Bid", calling `OfferRegistry.postOffer` via `useWriteContract` (Wagmi), with the same react‑hook‑form + Zod pattern. Per the binding-offer model (§4.6) and the symmetric framework (§4.5), the offeror's signing step at posting produces **two EIP‑712 signatures presented in a single typed‑data payload**, with the contents determined by side:
-  - **Post Sell Offer** (offeror = seller): (a) the signature on the partially-populated trade agreement (party A = seller fields), and (b) the open-endorsement signature on the seller's cert (§4.3, authorizing transfer of the offered units to whichever qualifying counterparty accepts). No payment movement at posting.
-  - **Post Bid** (offeror = buyer): (a) the signature on the partially-populated trade agreement (party A = buyer fields, including accreditation, ERISA negative attestation, info-package acknowledgment, tax-info covenant), and (b) an ERC-20 approval that lets `OfferRegistry.postOffer` pull `consideration` of `paymentToken` into a `LexScroWLite` holding escrow keyed by the new `offerId`.
+Concrete reuses:
 
-  The wallet shows both signatures in one bundled EIP‑712 prompt; the user experiences it as one signing action. The offeror will not be asked to sign again at any later step (until cancel or void, which produce their own self-contained signatures).
+- **From cyberSign**: the template-id selector, the global/party field parsing via `useCyberAgreementRegistryContractDetails`, the EIP-712 typed-data signing prompt that handles per-party values, the delegation hook (`useCyberAgreementRegistryDelegations`) for fund-admin-signs-on-behalf cases.
+- **From cyberRAISE's round form**: the `useFormSession` multi-step pattern, the asset selectors, the `requiresLexChex` and condition-attachment pattern.
+- **From CyTE's design-system forms**: `AssetInput`, `AssetValueLabel`, `EmbeddedAgreement` (for IPFS preview of the template's `legalContractUri`), `DateInputField` for `validUntil`, `FormSelectField` for the exemption pathway dropdown, `TransactionActionButton` for the signing action.
 
-What CyTE does **not** have and must be added: a "Counterparty restrictions" sub‑form (accredited‑only, QP‑only, non‑US‑person, required Soulbound category/tier, explicit allowlist). This is a small new component under `packages/design-system/forms/components/CounterpartyRestrictionsInput.tsx`.
+Per the binding-offer model (§4.6) and the symmetric framework (§4.5), the offeror's signing step at posting produces **two EIP‑712 signatures presented in a single typed‑data payload**, with the contents determined by side:
+
+- **Post Sell Offer** (offeror = seller): (a) the signature on the partially-populated trade agreement (party A = seller fields), and (b) the open-endorsement signature on the seller's cert (§4.3, authorizing transfer of the offered units to whichever qualifying counterparty accepts). No payment movement at posting.
+- **Post Bid** (offeror = buyer): (a) the signature on the partially-populated trade agreement (party A = buyer fields, including accreditation, ERISA negative attestation, info-package acknowledgment, tax-info covenant), and (b) an ERC-20 approval that lets `OfferRegistry.postOffer` pull `consideration` of `paymentToken` into a `LexScroWLite` holding escrow keyed by the new `offerId`.
+
+The wallet shows both signatures in one bundled EIP‑712 prompt; the user experiences it as one signing action. The offeror will not be asked to sign again at any later step (until cancel or void, which produce their own self-contained signatures).
+
+What neither cyberSign nor cyberRAISE has and must be added: a "Counterparty restrictions" sub‑form (accredited‑only, QP‑only, non‑US‑person, required Soulbound category/tier, explicit allowlist). This is a small new component under `packages/design-system/forms/components/CounterpartyRestrictionsInput.tsx`.
 
 Sell‑side specifics: an entry-token picker (the LP's existing `cyberCert` rows under the SPV's printer, served from the Ponder indexer's `cyberCert` table — the same data source as the existing `CertsTable.tsx` on the mainframe). The picker surfaces, per cert: `unitsRepresented`, `acquisitionDate`, `certLegend`, holding‑period status (derived from `acquisitionDate` and the fund's category).
 
 ### 10.2 Offer Discovery (browse)
 
-No CyTE precedent. New page under `apps/web/src/app/(frame-layout)/cybertrade/discover/page.tsx`. Server component pulls from `/api/offers` (new indexer route, §11), pre‑filtered by:
+Extends the existing `PublicRoundsList` pattern (`apps/cybercorps-web/src/app/(frame-layout)/cyberraise/public-rounds/`), which is already a Covered UI Provider–compliant listings page (sort/filter only, no recommendation labels, paginated, search-by-name). New page under `apps/web/src/app/(frame-layout)/cybertrade/discover/page.tsx`. Server component pulls from `/api/offers` (new indexer route, §11), pre‑filtered by:
 
 - session user's LeXcheX credentials (`useLexchexForAddress`),
-- session user's Soulbound NFT category/tier (new hook `useLegionSoulboundForAddress`, parallel to `useLexchexForAddress`),
+- session user's Legion Soulbound badge (the LeXcheX schema already supports investor-type fields; an extended `Accreditation.category` or a separate Legion-operator LeXcheX deployment carries the SPV-specific badge — see §5),
 - session user's per‑SPV whitelist entitlements (server‑side, queried from a new `user_spv_entitlements` table in the webapp DB — administered by Legion ops, not on chain),
 - session user's seasoning timestamp (set when the user finishes onboarding; gate at 30 days per §11.1B of the spec).
 
-The list view is a thin wrapper around the indexer's denormalized response. Sort/filter is user‑driven, no recommendations or "best price" labels — this is the Covered UI Provider constraint (§11.5).
+The list view is a thin wrapper around the indexer's denormalized response, mirroring `PublicRoundsList`'s structure. Sort/filter is user‑driven, no recommendations or "best price" labels — this is the Covered UI Provider constraint (§11.5).
 
 ### 10.3 Acceptance view
 
-Closely modeled on `apps/web/src/app/(frame-layout)/lexscrow/double-token-lexscrow-agreement/[agreementAddress]/_forms/SignLexscrowAgreement.tsx`. CyTE already has a per‑agreement page that:
+Modeled on cyberSign's `SignAgreementForm` (`apps/web/src/app/(frame-layout)/cybersign/[chainId]/[agreementId]/`). cyberSign already implements:
 
-- reads the agreement, shows the parties, renders the IPFS document inline,
-- runs `useSignedAgreement` to check status,
-- exposes a "confirm and adopt" call.
+- reading the agreement record, displaying party A's filled values and signature,
+- rendering party B's blank fields for the connected acceptor to fill,
+- signing as a designated party, a delegate, or an unassigned party slot,
+- displaying condition pass/fail status before signing,
+- per-party `signedAt` tracking.
 
-For cyberTRADE, the route is `apps/web/src/app/(frame-layout)/cybertrade/offer/[offerId]/page.tsx`. It adds:
+For cyberTRADE, the route is `apps/web/src/app/(frame-layout)/cybertrade/offer/[offerId]/page.tsx`. It extends cyberSign's flow with:
 
-- a compliance checklist (KYC valid, accreditation valid, non‑US valid, QP valid, Soulbound held, ERISA negative, Reg S distribution compliance, tax info) — each item rendered with the same `useLexchexForAddress` + onchain reads from the cert and SPV state,
+- a compliance checklist (KYC valid, accreditation valid, non‑US valid, QP valid, Soulbound held, ERISA negative, Reg S distribution compliance, tax info) — each item rendered via existing condition-status hooks (e.g., `useRoundConditionsState` pattern in `apps/cybercorps-web/src/features/conditions/hooks/`, parameterized for cyberTRADE's condition set instead of round conditions),
 - a 4(a)(7) information‑package acknowledgment modal that the acceptor must click‑through before the "Sign and Accept" button activates,
 - a single "Sign and Accept" action that signs an EIP-712 typed-data bundle covering the acceptor's contribution to the trade (§4.5 for the full symmetric model). The bundle contents depend on which side the user is accepting:
   - **Accepting a sell offer** (acceptor = buyer): (a) agreement-buyer-side signature; (b) ERC-20 approval allowing the trade's settlement escrow to pull `consideration` of `paymentToken` (collected on the deposit screen immediately afterward, §10.4).
@@ -1004,24 +1058,66 @@ Closely modeled on `apps/web/src/app/(frame-layout)/lexscrow/double-token-lexscr
 
 Closely modeled on `apps/cybercorps-web/src/app/(frame-layout)/cybercorps/mainframe/_components/CertsTable.tsx`. Same columns plus: active offers for the SPV (joined from the indexer's `offer` table), passing/failing condition counts per open trade, holder count vs. ICA cap with color‑coded headroom, transfer‑restriction‑hook deployment status. No "approve trade" button — the spec is explicit that GPs do not approve individual trades.
 
-### 10.6 Admin panel (Pathway F)
+### 10.6 Admin panel (Pathway F + Officer / BorgAuth management)
 
-The void / force‑transfer / lower‑Global‑Kill / propose‑Global‑Kill‑lower flows live behind a separate admin route, gated by BorgAuth role. This is **not** part of the trading UI; it lives under `apps/cybercorps-web/src/app/(frame-layout)/cybercorps/mainframe/admin/` to keep the Covered UI Provider scope clean per §11.5.
+This subsection covers a meaningful gap surfaced in the second-pass review: the webapp has **no admin UI for officer management or BorgAuth role assignment today**. The indexer tracks `OfficerAdded` / `OfficerRemoved` events on `CyberCorp` and `RoleUpdated` events on `BorgAuth`, and the `officer` and `role` tables are populated, but role management today is script-only (`script/upgrade-lexchex-minter-admin.s.sol`, etc.). cyberTRADE requires a real admin UI for two reasons: (a) the Pathway F admin actions enumerated below have no current home; (b) BorgAuth role rotation becomes operationally critical with the new `SECONDARY_TRANSFER_ROLE` granted to each SPV's DealManager (§8.1).
+
+The admin route lives under `apps/cybercorps-web/src/app/(frame-layout)/cybercorps/mainframe/admin/` and is **not** part of the trading UI — this separation keeps the Covered UI Provider scope (§11.5) clean by isolating issuer-administrator functions from the user-facing trading surface.
+
+Admin-panel responsibilities for the cyberTRADE workstream:
+
+1. **Officer management.** Add / remove officers on the SPV's cyberCORP. Surfaces the existing indexed `officer` table; new mutations call `CyberCorp.addOfficer` / `removeOfficer`. Tracks signing officers used by `CertPrinter.CertificateDetails.signingOfficerName` / `signingOfficerTitle`.
+2. **BorgAuth role assignment.** Grant and rotate the SPV's roles: GP admin, ledger administrator multisig, `SECONDARY_TRANSFER_ROLE` on the DealManager, optional `LegionSoulboundCondition` admin, optional `GPLPApprovalCondition` approver, etc. Surfaces the indexed `role` table; new mutations call `BorgAuth.updateRole`.
+3. **Pathway F operations.** Void / force-transfer / `voidCert` on specific certs, with documentation of the underlying basis (Compromised Credential Transfer voidness, court order, etc.). Each action requires a written justification field and an attached document (filed in the SPV's records via Pinata + the per-cyberCORP documents tab proposed in §10.7).
+4. **Global Kill governance.** `raiseKill()` (unilateral by either MetaLeX or Legion admin), `proposeLower()` and `confirmLower()` for the bilateral 48-hour quorum (§5.3 of this doc).
+5. **Per-SPV configuration flags.** Set / read `settlementMode`, `qmsMode`, `endorserOfRecord` (§3.4). For SPVs that need to migrate flags mid-life, the flag setters are BorgAuth-gated.
+6. **Restriction-hook configuration.** Deploy / swap / update the SPV's `globalRestrictionHook` and per-token `restrictionHooksById` (§3.6). Surfaces the existing `WhitelistTransferHook` / `ToggleTransferHook` patterns for configuration.
+
+### 10.7 Per-cyberCORP documents tab (new)
+
+Spec §4.3.1 (Rule 144(c)(2) disclosure maintenance and Section 4(a)(7) information delivery) requires the GP to publish and periodically refresh the SPV's information package, financial statements, GP underlying-asset provenance attestation (§4.1.0 of spec), and other disclosure documents. The current webapp has no per-cyberCORP documents tab; the legacy `documents` system at `apps/web/src/data/queries/documents.ts` is Borg-only and is not reusable as-is.
+
+cyberTRADE depends on this tab existing because:
+
+- The OfferRegistry's `registerSPV` check should verify the SPV's disclosure URIs are non-empty and freshly-dated.
+- The `Section4a7DisclosureCondition` and `Rule144DisclosureCondition` (§5.1) read the SPV's disclosure URI from the cyberCORP and check timestamp freshness against per-condition staleness windows.
+- The trade-agreement templates' `gpUnderlyingProvenanceAttestationHash` field (§7) must be populatable from the cyberCORP record.
+
+New work for the cyberTRADE webapp:
+
+- Per-cyberCORP documents page modeled on the legacy `documents` system but writing to a `cyberCorpDocuments` table (chain-indexed if URIs are stored on chain, server-side if not).
+- Upload via `useUploadPdfToPinata` to Pinata; URI written to the cyberCORP's metadata (PPM, financial statements, GP attestation, etc.).
+- Annual / quarterly refresh prompts surfaced via `useNotifications` for the GP.
+- Public-facing read of these URIs from the offer detail view (Section 4(a)(7) information delivery acknowledgment is recorded as a buyer-side party value at acceptance).
 
 ---
 
 ## 11. Indexer Additions
 
-The webapp uses Ponder (`apps/cybercorps-indexer/`). Schema in `ponder.schema.ts`. cyberTRADE additions:
+The webapp uses Ponder (`apps/cybercorps-indexer/`). Schema in `ponder.schema.ts`. **Existing tables verified by second-pass review:** `cyberCorp`, `officer`, `role`, `certPrinter`, `cyberCert` (with endorsements stored as JSONB), `cyberScripBalance`, `deal`, `dealCerts`, `round`, `eoi`, `pumpWrappedToken`. **Existing event handlers (~39 total)** cover CyberCorp lifecycle, BorgAuth role updates, IssuanceManager (cert creation, scrip deployment, scripification), DealManager (deal proposed/finalized/voided), RoundManager (round/EOI lifecycle), and ERC-721 transfers/endorsements/voids on CyberCert.
+
+**Critical gap surfaced in second-pass review:** `CyberAgreementRegistry` events are **not currently indexed**. There are no Ponder handlers for `AgreementCreated`, `AgreementSigned`, `AgreementFinalized`, or `AgreementVoided`. Agreement state lives only on chain and is reachable only via direct contract reads (`useCyberAgreementRegistryAgreementSummary`, etc.). cyberTRADE's offer discovery and acceptance views cannot function without indexed agreement state — listing every offer's agreement-finalized status, condition-pass status, party-B signed-at timestamp, etc., requires a queryable indexer table. **Add agreement events to the Ponder config as a discrete step (§14).**
+
+cyberTRADE additions:
 
 ```ts
 // new tables
+agreement:            {id, templateId, parties, signedAt (per-party JSONB), finalized, voided,
+                       openToMatching, legalContractUri, globalValues, partyValues, expiry,
+                       createdAt, finalizedAt, voidedAt}
+                       // ↑ critical missing primitive — see note above
 offer:                {id, spvCyberCorp, offeror, side, tokenId, units, paymentToken, consideration,
                        exemptionPathway, validUntil, restrictionsBlob, additionalTermsBlob,
-                       integrator, status, unitsAccepted, postedAt, cancelledAt, expiredAt}
+                       integrator, agreementId, offerorEndorsementSignature, bidCommitmentEscrowId,
+                       status, unitsAccepted, postedAt, cancelledAt, expiredAt}
 offer_acceptance:     {id, offerId, acceptor, units, dealId, acceptedAt}
 fix_trade_receipt:    {id (=execID), dealId, offerId, fixID, tradeDate, lastPx, lastQty,
                        currency, partyBuyer, partySeller, partyGP, exemptionBasis}
+endorsement:          {id, cyberCert, endorser, endorsee, registry, agreementId, timestamp,
+                       signatureHash, voidedAt}
+                       // ↑ optional but recommended — denormalize from cyberCert.endorsements JSONB
+                       // for "all endorsements made by address X" / "all endorsements on cert Y"
+                       // / "all endorsements with agreementId Z" query patterns
 user_spv_entitlement: {userId, spvCyberCorp, whitelistTier, addedAt, addedBy}  // off-chain only
 user_seasoning:       {userId, onboardingCompletedAt, seasoningUnlockAt}        // off-chain only
 
@@ -1033,6 +1129,8 @@ cyberCert:            + fundInterestData (decoded), lastTrade (decoded FIX), cus
 API routes mirror the existing patterns in `apps/cybercorps-indexer/src/api/rounds/rounds-routes.ts` and `deals/deals-routes.ts`:
 
 ```
+GET /api/agreements              // new — agreement-state queries
+GET /api/agreements/:agreementId
 GET /api/offers                  // filtered list, eligibility-aware via session
 GET /api/offers/:offerId
 GET /api/spvs/:cyberCorp/offers  // per-SPV
@@ -1042,6 +1140,8 @@ GET /api/spvs/:cyberCorp/fix-receipts
 ```
 
 Eligibility filtering for `/api/offers` is server‑side: the route joins `user_spv_entitlement`, `user_seasoning`, and the user's LeXcheX credential cache; it never returns an offer the user is ineligible to see. This is the implementation of the spec's "UI‑level visibility gating" (§4.4, §11.1B).
+
+**IPFS storage.** The webapp uses Pinata via `apps/cybercorps-web/src/features/api/upload/useUploadPdfToPinata.ts`. Trade-agreement templates, disclosure packages, and the GP underlying-asset provenance attestation document all live on Pinata. The indexer does not pin IPFS content directly; URIs are recorded as fields on the agreement / cyberCorp / cyberCert records and resolved at render time. Operationally, Pinata API key management lives in the webapp's environment configuration; pricing scales with the volume of cyberTRADE templates and per-SPV disclosure packages.
 
 A keeper component (separate Node process, deployed alongside the indexer) does two things:
 
@@ -1056,8 +1156,8 @@ Both auto-finalize and auto-void are convenience layers, not trust layers: eithe
 
 Items the spec lists as future enhancements that are not in this implementation detail:
 
-- **Scrip Token layer (§13).** No `CyberScrip` changes proposed; existing `src/CyberScrip.sol` is untouched. If/when scrip is adopted as a trading instrument for fund interests, it sits alongside the secondary trade primitives, not inside them.
-- **AMM liquidity for scrip (§13A).** Out of scope.
+- **Scrip Token layer (§13).** No `CyberScrip` changes proposed for cyberTRADE. Note: `src/CyberScrip.sol` already exists in the codebase with compliance flags (`canForceTransfer`, `canForceBurn`, `canFreeze`), transfer-hook integration, and `_update` overrides — more than the spec's "future enhancement" framing implies. If/when scrip is adopted as a trading instrument for fund interests, the foundation is in place; the new work is scrip-to-cert conversion semantics for the fund context and any tax/PTP accommodations.
+- **AMM liquidity for scrip (§13A).** Out of scope for cyberTRADE. Note: `src/hooks/uniswap/MetalexIssuerFeeHook.sol` already exists as a Uniswap v4 hook skeleton in the codebase — the §13A AMM is partially scaffolded at the protocol layer, not greenfield. If §13A is adopted in the future, this hook is the natural starting point.
 - **Tag‑along / drag‑along / ROFR.** Not assumed for the initial SPVs (Addendum B).
 - **Manual per‑trade GP consent.** Generalized into `GPLPApprovalCondition` (§5), deployed only on SPVs whose governing documents require it (Addendum C). The condition exists in the protocol layer; no UI work beyond a "GP approval pending" status row in the trade detail view.
 - **QMS mode (§4.7).** Architected for via the `qmsMode` flag on offers, `qmsListedAt` timestamp, and the cool-off behavior on `AgreementSignedCondition` and `TimeSettlementPeriodCondition`. Not built in the initial deployment. The initial deployment relies on the §1.7704‑1(h) private-placement safe harbor for 3(c)(1) funds and on facts-and-circumstances analysis for 3(c)(7) funds. Build QMS mode when (i) a 3(c)(7) deployment with high turnover lands, or (ii) counsel for a particular SPV requires the belt-and-suspenders treatment.
@@ -1072,7 +1172,7 @@ Items in v2.04 that should be corrected or refined when the spec is next revised
 2. **§12B.2 per‑token restriction hooks.** Spec says the block in `_update` is "commented out" — verified correct (around lines 257–264 of the current `CyberCertPrinter.sol`). The `restrictionHooksById` storage and setter functions exist; only the read in `_update` is dormant. Spec is accurate.
 3. **§4.2 `safeMint` vs `safeMintAndAssign`.** Spec correctly identifies that `safeMint` leaves `OwnerDetails.name` empty — verified. Implementation must use `safeMintAndAssign` everywhere, including the secondary‑settlement mint. The spec calls this out in §7.5; reinforce in implementation reviews.
 4. **§7.6 / §12B.7 FIX field location.** Spec is ambivalent about whether FIX fields live on the core `CertificateDetails` or on `FundInterestExtension`. This detail document recommends extension (§1.4), to minimize the blast radius of the change and stay consistent with the existing pattern where security‑class‑specific data lives in the extension.
-5. **§8 reference to CyTE.** Spec states CyTE is at "`app.metalex.tech/lexscrow/propose`" and acts as the closest precedent — URL verified correct. Note however that CyTE itself does **not** integrate cyberSign explicitly; it calls `confirmAndAdoptAgreement` on the LeXscroW contract, which performs the signature inline. cyberRAISE is the actual precedent for cyberSign‑style template signing. cyberTRADE should pattern its agreement‑population step after cyberRAISE's subscription‑agreement flow, not CyTE's static IPFS document flow, because the trade agreement must carry per‑trade `globalValues` populated through `CyberAgreementRegistry.createContract`.
+5. **§8 reference to CyTE — partially wrong as a precedent.** Spec states CyTE is at "`app.metalex.tech/lexscrow/propose`" and acts as the closest precedent for the agreement-and-escrow steps — URL verified correct. CyTE is the right precedent for the **escrow + deposit + settlement** half of cyberTRADE (`LexScroWLite`-based two-party locks with finalize/void). It is the wrong precedent for the **trade-agreement creation** half: CyTE renders a single static IPFS `legalAgreementURI` and does not use the `CyberAgreementRegistry` template-with-globalFields/partyFields machinery that cyberTRADE needs. The correct webapp precedent for cyberTRADE's agreement creation and signing is **cyberSign** (routes `/cybersign/create` and `/cybersign/[chainId]/[agreementId]`), which already implements templated-agreement creation, per-party value population, EIP-712 typed-data signing, delegation, and condition-status display. The impl doc's §10 reflects this corrected mapping. The spec's §8 reference should similarly be updated to point at cyberSign as the agreement-creation precedent and CyTE as the escrow-deposit-settlement precedent — they are different precedents for different halves of the flow.
 6. **§4.2.2 `acquisitionDate` placement.** Spec proposes adding to `CertificateDetails` "preferable" — this detail document recommends the extension (§1 above). Both are workable; placement in the extension is lower‑risk for the cyberTRADE workstream because it doesn't touch shared core storage.
 7. **§12 reference to `OfferRegistry`.** Spec correctly notes none exists. New file `src/OfferRegistry.sol` proposed in §4 above.
 8. **§10 reference to `CertsTable`.** The webapp already has a serviceable cap‑table view (`apps/cybercorps-web/src/app/(frame-layout)/cybercorps/mainframe/_components/CertsTable.tsx`); the GP monitoring view extends this rather than building new.
@@ -1085,29 +1185,68 @@ Items in v2.04 that should be corrected or refined when the spec is next revised
 
 14. **`endorsementRequired = true` precondition for SPVs using cyberTRADE.** The endorsement-lock that protects a Direct Custody seller's cert during pendency (§4.4) depends on `CyberCertPrinter._update` enforcing the `endorsementRequired` check. SPVs whose cert printers were initialized with `endorsementRequired = false` would silently lack this protection — the materialized endorsement at `acceptOffer` would be recorded but not enforced as a transfer lock, allowing the seller to move the cert mid-pendency. The OfferRegistry's `registerSPV` function therefore enforces `CyberCertPrinter.endorsementRequired() == true` and reverts otherwise. SPVs that wish to use cyberTRADE for secondary trading must enable this flag at cert-printer initialization (preferable) or via the printer's setter (if available) before SPV registration. The spec's §4.4 / §9 should reflect this precondition in the SPV-onboarding checklist.
 
+15. **Spec assumes embedded / MPC wallet infrastructure exists; it does not.** Spec §4.2.2 says LPs who elect Administered Custody "do not need wallets; their ownership is recorded in Ledger Entry Token metadata and they interact through a conventional web interface." This implies a Legion-provisioned MPC wallet that signs on the LP's behalf after web authentication. **No such infrastructure exists in the webapp today** — the EVM provider stack is ConnectKit + wagmi (`apps/cybercorps-web/src/features/providers/EvmProviders.tsx`), which requires the user to bring their own self-custodial wallet. Building MPC integration (Privy, Web3Auth, Magic, Turnkey, or equivalent) is a multi-week dependency for cyberTRADE that the spec treats as a given. The Covered UI Provider statement (§11.5) requires the wallet to be "self-custodial," which MPC patterns can satisfy if the user controls one key shard via their authentication provider — but the integration choice and operational model need to be made. The spec should explicitly call this out as an onboarding-infrastructure dependency.
+
+16. **Spec assumes cap-table import infrastructure exists.** Phase 2 Option C (§4.2.3) describes existing funds migrating to the protocol via bulk minting of Ledger Entry Tokens with historical `acquisitionDate` per LP. **No bulk-import flow exists in the webapp.** The current cert-minting pattern is event-driven (via `IssuanceManager:CertificateCreated`), one cert at a time, in the context of a `RoundManager.allocateEOIs` call. A new bulk-import workflow is required: GP uploads CSV/JSON of LP records (name, wallet, units, original acquisition date, capital contribution), webapp invokes a batched mint via `IssuanceManager.safeMintAndAssign` per row, with `FundInterestExtension.acquisitionDate` populated from the imported data. The spec should call this out as a build item under Phase 2 Option C.
+
+17. **Spec assumes per-cyberCORP disclosure-document infrastructure exists.** Spec §4.3.1 (Rule 144(c)(2) and Section 4(a)(7) information delivery) requires the GP to maintain a current information package — business description, GP names, outstanding units, financial statements, GP underlying-asset provenance attestation. **The current webapp has no per-cyberCORP documents tab**; the legacy `documents` system (`apps/web/src/data/queries/documents.ts`) is Borg-only. The cyberTRADE workstream depends on this being built (§10.7 of this doc). The spec should explicitly flag this as a build dependency, not assume it.
+
+18. **Spec references "existing FIX integration on the issuer side" (§12B.7) — no such integration found.** Second-pass review of `metalex-tech/cybercorps-contracts` and `metalex-tech/metalex-webapp` found no existing FIX protocol integration anywhere. This appears to be either (a) aspirational drafting language, (b) a reference to a planned-but-unbuilt component, or (c) an error in the spec. The cyberTRADE workstream introduces the first FIX-format metadata anywhere in the stack, with `FundInterestExtension.lastTrade` (§1.4) and the `FIXTradeReceipt` event (§9). The spec language should be updated to reflect that the FIX integration is being introduced by cyberTRADE, not extending an existing one.
+
+19. **`CyberShares.sol` exists as a partial implementation in the codebase.** `src/CyberShares.sol` (340 lines) is a hybrid ERC20 + ERC721-like share-class layer with `formCertificateFromShares` / `voidToShares` interfaces, currently incomplete (`certificateTokenURI` returns empty string, key logic stubbed). It is not referenced in the spec or in this impl doc. Decision point before committing to the `FundInterestExtension` build path of §1: (a) does the project want to complete `CyberShares.sol` and use it as the foundation for fund-interest shares (fungible LP units with an optional per-LP cert layer)? (b) or treat fund interests as pure cert-with-extension on the existing `CyberCertPrinter`? This document assumes (b); option (a) would be a meaningfully different architecture and should be confirmed-or-rejected before the FundInterestExtension work starts.
+
+20. **Storage namespacing discipline as a quasi-spec requirement.** Every stateful contract in the codebase uses `keccak256("metalex.<contract>.storage.v<N>")` as a namespaced storage slot via a dedicated `*Storage.sol` library (see `src/storage/`). This pattern enables non-breaking upgrades and is enforced by the upgrade migration scripts (`script/upgrade-legacy-*.s.sol`). All new contracts in the cyberTRADE workstream (`OfferRegistry`, `FundInterestExtension`, every new `ICondition`, the bid holding escrow extension) must follow this pattern. The spec should reference this as the protocol's upgrade discipline so it's not silently dropped by new contributors.
+
 ---
 
 ## 14. Sequenced Delivery Plan
 
-A pragmatic order of work that lets each step ship independently:
+A pragmatic order of work that lets each step ship independently. Three workstreams run in parallel: protocol-layer (contracts), application-layer (webapp), and operational-infrastructure (indexer, keeper, ops tooling).
 
-1. **`FundInterestExtension`** + encoding helpers in webapp. Mergeable; immediately unblocks primary issuance of fund interests through cyberRAISE.
+**Protocol-layer (cybercorps-contracts).**
+
+1. **`FundInterestExtension`** + encoding helpers in webapp. Mergeable; immediately unblocks primary issuance of fund interests through cyberRAISE. *Decision gate: confirm-or-reject the `CyberShares.sol` alternative path (§13 item 19) before starting.*
 2. **`acquisitionDate` / `tackedFromAcquisitionDate` plumbing** in the extension and the round‑close flow (cyberRAISE side). Tested by minting fund certs and asserting the date is the round close date, not the mint date.
 3. **Activate per‑token restriction hooks** in `CyberCertPrinter._update`. Behind a printer-level feature flag if needed to avoid disturbing existing deployments.
 4. **`GlobalKillCondition` + `TimeSettlementPeriodCondition`**. Deployed and attached‑by‑default by `DealManagerFactory`. No behavioral effect on primary issuance because they pass when not raised / once delay elapses.
 5. **`DealManagerFactory` integrator whitelist + per‑deal `feeDestination`**. No behavioral change to existing deployments because `defaultIntegrator == 0` and `feeDestination == 0` keep the legacy flow.
 6. **`DealManager` secondary trade mode** (`tradeType`, `sellerAddress`, `xferIntent`, payment-only escrow, payment routing to seller, fee split — §3.2). `corpAssets` empty for secondary trades; no NFT deposit step.
-7. **`IssuanceManager.executeSecondaryTransfer`** entry point (§8). BorgAuth‑gated to the SPV's DealManager. Implements the unified mutate‑and‑mint with endorsement‑lock and FIX stamping. The `attachOpenEndorsement` helper that `OfferRegistry.acceptOffer` calls also lives in `IssuanceManager`.
+7. **`IssuanceManager.executeSecondaryTransfer`** entry point (§8). BorgAuth‑gated to the SPV's DealManager via `SECONDARY_TRANSFER_ROLE`. Implements the unified mutate‑and‑mint with endorsement‑lock and FIX stamping. The `attachOpenEndorsement` helper that `OfferRegistry.acceptOffer` calls also lives in `IssuanceManager`.
 8. **`CyberAgreementRegistry` additive surface** (`createOpenAgreement`, `attachAndSignAsPartyB`, `openToMatching` flag — §7.1). No change to existing `createContract` flow; primary issuance unaffected.
-9. **Trade agreement templates** registered in `CyberAgreementRegistry`.
-10. **Remaining `ICondition` implementations** (Holding period, accredited, KYC, ERISA, NonUS, RegS, holder cap, tax info, Soulbound, CFIUS, price anomaly, GPLP approval, 4(a)(7) disclosure, Rule 144 disclosure, legal opinion, 144A QIB).
-11. **`OfferRegistry`** contract (§4), including: the pre‑signed open‑endorsement signature storage and `acceptOffer` → `attachOpenEndorsement` + `attachAndSignAsPartyB` + `proposeSecondaryDeal` orchestration for sell-side initiation; the bid-commitment holding escrow opened at `postOffer` and migrated into the trade settlement escrow at `acceptOffer` for buy-side initiation (§4.5). Both sides share the same `Offer` storage struct, the same agreement-template registry, the same condition set, and the same downstream settlement code.
-12. **Indexer schema additions** (Ponder).
-13. **Webapp UI**: offer builder → discovery → acceptance → deposit/settlement → GP monitoring. Components inherited from `ProposeLexscrowAgreementForm`, `SignLexscrowAgreement`, `ExecuteLexscrowAgreement`, `CertsTable`, `useLexchexForAddress`, `useFeeBasisPoints`. EIP‑712 typed‑data bundling at `postOffer` (agreement signature + open‑endorsement signature in one wallet prompt) is the only new signing pattern.
-14. **Keeper + FIX receipt event consumer**.
-15. **Pathway F admin panel** for void / force transfer / Global Kill governance.
+9. **Trade agreement templates** registered in `CyberAgreementRegistry` via a new `script/RegisterTradeAgreementTemplates.s.sol` modeled on `script/template.s.sol` / `templatev2.s.sol`. Markdown sources land in `templates/`.
+10. **New `ICondition` implementations** (§5.1). Smaller list than the prior draft enumerated: extend `LexChexCondition` for accredited / QP / QIB; reuse `NonUSNationalityCondition` and `IssuerApprovalRecertificationCondition`. New code: `HolderCapCondition`, `HoldingPeriodCondition`, `KYCAMLCondition`, `Section4a7DisclosureCondition`, `Rule144DisclosureCondition`, `AgreementSignedCondition`, `ERISACondition`, `RegSDistributionComplianceCondition`, `LegalOpinionCondition`, `CFIUSCondition`, `TaxInfoCondition`, `PriceAnomalyCondition`, `GPLPApprovalCondition`, `LegionSoulboundCondition`. All follow the existing storage-namespacing discipline (§13 item 20).
+11. **`OfferRegistry`** contract (§4), including: the pre‑signed open‑endorsement signature storage and `acceptOffer` → `attachOpenEndorsement` + `attachAndSignAsPartyB` + `proposeSecondaryDeal` orchestration for sell-side initiation; the bid-commitment holding escrow opened at `postOffer` and migrated into the trade settlement escrow at `acceptOffer` for buy-side initiation (§4.5). Both sides share the same `Offer` storage struct, the same agreement-template registry, the same condition set, and the same downstream settlement code. SPV registration enforces `CyberCertPrinter.endorsementRequired() == true` (§13 item 14).
+12. **`FundSPVFactory`** extending `PumpCorpFactory` (§13 item 20 architecture; details in §15). Bundles SPV-specific subscription template + cyberCORP + IssuanceManager + DealManager + RoundManager into a single EIP-712-bundled deployment.
 
-Items 1–4 are protocol upgrades with no functional change to existing flows; they can land on `main` without coordinating with the webapp. Item 5 is the first change that requires coordinated webapp release (the integrator address must be supplied somewhere). Items 6–11 are the secondary‑trade core; items 12–15 are the UI / operations layer. The legacy NFT‑escrow opt-in (§3.4) and QMS mode (§4.7) are deferred enhancements that ride on top of this sequence and are not built in the initial deployment.
+**Operational-infrastructure (indexer / keeper / ops).**
+
+13. **Indexer schema additions and CyberAgreementRegistry event handlers** (Ponder). Adds the `agreement`, `offer`, `offer_acceptance`, `fix_trade_receipt`, optional `endorsement` denormalized table, plus off-chain `user_spv_entitlement` and `user_seasoning`. **CyberAgreementRegistry event handlers are net-new — they are not in the current Ponder config and are a prerequisite for cyberTRADE's UI to function** (§13 item 18 of this doc, §11 of impl doc).
+14. **Keeper service.** Auto-finalize on ready conditions + auto-void on expiry (both trade settlement escrows and bid-commitment holding escrows). Convenience layer, not trust layer.
+15. **MPC / embedded-wallet integration.** Privy, Web3Auth, Magic, Turnkey, or equivalent. Multi-week dependency that the spec implicitly assumes. Must satisfy the Covered UI Provider statement's "self-custodial wallet" condition (user controls at least one key shard via auth provider). Required for any LP/buyer who does not bring their own wallet.
+
+**Application-layer (metalex-webapp).**
+
+16. **`useUploadPdfToPinata` reuse and Pinata API key allocation.** Trade-agreement templates and disclosure packages all flow through this. Existing infrastructure; only ops setup required.
+17. **Per-cyberCORP documents tab** (§10.7). Build the disclosure-document management UI required by spec §4.3.1 — no current equivalent for cyberCORP (legacy `documents` system is Borg-only).
+18. **Cap-table import workflow.** Bulk-mint UI for migrating offchain LP records to onchain certs with historical `acquisitionDate` capture (Phase 2 Option C of spec; §13 item 16 of this doc).
+19. **Officer / BorgAuth admin UI.** Surfaces the indexed `officer` and `role` tables; CRUD operations call the corresponding contract functions. Prerequisite for the admin panel (§10.6) and for cyberTRADE's BorgAuth role rotation (e.g., `SECONDARY_TRANSFER_ROLE`).
+20. **Per-SPV settings / config panel.** Renders and mutates `settlementMode`, `qmsMode`, `endorserOfRecord`, plus existing flags (`requiresLexChex`, etc.). Lives under the cyberCORP admin route.
+21. **Webapp UI for cyberTRADE itself.**
+    - **Offer Builder** modeled on cyberSign's `CreateAgreementForm` + cyberRAISE's `CreateRoundForm` (using `useFormSession` multi-step pattern); CyTE design-system components for asset / date / select inputs (§10.1).
+    - **Discovery view** extending `PublicRoundsList` (§10.2).
+    - **Acceptance view** modeled on cyberSign's `SignAgreementForm` (§10.3).
+    - **Deposit + Settlement view** modeled on CyTE's `ExecuteLexscrowAgreement` (§10.4).
+    - **GP Monitoring** extending `CertsTable` (§10.5).
+22. **Notifications integration.** Plug cyberTRADE state changes (offer posted, accepted, ready to deposit, ready to settle, expired) into the existing `useNotifications` aggregator (`apps/cybercorps-web/src/features/notifications/`).
+23. **Pathway F admin panel** for void / force transfer / Global Kill governance (§10.6).
+
+**Sequencing notes.**
+
+- Items 1–4 are protocol upgrades with no functional change to existing flows; they can land on `main` without coordinating with the webapp.
+- Item 5 is the first change that requires coordinated webapp release (the integrator address must be supplied somewhere).
+- Items 6–12 are the secondary‑trade protocol core; items 13–15 are operational infrastructure; items 16–23 are application layer.
+- Items 15 (MPC wallets) and 17 (disclosure documents) are large dependencies that the spec assumes exist; they need to land before any cyberTRADE flow is end-to-end functional.
+- The legacy NFT‑escrow opt-in (§3.4) and QMS mode (§4.7) are deferred enhancements that ride on top of this sequence and are not built in the initial deployment.
 
 ---
 
@@ -1126,24 +1265,64 @@ Contracts repo (`metalex-tech/cybercorps-contracts`):
 - `src/storage/extensions/ShareExtension.sol` — the template to clone for `FundInterestExtension`.
 - `src/storage/extensions/{SAFE,SAFTE,SAFT,TokenWarrant,ACESAFE}Extension*.sol` — additional patterns to study; ACESAFE in particular for fund/pump denomination handling.
 - `src/hooks/transfer/{BaseTransferHook,ToggleTransferHook,WhitelistTransferHook}.sol` — restriction hook patterns.
+- `src/hooks/uniswap/MetalexIssuerFeeHook.sol` — Uniswap v4 hook skeleton; deferred §13A scrip-AMM groundwork.
 - `src/libs/auth.sol`, `src/storage/BorgAuthStorage.sol` — BorgAuth role wiring.
-- `src/creds/` — adapter pattern for off‑chain credential reads (LeXcheX); add `LegionSoulboundAdapter.sol` and `LeXcheXFundInterestAdapter.sol` here.
+- `src/libs/conditions/{baseCondition,lexchexCondition,OrCondition,NonUSNationalityCondition,IssuerApprovalRecertificationCondition}.sol` — **existing condition primitives to extend, not duplicate** (§5.0).
+- `src/creds/lexchex.sol`, `src/creds/lexchexMinter.sol`, `src/creds/storage/lexchexStorage.sol` — LeXcheX core; `Accreditation` struct already carries `investorName` / `investorType` / `investorJurisdiction` / `expiryDate`; soulbound (ERC5484); LeXcheXMinter is the oracle pattern. No `LeXcheXAdapter` / `LegionSoulboundAdapter` / `LeXcheXNameLookup` needed; use `ILexChex` directly. Legion's custom credentialing layer is a parallel LeXcheX deployment.
+- `src/interfaces/{ILexChex,IZKPassportVerifier,ICondition,ITransferRestrictionHook,ICertificateConverter}.sol` — already-defined interfaces.
+- `src/PumpCorpFactory.sol`, `src/CyberCorpFactory.sol`, `src/CyberCorpSingleFactory.sol`, `src/MetaDAOFactory.sol`, `src/ParentCoFactory.sol` — factory landscape. `FundSPVFactory` extends `PumpCorpFactory` (closest existing analog to a fund-SPV factory).
+- `src/CyberShares.sol`, `src/storage/CyberSharesStorage.sol` — partial implementation; decision gate before FundInterestExtension build (§13 item 19).
+- `src/CyberScrip.sol`, `src/storage/CyberScripStorage.sol` — existing scrip implementation with compliance flags; foundation for any future scrip-trading layer.
+- `src/converters/SafeCertificateConverter.sol` — converter pattern reference.
+- `src/{CyberCorp,DealManager,IssuanceManager}WithMigration.sol`, `src/helpers/RoundManagerUpgradeHelper.sol` — migration pattern for upgrading existing deployments; cyberTRADE protocol changes land as new `*WithMigrationV2` contracts via this pattern.
+- `script/{template,templatev2,add-spa-plus-templates}.s.sol` — existing template-registration script pattern; new cyberTRADE templates follow this. `script/deploy-non-us-zkpassport-condition.s.sol` shows how to deploy a condition. `script/upgrade-legacy-*.s.sol` files are the migration playbook.
+- `templates/` — existing markdown sources for cyberSAFE/cyberSAFTE/cyberSAFT/cyberTokenWarrant Reg D/Reg S variants; cyberTRADE templates land here under a consistent naming convention.
 
 Webapp (`metalex-tech/metalex-webapp`):
 
-- `apps/web/src/app/(frame-layout)/lexscrow/propose/_forms/ProposeLexscrowAgreement.tsx` — CyTE form container.
-- `packages/design-system/forms/ProposeLexscrowAgreementForm.tsx` — CyTE form UI.
-- `packages/design-system/forms/components/` — `AssetInput`, `PartyHeader`, `EmbeddedAgreement`, `TransactionActionButton`, `ExpiryCard`, `SummaryBox`.
+**cyberSign — primary precedent for trade-agreement creation and signing (§10.1, §10.3):**
+- `apps/web/src/app/(frame-layout)/cybersign/create/` — `CreateAgreementForm` (templated agreement creation).
+- `apps/web/src/app/(frame-layout)/cybersign/[chainId]/[agreementId]/` — `SignAgreementForm` (per-party EIP-712 signing, delegation, condition-status display).
+- `apps/web/src/features/cyber-agreement-registry/hooks/useCyberAgreementRegistry.ts` — `useCyberAgreementRegistryAgreementSummary`, `useCyberAgreementRegistryContractDetails`, `useCyberAgreementRegistryDelegations`.
+
+**CyTE / LeXscroW — precedent for escrow deposit and settlement (§10.4):**
+- `apps/web/src/app/(frame-layout)/lexscrow/propose/_forms/ProposeLexscrowAgreement.tsx` — escrow proposal form (not the agreement-templating precedent).
+- `apps/web/src/app/(frame-layout)/lexscrow/double-token-lexscrow-agreement/[agreementAddress]/_forms/ExecuteLexscrowAgreement.tsx` — escrow deposit + finalize flow.
+- `apps/web/src/app/(frame-layout)/lexscrow/_hooks/{useFeeBasisPoints,useEscrowBalance,useLexscrowsForAddress,useAgreementDetails,useSignedAgreement,useReadFees}.ts` — escrow read-side hooks.
+
+**Design-system components (reusable across cyberSign and CyTE):**
+- `packages/design-system/forms/components/` — `AssetInput`, `AssetValueLabel`, `PartyHeader`, `EmbeddedAgreement`, `TransactionActionButton`, `ExpiryCard`, `SummaryBox`.
 - `packages/design-system/forms/fields/{DateInputField,FormSelectField,FormSelectOrInputField}.tsx`.
-- `apps/web/src/app/(frame-layout)/lexscrow/double-token-lexscrow-agreement/[agreementAddress]/_forms/{SignLexscrowAgreement,ExecuteLexscrowAgreement}.tsx` — countersign + deposit/finalize.
-- `apps/web/src/app/(frame-layout)/lexscrow/_hooks/{useFeeBasisPoints,useEscrowBalance,useLexscrowsForAddress,useAgreementDetails,useSignedAgreement,useReadFees}.ts` — read-side hooks.
-- `apps/cybercorps-web/src/features/rounds/forms/CreateRoundForm.tsx` — round configuration; the closest precedent for cyberTRADE's exemption/template selection UX (it picks a `templateId` and an extension contract per round).
+
+**cyberRAISE — multi-step form pattern and extension-data encoding:**
+- `apps/cybercorps-web/src/features/rounds/forms/CreateRoundForm.tsx` — round configuration; multi-step form precedent.
 - `apps/cybercorps-web/src/features/rounds/hooks/{useSubmitEOI,useAllocate,useCloseRoundNow}.ts` — flow patterns and Wagmi usage.
-- `apps/cybercorps-web/src/features/api/lexchex/useLexchexForAddress.ts` — credential check; the model for the new `useLegionSoulboundForAddress`.
+- `apps/cybercorps-web/src/features/forms/session/useFormSession.ts`, `FormStepsLayout`, `useFormSessionRouter` — **reusable multi-step form pattern with Jotai-atom state and localStorage persistence**; basis for cyberTRADE's Offer Builder.
 - `apps/cybercorps-web/src/features/forms/form-builder/helpers/extensionData.ts` — extension encoder dispatch; add `encodeFundInterestExtensionData`.
-- `apps/cybercorps-web/src/app/(frame-layout)/cybercorps/mainframe/_components/CertsTable.tsx` — GP cap‑table view; the basis for GP monitoring.
-- `apps/cybercorps-indexer/ponder.schema.ts` — indexer schema; new `offer`, `offer_acceptance`, `fix_trade_receipt`, `user_spv_entitlement`, `user_seasoning` tables go here.
-- `apps/cybercorps-indexer/src/api/{rounds,deals,cybercerts,cybercorps}/...-routes.ts` — REST route patterns; new `offers-routes.ts` follows them.
+
+**Listings / discovery (precedent for §10.2):**
+- `apps/cybercorps-web/src/app/(frame-layout)/cyberraise/public-rounds/` — `PublicRoundsList`; sortable/filterable/paginated Covered-UI-Provider-compliant listings page.
+
+**Hooks for cyberTRADE to extend:**
+- `apps/cybercorps-web/src/features/api/lexchex/useLexchexForAddress.ts` — credential check via `ILexChex.hasValidLexCheX`. Read other accreditation fields directly via `ILexChex.getAccreditationByOwner` + `accreditations(tokenId)` — no new adapter hook needed.
+- `apps/cybercorps-web/src/features/api/upload/useUploadPdfToPinata.ts` — **Pinata is the IPFS provider**. Trade-agreement templates, disclosure packages, and GP attestation documents flow through this hook.
+- The `useDealsForX` family (`useDealsForInvestor`, `useDealsForFounder`, `useDealsForCyberCorp`, `useDealById`, `useDealForCyberCert`, `useOpenDealsForInvestor`, `useExpiredDealsForInvestor`) — precedent for `useOffersFor*` family.
+- `apps/cybercorps-web/src/features/conditions/hooks/useRoundConditionsState.ts` — condition-status hook pattern; parameterize for cyberTRADE's condition set.
+
+**Notifications (existing aggregator to plug into, §10.x):**
+- `apps/cybercorps-web/src/features/notifications/hooks/useNotifications.ts` — aggregates EOI, deal, and round state changes with 14-day auto-expiry. cyberTRADE state changes plug into this; **no new notification UI needed**.
+
+**GP / admin / cap table:**
+- `apps/cybercorps-web/src/app/(frame-layout)/cybercorps/mainframe/_components/CertsTable.tsx` — GP cap-table view; basis for GP monitoring (§10.5).
+- `apps/cybercorps-web/src/app/(frame-layout)/cybercorps/admin/` — existing admin route; basis for the expanded admin panel (§10.6) and SPV settings panel.
+
+**Indexer (Ponder):**
+- `apps/cybercorps-indexer/ponder.schema.ts` — indexer schema; new `agreement`, `offer`, `offer_acceptance`, `fix_trade_receipt`, optional `endorsement` tables go here. Existing tables: `cyberCorp`, `officer`, `role`, `certPrinter`, `cyberCert`, `cyberScripBalance`, `deal`, `dealCerts`, `round`, `eoi`, `pumpWrappedToken`.
+- `apps/cybercorps-indexer/ponder.config.ts` — event-handler registration; **add `CyberAgreementRegistry` handlers** (gap surfaced in second-pass review, §13 item 18).
+- `apps/cybercorps-indexer/src/api/{rounds,deals,cybercerts,cybercorps}/...-routes.ts` — REST route patterns; new `offers-routes.ts` and `agreements-routes.ts` follow them.
+
+**EVM provider stack (relevant to MPC integration §14 step 15):**
+- `apps/cybercorps-web/src/features/providers/EvmProviders.tsx` — current ConnectKit + wagmi stack; **no MPC / embedded-wallet integration exists yet**.
 
 These pointers, plus the structural changes in §3–§11, are the bridge from the v2.04 spec to a working implementation that fits the cybercorps protocol and the metalex webapp as they exist today.
 
