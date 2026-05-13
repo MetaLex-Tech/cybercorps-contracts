@@ -143,6 +143,7 @@ contract NonUSNationalityCondition is BaseCondition, UUPSUpgradeable, BorgAuthAC
         );
 
         uint256 validityPeriod = params.serviceConfig.validityPeriodInSeconds;
+        if (validityPeriod > maxValidityPeriod) revert MaxValidityPeriodExceeded();
         uint256 expiresAt = proofTimestamp + validityPeriod;
         if (expiresAt < block.timestamp) revert ProofExpired();
         if (expiresAt > block.timestamp + maxValidityPeriod) revert MaxValidityPeriodExceeded();

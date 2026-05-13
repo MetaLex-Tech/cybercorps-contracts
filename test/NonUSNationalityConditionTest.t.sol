@@ -348,6 +348,20 @@ contract NonUSNationalityConditionTest is Test {
         condition.submitProof(_buildParams(investor, firstExpiry, validityPeriod), false);
     }
 
+    function test_RevertWhen_StaleProof_OversizedValidityPeriod() public {
+        // proofTimestamp backdated by 1 day, validityPeriod = maxValidityPeriod + 1 day
+        // expiresAt = (now - 1d) + (30d + 1d) = now + 30d — passes the expiresAt window check
+        // but validityPeriod > maxValidityPeriod, so it must revert
+        address investor = address(0xA11CE);
+        uint256 now_ = 2 days;
+        vm.warp(now_);
+        uint256 proofTimestamp = now_ - 1 days;
+        uint256 oversizedValidity = MAX_VALIDITY_PERIOD + 1 days;
+        vm.prank(investor);
+        vm.expectRevert(NonUSNationalityCondition.MaxValidityPeriodExceeded.selector);
+        condition.submitProof(_buildParams(investor, proofTimestamp, oversizedValidity), false);
+    }
+
     function test_RevertWhen_FutureTimestamp_ExceedsMaxValidityWindow() public {
         address investor = address(0xA11CE);
         uint256 futureTimestamp = block.timestamp + 1;
