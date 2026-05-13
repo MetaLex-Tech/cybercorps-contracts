@@ -7,6 +7,7 @@ import {NonUSNationalityCondition} from "../src/libs/conditions/NonUSNationality
 import {OrCondition} from "../src/libs/conditions/OrCondition.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
+import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract DeployNonUsZkPassportConditionScript is Script {
     function run() public returns (BorgAuth zkpassportAuth, NonUSNationalityCondition zkpassportCondition) {
@@ -72,13 +73,19 @@ contract DeployNonUsZkPassportConditionScript is Script {
 
         zkpassportAuth = new BorgAuth{salt: salt}(deployerAddress);
 
-        zkpassportCondition = new NonUSNationalityCondition{salt: salt}(
-            address(zkpassportAuth),
-            expectedDomain,
-            expectedScope,
-            address(0), // verifier (use default)
-            maxValidityPeriod,
-            outCountries
+        NonUSNationalityCondition impl = new NonUSNationalityCondition{salt: salt}();
+        zkpassportCondition = NonUSNationalityCondition(
+            address(new ERC1967Proxy{salt: salt}(
+                address(impl),
+                abi.encodeCall(NonUSNationalityCondition.initialize, (
+                    address(zkpassportAuth),
+                    expectedDomain,
+                    expectedScope,
+                    address(0), // verifier (use default)
+                    maxValidityPeriod,
+                    outCountries
+                ))
+            ))
         );
 
         // Deploy OrCondition (zkPassport || LexChex)

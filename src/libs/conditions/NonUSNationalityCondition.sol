@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts/interfaces/IERC165.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts/interfaces/IERC165.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./baseCondition.sol";
 import "../LexScroWLite.sol";
 import "../auth.sol";
@@ -14,7 +15,7 @@ interface ICyberCorpManager {
 
 /// @title NonUSNationalityCondition
 /// @notice Round condition requiring a valid, non-US ZKPassport proof for the participant
-contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
+contract NonUSNationalityCondition is BaseCondition, UUPSUpgradeable, BorgAuthACL {
     error InvalidVerifier();
     error InvalidProof();
     error InvalidScope();
@@ -42,7 +43,6 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
         address indexed approver
     );
 
-    // TODO this should be upgradeable
     // Deterministic verifier address from ZKPassport docs.
     address public constant DEFAULT_ZKPASSPORT_VERIFIER =
         0x1D000001000EFD9a6371f4d90bB8920D5431c0D8;
@@ -59,23 +59,11 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
 
     string[] public excludedCountries;
 
-    /// @notice initialize atomically since this is not an upgradeable contract
-    constructor(
-        address _auth,
-        string memory _expectedDomain,
-        string memory _expectedScope,
-        address _verifier,
-        uint256 _maxValidityPeriod,
-        string[] memory _excludedCountries
-    ) {
-        initialize(
-            _auth,
-            _expectedDomain,
-            _expectedScope,
-            _verifier,
-            _maxValidityPeriod,
-            _excludedCountries
-        );
+    uint256[41] private __gap;
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
     }
 
     function initialize(
@@ -86,6 +74,7 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
         uint256 _maxValidityPeriod,
         string[] memory _excludedCountries
     ) public initializer {
+        __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
 
         expectedDomain = _expectedDomain;
@@ -192,4 +181,6 @@ contract NonUSNationalityCondition is BaseCondition, BorgAuthACL {
         if (founderOverrides[_contract][counterparty]) return true;
         return proofExpiry[counterparty] >= block.timestamp;
     }
+
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 }

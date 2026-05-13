@@ -6,8 +6,10 @@ import {Escrow, EscrowStatus, Token} from "../src/storage/LexScrowStorage.sol";
 import {NonUSNationalityCondition} from "../src/libs/conditions/NonUSNationalityCondition.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
-import {IERC165} from "@openzeppelin/contracts/interfaces/IERC165.sol";
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
+import {IERC165} from "openzeppelin-contracts/interfaces/IERC165.sol";
+import {Initializable} from "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {
     BoundData,
     DisclosedData,
@@ -138,6 +140,8 @@ contract MockManager {
 }
 
 contract NonUSNationalityConditionTest is Test {
+    using ERC1967ProxyLib for address;
+
     string internal constant EXPECTED_DOMAIN = "app.example";
     string internal constant EXPECTED_SCOPE = "non-us-round";
 
@@ -158,13 +162,19 @@ contract NonUSNationalityConditionTest is Test {
         string[] memory excludedCountries = new string[](1);
         excludedCountries[0] = "USA";
 
-        condition = new NonUSNationalityCondition(
-            address(zkpassportAuth),
-            EXPECTED_DOMAIN,
-            EXPECTED_SCOPE,
-            address(mockVerifier),
-            MAX_VALIDITY_PERIOD,
-            excludedCountries
+        NonUSNationalityCondition impl = new NonUSNationalityCondition();
+        condition = NonUSNationalityCondition(
+            address(new ERC1967Proxy(
+                address(impl),
+                abi.encodeCall(NonUSNationalityCondition.initialize, (
+                    address(zkpassportAuth),
+                    EXPECTED_DOMAIN,
+                    EXPECTED_SCOPE,
+                    address(mockVerifier),
+                    MAX_VALIDITY_PERIOD,
+                    excludedCountries
+                ))
+            ))
         );
         escrowSource = new MockEscrowSource();
     }
@@ -635,15 +645,18 @@ contract NonUSNationalityConditionTest is Test {
     function test_RevertWhen_Initialize_ZeroMaxValidityPeriod() public {
         string[] memory excludedCountries = new string[](1);
         excludedCountries[0] = "USA";
-
+        NonUSNationalityCondition freshImpl = new NonUSNationalityCondition();
         vm.expectRevert(NonUSNationalityCondition.InvalidMaxValidityPeriod.selector);
-        NonUSNationalityCondition fresh = new NonUSNationalityCondition(
-            address(zkpassportAuth),
-            EXPECTED_DOMAIN,
-            EXPECTED_SCOPE,
-            address(mockVerifier),
-            0,
-            excludedCountries
+        new ERC1967Proxy(
+            address(freshImpl),
+            abi.encodeCall(NonUSNationalityCondition.initialize, (
+                address(zkpassportAuth),
+                EXPECTED_DOMAIN,
+                EXPECTED_SCOPE,
+                address(mockVerifier),
+                0,
+                excludedCountries
+            ))
         );
     }
 
@@ -664,6 +677,27 @@ contract NonUSNationalityConditionTest is Test {
             MAX_VALIDITY_PERIOD,
             excludedCountries
         );
+    }
+
+    function test_ImplementationInitializerDisabled() public {
+        NonUSNationalityCondition impl = new NonUSNationalityCondition();
+        string[] memory countries = new string[](0);
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
+        impl.initialize(address(zkpassportAuth), "x", "x", address(mockVerifier), 1 days, countries);
+    }
+
+    function test_RevertWhen_Upgrade_Unauthorized() public {
+        NonUSNationalityCondition newImpl = new NonUSNationalityCondition();
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, zkpassportAuth.OWNER_ROLE(), address(0xDEAD)));
+        vm.prank(address(0xDEAD));
+        condition.upgradeToAndCall(address(newImpl), "");
+    }
+
+    function test_Upgrade_SucceedsForAdmin() public {
+        NonUSNationalityCondition newImpl = new NonUSNationalityCondition();
+        condition.upgradeToAndCall(address(newImpl), "");
+        assertEq(address(condition).getErc1967Implementation(), address(newImpl));
+        assertEq(condition.maxValidityPeriod(), MAX_VALIDITY_PERIOD);
     }
 
     // --- supportsInterface tests ---
