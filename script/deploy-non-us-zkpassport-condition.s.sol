@@ -13,7 +13,7 @@ contract DeployNonUsZkPassportConditionScript is Script {
     function run() public returns (BorgAuth zkpassportAuth, NonUSNationalityCondition zkpassportCondition) {
         return runWithArgs(
             // Production
-            "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.1.0",
+            "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.2.0",
             vm.envUint("PRIVATE_KEY_MAIN"),
             "ace.metalex.tech",
             "non-us-non-sanctioned",
@@ -22,7 +22,7 @@ contract DeployNonUsZkPassportConditionScript is Script {
             false // ownedByDeployer
 
 //            // Staging (localhost)
-//            "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.1.0.staging.dev1",
+//            "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.2.0.staging.dev0-localhost",
 //            vm.envUint("PRIVATE_KEY_MAIN"),
 //            "localhost",
 //            "non-us-non-sanctioned",
@@ -31,7 +31,7 @@ contract DeployNonUsZkPassportConditionScript is Script {
 //            true // ownedByDeployer
 
 //            // Staging (staging.ace.metalex.tech)
-//            "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.1.0.staging.dev1-staging.ace.metalex.tech",
+//            "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.2.0.staging.dev0-staging.ace.metalex.tech",
 //            vm.envUint("PRIVATE_KEY_MAIN"),
 //            "staging.ace.metalex.tech",
 //            "non-us-non-sanctioned",
