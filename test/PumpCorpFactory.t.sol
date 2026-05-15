@@ -303,10 +303,25 @@ contract PumpCorpFactoryTest is Test {
         address paymentToken_,
         bytes32 templateId_,
         RoundType roundType_
+    ) internal view returns (bytes memory) {
+        return _escrowSigFull(rm_, corp_, signerPk_, startTime_, endTime_, paymentToken_, templateId_, roundType_, MIN_TICKET, MAX_TICKET);
+    }
+
+    function _escrowSigFull(
+        address rm_,
+        address corp_,
+        uint256 signerPk_,
+        uint256 startTime_,
+        uint256 endTime_,
+        address paymentToken_,
+        bytes32 templateId_,
+        RoundType roundType_,
+        uint256 minTicket_,
+        uint256 maxTicket_
     ) internal view returns (bytes memory sig) {
         bytes32 roundId_ = keccak256(abi.encodePacked(
             SecuritySeries.SeriesSeed,
-            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            RAISE_CAP, minTicket_, maxTicket_,
             uint8(roundType_),
             startTime_, endTime_,
             templateId_,
@@ -323,7 +338,7 @@ contract PumpCorpFactoryTest is Test {
             EIP712Lib.ESCROWEDSIGNATUREDATA_TYPEHASH,
             roundId_,
             uint8(SecuritySeries.SeriesSeed),
-            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            RAISE_CAP, minTicket_, maxTicket_,
             uint8(roundType_),
             startTime_, endTime_,
             templateId_,
@@ -390,8 +405,17 @@ contract PumpCorpFactoryTest is Test {
         uint256 salt_,
         RoundType roundType_,
         address[] memory conditions
-    ) internal returns (address corp_, address rm_, bytes32 roundId_)
-    {
+    ) internal returns (address corp_, address rm_, bytes32 roundId_) {
+        return _deployLifecycle(salt_, roundType_, conditions, MIN_TICKET, MAX_TICKET);
+    }
+
+    function _deployLifecycle(
+        uint256 salt_,
+        RoundType roundType_,
+        address[] memory conditions,
+        uint256 minTicket_,
+        uint256 maxTicket_
+    ) internal returns (address corp_, address rm_, bytes32 roundId_) {
         uint256 start = block.timestamp - 1;
         uint256 end   = block.timestamp + 30 days;
 
@@ -401,7 +425,8 @@ contract PumpCorpFactoryTest is Test {
             escrowSig = _escrowSigFull(
                 predRM, predCorp, officerPk,
                 start, end,
-                address(payToken), TEMPLATE_ID, roundType_
+                address(payToken), TEMPLATE_ID, roundType_,
+                minTicket_, maxTicket_
             );
         }
 
@@ -427,7 +452,7 @@ contract PumpCorpFactoryTest is Test {
             ),
             roundType_,
             conditions,
-            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            RAISE_CAP, minTicket_, maxTicket_,
             start, end,
             true, true, true
         );
@@ -636,6 +661,52 @@ contract PumpCorpFactoryTest is Test {
             RoundManager(rm).getRound(roundId).raised,
             investAmount,
             "raised must equal investAmount"
+        );
+    }
+
+    /// FCFS round with minTicket == maxTicket: the only valid EOI amount is that single value.
+    function test_HappyPath_SubmitEOI_FCFS_EqualTickets() public {
+        uint256 ticketAmount = MIN_TICKET;
+        (, address rm, bytes32 roundId) = _deployLifecycle(
+            300099, RoundType.FCFS, new address[](0), ticketAmount, ticketAmount
+        );
+
+        string[] memory globalValues = _lifecycleGlobalValues();
+        string[] memory investorPv   = _lifecyclePartyValues("Test Investor", investor);
+        uint256 eoiSalt = 99;
+
+        payToken.mint(investor, ticketAmount);
+        vm.startPrank(investor);
+        payToken.approve(rm, ticketAmount);
+
+        EOI memory eoi = EOI({
+            name: "Test Investor",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "investor@test.com",
+            minAmount: ticketAmount,
+            maxAmount: ticketAmount,
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
+        });
+
+        (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
+            roundId, eoi,
+            globalValues, investorPv,
+            _eoiSig(eoiSalt, globalValues, investorPv),
+            eoiSalt, new address[](0), bytes32(0)
+        );
+        vm.stopPrank();
+
+        assertTrue(
+            CyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
+            "agreement must be finalized after FCFS submitEOI"
+        );
+        assertEq(
+            RoundManager(rm).getRound(roundId).raised,
+            ticketAmount,
+            "raised must equal ticketAmount"
         );
     }
 
