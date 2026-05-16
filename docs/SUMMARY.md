@@ -2,14 +2,14 @@
 
 * [Welcome](README.md)
 
-## Tutorials
+## Protocol — Tutorials
 
 * [Overview](tutorials/README.md)
 * [Incorporate a cyberCORP](tutorials/incorporate-a-cybercorp.md)
 * [Run a cyberRAISE round](tutorials/run-a-cyberraise-round.md)
 * [Scripify and settle a secondary trade](tutorials/scripify-and-settle.md)
 
-## How-to Guides
+## Protocol — How-to Guides
 
 * [Overview](how-to/README.md)
 * [Configure BorgAuth roles](how-to/configure-roles.md)
@@ -25,7 +25,7 @@
 * [Sign a cyberAgreement](how-to/sign-a-cyberagreement.md)
 * [Integrate from a frontend](how-to/integrate-from-frontend.md)
 
-## Reference
+## Protocol — Reference
 
 * [Overview](reference/README.md)
 * [Core contracts](reference/contracts.md)
@@ -52,7 +52,7 @@
 * [Deployments](reference/deployments.md)
 * [Glossary](reference/glossary.md)
 
-## Explanation
+## Protocol — Explanation
 
 * [Overview](explanation/README.md)
 * [Constitutive vs. pointer tokenization](explanation/constitutive-vs-pointer.md)
@@ -64,3 +64,35 @@
 * [The role of MetaLeX](explanation/role-of-metalex.md)
 * [Regulatory context](explanation/regulatory-context.md)
 * [The cyberCORPs application stack](explanation/application-stack.md)
+
+## Web App — Overview
+
+* [The metalex-webapp monorepo](webapp/README.md)
+* [Apps and packages](webapp/apps-and-packages.md)
+
+## Web App — Building
+
+* [Local development setup](webapp/local-setup.md)
+* [Monorepo structure and conventions](webapp/project-structure.md)
+* [Environment variables and secrets](webapp/environment.md)
+* [Database and Drizzle ORM](webapp/database.md)
+* [Authentication (SIWE)](webapp/authentication.md)
+* [Calling the protocol from the app](webapp/contract-integration.md)
+* [The design system](webapp/design-system.md)
+* [Add a feature to cybercorps-web](webapp/add-a-feature.md)
+
+## Web App — Apps and Services
+
+* [cybercorps-web](webapp/apps/cybercorps-web.md)
+* [web](webapp/apps/web.md)
+* [lexchex-web](webapp/apps/lexchex-web.md)
+* [landing](webapp/apps/landing.md)
+* [cybercorps-indexer](webapp/apps/cybercorps-indexer.md)
+* [lexchex-oracle](webapp/apps/lexchex-oracle.md)
+* [notifier](webapp/apps/notifier.md)
+* [snapshot-executor](webapp/apps/snapshot-executor.md)
+
+## Web App — Operations
+
+* [Deployment](webapp/deployment.md)
+* [Running the backend services](webapp/operations.md)
