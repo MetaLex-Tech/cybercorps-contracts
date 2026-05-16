@@ -1,7 +1,7 @@
 ---
 description: >-
   Natively tokenized private securities on Ethereum, anchored in each issuer's
-  governing law — plus the web app that demonstrates them.
+  governing law — and how to use the apps built on them.
 ---
 
 # Welcome to cyberCORPs
@@ -34,20 +34,21 @@ It follows the [Diátaxis](https://diataxis.fr/) framework:
 |---|---|
 | [**Tutorials**](tutorials/README.md) | You're new and want to *learn by doing*. Start here. |
 | [**How-to Guides**](how-to/README.md) | You have a specific goal and want a recipe. |
-| [**Reference**](reference/README.md) | You need the dry technical facts (contract APIs, roles, events, addresses). |
+| [**Reference**](reference/README.md) | You need the dry technical facts (contract APIs, roles, events). |
 | [**Explanation**](explanation/README.md) | You want to *understand why* the protocol is the way it is. |
 
-**Part 2 — Web App** documents the
-[`metalex-webapp`](https://github.com/MetaLex-Tech/metalex-webapp) monorepo: the
-Next.js applications and backend services that implement the illustrative
-products (the cyberCORPs Mainframe, cyberRAISE, ACE, LeXcheX, and more).
+**Part 2 — Web App** is for people *using* the cyberCORPs apps — issuers,
+investors, and token communities. No code, no setup: just what each app does
+and how to use it.
 
-| Section | When to read it |
+| Guide | For |
 |---|---|
-| [**Overview**](webapp/README.md) | What the monorepo is and what's in it. |
-| [**Building**](webapp/local-setup.md) | Set up, develop, and extend the apps. |
-| [**Apps and Services**](webapp/apps/cybercorps-web.md) | Per-app reference. |
-| [**Operations**](webapp/deployment.md) | Deploy and run the apps and services. |
+| [Using the cyberCORPs apps](webapp/README.md) | Everyone — start here. |
+| [The Mainframe](webapp/mainframe.md) | Issuers managing their cyberCORP. |
+| [cyberRAISE](webapp/cyberraise.md) | Issuers raising capital; investors funding rounds. |
+| [ACE](webapp/ace.md) | Token communities converting to equity; investors. |
+| [LeXcheX](webapp/lexchex.md) | Anyone who needs to prove accredited-investor status. |
+| [MetaDAO](webapp/metadao.md) | Participants in futarchy-governed entities. |
 
 ## The two-minute version
 
@@ -60,11 +61,9 @@ products (the cyberCORPs Mainframe, cyberRAISE, ACE, LeXcheX, and more).
    minted from a cyberCERT and convertible back.
 4. A growing **application stack** runs on this single contract suite —
    **cyberRAISE**, **cyberTRADE**, **ACE**, **LiquiLeX**, **cyberSign** — all
-   surfaced through the cyberCORPs **Mainframe**. The reference
-   implementations of these products live in `metalex-webapp` and are
-   documented in Part 2.
+   surfaced through the cyberCORPs **Mainframe**. Part 2 explains how to use
+   them.
 
-## Repositories
+## Protocol repository
 
-* Protocol: [github.com/MetaLex-Tech/cybercorps-contracts](https://github.com/MetaLex-Tech/cybercorps-contracts)
-* Web app: [github.com/MetaLex-Tech/metalex-webapp](https://github.com/MetaLex-Tech/metalex-webapp)
+[github.com/MetaLex-Tech/cybercorps-contracts](https://github.com/MetaLex-Tech/cybercorps-contracts)

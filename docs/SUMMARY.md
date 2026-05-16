@@ -65,34 +65,11 @@
 * [Regulatory context](explanation/regulatory-context.md)
 * [The cyberCORPs application stack](explanation/application-stack.md)
 
-## Web App — Overview
+## Web App — Using the Apps
 
-* [The metalex-webapp monorepo](webapp/README.md)
-* [Apps and packages](webapp/apps-and-packages.md)
-
-## Web App — Building
-
-* [Local development setup](webapp/local-setup.md)
-* [Monorepo structure and conventions](webapp/project-structure.md)
-* [Environment variables and secrets](webapp/environment.md)
-* [Database and Drizzle ORM](webapp/database.md)
-* [Authentication (SIWE)](webapp/authentication.md)
-* [Calling the protocol from the app](webapp/contract-integration.md)
-* [The design system](webapp/design-system.md)
-* [Add a feature to cybercorps-web](webapp/add-a-feature.md)
-
-## Web App — Apps and Services
-
-* [cybercorps-web](webapp/apps/cybercorps-web.md)
-* [web](webapp/apps/web.md)
-* [lexchex-web](webapp/apps/lexchex-web.md)
-* [landing](webapp/apps/landing.md)
-* [cybercorps-indexer](webapp/apps/cybercorps-indexer.md)
-* [lexchex-oracle](webapp/apps/lexchex-oracle.md)
-* [notifier](webapp/apps/notifier.md)
-* [snapshot-executor](webapp/apps/snapshot-executor.md)
-
-## Web App — Operations
-
-* [Deployment](webapp/deployment.md)
-* [Running the backend services](webapp/operations.md)
+* [Using the cyberCORPs apps](webapp/README.md)
+* [The Mainframe — for issuers](webapp/mainframe.md)
+* [cyberRAISE — raising and investing](webapp/cyberraise.md)
+* [ACE — token to equity](webapp/ace.md)
+* [LeXcheX — get accredited](webapp/lexchex.md)
+* [MetaDAO — futarchy governance](webapp/metadao.md)
