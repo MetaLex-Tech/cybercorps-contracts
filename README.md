@@ -1,4 +1,3 @@
-```
 /*    .o.                                                                                             
      .888.                                                                                            
     .8"888.                                                                                           
@@ -42,6 +41,9 @@ The protocol is entity-type and jurisdiction agnostic. Delaware C-corp stock is 
 The contracts in this repository underlie a growing application stack: *cyberRAISE* for primary fundraising, *cyberTRADE* for secondary settlement, *ACE* (Asset Conversion to Equity) for converting token communities into equity holders, *LiquiLeX* for AMM native scrip liquidity, and *cyberSign* for cybernetic legal agreement execution, all surfaced to issuers through the cyberCORPs *Mainframe*.
 
 Live on **Ethereum mainnet**, **Arbitrum**, and **Base**.
+
+> 📖 **[Read the full protocol documentation →](https://gabriel-j-shapiro.gitbook.io/metalex-docs)**
+> Tutorials, how-to guides, a complete contract reference, and the design rationale behind the protocol. Documentation source lives in [`docs/`](./docs) and is organized per the [Diátaxis](https://diataxis.fr/) framework.
 
 ---
 
@@ -228,6 +230,20 @@ Some tests depend on contracts deployed on Base Sepolia:
 ```sh
 forge test --via-ir --fork-url <your-base-sepolia-rpc-endpoint> -vvvv
 ```
+
+---
+
+## Documentation
+
+Full protocol documentation is published at
+**[gabriel-j-shapiro.gitbook.io/metalex-docs](https://gabriel-j-shapiro.gitbook.io/metalex-docs)**
+and its source is maintained in [`docs/`](./docs), organized per the
+[Diátaxis](https://diataxis.fr/) framework:
+
+- **Tutorials** — learning-oriented walkthroughs: incorporate a cyberCORP, run a cyberRAISE round, scripify and settle a secondary trade.
+- **How-to Guides** — task-oriented recipes for issuance, transfer restriction, condition gating, secondary trades, SAFE conversion, ACE / MetaDAO deployment, LiquiLeX pools, upgrades, and frontend integration.
+- **Reference** — contract-by-contract API reference, factories, extensions, hooks, conditions, BorgAuth roles, the upgrade model, templates, security types, and a glossary.
+- **Explanation** — design rationale: constitutive vs. pointer tokenization, the dual-token model, statutory mappings, co-approval upgradeability, compliance architecture, and the application stack.
 
 ---
 
