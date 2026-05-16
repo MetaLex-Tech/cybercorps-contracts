@@ -1,54 +1,62 @@
 # Security types
 
-The protocol natively issues and manages the lifecycle of the following
-instrument types. Each maps to a registered
-[Certificate extension](extensions.md) on the cyberCORP's
-`CyberCertPrinter`.
+The instrument types the protocol can issue are the `SecurityClass` enum in
+[`src/CyberCorpConstants.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/CyberCorpConstants.sol).
+A CyberCertPrinter is created for a specific `SecurityClass` (and
+`SecuritySeries`).
 
-## Equity
+## `SecurityClass`
 
-* **Common Stock** — `ShareExtension`.
-* **Preferred Stock**, Pre-Seed through Series F —
-  `ShareExtension` with the appropriate series identifier and NVCA-aligned
-  parameters.
-* **Stock Options** — `ShareExtension` (option variant) with reservation
-  accounting in `CyberShares`.
-* **Restricted Stock Purchase Agreements** — `ShareExtension` plus an
-  unlock / vesting condition.
-* **Restricted Stock Units (RSUs)** — `ShareExtension` (RSU variant).
+```solidity
+enum SecurityClass {
+    SAFE,
+    SAFT,
+    SAFTE,
+    TokenPurchaseAgreement,
+    TokenWarrant,
+    ConvertibleNote,
+    CommonStock,
+    StockOption,
+    PreferredStock,
+    RestrictedStockPurchaseAgreement,
+    RestrictedStockUnit,
+    RestrictedTokenPurchaseAgreement,
+    RestrictedTokenUnit
+}
+```
 
-## SAFE family
+## `SecuritySeries`
 
-* **SAFEs** — `SAFEExtension`. YC post-money or jurisdiction-neutral
-  template (see [Templates](templates.md)).
-* **ACE SAFEs** — `ACESAFEExtension`. Used by
-  [PumpCorpFactory](factories.md#pumpcorpfactory).
+```solidity
+enum SecuritySeries {
+    SeriesPreSeed,
+    SeriesSeed,
+    SeriesA,
+    SeriesB,
+    SeriesC,
+    SeriesD,
+    SeriesE,
+    SeriesF,
+    NA,
+    ACE
+}
+```
 
-## SAFT family
+`NA` is used where a series is not applicable; `ACE` marks securities issued
+through an ACE offering.
 
-* **SAFTs** — `SAFTExtension` / `SAFTExtensionV2`.
-* **SAFTEs** — `SAFTEExtension` / `SAFTEExtensionV2` (tokens or equity, with
-  trigger-first conversion).
+## `SecurityStatus`
 
-## Token instruments
+```solidity
+enum SecurityStatus { Unassigned, Assigned, Void }
+```
 
-* **Token Warrants** — `TokenWarrantExtension` / `TokenWarrantExtensionV2`
-  (a16z-derived, jurisdiction-neutral, and Reg S variants).
-* **Token Purchase Agreements** — issuable via `SAFTExtension` with
-  appropriate parameters.
-* **Restricted Token Purchase Agreements** — `SAFTExtension` + vesting
-  condition.
-* **Restricted Token Units** — `SAFTEExtension` (RTU variant).
+A cyberCERT's status; `Void` is set by `CyberCertPrinter.voidCert`.
 
-## Convertible Notes
+## Instrument-specific metadata
 
-Issuable via `SAFEExtension` configured as a debt instrument with maturity,
-interest, and conversion terms. (Convention; the extension is intentionally
-flexible.)
-
-## LLC / partnership / fund
-
-LLC membership interests, LP interests, and fund interests flow through
-`ShareExtension` with the appropriate `entityType` on the parent cyberCORP
-and jurisdiction-appropriate legends. The protocol makes no assumption
-about the underlying corporate or partnership statute.
+Each security class is paired with a [certificate extension](extensions.md)
+that encodes its instrument-specific terms. `CyberCorpConstants.sol` also
+defines supporting enums used by those extensions — `ExercisePriceMethod`,
+`TokenCalculationMethod`, `UnlockStartTimeType`, `UnlockingIntervalType` —
+for token-warrant and vesting instruments.

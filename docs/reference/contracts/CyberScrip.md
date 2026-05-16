@@ -1,56 +1,64 @@
 # CyberScrip
 
-**CyberScrip** is the ERC-20 fungible form of a cyberCORP security. It is
-minted by `IssuanceManager.scripifyCert` and burned by `convertScripToCert`.
-It is itself a security in scrip form (e.g., DGCL §155), with limited
-contingent rights specified in its Terms of Service and a deterministic
-in-protocol tieback to the cyberCERTs it was minted from.
+The ERC-20 fungible form of a cyberCORP security. One CyberScrip is deployed
+per CyberCertPrinter, via `IssuanceManager.deployCyberScrip`.
 
 * **Source:** [`src/CyberScrip.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/CyberScrip.sol)
-* **Proxy pattern:** beacon proxy (owned by the cyberCORP's `IssuanceManager`)
+* **Inherits:** `ERC20Upgradeable`, `BorgAuthACL`
+* **Pattern:** beacon proxy
+* **`DEPLOY_VERSION`:** `"4"`
 
-## Compliance powers (USDC-style)
+Every state-changing function carries `onlyIssuanceManager` — the caller must
+be the IssuanceManager. Scripification and de-scripification are driven
+through the IssuanceManager.
 
-| Power | Effect | Renounceable |
-|---|---|---|
-| Force transfer | Compel a transfer between any two addresses. | ✅ (`permanentlyDisableForceTransfer`) |
-| Force burn | Burn from any address. | ✅ (`permanentlyDisableForceBurn`) |
-| Freeze | Lock an address. | ✅ (`permanentlyDisableFreeze`) |
-| Blocklist | Reject transfers to/from an address. | ✅ (`permanentlyDisableBlocklist`) |
-
-Each disable toggle is **independent and irreversible**. Once an issuer
-renounces a power, no party — including MetaLeX — can restore it. This lets
-an issuer harden toward the "open" end of the compliance spectrum as the
-security matures, without redeploying.
-
-## Transfer hooks
-
-`CyberScrip` consults an optional transfer hook on every transfer. See
-[Hooks](../hooks.md) for `WhitelistTransferHook`, `ToggleTransferHook`, and
-the base classes.
-
-## Selected public interface
+## Mint / burn
 
 ```solidity
-function mint(address to, uint256 amount) external;     // IssuanceManager only
-function burn(address from, uint256 amount) external;   // IssuanceManager only
-
-function setTransferHook(address) external;             // OFFICER_AUTHORITY
-function setMaxHolders(uint256) external;               // DIRECTOR_AUTHORITY
-
-function forceTransfer(address from, address to, uint256 amount) external;
-function forceBurn(address from, uint256 amount) external;
-function freeze(address account) external;
-function blocklist(address account, bool) external;
-
-function permanentlyDisableForceTransfer() external;
-function permanentlyDisableForceBurn() external;
-function permanentlyDisableFreeze() external;
-function permanentlyDisableBlocklist() external;
+function mint(address to, uint256 amount) external onlyIssuanceManager;
+function burnFrom(address account, uint256 amount) external onlyIssuanceManager;
 ```
 
-## See also
+## Compliance powers
 
-* [`IssuanceManager`](IssuanceManager.md)
-* [Hooks](../hooks.md)
-* [The dual-token model](../../explanation/dual-token-model.md)
+CyberScrip supports **three** compliance powers. There is **no blocklist**.
+
+| Power | Function | Enabled at deploy by | Disable (one-way) |
+|---|---|---|---|
+| Force transfer | `forceTransfer(from, to, amount)` | `enableForceTransfer` | `disableForceTransfer()` |
+| Force burn | `forceBurn(account, amount)` | `enableForceBurn` | `disableForceBurn()` |
+| Freeze | `setFrozen(account, isFrozen)` | `enableFreeze` | `disableFreeze()` |
+
+Each `disable*` function is irreversible — once a power is disabled it cannot
+be re-enabled. A power can only be exercised while its `can*` flag is true;
+otherwise the call reverts `ComplianceFeatureDisabled`.
+
+## Transfer restrictions
+
+`setRestrictionHook(ITransferRestrictionHook[])` installs an array of
+[transfer hooks](../hooks.md). Every transfer runs each hook's
+`checkTransferRestriction`; a `false` result reverts `RestrictedTransfer`.
+Frozen accounts (when `canFreeze`) revert `AccountFrozen`.
+
+## Holder cap
+
+`setMaxHolderCount(uint256)` sets a maximum holder count (`0` = unlimited).
+Transfers that would exceed it revert `HolderLimitExceeded`.
+
+## Views
+
+`certPrinter`, `issuanceManager`, `transferRestrictionHooks(i)`,
+`transferRestrictionHooksLength`, `canForceTransfer`, `canForceBurn`,
+`canFreeze`, `frozen(account)`, `holderCount` / `currentHolderCount`,
+`maxHolderCount`, `remainingSlots`, `canTransfer(from, to, amount)`,
+`willCreateNewHolder(to, amount)`.
+
+## Events
+
+`ForceTransfer`, `ForceBurn`, `FreezeStatusUpdated`,
+`ComplianceFeatureDisabledEvent`, `MaxHolderCountUpdated`.
+
+## Errors
+
+`RestrictedTransfer`, `NotIssuanceManager`, `ComplianceFeatureDisabled`,
+`AccountFrozen`, `HolderLimitExceeded`.

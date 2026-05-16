@@ -1,68 +1,68 @@
 # Configure BorgAuth roles
 
-All authority on a cyberCORP flows through **BorgAuth**, a multi-authority
-role-based access control framework (see
-[borg-core](https://github.com/MetaLex-Tech/borg-core)).
+Authority on a cyberCORP is held in its **BorgAuth** ACL. Roles are numeric
+levels in a hierarchy — see [Access control](../reference/access-control.md).
 
-Roles correspond to governance roles in the entity's constitutional documents
-(officers, directors, secretary, manager, general partner, etc.). The cyberCORP
-makes no assumption about which roles exist — you wire them.
+## The levels you'll use
 
-## When to use this guide
-
-You need to grant, revoke, or rotate authority on an existing cyberCORP.
-
-## Steps
-
-### 1. Identify the role
-
-Common BorgAuth role identifiers used by the protocol:
-
-| Role | Permitted actions |
+| Level | Meaning |
 |---|---|
-| `ISSUER_AUTHORITY` | Mint and revoke cyberCERTs via `IssuanceManager`. |
-| `OFFICER_AUTHORITY` | Co-sign on registration approvals, sign agreements on the entity's behalf. |
-| `DIRECTOR_AUTHORITY` | Approve resolutions, change officers, authorise share classes. |
-| `SECRETARY_AUTHORITY` | Endorse cyberCERTs (e.g., legend updates). |
-| `UPGRADE_AUTHORITY` | Co-approve UUPS implementation upgrades for this cyberCORP. |
-| `COMPLIANCE_AUTHORITY` | Operate force-transfer / force-burn / freeze / blocklist powers on cyberSCRIP (if not renounced). |
+| `99` (`OWNER_ROLE`) | Owner. Can grant/revoke roles. Held by the suite's manager contracts. |
+| `200` | Company officer. Set for an officer's address; `200 ≥ 99`, so officers also pass `onlyOwner`. |
+| `0` | No authority. |
 
-See [Access control reference](../reference/access-control.md) for the
-authoritative list.
+## Grant an officer
 
-### 2. Grant a role
+The simplest path is `CyberCorp.addOfficer`, which records the officer **and**
+grants their address level `200`:
 
 ```solidity
-IBorgAuth auth = IBorgAuth(cyberCorp.auth());
-auth.grantRole(ISSUER_AUTHORITY, newOfficer);
+import {CompanyOfficer} from "src/CyberCorpConstants.sol";
+
+CyberCorp(cyberCorp).addOfficer(CompanyOfficer({
+    eoa:     newOfficer,
+    name:    "Sam Officer",
+    contact: "sam@acme.example",
+    title:   "Chief Financial Officer"
+}));
 ```
 
-The call requires the existing `ADMIN_AUTHORITY` (typically the board /
-managers, often a multisig).
+## Remove an officer
 
-### 3. Revoke a role
+Either removes the officer record and sets their level back to `0`:
 
 ```solidity
-auth.revokeRole(ISSUER_AUTHORITY, departedOfficer);
+CyberCorp(cyberCorp).removeOfficer(departedOfficer);
+// or by index:
+CyberCorp(cyberCorp).removeOfficerAt(2);
 ```
 
-### 4. Rotate (atomic)
+## Grant or revoke a role directly
 
-For a clean swap, batch into one transaction (e.g., from a Safe multisig):
+To set any level directly, call `updateRole` on the BorgAuth contract. The
+caller must hold `OWNER_ROLE`.
 
 ```solidity
-auth.grantRole(OFFICER_AUTHORITY, newCfo);
-auth.revokeRole(OFFICER_AUTHORITY, oldCfo);
+BorgAuth auth = BorgAuth(BorgAuthACL(cyberCorp).AUTH());
+auth.updateRole(someAddress, 200);   // grant officer level
+auth.updateRole(someAddress, 0);     // revoke
 ```
 
-## Verification
+## Transfer ownership
+
+Two-step, on the BorgAuth contract:
 
 ```solidity
-bool hasIt = auth.hasRole(OFFICER_AUTHORITY, newCfo);
+auth.initTransferOwnership(newOwner);   // by current owner
+// then, as newOwner:
+auth.acceptOwnership();
 ```
+
+## Renounce
+
+`auth.zeroOwner()` sets the caller's level to `0`, permanently removing its
+admin control.
 
 ## Related
 
 * [Access control reference](../reference/access-control.md)
-* [The role of MetaLeX](../explanation/role-of-metalex.md) — why no
-  protocol-level admin keys exist over your roles.

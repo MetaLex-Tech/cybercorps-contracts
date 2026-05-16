@@ -1,69 +1,70 @@
 # Gate state transitions with conditions
 
-Any state transition in the protocol — issuance, scripification,
-de-scripification, deal close, round acceptance, secondary trade — can be
-gated by an arbitrary onchain check via the `ICondition` interface.
+A **condition** is a contract implementing `ICondition`. Conditions gate
+state transitions on arbitrary onchain checks.
 
-## Built-in conditions
-
-| Condition | Effect |
-|---|---|
-| `lexchexCondition` | Requires a valid LeXcheX credential (KYC/AML, accreditation, qualified-purchaser). |
-| `NonUSNationalityCondition` | zkPassport-based check that the address is held by a non-US person (Reg S). |
-| `IssuerApprovalRecertificationCondition` | Requires explicit issuer approval before a non-registered scrip holder can present scrip for de-scripification. |
-| `OrCondition` | Composes multiple conditions with disjunctive logic. |
-
-See [Conditions reference](../reference/conditions.md).
-
-## Attach a condition to a round
-
-```solidity
-ICondition lexCond = ICondition(LEXCHEX_CONDITION_ADDR);
-
-roundManager.createRound(RoundConfig({
-    // ...
-    conditions: lexCond
-}));
-```
-
-Now no EOI can be accepted unless the investor's address has the credential.
-
-## Attach a condition to scripification
-
-```solidity
-issuanceManager.setScripifyCondition(SHARE_CLASS_COMMON, lexCond);
-```
-
-A cert holder will be unable to scripify unless they pass the check.
-
-## Compose conditions
-
-Use `OrCondition` (or a custom composer) for unions:
-
-```solidity
-OrCondition or = new OrCondition();
-or.add(lexchexCondition);
-or.add(nonUsCondition);
-issuanceManager.setDescripifyCondition(SHARE_CLASS_COMMON, or);
-```
-
-## Write a custom condition
-
-Implement `ICondition`:
+## The interface
 
 ```solidity
 interface ICondition {
-    function check(address subject, bytes calldata context) external view returns (bool);
+    function checkCondition(
+        address _contract,
+        bytes4 _functionSignature,
+        bytes memory data
+    ) external view returns (bool);
 }
 ```
 
-Deploy and register it like any other. Anything expressible onchain — a token
-balance threshold, a Snapshot vote outcome, a UMA assertion, a Soulbound
-credential — can become a precondition for a state transition on your
-cyberCORP.
+See [Conditions](../reference/conditions.md) for the built-in conditions
+(`lexchexCondition`, `NonUSNationalityCondition`,
+`IssuerApprovalRecertificationCondition`, `OrCondition`).
+
+## Where conditions are attached
+
+Conditions are passed as `address[]` (or `ICondition[]`) into the call that
+creates the gated thing:
+
+**Scripification / de-scripification** — set when the scrip is deployed:
+
+```solidity
+IIssuanceManager(issuanceManager).deployCyberScrip(
+    certAddress,
+    typeRestrictionHooks,
+    certToScripConditions,   // ICondition[] gating scripifyCert
+    scripToCertConditions,   // ICondition[] gating convertScripToCert
+    /* ...remaining args... */
+);
+```
+
+**A fundraising round** — in the `Round` built via `RoundLib.setAgreement`
+(`roundConditions`), and per-EOI in `submitEOI(..., conditions, ...)`.
+
+**A deal** — the `conditions` argument of `DealManager.proposeDeal`.
+
+## Writing a custom condition
+
+Implement `ICondition`. Because `checkCondition` receives the calling
+contract, the selector, and arbitrary `data`, you can encode any onchain
+check:
+
+```solidity
+contract MinBalanceCondition is ICondition {
+    IERC20  immutable token;
+    uint256 immutable minimum;
+    constructor(IERC20 t, uint256 m) { token = t; minimum = m; }
+
+    function checkCondition(address, bytes4, bytes memory data)
+        external view returns (bool)
+    {
+        address subject = abi.decode(data, (address));
+        return token.balanceOf(subject) >= minimum;
+    }
+}
+```
+
+Deploy it and pass its address wherever the protocol accepts a condition
+list.
 
 ## Related
 
-* Reference: [Conditions](../reference/conditions.md)
-* Explanation:
-  [Compliance architecture](../explanation/compliance-architecture.md)
+* [Conditions reference](../reference/conditions.md)

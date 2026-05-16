@@ -1,128 +1,102 @@
 # Tutorial: Scripify and settle a secondary trade
 
-In this tutorial you will:
+In this tutorial you make part of a cyberCERT tradable as fungible
+**cyberSCRIP**, transfer it to a buyer, and convert it back into a cyberCERT.
 
-1. take an existing cyberCERT (a Common Stock entry) and *scripify* part of
-   it, producing fungible cyberSCRIP,
-2. transfer that scrip to a buyer, and
-3. settle the buyer back onto the register via *de-scripification*, with
-   issuer approval gating.
-
-This is the core flow that powers **cyberTRADE**'s "scrip path" and any
-AMM-native LiquiLeX pool.
+> Code is **illustrative of the flow** and uses the real signatures from
+> `cybercorps-contracts` (`develop`).
 
 ## Prerequisites
 
-You have a cyberCERT from Tutorial 1, say `tokenId = 1` representing 8,000,000
-shares of Common, owned by `alice`. Take note of the `issuanceManagerAddr` and
-the `cyberScripAddr` that the IssuanceManager deployed for the Common class.
+A cyberCERT from [Tutorial 1](incorporate-a-cybercorp.md) — say `tokenId = 1`
+on the Common Stock printer at `commonPrinter`, held by `alice`. You also
+need the `issuanceManager` address.
 
-## 1. Scripify part of the cert
+## 1. Deploy a CyberScrip for the printer
 
-Alice wants to make 1,000,000 units tradable while keeping the rest on her
-cert.
+A CyberScrip is deployed per CyberCertPrinter via `deployCyberScrip`. This
+is also where you set the scrip ratio, conversion conditions, and which
+compliance powers exist.
 
 ```solidity
-IIssuanceManager im = IIssuanceManager(issuanceManagerAddr);
-
-im.scripifyCert(
-    tokenId,             // the cert to (partially) scripify
-    1_000_000,           // units to scripify
-    alice                // recipient of the resulting cyberSCRIP
+address cyberScrip = IIssuanceManager(issuanceManager).deployCyberScrip(
+    commonPrinter,
+    typeRestrictionHooks,   // ITransferRestrictionHook[]
+    certToScripConditions,  // ICondition[] gating scripification
+    scripToCertConditions,  // ICondition[] gating de-scripification
+    1e18,                   // scripToCertMinimum
+    1,                      // scripRatioNumerator
+    1,                      // scripRatioDenominator
+    new uint256[](0),       // scripifyWhitelistIds
+    false,                  // scripifyWhitelistEnabled
+    true,                   // enableForceTransfer
+    true,                   // enableForceBurn
+    true                    // enableFreeze
 );
 ```
 
-The call will:
-
-* check that `tokenId` is eligible (via the optional per-cert scripify
-  whitelist) and that scripification conditions are satisfied,
-* reduce `tokenId`'s `units` from 8,000,000 to 7,000,000 (partial
-  scripification leaves the cert active),
-* record 1,000,000 units in the **Scripified Share Pool** (ERC-4626-style
-  vault) crediting Alice as the underlying registered holder,
-* mint `1_000_000 * scripRatioNumerator / scripRatioDenominator` cyberSCRIP
-  ERC-20 tokens to Alice.
-
-> 🛈 **Same security, different form.** The cyberSCRIP is *itself* a security
-> in scrip form (DGCL §155, or the equivalent under your governing law). It is
-> not a wrapper. See
-> [the dual-token model](../explanation/dual-token-model.md).
-
-## 2. Sell the scrip
-
-Alice transfers her cyberSCRIP to Bob.
+## 2. Scripify part of the cert
 
 ```solidity
-CyberScrip(cyberScripAddr).transfer(bob, 1_000_000e18);
+IIssuanceManager(issuanceManager).scripifyCert(
+    commonPrinter,   // certAddress
+    1,               // id (the cyberCERT token id)
+    1_000_000,       // amount of units to scripify
+    alice            // recipient of the cyberSCRIP
+);
 ```
 
-If the cyberSCRIP has a `WhitelistTransferHook` or other
-[transfer hook](../reference/hooks.md) installed, the transfer will only
-succeed if Bob's address passes. For an open LiquiLeX pool, no whitelist is
-required; compliance is enforced *at the de-scripification boundary*.
+This reduces the cert's `unitsRepresented`, records the scripified units in
+the scrip pool, and mints cyberSCRIP to Alice (scaled by the scrip ratio).
+The cyberSCRIP is the *same security in fungible form* — see
+[the dual-token model](../explanation/dual-token-model.md).
 
-## 3. Bob requests recertification
-
-Bob does not want to hold scrip indefinitely; he wants to be a registered
-holder of record. He calls:
+## 3. Sell the scrip
 
 ```solidity
-im.requestRecertification(cyberScripAddr, 1_000_000e18);
+CyberScrip(cyberScrip).transfer(bob, 1_000_000e18);
 ```
 
-Because Bob is not yet a registered holder, this enters the **new-holder
-path**: it does *not* mint a cert yet. It records his request.
+If a transfer hook is installed, the transfer must satisfy it (see
+[Restrict cyberSCRIP transfers](../how-to/restrict-transfers.md)).
 
-## 4. Issuer approves the new holder
+## 4. (New holder) issuer pre-approves recertification
 
-An officer of Acme CyberCo reviews Bob's KYC/AML credentials (potentially via
-an onchain `lexchexCondition`) and pre-sets the certificate metadata:
+Because Bob is not yet a registered holder, an officer pre-sets the
+certificate metadata he will receive on de-scripification:
 
 ```solidity
-im.approveRegistration(bob, RegistrationData({
-    holderName: "Bob Buyer",
-    legend: "...",
-    officerSignature: officerSig,
-    // ...
-}));
+IIssuanceManager(issuanceManager).setRecertificationApproval(
+    commonPrinter,
+    bob,
+    "Bob Buyer",
+    bobCertDetails,    // CertificateDetails
+    officerSignature   // bytes
+);
 ```
 
-Now Bob can present his scrip:
+## 5. Convert scrip back to a cyberCERT
 
 ```solidity
-uint256 newTokenId = im.convertScripToCert(cyberScripAddr, 1_000_000e18);
+IIssuanceManager(issuanceManager).convertScripToCert(
+    commonPrinter,   // certAddress
+    1_000_000e18     // amount of cyberSCRIP to present
+);
 ```
 
-The call will:
+This burns Bob's cyberSCRIP, withdraws the units from the scrip pool, and —
+using the approved metadata — puts Bob on the register. An
+`IssuerApprovalRecertificationCondition` among the `scripToCertConditions`
+is what enforces the approval requirement for new holders.
 
-* burn 1,000,000e18 cyberSCRIP from Bob,
-* withdraw 1,000,000 units from the Scripified Share Pool (Alice's vault
-  balance decreases),
-* mint a fresh cyberCERT to Bob with the approved metadata and a pre-set
-  officer signature.
+## What you just did
 
-Bob is now on Acme's register. The chain state transition *is* the legal state
-transition.
-
-> If Bob were *already* a registered holder, the existing-holder path applies:
-> `convertScripToCert` would merge the units onto his existing cyberCERT for
-> the same class without requiring further issuer approval.
-
-## 5. What you just did
-
-* Used the **scrip layer** to make Common Stock tradable like an ERC-20 while
-  the cert layer remained the authoritative register.
-* Routed the buyer through the **new-holder recertification path**, with
-  explicit issuer approval — the moment that matters for §158 / §219 / §202
-  compliance under Delaware law (and analogues elsewhere).
-* Kept the entire flow onchain. There was no transfer agent, no Carta, no
-  paper certificate.
+* Deployed a cyberSCRIP and scripified part of a cyberCERT.
+* Traded the security in fungible form.
+* Recertified a new holder back onto the register, under issuer approval.
 
 ## Next
 
-* How-to: [Restrict cyberSCRIP transfers](../how-to/restrict-transfers.md) to
-  add a whitelist or per-cert toggle.
-* How-to: [Deploy a LiquiLeX pool](../how-to/deploy-liquilex-pool.md) for
-  AMM-native settlement.
-* Reference: [`CyberScrip`](../reference/contracts/CyberScrip.md),
-  [`IssuanceManager`](../reference/contracts/IssuanceManager.md).
+* How-to: [Restrict cyberSCRIP transfers](../how-to/restrict-transfers.md).
+* Reference: [CyberScrip](../reference/contracts/CyberScrip.md),
+  [IssuanceManager](../reference/contracts/IssuanceManager.md).

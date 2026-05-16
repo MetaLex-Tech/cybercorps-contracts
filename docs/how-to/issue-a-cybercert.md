@@ -1,70 +1,70 @@
 # Issue a cyberCERT
 
-This is the canonical way to mint a new entry on a cyberCORP's register of
-holders — whether that entry represents Common Stock, Preferred Stock, a SAFE,
-a SAFT, a SAFTE, a Token Warrant, an LLC membership interest, or any other
-supported security type.
+This is how you mint a new register entry on a cyberCORP — stock, a SAFE, an
+option, or any [supported security type](../reference/security-types.md).
 
 ## Prerequisites
 
-* The caller has the `ISSUER_AUTHORITY` BorgAuth role.
-* The relevant `CertificateExtension` (e.g., `ShareExtension`,
-  `SAFEExtension`) is registered on the `CyberCertPrinter`.
-* If the security is a share, the share class is authorised in `CyberShares`
-  with sufficient headroom (`authorized - outstanding ≥ units`).
+* A cyberCORP and its `issuanceManager` address.
+* A `CyberCertPrinter` for the security class (create one with
+  `createCertPrinter` if needed).
 
-## Steps
-
-### 1. Build the `CertIssuance`
-
-The struct varies by extension. See [extensions](../reference/extensions.md)
-for the per-extension metadata. A Preferred Stock example:
+## 1. (If needed) create the certificate printer
 
 ```solidity
-CertIssuance memory cert = CertIssuance({
-    holderName: "Alice Investor LLC",
-    holderAddress: 0xAaA...,
-    units: 1_000_000,
-    shareClass: SHARE_CLASS_PREFERRED,
-    series: "Series A",
-    legend: STANDARD_RESTRICTIVE_LEGEND,
-    agreementUri: "ipfs://series-a-spa-v1",
-    acquisitionPriceUsd: 2_500_000e6,
-    extensionData: abi.encode(ShareExtensionParams({
-        liquidationPreference: 1e18,
-        conversionRatio: 1e18,
-        antiDilution: AntiDilution.BROAD_BASED_WEIGHTED_AVG,
-        votingPower: 1
-    }))
+import {SecurityClass, SecuritySeries} from "src/CyberCorpConstants.sol";
+
+address printer = IIssuanceManager(issuanceManager).createCertPrinter(
+    defaultLegend,                 // string[]
+    "Acme Series A Preferred",     // name
+    "ACME-A",                      // ticker
+    "ipfs://acme-cert-art",        // certificate URI
+    SecurityClass.PreferredStock,
+    SecuritySeries.SeriesA,
+    SHARE_EXTENSION_ADDR           // certificate extension
+);
+```
+
+## 2. Build the `CertificateDetails`
+
+From [`CyberCertPrinterStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/storage/CyberCertPrinterStorage.sol):
+
+```solidity
+import {CertificateDetails} from "src/storage/CyberCertPrinterStorage.sol";
+
+CertificateDetails memory details = CertificateDetails({
+    signingOfficerName:                  "Jane Founder",
+    signingOfficerTitle:                 "Chief Executive Officer",
+    investmentAmountUSD:                 2_500_000e18,
+    issuerUSDValuationAtTimeOfInvestment: 20_000_000e18,
+    unitsRepresented:                    1_000_000,
+    legalDetails:                        "Series A Preferred",
+    extensionData:                       abi.encode(/* per the extension */)
 });
 ```
 
-### 2. Call `IssuanceManager.issueCert`
+## 3. Mint
+
+| Function | Use when |
+|---|---|
+| `createCert(certAddress, to, details)` | Mint without setting a registered owner. |
+| `createCertAndAssign(certAddress, investor, details)` | Mint and record the registered owner. |
+| `createCertAndAssignWithName(...)` | As above, plus a holder name and an endorsement signature. |
+| `createCertSignAndAssign(...)` | As above, plus a registry/agreement reference. |
 
 ```solidity
-uint256 tokenId = issuanceManager.issueCert(cert);
+uint256 tokenId = IIssuanceManager(issuanceManager).createCertAndAssign(
+    printer, investor, details
+);
 ```
 
-### 3. Verify
+## Other operations
 
-```solidity
-string memory uri = certPrinter.tokenURI(tokenId);
-// renders the SVG share certificate inline
-
-uint256 outstanding = cyberShares.outstanding(SHARE_CLASS_PREFERRED);
-```
-
-## Common variations
-
-* **Endorsement** (record an event on an existing cert) —
-  `issuanceManager.endorseCert(tokenId, endorsementData)`.
-* **Revoke** — `issuanceManager.revokeCert(tokenId)` (requires the relevant
-  legal grounds; the extension can enforce them).
-* **Pre-set registration approval** for a new holder receiving cyberSCRIP —
-  see [Run a secondary trade](run-a-secondary-trade.md).
+* **Endorse:** `endorseCertificate(certAddress, tokenId, endorser, signature, agreementId)`.
+* **Officer signature:** `addOfficerSignature(certAddress, tokenId, signature)`.
+* **Void / unvoid:** `voidCertificate` / `unvoidCertificate`.
 
 ## Related
 
-* Reference: [`IssuanceManager`](../reference/contracts/IssuanceManager.md),
-  [`CyberCertPrinter`](../reference/contracts/CyberCertPrinter.md),
-  [Certificate extensions](../reference/extensions.md).
+* [IssuanceManager](../reference/contracts/IssuanceManager.md),
+  [CyberCertPrinter](../reference/contracts/CyberCertPrinter.md).

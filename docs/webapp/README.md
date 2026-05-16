@@ -1,62 +1,75 @@
-# The metalex-webapp monorepo
+# Using the cyberCORPs apps
 
-[`metalex-webapp`](https://github.com/MetaLex-Tech/metalex-webapp) is the
-monorepo that implements the **illustrative applications** built on the
-cyberCORPs protocol. It is not the protocol — the protocol is the contracts in
-[`cybercorps-contracts`](https://github.com/MetaLex-Tech/cybercorps-contracts).
-The webapp is one possible set of front ends and supporting services for it.
+This part of the documentation is for the people who **use** the cyberCORPs
+apps — not for developers. If you are a company raising capital, an investor
+putting money into a round, or a token community converting into equity, you
+are in the right place.
 
-> The repository is MetaLeX-internal. These docs describe it for two
-> audiences: **external builders** who want to understand the reference
-> implementation (or build their own front end), and **internal developers**
-> who work on the monorepo directly. Pages note which audience they target
-> when it matters.
+## The apps at a glance
 
-## What's in it
+| App | It lets you… | Who it's for |
+|---|---|---|
+| [**The Mainframe**](mainframe.md) | Set up and run your company onchain — cap table, fundraising, deals, agreements, roles. | Company founders and officers (issuers). |
+| [**cyberRAISE**](cyberraise.md) | Run a fundraising round, or invest in one. | Issuers and investors. |
+| [**ACE**](ace.md) | Convert a token community into equity holders of a company. | Token projects and their communities. |
+| [**LeXcheX**](lexchex.md) | Prove you are an accredited investor, onchain. | Investors. |
+| [**MetaDAO**](metadao.md) | Take part in a futarchy-governed entity. | Governance participants. |
 
-The monorepo is a [Turborepo](https://turbo.build/repo) workspace managed with
-[Bun](https://bun.sh/). It contains **apps** (deployable Next.js apps and
-standalone services) and **packages** (shared libraries).
+All of them run on the same underlying protocol, so a security you receive in
+one app (say, a SAFE from a cyberRAISE round) is visible and manageable in the
+others.
 
-### Apps
+## Before you start: what you need
 
-| App | What it is |
-|---|---|
-| [`cybercorps-web`](apps/cybercorps-web.md) | The cyberCORPs platform UI — the Mainframe, cyberRAISE, ACE, MetaDAO, profiles. The closest thing to "the cyberCORPs app." |
-| [`web`](apps/web.md) | The main MetaLeX webapp (BORG OS surface). |
-| [`lexchex-web`](apps/lexchex-web.md) | The LeXcheX onchain-accreditation app. |
-| [`landing`](apps/landing.md) | The marketing landing site. |
-| [`cybercorps-indexer`](apps/cybercorps-indexer.md) | A Ponder indexer projecting protocol events into a queryable store. |
-| [`lexchex-oracle`](apps/lexchex-oracle.md) | The LeXcheX backend oracle (identity / portfolio verification). |
-| [`notifier`](apps/notifier.md) | A cron service sending Telegram notifications for cyberRAISE activity. |
-| [`snapshot-executor`](apps/snapshot-executor.md) | A service that executes successful Snapshot / BORG governance votes onchain. |
+1. **A web3 wallet.** A browser wallet such as MetaMask or Rabby. The apps
+   connect to your wallet to read your holdings and to ask you to sign
+   transactions and agreements.
+2. **A little ETH for gas.** Actions that change onchain state (investing,
+   issuing, signing) are blockchain transactions and cost a small network
+   fee. The apps run on **Ethereum, Arbitrum, and Base** — you'll need gas on
+   whichever network the entity you're dealing with uses. (Arbitrum and Base
+   fees are typically very low.)
+3. **Nothing else.** There is no separate account to create. Your wallet *is*
+   your identity.
 
-### Packages
+## Signing in
 
-Shared libraries consumed by the apps — ABIs, database schemas, the design
-system, EVM clients, encryption, governance utilities, and more. See
-[Apps and packages](apps-and-packages.md) for the full inventory.
+The apps use **Sign-In With Ethereum**: you connect your wallet and sign a
+short message to prove the wallet is yours. This signature is free — it is not
+a transaction and costs no gas. It simply starts your session.
 
-## How it relates to the protocol
+> You stay in control of your assets at all times. MetaLeX never takes
+> custody of your funds or your securities. Money in transit during a deal is
+> held by an onchain escrow contract that no one can override.
 
-Every product surface in the webapp is a thin client over the protocol
-contracts:
+## Two kinds of "sign"
 
-* `cybercorps-web` routes (`/cybercorps`, `/cyberraise`, `/ace`, `/metadao`)
-  call `CyberCorpFactory`, `RoundManager`, `IssuanceManager`, `DealManager`,
-  etc.
-* `lexchex-web` + `lexchex-oracle` mint the LeXcheX credentials that the
-  protocol's `lexchexCondition` checks.
-* `cybercorps-indexer` reads protocol events; `notifier` reads the indexer.
-* `snapshot-executor` bridges off-chain governance to on-chain authority.
+You'll be asked to sign two different things; it's worth knowing the
+difference:
 
-See the protocol-side [Application stack](../explanation/application-stack.md)
-for the product-to-contract mapping.
+* **A message signature** — free, instant, no gas. Used for signing in, for
+  Expressions of Interest, and for countersigning legal agreements.
+* **A transaction** — costs gas, takes a few seconds to confirm. Used when
+  something actually changes onchain: funding a round, issuing a security,
+  closing a deal.
+
+Your wallet always tells you which one it is before you approve.
 
 ## Where to go next
 
-* New to the repo? Start with [Local development setup](local-setup.md).
-* Want the layout? See [Monorepo structure](project-structure.md).
-* Building a feature? See [Add a feature to cybercorps-web](add-a-feature.md).
-* Just want to know what an app does? Jump to its page under
-  **Web App — Apps and Services**.
+* Running a company? Start with [The Mainframe](mainframe.md).
+* Raising or investing? See [cyberRAISE](cyberraise.md).
+* Coming from a token community? See [ACE](ace.md).
+* Need to prove accreditation first? See [LeXcheX](lexchex.md).
+
+## A note on terms
+
+The apps use a few protocol words. The short version:
+
+* A **cyberCORP** is your company, represented onchain.
+* A **cyberCERT** is a certificate — one entry on the company's register of
+  holders (a stake, a SAFE, an option, etc.).
+* A **cyberSCRIP** is the tradable, fungible form of a security.
+
+The full [Glossary](../reference/glossary.md) has the rest, and Part 1 of
+this book explains the protocol in depth if you're curious.

@@ -1,87 +1,60 @@
 # Integrate from a frontend
 
-This guide covers calling the protocol from a TypeScript / React / Next.js
-front end. The reference implementation is the
-[`metalex-webapp`](https://github.com/MetaLex-Tech/metalex-webapp) monorepo;
-the app most directly equivalent to a generic issuer Mainframe is
-[`apps/cybercorps-web`](https://github.com/MetaLex-Tech/metalex-webapp/tree/develop/apps/cybercorps-web).
+This guide covers calling the protocol from a TypeScript / React app. The
+reference UIs live in
+[`metalex-webapp`](https://github.com/MetaLex-Tech/metalex-webapp).
 
-## Stack used in the reference UIs
+## Recommended stack
 
-* **Next.js (App Router)** with `bun` as package manager
-* **wagmi + viem** for contract interaction
-* **RainbowKit / Rabby / Safe** for wallet connection
-* **Privy / SIWE** for session auth (`SIWE_ALLOWED_DOMAINS` env var)
-* **Tailwind + biome** for styling and linting
-* **A custom indexer** (`apps/cybercorps-indexer`) for cap-table queries
-* **A notifier** (`apps/notifier`) for event-driven notifications
-* **An oracle** (`apps/lexchex-oracle`) for accreditation backstop
+* **wagmi + viem** for contract calls and typed ABIs.
+* A wallet connector (injected wallets, WalletConnect).
+* An **indexer** for list/aggregate reads (cap tables, rounds) rather than
+  many direct contract reads.
 
-## Calling the contracts
-
-### 1. Generate types from ABIs
-
-With `wagmi/cli` and the package containing the protocol ABIs:
+## Reading contract state
 
 ```ts
-import { useReadContract, useWriteContract } from "wagmi";
+import { useReadContract } from "wagmi";
 import { cyberCorpAbi } from "@/abis";
 
-const { data: legalName } = useReadContract({
+const { data: name } = useReadContract({
   abi: cyberCorpAbi,
-  address: cyberCorpAddr,
-  functionName: "legalName",
+  address: cyberCorpAddress,
+  functionName: "cyberCORPName",
 });
 ```
 
-### 2. Submit an EIP-712 EOI
+Note the real getters: `cyberCORPName`, `cyberCORPType`,
+`cyberCORPJurisdiction` on `CyberCorp`; `legalOwnerOf` vs `ownerOf` on
+`CyberCertPrinter`.
 
-Use `viem.signTypedData` with the schema published by `RoundManager`:
+## Writing transactions
 
-```ts
-const signature = await wallet.signTypedData({
-  domain: { name: "cyberRAISE", version: "1", chainId, verifyingContract: roundManagerAddr },
-  types: { EOI: [...] },
-  primaryType: "EOI",
-  message: { investor: account.address, amount: 100_000_000_000n, /* ... */ }
-});
+Use `useWriteContract`. State-changing calls go through the cyberCORP's
+manager contracts — `IssuanceManager`, `DealManager`, `RoundManager` — not
+directly to `CyberCertPrinter` / `CyberScrip` (those are
+`onlyIssuanceManager`).
 
-await write({ functionName: "submitEOI", args: [roundId, eoi, signature] });
-```
+## EIP-712 signatures
 
-### 3. Read the register
+cyberRAISE EOIs, deal counter-signatures, and cyberSign agreements are
+EIP-712 typed-data signatures, produced with `viem`'s `signTypedData`. The
+`CyberAgreementRegistry` underlies all of them — a round EOI and a deal both
+resolve to a registry contract identified by a `bytes32` id.
 
-A cap-table view typically pages over `CyberCertPrinter` tokens via an
-indexer rather than reading on-chain. The reference
-[`cybercorps-indexer`](https://github.com/MetaLex-Tech/metalex-webapp/tree/develop/apps/cybercorps-indexer)
-uses **ponder** to project events into a SQL store.
+## Rendering a cyberCERT
 
-### 4. Render the cert SVG
+`CyberCertPrinter.tokenURI(tokenId)` returns a base64 `data:` JSON whose
+`image` is an onchain-rendered SVG. Decode the JSON, then render the SVG.
 
-`tokenURI` returns a base64-encoded JSON whose `image` is itself a base64 SVG.
-To display:
+## ABIs
 
-```ts
-const json = JSON.parse(atob(uri.split(",")[1]));
-const svg = atob(json.image.split(",")[1]);
-return <img src={`data:image/svg+xml;base64,${btoa(svg)}`} />;
-```
-
-## Subdomain routing in the reference app
-
-The webapp exposes multiple product surfaces (cyberRAISE, ACE, profile, etc.)
-behind subdomains driven by env vars:
-
-```
-NEXT_PUBLIC_USE_SUBDOMAIN_ROUTING=true
-NEXT_PUBLIC_APP_DOMAIN=metalex.tech
-SIWE_ALLOWED_DOMAINS=cybercorps.metalex.tech,cyberraise.metalex.tech,pump.metalex.tech
-```
-
-Use the same pattern if you want to mount the issuer Mainframe at one domain
-and the public ACE / cyberRAISE views at others.
+Keep your ABIs in sync with the deployed contracts (`DEPLOY_VERSION` `"4"`
+at time of writing). The protocol is under active development; regenerate
+ABIs when implementations change.
 
 ## Related
 
-* Explanation: [Application stack](../explanation/application-stack.md).
-* See the `cybercorps-web` `README.md` in `metalex-webapp` for env setup.
+* [Application stack](../explanation/application-stack.md).
+* The Web App section of these docs covers the live apps from a user's
+  perspective.

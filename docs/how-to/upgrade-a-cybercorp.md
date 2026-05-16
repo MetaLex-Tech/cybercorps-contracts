@@ -1,68 +1,55 @@
 # Upgrade a cyberCORP
 
 All contracts use UUPS upgradeable proxies (with beacon proxies for
-`CyberCertPrinter` and `CyberScrip` instances) and ERC-7201 namespaced
-storage. Upgrades use a **co-approval** model: MetaLeX publishes new
-implementations, but each cyberCORP independently opts in. No unilateral
-pushes.
+`CyberCertPrinter` and `CyberScrip`). Upgrades use a **co-approval** model:
+MetaLeX publishes a reference implementation, and the cyberCORP's owner opts
+in. See [Upgrade model](../reference/upgrade-model.md).
 
-For architecture detail, see [Upgrade model](../reference/upgrade-model.md)
-and [Co-approval upgradeability](../explanation/co-approval-upgradeability.md).
+## Upgrade the CyberCorp contract
 
-## Steps
-
-### 1. Confirm a MetaLeX-published implementation
-
-MetaLeX publishes implementation addresses (and a release note) to
-[the official Substack](https://metalex.substack.com/) and the contracts
-repository. For v3 architectures, the published address is registered on the
-relevant factory (e.g., `IssuanceManagerFactory.setRefImplementation`).
-
-Verify the address you intend to upgrade to:
+`CyberCorp._authorizeUpgrade` is `onlyOwner` **and** requires the new
+implementation to equal the factory's reference implementation — otherwise
+it reverts `NotRefImplementation`.
 
 ```solidity
-address published = issuanceManagerFactory.refImplementation();
+// The target must equal the factory's published reference implementation:
+address published =
+    ICyberCorpSingleFactory(CyberCorp(cyberCorp).upgradeFactory()).getRefImplementation();
+
+UUPSUpgradeable(cyberCorp).upgradeToAndCall(published, "");
 ```
 
-### 2. Call `upgradeToAndCall` from the issuer's `UPGRADE_AUTHORITY`
+If `published` is not what you expected, do not upgrade — the gate exists so
+neither side can move you to an arbitrary implementation.
+
+## Upgrade the IssuanceManager, DealManager, RoundManager
+
+The `IssuanceManager`, `DealManager`, and `RoundManager` are UUPS proxies
+too; upgrade each with `upgradeToAndCall` against its factory's reference
+implementation, gated the same way.
+
+## Upgrade CyberCertPrinter / CyberScrip instances
+
+These are beacon proxies. The beacons are owned by the cyberCORP's
+`IssuanceManager`, which exposes:
 
 ```solidity
-UUPSUpgradeable(yourCyberCorp).upgradeToAndCall(published, "");
+IIssuanceManager(issuanceManager).upgradeCertPrinterBeaconImplementation(newImpl);
+IIssuanceManager(issuanceManager).upgradeScripBeaconImplementation(newImpl);
 ```
 
-For downstream beacon-proxied contracts (`CyberCertPrinter`, `CyberScrip`),
-upgrade the cyberCORP's *own* beacon — this batches all instances of that
-type owned by your `IssuanceManager`:
-
-```solidity
-issuanceManager.upgradeCertPrinterBeaconImplementation(publishedPrinter);
-issuanceManager.upgradeScripBeaconImplementation(publishedScrip);
-```
-
-### 3. Verify the new implementation pointer
-
-For a UUPS proxy:
-
-```solidity
-bytes32 SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
-address impl = address(uint160(uint256(vm.load(yourCyberCorp, SLOT))));
-assert(impl == published);
-```
+Upgrading a beacon moves every instance of that type under the
+IssuanceManager at once.
 
 ## What you can and cannot do
 
-* ✅ You can stay on your original implementation indefinitely. There is no
-  forced migration.
-* ✅ You can roll back to an earlier MetaLeX-approved implementation if it
-  is still set on the factory.
-* ❌ You cannot upgrade to an arbitrary implementation. The reference
-  implementation gate ensures MetaLeX and the issuer must both agree.
-* ❌ MetaLeX cannot upgrade your contracts. The upgrade transaction is
-  signed by your `UPGRADE_AUTHORITY`.
+* You may stay on your current implementation indefinitely.
+* You cannot upgrade to an implementation that is not the factory's
+  published reference — the call reverts.
+* MetaLeX cannot upgrade your contracts; the upgrade call is made by your
+  owner.
 
 ## Related
 
-* Reference: [Upgrade model](../reference/upgrade-model.md).
-* Explanation:
-  [Co-approval upgradeability](../explanation/co-approval-upgradeability.md),
-  [The role of MetaLeX](../explanation/role-of-metalex.md).
+* [Upgrade model](../reference/upgrade-model.md).
+* Explanation: [Co-approval upgradeability](../explanation/co-approval-upgradeability.md).

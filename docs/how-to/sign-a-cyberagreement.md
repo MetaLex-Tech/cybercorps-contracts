@@ -1,74 +1,64 @@
 # Sign a cyberAgreement
 
-**cyberSign** is the protocol's cybernetic legal-agreement execution layer.
-Templates are registered in `CyberAgreementRegistry`, parties countersign
-onchain via EIP-712, and execution is anchored to the resulting cyberCERTs
-and deal records.
+**cyberSign** is the protocol's agreement layer: the
+`CyberAgreementRegistry` holds agreement **templates** and executed,
+multi-party-signed **contracts**. Deals and rounds reference it for their
+underlying agreements.
 
-cyberSign is unbundled from cyberRAISE: you can use it as a standalone
-signing layer for any legal instrument that should run on the same chain as
-the assets it governs.
+## 1. Register a template
 
-## When to use this guide
-
-You need to record a signed legal agreement (a SAFE, a side letter, a board
-consent, a stockholder consent, an investor representation letter, etc.)
-onchain such that it is bound to a specific cyberCORP, party, and (optionally)
-deal or cyberCERT.
-
-## Steps
-
-### 1. Register the template
-
-If the template is not already in `CyberAgreementRegistry`, an admin uploads
-it:
+A template is a reusable legal document with a field schema.
 
 ```solidity
-uint256 templateId = registry.registerTemplate(TemplateData({
-    name: "Series A Stockholder Consent v1",
-    contentUri: "ipfs://...",      // canonical text
-    contentHash: keccak256(text),
-    schema: "..."                  // optional EIP-712 schema for typed params
-}));
+ICyberAgreementRegistry(registry).createTemplate(
+    templateId,        // bytes32 — chosen id
+    "Series A Stockholder Consent v1",  // title
+    "ipfs://...",      // legalContractUri (canonical text)
+    globalFields,      // string[] — fields common to the contract
+    partyFields        // string[] — fields filled per signing party
+);
 ```
 
-Most commonly used templates (see
-[Agreement templates](../reference/templates.md)) are pre-registered.
-
-### 2. Instantiate an executed agreement
+## 2. Create a contract from the template
 
 ```solidity
-uint256 agreementId = registry.proposeAgreement(AgreementProposal({
-    templateId: templateId,
-    parties: [acme, alice],
-    params: abi.encode(...),       // values for the typed parameters
-    boundCertIds: [42],            // optional: bind to specific certs
-    boundDealId: 0                 // optional: bind to a deal
-}));
+bytes32 contractId = ICyberAgreementRegistry(registry).createContract(
+    templateId,
+    salt,           // uint256
+    globalValues,   // string[]
+    parties,        // address[]
+    partyValues,    // string[][] — per-party values
+    secretHash,     // bytes32
+    finalizer,      // address allowed to finalise
+    expiry          // uint256
+);
 ```
 
-### 3. Countersign
+## 3. Parties sign
 
-Each party signs an EIP-712 payload covering the template id, params, and
-their party identity, and submits the signature:
+Each party signs. Three entry points:
+
+* `signContract(contractId, partyValues, fillUnallocated, secret)` — the
+  caller signs for itself.
+* `signContractFor(signer, contractId, partyValues, signature, fillUnallocated, secret)`
+  — relayed, with the signer's EIP-712 signature.
+* `signContractWithEscrow(escrowSigner, contractId, partyValues, signature, fillUnallocated, secret)`
+  — using a pre-escrowed signature.
+
+When every party has signed, the registry emits `ContractFullySigned`.
+
+## 4. Finalise
 
 ```solidity
-registry.signAgreement(agreementId, aliceSig);
+ICyberAgreementRegistry(registry).finalizeContract(contractId);
 ```
 
-When all parties have signed, the registry emits `AgreementExecuted` and the
-agreement is permanently anchored — addressable by `agreementId` from any cert
-or deal that bound to it.
+## Checking status
 
-### 4. (Optional) Use as a precondition
-
-A `RequireAgreementExecutedCondition` (custom) can be attached to any
-state transition to require that a specific agreement is fully executed first
-— e.g., "this round cannot close until the side letter is signed."
+`hasSigned`, `allPartiesSigned`, `isFinalized`, `isVoided`,
+`getContractDetails`, `getAgreementsForParty`.
 
 ## Related
 
-* Reference:
-  [`CyberAgreementRegistry`](../reference/contracts/CyberAgreementRegistry.md),
+* [CyberAgreementRegistry](../reference/contracts/CyberAgreementRegistry.md),
   [Agreement templates](../reference/templates.md).
-* Explanation: [Application stack — cyberSign](../explanation/application-stack.md#cybersign).

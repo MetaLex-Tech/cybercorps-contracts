@@ -1,40 +1,53 @@
 # DealManager
 
-**DealManager** is the deal-lifecycle and escrow contract used by cyberTRADE
-and by `RoundManager` when closing rounds.
+Manages the lifecycle of deals — secondary transfers and other transactions —
+for a cyberCORP. A deal is created from an agreement template and is
+identified by a `bytes32 agreementId`.
 
 * **Source:** [`src/DealManager.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/DealManager.sol)
-* **Proxy pattern:** UUPS (v3)
+  / interface [`IDealManager.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/interfaces/IDealManager.sol)
+* **Pattern:** UUPS proxy
 
-## Responsibilities
-
-* Propose deals (`proposeDeal`).
-* Manage counterparty signatures (EIP-712).
-* Escrow assets (ERC-20 / ERC-721) via `LeXscroWLite`.
-* Evaluate `ICondition` sets and release atomically on satisfaction.
-* Endorse the affected cyberCERT(s) on close.
-
-## Selected public interface
+## Lifecycle
 
 ```solidity
-function proposeDeal(DealParams calldata) external returns (uint256 dealId);
-function signDeal(uint256 dealId, bytes calldata signature) external;
-function approveDeal(uint256 dealId) external;         // OFFICER_AUTHORITY (issuer side)
-function deposit(uint256 dealId) external;
-function close(uint256 dealId) external;
-function cancel(uint256 dealId) external;
+function proposeDeal(address[] _certPrinterAddress, address _paymentToken,
+    uint256 _paymentAmount, bytes32 _templateId, uint256 _salt,
+    string[] _globalValues, address[] _parties, CertificateDetails[] _certDetails,
+    string[][] _partyValues, address[] conditions, bytes32 secretHash,
+    uint256 expiry) external returns (bytes32 agreementId);
+
+function proposeAndSignDeal(/* ...as above, plus */ address proposer,
+    bytes signature /* ... */) external returns (bytes32 agreementId, uint256[] certIds);
+
+function signDealAndPay(address signer, bytes32 agreementId, bytes signature,
+    string[] partyValues, bool _fillUnallocated, string name, string secret) external;
+function signAndFinalizeDeal(address signer, bytes32 _agreementId,
+    string[] _partyValues, bytes signature, bool _fillUnallocated,
+    string buyerName, string secret) external;
+function finalizeDeal(bytes32 agreementId) external;
+
+function voidExpiredDeal(bytes32 _agreementId, address signer, bytes signature) external;
+function revokeDeal(bytes32 _agreementId, address signer, bytes signature) external;
+function signToVoid(bytes32 _agreementId, address signer, bytes signature) external;
+
+function initialize(address _auth, address _corp, address _dealRegistry,
+    address _issuanceManager, address _upgradeFactory) external;
 ```
 
-## Settlement modes
+## How it works
 
-* `EDIT_CERT` — mutate the seller's existing cert's holder / units fields
-  in place under issuer approval.
-* `BURN_AND_MINT` — burn the seller's cert and mint a fresh one to the buyer
-  with new metadata.
-* `SCRIP` — settle in cyberSCRIP; the seller may scripify as part of close,
-  the buyer may de-scripify later or never.
+* A deal references an agreement **template** (`_templateId`) and is recorded
+  through the [CyberAgreementRegistry](CyberAgreementRegistry.md) —
+  `_dealRegistry` in `initialize`.
+* `_parties` countersign with EIP-712 signatures; `signDealAndPay` combines a
+  party's signature with their payment.
+* `conditions` are `ICondition` addresses that gate the deal.
+* `expiry` and `secretHash` support timed and secret-gated deals;
+  `voidExpiredDeal` cleans up expired deals.
+* On `finalizeDeal` the deal's certificate effects (mint/assign/endorse) are
+  applied via the IssuanceManager.
 
-## See also
-
-* [`LeXscroWLite`](LeXscroWLite.md), [`RoundManager`](RoundManager.md)
-* [Conditions](../conditions.md)
+> The escrow of payment and assets is part of this deal flow. There is no
+> separate `LeXscroWLite` contract in this repository — see
+> [LeXscroWLite](LeXscroWLite.md).

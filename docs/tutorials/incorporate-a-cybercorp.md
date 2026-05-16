@@ -1,137 +1,129 @@
 # Tutorial: Incorporate a cyberCORP
 
-In this tutorial you will deploy a brand-new cyberCORP representing a Delaware
-C-corp, issue its first cyberCERT (a genesis share certificate), and inspect
-the onchain register.
+In this tutorial you deploy a new cyberCORP, create a certificate printer for
+its Common Stock, and issue the first cyberCERT to a founder.
 
-At the end, you will have:
+At the end you will have a `CyberCorp` and its suite (`IssuanceManager`,
+`DealManager`, `RoundManager`, plus a `BorgAuth` ACL), one `CyberCertPrinter`
+for Common Stock, and one cyberCERT held by the founder.
 
-* a `CyberCorp` proxy you control,
-* an `IssuanceManager`, `DealManager`, `RoundManager`, `CyberCertPrinter` and
-  `CyberShares` deployed as part of the suite,
-* a single cyberCERT minted to a founder address representing 10,000,000
-  authorized shares of Common Stock.
+> Code here is **illustrative of the flow** and uses the real contract
+> signatures from `cybercorps-contracts` (`develop`). Confirm structs and
+> parameters against the source before deploying.
 
-## 1. Pick a factory
+## 1. Deploy the cyberCORP
 
-New cyberCORPs are deployed by a `CyberCorpFactory`. The factory composes the
-`CyberCorpSingleFactory`, `IssuanceManagerFactory`, `DealManagerFactory` and
-`RoundManagerFactory` so that a single transaction produces a fully wired
-suite.
-
-Use the canonical Base Sepolia factory address from
-[Deployments](../reference/deployments.md). Cast it to the
-`ICyberCorpFactory` interface in your script.
-
-## 2. Assemble the entity config
-
-The `CyberCorp` contract stores the entity's legal identity. Fill in:
-
-* **Legal name** — `"Acme CyberCo, Inc."`
-* **Entity type** — `EntityType.DELAWARE_C_CORP`
-* **Jurisdiction** — `"Delaware, USA"`
-* **Governance roles** — addresses for `officer`, `director`,
-  `secretary` (these become BorgAuth roles)
-* **Default dispute resolution** — the URI of your governing arbitration
-  clause or a sentinel
-* **Authorized signatures** — initial escrowed signature data structures
-* **Agreement registry** — address of the canonical `CyberAgreementRegistry`
-  on your chain (see [Reference → Deployments](../reference/deployments.md))
-
-See [`CyberCorp.sol`](../reference/contracts/CyberCorp.md) for the full struct.
-
-## 3. Deploy via `createCyberCorp`
+New cyberCORPs are deployed by the **`CyberCorpFactory`**. A single
+`deployCyberCorp` call deploys the BorgAuth ACL and the whole suite.
 
 ```solidity
-ICyberCorpFactory factory = ICyberCorpFactory(FACTORY_ADDR);
-address corp = factory.createCyberCorp(entityConfig, governanceConfig);
-```
+import {CompanyOfficer} from "src/CyberCorpConstants.sol";
 
-The factory will:
+CyberCorpFactory factory = CyberCorpFactory(FACTORY_ADDR);
 
-1. Deploy a UUPS `CyberCorp` proxy owned by your address.
-2. Deploy an `IssuanceManager` proxy and grant it the issuance authority.
-3. Deploy `CyberCertPrinter` (the ERC-721) and `CyberScrip` beacons under the
-   `IssuanceManager`.
-4. Deploy a `DealManager` and a `RoundManager`.
-5. Wire all addresses into the root `CyberCorp` contract.
-
-The transaction emits a `CyberCorpDeployed` event. Capture every address from
-the event for the next step.
-
-## 4. Issue the genesis cyberCERT
-
-A cyberCORP is born with zero issued shares. You authorize, then issue.
-
-```solidity
-IIssuanceManager im = IIssuanceManager(issuanceManagerAddr);
-
-// 4a. Authorise 10,000,000 shares of Common Stock under the share extension.
-im.setAuthorizedShares(SHARE_CLASS_COMMON, 10_000_000);
-
-// 4b. Build a CertIssuance struct (see CyberCertPrinter reference).
-CertIssuance memory cert = CertIssuance({
-    holderName: "Jane Founder",
-    holderAddress: founder,
-    units: 8_000_000,
-    shareClass: SHARE_CLASS_COMMON,
-    series: "",
-    legend: "These securities have not been registered under the Securities Act of 1933...",
-    agreementUri: "ipfs://...",
-    acquisitionPriceUsd: 0,
-    // ...
+CompanyOfficer memory officer = CompanyOfficer({
+    eoa:     founder,
+    name:    "Jane Founder",
+    contact: "jane@acme.example",
+    title:   "Chief Executive Officer"
 });
 
-// 4c. Mint.
-uint256 tokenId = im.issueCert(cert);
+(
+    address cyberCorp,
+    address auth,
+    address issuanceManager,
+    address dealManager,
+    address roundManager
+) = factory.deployCyberCorp(
+    keccak256("acme-cyberco-v1"),     // salt (must be non-zero)
+    "Acme CyberCo, Inc.",            // companyName
+    "corporation",                   // companyType (free-form text)
+    "Delaware",                      // companyJurisdiction
+    "legal@acme.example",            // companyContactDetails
+    "Delaware Court of Chancery",     // defaultDisputeResolution
+    founder,                          // companyPayable
+    officer
+);
 ```
 
-The call will:
+The factory grants the founder BorgAuth role `200` (officer) and grants the
+IssuanceManager / DealManager / RoundManager role `99`. See
+[Access control](../reference/access-control.md). It emits `CyberCorpDeployed`.
 
-* require the caller to hold the `ISSUER_AUTHORITY` BorgAuth role,
-* increment `CyberShares.outstanding(SHARE_CLASS_COMMON)` by 8,000,000,
-* mint an ERC-721 to `founder` whose `tokenURI` is a fully onchain JSON+SVG
-  certificate produced by `CertificateUriBuilder`,
-* emit `CertIssued(tokenId, ...)`.
+## 2. Create a Common Stock certificate printer
 
-## 5. Inspect the register
-
-The register *is* the chain. Anything you want to know is readable:
+The `IssuanceManager` creates one `CyberCertPrinter` per security class.
 
 ```solidity
-// What does this cert say?
-string memory uri = CyberCertPrinter(certPrinter).tokenURI(tokenId);
-// → data:application/json;base64,... with the rendered SVG inside
+import {SecurityClass, SecuritySeries} from "src/CyberCorpConstants.sol";
 
-// Who owns it?
-address owner = CyberCertPrinter(certPrinter).ownerOf(tokenId);
+string[] memory legend = new string[](1);
+legend[0] = "These securities have not been registered under the Securities Act of 1933...";
 
-// How many Common shares are outstanding?
-uint256 outstanding = CyberShares(sharesAddr).outstanding(SHARE_CLASS_COMMON);
-
-// What is the entity?
-string memory name = CyberCorp(corp).legalName();
-EntityType etype = CyberCorp(corp).entityType();
+address commonPrinter = IIssuanceManager(issuanceManager).createCertPrinter(
+    legend,                       // default legend
+    "Acme CyberCo Common Stock",  // name
+    "ACME-CS",                    // ticker
+    "ipfs://acme-cert-art",       // certificate URI
+    SecurityClass.CommonStock,
+    SecuritySeries.NA,
+    SHARE_EXTENSION_ADDR          // certificate extension for this class
+);
 ```
 
-There is no offchain ledger to reconcile against, no transfer agent to
-instruct. Per the entity's governing documents, **this** is the official
-stock ledger of Acme CyberCo, Inc.
+## 3. Issue the genesis cyberCERT
+
+Mint a cyberCERT to the founder with `createCertAndAssign`. The metadata is a
+`CertificateDetails` struct (defined in
+[`CyberCertPrinterStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/storage/CyberCertPrinterStorage.sol)).
+
+```solidity
+import {CertificateDetails} from "src/storage/CyberCertPrinterStorage.sol";
+
+CertificateDetails memory details = CertificateDetails({
+    signingOfficerName:                  "Jane Founder",
+    signingOfficerTitle:                 "Chief Executive Officer",
+    investmentAmountUSD:                 0,
+    issuerUSDValuationAtTimeOfInvestment: 0,
+    unitsRepresented:                    8_000_000,
+    legalDetails:                        "Founder common stock",
+    extensionData:                       ""   // ABI-encoded per the extension
+});
+
+uint256 tokenId = IIssuanceManager(issuanceManager).createCertAndAssign(
+    commonPrinter,
+    founder,
+    details
+);
+```
+
+`createCertAndAssign` mints the ERC-721 *and* records the founder as the
+registered owner. (`createCert` mints without assigning a registered owner;
+other `createCert*` variants also attach a name, an endorsement, or a
+signature — see [IssuanceManager](../reference/contracts/IssuanceManager.md).)
+
+## 4. Inspect the register
+
+```solidity
+CyberCertPrinter printer = CyberCertPrinter(commonPrinter);
+
+string  memory uri        = printer.tokenURI(tokenId);     // onchain JSON + SVG
+address         tokenHolder = printer.ownerOf(tokenId);     // ERC-721 holder
+address         registered  = printer.legalOwnerOf(tokenId);// registered owner of record
+```
+
+Note the two owners: `ownerOf` is the NFT holder; `legalOwnerOf` is the
+registered owner of record. They are kept distinct on purpose — see
+[The dual-token model](../explanation/dual-token-model.md).
 
 ## What you just did
 
-* Deployed a Delaware C-corp whose DGCL §224 stock ledger lives natively
-  onchain.
-* Used BorgAuth's role separation to make the founder a director-officer and
-  the IssuanceManager the only address that can mint share certificates.
-* Produced an ERC-721 whose metadata is itself the legal record (DGCL §158
-  share-certificate requirements are encoded into the token URI).
+* Deployed a cyberCORP and its full contract suite in one call.
+* Created a Common Stock certificate printer.
+* Issued the first register entry as a cyberCERT.
 
 ## Next
 
-* Tutorial 2: [Run a cyberRAISE round](run-a-cyberraise-round.md) to actually
-  raise capital from outside investors.
-* Reference: [`CyberCertPrinter`](../reference/contracts/CyberCertPrinter.md),
-  [`IssuanceManager`](../reference/contracts/IssuanceManager.md).
-* Explanation:
-  [Constitutive vs. pointer tokenization](../explanation/constitutive-vs-pointer.md).
+* [Run a cyberRAISE round](run-a-cyberraise-round.md).
+* Reference: [IssuanceManager](../reference/contracts/IssuanceManager.md),
+  [CyberCertPrinter](../reference/contracts/CyberCertPrinter.md).

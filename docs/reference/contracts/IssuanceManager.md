@@ -1,68 +1,96 @@
 # IssuanceManager
 
-The **IssuanceManager** is the issuance authority for a cyberCORP. It is the
-only contract permitted to mutate the register of holders.
+The issuance authority for a cyberCORP. It creates CyberCertPrinters, issues
+and manages cyberCERTs, deploys CyberScrip, and runs scripification.
 
 * **Source:** [`src/IssuanceManager.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/IssuanceManager.sol)
-* **Proxy pattern:** UUPS (v3)
-* **Owns:** `CyberCertPrinter` beacon, `CyberScrip` beacon
+  / interface [`IIssuanceManager.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/interfaces/IIssuanceManager.sol)
+* **Pattern:** UUPS proxy; owns the `cyberCertPrinterBeacon` and
+  `cyberScripBeacon` `UpgradeableBeacon`s.
 
-## Responsibilities
+One IssuanceManager exists per cyberCORP. It creates **one CyberCertPrinter
+per security class** (`createCertPrinter`), and **one CyberScrip per printer**
+(`deployCyberScrip`).
 
-* Issue cyberCERTs (`issueCert`) of any registered extension type.
-* Revoke / burn cyberCERTs (`revokeCert`).
-* Endorse cyberCERTs (`endorseCert`).
-* Scripify a cert (full or partial) into cyberSCRIP (`scripifyCert`).
-* De-scripify cyberSCRIP back to a cert (`convertScripToCert`).
-* Manage per-class conditions for scripify / de-scripify.
-* Manage the scripify whitelist per cert.
-* Manage registration approvals for new holders presenting scrip.
-* Deploy `CyberScrip` instances per share class on demand.
-
-## Selected public interface
+## Certificate lifecycle
 
 ```solidity
-function issueCert(CertIssuance calldata) external returns (uint256);  // ISSUER_AUTHORITY
-function revokeCert(uint256 tokenId) external;                          // ISSUER_AUTHORITY
-function endorseCert(uint256 tokenId, Endorsement calldata) external;   // SECRETARY_AUTHORITY
+function createCertPrinter(string[] _ledger, string _name, string _ticker,
+    string _certificateUri, SecurityClass _securityType,
+    SecuritySeries _securitySeries, address _extension) external returns (address);
 
-function scripifyCert(uint256 tokenId, uint256 units, address to) external;
-function convertScripToCert(address scrip, uint256 amount) external returns (uint256 newTokenId);
-function requestRecertification(address scrip, uint256 amount) external;
-function approveRegistration(address holder, RegistrationData calldata) external; // OFFICER_AUTHORITY
+function createCert(address certAddress, address to, CertificateDetails _details)
+    external returns (uint256);
+function createCertAndAssign(address certAddress, address investor,
+    CertificateDetails _details) external returns (uint256 tokenId);
+function createCertAndAssignWithName(address certAddress, address investor,
+    CertificateDetails _details, string investorName, bytes endorsementSignature,
+    uint256 timestamp) external returns (uint256 tokenId);
+function createCertSignAndAssign(address certAddress, address investor,
+    CertificateDetails _details, bytes endorsementSignature, address registry,
+    bytes32 agreementId, string investorName) external returns (uint256 tokenId);
+function assignCert(address certAddress, address from, uint256 tokenId,
+    address investor, CertificateDetails _details) external;
 
-function setScripifyCondition(bytes32 shareClass, ICondition) external;
-function setDescripifyCondition(bytes32 shareClass, ICondition) external;
-
-function setAuthorizedShares(bytes32 shareClass, uint256 authorized) external; // DIRECTOR_AUTHORITY
-
-function upgradeCertPrinterBeaconImplementation(address impl) external; // UPGRADE_AUTHORITY
-function upgradeScripBeaconImplementation(address impl) external;       // UPGRADE_AUTHORITY
+function signCertificate(address certAddress, uint256 tokenId, bytes signature) external;
+function addOfficerSignature(address certAddress, uint256 tokenId, bytes signature) external;
+function endorseCertificate(address certAddress, uint256 tokenId, address endorser,
+    bytes signature, bytes32 agreementId) external;
+function voidCertificate(address certAddress, uint256 tokenId) external;
+function unvoidCertificate(address certAddress, uint256 tokenId) external;
 ```
 
-## Scripification model
+> There is no single `issueCert` function. Issuance is `createCert*` — the
+> variant depends on whether you assign a holder, a name, and a signature/
+> endorsement at mint time.
 
-* **Partial scripification** is supported. The source cert remains active with
-  a reduced unit count.
-* **Configurable scrip ratio** (`numerator / denominator`) governs cert units
-  ↔ scrip ERC-20 unit conversion.
-* **Scripified Share Pool** is an ERC-4626-style vault tracking each
-  registered holder's scripified units. De-scripification withdraws
-  proportionally.
-* **Two recertification paths:**
-  * existing registered holders → direct merge onto their existing cert;
-  * new holders → require `approveRegistration` first (the
-    `IssuerApprovalRecertificationCondition` enforces this).
+## Scripification
+
+```solidity
+function deployCyberScrip(address certAddress,
+    ITransferRestrictionHook[] typeRestrictionHooks,
+    ICondition[] certToScripConditions, ICondition[] scripToCertConditions,
+    uint256 scripToCertMinimum, uint256 scripRatioNumerator,
+    uint256 scripRatioDenominator, uint256[] scripifyWhitelistIds,
+    bool scripifyWhitelistEnabled, bool enableForceTransfer,
+    bool enableForceBurn, bool enableFreeze) external returns (address);
+
+function scripifyCert(address certAddress, uint256 id, uint256 amount, address recipient) external;
+function convertScripToCert(address certAddress, uint256 amount) external;
+function setScripRatio(address certAddress, uint256 numerator, uint256 denominator) external;
+function setScripToCertMinimum(address certAddress, uint256 minimum) external;
+
+function setRecertificationApproval(address certAddress, address investor,
+    string investorName, CertificateDetails details, bytes officerSignature) external;
+function clearRecertificationApproval(address certAddress, address investor) external;
+```
+
+Plus scripify-whitelist management (`setScripifyWhitelistEnabled`,
+`addScripifyWhitelistIds`, `removeScripifyWhitelistIds`,
+`isScripifyWhitelisted`) and views (`getScripRatio`, `getScripToCertMinimum`,
+`getRecertificationApproval`, `getCertScripifiedStatus`,
+`getScripPoolAmountById`, `getScripPoolSharesById`).
+
+## Hooks, legends, transferability
+
+`setRestrictionHook`, `setGlobalRestrictionHook`, `setGlobalTransferable`,
+`setTokenTransferable`, `addDefaultLegend`, `removeDefaultLegendAt`,
+`addCertLegend`, `removeCertLegendAt`.
+
+## Beacons / config
+
+`CORP()`, `uriBuilder()` / `setUriBuilder`, `companyName()`,
+`companyJurisdiction()`, `AUTH()`, `DEPLOY_VERSION()`, `printers(index)`,
+`cyberCertPrinterBeacon()`, `cyberScripBeacon()`, `getUpgradeFactory()`,
+`upgradeCertPrinterBeaconImplementation`, `upgradeScripBeaconImplementation`.
 
 ## Events
 
-* `CertIssued(uint256 indexed tokenId, address indexed to, uint256 units, bytes32 shareClass)`
-* `CertRevoked(uint256 indexed tokenId)`
-* `CertScripified(uint256 indexed tokenId, uint256 units, address scrip, address to)`
-* `ScripConvertedToCert(address indexed scrip, uint256 amount, uint256 indexed newTokenId, address indexed to)`
-* `RegistrationApproved(address indexed holder, bytes32 dataHash)`
+`CertPrinterCreated`, `CertificateCreated`, `ScripifiedCert`,
+`ScripRecertified`, `ScripAddedToExistingCert`, `ScripToCertMinimumSet`,
+`CompanyDetailsUpdated`, `CertPrinterBeaconImplementationUpgraded`,
+`ScripBeaconImplementationUpgraded`.
 
-## See also
-
-* [`CyberCertPrinter`](CyberCertPrinter.md), [`CyberScrip`](CyberScrip.md)
-* [Conditions](../conditions.md)
+> Access control: state-changing functions are gated through BorgAuth (the
+> cyberCORP's officers/authorised roles). Consult the source for the exact
+> role required by each function.

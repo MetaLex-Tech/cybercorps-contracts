@@ -1,67 +1,66 @@
 # Factories
 
-Factories deploy and configure new cyberCORPs and their supporting
-contracts. They are themselves UUPS-upgradeable and live in MetaLeX's
-administrative domain (see [Upgrade model](upgrade-model.md)).
+Factories deploy cyberCORPs and their contracts.
 
 ## CyberCorpFactory
 
-The top-level entry point. Composes:
+The top-level entry point.
 
-* `CyberCorpSingleFactory` (deploys the root `CyberCorp` proxy)
-* `IssuanceManagerFactory` (deploys the issuance suite + beacons)
-* `DealManagerFactory` (deploys the cyberCORP's `DealManager`)
-* `RoundManagerFactory` (deploys the cyberCORP's `RoundManager`)
+* **Source:** [`src/CyberCorpFactory.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/CyberCorpFactory.sol)
+* **Inherits:** `UUPSUpgradeable`, `BorgAuthACL`
 
 ```solidity
-function createCyberCorp(EntityConfig calldata, GovernanceConfig calldata)
-    external returns (address cyberCorp);
+function deployCyberCorp(bytes32 salt, string companyName, string companyType,
+    string companyJurisdiction, string companyContactDetails,
+    string defaultDisputeResolution, address _companyPayable,
+    CompanyOfficer _officer)
+    external returns (address cyberCorp, address auth, address issuanceManager,
+                      address dealManager, address roundManager);
+
+function deployCyberCorpAndCreateOffer(/* ... */) external returns (/* corp suite + deal */);
+function deployCyberCorpAndCreateRound(/* ... */) external returns (/* corp suite + roundId */);
+function deployAndInitializeRoundManager(bytes32 salt, address cyberCorp) public returns (address);
 ```
 
-## CyberCorpSingleFactory
+`deployCyberCorp`:
 
-Deploys a single `CyberCorp` UUPS proxy from the registered
-`refImplementation`.
+1. Deploys a `BorgAuth` ACL via `CREATE2` and grants the officer level `200`.
+2. Deploys the `IssuanceManager`, `CyberCorp`, `DealManager`, and
+   `RoundManager` through their respective sub-factories and initialises
+   them.
+3. Grants the `IssuanceManager`, `DealManager`, and `RoundManager` BorgAuth
+   level `99`, and the `CyberCorp` level `200`.
+4. Emits `CyberCorpDeployed`.
 
-## IssuanceManagerFactory
+The `deployCyberCorpAndCreate*` variants additionally create cert printers
+and open a deal or a round in the same transaction.
 
-Deploys an `IssuanceManager` UUPS proxy plus the `CyberCertPrinter` and
-`CyberScrip` beacons owned by it. Holds the v3 reference implementations for
-all three.
+Setters (`onlyOwner`): `setStable`, `setIssuanceManagerFactory`,
+`setCyberCorpSingleFactory`, `setCyberAgreementFactory`,
+`setDealManagerFactory`, `setRoundManagerFactory`, `setLexchexAuth`.
 
-```solidity
-function setRefImplementation(address) external;                       // METALEX_ADMIN
-function setCyberCertPrinterRefImplementation(address) external;       // METALEX_ADMIN
-function setCyberScripRefImplementation(address) external;             // METALEX_ADMIN
-```
+## Sub-factories
 
-## DealManagerFactory / RoundManagerFactory
+`CyberCorpFactory` composes:
 
-Symmetric factories for the deal and round managers.
+| Factory | Deploys |
+|---|---|
+| `CyberCorpSingleFactory` | the `CyberCorp` proxy; holds the reference implementation that gates `CyberCorp` upgrades. |
+| `IssuanceManagerFactory` | the `IssuanceManager` (and its `CyberCertPrinter` / `CyberScrip` beacons). |
+| `DealManagerFactory` | the `DealManager`. |
+| `RoundManagerFactory` | the `RoundManager`. |
 
-## PumpCorpFactory
+The `CyberAgreementRegistry` is shared (passed in as `registryAddress`).
 
-Powers **ACE**. Deploys a cyberCORP + `RoundManager` pre-configured for an
-ACE-style Reg S offering, registers `ACESAFEExtension` on the
-`CyberCertPrinter`, and seeds the agreement registry with the ACE SAFE
-template.
+## Specialised factories
 
-Supports party-specific allocations and global price / cap configuration.
+These build on the same primitives for specific structures:
 
-## MetaDAOFactory
+| Factory | Source | Purpose |
+|---|---|---|
+| `PumpCorpFactory` | `src/PumpCorpFactory.sol` | Deploys cyberCORPs configured for **ACE** (token-to-equity) offerings. |
+| `MetaDAOFactory` | `src/MetaDAOFactory.sol` | Deploys MetaDAO futarchy-governed SPC structures. |
+| `ParentCoFactory` | `src/ParentCoFactory.sol` | Deploys parent/subsidiary cyberCORP structures. |
 
-Deploys a MetaDAO-style futarchy-governed Cayman SPC. Pre-registers the
-`MetaDAO Futarchy Governance SPC` templates. Wires governance authority to a
-futarchy oracle (per portfolio / SegCo).
-
-## ParentCoFactory
-
-Deploys parent + subsidiary cyberCORP structures for holding-company
-configurations. Both parent and sub share the same agreement registry and
-can cross-reference each other in their entity metadata.
-
-## See also
-
-* [How-to: Deploy a PumpCorp for ACE](../how-to/deploy-pumpcorp-ace.md)
-* [How-to: Deploy a MetaDAO SPC](../how-to/deploy-metadao-spc.md)
-* [Upgrade model](upgrade-model.md)
+> The specialised factories are documented here at a high level. Consult
+> their source for exact constructors and deployment parameters.

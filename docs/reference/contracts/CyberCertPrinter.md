@@ -1,65 +1,79 @@
 # CyberCertPrinter
 
-The **CyberCertPrinter** is the ERC-721 contract that mints cyberCERTs —
-Ledger Entry Tokens — for a single cyberCORP. There is typically one printer
-per instrument family, registered against the `IssuanceManager`.
+The ERC-721 contract for one security class's cyberCERTs (Ledger Entry
+Tokens). Mutated only by its IssuanceManager.
 
 * **Source:** [`src/CyberCertPrinter.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/CyberCertPrinter.sol)
-* **Proxy pattern:** beacon proxy (owned by the cyberCORP's `IssuanceManager`)
+* **Inherits:** `ERC721EnumerableUpgradeable`
+* **Pattern:** beacon proxy (beacon owned by the IssuanceManager)
+* **`DEPLOY_VERSION`:** `"4"`
 
-## What's encoded in each token
+Every state-changing function carries the `onlyIssuanceManager` modifier —
+the caller must be the IssuanceManager that deployed the printer. End users
+act through the IssuanceManager, not directly.
 
-Each cyberCERT carries — onchain — all information required by the relevant
-governing law for an entry on the holder register. For a Delaware C-corp this
-maps to DGCL §§158, 202, 219 requirements. For non-US entities the same
-fields satisfy the analogous statutory or contractual requirements.
-
-* Holder name (legal name of the holder of record)
-* Unit count (shares / membership-interest units / partnership-interest units
-  / fund-interest units)
-* Share class and series
-* Restriction legend
-* Endorsement history
-* Authorized signatures (officer / director / manager / general partner /
-  secretary)
-* Acquisition price
-* Governing agreement URI (`CyberAgreementRegistry` pointer + content hash)
-* A fully onchain Base64 SVG visualisation produced by
-  `CertificateImageBuilder`
-
-## Extensions
-
-Instrument-specific metadata is added via [extensions](../extensions.md)
-registered on the printer:
-
-* `ShareExtension` — Preferred / Common stock (NVCA-aligned terms)
-* `SAFEExtension`, `ACESAFEExtension`
-* `SAFTExtension`, `SAFTExtensionV2`
-* `SAFTEExtension`, `SAFTEExtensionV2`
-* `TokenWarrantExtension`, `TokenWarrantExtensionV2`
-
-## Selected public interface
+## Minting and assignment
 
 ```solidity
-function mint(uint256 tokenId, address to, bytes calldata metadata) external; // IssuanceManager only
-function burn(uint256 tokenId) external;                                       // IssuanceManager only
-
-function tokenURI(uint256 tokenId) external view returns (string memory);
-function setExtension(bytes32 securityType, address extension) external;       // DIRECTOR_AUTHORITY
-function setMaxHolders(uint256) external;                                      // DIRECTOR_AUTHORITY
-function setLegend(uint256 tokenId, string calldata) external;                 // SECRETARY_AUTHORITY
+function safeMint(uint256 tokenId, address to, CertificateDetails details)
+    external onlyIssuanceManager returns (uint256);
+function safeMintAndAssign(address to, uint256 tokenId, CertificateDetails details,
+    string investorName) external onlyIssuanceManager returns (uint256);
+function assignCert(address from, uint256 tokenId, address to,
+    CertificateDetails details) external onlyIssuanceManager returns (uint256);
+function burn(uint256 tokenId) external onlyIssuanceManager;
+function updateCertificateDetails(uint256 tokenId, CertificateDetails details)
+    external onlyIssuanceManager;
 ```
 
-## Behaviour: NFT transfer ≠ register transfer
+## Endorsements and signatures
 
-NFT `transferFrom` alone does **not** change registered ownership. Cert
-metadata must be explicitly mutated through the `IssuanceManager`. This
-maintains the distinction between *token possession* and *registered
-ownership* that corporate, LLC, partnership, and fund law require. See
-[The dual-token model](../../explanation/dual-token-model.md).
+```solidity
+function addEndorsement(uint256 tokenId, Endorsement newEndorsement) public;
+function endorseAndTransfer(uint256 tokenId, Endorsement e, address from, address to) external;
+function addIssuerSignature(uint256 tokenId, bytes signature) external onlyIssuanceManager;
+function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (Endorsement);
+function getIssuerSignatureCount(uint256 tokenId) external view returns (uint256);
+function getIssuerSignatureAt(uint256 tokenId, uint256 index) external view returns (bytes);
+```
 
-## See also
+## Void / status
 
-* [`IssuanceManager`](IssuanceManager.md)
-* [`CertificateUriBuilder`](CertificateUriBuilder.md)
-* [Extensions](../extensions.md)
+`voidCert`, `unvoidCert` (both `onlyIssuanceManager`), `isVoided`.
+
+## Legends, hooks, transferability
+
+`addDefaultLegend` / `removeDefaultLegendAt` / `getDefaultLegendAt` /
+`getDefaultLegendCount`; `addCertLegend` / `removeCertLegendAt` /
+`getCertLegendAt` / `getCertLegendCount`; `setRestrictionHook(id, hook)`,
+`setGlobalRestrictionHook`, `setGlobalTransferable`,
+`setTokenTransferable` / `isTokenTransferable`; `setExtension` /
+`getExtension` / `getExtensionData`.
+
+## Token possession vs. registered ownership
+
+Two distinct owners are tracked:
+
+* `ownerOf(tokenId)` — the ERC-721 token holder.
+* `legalOwnerOf(tokenId)` — the **registered owner of record**, stored
+  separately in the cert's `OwnerDetails`.
+
+The `_update` override enforces this: a transfer only updates the registered
+owner when a matching **endorsement** exists (or when `endorsementRequired`
+is false). Moving the NFT without an endorsement does not change the
+registered owner. This is the onchain mechanism behind the
+[dual-token model](../../explanation/dual-token-model.md).
+
+## Views
+
+`tokenURI`, `getCertificateDetails`, `getActiveCertificateDetails`,
+`defaultLegend`, `certificateUri`, `issuanceManager`, `securityType`
+(`SecurityClass`), `securitySeries` (`SecuritySeries`), `transferable`,
+`endorsementRequired`, `legalOwnerOf`.
+
+## Events
+
+`CyberCertPrinter_CertificateCreated`, `CertificateAssigned`,
+`CertificateEndorsed`, `CertificateSigned`, `CertificateVoided`,
+`CertificateUnvoided`, `CyberCertTransfer`, `RestrictionHookSet`,
+`GlobalRestrictionHookSet`, `GlobalTransferableSet`, `Converted`.

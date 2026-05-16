@@ -1,41 +1,57 @@
 # RoundManager
 
-**RoundManager** runs multi-investor primary fundraising rounds. It is the
-backend of cyberRAISE.
+Runs multi-investor primary fundraising rounds for a cyberCORP. Rounds are
+identified by a `bytes32 roundId`; each Expression of Interest becomes an
+agreement identified by a `bytes32 agreementId`.
 
 * **Source:** [`src/RoundManager.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/RoundManager.sol)
-* **Proxy pattern:** UUPS (v3)
+  / interface [`IRoundManager.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/interfaces/IRoundManager.sol)
+* **Pattern:** UUPS proxy
 
-## Round modes
-
-| Mode | Behaviour |
-|---|---|
-| `FIRST_COME` | First valid EOI is accepted automatically; cap fills in submission order. |
-| `ADMISSION` | Issuer must explicitly `acceptEOI` for each EOI. |
-
-## Round configuration
-
-* Security type (SAFE / SAFT / SAFTE / Token Warrant / priced equity round).
-* Payment token (typically USDC).
-* Raise cap, min ticket, max ticket.
-* Open / close timestamps.
-* Per-round `ICondition` (composed via `OrCondition` if needed).
-* Agreement template URI for the round's standard form.
-
-## Selected public interface
+## Functions
 
 ```solidity
-function createRound(RoundConfig calldata) external returns (uint256 roundId); // OFFICER_AUTHORITY
-function submitEOI(uint256 roundId, EOI calldata, bytes calldata sig) external;
-function acceptEOI(uint256 roundId, uint256 eoiId) external;                    // OFFICER_AUTHORITY
-function rejectEOI(uint256 roundId, uint256 eoiId) external;                    // OFFICER_AUTHORITY
-function closeRound(uint256 roundId) external;
+function createRound(Round roundDraft, CyberCertData[] certData)
+    external returns (bytes32 roundId);
 
-function totalRaised(uint256 roundId) external view returns (uint256);
-function certsMinted(uint256 roundId) external view returns (uint256[] memory);
+function submitEOI(bytes32 roundId, EOI eoi, string[] globalValues,
+    string[] partyValues, bytes signature, uint256 salt,
+    address[] conditions, bytes32 secretHash)
+    external returns (bytes32 agreementId, uint256 tokenId);
+
+function allocate(bytes32 agreementId, uint256 allocatedAmount)
+    external returns (uint256 tokenId);
+function reject(bytes32 agreementId) external;
+function reject(bytes32 agreementId, bool isVoidAgreement) external;
+function recallEOI(bytes32 agreementId) external;
+function recallEOI(bytes32 agreementId, bool isVoidAgreement) external;
+
+function setRoundEndTime(bytes32 roundId, uint256 newEndTime) external;
+function closeRoundNow(bytes32 roundId) external;
+function setRoundPricePerShare(bytes32 roundId, uint256 price, uint8 priceDecimals) external;
+function setPrimarySecurity(bytes32 roundId, SecurityClass cls, SecuritySeries series) external;
 ```
 
-## See also
+## Views
 
-* [`DealManager`](DealManager.md), [`IssuanceManager`](IssuanceManager.md)
-* [Tutorial: Run a cyberRAISE round](../../tutorials/run-a-cyberraise-round.md)
+`roundExists`, `getRoundPriceInfo`, `getPrimarySecurity`, `computeFee(size)`,
+`getPlatformPayable`, `getLexChex` / `setLexChex`, `issuanceManager`,
+`DEPLOY_VERSION`.
+
+## How it works
+
+* `createRound` takes a `Round` draft (built with the `RoundLib` helper —
+  ticket sizing, raise cap, price, valuation, start/end time, round type,
+  public/private, agreement template, conditions) plus per-class
+  `CyberCertData`.
+* Investors `submitEOI`; the issuer `allocate`s accepted EOIs (or `reject`s
+  them); investors may `recallEOI`.
+* `closeRoundNow` closes a round; allocations mint the corresponding
+  cyberCERTs through the IssuanceManager.
+* `computeFee` / `getPlatformPayable` cover the platform fee on a round.
+
+## Events
+
+`RoundCreated`, `RoundSnapshotSet`, `RoundingPolicySet`,
+`PMVCSubseriesLabelSet`, `RoundEndTimeUpdated`, `RoundClosed`,
+`EOISubmitted`, `AllocationMade`, `EOIRejected`.
