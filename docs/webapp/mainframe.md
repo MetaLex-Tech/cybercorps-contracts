@@ -1,92 +1,84 @@
-# The Mainframe — for issuers
+# The cyberCORPs app — manage your company
 
-The **Mainframe** is the control panel for your company (your *cyberCORP*).
-If you are a founder or officer, this is where you run the company's onchain
-life: its register of holders, its fundraising, its deals, and its
-governance.
+The **cyberCORPs app** (`cybercorps.metalex.tech`) is where a company is
+created and its securities are managed. If you are a founder or officer,
+this is your company's onchain control panel.
 
-## What the Mainframe is for
+Its central screen is the **Mainframe** — the view of your company's
+securities and scrip.
 
-Think of it as your company's cap-table software, transfer agent, and deal
-room — except the records it shows are not a copy of the official record.
-**They are the official record.** When you issue a security or record a
-transfer here, that *is* the legal change to your company's register.
+> **Fundraising rounds are not here.** Rounds are created, configured, and
+> run in [cyberRAISE](cyberraise.md) (`cyberraise.metalex.tech`). The
+> cyberCORPs app is about the company and its register of holders; cyberRAISE
+> is about raising money.
 
-## Getting set up
+## Creating your company
 
-1. **Connect your wallet** and sign in (see
-   [Using the cyberCORPs apps](README.md)).
-2. If your company has not been set up onchain yet, you create it: you
-   provide the entity's details — legal name, entity type (C-corp, LLC, etc.),
-   jurisdiction, and the people who serve as its officers. This step deploys
-   your cyberCORP and its supporting contracts.
-3. Once created, your company has a register with no securities issued yet.
-   You add securities as you issue them.
+Connect your wallet, sign in, and create a cyberCORP. You provide the
+entity's details — legal name, entity type, jurisdiction, contact details —
+and the officer who is setting it up. This deploys your cyberCORP and its
+supporting contracts.
 
-> Setting up a company onchain has legal prerequisites — your company's
-> governing documents need to designate the onchain system as the official
-> register. MetaLeX provides the templates for this. Talk to your counsel
-> before relying on the onchain register as authoritative.
+> You can also create a cyberCORP from within [cyberRAISE](cyberraise.md) —
+> useful if you are setting up the company and its first raise together.
 
-## What you can do in the Mainframe
+> Setting up a company onchain has legal prerequisites: the company's
+> governing documents need to designate the onchain system as its official
+> register. MetaLeX provides templates for this; talk to your counsel.
 
-### View the register (cap table)
+## The Mainframe
 
-See every holder of record, by class and series — common stock, preferred,
-SAFEs, options, and so on. Each entry is a **cyberCERT**: a certificate
-showing the holder's name, the number of units, the class, restrictions, and
-signatures.
+The Mainframe shows your company's securities. The records here are not a
+copy of the official record — **they are the official record**.
 
-### Issue securities
+### Security classes
 
-Issue new cyberCERTs to founders, employees, or investors — stock, options,
-SAFEs, and the other [supported security types](../reference/security-types.md).
-Each issuance is a transaction; once confirmed, the new holder appears on the
-register.
+Your company's securities are organised into **classes** (Common Stock,
+Preferred, SAFEs, options, and the other
+[supported types](../reference/security-types.md)). You create a new
+security class before issuing securities of that type.
 
-### Run fundraising rounds
+### Certificates (the register of holders)
 
-Configure and manage rounds. The round itself is run through
-[cyberRAISE](cyberraise.md), but you set it up and monitor it from here.
+Each holder's stake is a **cyberCERT** — a certificate showing the holder,
+the units, the class, restrictions, and signatures. The Mainframe lists
+them; together they are your cap table / register of holders.
 
-### Manage deals
+* **Issue a certificate** to a founder, employee, or investor.
+* **Approve a recertification** when a new holder needs to be put on the
+  register (for example, after acquiring scrip — see below).
 
-Propose and track deals — secondary transfers, buybacks, and other
-transactions. Deals move assets through an onchain escrow and settle only
-when all agreed conditions are met.
+### Scrip
 
-### Sign agreements
+A security can be given a tradable, fungible form — **cyberSCRIP**. From the
+Mainframe you can set a class up for scrip ("scripify"), and the Mainframe
+shows the scrip alongside the certificates.
 
-Countersign legal agreements (SAFEs, side letters, board and stockholder
-consents) onchain. The signed agreement is permanently linked to the
-securities and deals it governs.
+### Transferability
 
-### Manage roles
+Transferability controls let you set whether (and which) certificates and
+scrip can move.
 
-Grant and revoke authority — who can issue securities, who can sign on the
-company's behalf, who can approve upgrades. Each role corresponds to a
-governance role in your company's constitutional documents.
+## Admin
 
-### Monitor holder thresholds
+The app's **admin** area is where company-level settings and authority
+(officers / roles) are managed.
 
-Keep an eye on how many holders of record you have, so you can stay on the
-right side of regulatory thresholds (such as the US 12(g) threshold, or its
-equivalent in your jurisdiction).
+## Upgrades
 
-## A typical first month
-
-1. Create the cyberCORP.
-2. Issue founder stock.
-3. Set up an option pool and issue option grants.
-4. Open a SAFE round in [cyberRAISE](cyberraise.md).
-5. As investors come in, watch the register update in real time.
+The **upgrade** area lets the company opt in to new versions of the
+underlying contracts when MetaLeX publishes them. Upgrades are never forced —
+you choose if and when. (Background:
+[Co-approval upgradeability](../explanation/co-approval-upgradeability.md).)
 
 ## Good to know
 
-* **Every change is a transaction.** Issuing, transferring, and signing cost
-  a small amount of gas and take a few seconds to confirm.
+* **Every change is a transaction.** Issuing, transferring, scripifying, and
+  approving cost a small amount of gas.
 * **You keep control.** MetaLeX cannot issue your securities, move your
-  funds, or change your register. Authority lives with your company's own
-  roles.
-* **Nothing is hidden offchain.** Anyone you authorise — an auditor, an
-  investor, a regulator — can verify the register directly.
+  funds, or change your register.
+* **Nothing is hidden offchain.** Anyone you authorise can verify the
+  register directly.
+
+> This guide describes what each area of the app is for. It is not a
+> click-by-click walkthrough.

@@ -1,75 +1,66 @@
 # Using the cyberCORPs apps
 
-This part of the documentation is for the people who **use** the cyberCORPs
-apps — not for developers. If you are a company raising capital, an investor
-putting money into a round, or a token community converting into equity, you
-are in the right place.
+This part of the documentation is for the people who **use** the MetaLeX
+apps — founders, officers, and investors. No code: just what each app is for
+and how to use it.
 
-## The apps at a glance
+## The apps, and where they live
 
-| App | It lets you… | Who it's for |
+The products run as **separate apps on their own subdomains**. A company and
+the securities it issues are shared across them — set your company up once
+and it shows up everywhere.
+
+| App | Address | What you do there |
 |---|---|---|
-| [**The Mainframe**](mainframe.md) | Set up and run your company onchain — cap table, fundraising, deals, agreements, roles. | Company founders and officers (issuers). |
-| [**cyberRAISE**](cyberraise.md) | Run a fundraising round, or invest in one. | Issuers and investors. |
-| [**ACE**](ace.md) | Convert a token community into equity holders of a company. | Token projects and their communities. |
-| [**LeXcheX**](lexchex.md) | Prove you are an accredited investor, onchain. | Investors. |
-| [**MetaDAO**](metadao.md) | Take part in a futarchy-governed entity. | Governance participants. |
+| [**cyberCORPs app**](mainframe.md) | `cybercorps.metalex.tech` | Create your company; manage its securities, register of holders, and scrip. Home of the **Mainframe**. |
+| [**cyberRAISE**](cyberraise.md) | `cyberraise.metalex.tech` | Run fundraising rounds, and invest in them. **This is where rounds are created and configured.** |
+| [**ACE**](ace.md) | `ace.metalex.tech` | Token-community-to-equity raises, and investing in them. |
+| [**LeXcheX**](lexchex.md) | `lexchex.metalex.tech` | Prove accredited-investor status. |
+| **Profiles** | `profile.metalex.tech` | Your founder / investor profile. |
 
-All of them run on the same underlying protocol, so a security you receive in
-one app (say, a SAFE from a cyberRAISE round) is visible and manageable in the
-others.
+[**MetaDAO**](metadao.md) is a specialised, futarchy-governed entity type —
+covered in its own guide.
+
+> **Which app do I need?**
+> Setting up or managing a company → the **cyberCORPs app**.
+> Raising money, or investing in a raise → **cyberRAISE**.
+> Converting a token community to equity → **ACE**.
+> Getting accredited → **LeXcheX**.
 
 ## Before you start: what you need
 
-1. **A web3 wallet.** A browser wallet such as MetaMask or Rabby. The apps
-   connect to your wallet to read your holdings and to ask you to sign
-   transactions and agreements.
-2. **A little ETH for gas.** Actions that change onchain state (investing,
-   issuing, signing) are blockchain transactions and cost a small network
-   fee. The apps run on **Ethereum, Arbitrum, and Base** — you'll need gas on
-   whichever network the entity you're dealing with uses. (Arbitrum and Base
-   fees are typically very low.)
-3. **Nothing else.** There is no separate account to create. Your wallet *is*
-   your identity.
+1. **A web3 wallet** — a browser wallet such as MetaMask or Rabby. The apps
+   connect to it to read your holdings and ask you to sign.
+2. **A little ETH for gas** — actions that change onchain state are
+   transactions and cost a small network fee. The apps run on **Ethereum,
+   Arbitrum, and Base**; you need gas on whichever network the entity uses.
+3. **Nothing else** — there is no separate account. Your wallet is your
+   identity.
 
 ## Signing in
 
 The apps use **Sign-In With Ethereum**: you connect your wallet and sign a
-short message to prove the wallet is yours. This signature is free — it is not
-a transaction and costs no gas. It simply starts your session.
+short message to prove it is yours. This signature is **free** — not a
+transaction, no gas. It just starts your session.
 
-> You stay in control of your assets at all times. MetaLeX never takes
-> custody of your funds or your securities. Money in transit during a deal is
-> held by an onchain escrow contract that no one can override.
+> MetaLeX never takes custody of your funds or your securities. Money in
+> transit during a raise or deal sits in an onchain escrow that no one can
+> override.
 
 ## Two kinds of "sign"
 
-You'll be asked to sign two different things; it's worth knowing the
-difference:
+* **A message signature** — free, instant. Signing in, Expressions of
+  Interest, countersigning agreements.
+* **A transaction** — costs gas, confirms in seconds. Funding a round,
+  issuing a security, closing a deal.
 
-* **A message signature** — free, instant, no gas. Used for signing in, for
-  Expressions of Interest, and for countersigning legal agreements.
-* **A transaction** — costs gas, takes a few seconds to confirm. Used when
-  something actually changes onchain: funding a round, issuing a security,
-  closing a deal.
-
-Your wallet always tells you which one it is before you approve.
-
-## Where to go next
-
-* Running a company? Start with [The Mainframe](mainframe.md).
-* Raising or investing? See [cyberRAISE](cyberraise.md).
-* Coming from a token community? See [ACE](ace.md).
-* Need to prove accreditation first? See [LeXcheX](lexchex.md).
+Your wallet always tells you which one it is.
 
 ## A note on terms
-
-The apps use a few protocol words. The short version:
 
 * A **cyberCORP** is your company, represented onchain.
 * A **cyberCERT** is a certificate — one entry on the company's register of
   holders (a stake, a SAFE, an option, etc.).
 * A **cyberSCRIP** is the tradable, fungible form of a security.
 
-The full [Glossary](../reference/glossary.md) has the rest, and Part 1 of
-this book explains the protocol in depth if you're curious.
+The full [Glossary](../reference/glossary.md) has the rest.

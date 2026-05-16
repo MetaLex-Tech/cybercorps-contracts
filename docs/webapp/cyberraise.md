@@ -1,98 +1,97 @@
 # cyberRAISE — raising and investing
 
-**cyberRAISE** is how companies raise capital onchain and how investors put
-money into those rounds. This page has two halves: one for issuers running a
-round, one for investors joining one.
+**cyberRAISE** (`cyberraise.metalex.tech`) is the fundraising app. Companies
+run fundraising rounds here, and investors invest here. It is a separate app
+from the [cyberCORPs app](mainframe.md) — **rounds are created and configured
+in cyberRAISE, not in the Mainframe.**
+
+This page has two halves: one for issuers, one for investors.
 
 ---
 
-## For issuers: running a round
+## For issuers: running a raise
 
-### 1. Set up the round
+### Start a raise
 
-From the [Mainframe](mainframe.md), create a new round and choose:
+From cyberRAISE you start a raise. You can:
 
-* **What you're selling** — a SAFE, a SAFT, a SAFTE, a token warrant, or a
-  priced equity round.
-* **The payment token** — usually USDC.
-* **The raise cap** — the most you want to raise.
-* **Ticket sizes** — the minimum and maximum a single investor can put in.
-* **Open and close dates.**
-* **Who can invest** — you can require investors to be verified (for example,
-  to hold a valid [LeXcheX](lexchex.md) accreditation credential, or to pass
-  a non-US check for a Regulation S round).
-* **The agreement** — the standard legal document investors will sign.
+* add a round to a company you already created in the
+  [cyberCORPs app](mainframe.md), or
+* **create the cyberCORP and the round together** — if you are setting up
+  the company and its first raise at the same time.
 
-### 2. Share it with investors
+### Choose the round type
 
-Once open, the round has a page investors can visit to review the terms and
-express interest.
+cyberRAISE supports two styles of round:
 
-### 3. Review interest
+* a **ticket round**, and
+* a **structured round**.
 
-Investors submit **Expressions of Interest (EOIs)** — a signed statement of
-how much they want to invest. Depending on how you configured the round, EOIs
-are either accepted automatically (first come, first served) or reviewed and
-admitted by you one by one.
+You pick the one that fits your raise when you create it.
 
-### 4. Close
+### Configure the round
 
-When the round hits its cap or its closing date, it closes. Investor funds
-— which were held in an onchain escrow, never by you or by MetaLeX — are
-released to the company, and each investor receives their security as a
-cyberCERT on your register.
+When creating the round you set its terms — the security being offered (SAFE,
+SAFT, SAFTE, token warrant, or a priced equity round), the payment token,
+the raise cap, ticket sizes, the dates, who is eligible to invest, and the
+legal agreement investors will sign.
+
+### Manage the round
+
+Once the round is open, the **Rounds** area lists your company's rounds and
+lets you open a round to manage it. Investors submit **Expressions of
+Interest (EOIs)**; depending on the round type you either accept them
+automatically or review and allocate each one. Reviewing an EOI and an
+investor's ticket is done from the round.
+
+### The Marketplace
+
+Public rounds appear in the **Marketplace** (the public-rounds view), where
+any investor can discover them.
 
 ---
 
-## For investors: joining a round
+## For investors: investing in a round
 
-### 1. Open the round page
+### Find a round
 
-Review the terms: the instrument (SAFE, etc.), the valuation cap or price,
-the minimum and maximum ticket, and the legal agreement.
+Browse the **Marketplace** for public rounds, or open a round from a direct
+link an issuer shared with you.
 
-### 2. Check whether you need to be verified
+### Check eligibility
 
-Some rounds are restricted. If a round requires accredited-investor status,
-you'll need a [LeXcheX](lexchex.md) credential first. If it's a Regulation S
-round, you may need to complete a non-US verification. The round page tells
-you what's required.
+Some rounds are restricted — for example to accredited investors, or to
+non-US persons for a Regulation S round. If a round requires accreditation,
+get a [LeXcheX](lexchex.md) credential first. The round page tells you
+what's required.
 
-### 3. Submit an Expression of Interest
+### Express interest
 
-State how much you want to invest and sign the EOI. **Signing the EOI is
-free** — it's a message signature, not a transaction. It signals your intent
-and your agreement to the round's standard terms.
+Submit an **Expression of Interest**: state how much you want to invest and
+sign the EOI. **Signing the EOI is free** — a message signature, not a
+transaction.
 
-### 4. Fund your investment
+### Fund your ticket
 
-Once your EOI is accepted, you fund it: you approve and send your payment
-(usually USDC) into the round's onchain escrow. This is a transaction and
-costs gas.
+Once your EOI is accepted, fund it — you send your payment (usually USDC)
+into the round's onchain escrow. This is a transaction and costs gas.
 
-> Your money sits in an escrow contract — not with the company and not with
-> MetaLeX — until the round closes. If the round's conditions aren't met, the
-> escrow is where your refund comes from.
+> Your money sits in an escrow contract — not with the company, not with
+> MetaLeX — until the round closes.
 
-### 5. Receive your security
+### Receive your security and track it
 
-When the round closes, the escrow releases your funds to the company and you
-receive your **cyberCERT** — your SAFE (or other security) as an entry on the
-company's official register. You can view it any time from your wallet or
-your profile.
-
-## What happens to your SAFE later
-
-When the company later does a priced round, SAFEs convert into shares. That
-conversion happens through the protocol and the resulting shares appear as a
-new cyberCERT on the register. You don't need to do anything to trigger it;
-the company runs the conversion.
+When the round closes you receive your security as a **cyberCERT**. Your
+**Portfolio** in cyberRAISE tracks your tickets, EOIs, and the securities
+you hold.
 
 ## Good to know
 
 * **MetaLeX never holds your money.** Funds in flight are in an onchain
   escrow with no override.
-* **An EOI signature is free; funding is a transaction.** Your wallet tells
-  you which is which.
-* **Your security is real and onchain.** A cyberCERT is the actual register
-  entry for your stake — not a receipt or a placeholder.
+* **An EOI signature is free; funding is a transaction.**
+* **Your security is real and onchain** — a cyberCERT is the actual register
+  entry for your stake.
+
+> This guide describes what cyberRAISE does and the shape of each flow. It is
+> not a click-by-click walkthrough.

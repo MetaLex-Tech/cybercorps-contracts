@@ -1,56 +1,63 @@
 # ACE — token to equity
 
 **ACE** (Asset Conversion to Equity) lets a token community become equity
-holders of a real company. If you hold a project's token and the project runs
-an ACE round, you can convert into an actual stake in the issuing
-corporation.
-
-ACE is live at [**ace.metalex.tech**](https://ace.metalex.tech).
+holders of a real company. It is its own app at
+[**ace.metalex.tech**](https://ace.metalex.tech).
 
 ## Who ACE is for
 
-* **Token communities** — holders of a project's token who want a genuine
-  equity relationship with the company behind it.
-* **Projects** — teams that want to bring their community onto the cap table
-  in a structured, compliant way.
+* **Projects** — teams that want to bring their token community onto the cap
+  table in a structured, compliant way. Projects set up an ACE raise.
+* **Token holders / investors** — holders who want a genuine equity stake in
+  the company behind a project.
 
-## How it works, as an investor
+## For projects: setting up an ACE raise
 
-### 1. Open the ACE round
+The ACE app has a **raise** area where a project configures its ACE
+offering — the price, the cap, the security, and eligibility. ACE raises are
+typically structured under **Regulation S** (offered to non-US persons), and
+ACE includes controls for the passport-based eligibility checks that
+Regulation S relies on.
 
-Go to [ace.metalex.tech](https://ace.metalex.tech) and connect your wallet.
-The round page shows the offering terms — the price, the cap, and the
-security you'll receive (an ACE-style SAFE that later converts to equity).
+## For investors: taking part
+
+### 1. Open the raise
+
+Go to [ace.metalex.tech](https://ace.metalex.tech), connect your wallet, and
+open the round. The page shows the offering terms and the security you'll
+receive.
 
 ### 2. Pass the eligibility check
 
-ACE rounds are typically structured under **Regulation S**, which means they
-are offered to **non-US persons**. ACE uses a privacy-preserving passport
-check (zkPassport) to confirm eligibility — it verifies your eligibility
-*without* exposing your identity. The round page walks you through this.
+ACE uses a privacy-preserving passport check (zkPassport) to confirm
+eligibility — typically that you are a non-US person — **without** exposing
+your identity.
 
-### 3. Express interest and invest
+### 3. Invest
 
-As with [cyberRAISE](cyberraise.md): sign an Expression of Interest (free),
-then fund your ticket (a transaction). Funds are escrowed onchain.
+Express interest and fund your ticket, the same escrow-backed flow as
+[cyberRAISE](cyberraise.md): a free EOI signature, then a funding
+transaction.
 
-### 4. Receive your ACE SAFE
+### 4. Receive your security and track it
 
-When the round closes you receive your security as a cyberCERT. It converts
-to equity in the company's next priced round.
+You receive your security as a cyberCERT. The ACE app has a **portfolio**
+view for your tickets and holdings.
 
 ## Bridging from Solana
 
-Some ACE flows support assets that live on Solana. If your tokens are on
-Solana, the ACE app provides a bridge step to move what you need to the
-network the round runs on. Follow the in-app bridge instructions; allow extra
-time, as bridging adds a confirmation step on each side.
+If the tokens you want to use are on Solana, ACE provides bridge steps
+(bridge to / from Solana) to move what you need to the network the round
+runs on. Follow the in-app bridge instructions and allow extra time for the
+bridge confirmations.
 
 ## Good to know
 
-* **Eligibility is privacy-preserving.** The non-US check proves your status
+* **Eligibility is privacy-preserving** — the check proves your status
   without revealing who you are.
-* **You're getting a real security.** An ACE SAFE is an actual claim on the
-  company, on its official register — not a points balance or an airdrop.
-* **MetaLeX never holds your funds.** Same onchain escrow model as every
-  other cyberCORPs app.
+* **You're getting a real security** — not a points balance or an airdrop.
+* **MetaLeX never holds your funds** — the same onchain escrow model as
+  every other app.
+
+> This guide describes what ACE does and the shape of each flow, not exact
+> screens.
