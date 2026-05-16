@@ -1,63 +1,78 @@
-# ACE — token to equity
+# ACE — token-community raises
 
-**ACE** (Asset Conversion to Equity) lets a token community become equity
-holders of a real company. It is its own app at
-[**ace.metalex.tech**](https://ace.metalex.tech).
+**ACE** (`ace.metalex.tech`) is MetaLeX's fundraising product for token
+communities. An ACE raise is a **tokenized SAFE** denominated in a project's
+(typically Solana) community token — it lets a token community become equity
+holders of the company behind the project.
 
-## Who ACE is for
+> **Early access.** The ACE raise area currently sits behind a shared
+> access password. This is a launch-phase gate, not an investor check.
 
-* **Projects** — teams that want to bring their token community onto the cap
-  table in a structured, compliant way. Projects set up an ACE raise.
-* **Token holders / investors** — holders who want a genuine equity stake in
-  the company behind a project.
+## How ACE differs from cyberRAISE
 
-## For projects: setting up an ACE raise
+* ACE raises are **always first-come, first-served** and **private** by
+  default.
+* They are **token-denominated** — priced and funded in a community token,
+  not USDC.
+* Funding involves bridging that token between Solana and an EVM network.
 
-The ACE app has a **raise** area where a project configures its ACE
-offering — the price, the cap, the security, and eligibility. ACE raises are
-typically structured under **Regulation S** (offered to non-US persons), and
-ACE includes controls for the passport-based eligibility checks that
-Regulation S relies on.
+When you open ACE you choose a role: **Founder** or **Investor**.
+
+## For founders: setting up an ACE raise
+
+1. **SAFE Setup.** Paste your project's **Solana token mint address** — the
+   token name, ticker, and image load automatically. Then fill in:
+   * **Round terms** — entity valuation, raise cap, min/max investment,
+     start date, and an end date (or “open ended”);
+   * **Company identity** — company name (pre-filled from the token),
+     founder name, contact, company type, jurisdiction, dispute-resolution
+     method, current token percentage, and a **payable address** (the EVM
+     wallet that receives funds);
+   * optional **custom provisions**.
+   Drafts are saved automatically and can be shared via a draft link.
+2. **Sign.** Sign the agreement preview — two free signatures (one to
+   approve the round, one for metadata).
+3. **Review the summary** — network, raise cap, ticket range, valuation,
+   dates, payable address — then **Confirm & Submit**. This deploys the
+   cyberCORP and the round.
+4. **Manage the round.** From the round overview you can **invite
+   investors** (copy the investor link), **bridge** the token to Solana,
+   and — if the round uses non-US gating — **manage zkPassport overrides**.
+
+### zkPassport overrides
+
+If an ACE round restricts investment to non-US persons, founders can
+manually approve a verified investor: enter their wallet and add an
+override. Each override is an onchain transaction.
 
 ## For investors: taking part
 
-### 1. Open the raise
-
-Go to [ace.metalex.tech](https://ace.metalex.tech), connect your wallet, and
-open the round. The page shows the offering terms and the security you'll
-receive.
-
-### 2. Pass the eligibility check
-
-ACE uses a privacy-preserving passport check (zkPassport) to confirm
-eligibility — typically that you are a non-US person — **without** exposing
-your identity.
-
-### 3. Invest
-
-Express interest and fund your ticket, the same escrow-backed flow as
-[cyberRAISE](cyberraise.md): a free EOI signature, then a funding
-transaction.
-
-### 4. Receive your security and track it
-
-You receive your security as a cyberCERT. The ACE app has a **portfolio**
-view for your tickets and holdings.
-
-## Bridging from Solana
-
-If the tokens you want to use are on Solana, ACE provides bridge steps
-(bridge to / from Solana) to move what you need to the network the round
-runs on. Follow the in-app bridge instructions and allow extra time for the
-bridge confirmations.
+1. **Open the round.** The round detail page shows the company, the
+   security, the status (open / funded / closed), an elevator pitch, the
+   founder's profile, and any resource documents.
+2. **Verify eligibility.** If the round is restricted to non-US persons,
+   you complete a **zkPassport** verification — a privacy-preserving check
+   that proves your eligibility without revealing your identity.
+3. **Invest.** The *Invest* flow opens with a notice that you are entering a
+   legally binding tokenized SAFE. You provide your name, contact, investor
+   type, governing law, and investment amount. Confirming the deal is an
+   **onchain transaction**; your funds go into escrow.
+4. **Bridge if needed.** ACE rounds are funded in an EVM-wrapped version of
+   the Solana token. If your EVM balance is short, an in-page bridge card
+   walks you through connecting a **Solana wallet** and bridging — allow
+   extra time for the cross-chain confirmations. Standalone
+   *bridge to / from Solana* pages are also available.
+5. **Track your holdings.** The **My ACE SAFEs** portfolio lists the ACE
+   SAFE certificates you hold, across both your wallet and any Safe
+   multisig.
 
 ## Good to know
 
-* **Eligibility is privacy-preserving** — the check proves your status
-  without revealing who you are.
-* **You're getting a real security** — not a points balance or an airdrop.
-* **MetaLeX never holds your funds** — the same onchain escrow model as
-  every other app.
-
-> This guide describes what ACE does and the shape of each flow, not exact
-> screens.
+* **Eligibility is privacy-preserving** — the non-US check proves your
+  status without revealing who you are.
+* **You're getting a real security** — an ACE SAFE is an actual claim on the
+  company, not a points balance or an airdrop.
+* **MetaLeX never holds your funds** — the same onchain escrow model as the
+  other apps.
+* Some ACE features (setting up individual tickets, parts of the bridge UI)
+  are still being finished.
