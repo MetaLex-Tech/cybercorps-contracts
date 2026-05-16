@@ -1,44 +1,44 @@
 # LexChex / LexChexMinter
 
-**LeXcheX** is MetaLeX's onchain accreditation / KYC-AML credential layer.
-It manages soulbound credentials that downstream conditions (e.g.,
-`lexchexCondition`) can check.
+MetaLeX's onchain accreditation-credential system. A LeXcheX credential is a
+**soulbound** (non-transferable) NFT implementing
+[ERC-5484](https://eips.ethereum.org/EIPS/eip-5484).
 
-* **Sources:**
-  [`src/creds/lexchex.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/creds/lexchex.sol),
+* **Sources:** [`src/creds/lexchex.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/creds/lexchex.sol),
   [`src/creds/lexchexMinter.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/creds/lexchexMinter.sol)
-* **Reference consumer UI:**
-  [`apps/lexchex-web`](https://github.com/MetaLex-Tech/metalex-webapp/tree/develop/apps/lexchex-web)
-  (`lexchex.metalex.tech`).
+* **Interface:** [`ILexChex.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/interfaces/ILexChex.sol)
 
-## Credential dimensions
+## ERC-5484 (soulbound)
 
-* **KYC/AML** — identity verification (individual or legal entity).
-* **Accreditation** — SEC Rule 501(a) status. The reference UI supports both
-  traditional documentation flows and onchain net-worth proof using
-  wallet-bound assets (target $1M for individuals, $5M for entities).
-* **Qualified-purchaser** — Investment Company Act §3(c)(7) status.
-* **Jurisdiction tags** — for Reg S / non-US gating, complementing the
-  zkPassport-based `NonUSNationalityCondition`.
+`ILexChex` extends `IERC5484`, which defines `burnAuth(tokenId)` returning a
+`BurnAuth` enum (`IssuerOnly`, `OwnerOnly`, `Both`, `Neither`) and an
+`Issued` event. The credential cannot be transferred between wallets.
 
-## Minting
-
-The `LexChexMinter` mints a soulbound (non-transferable, wallet-bound) NFT
-certificate to the credentialed address. The user must countersign the
-LeXcheX agreement (see [Templates](../templates.md)) onchain.
-
-## Selected public interface
+## Interface
 
 ```solidity
-function mint(address subject, CredentialData calldata) external; // ORACLE_AUTHORITY
-function revoke(uint256 tokenId) external;
-function credentialOf(address subject) external view returns (CredentialData memory);
-function hasAccreditation(address subject) external view returns (bool);
-function hasKyc(address subject) external view returns (bool);
-function isNonUs(address subject) external view returns (bool);
+function mint(address to, Accreditation acc) external returns (uint256);
+function burn(uint256 tokenId) external;
+function setAccreditation(uint256 tokenId, Accreditation acc) external;
+function accreditations(uint256 tokenId) external view returns (Accreditation);
+function getAccreditation(uint256 tokenId) external view returns (Accreditation);
+function getAccreditationByOwner(address owner) external view returns (uint256);
+function getTokenIdsByOwner(address owner) external view returns (uint256[]);
+function hasValidLexCheX(address owner) external view returns (bool);
+function isValid(uint256 tokenId) external view returns (bool);
+function balanceOf(address owner) external view returns (uint256);
+function burnAuth(uint256 tokenId) external view returns (BurnAuth);
 ```
 
-## See also
+The `Accreditation` struct is defined in
+[`src/creds/storage/lexchexStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/creds/storage/lexchexStorage.sol).
 
-* [Conditions → `lexchexCondition`](../conditions.md#lexchexcondition)
-* [LeXcheX agreement template](../templates.md#lexchex-agreement)
+## How it's used
+
+* `hasValidLexCheX(owner)` is the headline check — it answers "does this
+  address hold a currently-valid credential?"
+* A `lexchexCondition` (see [Conditions](../conditions.md)) wraps this check
+  so it can gate issuance, rounds, scripification, and deals.
+* The `LexChexMinter` issues credentials; the LeXcheX app and oracle
+  ([metalex-webapp](https://github.com/MetaLex-Tech/metalex-webapp)) drive
+  the off-chain verification that backs a mint.

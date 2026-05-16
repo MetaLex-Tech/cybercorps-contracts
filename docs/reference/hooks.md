@@ -1,56 +1,49 @@
 # Hooks
 
-Hooks are pluggable contracts attached at well-defined extension points. The
-protocol exposes two families:
+The protocol uses two kinds of hook: **transfer-restriction hooks** consulted
+on token transfers, and a **Uniswap v4 hook** used by LiquiLeX pools.
 
-* **Transfer hooks** — consulted by `CyberScrip` on every transfer.
-* **Uniswap v4 hooks** — used by LiquiLeX pools.
+## Transfer-restriction hooks
 
-## Transfer hooks
-
-### `BaseTransferHook`
-
-Abstract base class. Override `_check(from, to, amount)` to enforce a rule.
-
-### `WhitelistTransferHook`
-
-Restricts `cyberSCRIP` transfers to whitelisted addresses. The cyberCORP's
-officers manage the set:
+### `ITransferRestrictionHook`
 
 ```solidity
-function setWhitelisted(address account, bool ok) external; // OFFICER_AUTHORITY
-function isWhitelisted(address account) external view returns (bool);
+interface ITransferRestrictionHook {
+    function checkTransferRestriction(
+        address from,
+        address to,
+        uint256 tokenId,   // token id for cyberCERTs; amount for cyberSCRIP
+        bytes memory data
+    ) external view returns (bool allowed, string memory reason);
+}
 ```
 
-Use for closed-circle compliance models or to whitelist a single LiquiLeX
-pool.
+Both `CyberCertPrinter` and `CyberScrip` consult these hooks on transfer:
 
-### `ToggleTransferHook`
+* `CyberScrip` holds an **array** of hooks (`setRestrictionHook`); every
+  hook must allow the transfer or it reverts `RestrictedTransfer(reason)`.
+* `CyberCertPrinter` holds per-id hooks (`setRestrictionHook(id, hook)`) and
+  a `globalRestrictionHook` (`setGlobalRestrictionHook`).
 
-Per-cyberCERT transfer toggling by the issuer with a configurable default.
-Useful for time-limited freezes or per-class transferability switches.
+### Implementations
 
-## Uniswap v4 hooks
+In [`src/hooks/transfer/`](https://github.com/MetaLex-Tech/cybercorps-contracts/tree/develop/src/hooks/transfer):
+
+| Hook | Purpose |
+|---|---|
+| `BaseTransferHook` | Common base for transfer-restriction hooks. |
+| `WhitelistTransferHook` | Allows transfers only between whitelisted addresses. |
+| `ToggleTransferHook` | Per-token transfer on/off switch, with a configurable default. |
+
+> These three implement `ITransferRestrictionHook`. Consult each contract's
+> source for its admin functions (whitelist management, toggle setters).
+
+## Uniswap v4 hook
 
 ### `MetalexIssuerFeeHook`
 
-Fee router for LiquiLeX. Splits Uniswap v4 swap fees between MetaLeX and the
-issuer at configured BPS, enabling cyberSCRIP / stablecoin pools that pay
-the issuer onchain on every trade.
-
-```solidity
-constructor(
-    address metalexTreasury,
-    address issuerTreasury,
-    uint256 metalexBps,
-    uint256 issuerBps
-);
-```
-
-Address-suffix mining is required to deploy at a Uniswap-v4-compliant
-address; use the standard `HookMiner` salt-mining flow.
-
-## See also
-
-* [How-to: Restrict cyberSCRIP transfers](../how-to/restrict-transfers.md)
-* [How-to: Deploy a LiquiLeX pool](../how-to/deploy-liquilex-pool.md)
+In [`src/hooks/uniswap/`](https://github.com/MetaLex-Tech/cybercorps-contracts/tree/develop/src/hooks/uniswap).
+A Uniswap v4 hook for **LiquiLeX** AMM pools that splits swap fees between
+MetaLeX and the issuer, so a cyberSCRIP / stablecoin pool pays the issuer
+onchain on every trade. See the source for its exact configuration and the
+hook-address requirements Uniswap v4 imposes.

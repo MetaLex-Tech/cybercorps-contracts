@@ -1,31 +1,73 @@
 # CyberAgreementRegistry
 
-**CyberAgreementRegistry** is the onchain anchor for cybernetic legal
-agreements. Templates, executed agreements, party signatures, and escrow
-linkage all live here.
+An onchain registry of legal-agreement **templates** and executed,
+multi-party-signed **contracts**. Deals and rounds reference it for their
+underlying agreements.
 
 * **Source:** [`src/CyberAgreementRegistry.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/CyberAgreementRegistry.sol)
-* **Proxy pattern:** UUPS
+  / interface [`ICyberAgreementRegistry.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/interfaces/ICyberAgreementRegistry.sol)
 
-## Responsibilities
-
-* Register agreement templates (content URI + content hash + optional schema).
-* Instantiate executed agreements (`proposeAgreement`).
-* Collect EIP-712 signatures from each party (`signAgreement`).
-* Emit `AgreementExecuted` once all required signatures are gathered.
-* Provide bidirectional links from agreements to cyberCERTs and deals (so a
-  cert can know its governing instrument).
-
-## Selected public interface
+## Data model
 
 ```solidity
-function registerTemplate(TemplateData calldata) external returns (uint256 templateId);
-function proposeAgreement(AgreementProposal calldata) external returns (uint256 agreementId);
-function signAgreement(uint256 agreementId, bytes calldata signature) external;
-function getAgreement(uint256 agreementId) external view returns (Agreement memory);
+struct Template {
+    string legalContractUri;   // canonical legal text
+    string title;
+    string[] globalFields;     // field names common to the whole contract
+    string[] partyFields;      // field names filled per signing party
+}
+
+struct ContractData {
+    bytes32 templateId;
+    string[] globalValues;
+    address[] parties;
+    uint256 numSignatures;
+    bytes32 transactionHash;
+}
 ```
 
-## See also
+## Functions
 
-* [How-to: Sign a cyberAgreement](../../how-to/sign-a-cyberagreement.md)
-* [Agreement templates](../templates.md)
+```solidity
+function createTemplate(bytes32 templateId, string title, string legalContractUri,
+    string[] globalFields, string[] partyFields) external;
+
+function createContract(bytes32 templateId, uint256 salt, string[] globalValues,
+    address[] parties, string[][] partyValues, bytes32 secretHash,
+    address finalizer, uint256 expiry) external returns (bytes32 contractId);
+
+function signContract(bytes32 contractId, string[] partyValues,
+    bool fillUnallocated, string secret) external;
+function signContractFor(address signer, bytes32 contractId, string[] partyValues,
+    bytes signature, bool fillUnallocated, string secret) external;
+function signContractWithEscrow(address escrowSigner, bytes32 contractId,
+    string[] partyValues, bytes signature, bool fillUnallocated, string secret) external;
+
+function voidContractFor(bytes32 contractId, address party, bytes signature) external;
+function finalizeContract(bytes32 contractId) external;
+```
+
+## Views
+
+`getParties`, `hasSigned`, `getSignatureTimestamp`, `allPartiesSigned`,
+`getContractDetails`, `getTemplateDetails`, `getSignerValues`, `isVoided`,
+`getAgreementsForParty`, `getContractJson`, `getContractTransactionHash`,
+`isFinalized`, `allPartiesFinalized`.
+
+## How signing works
+
+* `createTemplate` registers a reusable template (id, title, legal URI,
+  field schema).
+* `createContract` instantiates an executable contract from a template, with
+  its global values, parties, and per-party values; `finalizer` and `expiry`
+  bound it.
+* Each party signs — `signContract` (self), `signContractFor` (relayed with
+  an EIP-712 signature), or `signContractWithEscrow` (using a pre-escrowed
+  signature). `fillUnallocated` lets a signer occupy an empty party slot.
+* When all parties have signed, the registry emits `ContractFullySigned`;
+  `finalizeContract` completes it.
+
+## Events
+
+`TemplateCreated`, `ContractCreated`, `AgreementSigned`,
+`ContractFullySigned`.
