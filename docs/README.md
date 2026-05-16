@@ -1,7 +1,7 @@
 ---
 description: >-
   Natively tokenized private securities on Ethereum, anchored in each issuer's
-  governing law.
+  governing law — plus the web app that demonstrates them.
 ---
 
 # Welcome to cyberCORPs
@@ -24,8 +24,11 @@ Live on **Ethereum mainnet**, **Arbitrum**, and **Base**.
 
 ## How this documentation is organised
 
-These docs follow the [Diátaxis](https://diataxis.fr/) framework. Each section
-serves a different need:
+This book has two parts.
+
+**Part 1 — Protocol** documents the smart contracts
+([`cybercorps-contracts`](https://github.com/MetaLex-Tech/cybercorps-contracts)).
+It follows the [Diátaxis](https://diataxis.fr/) framework:
 
 | Section | When to read it |
 |---|---|
@@ -34,32 +37,34 @@ serves a different need:
 | [**Reference**](reference/README.md) | You need the dry technical facts (contract APIs, roles, events, addresses). |
 | [**Explanation**](explanation/README.md) | You want to *understand why* the protocol is the way it is. |
 
+**Part 2 — Web App** documents the
+[`metalex-webapp`](https://github.com/MetaLex-Tech/metalex-webapp) monorepo: the
+Next.js applications and backend services that implement the illustrative
+products (the cyberCORPs Mainframe, cyberRAISE, ACE, LeXcheX, and more).
+
+| Section | When to read it |
+|---|---|
+| [**Overview**](webapp/README.md) | What the monorepo is and what's in it. |
+| [**Building**](webapp/local-setup.md) | Set up, develop, and extend the apps. |
+| [**Apps and Services**](webapp/apps/cybercorps-web.md) | Per-app reference. |
+| [**Operations**](webapp/deployment.md) | Deploy and run the apps and services. |
+
 ## The two-minute version
 
 1. A **cyberCORP** is an onchain entity whose constitutional documents
-   (certificate of incorporation, operating agreement, partnership agreement,
-   fund constitutional documents, articles of association, etc.) designate the
-   onchain contract system as the entity's official register of holders.
+   designate the onchain contract system as the entity's official register of
+   holders.
 2. A **cyberCERT** (ERC-721) is a *Ledger Entry Token* — a single entry on that
-   register, encoding the holder, units, class/series, restrictions,
-   endorsements, signatures, and the governing agreement URI.
-3. A **cyberSCRIP** (ERC-20) is the *fungible* form of that same security. It
-   is minted from a cyberCERT via `scripifyCert()` and convertible back via
-   `convertScripToCert()`. It is itself a security in scrip form (e.g., DGCL
-   §155), not a wrapper or derivative.
-4. A growing **application stack** runs on this single contract suite:
-   **cyberRAISE** (primary fundraising), **cyberTRADE** (secondary
-   settlement), **ACE** (Asset Conversion to Equity), **LiquiLeX** (AMM-native
-   scrip liquidity), and **cyberSign** (cybernetic legal agreement execution),
-   all surfaced to issuers through the cyberCORPs **Mainframe**.
+   register.
+3. A **cyberSCRIP** (ERC-20) is the *fungible* form of that same security,
+   minted from a cyberCERT and convertible back.
+4. A growing **application stack** runs on this single contract suite —
+   **cyberRAISE**, **cyberTRADE**, **ACE**, **LiquiLeX**, **cyberSign** — all
+   surfaced through the cyberCORPs **Mainframe**. The reference
+   implementations of these products live in `metalex-webapp` and are
+   documented in Part 2.
 
-## Illustrative applications
+## Repositories
 
-The [metalex-webapp](https://github.com/MetaLex-Tech/metalex-webapp) monorepo
-hosts reference UIs built on these contracts. They are not the protocol; they
-are *examples* of what an issuer or front-end provider can build on top of it.
-See [Application Stack](explanation/application-stack.md) for a mapping.
-
-## Contracts repository
-
-[github.com/MetaLex-Tech/cybercorps-contracts](https://github.com/MetaLex-Tech/cybercorps-contracts)
+* Protocol: [github.com/MetaLex-Tech/cybercorps-contracts](https://github.com/MetaLex-Tech/cybercorps-contracts)
+* Web app: [github.com/MetaLex-Tech/metalex-webapp](https://github.com/MetaLex-Tech/metalex-webapp)
