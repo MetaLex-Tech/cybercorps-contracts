@@ -1,63 +1,68 @@
 # Restrict cyberSCRIP transfers
 
-cyberSCRIP is an ERC-20, so by default it moves freely. The protocol gives you
-several knobs to restrict transfers when the underlying security requires it
-(Reg D / Reg S secondary restrictions, an unaccredited-holder cap, a private
-whitelist, etc.).
+cyberSCRIP is an ERC-20. You can restrict it with transfer-restriction hooks,
+and a cyberCORP can hold (and later renounce) compliance powers.
 
-## Options
+## Transfer-restriction hooks
 
-| Mechanism | Use when |
+Hooks implement `ITransferRestrictionHook`; CyberScrip runs every installed
+hook on each transfer. See [Hooks](../reference/hooks.md).
+
+Hooks are set initially when the scrip is deployed (`typeRestrictionHooks`
+argument of `deployCyberScrip`) and can be changed afterward through the
+IssuanceManager:
+
+```solidity
+// at deploy time
+address cyberScrip = IIssuanceManager(issuanceManager).deployCyberScrip(
+    certAddress,
+    typeRestrictionHooks,   // ITransferRestrictionHook[]
+    /* ...remaining args... */
+);
+```
+
+On the `CyberCertPrinter` itself, the IssuanceManager can also set hooks for
+cyberCERT transfers: `setRestrictionHook(certAddress, id, hook)` and
+`setGlobalRestrictionHook(certAddress, hook)`.
+
+Implementations in
+[`src/hooks/transfer/`](https://github.com/MetaLex-Tech/cybercorps-contracts/tree/develop/src/hooks/transfer):
+`WhitelistTransferHook` (allow only whitelisted addresses) and
+`ToggleTransferHook` (per-token on/off). Consult each contract's source for
+its admin functions.
+
+## Compliance powers
+
+A CyberScrip is deployed with three optional powers — the last three
+booleans of `deployCyberScrip`:
+
+```solidity
+    /* ... */ true /*enableForceTransfer*/, true /*enableForceBurn*/, true /*enableFreeze*/
+```
+
+There is **no blocklist** — only force transfer, force burn, and freeze.
+
+| Power | Exercised via (on CyberScrip) |
 |---|---|
-| `WhitelistTransferHook` | Closed circle of pre-approved counterparties. |
-| `ToggleTransferHook` | Per-cert switch; useful for time-limited freezes. |
-| Compliance powers (force transfer / burn, freeze, blocklist) | Reg-driven incident response, with **independent, permanent disable toggles** per power. |
-| Max-holder cap on `CyberCertPrinter` | Stay below 12(g) (or analogue) thresholds. |
+| Force transfer | `forceTransfer(from, to, amount)` |
+| Force burn | `forceBurn(account, amount)` |
+| Freeze | `setFrozen(account, isFrozen)` |
 
-See [Hooks reference](../reference/hooks.md).
+These functions are `onlyIssuanceManager`, so they are driven through the
+cyberCORP's IssuanceManager.
 
-## Install a whitelist hook
+## Permanently disabling a power
 
-### 1. Deploy the hook
+Each power has a one-way disable on CyberScrip — `disableForceTransfer()`,
+`disableForceBurn()`, `disableFreeze()`. Once disabled, a power cannot be
+re-enabled; exercising it afterward reverts `ComplianceFeatureDisabled`. Like
+the exercise functions, the disables are `onlyIssuanceManager`.
 
-```solidity
-WhitelistTransferHook hook = new WhitelistTransferHook(cyberCorpAddr);
-```
+## Holder cap
 
-### 2. Register it on the cyberSCRIP
-
-From an account with the `OFFICER_AUTHORITY` role:
-
-```solidity
-cyberScrip.setTransferHook(address(hook));
-```
-
-### 3. Whitelist counterparties
-
-```solidity
-hook.setWhitelisted(alice, true);
-hook.setWhitelisted(bob, true);
-```
-
-Any `transfer` involving an address not in the set will revert. AMM pool
-addresses (e.g., a LiquiLeX Uniswap v4 pool) can be whitelisted too.
-
-## Permanently disable a compliance power
-
-Force-transfer, force-burn, freeze and blocklist on cyberSCRIP each have
-**independent, irreversible disable toggles**. Once an issuer renounces a
-power, no party — including MetaLeX — can restore it.
-
-```solidity
-// Permanently renounce force-transfer.
-cyberScrip.permanentlyDisableForceTransfer();
-```
-
-This is a one-way operation. Use it to harden the cyberSCRIP toward the
-"open" end of the compliance spectrum once you no longer need a given power.
+`CyberScrip.setMaxHolderCount(n)` caps the holder count (`0` = unlimited);
+transfers that would exceed it revert `HolderLimitExceeded`.
 
 ## Related
 
-* Explanation: [Composability and DeFi](../explanation/composability.md)
-* Reference: [`CyberScrip`](../reference/contracts/CyberScrip.md),
-  [Hooks](../reference/hooks.md).
+* [CyberScrip](../reference/contracts/CyberScrip.md), [Hooks](../reference/hooks.md).

@@ -1,63 +1,37 @@
 # Deploy a PumpCorp for ACE
 
 **ACE** (Asset Conversion to Equity) lets a token community convert into
-equity stakeholders of an issuing corporation through a Reg S compliant
-offering with zkPassport-based jurisdictional gating.
-
-Under the hood, ACE is powered by `PumpCorpFactory` and the
-`ACESAFEExtension`. The live consumer product is
-[ace.metalex.tech](https://ace.metalex.tech), implemented in the
-[`apps/cybercorps-web/src/app/ace`](https://github.com/MetaLex-Tech/metalex-webapp/tree/develop/apps/cybercorps-web/src/app/ace)
-route of `metalex-webapp`.
+equity. It is powered by the **`PumpCorpFactory`**
+([`src/PumpCorpFactory.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/PumpCorpFactory.sol))
+and an ACE-configured SAFE extension. The live product is
+[ace.metalex.tech](https://ace.metalex.tech).
 
 ## When to use this guide
 
-You are an issuer who wants to run an ACE-style round: a structured Reg S
-offering open to non-US persons, where investors arrive holding tokens and
-leave holding ACE SAFEs (later convertible to equity).
+You are an issuer running an ACE-style offering: a structured, typically
+Regulation S offering open to non-US persons, where investors arrive holding
+tokens and leave holding ACE SAFEs.
 
-## Steps
+## Approach
 
-### 1. Configure the PumpCorp
+`PumpCorpFactory` builds on the same primitives as `CyberCorpFactory`:
+it deploys a cyberCORP suite configured for an ACE offering and creates the
+round. The flow then mirrors a standard cyberRAISE round:
 
-```solidity
-IPumpCorpFactory pf = IPumpCorpFactory(PUMP_FACTORY);
+1. Deploy the PumpCorp through `PumpCorpFactory`, supplying the offering
+   parameters (pricing, cap, the agreement template, and a non-US /
+   zkPassport `ICondition` for Regulation S gating).
+2. Investors submit EOIs and are allocated, exactly as in
+   [Run a cyberRAISE round](../tutorials/run-a-cyberraise-round.md).
+3. On allocation, each investor receives an ACE SAFE cyberCERT (its security
+   series is `SecuritySeries.ACE`).
 
-address pumpCorp = pf.createPumpCorp(PumpCorpParams({
-    legalName: "Acme PumpCorp, Inc.",
-    jurisdiction: "Delaware, USA",
-    pricePerShare: 0.50e6,
-    raiseCap: 5_000_000e6,
-    perPartyAllocations: ...,           // optional per-investor allocations
-    nationalityCondition: nonUsCond,    // zkPassport: non-US only by default
-    agreementTemplate: "ipfs://ace-safe-regs-v1"
-}));
-```
-
-The factory deploys a complete cyberCORP suite plus an ACE-configured
-`RoundManager` and registers the `ACESAFEExtension` on the
-`CyberCertPrinter`.
-
-### 2. Open the round
-
-The round is created automatically on PumpCorp deployment in Reg-S-default
-mode. Open and close timestamps are part of `PumpCorpParams`.
-
-### 3. Investors submit EOIs and fund
-
-Identical to a standard cyberRAISE flow (see
-[Tutorial 2](../tutorials/run-a-cyberraise-round.md)), with the additional
-zkPassport check.
-
-### 4. Close and mint ACE SAFEs
-
-On close, each investor receives an ACE SAFE cyberCERT (an `ACESAFEExtension`
-cert). These convert to equity in the next priced round via the same
-[SAFE conversion flow](convert-safe-to-equity.md).
+> `PumpCorpFactory`'s exact constructor and `deploy*` parameters are not
+> reproduced here — consult the contract source, which is the authoritative
+> reference for the current ACE deployment shape.
 
 ## Related
 
-* Reference: [`PumpCorpFactory`](../reference/factories.md#pumpcorpfactory),
-  [Extensions → `ACESAFEExtension`](../reference/extensions.md#acesafeextension).
-* Explanation:
-  [Application stack — ACE](../explanation/application-stack.md#ace).
+* [Factories](../reference/factories.md),
+  [Security types](../reference/security-types.md).
+* Explanation: [Application stack — ACE](../explanation/application-stack.md#ace).

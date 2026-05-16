@@ -1,124 +1,142 @@
 # Tutorial: Run a cyberRAISE round
 
-In this tutorial you will configure a SAFE round, accept signed Expressions of
-Interest (EOIs) from two investors, escrow their USDC, and close the round —
-minting two SAFE cyberCERTs.
+In this tutorial you create a SAFE round on a cyberCORP's `RoundManager`,
+take an investor's Expression of Interest, allocate it, and close the round.
 
-This is exactly what the [`cybercorps-web` `cyberraise` route](https://github.com/MetaLex-Tech/metalex-webapp/tree/develop/apps/cybercorps-web/src/app/%28frame-layout%29/cyberraise)
-does from a UI; here we drive it from Solidity.
+> Code here is **illustrative of the flow**, using the real signatures and
+> structs from `cybercorps-contracts` (`develop`). The `Round` and `EOI`
+> structs are large — check the source for every field.
 
 ## Prerequisites
 
-You have completed [Tutorial 1](incorporate-a-cybercorp.md) and have the
-addresses of a fresh cyberCORP. Take note of `roundManagerAddr`,
-`issuanceManagerAddr`, and `dealManagerAddr`.
+A cyberCORP from [Tutorial 1](incorporate-a-cybercorp.md). You need its
+`roundManager` address and an officer key.
 
-## 1. Configure the round
+## 1. Build the round
 
-A round is created on the cyberCORP's own `RoundManager`. You choose:
-
-* **Security type** — `SecurityType.SAFE`
-* **Round mode** — `RoundMode.ADMISSION` (issuer approves each EOI) or
-  `RoundMode.FIRST_COME` (first valid EOI fills the cap)
-* **Payment token** — typically the canonical USDC on your chain
-* **Raise cap** — e.g. `2_000_000e6` for $2M
-* **Min / max ticket** — e.g. `25_000e6` / `500_000e6`
-* **Open / close timestamps** — Unix seconds
-* **Per-round conditions** — e.g. require a valid LeXcheX accreditation
-  credential ([`lexchexCondition`](../reference/conditions.md)).
-* **Agreement template** — the URI of the `MetaLeX cyberSAFE US style Reg D`
-  template you intend to use
+A round is a `Round` struct
+([`RoundLib.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/libs/RoundLib.sol)).
+Build it with the `RoundLib` builder — `draft()`, then `setTickets`, then
+`setAgreement`:
 
 ```solidity
-IRoundManager rm = IRoundManager(roundManagerAddr);
-uint256 roundId = rm.createRound(RoundConfig({
-    securityType: SecurityType.SAFE,
-    mode: RoundMode.ADMISSION,
-    paymentToken: USDC,
-    raiseCap: 2_000_000e6,
-    minTicket: 25_000e6,
-    maxTicket: 500_000e6,
-    opensAt: block.timestamp,
-    closesAt: block.timestamp + 30 days,
-    conditions: lexchexCond,
-    agreementTemplate: "ipfs://cybersafe-regd-v1"
-    /* ... */
-}));
+import {RoundLib, Round, RoundType} from "src/libs/RoundLib.sol";
+import {SecuritySeries} from "src/CyberCorpConstants.sol";
+using RoundLib for Round;
+
+Round memory round = RoundLib.draft()
+    .setTickets(
+        SecuritySeries.NA,        // seriesType
+        RoundType.FounderApproved,// FCFS or FounderApproved
+        false,                    // publicRound
+        true,                     // allowTimedOffers
+        false,                    // restrictEndTimeReduction
+        2_000_000e18,             // raiseCap   (USD, 18 decimals)
+        25_000e18,                // minTicket
+        500_000e18,               // maxTicket
+        USDC,                     // paymentToken
+        1e18,                     // pricePerUnit (USD, 18 decimals)
+        20_000_000e18,            // valuation
+        block.timestamp,          // startTime
+        block.timestamp + 30 days // endTime
+    )
+    .setAgreement(
+        TEMPLATE_ID,              // agreement template id
+        officer,                  // authorityOfficer
+        "Jane Founder",           // officerName
+        "Chief Executive Officer",// officerTitle
+        legalDetails,             // string[] (per cert printer)
+        roundPartyValues,         // string[]
+        extensionData,            // bytes[]  (per cert printer)
+        conditions,               // address[] of ICondition gates
+        escrowedSignature         // bytes — officer's escrowed signature
+    );
 ```
 
-## 2. Investors submit signed EOIs
+`RoundType.FCFS` accepts EOIs first-come; `RoundType.FounderApproved`
+requires the officer to allocate each one.
 
-Each investor signs an EIP-712 EOI message off-chain (a `RoundManager`-typed
-payload) declaring their intent to invest a specific amount at the round's
-price / cap and agreeing to the linked SAFE template.
+## 2. Create the round
 
-The EOI is then submitted on-chain (by the investor or by your front-end as a
-relayer):
+`createRound` also creates a `CyberCertPrinter` for each `CyberCertData`
+entry you pass.
 
 ```solidity
-rm.submitEOI(roundId, EOI({
-    investor: alice,
-    amount: 100_000e6,
-    agreementHash: keccak256(safeText),
-    /* ... */
-}), aliceSignature);
+import {CyberCertData} from "src/storage/RoundManagerStorage.sol";
+import {SecurityClass} from "src/CyberCorpConstants.sol";
+
+CyberCertData[] memory certData = new CyberCertData[](1);
+certData[0] = CyberCertData({
+    name:           "SAFE",
+    symbol:         "ACME-SAFE",
+    uri:            "ipfs://acme-safe-art",
+    securityClass:  SecurityClass.SAFE,
+    securitySeries: SecuritySeries.NA,
+    extension:      SAFE_EXTENSION_ADDR,
+    defaultLegend:  legend
+});
+
+bytes32 roundId = IRoundManager(roundManager).createRound(round, certData);
 ```
 
-In `ADMISSION` mode the issuer must then call `rm.acceptEOI(roundId, eoiId)`.
-In `FIRST_COME` mode acceptance is implicit on submission.
+## 3. Investor submits an EOI
 
-## 3. Investors fund the escrow
-
-On acceptance, the round creates a deal in the cyberCORP's `DealManager` and a
-`LeXscroWLite` escrow. The investor approves USDC to the escrow and calls:
+The investor signs the round's agreement (EIP-712) off-chain and submits an
+`EOI` struct ([`RoundManagerStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/storage/RoundManagerStorage.sol)):
 
 ```solidity
-dealManager.deposit(dealId);
+import {EOI} from "src/storage/RoundManagerStorage.sol";
+
+EOI memory eoi = EOI({
+    name:          "Alice Investor LLC",
+    investorType:  "entity",
+    jurisdiction:  "USA",
+    contact:       "alice@example.com",
+    minAmount:     100_000e6,    // in payment-token decimals
+    maxAmount:     100_000e6,
+    expiry:        block.timestamp + 14 days,
+    naturalPerson: false,
+    lexchexDetails: lexchexDetails    // see LexChexDetails in the source
+});
+
+(bytes32 agreementId, uint256 tokenId) = IRoundManager(roundManager).submitEOI(
+    roundId,
+    eoi,
+    globalValues,     // string[]
+    partyValues,      // string[]
+    investorSignature,// bytes (EIP-712)
+    salt,             // uint256
+    eoiConditions,    // address[]
+    secretHash        // bytes32
+);
 ```
 
-The escrow holds the funds until *all* conditions on the deal evaluate true.
-For a standard SAFE round this is typically:
+## 4. Allocate the EOI
 
-* the round is closed or its cap is hit,
-* the investor has a valid LeXcheX credential at close-time,
-* a `NonUSNationalityCondition` (Reg S only) or other configured gates.
-
-## 4. Close the round
-
-Once conditions are met (or you call `rm.closeRound(roundId)` after the close
-time), the `RoundManager`:
-
-1. Releases USDC from each accepted investor's escrow to the cyberCORP's
-   designated receiving address.
-2. Calls `IssuanceManager.issueCert(...)` for each filled ticket, minting a
-   SAFE cyberCERT to each investor. The cert's `tokenURI` embeds the SAFE
-   parameters (valuation cap, discount, MFN) via the
-   [SAFEExtension](../reference/extensions.md).
-3. Adds endorsements to each cyberCERT recording the deal-close event.
-4. Emits `RoundClosed(roundId)`.
-
-MetaLeX never custodies funds; the escrow contract is the only intermediary,
-and it has no admin keys.
-
-## 5. Inspect what happened
+The officer allocates an accepted EOI. `allocate` prices the ticket, mints a
+SAFE cyberCERT per printer, attaches the officer's escrowed signature and an
+endorsement, and refunds any rounding dust.
 
 ```solidity
-uint256 raised = rm.totalRaised(roundId);          // 200,000e6 if two $100k
-uint256[] memory tokens = rm.certsMinted(roundId); // two token ids
-string memory aliceCert = CyberCertPrinter(certPrinter).tokenURI(tokens[0]);
+uint256 certTokenId = IRoundManager(roundManager).allocate(
+    agreementId,
+    100_000e6        // allocatedAmount, in payment-token decimals
+);
 ```
 
-The SAFE certs are now part of Acme's official register. They are bound to the
-specific SAFE legal instrument (anchored in `CyberAgreementRegistry`) and will
-later convert to preferred stock via the
-[`SafeCertificateConverter`](../reference/contracts/SafeCertificateConverter.md)
-when Acme runs its priced round.
+## 5. Close the round
+
+```solidity
+IRoundManager(roundManager).closeRoundNow(roundId);
+```
+
+## What you just did
+
+* Built and created a SAFE round, which also created its cert printer.
+* Took a signed EOI, allocated it, and minted the investor's SAFE cyberCERT.
+* Closed the round.
 
 ## Next
 
-* Tutorial 3: [Scripify and settle](scripify-and-settle.md) — give your
-  investors a tradable form of their security.
-* How-to: [Convert SAFEs to equity](../how-to/convert-safe-to-equity.md).
-* Reference: [`RoundManager`](../reference/contracts/RoundManager.md).
-* Explanation:
-  [Compliance architecture](../explanation/compliance-architecture.md).
+* [Scripify and settle a secondary trade](scripify-and-settle.md).
+* Reference: [RoundManager](../reference/contracts/RoundManager.md).

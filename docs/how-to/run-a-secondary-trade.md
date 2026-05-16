@@ -1,74 +1,71 @@
 # Run a secondary trade
 
-There are two settlement paths for a secondary trade of cyberCORP securities,
-both supported by the same contracts. cyberTRADE is the issuer-facing app
-surface; the contracts are agnostic.
+Secondary trades settle through a cyberCORP's **`DealManager`**. A deal is
+built from an agreement template and identified by a `bytes32 agreementId`.
 
-* **Registered ledger path** — edit the existing cyberCERT (or burn-and-mint
-  with new metadata) under issuer approval. Best when both parties want to be
-  registered holders of record.
-* **Scrip path** — settle at the cyberSCRIP layer, with deferred
-  de-scripification, including AMM-native trades through LiquiLeX.
-
-## Registered ledger path
-
-### 1. Negotiate off-chain or off-protocol
-
-Discovery, KYC, price discovery and bilateral negotiation happen wherever
-they happen. The cyberCORP suite does not opinionate. You arrive at this step
-with a willing seller, a willing buyer, a price, and an asset description.
-
-### 2. Open a deal in the cyberCORP's `DealManager`
+## 1. Propose the deal
 
 ```solidity
-uint256 dealId = dealManager.proposeDeal(DealParams({
-    sellerCertId: 42,
-    units: 100_000,
-    buyer: bob,
-    paymentToken: USDC,
-    price: 200_000e6,
-    conditions: dealConditions,    // e.g. buyer accreditation + issuer approval
-    agreementHash: keccak256(spa)
-}));
+bytes32 agreementId = IDealManager(dealManager).proposeDeal(
+    certPrinters,     // address[] — cert printers involved
+    USDC,             // paymentToken
+    200_000e6,        // paymentAmount
+    templateId,       // bytes32 agreement template
+    salt,             // uint256
+    globalValues,     // string[]
+    parties,          // address[] — the counterparties
+    certDetails,      // CertificateDetails[]
+    partyValues,      // string[][]
+    conditions,       // address[] — ICondition gates
+    secretHash,       // bytes32
+    expiry            // uint256
+);
 ```
 
-### 3. Both parties countersign
+Use `proposeAndSignDeal` to propose and sign in one call.
 
-Each party signs an EIP-712 deal payload. Seller approves transfer of the
-cert (or of the units to be moved), buyer approves USDC to `LeXscroWLite`.
+## 2. Counterparties sign (and pay)
 
-### 4. The escrow settles atomically on conditions
+Each party signs the agreement (EIP-712). `signDealAndPay` combines a party's
+signature with their payment:
 
-When every `ICondition` returns true (e.g., `lexchexCondition` passes for
-both, and the issuer has called `dealManager.approveDeal(dealId)`),
-`LeXscroWLite` releases:
+```solidity
+IDealManager(dealManager).signDealAndPay(
+    signer,
+    agreementId,
+    signature,        // bytes (EIP-712)
+    partyValues,      // string[]
+    fillUnallocated,  // bool
+    name,             // string
+    secret            // string — if the deal is secret-gated
+);
+```
 
-* USDC to seller,
-* either an edited cyberCERT or a freshly minted cert to buyer (depending on
-  `DealParams.settlementMode`),
-* an endorsement is added to the cert recording the trade.
+## 3. Finalise
 
-The atomic step **is** the legal transfer.
+When all parties have signed and the deal's conditions are satisfied:
 
-## Scrip path
+```solidity
+IDealManager(dealManager).finalizeDeal(agreementId);
+```
 
-If both parties accept the scrip form of the security, the deal can settle in
-cyberSCRIP. Subsequent de-scripification onto the buyer's register entry can
-be deferred (or never happen — many cyberSCRIP holders just hold the scrip).
+Finalisation applies the deal's certificate effects (mint / assign /
+endorse) through the IssuanceManager. `signAndFinalizeDeal` does the final
+signature and finalisation together.
 
-This is the path used by AMM trades through a
-[LiquiLeX pool](deploy-liquilex-pool.md). Compliance is enforced either:
+## Cancelling
 
-* on every swap, via a whitelisted-pool model with full credential checks, or
-* at the de-scripification boundary, with a lighter zkPassport gate at swap
-  for sanctions and Reg S screening.
+* `voidExpiredDeal(agreementId, signer, signature)` — clear an expired deal.
+* `revokeDeal(agreementId, signer, signature)` — revoke before completion.
+* `signToVoid(agreementId, signer, signature)` — sign to void a deal.
 
-See Tutorial 3 for the full mechanics of
-[scripify and settle](../tutorials/scripify-and-settle.md).
+## Note on escrow
+
+The escrow of payment and assets is part of this deal flow — there is no
+separate escrow contract to call. See
+[LeXscroWLite](../reference/contracts/LeXscroWLite.md).
 
 ## Related
 
-* Reference: [`DealManager`](../reference/contracts/DealManager.md),
-  [`LeXscroWLite`](../reference/contracts/LeXscroWLite.md).
-* Explanation:
-  [Application stack — cyberTRADE](../explanation/application-stack.md#cybertrade).
+* [DealManager](../reference/contracts/DealManager.md),
+  [CyberAgreementRegistry](../reference/contracts/CyberAgreementRegistry.md).
