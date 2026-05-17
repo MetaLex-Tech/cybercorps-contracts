@@ -68,8 +68,9 @@
 ## Web App — Using the Apps
 
 * [Using the cyberCORPs apps](webapp/README.md)
-* [The Mainframe — for issuers](webapp/mainframe.md)
+* [The cyberCORPs app — manage your company](webapp/mainframe.md)
 * [cyberRAISE — raising and investing](webapp/cyberraise.md)
-* [ACE — token to equity](webapp/ace.md)
+* [ACE — token-community raises](webapp/ace.md)
 * [LeXcheX — get accredited](webapp/lexchex.md)
-* [MetaDAO — futarchy governance](webapp/metadao.md)
+* [Your profile](webapp/profile.md)
+* [MetaDAO — entity formation](webapp/metadao.md)

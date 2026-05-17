@@ -1,98 +1,143 @@
 # cyberRAISE — raising and investing
 
-**cyberRAISE** is how companies raise capital onchain and how investors put
-money into those rounds. This page has two halves: one for issuers running a
-round, one for investors joining one.
+**cyberRAISE** (`cyberraise.metalex.tech`) is the fundraising app. Companies
+run rounds here; investors invest here. It is separate from the
+[cyberCORPs app](mainframe.md) — **rounds are created and configured in
+cyberRAISE.**
+
+This page has two halves: issuers first, then investors.
 
 ---
 
-## For issuers: running a round
+## For issuers: running a raise
 
-### 1. Set up the round
+Starting a raise (desktop-only) begins with one choice: **how do you want to
+raise?**
 
-From the [Mainframe](mainframe.md), create a new round and choose:
+### Ticket-by-Ticket vs. Structured Round
 
-* **What you're selling** — a SAFE, a SAFT, a SAFTE, a token warrant, or a
-  priced equity round.
-* **The payment token** — usually USDC.
-* **The raise cap** — the most you want to raise.
-* **Ticket sizes** — the minimum and maximum a single investor can put in.
-* **Open and close dates.**
-* **Who can invest** — you can require investors to be verified (for example,
-  to hold a valid [LeXcheX](lexchex.md) accreditation credential, or to pass
-  a non-US check for a Regulation S round).
-* **The agreement** — the standard legal document investors will sign.
+* **Ticket by Ticket** — you sell securities to investors **one at a time**,
+  each on its own terms. There is no shared target or min/max; each “ticket”
+  is an individually configured deal. Suited to privately advertised raises
+  or geographically restricted (Regulation S) raises.
+* **Structured Round** — an automated round with **standardized terms for
+  all investors**: a target raise, min/max ticket sizes, and escrowed
+  investor bids. Can be public or private.
 
-### 2. Share it with investors
+If you don't have a cyberCORP yet, the raise flow creates one first — you
+can **create the company and the round together**.
 
-Once open, the round has a page investors can visit to review the terms and
-express interest.
+### Configuring a structured round
 
-### 3. Review interest
+The round form collects, in order:
 
-Investors submit **Expressions of Interest (EOIs)** — a signed statement of
-how much they want to invest. Depending on how you configured the round, EOIs
-are either accepted automatically (first come, first served) or reviewed and
-admitted by you one by one.
+* **Round stage** — the security series (e.g. Pre-Seed), auto-incrementing
+  from your last round.
+* **Round type** — **Privately Advertised** (invite-only) or **Publicly
+  Advertised** (listed on the Marketplace). Public rounds require investors
+  to be accredited via [LeXcheX](lexchex.md).
+* **Admission mode** — **First-Come, First-Served** (offers are accepted
+  automatically in order, funds escrowed immediately, until the round
+  fills) or **Investors Bid / Founders Approve** (you review each bidder —
+  their profile, socials, reputation — and choose who gets in and for how
+  much).
+* **Ticket size** — the minimum and maximum any one investor can invest.
+* **Funding target** — a hard cap; the round ends automatically when hit.
+* **Start and end dates.**
+* **Exploding offers** (founder-approval rounds only) — optionally let
+  investors send time-limited offers outside the min/max.
+* **Pitch deck** — an optional description and up to three uploaded files.
 
-### 4. Close
+Filling the form is free; the round is deployed onchain at the final step,
+where you also configure the standard agreement investors will sign.
 
-When the round hits its cap or its closing date, it closes. Investor funds
-— which were held in an onchain escrow, never by you or by MetaLeX — are
-released to the company, and each investor receives their security as a
-cyberCERT on your register.
+### Managing your rounds
+
+The **rounds list** for your company shows active and closed rounds, each
+with its series, public/private label, structure, raised-vs-target progress,
+and a flag when EOIs are waiting for you.
+
+Opening a round shows the **management view** — three summary cards (Round,
+Offer, Raised) and, for founder-approval rounds, tables of:
+
+* **Open Interests** — EOIs awaiting your decision,
+* **Exploding Offers** — time-limited offers,
+* **Closed Interests** — EOIs you've allocated, and
+* the round's issued cyberCERTs.
+
+(First-come rounds need no review, so they only show closed interests and
+certs.)
+
+From here you can switch to the **Investor view**, **Edit Pitch deck**
+(requires Authenticating), and **Close Round**.
+
+### Reviewing an EOI
+
+Opening an EOI shows the investor's profile, bio, the offer (min–max amount,
+their message, any expiry), the agreement details, their trading activity,
+and their LeXcheX accreditation status. You then either:
+
+* **Allocate** — enter an amount within the offer's min–max and confirm the
+  onchain transaction that accepts them, or
+* **Reject** — confirm the onchain transaction that declines the offer.
+
+### Closing a round
+
+**Close Round** is a single transaction. It stops new EOIs immediately; you
+can still review and allocate any EOIs already submitted. When a round hits
+its cap, the app prompts you to open the next round.
 
 ---
 
-## For investors: joining a round
+## For investors: investing in a round
 
-### 1. Open the round page
+### Find a round
 
-Review the terms: the instrument (SAFE, etc.), the valuation cap or price,
-the minimum and maximum ticket, and the legal agreement.
+Browse the **Marketplace** (the public-rounds list) — searchable, split into
+open and past rounds. Only publicly advertised rounds appear here. Private
+rounds are reached through a link the issuer shares with you.
 
-### 2. Check whether you need to be verified
+If you don't hold a valid [LeXcheX](lexchex.md) accreditation, the
+Marketplace shows a **“Get accredited”** card explaining the paths to
+accreditation — you'll need it for public rounds.
 
-Some rounds are restricted. If a round requires accredited-investor status,
-you'll need a [LeXcheX](lexchex.md) credential first. If it's a Regulation S
-round, you may need to complete a non-US verification. The round page tells
-you what's required.
+### Express interest
 
-### 3. Submit an Expression of Interest
+The *Express Interest* screen has the form on one side and the legal
+agreement on the other. You provide:
 
-State how much you want to invest and sign the EOI. **Signing the EOI is
-free** — it's a message signature, not a transaction. It signals your intent
-and your agreement to the round's standard terms.
+* **Your investor details** — name, contact, investor type, and (if not an
+  individual) jurisdiction of formation. These pre-fill from your
+  [profile](profile.md) and can be encrypted.
+* **Investment amount** — a fixed amount, or a min/max range, within the
+  round's ticket limits and your wallet balance.
+* an optional **message** to the founder.
 
-### 4. Fund your investment
+If the round requires accreditation, you either confirm an existing LeXcheX
+credential or mint one here.
 
-Once your EOI is accepted, you fund it: you approve and send your payment
-(usually USDC) into the round's onchain escrow. This is a transaction and
-costs gas.
+Then:
 
-> Your money sits in an escrow contract — not with the company and not with
-> MetaLeX — until the round closes. If the round's conditions aren't met, the
-> escrow is where your refund comes from.
+1. **Sign the agreement** — a free signature.
+2. **Approve the payment token** if needed — an onchain transaction.
+3. **Submit** — the onchain transaction that places your EOI.
 
-### 5. Receive your security
+In a founder-approval round your maximum amount is held in escrow until the
+founder accepts your offer or the round closes — any unused remainder is
+returned. In a first-come round, accepted investments mint the certificate
+without delay.
 
-When the round closes, the escrow releases your funds to the company and you
-receive your **cyberCERT** — your SAFE (or other security) as an entry on the
-company's official register. You can view it any time from your wallet or
-your profile.
+### Track it in your Portfolio
 
-## What happens to your SAFE later
-
-When the company later does a priced round, SAFEs convert into shares. That
-conversion happens through the protocol and the resulting shares appear as a
-new cyberCERT on the register. You don't need to do anything to trigger it;
-the company runs the conversion.
+Your **Portfolio** shows your pending investments (EOIs awaiting a decision,
+with their expiry), your closed investments, the certificates you hold, and
+any scrip. You can also withdraw an EOI that hasn't been allocated yet.
 
 ## Good to know
 
 * **MetaLeX never holds your money.** Funds in flight are in an onchain
   escrow with no override.
-* **An EOI signature is free; funding is a transaction.** Your wallet tells
-  you which is which.
-* **Your security is real and onchain.** A cyberCERT is the actual register
-  entry for your stake — not a receipt or a placeholder.
+* **Signing the agreement is free; approving the token and submitting are
+  transactions.**
+* **Your security is real and onchain** — a cyberCERT is the actual register
+  entry for your stake.

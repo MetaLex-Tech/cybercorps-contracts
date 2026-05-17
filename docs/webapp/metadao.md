@@ -1,47 +1,51 @@
-# MetaDAO — futarchy governance
+# MetaDAO — entity formation
 
-A **MetaDAO** is an entity governed by **futarchy**: instead of voting
-directly on decisions, participants trade in prediction markets, and the
-outcome the market expects to be best is the one that gets adopted.
+The **MetaDAO** page is a narrow, single-purpose integration: it forms the
+legal entity for a token launched through [MetaDAO](https://metadao.fi). It
+is **not** a governance or prediction-market surface — it does one thing,
+once.
 
-This page is a short orientation for participants. Futarchy is an unusual
-governance model, so it's worth understanding the idea before you take part.
+## When you'd use it
 
-## The core idea
+You would not navigate to this page directly. You arrive at it from the
+**MetaDAO launch flow**, via a link that carries the details of your token
+and enterprise. Opening the page without those details just shows an error.
 
-Traditional governance: "Should we do X? Vote yes or no."
+## What it does
 
-Futarchy: "Here is a measure of success. The market predicts whether doing X
-or not-doing X leads to a better value of that measure. We do whichever the
-market favours."
+The page presents a **formation agreement** for your entity — specifically a
+*Segregated Portfolio of a Futarchy Governance SPC*, a Cayman Islands
+structure. Almost every field is **pre-filled and locked**, carried over
+from the MetaDAO form:
 
-Decisions are made by **markets**, not by headcount. Participants who predict
-well are rewarded; the entity follows the prediction.
+* the enterprise and company name,
+* the company type (a segregated portfolio of a segregated portfolio
+  company),
+* the jurisdiction (Cayman Islands),
+* the token name and ticker,
+* the founder address,
+* the network (Base).
 
-## What a MetaDAO is, structurally
+The only fields you fill in are the **founder/operator name and contact**.
 
-A MetaDAO is organised as a **segregated portfolio company (SPC)** — a single
-legal entity that contains multiple independent portfolios ("SegCos"), each
-governed by its own prediction markets. New portfolios are approved by a
-recorded board consent.
+## The steps
 
-## Taking part
+1. Arrive from the MetaDAO launch flow (the page opens with your details
+   already populated).
+2. Enter the founder/operator name and contact.
+3. **Sign the formation agreement** — a free signature.
+4. **Submit.** MetaLeX forms the cyberCORP for your entity.
+5. You are redirected back to MetaDAO to continue the launch.
 
-1. **Connect your wallet** and open the MetaDAO area of the cyberCORPs app.
-2. **Find an open decision.** Each pending decision has its own market.
-3. **Trade your view.** Buy into the outcome you believe leads to the better
-   result on the entity's success measure. Trading is a transaction and costs
-   gas.
-4. **Settlement.** When the decision window closes, the market's verdict
-   determines what the entity does, and positions settle accordingly.
+That's the whole flow. Once the entity is formed, you manage it like any
+other cyberCORP — see [The cyberCORPs app](mainframe.md).
 
 ## Good to know
 
-* **You are predicting, not voting.** Your influence comes from the
-  conviction you back with capital and from being right — not from a
-  one-person-one-vote tally.
-* **It is still a real entity.** A MetaDAO is a real legal company with a
-  real onchain register; futarchy is how it makes decisions, not a
-  replacement for it being a company.
-* **Take time to learn the model.** If futarchy is new to you, start with
-  small positions while you get a feel for how the markets resolve.
+* This page is a **handoff**, not an app you spend time in.
+* The futarchy *governance* of a MetaDAO entity happens on MetaDAO's own
+  platform; this page only handles the onchain legal-entity formation.
+* For the protocol-level view of MetaDAO-style segregated portfolio
+  companies, see
+  [Legal mappings](../explanation/legal-mappings.md) and the
+  [MetaDAOFactory](../reference/factories.md) reference.
