@@ -50,6 +50,17 @@ confirms, your company exists onchain.
 > governing documents need to designate the onchain system as its official
 > register. MetaLeX provides templates for this — involve your counsel.
 
+> **Under the hood.** “Deploy cyberCORP” calls the protocol's
+> [`CyberCorpFactory`](../reference/factories.md), which deploys your
+> [`CyberCorp`](../reference/contracts/CyberCorp.md) contract and its suite
+> (issuance, deal, and round managers) and a `BorgAuth` access-control
+> contract in one transaction. The “founder identity” address becomes an
+> officer in [BorgAuth](../reference/access-control.md). For the full
+> walkthrough at the contract level, see the tutorial
+> [Incorporate a cyberCORP](../tutorials/incorporate-a-cybercorp.md); for
+> *why* the chain can be the official register, see
+> [Constitutive vs. pointer tokenization](../explanation/constitutive-vs-pointer.md).
+
 ## The company home
 
 Once your cyberCORP exists, the app home shows your **company overview** —
@@ -97,6 +108,14 @@ it.
 Two buttons at the top of the Mainframe: **Create new Security Class** and
 **Issue new security**.
 
+> **Under the hood.** Each security *class* is a
+> [`CyberCertPrinter`](../reference/contracts/CyberCertPrinter.md) contract.
+> Each *certificate* is a **cyberCERT** — an ERC-721 “Ledger Entry Token” —
+> and the set of them is your register of holders. Each scrip token is a
+> [`CyberScrip`](../reference/contracts/CyberScrip.md) ERC-20. A cyberCERT
+> and its cyberSCRIP are the same security in two forms; see
+> [The dual-token model](../explanation/dual-token-model.md).
+
 ## Creating a security class
 
 Before you can issue a security, its class must exist. The *Create New
@@ -112,6 +131,10 @@ Class / Series* form asks for:
 * the **legal document** — either upload a PDF or paste a link to it.
 
 Submitting deploys the class onchain and returns you to the Mainframe.
+
+> **Under the hood.** This deploys a new `CyberCertPrinter` for the chosen
+> [security type](../reference/security-types.md). The instrument-specific
+> terms are handled by a [certificate extension](../reference/extensions.md).
 
 ## Issuing a certificate
 
@@ -130,6 +153,12 @@ Issuing takes **two approvals**: first the signing officer signs the
 certificate (a free signature), then you confirm the onchain transaction
 that mints it.
 
+> **Under the hood.** The transaction calls the
+> [`IssuanceManager`](../reference/contracts/IssuanceManager.md), which
+> mints the cyberCERT on the class's `CyberCertPrinter` and records the
+> holder as the registered owner. See the how-to
+> [Issue a cyberCERT](../how-to/issue-a-cybercert.md).
+
 ## Enabling scrip (scripify)
 
 To give a security a tradable, fungible form, you *scripify* its class. The
@@ -146,6 +175,13 @@ To give a security a tradable, fungible form, you *scripify* its class. The
 Scripify requires your Issuance Manager to be on the latest version; if it
 isn't, the form points you to the **Upgrade** page first.
 
+> **Under the hood.** Scripify deploys a
+> [`CyberScrip`](../reference/contracts/CyberScrip.md) ERC-20 for the class.
+> Holders can then convert certificate units to scrip and back. The
+> mechanics — partial scripification, the scrip ratio, and the two
+> recertification paths — are covered in the tutorial
+> [Scripify and settle a secondary trade](../tutorials/scripify-and-settle.md).
+
 ## Approving de-scripification
 
 When a scrip holder wants to become a registered holder, they request
@@ -153,6 +189,11 @@ de-scripification. You approve it from the Mainframe's pending-request
 banner: the *Approve De-scripification* screen pre-fills the holder and
 share amount, you complete and sign the certificate details, and confirm.
 The holder is then put on the register.
+
+> **Under the hood.** Issuer approval is the moment that matters legally —
+> it is when a new holder is added to the register of record. See
+> [The dual-token model](../explanation/dual-token-model.md) and
+> [Compliance architecture](../explanation/compliance-architecture.md).
 
 ## Admin
 
@@ -166,14 +207,19 @@ The **upgrade** area lists your company's contracts — CyberCorp, Deal
 Manager, Issuance Manager, Round Manager, and the cyberCERT/cyberSCRIP
 implementations — and shows, for each, whether a newer MetaLeX-published
 version is available. You upgrade each one individually, and only when you
-choose; upgrades are never forced. (Background:
-[Co-approval upgradeability](../explanation/co-approval-upgradeability.md).)
+choose; upgrades are never forced.
+
+> **Under the hood.** Upgrades use a **co-approval** model: MetaLeX
+> publishes a new implementation, and your company opts in — neither side
+> can act alone. See [Upgrade model](../reference/upgrade-model.md) and
+> [Co-approval upgradeability](../explanation/co-approval-upgradeability.md).
 
 ## Good to know
 
 * **Every change is a transaction.** Issuing, transferring, scripifying, and
   approving cost a small amount of gas.
 * **You keep control.** MetaLeX cannot issue your securities, move your
-  funds, or change your register.
+  funds, or change your register — see
+  [The role of MetaLeX](../explanation/role-of-metalex.md).
 * **Nothing is hidden offchain.** Anyone you authorise can verify the
   register directly.

@@ -51,6 +51,12 @@ The round form collects, in order:
 Filling the form is free; the round is deployed onchain at the final step,
 where you also configure the standard agreement investors will sign.
 
+> **Under the hood.** A round is created on your cyberCORP's
+> [`RoundManager`](../reference/contracts/RoundManager.md). The contract-
+> level walkthrough — building the round, taking EOIs, allocating, and
+> closing — is the tutorial
+> [Run a cyberRAISE round](../tutorials/run-a-cyberraise-round.md).
+
 ### Managing your rounds
 
 The **rounds list** for your company shows active and closed rounds, each
@@ -80,6 +86,12 @@ and their LeXcheX accreditation status. You then either:
 * **Allocate** — enter an amount within the offer's min–max and confirm the
   onchain transaction that accepts them, or
 * **Reject** — confirm the onchain transaction that declines the offer.
+
+> **Under the hood.** Allocating an EOI releases the investor's escrowed
+> funds to the company and mints their security as a cyberCERT through the
+> [`IssuanceManager`](../reference/contracts/IssuanceManager.md). The legal
+> agreement each party signs is anchored in the
+> [`CyberAgreementRegistry`](../reference/contracts/CyberAgreementRegistry.md).
 
 ### Closing a round
 
@@ -127,6 +139,12 @@ founder accepts your offer or the round closes — any unused remainder is
 returned. In a first-come round, accepted investments mint the certificate
 without delay.
 
+> **Under the hood.** Your EOI is an EIP-712-signed offer recorded on the
+> [`RoundManager`](../reference/contracts/RoundManager.md); your funds sit
+> in an onchain escrow until the round resolves. The security you receive is
+> a **cyberCERT** — a real entry on the company's register, not a receipt.
+> See [The dual-token model](../explanation/dual-token-model.md).
+
 ### Track it in your Portfolio
 
 Your **Portfolio** shows your pending investments (EOIs awaiting a decision,
@@ -136,7 +154,8 @@ any scrip. You can also withdraw an EOI that hasn't been allocated yet.
 ## Good to know
 
 * **MetaLeX never holds your money.** Funds in flight are in an onchain
-  escrow with no override.
+  escrow with no override — see
+  [The role of MetaLeX](../explanation/role-of-metalex.md).
 * **Signing the agreement is free; approving the token and submitting are
   transactions.**
 * **Your security is real and onchain** — a cyberCERT is the actual register
