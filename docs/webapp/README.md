@@ -4,6 +4,12 @@ This part of the documentation is for the people who **use** the MetaLeX
 apps — founders, officers, and investors. No code: just what each app is for
 and how to use it.
 
+If you want to understand the machinery beneath the apps — what a cyberCORP,
+a cyberCERT, or a cyberSCRIP actually *is*, and why the design works the way
+it does — that is **Part 1, Protocol**. Each guide here links into it at the
+relevant points; see [How the apps relate to the protocol](#how-the-apps-relate-to-the-protocol)
+below.
+
 ## The apps, and where they live
 
 The products run as **separate apps, each on its own subdomain**. Your
@@ -79,3 +85,29 @@ guide notes which steps are which.
   invest in a round.
 
 The full [Glossary](../reference/glossary.md) has the rest.
+
+## How the apps relate to the protocol
+
+The apps are **front ends over the cyberCORPs smart-contract protocol**.
+Every meaningful button is a call to a contract; nothing important happens
+in a database that the chain doesn't already record.
+
+* When you **deploy a cyberCORP**, the app calls the protocol's factory,
+  which deploys your company's contracts. The chain becomes your company's
+  *official register* — not a copy of one. This is the core idea of the
+  protocol: see
+  [Constitutive vs. pointer tokenization](../explanation/constitutive-vs-pointer.md).
+* When you **issue a security**, the app mints a **cyberCERT** — an entry on
+  that register.
+* When you **scripify**, the app deploys a **cyberSCRIP** — the same
+  security in fungible form. Why two forms exist is explained in
+  [The dual-token model](../explanation/dual-token-model.md).
+
+Throughout these guides, **“Under the hood”** boxes link the action you're
+taking to the protocol contract behind it. You never need to read Part 1 to
+use the apps — but if you want to know exactly what you are signing, it is
+all there.
+
+A good starting point for the protocol side is the
+[Protocol welcome / overview](../README.md) and the tutorial
+[Incorporate a cyberCORP](../tutorials/incorporate-a-cybercorp.md).

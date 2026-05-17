@@ -40,12 +40,19 @@ The only fields you fill in are the **founder/operator name and contact**.
 That's the whole flow. Once the entity is formed, you manage it like any
 other cyberCORP — see [The cyberCORPs app](mainframe.md).
 
+## Under the hood
+
+Submitting forms a cyberCORP structured as a Cayman Segregated Portfolio
+Company. At the protocol level this is the **MetaDAO / SPC** path — see the
+[MetaDAOFactory](../reference/factories.md) reference and, for how a single
+legal entity can hold multiple independently-governed portfolios,
+[Legal mappings across jurisdictions](../explanation/legal-mappings.md). The
+futarchy *governance* of the entity happens on MetaDAO's own platform; this
+page only handles the onchain legal-entity formation.
+
 ## Good to know
 
 * This page is a **handoff**, not an app you spend time in.
-* The futarchy *governance* of a MetaDAO entity happens on MetaDAO's own
-  platform; this page only handles the onchain legal-entity formation.
-* For the protocol-level view of MetaDAO-style segregated portfolio
-  companies, see
-  [Legal mappings](../explanation/legal-mappings.md) and the
-  [MetaDAOFactory](../reference/factories.md) reference.
+* For everything you do *after* formation — issuing securities, raising —
+  you use the [cyberCORPs app](mainframe.md) and [cyberRAISE](cyberraise.md)
+  like any other company.

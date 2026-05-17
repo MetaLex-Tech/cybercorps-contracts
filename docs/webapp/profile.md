@@ -51,6 +51,12 @@ Safe's own interface, where your co-signers approve it.
 After that, the delegated wallet can sign cyberAgreements on the Safe's
 behalf until the delegation expires.
 
+> **Under the hood.** Delegation registers the delegate against the
+> protocol's agreement layer, so a signature from the delegate counts as a
+> signature from the Safe when executing a cyberAgreement. Background:
+> [CyberAgreementRegistry](../reference/contracts/CyberAgreementRegistry.md)
+> and [Sign a cyberAgreement](../how-to/sign-a-cyberagreement.md).
+
 ## Notifications
 
 A **notifications** page exists but is **not yet functional** — it is a

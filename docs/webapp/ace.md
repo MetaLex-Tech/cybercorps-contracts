@@ -66,6 +66,24 @@ override. Each override is an onchain transaction.
    SAFE certificates you hold, across both your wallet and any Safe
    multisig.
 
+## Under the hood
+
+ACE is the cyberCORPs protocol's **ACE / PumpCorp** path. An ACE raise
+deploys a cyberCORP configured for a token-to-equity offering and issues
+**ACE SAFE** cyberCERTs — a SAFE variant whose security series is `ACE`.
+The non-US eligibility check is an onchain **condition** (a zkPassport-backed
+`NonUSNationalityCondition`); a founder override writes to that condition
+contract.
+
+* Protocol view of the offering type:
+  [Deploy a PumpCorp for ACE](../how-to/deploy-pumpcorp-ace.md) and
+  [Factories](../reference/factories.md).
+* How eligibility gating works:
+  [Conditions](../reference/conditions.md) and
+  [Compliance architecture](../explanation/compliance-architecture.md).
+* What an ACE SAFE is as a security:
+  [Security types](../reference/security-types.md).
+
 ## Good to know
 
 * **Eligibility is privacy-preserving** — the non-US check proves your

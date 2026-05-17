@@ -40,6 +40,16 @@ also qualify by **investing above a threshold** (around \$200k for an
 individual, \$1M for an entity) or through **manual verification** by a
 MetaLeX attorney. The route that fits you depends on your circumstances.
 
+## Under the hood
+
+A LeXcheX credential is an onchain accreditation NFT issued by the protocol's
+[`LexChex` / `LexChexMinter`](../reference/contracts/LexChex.md) contracts.
+When a round requires accreditation, it attaches a **`lexchexCondition`** —
+an onchain [condition](../reference/conditions.md) that checks for a valid
+LeXcheX credential before letting an investment proceed. How this fits into
+Reg D / Reg S gating is covered in
+[Compliance architecture](../explanation/compliance-architecture.md).
+
 ## After you have the credential
 
 * It stays in your wallet. Restricted rounds verify it automatically — you
