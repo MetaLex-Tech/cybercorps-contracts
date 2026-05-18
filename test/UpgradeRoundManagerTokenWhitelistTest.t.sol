@@ -158,7 +158,8 @@ contract UpgradeRoundManagerTokenWhitelistTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
-            defaultLegend: defaultLegend
+            defaultLegend: defaultLegend,
+            printerExtensionData: hex""
         });
 
         address[] memory conditions = new address[](1);

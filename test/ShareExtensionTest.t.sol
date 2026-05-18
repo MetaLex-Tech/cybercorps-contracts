@@ -418,7 +418,8 @@ contract ShareExtensionTest is Test {
             securityClass: SecurityClass.PreferredStock,
             securitySeries: SecuritySeries.SeriesA,
             extension: address(shareExtension),
-            defaultLegend: legend
+            defaultLegend: legend,
+            printerExtensionData: hex""
         });
 
         string[] memory legalDetails = new string[](1);

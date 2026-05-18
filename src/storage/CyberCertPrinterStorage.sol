@@ -100,6 +100,7 @@ library CyberCertPrinterStorage {
         // New variables must be appended below to preserve storage layout for upgrades
         mapping(uint256 => bool) tokenTransferable;
         mapping(uint256 => bytes[]) issuerSignatures;
+        bytes printerExtensionData;
         
     }
 
@@ -114,12 +115,7 @@ library CyberCertPrinterStorage {
     // URI storage functionality
     function tokenURI(uint256 tokenId) external view returns (string memory) {
         CyberCertPrinterStorage.CyberCertStorage storage s = cyberCertStorage();
-        string[] memory certLegend = s.certLegend[tokenId];
         ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
-        CertificateDetails memory effectiveDetails = getCertificateDetails(
-            tokenId
-        );
-
         // Get registry and agreementId from first endorsement if it exists
         address registry = address(0);
         bytes32 agreementId = bytes32(0);
@@ -129,7 +125,11 @@ library CyberCertPrinterStorage {
             agreementId = firstEndorsement.agreementId;
         }
 
-        return IUriBuilder(IIssuanceManager(s.issuanceManager).uriBuilder()).buildCertificateUri(
+        IUriBuilder builder = IUriBuilder(IIssuanceManager(s.issuanceManager).uriBuilder());
+        string[] memory certLegend = s.certLegend[tokenId];
+        Endorsement[] memory endorsements = s.endorsements[tokenId];
+        OwnerDetails memory owner = s.owners[tokenId];
+        return builder.buildCertificateUri(
             corp.cyberCORPName(),
             corp.cyberCORPType(),
             corp.cyberCORPJurisdiction(),
@@ -138,9 +138,9 @@ library CyberCertPrinterStorage {
             s.securitySeries,
             s.certificateUri,
             certLegend,
-            effectiveDetails,
-            s.endorsements[tokenId],
-            s.owners[tokenId],
+            getCertificateDetails(tokenId),
+            endorsements,
+            owner,
             registry,
             agreementId,
             tokenId,
@@ -258,6 +258,14 @@ library CyberCertPrinterStorage {
 
     function _getExtensionData(uint256 tokenId) internal view returns (bytes memory) {
         return cyberCertStorage().certificateDetails[tokenId].extensionData;
+    }
+
+    function setPrinterExtensionData(bytes memory data) internal {
+        cyberCertStorage().printerExtensionData = data;
+    }
+
+    function getPrinterExtensionData() internal view returns (bytes memory) {
+        return cyberCertStorage().printerExtensionData;
     }
 
 } 

@@ -152,7 +152,8 @@ contract UpgradeLegacyCyberCorpsTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
-            defaultLegend: new string[](0)
+            defaultLegend: new string[](0),
+            printerExtensionData: hex""
         });
     }
 
@@ -310,7 +311,8 @@ contract UpgradeLegacyCyberCorpsTest is Test {
                     defaultCertData[j].uri,
                     defaultCertData[j].securityClass,
                     defaultCertData[j].securitySeries,
-                    defaultCertData[j].extension
+                    defaultCertData[j].extension,
+                    defaultCertData[j].printerExtensionData
                 );
             }
 
@@ -614,7 +616,8 @@ contract UpgradeLegacyCyberCorpsTest is Test {
                 defaultCertData[j].uri,
                 defaultCertData[j].securityClass,
                 defaultCertData[j].securitySeries,
-                defaultCertData[j].extension
+                defaultCertData[j].extension,
+                defaultCertData[j].printerExtensionData
             );
         }
 

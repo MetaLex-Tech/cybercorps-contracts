@@ -70,6 +70,7 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
         SecuritySeries securitySeries;
         address extension;
         string[] defaultLegend;
+        bytes printerExtensionData;
     }
 
     error ZeroAddress();
@@ -559,7 +560,8 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
                     _certData[i].uri,
                     _certData[i].securityClass,
                     _certData[i].securitySeries,
-                    _certData[i].extension
+                    _certData[i].extension,
+                    _certData[i].printerExtensionData
                 )
             );
             certPrinterAddress[i] = address(certPrinter);

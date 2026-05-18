@@ -93,7 +93,8 @@ interface IIssuanceManager {
         string memory _certificateUri,
         SecurityClass _securityType,
         SecuritySeries _securitySeries,
-        address _extension
+        address _extension,
+        bytes memory _printerExtensionData
     ) external returns (address);
 
     function createCert(
@@ -246,6 +247,8 @@ interface IIssuanceManager {
         address certAddress,
         uint256 minimum
     ) external;
+
+    function setCertPrinterExtensionData(address certPrinter, bytes calldata data) external;
 
     function getScripToCertMinimum(
         address certAddress

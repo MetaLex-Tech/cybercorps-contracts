@@ -83,3 +83,4 @@ interface IUriBuilder {
         address extension
     ) external view returns (string memory);
 }
+

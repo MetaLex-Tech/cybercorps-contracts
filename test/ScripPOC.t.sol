@@ -596,7 +596,8 @@ contract ScripPOCTest is Test {
             "uri://real",
             SecurityClass.CommonStock,
             SecuritySeries.SeriesA,
-            address(0)
+            address(0),
+            hex""
         );
 
         // Avoid IssuanceManager.createCert in this PoC: it fetches tokenURI, which

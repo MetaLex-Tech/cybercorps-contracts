@@ -327,7 +327,8 @@ library CyberCorpHelper {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
-            defaultLegend: defaultLegend
+            defaultLegend: defaultLegend,
+            printerExtensionData: hex""
         });
 
         string[] memory roundPartyValues = new string[](2);
@@ -409,7 +410,8 @@ library CyberCorpHelper {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
-            defaultLegend: defaultLegend
+            defaultLegend: defaultLegend,
+            printerExtensionData: hex""
         });
 
         string[] memory roundPartyValues = new string[](2);
@@ -891,7 +893,8 @@ contract RoundManagerTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
-            defaultLegend: defaultLegend
+            defaultLegend: defaultLegend,
+            printerExtensionData: hex""
         });
 
         (bytes memory signature, ) = CyberCorpHelper.computeEscrowSignature(
@@ -2121,7 +2124,8 @@ contract RoundManagerTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
-            defaultLegend: defaultLegend
+            defaultLegend: defaultLegend,
+            printerExtensionData: hex""
         });
         bytes32 roundIdFuture;
         // Compute escrowed signature for the future round
@@ -2478,7 +2482,8 @@ contract RoundManagerTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
-            defaultLegend: legendA
+            defaultLegend: legendA,
+            printerExtensionData: hex""
         });
         certData[1] = CyberCertData({
             name: "Equity B",
@@ -2487,7 +2492,8 @@ contract RoundManagerTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
-            defaultLegend: legendB
+            defaultLegend: legendB,
+            printerExtensionData: hex""
         });
 
         // Round agreement arrays must match certData length
@@ -2737,7 +2743,8 @@ contract RoundManagerFCFSTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
-            defaultLegend: defaultLegend
+            defaultLegend: defaultLegend,
+            printerExtensionData: hex""
         });
         string[] memory roundPartyValues = new string[](2);
         roundPartyValues[0] = "Officer";
@@ -3972,7 +3979,8 @@ contract CyberCorpFactoryPublicRoundTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
-            defaultLegend: defaultLegend
+            defaultLegend: defaultLegend,
+            printerExtensionData: hex""
         });
 
         string[] memory roundPartyValues = new string[](2);

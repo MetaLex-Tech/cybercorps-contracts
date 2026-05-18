@@ -91,6 +91,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     event RestrictionHookSet(uint256 indexed id, address indexed hookAddress);
     event GlobalRestrictionHookSet(address indexed hookAddress);
     event GlobalTransferableSet(bool indexed transferable);
+    event PrinterExtensionDataSet(bytes32 indexed dataHash);
     
     
     modifier onlyIssuanceManager() {
@@ -103,7 +104,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     }
 
     // Called by proxy on deployment (if needed)
-    function initialize(string[] memory _defaultLegend, string memory name, string memory ticker, string memory _certificateUri, address _issuanceManager, SecurityClass _securityType, SecuritySeries _securitySeries, address _extension) external initializer {
+    function initialize(string[] memory _defaultLegend, string memory name, string memory ticker, string memory _certificateUri, address _issuanceManager, SecurityClass _securityType, SecuritySeries _securitySeries, address _extension, bytes memory _printerExtensionData) external initializer {
         __ERC721_init(name, ticker);
         __ERC721Enumerable_init_unchained();
         
@@ -115,6 +116,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         s.certificateUri = _certificateUri;
         s.endorsementRequired = true;
         s.extension = _extension;
+        s.printerExtensionData = _printerExtensionData;
     }
 
     function updateIssuanceManager(address _issuanceManager) external onlyIssuanceManager {
@@ -489,6 +491,15 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
 
     function getExtensionData(uint256 tokenId) external view returns (bytes memory) {
         return CyberCertPrinterStorage._getExtensionData(tokenId);
+    }
+
+    function setPrinterExtensionData(bytes calldata data) external onlyIssuanceManager {
+        CyberCertPrinterStorage.cyberCertStorage().printerExtensionData = data;
+        emit PrinterExtensionDataSet(keccak256(data));
+    }
+
+    function getPrinterExtensionData() external view returns (bytes memory) {
+        return CyberCertPrinterStorage.cyberCertStorage().printerExtensionData;
     }
 
     function setExtension(uint256 tokenId, address extension) external onlyIssuanceManager {

@@ -45,3 +45,10 @@ interface ICertificateExtension {
     function supportsExtensionType(bytes32 extensionType) external pure returns (bool);
     function getExtensionURI(bytes memory data) external view returns (string memory);
 }
+
+interface ICertificateExtensionV2 {
+    function getExtensionURI(
+        bytes memory printerExtensionData,
+        bytes memory certificateExtensionData
+    ) external view returns (string memory);
+}

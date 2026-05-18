@@ -46,6 +46,7 @@ import "./CyberCorpConstants.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
 import "./interfaces/ICertificateImageBuilder.sol";
 import "./storage/extensions/ICertificateExtension.sol";
+import "./interfaces/ICyberCertPrinter.sol";
 import "./libs/auth.sol";
 
 contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
@@ -442,6 +443,46 @@ struct CertificateDetails {
         address contractAddress,
         address extension
     ) public view returns (string memory) {
+        string memory json = buildCertificateUriNotEncoded(
+            cyberCORPName,
+            cyberCORPType,
+            cyberCORPJurisdiction,
+            cyberCORPContactDetails,
+            securityType,
+            securitySeries,
+            certificateUri,
+            certLegend,
+            details,
+            endorsements,
+            owner,
+            registry,
+            agreementId,
+            tokenId,
+            contractAddress,
+            extension
+        );
+        json = Base64.encode(bytes(json));
+        return string(abi.encodePacked('data:application/json;base64,', json));
+    }
+
+    function buildCertificateUriNotEncoded(
+        string memory cyberCORPName,
+        string memory cyberCORPType,
+        string memory cyberCORPJurisdiction,
+        string memory cyberCORPContactDetails,
+        SecurityClass securityType,
+        SecuritySeries securitySeries,
+        string memory certificateUri,
+        string[] memory certLegend,
+        CertificateDetails memory details,
+        Endorsement[] memory endorsements,
+        OwnerDetails memory owner,
+        address registry,
+        bytes32 agreementId,
+        uint256 tokenId,
+        address contractAddress,
+        address extension
+    ) public view returns (string memory) {
         // Start building the JSON string with ERC-721 metadata standard format
         // Build on-chain SVG image using the image builder
         
@@ -486,6 +527,7 @@ struct CertificateDetails {
             '"'
         );
 
+
         // Add certificate details
         json = string.concat(json, 
             ', "signingOfficerName": "', details.signingOfficerName,
@@ -498,8 +540,11 @@ struct CertificateDetails {
         );
 
         //add extensionData
-        if (extension != address(0) && details.extensionData.length > 0) {
-            json = string.concat(json, ICertificateExtension(extension).getExtensionURI(details.extensionData));
+        if (extension != address(0)) {
+            bytes memory printerExtensionData = _getPrinterExtensionData(contractAddress);
+            if (details.extensionData.length > 0 || printerExtensionData.length > 0) {
+                json = string.concat(json, _getExtensionURI(extension, printerExtensionData, details.extensionData));
+            }
         }
 
         // Add endorsement history
@@ -518,108 +563,37 @@ struct CertificateDetails {
 
         // Close the main JSON object
         json = string.concat(json, '}');
-        json = Base64.encode(bytes(string(json)));
-        json = string(abi.encodePacked('data:application/json;base64,', json));
         return json;
     }
 
-    function buildCertificateUriNotEncoded(
-        string memory cyberCORPName,
-        string memory cyberCORPType,
-        string memory cyberCORPJurisdiction,
-        string memory cyberCORPContactDetails,
-        SecurityClass securityType,
-        SecuritySeries securitySeries,
-        string memory certificateUri,
-        string[] memory certLegend,
-        CertificateDetails memory details,
-        Endorsement[] memory endorsements,
-        OwnerDetails memory owner,
-        address registry,
-        bytes32 agreementId,
-        uint256 tokenId,
-        address contractAddress,
-        address extension
-    ) public view returns (string memory) {
-        // Start building the JSON string with ERC-721 metadata standard format
-        // Build on-chain SVG image using the image builder
+    function _getPrinterExtensionData(address certPrinter) internal view returns (bytes memory) {
+        if (certPrinter == address(0)) return "";
+        try ICyberCertPrinter(certPrinter).getPrinterExtensionData() returns (bytes memory data) {
+            return data;
+        } catch {
+            return "";
+        }
+    }
 
-        // Fetch timestamp from registry in scoped block to reduce stack pressure
-        uint256 certTimestamp = _getAgreementTimestamp(registry, agreementId);
-
-        CertificateSVGParams memory svgParams = CertificateSVGParams({
-            corpName: cyberCORPName,
-            securityType: securityType,
-            securitySeries: securitySeries,
-            officerName: details.signingOfficerName,
-            officerTitle: details.signingOfficerTitle,
-            units: details.unitsRepresented,
-            valuation: details.issuerUSDValuationAtTimeOfInvestment,
-            jurisdiction: cyberCORPJurisdiction,
-            ownerName: owner.name,
-            tokenId: tokenId,
-            certificateUri: certificateUri
-        });
-
-        string memory svg = ICertificateImageBuilder(imageBuilder).buildCertificateSVG(svgParams, certTimestamp);
-        string memory imageDataUri = string(abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg))));
-
-        string memory json = string(abi.encodePacked(
-            '{"title": "MetaLeX Tokenized Certificate",',
-            '"type": "', securityClassToString(securityType),
-            '", "image": "', imageDataUri, '",',
-            '"attributes": [', buildAttributes(owner, details, cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri),
-            '],'
-        ));
-
-        // Add all existing properties at root level
-        json = string.concat(
-            json,
-            '"cyberCORPName": "', cyberCORPName,
-            '", "cyberCORPType": "', cyberCORPType,
-            '", "cyberCORPJurisdiction": "', cyberCORPJurisdiction,
-            '", "cyberCORPContactDetails": "', cyberCORPContactDetails,
-            '", "securityType": "', securityClassToString(securityType),
-            '", "securitySeries": "', securitySeriesToString(securitySeries),
-            '", "certificateUri": "', certificateUri,
-            '"'
+    function _getExtensionURI(
+        address extension,
+        bytes memory printerExtensionData,
+        bytes memory certificateExtensionData
+    ) internal view returns (string memory) {
+        (bool success, bytes memory result) = extension.staticcall(
+            abi.encodeWithSelector(
+                ICertificateExtensionV2.getExtensionURI.selector,
+                printerExtensionData,
+                certificateExtensionData
+            )
         );
 
-        // Add certificate details
-        json = string.concat(json, 
-            ', "signingOfficerName": "', details.signingOfficerName,
-            '", "signingOfficerTitle": "', details.signingOfficerTitle,
-            '", "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD),
-            '", "issuerUSDValuationAtTimeOfInvestment": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
-            '", "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented),
-            '", "legalDetails": "', details.legalDetails,
-            '"'
-        );
-
-        //add extensionData
-        if (extension != address(0) && details.extensionData.length > 0) {
-            json = string.concat(json, ICertificateExtension(extension).getExtensionURI(details.extensionData));
+        if (success) {
+            return abi.decode(result, (string));
         }
 
-        // Add endorsement history
-        json = string.concat(json, ', "endorsementHistory": ', buildEndorsementHistory(endorsements, registry, agreementId));
-
-        // Add current owner details
-        json = string.concat(json, 
-            ', "currentOwner": {',
-            '"name": "', owner.name,
-            '", "ownerAddress": "', addressToString(owner.ownerAddress),
-            '"}'
-        );
-
-        // Add restrictive legends at the end
-        json = string.concat(json, ', "restrictiveLegends": ', arrayToJsonString(certLegend));
-
-        // Close the main JSON object
-        json = string.concat(json, '}');
-        //json = Base64.encode(bytes(string(json)));
-        //json = string(abi.encodePacked('data:application/json;base64,', json));
-        return json;
+        // Fall back to `getExtensionUri` without certPrinter data
+        return ICertificateExtension(extension).getExtensionURI(certificateExtensionData);
     }
 
     function _authorizeUpgrade(
