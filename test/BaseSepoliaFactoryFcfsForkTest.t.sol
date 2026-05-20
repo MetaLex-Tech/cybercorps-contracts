@@ -40,8 +40,7 @@ contract BaseSepoliaFactoryFcfsForkTest is Test, KnownAddressesLoaded {
     address internal investor;
 
     function setUp() public {
-        //assertEq(block.chainid, BASE_SEPOLIA_CHAIN_ID, "Fork test: Base Sepolia only");
-        //vm.rollFork(BASE_SEPOLIA_FORK_BLOCK); // TODO: Uncomment this when the fork is ready      
+        vm.createSelectFork("base_sepolia", BASE_SEPOLIA_FORK_BLOCK);
 
         registry = CyberAgreementRegistry(CYBER_AGREEMENT_REGISTRY);
         cyberCorpFactory = CyberCorpFactory(CYBERCORP_FACTORY);

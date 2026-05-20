@@ -71,11 +71,9 @@ contract SelectorCondition is ICondition {
     }
 }
 
-contract CyberScripUpgradeTest is Test {
+contract CyberScripUpgradeForkTest is Test {
     using ERC1967ProxyLib for address;
     using RoundLib for Round;
-
-    string internal constant RPC_ENV_VAR = "FORK_RPC_URL";
     address internal constant METALEX_SAFE =
         0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
     address internal constant LEXCHEX_OWNER =
@@ -100,6 +98,7 @@ contract CyberScripUpgradeTest is Test {
     address internal otherInvestor;
 
     function setUp() public {
+        vm.createSelectFork("base_sepolia");
 
         deployment = DeploymentConstants.coreV2(block.chainid);
 

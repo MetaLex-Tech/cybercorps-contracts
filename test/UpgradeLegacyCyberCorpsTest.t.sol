@@ -41,7 +41,7 @@ contract MockImplVTest is UUPSUpgradeable {
     ) internal override {}
 }
 
-contract UpgradeLegacyCyberCorpsTest is Test {
+contract UpgradeLegacyCyberCorpsForkTest is Test {
     using ERC1967ProxyLib for address;
     
     address metalexSafe = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
@@ -91,11 +91,7 @@ contract UpgradeLegacyCyberCorpsTest is Test {
         // Prepare for upgrades
         //
 
-        // For future-proof: some networks may have upgraded already. In such case we will roll back to a known block before the upgrades
-        if (block.chainid == 84532) {
-            console2.log("Existing deployment has been upgraded, rolling back to a known block before it...");
-            vm.rollFork(33920951);
-        }
+        vm.createSelectFork("base_sepolia", 33920951);
 
         // Load all known managers
         knownCyberCorps = KnownAddressesLoader.load(block.chainid, "/script/res/known-cyber-corps.json", legacyAddressesCount);

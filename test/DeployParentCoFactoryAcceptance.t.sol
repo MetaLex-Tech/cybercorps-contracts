@@ -12,7 +12,7 @@ import {CyberCorp} from "../src/CyberCorp.sol";
 import {CompanyOfficer} from "../src/CyberCorpConstants.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
-contract DeployParentCoFactoryAcceptanceTest is Test {
+contract DeployParentCoFactoryAcceptanceForkTest is Test {
     DeploymentConstants.CoreDeployment coreDeployment;
     DeploymentConstants.UmiaDeployment umiaDeployment;
     DeploymentConstants.Deps deps;
@@ -31,6 +31,7 @@ contract DeployParentCoFactoryAcceptanceTest is Test {
 
     /// @notice Assumes all contracts are deployed
     function setUp() public {
+        vm.createSelectFork("base_sepolia");
         coreDeployment = DeploymentConstants.coreV2(block.chainid);
         umiaDeployment = DeploymentConstants.umia(block.chainid);
         deps = DeploymentConstants.deps(block.chainid);
@@ -178,12 +179,6 @@ contract DeployParentCoFactoryAcceptanceTest is Test {
     }
 
     function test_realCalldata() public {
-        // Skip test if not on Base Sepolia
-        if(block.chainid != DeploymentConstants.BASE_SEPOLIA) {
-            console2.log("skipping unsupported chain ID: %d ...", block.chainid);
-            return;
-        }
-
         // https://sepolia.basescan.org/tx/0xd479c8e723bd1999945477fdb7fe9345f488c248b3e02731c050e442aba5d827
         vm.rollFork(40820661); // one block before the real tx
 

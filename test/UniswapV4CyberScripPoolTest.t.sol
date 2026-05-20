@@ -42,8 +42,7 @@ contract HookCreate2Deployer {
     }
 }
 
-contract UniswapV4CyberScripPoolTest is Test, IUnlockCallback {
-    string internal constant RPC_ENV_VAR = "FORK_RPC_URL";
+contract UniswapV4CyberScripPoolForkTest is Test, IUnlockCallback {
 
     address internal constant BASE_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     address internal constant BASE_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
@@ -64,6 +63,7 @@ contract UniswapV4CyberScripPoolTest is Test, IUnlockCallback {
     address internal issuerRecipient;
 
     function setUp() public {
+        vm.createSelectFork("base");
 
         poolManager = IPoolManagerV4(BASE_POOL_MANAGER);
 

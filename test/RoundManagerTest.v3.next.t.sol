@@ -119,7 +119,7 @@ library CyberCorpHelperV3 {
 /// A corp and round are created on the OLD (pre-upgrade) RoundManager implementation,
 /// the upgrade is then simulated, and tests verify both backward compatibility and
 /// new-feature correctness.
-contract RoundManagerV3NextTest is Test {
+contract RoundManagerV3NextForkTest is Test {
     using RoundLib for Round;
     using ERC1967ProxyLib for address;
 
@@ -156,8 +156,7 @@ contract RoundManagerV3NextTest is Test {
     uint256 constant VALUATION      = 10_000_000 * 1e18;
 
     function setUp() public {
-        assertEq(block.chainid, 84532, "Fork test: Base Sepolia only @ block 38956871");
-        vm.rollFork(38956871);
+        vm.createSelectFork("base_sepolia", 38956871);
 
         (deployer,       deployerPrivKey)    = makeAddrAndKey("deployer");
         (corpOwnerV3,    corpOwnerPrivKeyV3) = makeAddrAndKey("corpOwnerV3");

@@ -23,7 +23,7 @@ import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
 import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
-contract UpgradePublicRoundsTest is Test {
+contract UpgradePublicRoundsForkTest is Test {
     address metalexSafe = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
 
     // Assume Base-sepolia
@@ -54,6 +54,7 @@ contract UpgradePublicRoundsTest is Test {
     bytes32 templateId = bytes32(uint256(20000));
     
     function setUp() public {
+        vm.createSelectFork("base_sepolia");
         vm.label(deployer, "deployer");
         vm.label(companyOwner, "companyOwner");
         vm.label(alice, "alice");

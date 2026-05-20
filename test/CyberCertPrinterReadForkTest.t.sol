@@ -8,6 +8,10 @@ import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 contract CyberCertPrinterReadForkTest is Test {
     address internal constant PRINTER = 0xf77f10816D376E2D1f4a3FAF548E0E9142aB11D9;
 
+    function setUp() public {
+        vm.createSelectFork("base_sepolia");
+    }
+
     function test_ReadPrinterUriAndCertificateDetails() public {
         ICyberCertPrinter printer = ICyberCertPrinter(PRINTER);
 

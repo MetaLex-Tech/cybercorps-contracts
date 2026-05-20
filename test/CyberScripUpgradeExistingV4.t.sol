@@ -64,7 +64,7 @@ contract LegacySelectorCondition is ICondition {
 /// @notice Fork-based CyberScrip upgrade tests against a legacy Base Sepolia v3 deployment.
 /// @dev The corp stack is deployed at a pre-upgrade block using the old live factories,
 ///      then upgraded locally to the latest in-repo implementations before each test runs.
-contract CyberScripUpgradeExistingV3Test is Test {
+contract CyberScripUpgradeExistingV3ForkTest is Test {
     using ERC1967ProxyLib for address;
 
     struct UpgradeImpls {
@@ -111,8 +111,7 @@ contract CyberScripUpgradeExistingV3Test is Test {
     address internal otherInvestor;
 
     function setUp() public {
-        assertEq(block.chainid, BASE_SEPOLIA, "Fork test: Base Sepolia only");
-        vm.rollFork(PRE_UPGRADE_BLOCK);
+        vm.createSelectFork("base_sepolia", PRE_UPGRADE_BLOCK);
 
         corpFactory = CyberCorpFactory(CYBERCORP_FACTORY_PROXY);
         corpSingleFactory = CyberCorpSingleFactory(

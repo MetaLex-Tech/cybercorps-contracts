@@ -22,7 +22,7 @@ import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 
 /// @notice This is for testing upgrading base-sepolia, which has been upgraded to a dev version of v3 before, to the current version of v3
-contract UpgradeRoundManagerTokenWhitelistTest is Test {
+contract UpgradeRoundManagerTokenWhitelistForkTest is Test {
     using RoundLib for Round;
     using ERC1967ProxyLib for address;
     
@@ -56,9 +56,7 @@ contract UpgradeRoundManagerTokenWhitelistTest is Test {
         (alice, alicePrivateKey) = makeAddrAndKey("alice");
         (bob, bobPrivateKey) = makeAddrAndKey("bob");
 
-        // Lock in specific chain ID and fork block (after previous dev public-round migration and after LexCheX Minter is setup)
-        assertEq(block.chainid, 84532, "This test is meant for only Base Sepolia @ 34732511");
-        vm.rollFork(34732511);
+        vm.createSelectFork("base_sepolia", 34732511);
 
         rmFactory = RoundManagerFactory(cyberCorpFactory.roundManagerFactory());
 
