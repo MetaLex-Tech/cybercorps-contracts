@@ -54,7 +54,7 @@ contract UpgradePublicRoundsForkTest is Test {
     bytes32 templateId = bytes32(uint256(20000));
     
     function setUp() public {
-        vm.createSelectFork("base_sepolia");
+        vm.createSelectFork("base_sepolia", 34755849);
         vm.label(deployer, "deployer");
         vm.label(companyOwner, "companyOwner");
         vm.label(alice, "alice");

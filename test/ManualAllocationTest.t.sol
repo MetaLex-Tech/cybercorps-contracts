@@ -13,7 +13,7 @@ contract ManualAllocationForkTest is Test {
     bytes32 public constant AGREEMENT_ID = 0x72F1689D3F127129857D1867C30ADAEDF4428527510FD4EA98221FA6B4BA132F;
 
     function setUp() public {
-        vm.createSelectFork("base_sepolia");
+        vm.createSelectFork("ethereum", 24085124);
     }
 
     function test_manualAllocate() public {

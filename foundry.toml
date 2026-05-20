@@ -11,9 +11,10 @@ fs_permissions = [
 ]
 
 [rpc_endpoints]
-base_sepolia = "https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+ethereum     = "https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
 base         = "https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
 sepolia      = "https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+base_sepolia = "https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
 
 [profile.ci]
 # inherits [profile.default]

@@ -31,7 +31,7 @@ contract DeployParentCoFactoryAcceptanceForkTest is Test {
 
     /// @notice Assumes all contracts are deployed
     function setUp() public {
-        vm.createSelectFork("base_sepolia");
+        vm.createSelectFork("ethereum");
         coreDeployment = DeploymentConstants.coreV2(block.chainid);
         umiaDeployment = DeploymentConstants.umia(block.chainid);
         deps = DeploymentConstants.deps(block.chainid);
@@ -180,7 +180,10 @@ contract DeployParentCoFactoryAcceptanceForkTest is Test {
 
     function test_realCalldata() public {
         // https://sepolia.basescan.org/tx/0xd479c8e723bd1999945477fdb7fe9345f488c248b3e02731c050e442aba5d827
+        vm.createSelectFork("base_sepolia");
         vm.rollFork(40820661); // one block before the real tx
+
+        ParentCoFactory realParentCoFactory = ParentCoFactory(0x478ee34c618E9339Ae2DD8100Df7ec535eb24D29);
 
         string[] memory globalValues = new string[](8);
         globalValues[0] = "alice";
@@ -193,7 +196,7 @@ contract DeployParentCoFactoryAcceptanceForkTest is Test {
         partyValues[0] = "alice";
         partyValues[1] = "123";
 
-        (address subCorp,,,,,,,) = parentCoFactory.deployCorpContractFor({
+        (address subCorp,,,,,,,) = realParentCoFactory.deployCorpContractFor({
             salt: 1777409598760,
             companyName: "TestCorp S.P.",
             companyType: "Segregated Portfolio of Segregated Portfolio Company",
