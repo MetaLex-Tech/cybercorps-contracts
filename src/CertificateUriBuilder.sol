@@ -592,6 +592,8 @@ struct CertificateDetails {
             return abi.decode(result, (string));
         }
 
+        if (certificateExtensionData.length == 0) return "";
+
         // Fall back to `getExtensionUri` without certPrinter data
         return ICertificateExtension(extension).getExtensionURI(certificateExtensionData);
     }
