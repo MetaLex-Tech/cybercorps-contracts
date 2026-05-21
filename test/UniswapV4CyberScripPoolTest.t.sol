@@ -47,9 +47,13 @@ contract UniswapV4CyberScripPoolForkTest is Test, IUnlockCallback {
     address internal constant BASE_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     address internal constant BASE_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
 
-    uint16 internal constant BEFORE_SWAP_FLAG = 1 << 7;
+    uint16 internal constant AFTER_SWAP_RETURNS_DELTA_FLAG  = 1 << 2;
     uint16 internal constant BEFORE_SWAP_RETURNS_DELTA_FLAG = 1 << 3;
-    uint16 internal constant REQUIRED_HOOK_FLAGS = BEFORE_SWAP_FLAG | BEFORE_SWAP_RETURNS_DELTA_FLAG;
+    uint16 internal constant AFTER_SWAP_FLAG                = 1 << 6;
+    uint16 internal constant BEFORE_SWAP_FLAG               = 1 << 7;
+    uint16 internal constant REQUIRED_HOOK_FLAGS =
+        BEFORE_SWAP_FLAG | AFTER_SWAP_FLAG |
+        BEFORE_SWAP_RETURNS_DELTA_FLAG | AFTER_SWAP_RETURNS_DELTA_FLAG; // 0x00CC
     uint24 internal constant POOL_FEE = 3000; // 0.30%
     int24 internal constant TICK_SPACING = 60;
 
@@ -95,20 +99,48 @@ contract UniswapV4CyberScripPoolForkTest is Test, IUnlockCallback {
         deal(BASE_USDC, address(this), 5_000_000 * 1e6);
     }
 
-    function test_Sell_CollectsFeeInCyberScrip() public {
+    function test_SellExactInput_CollectsFeeInCyberScrip() public {
         _unlock(UnlockAction.InitializeAndAddLiquidity);
-        _unlock(UnlockAction.SwapSell);
+        _unlock(UnlockAction.SwapSellExactInput);
 
-        assertGt(IERC20(address(cyberScrip)).balanceOf(metalexRecipient), 0, "metalex fee not collected");
-        assertGt(IERC20(address(cyberScrip)).balanceOf(issuerRecipient), 0, "issuer fee not collected");
+        // 3000 wei CS in, 100 bps fee → 3000 * 100 / 10_000 = 30
+        assertEq(IERC20(address(cyberScrip)).balanceOf(metalexRecipient), 30, "metalex fee incorrect");
+        assertEq(IERC20(address(cyberScrip)).balanceOf(issuerRecipient),  30, "issuer fee incorrect");
     }
 
-    function test_Buy_CollectsFeeInUsdc() public {
+    function test_BuyExactInput_CollectsFeeInUsdc() public {
         _unlock(UnlockAction.InitializeAndAddLiquidity);
-        _unlock(UnlockAction.SwapBuy);
+        _unlock(UnlockAction.SwapBuyExactInput);
 
-        assertGt(IERC20(BASE_USDC).balanceOf(metalexRecipient), 0, "metalex fee not collected");
-        assertGt(IERC20(BASE_USDC).balanceOf(issuerRecipient), 0, "issuer fee not collected");
+        // 3000 wei USDC in, 100 bps fee → 30
+        assertEq(IERC20(BASE_USDC).balanceOf(metalexRecipient), 30, "metalex fee incorrect");
+        assertEq(IERC20(BASE_USDC).balanceOf(issuerRecipient),  30, "issuer fee incorrect");
+    }
+
+    function test_SellExactOutput_CollectsFeeInCyberScrip() public {
+        _unlock(UnlockAction.InitializeAndAddLiquidity);
+
+        uint256 csBefore = IERC20(address(cyberScrip)).balanceOf(address(this));
+        _unlock(UnlockAction.SwapSellExactOutput);
+        uint256 metalexFee = IERC20(address(cyberScrip)).balanceOf(metalexRecipient);
+        uint256 issuerFee  = IERC20(address(cyberScrip)).balanceOf(issuerRecipient);
+        uint256 poolInput  = csBefore - IERC20(address(cyberScrip)).balanceOf(address(this)) - metalexFee - issuerFee;
+
+        assertEq(metalexFee, poolInput * 100 / 10_000, "metalex fee incorrect");
+        assertEq(issuerFee,  poolInput * 100 / 10_000, "issuer fee incorrect");
+    }
+
+    function test_BuyExactOutput_CollectsFeeInUsdc() public {
+        _unlock(UnlockAction.InitializeAndAddLiquidity);
+
+        uint256 usdcBefore = IERC20(BASE_USDC).balanceOf(address(this));
+        _unlock(UnlockAction.SwapBuyExactOutput);
+        uint256 metalexFee = IERC20(BASE_USDC).balanceOf(metalexRecipient);
+        uint256 issuerFee  = IERC20(BASE_USDC).balanceOf(issuerRecipient);
+        uint256 poolInput  = usdcBefore - IERC20(BASE_USDC).balanceOf(address(this)) - metalexFee - issuerFee;
+
+        assertEq(metalexFee, poolInput * 100 / 10_000, "metalex fee incorrect");
+        assertEq(issuerFee,  poolInput * 100 / 10_000, "issuer fee incorrect");
     }
 
     function unlockCallback(bytes calldata data) external override returns (bytes memory) {
@@ -119,12 +151,20 @@ contract UniswapV4CyberScripPoolForkTest is Test, IUnlockCallback {
             _initializeAndAddLiquidity();
             return "";
         }
-        if (action == UnlockAction.SwapSell) {
-            _swapSell();
+        if (action == UnlockAction.SwapSellExactInput) {
+            _swapSellExactInput();
             return "";
         }
-        if (action == UnlockAction.SwapBuy) {
-            _swapBuy();
+        if (action == UnlockAction.SwapBuyExactInput) {
+            _swapBuyExactInput();
+            return "";
+        }
+        if (action == UnlockAction.SwapSellExactOutput) {
+            _swapSellExactOutput();
+            return "";
+        }
+        if (action == UnlockAction.SwapBuyExactOutput) {
+            _swapBuyExactOutput();
             return "";
         }
 
@@ -133,8 +173,10 @@ contract UniswapV4CyberScripPoolForkTest is Test, IUnlockCallback {
 
     enum UnlockAction {
         InitializeAndAddLiquidity,
-        SwapSell,
-        SwapBuy
+        SwapSellExactInput,
+        SwapBuyExactInput,
+        SwapSellExactOutput,
+        SwapBuyExactOutput
     }
 
     function _unlock(UnlockAction action) internal {
@@ -155,35 +197,40 @@ contract UniswapV4CyberScripPoolForkTest is Test, IUnlockCallback {
         _settleDelta(callerDelta);
     }
 
-    function _swapSell() internal {
-        // Sell CyberScrip for USDC; zeroForOne depends on token ordering
-        bool zeroForOne = poolKey.currency0 == address(cyberScrip);
-        // PM's CS balance comes only from our liquidity (~6000 wei); fee must stay below that
-        uint256 inputAmount = 3000; // 3000 wei CS → 60 wei fee (well within PM's CS balance)
-
-        IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
+    function _swapSellExactInput() internal {
+        bool zeroForOne = address(cyberScrip) < BASE_USDC;
+        _settleDelta(poolManager.swap(poolKey, IPoolManager.SwapParams({
             zeroForOne: zeroForOne,
-            amountSpecified: -int256(inputAmount),
+            amountSpecified: -3000,
             sqrtPriceLimitX96: zeroForOne ? MIN_SQRT_RATIO + 1 : MAX_SQRT_RATIO - 1
-        });
-
-        BalanceDelta swapDelta = poolManager.swap(poolKey, params, "");
-        _settleDelta(swapDelta);
+        }), ""));
     }
 
-    function _swapBuy() internal {
-        // Buy CyberScrip with USDC; zeroForOne depends on token ordering
-        bool zeroForOne = poolKey.currency0 == BASE_USDC;
-        uint256 inputAmount = 10 * 1e6; // 10 USDC (6 dec)
-
-        IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
+    function _swapBuyExactInput() internal {
+        bool zeroForOne = BASE_USDC < address(cyberScrip);
+        _settleDelta(poolManager.swap(poolKey, IPoolManager.SwapParams({
             zeroForOne: zeroForOne,
-            amountSpecified: -int256(inputAmount),
+            amountSpecified: -3000,
             sqrtPriceLimitX96: zeroForOne ? MIN_SQRT_RATIO + 1 : MAX_SQRT_RATIO - 1
-        });
+        }), ""));
+    }
 
-        BalanceDelta swapDelta = poolManager.swap(poolKey, params, "");
-        _settleDelta(swapDelta);
+    function _swapSellExactOutput() internal {
+        bool zeroForOne = address(cyberScrip) < BASE_USDC;
+        _settleDelta(poolManager.swap(poolKey, IPoolManager.SwapParams({
+            zeroForOne: zeroForOne,
+            amountSpecified: 3000,
+            sqrtPriceLimitX96: zeroForOne ? MIN_SQRT_RATIO + 1 : MAX_SQRT_RATIO - 1
+        }), ""));
+    }
+
+    function _swapBuyExactOutput() internal {
+        bool zeroForOne = BASE_USDC < address(cyberScrip);
+        _settleDelta(poolManager.swap(poolKey, IPoolManager.SwapParams({
+            zeroForOne: zeroForOne,
+            amountSpecified: 3000,
+            sqrtPriceLimitX96: zeroForOne ? MIN_SQRT_RATIO + 1 : MAX_SQRT_RATIO - 1
+        }), ""));
     }
 
     function _settleDelta(BalanceDelta delta) internal {
@@ -241,7 +288,7 @@ contract UniswapV4CyberScripPoolForkTest is Test, IUnlockCallback {
         bytes memory creationCode = type(MetalexIssuerFeeHook).creationCode;
         bytes32 initCodeHash = keccak256(creationCode);
 
-        for (uint256 i = 0; i < 200_000; i++) {
+        for (uint256 i = 0; i < 1_000_000; i++) {
             bytes32 salt = bytes32(i);
             address predicted = _computeCreate2Address(address(deployer), salt, initCodeHash);
             if (uint16(uint160(predicted)) == REQUIRED_HOOK_FLAGS) {
@@ -259,7 +306,18 @@ contract UniswapV4CyberScripPoolForkTest is Test, IUnlockCallback {
         bytes32 salt,
         bytes32 initCodeHash
     ) internal pure returns (address) {
-        return address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), deployer, salt, initCodeHash)))));
+        // Use assembly to reuse scratch space on every iteration — avoids advancing
+        // the free memory pointer 200k times and hitting MemoryOOG in the mining loop.
+        bytes32 hash;
+        assembly {
+            let ptr := mload(0x40)
+            mstore8(ptr, 0xff)
+            mstore(add(ptr, 1), shl(96, deployer))
+            mstore(add(ptr, 21), salt)
+            mstore(add(ptr, 53), initCodeHash)
+            hash := keccak256(ptr, 85)
+        }
+        return address(uint160(uint256(hash)));
     }
 
     function _amount0(BalanceDelta delta) internal pure returns (int128) {
