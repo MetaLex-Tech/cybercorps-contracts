@@ -206,8 +206,8 @@ contract MetalexIssuerFeeHook is IHooks, BorgAuthACL {
     }
 
     function getHookPermissions() external pure returns (HookPermissions memory permissions) {
-        permissions.afterSwap = true;
-        permissions.afterSwapReturnDelta = true;
+        permissions.beforeSwap = true;
+        permissions.beforeSwapReturnDelta = true;
     }
 
     function beforeInitialize(
@@ -269,48 +269,46 @@ contract MetalexIssuerFeeHook is IHooks, BorgAuthACL {
 
     function beforeSwap(
         address,
-        PoolKey calldata,
-        IPoolManager.SwapParams calldata,
-        bytes calldata
-    ) external pure returns (bytes4, BeforeSwapDelta, uint24) {
-        return (MetalexIssuerFeeHook.beforeSwap.selector, BeforeSwapDelta.wrap(0), 0);
-    }
-
-    function afterSwap(
-        address,
         PoolKey calldata key,
         IPoolManager.SwapParams calldata params,
-        BalanceDelta delta,
         bytes calldata
-    ) external returns (bytes4, int128) {
+    ) external returns (bytes4, BeforeSwapDelta, uint24) {
         if (msg.sender != address(poolManager)) {
             revert UnauthorizedPoolManager();
         }
 
         PoolFeeConfig memory config = poolFeeConfig[_poolId(key)];
-        if (!config.enabled) {
-            return (MetalexIssuerFeeHook.afterSwap.selector, 0);
+        // only exact-input swaps (amountSpecified < 0) have a known input amount at this point
+        if (!config.enabled || params.amountSpecified >= 0) {
+            return (MetalexIssuerFeeHook.beforeSwap.selector, BeforeSwapDelta.wrap(0), 0);
         }
 
-        uint256 outputAmount = _outputAmount(delta, params.zeroForOne);
-        if (outputAmount == 0) {
-            return (MetalexIssuerFeeHook.afterSwap.selector, 0);
-        }
-
-        uint256 metalexFee = (outputAmount * config.metalexFeeBps) / BPS_DENOMINATOR;
-        uint256 issuerFee = (outputAmount * config.issuerFeeBps) / BPS_DENOMINATOR;
-        // take from the unspecified (output) token so AFTER_SWAP_RETURNS_DELTA_FLAG correctly settles the hook's delta
-        address currencyOut = params.zeroForOne ? key.currency1 : key.currency0;
+        uint256 inputAmount = uint256(-params.amountSpecified);
+        uint256 metalexFee = (inputAmount * config.metalexFeeBps) / BPS_DENOMINATOR;
+        uint256 issuerFee = (inputAmount * config.issuerFeeBps) / BPS_DENOMINATOR;
+        address currencyIn = params.zeroForOne ? key.currency0 : key.currency1;
 
         if (metalexFee > 0) {
-            poolManager.take(currencyOut, config.metalexRecipient, metalexFee);
+            poolManager.take(currencyIn, config.metalexRecipient, metalexFee);
         }
         if (issuerFee > 0) {
-            poolManager.take(currencyOut, config.issuerRecipient, issuerFee);
+            poolManager.take(currencyIn, config.issuerRecipient, issuerFee);
         }
 
-        int128 totalFee = int128(uint128(metalexFee + issuerFee));
-        return (MetalexIssuerFeeHook.afterSwap.selector, totalFee);
+        // positive specifiedDelta credits the hook's input-token debt, settling the take() calls above
+        uint256 totalFee = metalexFee + issuerFee;
+        BeforeSwapDelta delta = BeforeSwapDelta.wrap(int256(uint256(uint128(totalFee)) << 128));
+        return (MetalexIssuerFeeHook.beforeSwap.selector, delta, 0);
+    }
+
+    function afterSwap(
+        address,
+        PoolKey calldata,
+        IPoolManager.SwapParams calldata,
+        BalanceDelta,
+        bytes calldata
+    ) external pure returns (bytes4, int128) {
+        return (MetalexIssuerFeeHook.afterSwap.selector, 0);
     }
 
     function beforeDonate(
@@ -333,26 +331,8 @@ contract MetalexIssuerFeeHook is IHooks, BorgAuthACL {
         return MetalexIssuerFeeHook.afterDonate.selector;
     }
 
-    function _outputAmount(BalanceDelta delta, bool zeroForOne) internal pure returns (uint256) {
-        if (zeroForOne) {
-            int128 amount1 = _amount1(delta);
-            if (amount1 <= 0) return 0;
-            return uint256(uint128(amount1));
-        }
-        int128 amount0 = _amount0(delta);
-        if (amount0 <= 0) return 0;
-        return uint256(uint128(amount0));
-    }
-
     function _poolId(PoolKey calldata key) internal pure returns (bytes32) {
         return keccak256(abi.encode(key));
     }
 
-    function _amount0(BalanceDelta delta) internal pure returns (int128) {
-        return int128(int256(BalanceDelta.unwrap(delta) >> 128));
-    }
-
-    function _amount1(BalanceDelta delta) internal pure returns (int128) {
-        return int128(int256(BalanceDelta.unwrap(delta)));
-    }
 }
