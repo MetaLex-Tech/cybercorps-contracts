@@ -185,8 +185,27 @@ struct CertificateData {
     uint256 certificateNumber;
     uint256 numberOfShares;
     uint256 issueDate;
+    /// @notice Flags the cert as partly paid stock under DGCL §156.
+    /// @dev Switches `_getPaymentPercentage` between the fully paid early return
+    ///      (`PERCENTAGE_PRECISION`) and the `amountPaid`/`totalConsideration` ratio.
     bool isPartlyPaid;
+    /// @notice Consideration received to date for the cert.
+    /// @dev Equals `totalConsideration` when the cert is fully paid. The difference
+    ///      `totalConsideration - amountPaid` is the unpaid subscription balance.
     uint256 amountPaid;
+    /// @notice Full subscription price agreed for the cert under the issuance terms.
+    /// @dev Pairs with `amountPaid` and `isPartlyPaid` to model DGCL §156 partly paid
+    ///      stock. Distinct from `CertificateDetails.investmentAmountUSD` (defined in
+    ///      `src/CertificateUriBuilder.sol`), which records the USD amount actually
+    ///      paid at issuance and is the value consumed by converters such as
+    ///      `SafeCertificateConverter` for share-count math.
+    /// @dev Fully paid cert invariant: `amountPaid == totalConsideration`, and both
+    ///      are expected to equal the base `CertificateDetails.investmentAmountUSD`.
+    ///      Partly paid cert: `amountPaid < totalConsideration`; the gap is the
+    ///      outstanding subscription liability callable by the corporation under §156.
+    /// @dev Seam: consumers reading the base `CertificateDetails` alone see only the
+    ///      paid-to-date amount and miss the unpaid subscription balance. Tooling that
+    ///      needs full subscription context must read the share extension data.
     uint256 totalConsideration;
     string sourceAuthorityURI;
     ShareRepresentationType representationType;
@@ -374,6 +393,10 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         ratio = (terms.originalIssuePrice * PRICE_PRECISION) / terms.conversionPrice;
     }
 
+    /// @notice Returns the paid fraction of the cert scaled by `PERCENTAGE_PRECISION` (10**4).
+    /// @dev Early returns `PERCENTAGE_PRECISION` (treated as fully paid) when the cert is
+    ///      not partly paid or `totalConsideration` is zero; otherwise returns the
+    ///      `amountPaid`/`totalConsideration` ratio scaled by `PERCENTAGE_PRECISION`.
     function _getPaymentPercentage(CertificateData memory cert) internal pure returns (uint256 percentage) {
         if (!cert.isPartlyPaid || cert.totalConsideration == 0) return PERCENTAGE_PRECISION;
         percentage = (cert.amountPaid * PERCENTAGE_PRECISION) / cert.totalConsideration;
