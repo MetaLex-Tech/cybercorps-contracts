@@ -54,5 +54,5 @@ jobs:
       - name: Fork tests
         env:
           ALCHEMY_API_KEY:  "${{ secrets.ALCHEMY_API_KEY }}"
-        # `--threads` and `--cups` are used to avoid getting rate limited
-        run: forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --threads 1 --cups 5 --mc ForkTest --nmc AdhocTest
+        # `--threads 1` is used in combination with endpoint retry settings in foundry.toml to avoid getting rate limited
+        run: forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --threads 1 --mc ForkTest --nmc AdhocTest
