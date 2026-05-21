@@ -41,7 +41,7 @@ contract RoundManagerForkTest is Test {
     address private helper;
 
     function setUp() public {
-        vm.createSelectFork("base_sepolia", 33921622);
+        vm.createSelectFork("base_sepolia", 33921622); // must pin to an old block before `exampleCorp` is upgraded
         address me = address(this);
         (,,,,,,,helper) = CyberCorpHelper.deployRegistryAndFactories(me);
     }

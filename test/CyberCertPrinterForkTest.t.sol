@@ -17,6 +17,7 @@ contract CyberCertPrinterForkTest is Test {
     address[] internal certPrinters = new address[](0);
 
     function setUp() public {
+        // change it accordingly for the CyberCertPrinters you want to test
         vm.createSelectFork("base_sepolia");
     }
 

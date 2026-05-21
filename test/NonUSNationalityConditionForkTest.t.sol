@@ -98,7 +98,7 @@ contract NonUSNationalityConditionForkTest is Test {
     string[] excludedCountries;
 
     function setUp() public {
-        vm.createSelectFork("sepolia", 10408265);
+        vm.createSelectFork("sepolia", 10408265); // must pin to an old block because the proofs are time-sensitive
         excludedCountries = new string[](9);
         excludedCountries[0] = "IRN";
         excludedCountries[1] = "IRQ";
