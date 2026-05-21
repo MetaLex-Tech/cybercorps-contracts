@@ -12,7 +12,7 @@ import {CyberCorp} from "../src/CyberCorp.sol";
 import {CompanyOfficer} from "../src/CyberCorpConstants.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
-contract DeployParentCoFactoryTest is Test {
+contract DeployParentCoFactoryForkTest is Test {
     DeploymentConstants.CoreDeployment coreDeployment;
     DeploymentConstants.Deps deps;
 
@@ -47,6 +47,7 @@ contract DeployParentCoFactoryTest is Test {
     }
 
     function setUp() public {
+        vm.createSelectFork("base_sepolia", 40732512); // pinned to an old block before ParentCoFactory is deployed
         coreDeployment = DeploymentConstants.coreV2(block.chainid);
         deps = DeploymentConstants.deps(block.chainid);
 

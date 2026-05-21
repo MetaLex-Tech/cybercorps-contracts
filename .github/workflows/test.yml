@@ -1,7 +1,8 @@
 name: CI
 
 on:
-  push:
+  # pull_request-only to avoid flooding the RPC
+#  push:
   pull_request:
   workflow_dispatch:
 
@@ -9,11 +10,8 @@ env:
   FOUNDRY_PROFILE: ci
 
 jobs:
-  check:
-    strategy:
-      fail-fast: true
-
-    name: Foundry project
+  unit:
+    name: Unit tests
     runs-on: ubuntu-latest
     environment: test
     steps:
@@ -25,27 +23,34 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
 
       - name: Show Forge version
-        run: |
-          forge --version
+        run: forge --version
 
-      # Disabled for now until we have a less-disruptive workflow
-#      - name: Run Forge fmt
-#        run: |
-#          forge fmt --check
-#        id: fmt
+      - name: Build
+        run: forge build --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 --sizes
 
-      - name: Run Forge build
-        run: |
-          forge build --via-ir --sizes
-        id: build
+      - name: Unit tests
+        run: forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --nmc '(ForkTest|AdhocTest)'
 
-      - name: Run Forge tests
+  fork:
+    name: Fork tests
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Show Forge version
+        run: forge --version
+
+      - name: Build
+        run: forge build --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 --sizes
+
+      - name: Fork tests
         env:
-          FOUNDRY_ETH_RPC_URL: "https://base-sepolia.g.alchemy.com/v2/${{ secrets.ALCHEMY_API_KEY }}"
-          FORK_RPC_URL: "https://base-sepolia.g.alchemy.com/v2/${{ secrets.ALCHEMY_API_KEY }}"
-          PRIVATE_KEY_MAIN: "${{ secrets.DEPLOYER_PRIVATE_KEY }}"
-          TEST_KEY: "${{ secrets.DEPLOYER_PRIVATE_KEY }}"
-        # limit threading and compute-units-per-second so we don't hit RPC caps
-        run: |
-          forge test --via-ir -vvv --threads 1 --cups 10
-        id: test
+          ALCHEMY_API_KEY:  "${{ secrets.ALCHEMY_API_KEY }}"
+        # `--threads` and `--cups` are used to avoid getting rate limited
+        run: forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --threads 1 --cups 5 --mc ForkTest --nmc AdhocTest

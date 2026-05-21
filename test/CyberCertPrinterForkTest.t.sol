@@ -10,7 +10,7 @@ import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 
-contract CyberCertPrinterForkTest is Test {
+contract CyberCertPrinterAdhocTest is Test {
     // Fill these in with real values before running locally/CI
     string internal constant RPC_ENV_VAR = "FORK_RPC_URL"; // e.g. BASE_SEPOLIA_RPC_URL
     address internal constant ISSUANCE_MANAGER_OWNER = address(0); // company owner on target chain

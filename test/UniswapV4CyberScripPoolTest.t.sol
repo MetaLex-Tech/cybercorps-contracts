@@ -42,13 +42,14 @@ contract HookCreate2Deployer {
     }
 }
 
-contract UniswapV4CyberScripPoolTest is Test, IUnlockCallback {
-    string internal constant RPC_ENV_VAR = "FORK_RPC_URL";
+contract UniswapV4CyberScripPoolForkTest is Test, IUnlockCallback {
 
     address internal constant BASE_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     address internal constant BASE_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
 
-    uint16 internal constant AFTER_SWAP_FLAG = 1 << 7;
+    uint16 internal constant BEFORE_SWAP_FLAG = 1 << 7;
+    uint16 internal constant BEFORE_SWAP_RETURNS_DELTA_FLAG = 1 << 3;
+    uint16 internal constant REQUIRED_HOOK_FLAGS = BEFORE_SWAP_FLAG | BEFORE_SWAP_RETURNS_DELTA_FLAG;
     uint24 internal constant POOL_FEE = 3000; // 0.30%
     int24 internal constant TICK_SPACING = 60;
 
@@ -64,6 +65,7 @@ contract UniswapV4CyberScripPoolTest is Test, IUnlockCallback {
     address internal issuerRecipient;
 
     function setUp() public {
+        vm.createSelectFork("base");
 
         poolManager = IPoolManagerV4(BASE_POOL_MANAGER);
 
@@ -73,7 +75,7 @@ contract UniswapV4CyberScripPoolTest is Test, IUnlockCallback {
         BorgAuth auth = new BorgAuth(address(this));
         auth.updateRole(address(this), auth.ADMIN_ROLE());
 
-        hook = _deployHookWithAfterSwapFlag();
+        hook = _deployHook();
         hook.initialize(address(auth), BASE_POOL_MANAGER);
 
         cyberScrip = _deployCyberScrip(address(auth));
@@ -93,13 +95,20 @@ contract UniswapV4CyberScripPoolTest is Test, IUnlockCallback {
         deal(BASE_USDC, address(this), 5_000_000 * 1e6);
     }
 
-    function test_CreatePool_AddHook_AndSwap() public {
+    function test_Sell_CollectsFeeInCyberScrip() public {
         _unlock(UnlockAction.InitializeAndAddLiquidity);
-        _unlock(UnlockAction.SwapExactInput);
+        _unlock(UnlockAction.SwapSell);
 
-        address inputCurrency = _inputCurrency();
-        assertGt(IERC20(inputCurrency).balanceOf(metalexRecipient), 0, "metalex fee not collected");
-        assertGt(IERC20(inputCurrency).balanceOf(issuerRecipient), 0, "issuer fee not collected");
+        assertGt(IERC20(address(cyberScrip)).balanceOf(metalexRecipient), 0, "metalex fee not collected");
+        assertGt(IERC20(address(cyberScrip)).balanceOf(issuerRecipient), 0, "issuer fee not collected");
+    }
+
+    function test_Buy_CollectsFeeInUsdc() public {
+        _unlock(UnlockAction.InitializeAndAddLiquidity);
+        _unlock(UnlockAction.SwapBuy);
+
+        assertGt(IERC20(BASE_USDC).balanceOf(metalexRecipient), 0, "metalex fee not collected");
+        assertGt(IERC20(BASE_USDC).balanceOf(issuerRecipient), 0, "issuer fee not collected");
     }
 
     function unlockCallback(bytes calldata data) external override returns (bytes memory) {
@@ -110,8 +119,12 @@ contract UniswapV4CyberScripPoolTest is Test, IUnlockCallback {
             _initializeAndAddLiquidity();
             return "";
         }
-        if (action == UnlockAction.SwapExactInput) {
-            _swapExactInput();
+        if (action == UnlockAction.SwapSell) {
+            _swapSell();
+            return "";
+        }
+        if (action == UnlockAction.SwapBuy) {
+            _swapBuy();
             return "";
         }
 
@@ -120,7 +133,8 @@ contract UniswapV4CyberScripPoolTest is Test, IUnlockCallback {
 
     enum UnlockAction {
         InitializeAndAddLiquidity,
-        SwapExactInput
+        SwapSell,
+        SwapBuy
     }
 
     function _unlock(UnlockAction action) internal {
@@ -141,9 +155,26 @@ contract UniswapV4CyberScripPoolTest is Test, IUnlockCallback {
         _settleDelta(callerDelta);
     }
 
-    function _swapExactInput() internal {
+    function _swapSell() internal {
+        // Sell CyberScrip for USDC; zeroForOne depends on token ordering
         bool zeroForOne = poolKey.currency0 == address(cyberScrip);
-        uint256 inputAmount = 10 ether;
+        // PM's CS balance comes only from our liquidity (~6000 wei); fee must stay below that
+        uint256 inputAmount = 3000; // 3000 wei CS → 60 wei fee (well within PM's CS balance)
+
+        IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
+            zeroForOne: zeroForOne,
+            amountSpecified: -int256(inputAmount),
+            sqrtPriceLimitX96: zeroForOne ? MIN_SQRT_RATIO + 1 : MAX_SQRT_RATIO - 1
+        });
+
+        BalanceDelta swapDelta = poolManager.swap(poolKey, params, "");
+        _settleDelta(swapDelta);
+    }
+
+    function _swapBuy() internal {
+        // Buy CyberScrip with USDC; zeroForOne depends on token ordering
+        bool zeroForOne = poolKey.currency0 == BASE_USDC;
+        uint256 inputAmount = 10 * 1e6; // 10 USDC (6 dec)
 
         IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
             zeroForOne: zeroForOne,
@@ -180,10 +211,6 @@ contract UniswapV4CyberScripPoolTest is Test, IUnlockCallback {
         poolManager.settle();
     }
 
-    function _inputCurrency() internal view returns (address) {
-        return poolKey.currency0 == address(cyberScrip) ? poolKey.currency0 : poolKey.currency1;
-    }
-
     function _sortCurrencies(address tokenA, address tokenB) internal pure returns (address, address) {
         return tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
     }
@@ -209,7 +236,7 @@ contract UniswapV4CyberScripPoolTest is Test, IUnlockCallback {
         ));
     }
 
-    function _deployHookWithAfterSwapFlag() internal returns (MetalexIssuerFeeHook) {
+    function _deployHook() internal returns (MetalexIssuerFeeHook) {
         HookCreate2Deployer deployer = new HookCreate2Deployer();
         bytes memory creationCode = type(MetalexIssuerFeeHook).creationCode;
         bytes32 initCodeHash = keccak256(creationCode);
@@ -217,7 +244,7 @@ contract UniswapV4CyberScripPoolTest is Test, IUnlockCallback {
         for (uint256 i = 0; i < 200_000; i++) {
             bytes32 salt = bytes32(i);
             address predicted = _computeCreate2Address(address(deployer), salt, initCodeHash);
-            if (uint16(uint160(predicted)) == AFTER_SWAP_FLAG) {
+            if (uint16(uint160(predicted)) == REQUIRED_HOOK_FLAGS) {
                 address hookAddr = deployer.deploy(salt, creationCode);
                 require(hookAddr == predicted, "hook addr mismatch");
                 return MetalexIssuerFeeHook(hookAddr);

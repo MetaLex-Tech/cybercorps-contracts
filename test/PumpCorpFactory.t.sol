@@ -52,7 +52,7 @@ contract MockZkPassportCondition {
 ///
 /// Run with (timeout = 5m):
 ///   forge test --use solc:0.8.28 --via-ir --fork-url $END_PT_BASE -vvv --mp PumpCorpFactory.t.sol
-contract PumpCorpFactoryTest is Test {
+contract PumpCorpFactoryForkTest is Test {
     using Strings for address;
 
     string saltStrPump = "PumpCorpFactoryTest.pump";
@@ -114,9 +114,7 @@ contract PumpCorpFactoryTest is Test {
     string[]        internal officerPartyValues;
 
     function setUp() public {
-        assertEq(block.chainid, DeploymentConstants.BASE, "Fork test: Base only @ block 45993317");
-        vm.rollFork(45993317);
-//        assertEq(block.chainid, DeploymentConstants.BASE_SEPOLIA, "For test: Base Sepolia only");
+        vm.createSelectFork("base", 45993317); // pinned to an old block before deployment
 
         (deployer, deployerPk) = makeAddrAndKey("deployer");
         (officer, officerPk) = makeAddrAndKey("officer");
