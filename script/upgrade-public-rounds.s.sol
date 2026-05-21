@@ -30,13 +30,17 @@ interface IUUPS {
 
 contract UpgradePublicRoundsScript is Script {
     function run() public {
+        runWithArgs(
+            vm.envUint("PRIVATE_KEY_MAIN"),
+            vm.envUint("TEST_KEY")
+        );
+    }
+
+    function runWithArgs(uint256 deployerPrivateKey, uint256 testPrivateKey) public {
         // Config
         bytes32 salt = bytes32(
             keccak256("MetaLexCyberCorp.PublicRounds.UpgradeV3.0.1")
         );
-        
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
-        uint256 testPrivateKey = vm.envUint("TEST_KEY");
 
         address testDeployer = vm.addr(testPrivateKey);
         console.log("Test Deployer:", testDeployer);

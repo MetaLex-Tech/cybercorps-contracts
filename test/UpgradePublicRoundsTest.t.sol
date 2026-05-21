@@ -38,8 +38,8 @@ contract UpgradePublicRoundsForkTest is Test {
     LeXcheXMinter leXcheXMinter = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
     ERC20 stable = ERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e);
 
-    uint256 deployerPrivateKey = vm.envUint("TEST_DEPLOYER_KEY");
-    address deployer = vm.addr(deployerPrivateKey);
+    uint256 deployerPrivateKey;
+    address deployer;
 
     // Randomly generated to avoid contaminated common test addresses
     uint256 privateKeySalt = 0xe6fc9058b04996425a6f0e6479e6e06f7177a6c61043b10857eb0a72339853e0;
@@ -55,7 +55,10 @@ contract UpgradePublicRoundsForkTest is Test {
     
     function setUp() public {
         vm.createSelectFork("base_sepolia", 34755849);
-        vm.label(deployer, "deployer");
+
+        (deployer, deployerPrivateKey) = makeAddrAndKey("deployer");
+        (, uint256 testPrivateKey) = makeAddrAndKey("test");
+
         vm.label(companyOwner, "companyOwner");
         vm.label(alice, "alice");
         vm.label(bob, "bob");
@@ -72,7 +75,10 @@ contract UpgradePublicRoundsForkTest is Test {
         ); // so deployer can grant cyberCorpFactory permissions to it
         vm.stopPrank();
 
-        (new UpgradePublicRoundsScript()).run();
+        (new UpgradePublicRoundsScript()).runWithArgs({
+            deployerPrivateKey: deployerPrivateKey,
+            testPrivateKey: testPrivateKey
+        });
 
         cyberCorpSingleFactory = CyberCorpFactory(cyberCorpFactoryProxyAddr).cyberCorpSingleFactory();
         rmFactory = CyberCorpFactory(cyberCorpFactoryProxyAddr).roundManagerFactory();

@@ -28,9 +28,6 @@ jobs:
         run: forge build --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 --sizes
 
       - name: Unit tests
-        env:
-          TEST_DEPLOYER_KEY: "${{ secrets.TEST_DEPLOYER_KEY }}"
-          TEST_KEY:         "${{ secrets.DEPLOYER_PRIVATE_KEY }}"
         run: forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --nmc ForkTest
 
   fork:
@@ -54,6 +51,4 @@ jobs:
       - name: Fork tests
         env:
           ALCHEMY_API_KEY:  "${{ secrets.ALCHEMY_API_KEY }}"
-          TEST_DEPLOYER_KEY: "${{ secrets.TEST_DEPLOYER_KEY }}"
-          TEST_KEY:         "${{ secrets.DEPLOYER_PRIVATE_KEY }}"
         run: forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --mc ForkTest --threads 1 --cups 8
