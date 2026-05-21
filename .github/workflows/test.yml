@@ -1,8 +1,10 @@
 name: CI
 
 on:
-  # pull_request-only to avoid flooding the RPC
-#  push:
+  # push to develop and pull_request only to avoid flooding the RPC
+  push:
+    branches:
+      - develop
   pull_request:
   workflow_dispatch:
 
