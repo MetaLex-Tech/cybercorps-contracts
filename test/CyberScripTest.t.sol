@@ -423,16 +423,14 @@ contract CyberScripTest is Test {
         assertEq(cyberScrip.remainingSlots(), 0);
     }
 
-    function test_MintBypassesHooksAndFreeze() public {
-        // Disable transfers in hook and freeze recipient
-        mockHook.setAllowTransfers(false);
+    function test_MintRespectsFreeze() public {
+        // _update enforces freeze on recipient even for mints (to != address(0))
         vm.startPrank(issuanceManager);
         cyberScrip.setFrozen(user2, true);
 
-        // Mint to frozen recipient should still work (from == address(0))
+        vm.expectRevert(abi.encodeWithSignature("AccountFrozen(address)", user2));
         cyberScrip.mint(user2, 123 ether);
         vm.stopPrank();
-        assertEq(cyberScrip.balanceOf(user2), 123 ether);
     }
 
     function test_BurnFromBypassesHooksAndFreeze() public {
