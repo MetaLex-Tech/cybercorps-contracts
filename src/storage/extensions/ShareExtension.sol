@@ -194,6 +194,32 @@ struct CertificateData {
     bool holdingPeriodTackingApplied;
 }
 
+struct ShareExtensionDataSplitProposal {
+    string[] moveToPrinterExtensionData;
+    string[] keepInCertificateExtensionData;
+    string[] removeBecauseCoveredByRoundManager;
+}
+
+struct SharePrinterExtensionData {
+    SeriesTerms terms;
+    MandatoryConversionTrigger[] mandatoryConversionTriggers;
+    SpecialVotingRight[] specialVotingRights;
+    TransferRestriction[] transferRestrictions;
+    SplitRecord[] splitHistory;
+    ShareExtensionDataSplitProposal dataSplitProposal;
+}
+
+struct ShareCertificateData {
+    uint256 certificateNumber;
+    uint256 issueDate;
+    bool isPartlyPaid;
+    uint256 amountPaid;
+    string sourceAuthorityURI;
+    ShareRepresentationType representationType;
+    uint256 holdingPeriodStartDate;
+    bool holdingPeriodTackingApplied;
+}
+
 struct ShareCertData {
     SeriesTerms terms;
     CertificateData certificateData;
@@ -201,11 +227,9 @@ struct ShareCertData {
     SpecialVotingRight[] specialVotingRights;
     TransferRestriction[] transferRestrictions;
     SplitRecord[] splitHistory;
-    string issuerName;
-    string stateOfIncorporation;
 }
 
-contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
+contract ShareExtension is UUPSUpgradeable, ICertificateExtension, ICertificateExtensionV2, BorgAuthACL {
     bytes32 public constant EXTENSION_TYPE = keccak256("SHARE");
     uint256 public constant PERCENTAGE_PRECISION = 10 ** 4;
     uint256 public constant PRICE_PRECISION = 10 ** 18;
@@ -231,21 +255,78 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return abi.encode(data);
     }
 
+    function decodePrinterExtensionData(bytes memory data) external pure returns (SharePrinterExtensionData memory) {
+        return abi.decode(data, (SharePrinterExtensionData));
+    }
+
+    function encodePrinterExtensionData(SharePrinterExtensionData memory data) external pure returns (bytes memory) {
+        return abi.encode(data);
+    }
+
+    function decodeCertificateExtensionData(bytes memory data) external pure returns (ShareCertificateData memory) {
+        return abi.decode(data, (ShareCertificateData));
+    }
+
+    function encodeCertificateExtensionData(ShareCertificateData memory data) external pure returns (bytes memory) {
+        return abi.encode(data);
+    }
+
     function supportsExtensionType(bytes32 extensionType) external pure override returns (bool) {
         return extensionType == EXTENSION_TYPE;
     }
 
     function getExtensionURI(bytes memory data) external pure override returns (string memory) {
-        if (data.length == 0) return "";
+        return _buildExtensionURI("", data);
+    }
 
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
+    function getExtensionURI(
+        bytes memory printerExtensionData,
+        bytes memory certificateExtensionData
+    ) external pure override returns (string memory) {
+        return _buildExtensionURI(printerExtensionData, certificateExtensionData);
+    }
+
+    function _buildExtensionURI(
+        bytes memory printerExtensionData,
+        bytes memory certificateExtensionData
+    ) internal pure returns (string memory) {
+        if (printerExtensionData.length == 0) {
+            if (certificateExtensionData.length == 0) return "";
+
+            ShareCertData memory legacyShare = abi.decode(certificateExtensionData, (ShareCertData));
+            return string(
+                abi.encodePacked(
+                    ', "shareDetails": {',
+                    _buildSeriesJson(legacyShare.terms, legacyShare.certificateData),
+                    _buildCertificateJson(legacyShare.certificateData),
+                    _buildDerivedJson(legacyShare),
+                    '"}'
+                )
+            );
+        }
+
+        SharePrinterExtensionData memory printerData = abi.decode(printerExtensionData, (SharePrinterExtensionData));
+
+        if (certificateExtensionData.length == 0) {
+            return string(
+                abi.encodePacked(
+                    ', "shareDetails": {',
+                    _buildSeriesJson(printerData.terms),
+                    _buildPrinterDerivedJson(printerData),
+                    '"}'
+                )
+            );
+        }
+
+        ShareCertificateData memory certificateData = abi.decode(certificateExtensionData, (ShareCertificateData));
+        CertificateData memory cert = _toCertificateData(certificateData);
 
         return string(
             abi.encodePacked(
                 ', "shareDetails": {',
-                _buildSeriesJson(share.terms, share.certificateData),
-                _buildCertificateJson(share.certificateData),
-                _buildDerivedJson(share),
+                _buildSeriesJson(printerData.terms),
+                _buildCertificateJson(certificateData),
+                _buildDerivedJson(printerData, cert),
                 '"}'
             )
         );
@@ -255,17 +336,42 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         SeriesTerms memory terms,
         CertificateData memory cert
     ) internal pure returns (string memory) {
+        return string.concat(
+            _buildSeriesJsonPartOne(terms, Strings.toHexString(uint256(cert.seriesId), 32)),
+            _buildSeriesJsonPartTwo(terms)
+        );
+    }
+
+    function _buildSeriesJson(SeriesTerms memory terms) internal pure returns (string memory) {
+        return string.concat(
+            _buildSeriesJsonPartOne(terms, ""),
+            _buildSeriesJsonPartTwo(terms)
+        );
+    }
+
+    function _buildSeriesJsonPartOne(
+        SeriesTerms memory terms,
+        string memory seriesId
+    ) internal pure returns (string memory) {
         return string(
             abi.encodePacked(
                 '"shareClassKey": "', _shareClassKeyToString(terms.shareClassKey),
                 '", "seriesName": "', terms.seriesName,
-                '", "seriesId": "', Strings.toHexString(uint256(cert.seriesId), 32),
+                bytes(seriesId).length == 0 ? "" : string.concat('", "seriesId": "', seriesId),
                 '", "authorizedShares": "', Strings.toString(terms.authorizedShares),
                 '", "parValue": "', Strings.toString(terms.parValue),
                 '", "originalIssuePrice": "', Strings.toString(terms.originalIssuePrice),
                 '", "liquidationPreferenceMultiple": "', Strings.toString(terms.liquidationPreferenceMultiple),
                 '", "liquidationPreferenceType": "', _liquidationPreferenceTypeToString(terms.liquidationPreferenceType),
-                '", "dividendType": "', _dividendTypeToString(terms.dividendType),
+                '", '
+            )
+        );
+    }
+
+    function _buildSeriesJsonPartTwo(SeriesTerms memory terms) internal pure returns (string memory) {
+        return string(
+            abi.encodePacked(
+                '"dividendType": "', _dividendTypeToString(terms.dividendType),
                 '", "dividendRate": "', Strings.toString(terms.dividendRate),
                 '", "isConvertible": "', _boolToString(terms.isConvertible),
                 '", "conversionPrice": "', Strings.toString(terms.conversionPrice),
@@ -297,6 +403,21 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         );
     }
 
+    function _buildCertificateJson(ShareCertificateData memory cert) internal pure returns (string memory) {
+        return string(
+            abi.encodePacked(
+                '"certificateNumber": "', Strings.toString(cert.certificateNumber),
+                '", "issueDate": "', Strings.toString(cert.issueDate),
+                '", "isPartlyPaid": "', _boolToString(cert.isPartlyPaid),
+                '", "amountPaid": "', Strings.toString(cert.amountPaid),
+                '", "representationType": "', _representationTypeToString(cert.representationType),
+                '", "holdingPeriodStartDate": "', Strings.toString(cert.holdingPeriodStartDate),
+                '", "holdingPeriodTackingApplied": "', _boolToString(cert.holdingPeriodTackingApplied),
+                '", '
+            )
+        );
+    }
+
     function _buildDerivedJson(ShareCertData memory share) internal pure returns (string memory) {
         return string(
             abi.encodePacked(
@@ -306,11 +427,69 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
                 '", "splitHistoryCount": "', Strings.toString(share.splitHistory.length),
                 '", "paymentPercentage": "', Strings.toString(_getPaymentPercentage(share.certificateData)),
                 '", "conversionRatio": "', Strings.toString(_getConversionRatio(share.terms)),
-                '", "issuerName": "', share.issuerName,
-                '", "stateOfIncorporation": "', share.stateOfIncorporation,
                 '"'
             )
         );
+    }
+
+    function _buildDerivedJson(
+        SharePrinterExtensionData memory printerData,
+        CertificateData memory cert
+    ) internal pure returns (string memory) {
+        return string(
+            abi.encodePacked(
+                _buildPrinterDerivedJson(printerData),
+                ', "paymentPercentage": "', Strings.toString(_getPaymentPercentage(cert)),
+                '"'
+            )
+        );
+    }
+
+    function _buildPrinterDerivedJson(
+        SharePrinterExtensionData memory printerData
+    ) internal pure returns (string memory) {
+        return string(
+            abi.encodePacked(
+                '"mandatoryConversionTriggerCount": "', Strings.toString(printerData.mandatoryConversionTriggers.length),
+                '", "specialVotingRightCount": "', Strings.toString(printerData.specialVotingRights.length),
+                '", "transferRestrictionCount": "', Strings.toString(printerData.transferRestrictions.length),
+                '", "splitHistoryCount": "', Strings.toString(printerData.splitHistory.length),
+                '", "conversionRatio": "', Strings.toString(_getConversionRatio(printerData.terms)),
+                '"'
+            )
+        );
+    }
+
+    function _toCertificateData(
+        ShareCertificateData memory data
+    ) internal pure returns (CertificateData memory certificateData) {
+        certificateData = CertificateData({
+            seriesId: bytes32(0),
+            certificateNumber: data.certificateNumber,
+            numberOfShares: 0,
+            issueDate: data.issueDate,
+            isPartlyPaid: data.isPartlyPaid,
+            amountPaid: data.amountPaid,
+            totalConsideration: 0,
+            sourceAuthorityURI: data.sourceAuthorityURI,
+            representationType: data.representationType,
+            holdingPeriodStartDate: data.holdingPeriodStartDate,
+            holdingPeriodTackingApplied: data.holdingPeriodTackingApplied
+        });
+    }
+
+    function _emptyCertificateData() internal pure returns (CertificateData memory certificateData) {}
+
+    function _bytesToHexString(bytes memory data) internal pure returns (string memory) {
+        bytes16 symbols = "0123456789abcdef";
+        bytes memory buffer = new bytes(2 + data.length * 2);
+        buffer[0] = "0";
+        buffer[1] = "x";
+        for (uint256 i = 0; i < data.length; i++) {
+            buffer[2 + i * 2] = symbols[uint8(data[i] >> 4)];
+            buffer[3 + i * 2] = symbols[uint8(data[i] & 0x0f)];
+        }
+        return string(buffer);
     }
 
     function _shareClassKeyToString(bytes32 key) internal pure returns (string memory) {

@@ -91,7 +91,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     event RestrictionHookSet(uint256 indexed id, address indexed hookAddress);
     event GlobalRestrictionHookSet(address indexed hookAddress);
     event GlobalTransferableSet(bool indexed transferable);
-    event PrinterExtensionDataSet(bytes32 indexed dataHash);
+    event PrinterExtensionDataSet();
     
     
     modifier onlyIssuanceManager() {
@@ -495,7 +495,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
 
     function setPrinterExtensionData(bytes calldata data) external onlyIssuanceManager {
         CyberCertPrinterStorage.cyberCertStorage().printerExtensionData = data;
-        emit PrinterExtensionDataSet(keccak256(data));
+        emit PrinterExtensionDataSet();
     }
 
     function getPrinterExtensionData() external view returns (bytes memory) {

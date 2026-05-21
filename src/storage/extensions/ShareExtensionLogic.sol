@@ -114,18 +114,6 @@ contract ShareExtensionLogic {
         return abi.encode(share);
     }
 
-    function setIssuerName(bytes memory data, string memory newIssuerName) external pure returns (bytes memory) {
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        share.issuerName = newIssuerName;
-        return abi.encode(share);
-    }
-
-    function setStateOfIncorporation(bytes memory data, string memory newState) external pure returns (bytes memory) {
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        share.stateOfIncorporation = newState;
-        return abi.encode(share);
-    }
-
     function addConversionTrigger(
         bytes memory data,
         MandatoryConversionTrigger memory conversionTrigger

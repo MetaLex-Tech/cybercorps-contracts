@@ -112,7 +112,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         uint256 indexed id,
         bool isWhitelisted
     );
-    event CertPrinterExtensionDataSet(address indexed certPrinter, bytes32 dataHash);
+    event CertPrinterExtensionDataSet(address indexed certPrinter);
 
     event CyberScripDeployed(
         address indexed certPrinterAddress,
@@ -680,7 +680,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         bytes calldata data
     ) external onlyOwner {
         ICyberCertPrinter(certPrinter).setPrinterExtensionData(data);
-        emit CertPrinterExtensionDataSet(certPrinter, keccak256(data));
+        emit CertPrinterExtensionDataSet(certPrinter);
     }
 
     /// @notice Sets the minimum scrip amount required to convert back into certs
