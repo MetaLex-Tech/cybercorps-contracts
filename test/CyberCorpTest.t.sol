@@ -81,7 +81,7 @@ import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {ILegacyFactory} from "../script/interfaces/ILegacyFactory.sol";
 
-contract CyberCorpTest is Test {
+contract CyberCorpForkTest is Test {
     using ERC1967ProxyLib for address;
 
     //     Counter public counter;
@@ -109,6 +109,7 @@ contract CyberCorpTest is Test {
     LexChexCondition lexchexCondition;
 
     function setUp() public {
+        vm.createSelectFork("base_sepolia");
         testPrivateKey = 1337;
         testAddress = vm.addr(testPrivateKey);
         vm.startPrank(testAddress);
@@ -5839,15 +5840,16 @@ contract CyberCorpTest is Test {
         vm.prank(issuanceManager);
         CyberCertPrinter(certPrinter).setTokenTransferable(0, true);
 
-        // Without endorsement should still revert
-        vm.startPrank(certOwner);
-        vm.expectRevert(CyberCertPrinter.EndorsementNotSignedOrInvalid.selector);
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 0);
-        vm.stopPrank();
+        // Transfer without endorsement: ERC721 owner changes but legal owner record does not
+        address midAddr = vm.addr(0xD0);
+        vm.prank(certOwner);
+        CyberCertPrinter(certPrinter).transferFrom(certOwner, midAddr, 0);
+        assertEq(CyberCertPrinter(certPrinter).ownerOf(0), midAddr);
+        assertEq(CyberCertPrinter(certPrinter).legalOwnerOf(0), certOwner);
 
-        // Add endorsement and transfer succeeds for token 0
+        // Add endorsement and endorsed transfer updates legal owner record
         Endorsement memory e = Endorsement({
-            endorser: certOwner,
+            endorser: midAddr,
             timestamp: block.timestamp,
             signatureHash: hex"01",
             registry: address(0),
@@ -5855,11 +5857,12 @@ contract CyberCorpTest is Test {
             endorsee: recipient,
             endorseeName: "Recipient"
         });
-        vm.prank(certOwner);
+        vm.prank(midAddr);
         CyberCertPrinter(certPrinter).addEndorsement(0, e);
-        vm.prank(certOwner);
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 0);
+        vm.prank(midAddr);
+        CyberCertPrinter(certPrinter).transferFrom(midAddr, recipient, 0);
         assertEq(CyberCertPrinter(certPrinter).ownerOf(0), recipient);
+        assertEq(CyberCertPrinter(certPrinter).legalOwnerOf(0), recipient);
 
         // Token 1 should remain blocked
         vm.startPrank(certOwner);
