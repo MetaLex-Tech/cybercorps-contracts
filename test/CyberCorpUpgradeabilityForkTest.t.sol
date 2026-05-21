@@ -80,7 +80,7 @@ contract RugCyberScrip is ERC20Upgradeable, UUPSUpgradeable {
     function _authorizeUpgrade(address newImplementation) internal override {}
 }
 
-contract CyberCorpUpgradeabilityTest is Test {
+contract CyberCorpUpgradeabilityForkTest is Test {
     using ERC1967ProxyLib for address;
 
     address public constant LEXCHEX_OWNER = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
