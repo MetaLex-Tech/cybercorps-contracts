@@ -231,16 +231,18 @@ forge build --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 --sizes
 
 ### Test
 
-Tests are split into two categories by contract name: contracts ending in `ForkTest` fork a live
-network internally using `vm.createFork()` and the named RPC endpoints in `foundry.toml`; all
-others are pure unit tests with no network dependency.
+Tests are split into three categories by contract name:
+
+- **Unit tests** — all contracts not matching `ForkTest` or `AdhocTest`; no network dependency.
+- **Fork tests** — contracts ending in `ForkTest`; fork a live network internally using `vm.createFork()` and the named RPC endpoints in `foundry.toml`.
+- **Adhoc tests** — contracts ending in `AdhocTest`; excluded from CI entirely, for local one-off exploration only.
 
 ```sh
 # Unit tests (no ALCHEMY_API_KEY needed)
-forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --nmc ForkTest
+forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --nmc '(ForkTest|AdhocTest)'
 
 # Fork tests (requires ALCHEMY_API_KEY in env)
-forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --mc ForkTest --threads 1 --cups 10
+forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --mc ForkTest --nmc AdhocTest --threads 1 --cups 10
 ```
 
 ---

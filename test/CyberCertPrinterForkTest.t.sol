@@ -10,15 +10,18 @@ import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 
-contract CyberCertPrinterForkTest is Test {
+contract CyberCertPrinterAdhocTest is Test {
+    // Fill these in with real values before running locally/CI
+    string internal constant RPC_ENV_VAR = "FORK_RPC_URL"; // e.g. BASE_SEPOLIA_RPC_URL
     address internal constant ISSUANCE_MANAGER_OWNER = address(0); // company owner on target chain
 
     // Add one or more existing CyberCertPrinter addresses to validate on fork
     address[] internal certPrinters = new address[](0);
 
     function setUp() public {
-        // change it accordingly for the CyberCertPrinters you want to test
-        vm.createSelectFork("base_sepolia");
+        // Create/select fork from env
+        string memory rpcUrl = vm.envString(RPC_ENV_VAR);
+        vm.createSelectFork(rpcUrl);
     }
 
     //
