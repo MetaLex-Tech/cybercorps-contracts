@@ -114,7 +114,7 @@ contract PumpCorpFactoryForkTest is Test {
     string[]        internal officerPartyValues;
 
     function setUp() public {
-        vm.createSelectFork("base", 45993317);
+        vm.createSelectFork("base", 45993317); // pinned to an old block before deployment
 
         (deployer, deployerPk) = makeAddrAndKey("deployer");
         (officer, officerPk) = makeAddrAndKey("officer");

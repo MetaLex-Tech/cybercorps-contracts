@@ -156,7 +156,7 @@ contract RoundManagerV3NextForkTest is Test {
     uint256 constant VALUATION      = 10_000_000 * 1e18;
 
     function setUp() public {
-        vm.createSelectFork("base_sepolia", 38956871);
+        vm.createSelectFork("base_sepolia", 38956871); // pinned to an old block before upgrades
 
         (deployer,       deployerPrivKey)    = makeAddrAndKey("deployer");
         (corpOwnerV3,    corpOwnerPrivKeyV3) = makeAddrAndKey("corpOwnerV3");
