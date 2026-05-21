@@ -221,20 +221,26 @@ The protocol has been used or piloted across Delaware C-corps, Delaware LLCs, Ca
 ### Prerequisites
 
 - [Foundry](https://book.getfoundry.sh/)
-- A Base Sepolia RPC endpoint (for fork dependent tests)
+- `ALCHEMY_API_KEY` environment variable (set in `.env`; only required for fork tests)
 
 ### Build
 
 ```sh
-forge build --via-ir
+forge build --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 --sizes
 ```
 
 ### Test
 
-Some tests depend on contracts deployed on Base Sepolia:
+Tests are split into two categories by contract name: contracts ending in `ForkTest` fork a live
+network internally using `vm.createFork()` and the named RPC endpoints in `foundry.toml`; all
+others are pure unit tests with no network dependency.
 
 ```sh
-forge test --via-ir --fork-url <your-base-sepolia-rpc-endpoint> -vvvv
+# Unit tests (no ALCHEMY_API_KEY needed)
+forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --nmc ForkTest
+
+# Fork tests (requires ALCHEMY_API_KEY in env)
+forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --mc ForkTest --threads 1 --cups 10
 ```
 
 ---
