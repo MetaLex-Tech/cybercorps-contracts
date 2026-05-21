@@ -47,7 +47,9 @@ contract UniswapV4CyberScripPoolForkTest is Test, IUnlockCallback {
     address internal constant BASE_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     address internal constant BASE_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
 
-    uint16 internal constant AFTER_SWAP_FLAG = 1 << 7;
+    uint16 internal constant AFTER_SWAP_FLAG = 1 << 6;
+    uint16 internal constant AFTER_SWAP_RETURNS_DELTA_FLAG = 1 << 2;
+    uint16 internal constant REQUIRED_HOOK_FLAGS = AFTER_SWAP_FLAG | AFTER_SWAP_RETURNS_DELTA_FLAG;
     uint24 internal constant POOL_FEE = 3000; // 0.30%
     int24 internal constant TICK_SPACING = 60;
 
@@ -142,13 +144,14 @@ contract UniswapV4CyberScripPoolForkTest is Test, IUnlockCallback {
     }
 
     function _swapExactInput() internal {
-        bool zeroForOne = poolKey.currency0 == address(cyberScrip);
-        uint256 inputAmount = 10 ether;
+        // Buy cyberScrip with USDC (!zeroForOne) so fees are taken from cyberScrip (output/unspecified token)
+        bool zeroForOne = false;
+        uint256 inputAmount = 10 * 1e6; // 10 USDC
 
         IPoolManager.SwapParams memory params = IPoolManager.SwapParams({
             zeroForOne: zeroForOne,
             amountSpecified: -int256(inputAmount),
-            sqrtPriceLimitX96: zeroForOne ? MIN_SQRT_RATIO + 1 : MAX_SQRT_RATIO - 1
+            sqrtPriceLimitX96: MAX_SQRT_RATIO - 1
         });
 
         BalanceDelta swapDelta = poolManager.swap(poolKey, params, "");
@@ -217,7 +220,7 @@ contract UniswapV4CyberScripPoolForkTest is Test, IUnlockCallback {
         for (uint256 i = 0; i < 200_000; i++) {
             bytes32 salt = bytes32(i);
             address predicted = _computeCreate2Address(address(deployer), salt, initCodeHash);
-            if (uint16(uint160(predicted)) == AFTER_SWAP_FLAG) {
+            if (uint16(uint160(predicted)) == REQUIRED_HOOK_FLAGS) {
                 address hookAddr = deployer.deploy(salt, creationCode);
                 require(hookAddr == predicted, "hook addr mismatch");
                 return MetalexIssuerFeeHook(hookAddr);

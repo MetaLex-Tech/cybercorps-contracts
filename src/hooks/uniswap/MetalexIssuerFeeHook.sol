@@ -42,6 +42,10 @@ struct HookPermissions {
     bool afterSwap;
     bool beforeDonate;
     bool afterDonate;
+    bool beforeSwapReturnDelta;
+    bool afterSwapReturnDelta;
+    bool beforeAddLiquidityReturnDelta;
+    bool afterAddLiquidityReturnDelta;
 }
 
 interface IHooks {
@@ -105,7 +109,7 @@ interface IHooks {
         IPoolManager.SwapParams calldata params,
         BalanceDelta delta,
         bytes calldata hookData
-    ) external returns (bytes4);
+    ) external returns (bytes4, int128);
 
     function beforeDonate(
         address sender,
@@ -203,6 +207,7 @@ contract MetalexIssuerFeeHook is IHooks, BorgAuthACL {
 
     function getHookPermissions() external pure returns (HookPermissions memory permissions) {
         permissions.afterSwap = true;
+        permissions.afterSwapReturnDelta = true;
     }
 
     function beforeInitialize(
@@ -277,33 +282,35 @@ contract MetalexIssuerFeeHook is IHooks, BorgAuthACL {
         IPoolManager.SwapParams calldata params,
         BalanceDelta delta,
         bytes calldata
-    ) external returns (bytes4) {
+    ) external returns (bytes4, int128) {
         if (msg.sender != address(poolManager)) {
             revert UnauthorizedPoolManager();
         }
 
         PoolFeeConfig memory config = poolFeeConfig[_poolId(key)];
         if (!config.enabled) {
-            return MetalexIssuerFeeHook.afterSwap.selector;
+            return (MetalexIssuerFeeHook.afterSwap.selector, 0);
         }
 
-        uint256 inputAmount = _inputAmount(delta, params.zeroForOne);
-        if (inputAmount == 0) {
-            return MetalexIssuerFeeHook.afterSwap.selector;
+        uint256 outputAmount = _outputAmount(delta, params.zeroForOne);
+        if (outputAmount == 0) {
+            return (MetalexIssuerFeeHook.afterSwap.selector, 0);
         }
 
-        uint256 metalexFee = (inputAmount * config.metalexFeeBps) / BPS_DENOMINATOR;
-        uint256 issuerFee = (inputAmount * config.issuerFeeBps) / BPS_DENOMINATOR;
-        address currencyIn = params.zeroForOne ? key.currency0 : key.currency1;
+        uint256 metalexFee = (outputAmount * config.metalexFeeBps) / BPS_DENOMINATOR;
+        uint256 issuerFee = (outputAmount * config.issuerFeeBps) / BPS_DENOMINATOR;
+        // take from the unspecified (output) token so AFTER_SWAP_RETURNS_DELTA_FLAG correctly settles the hook's delta
+        address currencyOut = params.zeroForOne ? key.currency1 : key.currency0;
 
         if (metalexFee > 0) {
-            poolManager.take(currencyIn, config.metalexRecipient, metalexFee);
+            poolManager.take(currencyOut, config.metalexRecipient, metalexFee);
         }
         if (issuerFee > 0) {
-            poolManager.take(currencyIn, config.issuerRecipient, issuerFee);
+            poolManager.take(currencyOut, config.issuerRecipient, issuerFee);
         }
 
-        return MetalexIssuerFeeHook.afterSwap.selector;
+        int128 totalFee = int128(uint128(metalexFee + issuerFee));
+        return (MetalexIssuerFeeHook.afterSwap.selector, totalFee);
     }
 
     function beforeDonate(
@@ -326,20 +333,15 @@ contract MetalexIssuerFeeHook is IHooks, BorgAuthACL {
         return MetalexIssuerFeeHook.afterDonate.selector;
     }
 
-    function _inputAmount(BalanceDelta delta, bool zeroForOne) internal pure returns (uint256) {
+    function _outputAmount(BalanceDelta delta, bool zeroForOne) internal pure returns (uint256) {
         if (zeroForOne) {
-            int128 amount0 = _amount0(delta);
-            if (amount0 <= 0) {
-                return 0;
-            }
-            return uint256(uint128(amount0));
+            int128 amount1 = _amount1(delta);
+            if (amount1 <= 0) return 0;
+            return uint256(uint128(amount1));
         }
-
-        int128 amount1 = _amount1(delta);
-        if (amount1 <= 0) {
-            return 0;
-        }
-        return uint256(uint128(amount1));
+        int128 amount0 = _amount0(delta);
+        if (amount0 <= 0) return 0;
+        return uint256(uint128(amount0));
     }
 
     function _poolId(PoolKey calldata key) internal pure returns (bytes32) {
