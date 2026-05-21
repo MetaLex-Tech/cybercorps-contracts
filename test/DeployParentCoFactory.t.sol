@@ -47,7 +47,7 @@ contract DeployParentCoFactoryForkTest is Test {
     }
 
     function setUp() public {
-        vm.createSelectFork("base_sepolia", 40732512);
+        vm.createSelectFork("base_sepolia", 40732512); // pinned to an old block before ParentCoFactory is deployed
         coreDeployment = DeploymentConstants.coreV2(block.chainid);
         deps = DeploymentConstants.deps(block.chainid);
 
