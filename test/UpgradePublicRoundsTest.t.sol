@@ -38,7 +38,7 @@ contract UpgradePublicRoundsForkTest is Test {
     LeXcheXMinter leXcheXMinter = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
     ERC20 stable = ERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e);
 
-    uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
+    uint256 deployerPrivateKey = vm.envUint("TEST_DEPLOYER_KEY");
     address deployer = vm.addr(deployerPrivateKey);
 
     // Randomly generated to avoid contaminated common test addresses
