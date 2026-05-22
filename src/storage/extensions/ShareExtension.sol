@@ -260,7 +260,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
                 _buildSeriesJson(share.terms, share.certificateData),
                 _buildCertificateJson(share.certificateData),
                 _buildDerivedJson(share),
-                '"}'
+                '}'
             )
         );
     }

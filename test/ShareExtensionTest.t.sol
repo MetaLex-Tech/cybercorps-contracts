@@ -119,7 +119,7 @@ contract ShareExtensionTest is Test {
         string memory shareJson = shareExtension.getExtensionURI(details.extensionData);
         assertTrue(_contains(shareJson, '"shareDetails": {'));
         assertTrue(_contains(shareJson, '"seriesName": "Series A Preferred"'));
-        assertTrue(_contains(shareJson, '"issuerName": "Test CyberCorp"'));
+        assertTrue(_contains(shareJson, '"conversionRatio": "1000000000000000000"}'));
         assertTrue(_contains(certPrinter.tokenURI(tokenId), "data:application/json;base64,"));
     }
 
@@ -133,7 +133,6 @@ contract ShareExtensionTest is Test {
         assertTrue(valid);
         assertEq(error, "");
         assertEq(formatterDecoded.terms.seriesName, "Series A Preferred");
-        assertEq(logicDecoded.issuerName, "Test CyberCorp");
         assertEq(logicDecoded.transferRestrictions.length, 1);
         assertEq(logicDecoded.specialVotingRights.length, 1);
         assertEq(logicDecoded.mandatoryConversionTriggers.length, 1);
@@ -158,7 +157,6 @@ contract ShareExtensionTest is Test {
         ShareCertData memory decoded = shareLogic.decodeExtensionData(updatedData);
 
         assertEq(decoded.terms.authorizedShares, 20_000_000);
-        assertEq(decoded.certificateData.numberOfShares, 20_000);
         assertEq(decoded.terms.originalIssuePrice, 5e18);
         assertEq(decoded.terms.parValue, 5e15);
         assertEq(decoded.terms.conversionPrice, 5e18);
@@ -167,12 +165,6 @@ contract ShareExtensionTest is Test {
         assertEq(decoded.splitHistory.length, 1);
         assertEq(decoded.splitHistory[0].numerator, 2);
         assertEq(decoded.splitHistory[0].denominator, 1);
-    }
-
-    function testLogic_ComputesAccruedDividendsForCumulativeSeries() public {
-        uint256 accrued = shareLogic.computeAccruedDividends(certPrinter.getExtensionData(tokenId), block.timestamp + 365 days);
-
-        assertEq(accrued, 10_000e18);
     }
 
     function testLogic_ManagesDynamicArrayPayloadSections() public {
@@ -545,23 +537,17 @@ contract ShareExtensionTest is Test {
                 dragAlongTermsURI: "ipfs://drag-along"
             }),
             certificateData: CertificateData({
-                seriesId: bytes32("SERIES_A_2026"),
-                numberOfShares: 10_000,
-                issueDate: block.timestamp,
                 isPartlyPaid: true,
                 amountPaid: 50_000e18,
                 totalConsideration: 100_000e18,
                 sourceAuthorityURI: "ipfs://board-approval",
                 representationType: ShareRepresentationType.Certificated,
-                holdingPeriodStartDate: block.timestamp - 30 days,
                 holdingPeriodTackingApplied: false
             }),
             mandatoryConversionTriggers: conversionTriggers,
             specialVotingRights: votingRights,
             transferRestrictions: restrictions,
-            splitHistory: splitHistory,
-            issuerName: "Test CyberCorp",
-            stateOfIncorporation: "Delaware"
+            splitHistory: splitHistory
         });
 
         return shareExtension.encodeExtensionData(shareData);
