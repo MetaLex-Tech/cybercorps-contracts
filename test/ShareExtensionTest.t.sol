@@ -134,7 +134,6 @@ contract ShareExtensionTest is Test {
         assertEq(error, "");
         assertEq(formatterDecoded.terms.seriesName, "Series A Preferred");
         assertEq(logicDecoded.issuerName, "Test CyberCorp");
-        assertEq(logicDecoded.certificateData.certificateNumber, 1001);
         assertEq(logicDecoded.transferRestrictions.length, 1);
         assertEq(logicDecoded.specialVotingRights.length, 1);
         assertEq(logicDecoded.mandatoryConversionTriggers.length, 1);
@@ -547,7 +546,6 @@ contract ShareExtensionTest is Test {
             }),
             certificateData: CertificateData({
                 seriesId: bytes32("SERIES_A_2026"),
-                certificateNumber: 1001,
                 numberOfShares: 10_000,
                 issueDate: block.timestamp,
                 isPartlyPaid: true,

@@ -181,17 +181,18 @@ struct SeriesTerms {
 }
 
 struct CertificateData {
+    bytes32 seriesId;
+    uint256 numberOfShares;
+    uint256 issueDate;
     /// @notice Flags the cert as partly paid stock under DGCL §156.
     /// @dev Switches `_getPaymentPercentage` between the fully paid early return
     ///      (`PERCENTAGE_PRECISION`) and the `amountPaid`/`totalConsideration` ratio.
     bool isPartlyPaid;
     /// @notice Consideration received to date for the cert.
-    /// @dev Ignored when the cert is fully paid (i.e. `isPartlyPaid is false`). The
-    ///      difference `totalConsideration - amountPaid` is the unpaid subscription
-    ///      balance.
+    /// @dev Equals `totalConsideration` when the cert is fully paid. The difference
+    ///      `totalConsideration - amountPaid` is the unpaid subscription balance.
     uint256 amountPaid;
     /// @notice Full subscription price agreed for the cert under the issuance terms.
-    /// @dev Ignored when the cert is fully paid (i.e. `isPartlyPaid is false`).
     /// @dev Pairs with `amountPaid` and `isPartlyPaid` to model DGCL §156 partly paid
     ///      stock. Distinct from `CertificateDetails.investmentAmountUSD` (defined in
     ///      `src/CertificateUriBuilder.sol`), which records the USD amount actually
@@ -207,6 +208,7 @@ struct CertificateData {
     uint256 totalConsideration;
     string sourceAuthorityURI;
     ShareRepresentationType representationType;
+    uint256 holdingPeriodStartDate;
     bool holdingPeriodTackingApplied;
 }
 
@@ -217,6 +219,8 @@ struct ShareCertData {
     SpecialVotingRight[] specialVotingRights;
     TransferRestriction[] transferRestrictions;
     SplitRecord[] splitHistory;
+    string issuerName;
+    string stateOfIncorporation;
 }
 
 contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
@@ -298,7 +302,6 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return string(
             abi.encodePacked(
                 '"numberOfShares": "', Strings.toString(cert.numberOfShares),
-                '", "certificateNumber": "', Strings.toString(cert.certificateNumber),
                 '", "issueDate": "', Strings.toString(cert.issueDate),
                 '", "isPartlyPaid": "', _boolToString(cert.isPartlyPaid),
                 '", "amountPaid": "', Strings.toString(cert.amountPaid),
