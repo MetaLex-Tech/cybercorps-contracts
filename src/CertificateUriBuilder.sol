@@ -120,6 +120,7 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         if (_series == SecuritySeries.SeriesE) return "SeriesE";
         if (_series == SecuritySeries.SeriesF) return "SeriesF";
         if (_series == SecuritySeries.NA) return "NA";
+        if (_series == SecuritySeries.ACE) return "ACE";
         return "Unknown";
     }
 
@@ -320,9 +321,9 @@ struct CertificateDetails {
         return string(abi.encodePacked(
             '{"trait_type": "CurrentOwner", "value": "', addressToString(owner.ownerAddress),
             '"}, {"trait_type": "CurrentOwnerName", "value": "', owner.name,
-            '"}, {"trait_type": "investmentAmount", "value": "$', from18DecimalsToString(details.investmentAmountUSD),
+            '"}, {"trait_type": "investmentAmount", "value": "', from18DecimalsToString(details.investmentAmountUSD),
             '"}, {"trait_type": "unitsRepresented", "value": "', from18DecimalsToString(details.unitsRepresented),
-            '"}, {"trait_type": "issuerUSDValuationAtTimeOfInvestment", "value": "$', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
+            '"}, {"trait_type": "issuerUSDValuationAtTimeOfInvestment", "value": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
             '"}, {"trait_type": "cyberCORPName", "value": "', cyberCORPName,
             '"}, {"trait_type": "cyberCORPType", "value": "', cyberCORPType,
             '"}'

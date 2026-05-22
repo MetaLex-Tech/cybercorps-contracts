@@ -59,7 +59,7 @@ import "./interfaces/IDealManagerFactory.sol";
 contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeable, ReentrancyGuard {
     using DealManagerStorage for DealManagerStorage.DealManagerData;
 
-    string public constant DEPLOY_VERSION = "3"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "4"; // For version-tracking on all deployment and future upgrades
 
     /// @notice Certificate data structure for creating new certificates
     struct CyberCertData {

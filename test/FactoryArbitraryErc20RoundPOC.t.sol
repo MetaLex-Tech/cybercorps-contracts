@@ -158,7 +158,8 @@ contract FactoryArbitraryErc20RoundPOCTest is Test {
             startTime,
             endTime,
             true,
-            true
+            true,
+            false
         );
 
         assertEq(corp, predictedCorp, "unexpected corp address");

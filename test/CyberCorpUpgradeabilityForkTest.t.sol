@@ -32,6 +32,7 @@ import {IERC721Errors} from "openzeppelin-contracts/interfaces/draft-IERC6093.so
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {UpgradeableBeacon} from "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
+import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 
 contract RugImplemantation is UUPSUpgradeable {
     string public constant DEPLOY_VERSION = "ngmi";
@@ -79,7 +80,7 @@ contract RugCyberScrip is ERC20Upgradeable, UUPSUpgradeable {
     function _authorizeUpgrade(address newImplementation) internal override {}
 }
 
-contract CyberCorpUpgradeabilityTest is Test {
+contract CyberCorpUpgradeabilityForkTest is Test {
     using ERC1967ProxyLib for address;
 
     address public constant LEXCHEX_OWNER = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
@@ -114,9 +115,11 @@ contract CyberCorpUpgradeabilityTest is Test {
     uint256[] public certIds;
 
     function setUp() public {
+        vm.createSelectFork("base_sepolia");
+        
         (metalex, metalexPrivateKey) = makeAddrAndKey("metalex");
         (corpOwner, corpOwnerPrivateKey) = makeAddrAndKey("corpOwner");
-        (alice, alicePrivateKey) = makeAddrAndKey("alice");
+        (alice, alicePrivateKey) = makeAddrAndKey("alice2"); // somehow "alice" is taken in base-sepolia
 
         metalexAuth = new BorgAuth(metalex);
 
@@ -139,6 +142,9 @@ contract CyberCorpUpgradeabilityTest is Test {
             )
         );
         vm.label(address(uriBuilder), "CertificateUriBuilder");
+        address imageBuilderImpl = address(new CertificateImageBuilderContract{salt: salt}());
+        vm.prank(metalex);
+        uriBuilder.setImageBuilder(imageBuilderImpl);
 
         cyberCorpSingleFactory = CyberCorpSingleFactory(address(
             new ERC1967Proxy{salt: salt}(
@@ -435,6 +441,7 @@ contract CyberCorpUpgradeabilityTest is Test {
 
         // CyberCorpFactory does not utilize CyberScrip yet, so we will simulate it here
 
+        vm.prank(corpOwner);
         CyberScrip cyberScrip = CyberScrip(
             IssuanceManager(imAddr)
                 .deployCyberScrip(

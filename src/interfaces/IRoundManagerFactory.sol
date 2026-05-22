@@ -41,12 +41,20 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
+struct FeeOverride {
+    bool enabled;
+    uint256 ratio;
+}
+
 interface IRoundManagerFactory {
     function deployRoundManager(bytes32 _salt) external returns (address);
 
     function getRefImplementation() external view returns (address);
 
     function getDefaultFeeRatio() external view returns (uint256);
+    function getUnderlyingDefaultFeeRatio() external view returns (uint256);
+    function getInstanceFeeOverride(address roundManager) external view returns (FeeOverride memory);
+    function setInstanceFeeOverride(address roundManager, bool enabled, uint256 ratio) external;
     function getPlatformPayable() external view returns (address);
     function isWhitelistedToken(address token) external view returns (bool);
     function setWhitelistedToken(address token, bool isWhitelisted) external;

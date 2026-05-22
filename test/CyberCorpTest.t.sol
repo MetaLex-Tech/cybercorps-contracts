@@ -81,7 +81,7 @@ import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {ILegacyFactory} from "../script/interfaces/ILegacyFactory.sol";
 
-contract CyberCorpTest is Test {
+contract CyberCorpForkTest is Test {
     using ERC1967ProxyLib for address;
 
     //     Counter public counter;
@@ -109,6 +109,7 @@ contract CyberCorpTest is Test {
     LexChexCondition lexchexCondition;
 
     function setUp() public {
+        vm.createSelectFork("base_sepolia");
         testPrivateKey = 1337;
         testAddress = vm.addr(testPrivateKey);
         vm.startPrank(testAddress);
@@ -3914,24 +3915,10 @@ contract CyberCorpTest is Test {
         vm.startPrank(testAddress);
         bytes32 check = bytes32(bytes("ABV_safe_t"));
         console.logBytes32(check);
-     console.log("blackhaven_safe_t");
-        check = bytes32(bytes("blackhaven_safe_t"));
+     console.log("ace_safev1");
+        check = bytes32(bytes("ace_safev1"));
         console.logBytes32(check);
-        check = bytes32(bytes("mlx_safe_reg_s_v1_3"));
-        console.logBytes32(check);
-        check = bytes32(bytes("mlx_safe_tw_reg_d_v1_3"));
-        console.logBytes32(check);
-        check = bytes32(bytes("mlx_safe_tw_reg_s_v1_3"));
-        console.logBytes32(check);
-        check = bytes32(bytes("mlx_safte_reg_d_v1_3"));
-        console.logBytes32(check);
-        check = bytes32(bytes("mlx_safte_reg_s_v1_3"));
-        console.logBytes32(check);
-        check = bytes32(bytes("mlx_saft_reg_d_v1_3"));
-        console.logBytes32(check);
-        check = bytes32(bytes("mlx_saft_reg_s_v1_3"));
-        console.logBytes32(check);
-
+     
         bytes32 salt = bytes32(keccak256("TestSAFTE"));
 
         address safteExtension = address(new ERC1967Proxy{salt: salt}(
@@ -5066,6 +5053,7 @@ contract CyberCorpTest is Test {
     function testLexChexMinterIntegration() public {
         uint256 investorPk = 12345;
         address investorAddr = vm.addr(investorPk);
+        vm.etch(investorAddr, hex"");
 
         vm.startPrank(multisig);
         auth.updateRole(address(testAddress), 98); // Give testAddress ADMIN_ROLE for testing
@@ -5281,6 +5269,7 @@ contract CyberCorpTest is Test {
             address(dealManager),
             _paymentAmount
         );
+        vm.stopPrank();
 
         bytes memory investorDealSignature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -5296,6 +5285,7 @@ contract CyberCorpTest is Test {
         );
 
         // This should succeed because the investor has a valid LexChex token
+        vm.startPrank(testAddress);
         dealManager.signAndFinalizeDeal(
             investorAddr,
             dealContractId,
@@ -5820,8 +5810,10 @@ contract CyberCorpTest is Test {
         );
         vm.stopPrank();
 
-        // Create a certificate printer and mint two certs to testAddress
+        // Create a certificate printer and mint two certs to a code-less EOA recipient
         string[] memory ledger = new string[](0);
+        address certOwner = vm.addr(0xA11CE);
+        vm.etch(certOwner, hex"");
         vm.prank(testAddress);
         address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
             ledger,
@@ -5844,31 +5836,32 @@ contract CyberCorpTest is Test {
             extensionData: ""
         });
         vm.prank(testAddress);
-        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // tokenId 0
+        IssuanceManager(issuanceManager).createCert(certPrinter, certOwner, cd); // tokenId 0
         vm.prank(testAddress);
-        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // tokenId 1
+        IssuanceManager(issuanceManager).createCert(certPrinter, certOwner, cd); // tokenId 1
 
         address recipient = vm.addr(0xCAFE);
 
         // Global off; token 0 off => revert
-        vm.startPrank(testAddress);
+        vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
+        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 0);
         vm.stopPrank();
 
         // Enable token 0 only
         vm.prank(issuanceManager);
         CyberCertPrinter(certPrinter).setTokenTransferable(0, true);
 
-        // Without endorsement should still revert
-        vm.startPrank(testAddress);
-        vm.expectRevert(CyberCertPrinter.EndorsementNotSignedOrInvalid.selector);
-        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
-        vm.stopPrank();
+        // Transfer without endorsement: ERC721 owner changes but legal owner record does not
+        address midAddr = vm.addr(0xD0);
+        vm.prank(certOwner);
+        CyberCertPrinter(certPrinter).transferFrom(certOwner, midAddr, 0);
+        assertEq(CyberCertPrinter(certPrinter).ownerOf(0), midAddr);
+        assertEq(CyberCertPrinter(certPrinter).legalOwnerOf(0), certOwner);
 
-        // Add endorsement and transfer succeeds for token 0
+        // Add endorsement and endorsed transfer updates legal owner record
         Endorsement memory e = Endorsement({
-            endorser: testAddress,
+            endorser: midAddr,
             timestamp: block.timestamp,
             signatureHash: hex"01",
             registry: address(0),
@@ -5876,16 +5869,17 @@ contract CyberCorpTest is Test {
             endorsee: recipient,
             endorseeName: "Recipient"
         });
-        vm.prank(testAddress);
+        vm.prank(midAddr);
         CyberCertPrinter(certPrinter).addEndorsement(0, e);
-        vm.prank(testAddress);
-        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
+        vm.prank(midAddr);
+        CyberCertPrinter(certPrinter).transferFrom(midAddr, recipient, 0);
         assertEq(CyberCertPrinter(certPrinter).ownerOf(0), recipient);
+        assertEq(CyberCertPrinter(certPrinter).legalOwnerOf(0), recipient);
 
         // Token 1 should remain blocked
-        vm.startPrank(testAddress);
+        vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(certPrinter).transferFrom(testAddress, vm.addr(0xBEEF), 1);
+        CyberCertPrinter(certPrinter).transferFrom(certOwner, vm.addr(0xBEEF), 1);
         vm.stopPrank();
     }
 
@@ -5956,8 +5950,10 @@ contract CyberCorpTest is Test {
         );
         vm.stopPrank();
 
-        // Create printer and mint two certs to testAddress
+        // Create printer and mint two certs to a code-less EOA recipient
         string[] memory ledger = new string[](0);
+        address certOwner = vm.addr(0xA11CE);
+        vm.etch(certOwner, hex"");
         vm.prank(testAddress);
         address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
             ledger,
@@ -5979,16 +5975,16 @@ contract CyberCorpTest is Test {
             extensionData: ""
         });
         vm.prank(testAddress);
-        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // token 0
+        IssuanceManager(issuanceManager).createCert(certPrinter, certOwner, cd); // token 0
         vm.prank(testAddress);
-        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // token 1
+        IssuanceManager(issuanceManager).createCert(certPrinter, certOwner, cd); // token 1
 
         address recipient1 = vm.addr(0x1001);
         address recipient2 = vm.addr(0x1002);
 
         // Add endorsement for token 0 -> recipient1
         Endorsement memory e0 = Endorsement({
-            endorser: testAddress,
+            endorser: certOwner,
             timestamp: block.timestamp,
             signatureHash: hex"01",
             registry: address(0),
@@ -5996,20 +5992,20 @@ contract CyberCorpTest is Test {
             endorsee: recipient1,
             endorseeName: "R1"
         });
-        vm.prank(testAddress);
+        vm.prank(certOwner);
         CyberCertPrinter(certPrinter).addEndorsement(0, e0);
 
         // Before enabling global: expect TokenNotTransferable
-        vm.startPrank(testAddress);
+        vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient1, 0);
+        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient1, 0);
         vm.stopPrank();
 
         // Turn global on, transfer succeeds
         vm.prank(issuanceManager);
         CyberCertPrinter(certPrinter).setGlobalTransferable(true);
-        vm.prank(testAddress);
-        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient1, 0);
+        vm.prank(certOwner);
+        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient1, 0);
         assertEq(CyberCertPrinter(certPrinter).ownerOf(0), recipient1);
 
         // Global off again
@@ -6022,7 +6018,7 @@ contract CyberCorpTest is Test {
 
         // Add endorsement for token 1 -> recipient2 and ensure it still reverts due to global off and no per-token flag
         Endorsement memory e1 = Endorsement({
-            endorser: testAddress,
+            endorser: certOwner,
             timestamp: block.timestamp,
             signatureHash: hex"02",
             registry: address(0),
@@ -6030,11 +6026,11 @@ contract CyberCorpTest is Test {
             endorsee: recipient2,
             endorseeName: "R2"
         });
-        vm.prank(testAddress);
+        vm.prank(certOwner);
         CyberCertPrinter(certPrinter).addEndorsement(1, e1);
-        vm.startPrank(testAddress);
+        vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient2, 1);
+        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient2, 1);
         vm.stopPrank();
     }
 
@@ -6064,8 +6060,10 @@ contract CyberCorpTest is Test {
         );
         vm.stopPrank();
 
-        // Create printer and mint token 0
+        // Create printer and mint token 0 to a code-less EOA recipient
         string[] memory ledger = new string[](0);
+        address certOwner = vm.addr(0xA11CE);
+        vm.etch(certOwner, hex"");
         vm.prank(testAddress);
         address certPrinter = IssuanceManager(issuanceManager).createCertPrinter(
             ledger,
@@ -6087,7 +6085,7 @@ contract CyberCorpTest is Test {
             extensionData: ""
         });
         vm.prank(testAddress);
-        IssuanceManager(issuanceManager).createCert(certPrinter, testAddress, cd); // token 0
+        IssuanceManager(issuanceManager).createCert(certPrinter, certOwner, cd); // token 0
 
         // Enable per-token transferability for token 0
         vm.prank(issuanceManager);
@@ -6105,7 +6103,7 @@ contract CyberCorpTest is Test {
         // With endorsement, transfer should still be blocked by hook
         address recipient = vm.addr(0x2222);
         Endorsement memory e = Endorsement({
-            endorser: testAddress,
+            endorser: certOwner,
             timestamp: block.timestamp,
             signatureHash: hex"01",
             registry: address(0),
@@ -6113,11 +6111,11 @@ contract CyberCorpTest is Test {
             endorsee: recipient,
             endorseeName: "R"
         });
-        vm.prank(testAddress);
+        vm.prank(certOwner);
         CyberCertPrinter(certPrinter).addEndorsement(0, e);
-        vm.startPrank(testAddress);
+        vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSelector(CyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
-        CyberCertPrinter(certPrinter).transferFrom(testAddress, recipient, 0);
+        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 0);
         vm.stopPrank();
     }
 

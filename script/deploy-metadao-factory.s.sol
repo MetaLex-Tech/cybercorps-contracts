@@ -64,7 +64,7 @@ contract DeployScript is Script {
         address deployerAddress = vm.addr(deployerPrivateKey);
         vm.startBroadcast(deployerPrivateKey);
 
-        bytes32 salt = bytes32(keccak256("MetaDAOFactory.deploy.v1"));
+        bytes32 salt = bytes32(keccak256("MetaDAOFactory.deploy.v2"));
 
         address stable = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913; // USDC @ Base
 

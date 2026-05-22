@@ -53,7 +53,12 @@ interface IIssuanceManager {
     event ScripifiedCert(
         address indexed certAddress,
         uint256 indexed id,
-        address indexed scripifiedCert
+        address indexed scripifiedCert,
+        uint256 amount,
+        uint256 newUnitsRepresented,
+        uint256 newCertNominalShares,
+        uint256 newTotalAssetsWad,
+        uint256 newTotalNominalShares
     );
     event CertPrinterCreated(
         address indexed certificate,
@@ -77,6 +82,24 @@ interface IIssuanceManager {
     event CertPrinterBeaconImplementationUpgraded(address implementation);
     event ScripBeaconImplementationUpgraded(address implementation);
     event ScripToCertMinimumSet(address indexed certAddress, uint256 minimum);
+    event ScripRecertified(
+        address indexed certAddress,
+        address indexed user,
+        uint256 indexed certId,
+        uint256 scripAmount,
+        uint256 newUnitsRepresented,
+        uint256 newCertNominalShares,
+        uint256 newTotalAssetsWad,
+        uint256 newTotalNominalShares
+    );
+    event ScripAddedToExistingCert(
+        address indexed certAddress,
+        address indexed user,
+        uint256 indexed certId,
+        uint256 scripsAdded,
+        uint256 newUnitsRepresented,
+        uint256 newUnitsScripified
+    );
 
     // Issuance Manager Functions
     function initialize(
@@ -117,6 +140,15 @@ interface IIssuanceManager {
         CertificateDetails memory _details
     ) external returns (uint256 tokenId);
 
+    function createCertAndAssignWithName(
+        address certAddress,
+        address investor,
+        CertificateDetails memory _details,
+        string calldata investorName,
+        bytes calldata endorsementSignature,
+        uint256 timestamp
+    ) external returns (uint256 tokenId);
+
     function createCertSignAndAssign(
         address certAddress,
         address investor,
@@ -148,6 +180,11 @@ interface IIssuanceManager {
     ) external;
 
     function voidCertificate(
+        address certAddress,
+        uint256 tokenId
+    ) external;
+
+    function unvoidCertificate(
         address certAddress,
         uint256 tokenId
     ) external;
@@ -254,6 +291,33 @@ interface IIssuanceManager {
         address certAddress
     ) external view returns (uint256);
 
+    function setRecertificationApproval(
+        address certAddress,
+        address investor,
+        string calldata investorName,
+        CertificateDetails calldata details,
+        bytes calldata officerSignature
+    ) external;
+
+    function clearRecertificationApproval(
+        address certAddress,
+        address investor
+    ) external;
+
+    function getRecertificationApproval(
+        address certAddress,
+        address investor
+    )
+        external
+        view
+        returns (
+            bool approved,
+            string memory investorName,
+            CertificateDetails memory details,
+            bytes memory officerSignature,
+            uint256 endorsementTimestamp
+        );
+
     function setScripifyWhitelistEnabled(
         address certAddress,
         bool enabled
@@ -285,6 +349,16 @@ interface IIssuanceManager {
         external
         view
         returns (bool isScripified, uint256 scripifiedUnits, uint256 maxUnitsRepresented);
+
+    function getScripPoolAmountById(
+        address certAddress,
+        uint256 id
+    ) external view returns (uint256);
+
+    function getScripPoolSharesById(
+        address certAddress,
+        uint256 id
+    ) external view returns (uint256);
 
     function convertScripToCert(
         address certAddress,

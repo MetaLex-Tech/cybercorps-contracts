@@ -37,4 +37,4 @@ interface ICyberScrip is IERC20 {
     function holderCount() external view returns (uint256);
     function maxHolderCount() external view returns (uint256);
     function setMaxHolderCount(uint256 maxHolders) external;
-} 
+}
