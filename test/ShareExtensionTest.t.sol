@@ -27,12 +27,10 @@ import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {CyberCertData, EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {
     ShareExtension,
-    ShareCertData,
     SharePrinterExtensionData,
     ShareCertificateData,
     ShareExtensionDataSplitProposal,
     SeriesTerms,
-    CertificateData,
     MandatoryConversionTrigger,
     MandatoryConversionTriggerType,
     SpecialVotingRight,
@@ -47,7 +45,6 @@ import {
     VotingScope,
     ShareRepresentationType
 } from "../src/storage/extensions/ShareExtension.sol";
-import {ShareExtensionLogic} from "../src/storage/extensions/ShareExtensionLogic.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 
 contract MockPaymentToken is ERC20 {
@@ -90,14 +87,12 @@ contract ShareExtensionTest is Test {
     CyberCertPrinter internal certPrinter;
     CertificateUriBuilder internal uriBuilder;
     ShareExtension internal shareExtension;
-    ShareExtensionLogic internal shareLogic;
     MockPaymentToken internal paymentToken;
 
     address internal corpAddress;
     bytes32 internal roundId;
     bytes32 internal agreementId;
     uint256 internal tokenId;
-    bytes internal initialLegacyShareData;
     bytes internal initialCertificateShareData;
     bytes internal initialPrinterShareData;
 
@@ -135,127 +130,6 @@ contract ShareExtensionTest is Test {
         string memory tokenUri = certPrinter.tokenURI(tokenId);
         assertTrue(_contains(tokenUri, "data:application/json;base64,"));
         assertEq(keccak256(certPrinter.getPrinterExtensionData()), keccak256(initialPrinterShareData));
-    }
-
-    function testLogic_DecodeAndValidateLiveSharePayload() public {
-        bytes memory storedData = initialLegacyShareData;
-
-        ShareCertData memory formatterDecoded = shareExtension.decodeExtensionData(storedData);
-        ShareCertData memory logicDecoded = shareLogic.decodeExtensionData(storedData);
-        (bool valid, string memory error) = shareLogic.validateShareData(storedData);
-
-        assertTrue(valid);
-        assertEq(error, "");
-        assertEq(formatterDecoded.terms.seriesName, "Series A Preferred");
-        assertEq(logicDecoded.certificateData.certificateNumber, 1001);
-        assertEq(logicDecoded.transferRestrictions.length, 1);
-        assertEq(logicDecoded.specialVotingRights.length, 1);
-        assertEq(logicDecoded.mandatoryConversionTriggers.length, 1);
-    }
-
-    function testLogic_UpdateConversionPriceAndRatio() public {
-        bytes memory updatedData = shareLogic.updateConversionPrice(initialLegacyShareData, 8e18);
-        ShareCertData memory decoded = shareLogic.decodeExtensionData(updatedData);
-        uint256 ratio = shareLogic.getConversionRatio(updatedData);
-
-        assertEq(decoded.terms.conversionPrice, 8e18);
-        assertEq(ratio, (decoded.terms.originalIssuePrice * 1e18) / 8e18);
-
-        string memory json = shareExtension.getExtensionURI(updatedData);
-        assertTrue(_contains(json, '"conversionPrice": "8000000000000000000"'));
-    }
-
-    function testLogic_RecordStockSplitAdjustsSharePayload() public {
-        bytes memory updatedData =
-            shareLogic.recordStockSplit(initialLegacyShareData, 2, 1, "ipfs://split-board-consent", block.timestamp);
-
-        ShareCertData memory decoded = shareLogic.decodeExtensionData(updatedData);
-
-        assertEq(decoded.terms.authorizedShares, 20_000_000);
-        assertEq(decoded.certificateData.numberOfShares, 20_000);
-        assertEq(decoded.terms.originalIssuePrice, 5e18);
-        assertEq(decoded.terms.parValue, 5e15);
-        assertEq(decoded.terms.conversionPrice, 5e18);
-        assertEq(decoded.terms.redemptionPrice, 6e18);
-        assertEq(decoded.mandatoryConversionTriggers[0].primaryThreshold, 6e18);
-        assertEq(decoded.splitHistory.length, 1);
-        assertEq(decoded.splitHistory[0].numerator, 2);
-        assertEq(decoded.splitHistory[0].denominator, 1);
-    }
-
-    function testLogic_ComputesAccruedDividendsForCumulativeSeries() public {
-        uint256 accrued = shareLogic.computeAccruedDividends(initialLegacyShareData, block.timestamp + 365 days);
-
-        assertEq(accrued, 10_000e18);
-    }
-
-    function testLogic_ManagesDynamicArrayPayloadSections() public {
-        bytes memory workingData = initialLegacyShareData;
-
-        MandatoryConversionTrigger memory trigger = MandatoryConversionTrigger({
-            triggerType: MandatoryConversionTriggerType.Custom,
-            primaryThreshold: 0,
-            secondaryThreshold: 0,
-            additionalConditions: "Board approved recapitalization",
-            description: "Automatic conversion on recapitalization"
-        });
-        workingData = shareLogic.addConversionTrigger(workingData, trigger);
-
-        SpecialVotingRight memory votingRight = SpecialVotingRight({
-            matterType: keccak256("NEW_BOARD_SEAT"),
-            votesPerShare: 2e18,
-            threshold: 6000,
-            isVetoRight: false,
-            scope: VotingScope.SeriesSpecific,
-            description: "Series vote to add a board seat"
-        });
-        workingData = shareLogic.addSpecialVotingRight(workingData, votingRight);
-
-        TransferRestrictionException[] memory exceptions = new TransferRestrictionException[](1);
-        exceptions[0] = TransferRestrictionException({
-            exceptionType: keccak256("AFFILIATE_TRANSFER"),
-            exceptionText: "Transfers to affiliates are permitted",
-            requiresEvidence: true
-        });
-
-        TransferRestriction memory restriction = TransferRestriction({
-            restrictionType: TransferRestrictionType.CustomRestriction,
-            restrictionText: "Subject to side letter transfer limits",
-            sourceAgreement: "Side Letter",
-            isRemovable: true,
-            exceptions: exceptions
-        });
-        workingData = shareLogic.addTransferRestriction(workingData, restriction);
-
-        ShareCertData memory expanded = shareLogic.decodeExtensionData(workingData);
-        assertEq(expanded.mandatoryConversionTriggers.length, 2);
-        assertEq(expanded.specialVotingRights.length, 2);
-        assertEq(expanded.transferRestrictions.length, 2);
-
-        workingData = shareLogic.removeConversionTrigger(workingData, 1);
-        workingData = shareLogic.removeSpecialVotingRight(workingData, 1);
-        workingData = shareLogic.removeTransferRestriction(workingData, 1);
-
-        ShareCertData memory collapsed = shareLogic.decodeExtensionData(workingData);
-        assertEq(collapsed.mandatoryConversionTriggers.length, 1);
-        assertEq(collapsed.specialVotingRights.length, 1);
-        assertEq(collapsed.transferRestrictions.length, 1);
-    }
-
-    function testLogic_RejectsInvalidSeriesTerms() public {
-        ShareCertData memory shareData = shareLogic.decodeExtensionData(initialLegacyShareData);
-        shareData.terms.isConvertible = false;
-        shareData.terms.conversionPrice = 1e18;
-        shareData.terms.targetConversionSeriesId = bytes32(0);
-        shareData.terms.hasMandatoryConversion = false;
-
-        (bool valid, string memory error) = shareLogic.validateSeriesTerms(shareData.terms);
-        assertFalse(valid);
-        assertEq(error, "ShareExtensionLogic: conversionPrice must be 0 when not convertible");
-
-        bytes memory storedData = initialLegacyShareData;
-        vm.expectRevert(bytes("ShareExtensionLogic: conversionPrice must be 0 when not convertible"));
-        shareLogic.updateSeriesTerms(storedData, shareData.terms);
     }
 
     function _deployFactories() internal {
@@ -349,7 +223,6 @@ contract ShareExtensionTest is Test {
         extensionAuth = new BorgAuth(address(this));
         shareExtension = new ShareExtension();
         shareExtension.initialize(address(extensionAuth));
-        shareLogic = new ShareExtensionLogic();
     }
 
     function _createTemplate() internal {
@@ -405,9 +278,8 @@ contract ShareExtensionTest is Test {
         paymentToken = new MockPaymentToken();
         paymentToken.mint(investor, OFFER_AMOUNT * 2);
 
-        initialLegacyShareData = _buildInitialShareData();
-        initialCertificateShareData = _buildInitialCertificateShareData();
         initialPrinterShareData = _buildInitialPrinterShareData();
+        initialCertificateShareData = _buildInitialCertificateShareData();
         roundId = _createSeriesARound(initialCertificateShareData);
 
         vm.startPrank(investor);
@@ -465,6 +337,7 @@ contract ShareExtensionTest is Test {
                 RoundType.FCFS,
                 false,
                 true,
+                false,
                 RAISE_CAP,
                 OFFER_AMOUNT,
                 OFFER_AMOUNT,
@@ -488,7 +361,7 @@ contract ShareExtensionTest is Test {
         );
     }
 
-    function _buildInitialShareData() internal view returns (bytes memory) {
+    function _buildInitialPrinterShareData() internal view returns (bytes memory) {
         TransferRestrictionException[] memory exceptions = new TransferRestrictionException[](1);
         exceptions[0] = TransferRestrictionException({
             exceptionType: keccak256("ESTATE_PLANNING_TRANSFER"),
@@ -524,9 +397,13 @@ contract ShareExtensionTest is Test {
             description: "Series A veto on merger approval"
         });
 
-        SplitRecord[] memory splitHistory = new SplitRecord[](0);
+        ShareExtensionDataSplitProposal memory proposal = ShareExtensionDataSplitProposal({
+            moveToPrinterExtensionData: new string[](0),
+            keepInCertificateExtensionData: new string[](0),
+            removeBecauseCoveredByRoundManager: new string[](0)
+        });
 
-        ShareCertData memory shareData = ShareCertData({
+        SharePrinterExtensionData memory printerData = SharePrinterExtensionData({
             terms: SeriesTerms({
                 shareClassKey: keccak256("PREFERRED"),
                 seriesName: "Series A Preferred",
@@ -568,41 +445,10 @@ contract ShareExtensionTest is Test {
                 hasDragAlongRights: true,
                 dragAlongTermsURI: "ipfs://drag-along"
             }),
-            certificateData: CertificateData({
-                seriesId: bytes32("SERIES_A_2026"),
-                certificateNumber: 1001,
-                numberOfShares: 10_000,
-                issueDate: block.timestamp,
-                isPartlyPaid: true,
-                amountPaid: 50_000e18,
-                totalConsideration: 100_000e18,
-                sourceAuthorityURI: "ipfs://board-approval",
-                representationType: ShareRepresentationType.Certificated,
-                holdingPeriodStartDate: block.timestamp > 30 days ? block.timestamp - 30 days : 0,
-                holdingPeriodTackingApplied: false
-            }),
             mandatoryConversionTriggers: conversionTriggers,
             specialVotingRights: votingRights,
             transferRestrictions: restrictions,
-            splitHistory: splitHistory
-        });
-
-        return shareExtension.encodeExtensionData(shareData);
-    }
-
-    function _buildInitialPrinterShareData() internal view returns (bytes memory) {
-        ShareCertData memory legacy = shareExtension.decodeExtensionData(initialLegacyShareData);
-        ShareExtensionDataSplitProposal memory proposal = ShareExtensionDataSplitProposal({
-            moveToPrinterExtensionData: new string[](0),
-            keepInCertificateExtensionData: new string[](0),
-            removeBecauseCoveredByRoundManager: new string[](0)
-        });
-        SharePrinterExtensionData memory printerData = SharePrinterExtensionData({
-            terms: legacy.terms,
-            mandatoryConversionTriggers: legacy.mandatoryConversionTriggers,
-            specialVotingRights: legacy.specialVotingRights,
-            transferRestrictions: legacy.transferRestrictions,
-            splitHistory: legacy.splitHistory,
+            splitHistory: new SplitRecord[](0),
             dataSplitProposal: proposal
         });
 
@@ -610,17 +456,15 @@ contract ShareExtensionTest is Test {
     }
 
     function _buildInitialCertificateShareData() internal view returns (bytes memory) {
-        ShareCertData memory legacy = shareExtension.decodeExtensionData(initialLegacyShareData);
-        CertificateData memory legacyCert = legacy.certificateData;
         ShareCertificateData memory certificateData = ShareCertificateData({
-            certificateNumber: legacyCert.certificateNumber,
-            issueDate: legacyCert.issueDate,
-            isPartlyPaid: legacyCert.isPartlyPaid,
-            amountPaid: legacyCert.amountPaid,
-            sourceAuthorityURI: legacyCert.sourceAuthorityURI,
-            representationType: legacyCert.representationType,
-            holdingPeriodStartDate: legacyCert.holdingPeriodStartDate,
-            holdingPeriodTackingApplied: legacyCert.holdingPeriodTackingApplied
+            certificateNumber: 1001,
+            issueDate: block.timestamp,
+            isPartlyPaid: true,
+            amountPaid: 50_000e18,
+            sourceAuthorityURI: "ipfs://board-approval",
+            representationType: ShareRepresentationType.Certificated,
+            holdingPeriodStartDate: block.timestamp > 30 days ? block.timestamp - 30 days : 0,
+            holdingPeriodTackingApplied: false
         });
 
         return shareExtension.encodeCertificateExtensionData(certificateData);

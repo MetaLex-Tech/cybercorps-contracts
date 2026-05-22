@@ -56,7 +56,7 @@ struct SAFTDataV2 {
     string customProvisions;
 }
 
-contract SAFTExtensionV2 is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
+contract SAFTExtensionV2 is UUPSUpgradeable, ILegacyCertificateExtension, BorgAuthACL {
     bytes32 public constant EXTENSION_TYPE = keccak256("SAFT_V2");
     uint256 public constant PERCENTAGE_PRECISION = 10 ** 4;
 

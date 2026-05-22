@@ -583,7 +583,7 @@ struct CertificateDetails {
     ) internal view returns (string memory) {
         (bool success, bytes memory result) = extension.staticcall(
             abi.encodeWithSelector(
-                ICertificateExtensionV2.getExtensionURI.selector,
+                ICertificateExtension.getExtensionURI.selector,
                 printerExtensionData,
                 certificateExtensionData
             )
@@ -595,8 +595,8 @@ struct CertificateDetails {
 
         if (certificateExtensionData.length == 0) return "";
 
-        // Fall back to `getExtensionUri` without certPrinter data
-        return ICertificateExtension(extension).getExtensionURI(certificateExtensionData);
+        // Fall back to legacy one-blob extensions without certPrinter data.
+        return ILegacyCertificateExtension(extension).getExtensionURI(certificateExtensionData);
     }
 
     function _authorizeUpgrade(

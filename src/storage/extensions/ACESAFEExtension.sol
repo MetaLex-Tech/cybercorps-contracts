@@ -52,7 +52,7 @@ struct ACESAFEData {
 
 }
 
-contract ACESAFEExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
+contract ACESAFEExtension is UUPSUpgradeable, ILegacyCertificateExtension, BorgAuthACL {
     bytes32 public constant EXTENSION_TYPE = keccak256("ACE_SAFE");
 
     //ofset to leave for future upgrades

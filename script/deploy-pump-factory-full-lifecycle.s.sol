@@ -136,7 +136,8 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesA,
             extension: address(0),
-            defaultLegend: defaultLegend
+            defaultLegend: defaultLegend,
+            printerExtensionData: ""
         });
 
         string[] memory roundFirstPartyValues = new string[](5);

@@ -61,7 +61,7 @@ struct TokenWarrantData {
     uint256 tokenPremiumMultiplier; //multiplier of network valuation over company equity valuation, to be used within equityProRataToTokenSupply method (set to 0 if no premium)
 }
 
-contract TokenWarrantExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
+contract TokenWarrantExtension is UUPSUpgradeable, ILegacyCertificateExtension, BorgAuthACL {
     bytes32 public constant EXTENSION_TYPE = keccak256("TOKEN_WARRANT");
     uint256 public constant PERCENTAGE_PRECISION = 10 ** 4;
 

@@ -181,7 +181,6 @@ struct SeriesTerms {
 }
 
 struct CertificateData {
-    bytes32 seriesId;
     uint256 certificateNumber;
     uint256 numberOfShares;
     uint256 issueDate;
@@ -220,21 +219,7 @@ struct ShareCertificateData {
     bool holdingPeriodTackingApplied;
 }
 
-struct ShareCertData {
-    SeriesTerms terms;
-    CertificateData certificateData;
-    MandatoryConversionTrigger[] mandatoryConversionTriggers;
-    SpecialVotingRight[] specialVotingRights;
-    TransferRestriction[] transferRestrictions;
-    SplitRecord[] splitHistory;
-}
-
-contract ShareExtension is
-    UUPSUpgradeable,
-    ICertificateExtension,
-    ICertificateExtensionV2,
-    BorgAuthACL
-{
+contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     bytes32 public constant EXTENSION_TYPE = keccak256("SHARE");
     uint256 public constant PERCENTAGE_PRECISION = 10 ** 4;
     uint256 public constant PRICE_PRECISION = 10 ** 18;
@@ -250,18 +235,6 @@ contract ShareExtension is
     function initialize(address _auth) external initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
-    }
-
-    function decodeExtensionData(
-        bytes memory data
-    ) external pure returns (ShareCertData memory) {
-        return abi.decode(data, (ShareCertData));
-    }
-
-    function encodeExtensionData(
-        ShareCertData memory data
-    ) external pure returns (bytes memory) {
-        return abi.encode(data);
     }
 
     function decodePrinterExtensionData(
@@ -295,12 +268,6 @@ contract ShareExtension is
     }
 
     function getExtensionURI(
-        bytes memory data
-    ) external pure override returns (string memory) {
-        return _buildExtensionURI("", data);
-    }
-
-    function getExtensionURI(
         bytes memory printerExtensionData,
         bytes memory certificateExtensionData
     ) external pure override returns (string memory) {
@@ -312,27 +279,7 @@ contract ShareExtension is
         bytes memory printerExtensionData,
         bytes memory certificateExtensionData
     ) internal pure returns (string memory) {
-        if (printerExtensionData.length == 0) {
-            if (certificateExtensionData.length == 0) return "";
-
-            ShareCertData memory legacyShare = abi.decode(
-                certificateExtensionData,
-                (ShareCertData)
-            );
-            return
-                string(
-                    abi.encodePacked(
-                        ', "shareDetails": {',
-                        _buildSeriesJson(
-                            legacyShare.terms,
-                            legacyShare.certificateData
-                        ),
-                        _buildCertificateJson(legacyShare.certificateData),
-                        _buildDerivedJson(legacyShare),
-                        '"}'
-                    )
-                );
-        }
+        if (printerExtensionData.length == 0) return "";
 
         SharePrinterExtensionData memory printerData = abi.decode(
             printerExtensionData,
@@ -370,32 +317,17 @@ contract ShareExtension is
     }
 
     function _buildSeriesJson(
-        SeriesTerms memory terms,
-        CertificateData memory cert
-    ) internal pure returns (string memory) {
-        return
-            string.concat(
-                _buildSeriesJsonPartOne(
-                    terms,
-                    Strings.toHexString(uint256(cert.seriesId), 32)
-                ),
-                _buildSeriesJsonPartTwo(terms)
-            );
-    }
-
-    function _buildSeriesJson(
         SeriesTerms memory terms
     ) internal pure returns (string memory) {
         return
             string.concat(
-                _buildSeriesJsonPartOne(terms, ""),
+                _buildSeriesJsonPartOne(terms),
                 _buildSeriesJsonPartTwo(terms)
             );
     }
 
     function _buildSeriesJsonPartOne(
-        SeriesTerms memory terms,
-        string memory seriesId
+        SeriesTerms memory terms
     ) internal pure returns (string memory) {
         return
             string(
@@ -404,9 +336,6 @@ contract ShareExtension is
                     _shareClassKeyToString(terms.shareClassKey),
                     '", "seriesName": "',
                     terms.seriesName,
-                    bytes(seriesId).length == 0
-                        ? ""
-                        : string.concat('", "seriesId": "', seriesId),
                     '", "authorizedShares": "',
                     Strings.toString(terms.authorizedShares),
                     '", "parValue": "',
@@ -510,31 +439,6 @@ contract ShareExtension is
     }
 
     function _buildDerivedJson(
-        ShareCertData memory share
-    ) internal pure returns (string memory) {
-        return
-            string(
-                abi.encodePacked(
-                    '"mandatoryConversionTriggerCount": "',
-                    Strings.toString(share.mandatoryConversionTriggers.length),
-                    '", "specialVotingRightCount": "',
-                    Strings.toString(share.specialVotingRights.length),
-                    '", "transferRestrictionCount": "',
-                    Strings.toString(share.transferRestrictions.length),
-                    '", "splitHistoryCount": "',
-                    Strings.toString(share.splitHistory.length),
-                    '", "paymentPercentage": "',
-                    Strings.toString(
-                        _getPaymentPercentage(share.certificateData)
-                    ),
-                    '", "conversionRatio": "',
-                    Strings.toString(_getConversionRatio(share.terms)),
-                    '"'
-                )
-            );
-    }
-
-    function _buildDerivedJson(
         SharePrinterExtensionData memory printerData,
         CertificateData memory cert
     ) internal pure returns (string memory) {
@@ -576,7 +480,6 @@ contract ShareExtension is
         ShareCertificateData memory data
     ) internal pure returns (CertificateData memory certificateData) {
         certificateData = CertificateData({
-            seriesId: bytes32(0),
             certificateNumber: data.certificateNumber,
             numberOfShares: 0,
             issueDate: data.issueDate,

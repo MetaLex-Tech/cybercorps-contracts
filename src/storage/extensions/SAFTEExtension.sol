@@ -59,7 +59,7 @@ struct SAFTEData {
     uint256 protocolUSDValuationAtTimeofInvestment;
     }
 
-contract SAFTEExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
+contract SAFTEExtension is UUPSUpgradeable, ILegacyCertificateExtension, BorgAuthACL {
     bytes32 public constant EXTENSION_TYPE = keccak256("SAFTE");
     uint256 public constant PERCENTAGE_PRECISION = 10 ** 4;
 

@@ -163,6 +163,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         SecuritySeries securitySeries;
         address extension;
         string[] defaultLegend;
+        bytes printerExtensionData;
     }
 
     event CyberCorpDeployed(
@@ -473,7 +474,8 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
                     _certData[i].uri,
                     _certData[i].securityClass,
                     _certData[i].securitySeries,
-                    _certData[i].extension
+                    _certData[i].extension,
+                    _certData[i].printerExtensionData
                 )
             );
             certPrinterAddress[i] = address(certPrinter);

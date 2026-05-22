@@ -55,7 +55,7 @@ struct SAFTData {
     UnlockingIntervalType unlockingIntervalType;
 }
 
-contract SAFTExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
+contract SAFTExtension is UUPSUpgradeable, ILegacyCertificateExtension, BorgAuthACL {
     bytes32 public constant EXTENSION_TYPE = keccak256("SAFT");
     uint256 public constant PERCENTAGE_PRECISION = 10 ** 4;
 
