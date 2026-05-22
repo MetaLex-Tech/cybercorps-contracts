@@ -114,18 +114,6 @@ contract ShareExtensionLogic {
         return abi.encode(share);
     }
 
-    function setIssuerName(bytes memory data, string memory newIssuerName) external pure returns (bytes memory) {
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        share.issuerName = newIssuerName;
-        return abi.encode(share);
-    }
-
-    function setStateOfIncorporation(bytes memory data, string memory newState) external pure returns (bytes memory) {
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        share.stateOfIncorporation = newState;
-        return abi.encode(share);
-    }
-
     function addConversionTrigger(
         bytes memory data,
         MandatoryConversionTrigger memory conversionTrigger
@@ -196,8 +184,6 @@ contract ShareExtensionLogic {
         }
 
         share.terms.authorizedShares = (share.terms.authorizedShares * splitNumerator) / splitDenominator;
-        share.certificateData.numberOfShares =
-            (share.certificateData.numberOfShares * splitNumerator) / splitDenominator;
 
         for (uint256 i = 0; i < share.mandatoryConversionTriggers.length; i++) {
             if (
@@ -237,36 +223,36 @@ contract ShareExtensionLogic {
             (share.certificateData.amountPaid * PERCENTAGE_PRECISION) / share.certificateData.totalConsideration;
     }
 
-    function computeAccruedDividends(bytes memory data, uint256 asOfTimestamp) external pure returns (uint256 accrued) {
-        ShareCertData memory share = abi.decode(data, (ShareCertData));
-        SeriesTerms memory terms = share.terms;
-        CertificateData memory cert = share.certificateData;
+    // function computeAccruedDividends(bytes memory data, uint256 asOfTimestamp) external pure returns (uint256 accrued) {
+    //     ShareCertData memory share = abi.decode(data, (ShareCertData));
+    //     SeriesTerms memory terms = share.terms;
+    //     CertificateData memory cert = share.certificateData;
 
-        if (terms.dividendType != DividendType.Cumulative) return 0;
-        if (asOfTimestamp <= terms.dividendAccrualStartDate) return 0;
+    //     if (terms.dividendType != DividendType.Cumulative) return 0;
+    //     if (asOfTimestamp <= terms.dividendAccrualStartDate) return 0;
 
-        uint256 elapsed = asOfTimestamp - terms.dividendAccrualStartDate;
-        uint256 principal = terms.originalIssuePrice * cert.numberOfShares;
+    //     uint256 elapsed = asOfTimestamp - terms.dividendAccrualStartDate;
+    //     uint256 principal = terms.originalIssuePrice * cert.numberOfShares;
 
-        if (!terms.dividendCompounding) {
-            accrued = (terms.dividendRate * principal * elapsed) / (365 days * PRICE_PRECISION);
-            return accrued;
-        }
+    //     if (!terms.dividendCompounding) {
+    //         accrued = (terms.dividendRate * principal * elapsed) / (365 days * PRICE_PRECISION);
+    //         return accrued;
+    //     }
 
-        uint256 fullYears = elapsed / 365 days;
-        uint256 remainder = elapsed % 365 days;
-        uint256 compounded = principal;
+    //     uint256 fullYears = elapsed / 365 days;
+    //     uint256 remainder = elapsed % 365 days;
+    //     uint256 compounded = principal;
 
-        for (uint256 i = 0; i < fullYears; i++) {
-            compounded = (compounded * (PRICE_PRECISION + terms.dividendRate)) / PRICE_PRECISION;
-        }
+    //     for (uint256 i = 0; i < fullYears; i++) {
+    //         compounded = (compounded * (PRICE_PRECISION + terms.dividendRate)) / PRICE_PRECISION;
+    //     }
 
-        if (remainder > 0) {
-            compounded += (compounded * terms.dividendRate * remainder) / (365 days * PRICE_PRECISION);
-        }
+    //     if (remainder > 0) {
+    //         compounded += (compounded * terms.dividendRate * remainder) / (365 days * PRICE_PRECISION);
+    //     }
 
-        accrued = compounded - principal;
-    }
+    //     accrued = compounded - principal;
+    // }
 
     function _validateShareDataInternal(ShareCertData memory share) internal pure returns (bool, string memory) {
         (bool valid, string memory error) = _validateSeriesTermsInternal(share.terms);
@@ -331,13 +317,6 @@ contract ShareExtensionLogic {
     function _validateCertificateDataInternal(
         CertificateData memory certificateData
     ) internal pure returns (bool, string memory) {
-        if (certificateData.seriesId == bytes32(0)) {
-            return (false, "ShareExtensionLogic: seriesId must be non-zero");
-        }
-        if (certificateData.numberOfShares == 0) {
-            return (false, "ShareExtensionLogic: numberOfShares must be > 0");
-        }
-
         if (certificateData.isPartlyPaid) {
             if (certificateData.totalConsideration == 0) {
                 return (false, "ShareExtensionLogic: totalConsideration must be > 0 when partly paid");

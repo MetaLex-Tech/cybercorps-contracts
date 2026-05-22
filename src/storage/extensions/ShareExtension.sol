@@ -181,18 +181,17 @@ struct SeriesTerms {
 }
 
 struct CertificateData {
-    bytes32 seriesId;
-    uint256 numberOfShares;
-    uint256 issueDate;
     /// @notice Flags the cert as partly paid stock under DGCL §156.
     /// @dev Switches `_getPaymentPercentage` between the fully paid early return
     ///      (`PERCENTAGE_PRECISION`) and the `amountPaid`/`totalConsideration` ratio.
     bool isPartlyPaid;
     /// @notice Consideration received to date for the cert.
-    /// @dev Equals `totalConsideration` when the cert is fully paid. The difference
-    ///      `totalConsideration - amountPaid` is the unpaid subscription balance.
+    /// @dev Ignored when the cert is fully paid (i.e. `isPartlyPaid is false`). The
+    ///      difference `totalConsideration - amountPaid` is the unpaid subscription
+    ///      balance.
     uint256 amountPaid;
     /// @notice Full subscription price agreed for the cert under the issuance terms.
+    /// @dev Ignored when the cert is fully paid (i.e. `isPartlyPaid is false`).
     /// @dev Pairs with `amountPaid` and `isPartlyPaid` to model DGCL §156 partly paid
     ///      stock. Distinct from `CertificateDetails.investmentAmountUSD` (defined in
     ///      `src/CertificateUriBuilder.sol`), which records the USD amount actually
@@ -208,7 +207,6 @@ struct CertificateData {
     uint256 totalConsideration;
     string sourceAuthorityURI;
     ShareRepresentationType representationType;
-    uint256 holdingPeriodStartDate;
     bool holdingPeriodTackingApplied;
 }
 
@@ -219,8 +217,6 @@ struct ShareCertData {
     SpecialVotingRight[] specialVotingRights;
     TransferRestriction[] transferRestrictions;
     SplitRecord[] splitHistory;
-    string issuerName;
-    string stateOfIncorporation;
 }
 
 contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
@@ -277,7 +273,6 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
             abi.encodePacked(
                 '"shareClassKey": "', _shareClassKeyToString(terms.shareClassKey),
                 '", "seriesName": "', terms.seriesName,
-                '", "seriesId": "', Strings.toHexString(uint256(cert.seriesId), 32),
                 '", "authorizedShares": "', Strings.toString(terms.authorizedShares),
                 '", "parValue": "', Strings.toString(terms.parValue),
                 '", "originalIssuePrice": "', Strings.toString(terms.originalIssuePrice),
@@ -301,13 +296,10 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     function _buildCertificateJson(CertificateData memory cert) internal pure returns (string memory) {
         return string(
             abi.encodePacked(
-                '"numberOfShares": "', Strings.toString(cert.numberOfShares),
-                '", "issueDate": "', Strings.toString(cert.issueDate),
-                '", "isPartlyPaid": "', _boolToString(cert.isPartlyPaid),
+                '"isPartlyPaid": "', _boolToString(cert.isPartlyPaid),
                 '", "amountPaid": "', Strings.toString(cert.amountPaid),
                 '", "totalConsideration": "', Strings.toString(cert.totalConsideration),
                 '", "representationType": "', _representationTypeToString(cert.representationType),
-                '", "holdingPeriodStartDate": "', Strings.toString(cert.holdingPeriodStartDate),
                 '", "holdingPeriodTackingApplied": "', _boolToString(cert.holdingPeriodTackingApplied),
                 '", '
             )
@@ -323,8 +315,6 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
                 '", "splitHistoryCount": "', Strings.toString(share.splitHistory.length),
                 '", "paymentPercentage": "', Strings.toString(_getPaymentPercentage(share.certificateData)),
                 '", "conversionRatio": "', Strings.toString(_getConversionRatio(share.terms)),
-                '", "issuerName": "', share.issuerName,
-                '", "stateOfIncorporation": "', share.stateOfIncorporation,
                 '"'
             )
         );
