@@ -116,10 +116,15 @@ contract ShareExtensionTest is Test {
         assertEq(details.unitsRepresented, (OFFER_AMOUNT * 1e18) / PRICE_PER_SHARE);
         assertEq(details.legalDetails, "Series A Preferred Stock Certificate");
 
-        string memory shareJson = shareExtension.getExtensionURI(details.extensionData);
-        assertTrue(_contains(shareJson, '"shareDetails": {'));
-        assertTrue(_contains(shareJson, '"seriesName": "Series A Preferred"'));
-        assertTrue(_contains(shareJson, '"conversionRatio": "1000000000000000000"}'));
+        string memory shareJson = _toJson(shareExtension.getExtensionURI(details.extensionData));
+        assertEq(vm.parseJsonString(shareJson, ".shareDetails.seriesName"), "Series A Preferred");
+        assertEq(vm.parseJsonString(shareJson, ".shareDetails.conversionRatio"), "1000000000000000000");
+        assertEq(vm.parseJsonString(shareJson, ".shareDetails.hasPayToPlay"), "true");
+        assertEq(vm.parseJsonString(shareJson, ".shareDetails.dragAlongTermsURI"), "ipfs://drag-along");
+        assertEq(vm.parseJsonString(shareJson, ".shareDetails.mandatoryConversionTriggers[0].triggerType"), "QualifiedIPO");
+        assertEq(vm.parseJsonString(shareJson, ".shareDetails.transferRestrictions[0].restrictionType"), "SecuritiesActRestriction");
+        bytes memory splitHistoryRaw = vm.parseJson(shareJson, ".shareDetails.splitHistory");
+        assertEq(splitHistoryRaw, abi.encode(new string[](0)));
         assertTrue(_contains(certPrinter.tokenURI(tokenId), "data:application/json;base64,"));
     }
 
@@ -146,8 +151,8 @@ contract ShareExtensionTest is Test {
         assertEq(decoded.terms.conversionPrice, 8e18);
         assertEq(ratio, (decoded.terms.originalIssuePrice * 1e18) / 8e18);
 
-        string memory json = shareExtension.getExtensionURI(updatedData);
-        assertTrue(_contains(json, '"conversionPrice": "8000000000000000000"'));
+        string memory json = _toJson(shareExtension.getExtensionURI(updatedData));
+        assertEq(vm.parseJsonString(json, ".shareDetails.conversionPrice"), "8000000000000000000");
     }
 
     function testLogic_RecordStockSplitAdjustsSharePayload() public {
@@ -218,6 +223,57 @@ contract ShareExtensionTest is Test {
         assertEq(collapsed.mandatoryConversionTriggers.length, 1);
         assertEq(collapsed.specialVotingRights.length, 1);
         assertEq(collapsed.transferRestrictions.length, 1);
+    }
+
+    function testJson_GetExtensionURIIsValidAndParseable() public {
+        bytes memory data = certPrinter.getExtensionData(tokenId);
+        string memory json = _toJson(shareExtension.getExtensionURI(data));
+
+        // Structural validity: reverts on malformed JSON
+        vm.parseJson(json);
+
+        // Series terms — scalar
+        assertEq(vm.parseJsonString(json, ".shareDetails.seriesName"), "Series A Preferred");
+        assertEq(vm.parseJsonString(json, ".shareDetails.authorizedShares"), "10000000");
+        assertEq(vm.parseJsonString(json, ".shareDetails.liquidationPreferenceType"), "CappedParticipating");
+        assertEq(vm.parseJsonString(json, ".shareDetails.dividendType"), "Cumulative");
+        assertEq(vm.parseJsonString(json, ".shareDetails.isConvertible"), "true");
+        assertEq(vm.parseJsonString(json, ".shareDetails.antiDilutionType"), "BroadBasedWeightedAverage");
+        assertEq(vm.parseJsonString(json, ".shareDetails.seniorityRank"), "1");
+        assertEq(vm.parseJsonString(json, ".shareDetails.hasMandatoryConversion"), "true");
+        assertEq(vm.parseJsonString(json, ".shareDetails.hasPayToPlay"), "true");
+        assertEq(vm.parseJsonString(json, ".shareDetails.dragAlongTermsURI"), "ipfs://drag-along");
+
+        // Certificate data
+        assertEq(vm.parseJsonString(json, ".shareDetails.isPartlyPaid"), "true");
+        assertEq(vm.parseJsonString(json, ".shareDetails.amountPaid"), "50000000000000000000000");
+        assertEq(vm.parseJsonString(json, ".shareDetails.totalConsideration"), "100000000000000000000000");
+        assertEq(vm.parseJsonString(json, ".shareDetails.representationType"), "Certificated");
+        assertEq(vm.parseJsonString(json, ".shareDetails.holdingPeriodTackingApplied"), "false");
+
+        // Derived / computed
+        assertEq(vm.parseJsonString(json, ".shareDetails.paymentPercentage"), "5000");
+        assertEq(vm.parseJsonString(json, ".shareDetails.conversionRatio"), "1000000000000000000");
+
+        // Mandatory conversion trigger
+        assertEq(vm.parseJsonString(json, ".shareDetails.mandatoryConversionTriggers[0].triggerType"), "QualifiedIPO");
+        assertEq(vm.parseJsonString(json, ".shareDetails.mandatoryConversionTriggers[0].description"), "Auto-converts upon a qualified IPO");
+
+        // Special voting right
+        assertEq(vm.parseJsonString(json, ".shareDetails.specialVotingRights[0].isVetoRight"), "true");
+        assertEq(vm.parseJsonString(json, ".shareDetails.specialVotingRights[0].scope"), "SeriesSpecific");
+
+        // Transfer restriction
+        assertEq(vm.parseJsonString(json, ".shareDetails.transferRestrictions[0].restrictionType"), "SecuritiesActRestriction");
+        assertEq(vm.parseJsonString(json, ".shareDetails.transferRestrictions[0].isRemovable"), "true");
+
+        // Nested exception inside transfer restriction
+        assertEq(vm.parseJsonString(json, ".shareDetails.transferRestrictions[0].exceptions[0].requiresEvidence"), "true");
+        assertEq(vm.parseJsonString(json, ".shareDetails.transferRestrictions[0].exceptions[0].exceptionText"), "Permitted estate planning transfer");
+
+        // Empty split history renders as JSON array
+        bytes memory splitHistoryRaw = vm.parseJson(json, ".shareDetails.splitHistory");
+        assertEq(splitHistoryRaw, abi.encode(new string[](0)));
     }
 
     function testLogic_RejectsInvalidSeriesTerms() public {
@@ -676,6 +732,10 @@ contract ShareExtensionTest is Test {
             partyValues: new string[][](0),
             agreementSignature: ""
         });
+    }
+
+    function _toJson(string memory fragment) internal pure returns (string memory) {
+        return string.concat('{"_":{}', fragment, "}");
     }
 
     function _contains(string memory haystack, string memory needle) internal pure returns (bool) {
