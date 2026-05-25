@@ -117,10 +117,10 @@ contract ShareExtensionTest is Test {
         assertEq(details.legalDetails, "Series A Preferred Stock Certificate");
 
         string memory shareJson = _toJson(shareExtension.getExtensionURI(details.extensionData));
-        assertEq(vm.parseJsonString(shareJson, ".shareDetails.seriesName"), "Series A Preferred");
+        assertEq(vm.parseJsonString(shareJson, ".shareDetails.terms.seriesName"), "Series A Preferred");
         assertEq(vm.parseJsonString(shareJson, ".shareDetails.conversionRatio"), "1000000000000000000");
-        assertEq(vm.parseJsonString(shareJson, ".shareDetails.hasPayToPlay"), "true");
-        assertEq(vm.parseJsonString(shareJson, ".shareDetails.dragAlongTermsURI"), "ipfs://drag-along");
+        assertEq(vm.parseJsonString(shareJson, ".shareDetails.terms.hasPayToPlay"), "true");
+        assertEq(vm.parseJsonString(shareJson, ".shareDetails.terms.dragAlongTermsURI"), "ipfs://drag-along");
         assertEq(vm.parseJsonString(shareJson, ".shareDetails.mandatoryConversionTriggers[0].triggerType"), "QualifiedIPO");
         assertEq(vm.parseJsonString(shareJson, ".shareDetails.transferRestrictions[0].restrictionType"), "SecuritiesActRestriction");
         bytes memory splitHistoryRaw = vm.parseJson(shareJson, ".shareDetails.splitHistory");
@@ -152,7 +152,7 @@ contract ShareExtensionTest is Test {
         assertEq(ratio, (decoded.terms.originalIssuePrice * 1e18) / 8e18);
 
         string memory json = _toJson(shareExtension.getExtensionURI(updatedData));
-        assertEq(vm.parseJsonString(json, ".shareDetails.conversionPrice"), "8000000000000000000");
+        assertEq(vm.parseJsonString(json, ".shareDetails.terms.conversionPrice"), "8000000000000000000");
     }
 
     function testLogic_RecordStockSplitAdjustsSharePayload() public {
@@ -233,23 +233,23 @@ contract ShareExtensionTest is Test {
         vm.parseJson(json);
 
         // Series terms — scalar
-        assertEq(vm.parseJsonString(json, ".shareDetails.seriesName"), "Series A Preferred");
-        assertEq(vm.parseJsonString(json, ".shareDetails.authorizedShares"), "10000000");
-        assertEq(vm.parseJsonString(json, ".shareDetails.liquidationPreferenceType"), "CappedParticipating");
-        assertEq(vm.parseJsonString(json, ".shareDetails.dividendType"), "Cumulative");
-        assertEq(vm.parseJsonString(json, ".shareDetails.isConvertible"), "true");
-        assertEq(vm.parseJsonString(json, ".shareDetails.antiDilutionType"), "BroadBasedWeightedAverage");
-        assertEq(vm.parseJsonString(json, ".shareDetails.seniorityRank"), "1");
-        assertEq(vm.parseJsonString(json, ".shareDetails.hasMandatoryConversion"), "true");
-        assertEq(vm.parseJsonString(json, ".shareDetails.hasPayToPlay"), "true");
-        assertEq(vm.parseJsonString(json, ".shareDetails.dragAlongTermsURI"), "ipfs://drag-along");
+        assertEq(vm.parseJsonString(json, ".shareDetails.terms.seriesName"), "Series A Preferred");
+        assertEq(vm.parseJsonString(json, ".shareDetails.terms.authorizedShares"), "10000000");
+        assertEq(vm.parseJsonString(json, ".shareDetails.terms.liquidationPreferenceType"), "CappedParticipating");
+        assertEq(vm.parseJsonString(json, ".shareDetails.terms.dividendType"), "Cumulative");
+        assertEq(vm.parseJsonString(json, ".shareDetails.terms.isConvertible"), "true");
+        assertEq(vm.parseJsonString(json, ".shareDetails.terms.antiDilutionType"), "BroadBasedWeightedAverage");
+        assertEq(vm.parseJsonString(json, ".shareDetails.terms.seniorityRank"), "1");
+        assertEq(vm.parseJsonString(json, ".shareDetails.terms.hasMandatoryConversion"), "true");
+        assertEq(vm.parseJsonString(json, ".shareDetails.terms.hasPayToPlay"), "true");
+        assertEq(vm.parseJsonString(json, ".shareDetails.terms.dragAlongTermsURI"), "ipfs://drag-along");
 
         // Certificate data
-        assertEq(vm.parseJsonString(json, ".shareDetails.isPartlyPaid"), "true");
-        assertEq(vm.parseJsonString(json, ".shareDetails.amountPaid"), "50000000000000000000000");
-        assertEq(vm.parseJsonString(json, ".shareDetails.totalConsideration"), "100000000000000000000000");
-        assertEq(vm.parseJsonString(json, ".shareDetails.representationType"), "Certificated");
-        assertEq(vm.parseJsonString(json, ".shareDetails.holdingPeriodTackingApplied"), "false");
+        assertEq(vm.parseJsonString(json, ".shareDetails.certificateData.isPartlyPaid"), "true");
+        assertEq(vm.parseJsonString(json, ".shareDetails.certificateData.amountPaid"), "50000000000000000000000");
+        assertEq(vm.parseJsonString(json, ".shareDetails.certificateData.totalConsideration"), "100000000000000000000000");
+        assertEq(vm.parseJsonString(json, ".shareDetails.certificateData.representationType"), "Certificated");
+        assertEq(vm.parseJsonString(json, ".shareDetails.certificateData.holdingPeriodTackingApplied"), "false");
 
         // Derived / computed
         assertEq(vm.parseJsonString(json, ".shareDetails.paymentPercentage"), "5000");

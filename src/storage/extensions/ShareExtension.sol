@@ -279,6 +279,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     function _buildSeriesJson(SeriesTerms memory terms) internal pure returns (string memory) {
         return string(
             abi.encodePacked(
+                '"terms": {',
                 string(abi.encodePacked(
                     '"shareClassKey": "', _shareClassKeyToString(terms.shareClassKey),
                     '", "seriesName": "', _jsonEscape(terms.seriesName),
@@ -325,8 +326,9 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
                     '", "hasInformationRights": "', _boolToString(terms.hasInformationRights),
                     '", "hasDragAlongRights": "', _boolToString(terms.hasDragAlongRights),
                     '", "dragAlongTermsURI": "', _jsonEscape(terms.dragAlongTermsURI),
-                    '", '
-                ))
+                    '"'
+                )),
+                '}, '
             )
         );
     }
@@ -334,13 +336,14 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     function _buildCertificateJson(CertificateData memory cert) internal pure returns (string memory) {
         return string(
             abi.encodePacked(
+                '"certificateData": {',
                 '"isPartlyPaid": "', _boolToString(cert.isPartlyPaid),
                 '", "amountPaid": "', Strings.toString(cert.amountPaid),
                 '", "totalConsideration": "', Strings.toString(cert.totalConsideration),
                 '", "sourceAuthorityURI": "', _jsonEscape(cert.sourceAuthorityURI),
                 '", "representationType": "', _representationTypeToString(cert.representationType),
                 '", "holdingPeriodTackingApplied": "', _boolToString(cert.holdingPeriodTackingApplied),
-                '", '
+                '"}, '
             )
         );
     }
