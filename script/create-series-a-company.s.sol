@@ -57,7 +57,7 @@ contract CreateSeriesACompanyScript is Script {
 
     // Template for the Series A subscription agreement.
     // Using a unique hash avoids colliding with any existing template.
-    bytes32 internal constant SERIES_A_TEMPLATE_ID = keccak256("MetaLex.SeriesAPreferredSubscription.v1");
+    bytes32 internal constant SERIES_A_TEMPLATE_ID = keccak256("MetaLex.SeriesAPreferredSubscription.v1.dev1");
 
     // Round economics — edit before deploying to mainnet.
     uint256 internal constant RAISE_CAP       = 10_000_000e18; // $10M
@@ -96,7 +96,7 @@ contract CreateSeriesACompanyScript is Script {
         });
 
         // Salt incorporates the company name and timestamp so re-runs produce distinct corps.
-        bytes32 corpSalt = keccak256(abi.encodePacked(companyName, ".SeriesA.dev0"));
+        bytes32 corpSalt = keccak256(abi.encodePacked(companyName, ".SeriesA.dev1"));
 
         uint256 startTime = block.timestamp;
         uint256 endTime = block.timestamp + ROUND_DURATION;
@@ -275,8 +275,8 @@ contract CreateSeriesACompanyScript is Script {
 
         ShareCertData memory shareData = ShareCertData({
             terms: SeriesTerms({
-                shareClassKey: keccak256("SERIES_A_PREFERRED"),
-                seriesName: "Series A Preferred",
+                shareClassKey: keccak256("PREFERRED"),
+                seriesName: "Series A",
                 parValue: PAR_VALUE,
                 authorizedShares: AUTHORIZED_SHARES,
                 originalIssuePrice: PRICE_PER_SHARE,
