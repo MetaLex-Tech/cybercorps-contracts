@@ -8,7 +8,8 @@ import {ShareExtension} from "../src/storage/extensions/ShareExtension.sol";
 import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 
 contract DeployShareExtensionScript is Script {
-    bytes32 internal constant DEFAULT_SALT = keccak256("MetaLexCyberCorp-ShareExtension");
+    // TODO update before production
+    bytes32 internal constant DEFAULT_SALT = keccak256("MetaLexCyberCorp-ShareExtension.dev1");
 
     function run() external returns (address implementation, address proxy) {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
