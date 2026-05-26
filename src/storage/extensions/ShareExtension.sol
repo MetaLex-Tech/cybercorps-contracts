@@ -257,38 +257,78 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return string(
             abi.encodePacked(
                 ', "shareDetails": {',
-                _buildSeriesJson(share.terms, share.certificateData),
+                _buildSeriesJson(share.terms),
                 _buildCertificateJson(share.certificateData),
+
+                // remaining fields
+                abi.encodePacked(
+                    '"mandatoryConversionTriggers": ', _buildMandatoryConversionTriggersJson(share.mandatoryConversionTriggers),
+                    ', "specialVotingRights": ', _buildSpecialVotingRightsJson(share.specialVotingRights),
+                    ', "transferRestrictions": ', _buildTransferRestrictionsJson(share.transferRestrictions),
+                    ', "splitHistory": ', _buildSplitHistoryJson(share.splitHistory),
+                    ', '
+                ),
+
+                // derived fields
                 _buildDerivedJson(share),
                 '}'
             )
         );
     }
 
-    function _buildSeriesJson(
-        SeriesTerms memory terms,
-        CertificateData memory cert
-    ) internal pure returns (string memory) {
+    function _buildSeriesJson(SeriesTerms memory terms) internal pure returns (string memory) {
         return string(
             abi.encodePacked(
-                '"shareClassKey": "', _shareClassKeyToString(terms.shareClassKey),
-                '", "seriesName": "', terms.seriesName,
-                '", "authorizedShares": "', Strings.toString(terms.authorizedShares),
-                '", "parValue": "', Strings.toString(terms.parValue),
-                '", "originalIssuePrice": "', Strings.toString(terms.originalIssuePrice),
-                '", "liquidationPreferenceMultiple": "', Strings.toString(terms.liquidationPreferenceMultiple),
-                '", "liquidationPreferenceType": "', _liquidationPreferenceTypeToString(terms.liquidationPreferenceType),
-                '", "dividendType": "', _dividendTypeToString(terms.dividendType),
-                '", "dividendRate": "', Strings.toString(terms.dividendRate),
-                '", "isConvertible": "', _boolToString(terms.isConvertible),
-                '", "conversionPrice": "', Strings.toString(terms.conversionPrice),
-                '", "antiDilutionType": "', _antiDilutionTypeToString(terms.antiDilutionType),
-                '", "votesPerShare": "', Strings.toString(terms.votesPerShare),
-                '", "designatedBoardSeats": "', Strings.toString(uint256(terms.designatedBoardSeats)),
-                '", "isRedeemable": "', _boolToString(terms.isRedeemable),
-                '", "redemptionType": "', _redemptionTypeToString(terms.redemptionType),
-                '", "redemptionPrice": "', Strings.toString(terms.redemptionPrice),
-                '", '
+                '"terms": {',
+                string(abi.encodePacked(
+                    '"shareClassKey": "', _shareClassKeyToString(terms.shareClassKey),
+                    '", "seriesName": "', _jsonEscape(terms.seriesName),
+                    '", "authorizedShares": "', Strings.toString(terms.authorizedShares),
+                    '", "parValue": "', Strings.toString(terms.parValue),
+                    '", "originalIssuePrice": "', Strings.toString(terms.originalIssuePrice),
+                    '", "liquidationPreferenceMultiple": "', Strings.toString(terms.liquidationPreferenceMultiple),
+                    '", "liquidationPreferenceType": "', _liquidationPreferenceTypeToString(terms.liquidationPreferenceType),
+                    '", "dividendType": "', _dividendTypeToString(terms.dividendType),
+                    '", "dividendRate": "', Strings.toString(terms.dividendRate),
+                    '", "isConvertible": "', _boolToString(terms.isConvertible),
+                    '", "conversionPrice": "', Strings.toString(terms.conversionPrice),
+                    '", "antiDilutionType": "', _antiDilutionTypeToString(terms.antiDilutionType),
+                    '", "votesPerShare": "', Strings.toString(terms.votesPerShare),
+                    '", "designatedBoardSeats": "', Strings.toString(uint256(terms.designatedBoardSeats)),
+                    '", "isRedeemable": "', _boolToString(terms.isRedeemable),
+                    '", "redemptionType": "', _redemptionTypeToString(terms.redemptionType),
+                    '", "redemptionPrice": "', Strings.toString(terms.redemptionPrice),
+                    '", '
+                )),
+                string(abi.encodePacked(
+                    '"effectiveDate": "', Strings.toString(terms.effectiveDate),
+                    '", "sourceAuthorityURI": "', _jsonEscape(terms.sourceAuthorityURI),
+                    '", "participationCap": "', Strings.toString(terms.participationCap),
+                    '", "seniorityRank": "', Strings.toString(terms.seniorityRank),
+                    '", "dividendAccrualStartDate": "', Strings.toString(terms.dividendAccrualStartDate),
+                    '", "dividendCompounding": "', _boolToString(terms.dividendCompounding),
+                    '", "dividendIncreasesLiquidationAmount": "', _boolToString(terms.dividendIncreasesLiquidationAmount),
+                    '", "targetConversionSeriesId": "', Strings.toHexString(uint256(terms.targetConversionSeriesId), 32),
+                    '", "allowsFractionalConversion": "', _boolToString(terms.allowsFractionalConversion),
+                    '", "hasMandatoryConversion": "', _boolToString(terms.hasMandatoryConversion),
+                    '", "hasClassVotingRights": "', _boolToString(terms.hasClassVotingRights),
+                    '", "hasSeriesVotingRights": "', _boolToString(terms.hasSeriesVotingRights),
+                    '", '
+                )),
+                string(abi.encodePacked(
+                    '"redemptionSchedule": "', _jsonEscape(terms.redemptionSchedule),
+                    '", "redemptionTriggerDescription": "', _jsonEscape(terms.redemptionTriggerDescription),
+                    '", "hasPayToPlay": "', _boolToString(terms.hasPayToPlay),
+                    '", "payToPlayTermsURI": "', _jsonEscape(terms.payToPlayTermsURI),
+                    '", "hasRegistrationRights": "', _boolToString(terms.hasRegistrationRights),
+                    '", "registrationRightsURI": "', _jsonEscape(terms.registrationRightsURI),
+                    '", "hasProRataRights": "', _boolToString(terms.hasProRataRights),
+                    '", "hasInformationRights": "', _boolToString(terms.hasInformationRights),
+                    '", "hasDragAlongRights": "', _boolToString(terms.hasDragAlongRights),
+                    '", "dragAlongTermsURI": "', _jsonEscape(terms.dragAlongTermsURI),
+                    '"'
+                )),
+                '}, '
             )
         );
     }
@@ -296,12 +336,14 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     function _buildCertificateJson(CertificateData memory cert) internal pure returns (string memory) {
         return string(
             abi.encodePacked(
+                '"certificateData": {',
                 '"isPartlyPaid": "', _boolToString(cert.isPartlyPaid),
                 '", "amountPaid": "', Strings.toString(cert.amountPaid),
                 '", "totalConsideration": "', Strings.toString(cert.totalConsideration),
+                '", "sourceAuthorityURI": "', _jsonEscape(cert.sourceAuthorityURI),
                 '", "representationType": "', _representationTypeToString(cert.representationType),
                 '", "holdingPeriodTackingApplied": "', _boolToString(cert.holdingPeriodTackingApplied),
-                '", '
+                '"}, '
             )
         );
     }
@@ -309,11 +351,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     function _buildDerivedJson(ShareCertData memory share) internal pure returns (string memory) {
         return string(
             abi.encodePacked(
-                '"mandatoryConversionTriggerCount": "', Strings.toString(share.mandatoryConversionTriggers.length),
-                '", "specialVotingRightCount": "', Strings.toString(share.specialVotingRights.length),
-                '", "transferRestrictionCount": "', Strings.toString(share.transferRestrictions.length),
-                '", "splitHistoryCount": "', Strings.toString(share.splitHistory.length),
-                '", "paymentPercentage": "', Strings.toString(_getPaymentPercentage(share.certificateData)),
+                '"paymentPercentage": "', Strings.toString(_getPaymentPercentage(share.certificateData)),
                 '", "conversionRatio": "', Strings.toString(_getConversionRatio(share.terms)),
                 '"'
             )
@@ -374,6 +412,185 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
 
     function _boolToString(bool value) internal pure returns (string memory) {
         return value ? "true" : "false";
+    }
+
+    function _jsonEscape(string memory s) internal pure returns (string memory) {
+        bytes memory b = bytes(s);
+        uint256 extra = 0;
+        for (uint256 i = 0; i < b.length; i++) {
+            bytes1 c = b[i];
+            if (c == '"' || c == '\\' || c == '\n' || c == '\r' || c == '\t') extra++;
+        }
+        if (extra == 0) return s;
+        bytes memory out = new bytes(b.length + extra);
+        uint256 j = 0;
+        for (uint256 i = 0; i < b.length; i++) {
+            bytes1 c = b[i];
+            if (c == '"')       { out[j++] = '\\'; out[j++] = '"';  }
+            else if (c == '\\') { out[j++] = '\\'; out[j++] = '\\'; }
+            else if (c == '\n') { out[j++] = '\\'; out[j++] = 'n';  }
+            else if (c == '\r') { out[j++] = '\\'; out[j++] = 'r';  }
+            else if (c == '\t') { out[j++] = '\\'; out[j++] = 't';  }
+            else                { out[j++] = c; }
+        }
+        return string(out);
+    }
+
+    function _mandatoryConversionTriggerTypeToString(
+        MandatoryConversionTriggerType triggerType
+    ) internal pure returns (string memory) {
+        if (triggerType == MandatoryConversionTriggerType.QualifiedIPO) return "QualifiedIPO";
+        if (triggerType == MandatoryConversionTriggerType.ClassVote) return "ClassVote";
+        if (triggerType == MandatoryConversionTriggerType.DeemedLiquidation) return "DeemedLiquidation";
+        if (triggerType == MandatoryConversionTriggerType.Custom) return "Custom";
+        return "Unknown";
+    }
+
+    function _votingScopeToString(VotingScope scope) internal pure returns (string memory) {
+        if (scope == VotingScope.ClassWide) return "ClassWide";
+        if (scope == VotingScope.SeriesSpecific) return "SeriesSpecific";
+        return "Unknown";
+    }
+
+    function _transferRestrictionTypeToString(
+        TransferRestrictionType restrictionType
+    ) internal pure returns (string memory) {
+        if (restrictionType == TransferRestrictionType.None) return "None";
+        if (restrictionType == TransferRestrictionType.BoardConsentRequired) return "BoardConsentRequired";
+        if (restrictionType == TransferRestrictionType.ROFRAndCoSale) return "ROFRAndCoSale";
+        if (restrictionType == TransferRestrictionType.LockUp) return "LockUp";
+        if (restrictionType == TransferRestrictionType.SecuritiesActRestriction) return "SecuritiesActRestriction";
+        if (restrictionType == TransferRestrictionType.CustomRestriction) return "CustomRestriction";
+        return "Unknown";
+    }
+
+    function _buildMandatoryConversionTriggerJson(
+        MandatoryConversionTrigger memory trigger
+    ) internal pure returns (string memory) {
+        return string(
+            abi.encodePacked(
+                '{"triggerType": "', _mandatoryConversionTriggerTypeToString(trigger.triggerType),
+                '", "primaryThreshold": "', Strings.toString(trigger.primaryThreshold),
+                '", "secondaryThreshold": "', Strings.toString(trigger.secondaryThreshold),
+                '", "additionalConditions": "', _jsonEscape(trigger.additionalConditions),
+                '", "description": "', _jsonEscape(trigger.description),
+                '"}'
+            )
+        );
+    }
+
+    function _buildMandatoryConversionTriggersJson(
+        MandatoryConversionTrigger[] memory triggers
+    ) internal pure returns (string memory) {
+        if (triggers.length == 0) return "[]";
+        string memory result = "[";
+        for (uint256 i = 0; i < triggers.length; i++) {
+            if (i > 0) result = string(abi.encodePacked(result, ","));
+            result = string(abi.encodePacked(result, _buildMandatoryConversionTriggerJson(triggers[i])));
+        }
+        return string(abi.encodePacked(result, "]"));
+    }
+
+    function _buildSpecialVotingRightJson(
+        SpecialVotingRight memory right
+    ) internal pure returns (string memory) {
+        return string(
+            abi.encodePacked(
+                '{"matterType": "', Strings.toHexString(uint256(right.matterType), 32),
+                '", "votesPerShare": "', Strings.toString(right.votesPerShare),
+                '", "threshold": "', Strings.toString(right.threshold),
+                '", "isVetoRight": "', _boolToString(right.isVetoRight),
+                '", "scope": "', _votingScopeToString(right.scope),
+                '", "description": "', _jsonEscape(right.description),
+                '"}'
+            )
+        );
+    }
+
+    function _buildSpecialVotingRightsJson(
+        SpecialVotingRight[] memory rights
+    ) internal pure returns (string memory) {
+        if (rights.length == 0) return "[]";
+        string memory result = "[";
+        for (uint256 i = 0; i < rights.length; i++) {
+            if (i > 0) result = string(abi.encodePacked(result, ","));
+            result = string(abi.encodePacked(result, _buildSpecialVotingRightJson(rights[i])));
+        }
+        return string(abi.encodePacked(result, "]"));
+    }
+
+    function _buildTransferRestrictionExceptionJson(
+        TransferRestrictionException memory exception
+    ) internal pure returns (string memory) {
+        return string(
+            abi.encodePacked(
+                '{"exceptionType": "', Strings.toHexString(uint256(exception.exceptionType), 32),
+                '", "exceptionText": "', _jsonEscape(exception.exceptionText),
+                '", "requiresEvidence": "', _boolToString(exception.requiresEvidence),
+                '"}'
+            )
+        );
+    }
+
+    function _buildTransferRestrictionExceptionsJson(
+        TransferRestrictionException[] memory exceptions
+    ) internal pure returns (string memory) {
+        if (exceptions.length == 0) return "[]";
+        string memory result = "[";
+        for (uint256 i = 0; i < exceptions.length; i++) {
+            if (i > 0) result = string(abi.encodePacked(result, ","));
+            result = string(abi.encodePacked(result, _buildTransferRestrictionExceptionJson(exceptions[i])));
+        }
+        return string(abi.encodePacked(result, "]"));
+    }
+
+    function _buildTransferRestrictionJson(
+        TransferRestriction memory restriction
+    ) internal pure returns (string memory) {
+        return string(
+            abi.encodePacked(
+                '{"restrictionType": "', _transferRestrictionTypeToString(restriction.restrictionType),
+                '", "restrictionText": "', _jsonEscape(restriction.restrictionText),
+                '", "sourceAgreement": "', _jsonEscape(restriction.sourceAgreement),
+                '", "isRemovable": "', _boolToString(restriction.isRemovable),
+                '", "exceptions": ', _buildTransferRestrictionExceptionsJson(restriction.exceptions),
+                '}'
+            )
+        );
+    }
+
+    function _buildTransferRestrictionsJson(
+        TransferRestriction[] memory restrictions
+    ) internal pure returns (string memory) {
+        if (restrictions.length == 0) return "[]";
+        string memory result = "[";
+        for (uint256 i = 0; i < restrictions.length; i++) {
+            if (i > 0) result = string(abi.encodePacked(result, ","));
+            result = string(abi.encodePacked(result, _buildTransferRestrictionJson(restrictions[i])));
+        }
+        return string(abi.encodePacked(result, "]"));
+    }
+
+    function _buildSplitRecordJson(SplitRecord memory record) internal pure returns (string memory) {
+        return string(
+            abi.encodePacked(
+                '{"numerator": "', Strings.toString(record.numerator),
+                '", "denominator": "', Strings.toString(record.denominator),
+                '", "timestamp": "', Strings.toString(record.timestamp),
+                '", "sourceAuthorityURI": "', _jsonEscape(record.sourceAuthorityURI),
+                '"}'
+            )
+        );
+    }
+
+    function _buildSplitHistoryJson(SplitRecord[] memory history) internal pure returns (string memory) {
+        if (history.length == 0) return "[]";
+        string memory result = "[";
+        for (uint256 i = 0; i < history.length; i++) {
+            if (i > 0) result = string(abi.encodePacked(result, ","));
+            result = string(abi.encodePacked(result, _buildSplitRecordJson(history[i])));
+        }
+        return string(abi.encodePacked(result, "]"));
     }
 
     function _getConversionRatio(SeriesTerms memory terms) internal pure returns (uint256 ratio) {
