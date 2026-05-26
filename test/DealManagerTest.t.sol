@@ -153,6 +153,13 @@ contract CyberAgreementRegistryMock {
         return _hasSigned[signer];
     }
 
+    function getSignerValues(
+        bytes32,
+        address
+    ) external pure returns (string[] memory) {
+        return new string[](0);
+    }
+
     function allPartiesSigned(bytes32 contractId) public view returns (bool) {
         // Always signed
         return true;
@@ -848,27 +855,6 @@ contract DealManagerTest is Test {
         assertNotEq(dm1.DEPLOY_VERSION(), "test", "Other DealManager should not be upgraded");
     }
 
-      function test_forkedSepoliaDealManager() public {
-        address sepDmFactoryAddr = 0x3982b078f2ac306219c9540Ebc908360a960C251;
-        address sepDmAddr = 0xeAb084914b434059C340fb8C3ebEAe9b04A14929;
-
-        // Deploy existing DealManagers
-        DealManager sepDm = DealManager(sepDmAddr);
-
-        vm.startPrank(0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B);
-        DealManagerFactory(sepDmFactoryAddr).setRefImplementation(address(new MockDealManagerVTest()));
-        vm.stopPrank();
-
-        // Corp2 owner decided to accept the upgrade
-
-        vm.startPrank(0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B);
-        address toUpgrade = DealManagerFactory(sepDmFactoryAddr).getRefImplementation();
-        sepDm.upgradeToAndCall(toUpgrade, "");
-        vm.stopPrank();
-
-        assertEq(sepDm.DEPLOY_VERSION(), "test", "Target DealManager should be upgraded");
-    }
-
     function test_RevertIf_UpgradeNonFactoryOwner() public {
         // Non-MetaLeX admin should not be able to set new reference implementation
 
@@ -956,5 +942,26 @@ contract DealManagerTest is Test {
         );
 
         return (agreementId, certIds);
+    }
+}
+
+contract DealManagerForkTest is Test {
+    function setUp() public {
+        vm.createSelectFork("sepolia");
+    }
+
+    function test_forkedSepoliaDealManager() public {
+        address sepDmFactoryAddr = 0x3982b078f2ac306219c9540Ebc908360a960C251;
+        address sepDmAddr = 0xeAb084914b434059C340fb8C3ebEAe9b04A14929;
+
+        DealManager sepDm = DealManager(sepDmAddr);
+
+        vm.startPrank(0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B);
+        DealManagerFactory(sepDmFactoryAddr).setRefImplementation(address(new MockDealManagerVTest()));
+        address toUpgrade = DealManagerFactory(sepDmFactoryAddr).getRefImplementation();
+        sepDm.upgradeToAndCall(toUpgrade, "");
+        vm.stopPrank();
+
+        assertEq(sepDm.DEPLOY_VERSION(), "test", "Target DealManager should be upgraded");
     }
 }

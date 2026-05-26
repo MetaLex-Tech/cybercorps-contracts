@@ -31,7 +31,7 @@ import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
 import {ILexChex} from "../src/interfaces/ILexChex.sol";
 import {RoundManagerUpgradeHelper} from "../src/helpers/RoundManagerUpgradeHelper.sol";
 
-// (no extra imports needed for fork-based test)
+import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 
 // Import necessary types
 using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
@@ -169,6 +169,15 @@ library CyberCorpHelper {
                     )
                 )
             );
+            address imageBuilderImpl = address(new CertificateImageBuilderContract{salt: SALT}());
+            vm.prank(owner);
+            CertificateUriBuilder(uriBuilder).setImageBuilder(imageBuilderImpl);
+            // Mock the hardcoded LexChex address so hasValidLexCheX returns true in unit tests
+            vm.mockCall(
+                address(0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62),
+                abi.encodeWithSelector(ILexChex.hasValidLexCheX.selector),
+                abi.encode(true)
+            );
         }
 
         address issuanceManagerImpl = address(new IssuanceManager{salt: SALT}());
@@ -239,16 +248,23 @@ library CyberCorpHelper {
             )
         );
 
-        // Perform an upgrade of the existing UUPS proxy at the known address
-        address lexchexMinterUpgraded = address(new LeXcheXMinter());
-        vm.prank(UPGRADE_OWNER);
-        IUUPS(LEXCHEX_MINTER_ADDRESS).upgradeToAndCall(lexchexMinterUpgraded, "");
-
-        // Ensure CyberCorpFactory is OWNER of lexchexAuth
-        address lxAuth = corpFactory.lexchexAuth();
-        vm.startPrank(UPGRADE_OWNER);
-        BorgAuth(lxAuth).updateRole(address(corpFactory), BorgAuth(lxAuth).OWNER_ROLE());
-        vm.stopPrank();
+        if (block.chainid == 84532) {
+            // On a Base Sepolia fork: upgrade the deployed LEXCHEX_MINTER and grant corpFactory
+            // access to the deployed lxAuth so it can authorize new RoundManagers.
+            address lexchexMinterUpgraded = address(new LeXcheXMinter());
+            vm.prank(UPGRADE_OWNER);
+            IUUPS(LEXCHEX_MINTER_ADDRESS).upgradeToAndCall(lexchexMinterUpgraded, "");
+            address lxAuth = corpFactory.lexchexAuth();
+            vm.startPrank(UPGRADE_OWNER);
+            BorgAuth(lxAuth).updateRole(address(corpFactory), BorgAuth(lxAuth).OWNER_ROLE());
+            vm.stopPrank();
+        } else {
+            // Unit tests: use the local bootstrapAuth as lexchexAuth.
+            vm.startPrank(owner);
+            corpFactory.setLexchexAuth(address(bootstrapAuth));
+            bootstrapAuth.updateRole(address(corpFactory), bootstrapAuth.OWNER_ROLE());
+            vm.stopPrank();
+        }
     }
 
     function createTemplate(CyberAgreementRegistry registry) internal {
@@ -358,6 +374,7 @@ library CyberCorpHelper {
                     roundType,
                     publicRound,
                     true,
+                    false,
                     raiseCap,
                     minTicket,
                     maxTicket,
@@ -443,6 +460,7 @@ library CyberCorpHelper {
                     roundType,
                     publicRound,
                     true,
+                    false,
                     raiseCap,
                     minTicket,
                     maxTicket,
@@ -774,12 +792,6 @@ contract RoundManagerTest is Test {
     uint256 public constant VALUATION = 10000000 * 10 ** 18; // $10M valuation (decimals = 18)
 
     function setUp() public {
-        // For future-proof: some networks may have upgraded already. In such case we will roll back to a known block before the upgrades
-        if (block.chainid == 84532) {
-            console2.log("Existing deployment has been upgraded, rolling back to a known block before it...");
-            vm.rollFork(33920951);
-        }
-
         // Configs
 
         testRoundPartyValues = new string[](2);
@@ -860,26 +872,6 @@ contract RoundManagerTest is Test {
         paymentToken.approve(address(roundManager), type(uint256).max);
     }
 
-    function test_helperUpgrade() public {
-        //upgrade cybercorpsinglefactory
-        address deployer = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
-
-        // Upgrade all legacy corps
-        vm.startPrank(deployer);
-        address cyberCorpSingleFactory = 0xc8e084D3f8B3b326FCc894C7afD28F4904196406;
-        ILegacyFactory(cyberCorpSingleFactory).upgradeImplementation(address(new CyberCorp()));
-        vm.stopPrank();
-
-        address officer = 0x341Da9fb8F9bD9a775f6bD641091b24Dd9aA459B;
-        address exampleCorp = 0xf18393487c6AE9cB75B6AD1715B72d75dEc4F669;
-        //generate salt
-        bytes32 salt = keccak256("test_helperUpgrade");
-        vm.startPrank(officer);
-        BorgAuth(CyberCorp(exampleCorp).AUTH()).updateRole(helper, BorgAuth(CyberCorp(exampleCorp).AUTH()).OWNER_ROLE());
-        address newRoundManager = RoundManagerUpgradeHelper(helper).upgradeCorp(exampleCorp, salt);
-        vm.stopPrank();
-    }
-
     function test_RevertIf_CreateRound_InvalidSignature() public {
         CyberCertData[] memory certData = new CyberCertData[](1);
         string[] memory defaultLegend = new string[](1);
@@ -920,6 +912,7 @@ contract RoundManagerTest is Test {
                     RoundType.FounderApproved,
                     false,
                     true,
+                    false,
                     RAISE_CAP,
                     MIN_TICKET,
                     MAX_TICKET,
@@ -2149,6 +2142,7 @@ contract RoundManagerTest is Test {
                     RoundType.FounderApproved,
                     false,
                     true,
+                    false,
                     100_000 * 10 ** 6,
                     1_000 * 10 ** 6,
                     50_000 * 10 ** 6,
@@ -2528,6 +2522,7 @@ contract RoundManagerTest is Test {
                     RoundType.FCFS,
                     false,
                     true,
+                    false,
                     RAISE_CAP,
                     MIN_TICKET,
                     MAX_TICKET,
@@ -2590,6 +2585,26 @@ contract RoundManagerTest is Test {
         assertEq(price, 42);
         assertEq(decimals_, 2);
     }
+
+    function test_RevertIf_CreateRound_AlreadyExists() public {
+        vm.prank(corpOwner);
+        vm.expectRevert(RoundManager.RoundAlreadyExists.selector);
+        CyberCorpHelper.createRound(
+            RoundManager(roundManager),
+            address(paymentToken),
+            CyberCorpHelper.TEMPLATE_ID,
+            RAISE_CAP,
+            MIN_TICKET,
+            MAX_TICKET,
+            PRICE_PER_UNIT,
+            VALUATION,
+            RoundType.FounderApproved,
+            corpOwnerPrivKey,
+            corp,
+            false
+        );
+    }
+
 }
 
 // Separate FCFS tests in their own contract to avoid the original setUp()
@@ -2769,6 +2784,7 @@ contract RoundManagerFCFSTest is Test {
                     RoundType.FCFS,
                     true,
                     true,
+                    false,
                     1,
                     1,
                     1,
@@ -3176,729 +3192,9 @@ contract RoundManagerFCFSTest is Test {
             startBal + 2_000 * (10 ** usdc.decimals())
         );
     }
-
-    function test_RevertIf_FCFS_SubmitEOI_FailLexChexCondition() public {
-        // This test uses CreateLexChexRound to include the LexChex condition
-        address me = address(this);
-        (
-            CyberAgreementRegistry registry,
-            CyberCorpFactory corpFactory,
-            ,
-            ,
-            ,
-            ,
-            ,
-        ) = CyberCorpHelper.deployRegistryAndFactories(me);
-        CyberCorpHelper.createTemplate(registry);
-
-        (address corp, address auth, address issuance, address dealManager, address rmAddr) = CyberCorpHelper.deployCorp(
-            corpFactory,
-            "Corp B",
-            me,
-            me
-        );
-        RoundManager rm = RoundManager(rmAddr);
-
-        // Allow RoundManager to transfer certs by setting it as the corp's dealManager
-        vm.prank(address(corpFactory));
-        CyberCorp(corp).setDealManager(address(rm));
-
-        MockPaymentToken usdc = new MockPaymentToken();
-        uint256 officerPrivKey = 0xAA04;
-        address officerEOA = vm.addr(officerPrivKey);
-
-        bytes32 roundId = CyberCorpHelper.CreateLexChexRound(
-            rm,
-            address(usdc),
-            CyberCorpHelper.TEMPLATE_ID,
-            100_000 * (10 ** usdc.decimals()),
-            2_000 * (10 ** usdc.decimals()),
-            50_000 * (10 ** usdc.decimals()),
-            10 * (10 ** usdc.decimals()),
-            10_000_000,
-            RoundType.FCFS,
-            officerPrivKey,
-            corp,
-            true
-        );
-
-        uint256 salt = 1;
-        uint256 privKey = 0xA11CE;
-        address investor = vm.addr(privKey);
-        usdc.transfer(investor, 20_000 * (10 ** usdc.decimals()));
-        vm.startPrank(investor);
-        usdc.approve(address(rm), type(uint256).max);
-
-        uint256 meUsdcBalanceBefore = usdc.balanceOf(me);
-
-        EOI memory eoi = EOI({
-            name: "Investor 1",
-            investorType: "Individual",
-            jurisdiction: "US",
-            contact: "email",
-            minAmount: 5_000 * (10 ** usdc.decimals()),
-            maxAmount: 10_000 * (10 ** usdc.decimals()),
-            expiry: block.timestamp + 7 days,
-            naturalPerson: false,
-            lexchexDetails: CyberCorpHelper.emptyLex()
-        });
-
-        string[] memory globalValues = new string[](1);
-        globalValues[0] = "g";
-        string[] memory partyValues = new string[](2);
-        partyValues[0] = "Officer";
-        partyValues[1] = "CEO";
-
-        bytes memory sig = CyberCorpHelper.computeEOISignature(
-            registry,
-            CyberCorpHelper.TEMPLATE_ID,
-            salt,
-            globalValues,
-            partyValues,
-            officerEOA,
-            privKey
-        );
-
-        vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
-        rm.submitEOI(
-            roundId,
-            eoi,
-            globalValues,
-            partyValues,
-            sig,
-            salt,
-            new address[](0),
-            bytes32(0)
-        );
-        vm.stopPrank();
-    }
-
-    function test_FCFS_PublicRound_IndividualOver200k_LexChexRequired() public {
-        address me = address(this);
-        (
-            CyberAgreementRegistry registry,
-            CyberCorpFactory corpFactory,
-            ,
-            ,
-            ,
-            address rmFactoryAddr,
-            ,
-        ) = CyberCorpHelper.deployRegistryAndFactories(me);
-        CyberCorpHelper.createTemplate(registry);
-
-        (address corp, , , , address rmAddr) = CyberCorpHelper.deployCorp(
-            corpFactory,
-            "Corp Public",
-            me,
-            me
-        );
-        RoundManager rm = RoundManager(rmAddr);
-
-        // Allow RoundManager to transfer certs by setting it as the corp's dealManager
-        vm.prank(address(corpFactory));
-        CyberCorp(corp).setDealManager(address(rm));
-
-        MockPaymentToken usdc = new MockPaymentToken();
-
-        // Prepare officer identity for the round
-        uint256 officerPrivKey = 0xBEEF01;
-        address officerEOA = vm.addr(officerPrivKey);
-
-        // Create a public FCFS round with maxTicket above 200k
-        bytes32 roundId = CyberCorpHelper.CreateLexChexRound(
-            rm,
-            address(usdc),
-            CyberCorpHelper.TEMPLATE_ID,
-            1_000_000 * (10 ** usdc.decimals()),
-            2_000 * (10 ** usdc.decimals()),
-            300_000 * (10 ** usdc.decimals()),
-            10 * (10 ** usdc.decimals()),
-            10_000_000,
-            RoundType.FCFS,
-            officerPrivKey,
-            corp,
-            false
-        );
-
-        // Investor setup: natural person investing > 200k
-        uint256 salt = 7;
-        uint256 investorPrivKey = 0xC0FFEE;
-        address investor = vm.addr(investorPrivKey);
-        usdc.transfer(investor, 300_000 * (10 ** usdc.decimals()));
-
-        //white list the mock payment token MockPaymentToken: [0x27cc01A4676C73fe8b6d0933Ac991BfF1D77C4da]
-        RoundManagerFactory(rmFactoryAddr).setWhitelistedToken(address(usdc), true);
-       
-        vm.startPrank(investor);
-        usdc.approve(address(rm), type(uint256).max);
-
-        EOI memory eoi = EOI({
-            name: "High Roller",
-            investorType: "Individual",
-            jurisdiction: "US",
-            contact: "email",
-            minAmount: 200_000 * (10 ** usdc.decimals()),
-            maxAmount: 250_000 * (10 ** usdc.decimals()),
-            expiry: block.timestamp + 7 days,
-            naturalPerson: true,
-            lexchexDetails: CyberCorpHelper.emptyLex()
-        });
-         // Attach a valid LeXcheX mint payload aligned to template 400 so auto-mint can succeed
-        {
-            LeXcheXMinter minter = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
-            CyberAgreementRegistry lxRegistry = CyberAgreementRegistry(minter.dealRegistry());
-
-            bytes32 lxTemplateId = bytes32(uint256(400));
-            uint256 lxSalt = block.timestamp;
-            (string memory legalUri, , string[] memory lxGlFields, string[] memory lxPartyFields) = lxRegistry.getTemplateDetails(lxTemplateId);
-
-            string[] memory lxGlobalValues = new string[](1);
-            lxGlobalValues[0] = "2029-01-01";
-
-            address[] memory lxParties = new address[](1);
-            lxParties[0] = investor;
-
-            string[][] memory lxPartyValues = new string[][](1);
-            lxPartyValues[0] = new string[](4);
-            lxPartyValues[0][0] = eoi.name;
-            lxPartyValues[0][1] = eoi.investorType;
-            lxPartyValues[0][2] = eoi.jurisdiction;
-            lxPartyValues[0][3] = eoi.contact;
-
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties));
-            bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                lxRegistry.DOMAIN_SEPARATOR(),
-                lxRegistry.SIGNATUREDATA_TYPEHASH(),
-                lxContractId,
-                legalUri,
-                lxGlFields,
-                lxPartyFields,
-                lxGlobalValues,
-                lxPartyValues[0],
-                investorPrivKey
-            );
-
-            eoi.lexchexDetails = LexChexDetails({
-                request: MintRequest({
-                    uuid: 1,
-                    owner: investor,
-                    investorName: eoi.name,
-                    investorType: eoi.investorType,
-                    investorJurisdiction: eoi.jurisdiction,
-                    investorContact: eoi.contact,
-                    mintPrice: 0,
-                    expiry: block.timestamp + 30 days,
-                    paymentToken: address(usdc)
-                }),
-                templateId: lxTemplateId,
-                salt: uint256(lxSalt),
-                globalValues: lxGlobalValues,
-                parties: lxParties,
-                partyValues: lxPartyValues,
-                agreementSignature: lxSig
-            });
-        }
-
-        // Minimal agreement signature for EOI
-        string[] memory glValues = new string[](1);
-        glValues[0] = "g";
-        string[] memory pv = new string[](2);
-        pv[0] = "Officer";
-        pv[1] = "CEO";
-        bytes memory sig = CyberCorpHelper.computeEOISignature(
-            registry,
-            CyberCorpHelper.TEMPLATE_ID,
-            salt,
-            glValues,
-            pv,
-            officerEOA,
-            investorPrivKey
-        );
-
-        rm.submitEOI(
-            roundId,
-            eoi,
-            glValues,
-            pv,
-            sig,
-            salt,
-            new address[](0),
-            bytes32(0)
-        );
-        vm.stopPrank();
-
-        assertEq(ILexChex(CyberCorpHelper.LEXCHEX_ADDRESS).balanceOf(investor), 1, "LexChex should be minted for the investor");
-    }
-
-      function test_FCFS_PublicRound_UnderIndividualOver200k_LexChexRequired() public {
-        // This test uses CreateLexChexRound to include the LexChex condition
-        address me = address(this);
-        (
-            CyberAgreementRegistry registry,
-            CyberCorpFactory corpFactory,
-            ,
-            ,
-            ,
-            ,
-            ,
-        ) = CyberCorpHelper.deployRegistryAndFactories(me);
-        CyberCorpHelper.createTemplate(registry);
-
-        (address corp, , , , address rmAddr) = CyberCorpHelper.deployCorp(
-            corpFactory,
-            "Corp Public",
-            me,
-            me
-        );
-        RoundManager rm = RoundManager(rmAddr);
-
-        // Allow RoundManager to transfer certs by setting it as the corp's dealManager
-        vm.prank(address(corpFactory));
-        CyberCorp(corp).setDealManager(address(rm));
-
-        MockPaymentToken usdc = new MockPaymentToken();
-
-        // Prepare officer identity for the round
-        uint256 officerPrivKey = 0xBEEF01;
-        address officerEOA = vm.addr(officerPrivKey);
-
-        // Create a public FCFS round with maxTicket above 200k
-        bytes32 roundId = CyberCorpHelper.CreateLexChexRound(
-            rm,
-            address(usdc),
-            CyberCorpHelper.TEMPLATE_ID,
-            1_000_000 * (10 ** usdc.decimals()),
-            2_000 * (10 ** usdc.decimals()),
-            300_000 * (10 ** usdc.decimals()),
-            10 * (10 ** usdc.decimals()),
-            10_000_000,
-            RoundType.FCFS,
-            officerPrivKey,
-            corp,
-            true
-        );
-
-        // Investor setup: natural person investing > 200k
-        uint256 salt = 7;
-        uint256 investorPrivKey = 0xC0FFEE2;
-        address investor = vm.addr(investorPrivKey);
-        usdc.transfer(investor, 300_000 * (10 ** usdc.decimals()));
-        vm.startPrank(investor);
-        usdc.approve(address(rm), type(uint256).max);
-
-        EOI memory eoi = EOI({
-            name: "High Roller",
-            investorType: "Individual",
-            jurisdiction: "US",
-            contact: "email",
-            minAmount: 10_000 * (10 ** usdc.decimals()),
-            maxAmount: 15_000 * (10 ** usdc.decimals()),
-            expiry: block.timestamp + 7 days,
-            naturalPerson: true,
-            lexchexDetails: CyberCorpHelper.emptyLex()
-        });
-
-        // Attach a valid LeXcheX mint payload aligned to template 400 to avoid MismatchedFieldsLength if auto-mint is ever triggered
-        {
-            LeXcheXMinter minter = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
-            CyberAgreementRegistry lxRegistry = CyberAgreementRegistry(minter.dealRegistry());
-
-            bytes32 lxTemplateId = bytes32(uint256(400));
-            uint256 lxSalt = block.timestamp;
-            (string memory legalUri, , string[] memory lxGlFields, string[] memory lxPartyFields) = lxRegistry.getTemplateDetails(lxTemplateId);
-
-            string[] memory lxGlobalValues = new string[](1);
-            lxGlobalValues[0] = "2029-01-01";
-
-            address[] memory lxParties = new address[](1);
-            lxParties[0] = investor;
-
-            string[][] memory lxPartyValues = new string[][](1);
-            lxPartyValues[0] = new string[](4);
-            lxPartyValues[0][0] = eoi.name;
-            lxPartyValues[0][1] = eoi.investorType;
-            lxPartyValues[0][2] = eoi.jurisdiction;
-            lxPartyValues[0][3] = eoi.contact;
-
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties));
-            bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                lxRegistry.DOMAIN_SEPARATOR(),
-                lxRegistry.SIGNATUREDATA_TYPEHASH(),
-                lxContractId,
-                legalUri,
-                lxGlFields,
-                lxPartyFields,
-                lxGlobalValues,
-                lxPartyValues[0],
-                investorPrivKey
-            );
-
-            eoi.lexchexDetails = LexChexDetails({
-                request: MintRequest({
-                    uuid: 1,
-                    owner: investor,
-                    investorName: eoi.name,
-                    investorType: eoi.investorType,
-                    investorJurisdiction: eoi.jurisdiction,
-                    investorContact: eoi.contact,
-                    mintPrice: 0,
-                    expiry: block.timestamp + 30 days,
-                    paymentToken: address(usdc)
-                }),
-                templateId: lxTemplateId,
-                salt: uint256(lxSalt),
-                globalValues: lxGlobalValues,
-                parties: lxParties,
-                partyValues: lxPartyValues,
-                agreementSignature: lxSig
-            });
-        }
-
-        // Prepare a valid LeXcheX MintRequest (templateId = bytes32(uint256(400))) for use if auto-mint is triggered later
-        {
-            // Resolve LexChexMinter and its registry on the fork
-            LeXcheXMinter minter = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
-            CyberAgreementRegistry lxRegistry = CyberAgreementRegistry(minter.dealRegistry());
-
-            // Template and values
-            bytes32 lxTemplateId = bytes32(uint256(400));
-            uint256 lxSalt = block.timestamp;
-            (string memory legalUri, , string[] memory lxGlFields, string[] memory lxPartyFields) = lxRegistry.getTemplateDetails(lxTemplateId);
-
-            string[] memory lxGlobalValues = new string[](1);
-            lxGlobalValues[0] = "2029-01-01";
-
-            address[] memory lxParties = new address[](1);
-            lxParties[0] = investor; // owner signs
-
-            string[][] memory lxPartyValues = new string[][](1);
-            lxPartyValues[0] = new string[](4);
-            lxPartyValues[0][0] = eoi.name;           // investorName
-            lxPartyValues[0][1] = eoi.investorType;   // investorType
-            lxPartyValues[0][2] = eoi.jurisdiction;   // investorJurisdiction
-            lxPartyValues[0][3] = eoi.contact;        // investorContact
-
-            // Compute agreementId and signature for the LeXcheX agreement
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties));
-            bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                lxRegistry.DOMAIN_SEPARATOR(),
-                lxRegistry.SIGNATUREDATA_TYPEHASH(),
-                lxContractId,
-                legalUri,
-                lxGlFields,
-                lxPartyFields,
-                lxGlobalValues,
-                lxPartyValues[0],
-                investorPrivKey
-            );
-
-            // Populate lexchexDetails
-            eoi.lexchexDetails = LexChexDetails({
-                request: MintRequest({
-                    uuid: 1,
-                    owner: investor,
-                    investorName: eoi.name,
-                    investorType: eoi.investorType,
-                    investorJurisdiction: eoi.jurisdiction,
-                    investorContact: eoi.contact,
-                    mintPrice: 0,
-                    expiry: block.timestamp + 30 days,
-                    paymentToken: address(usdc)
-                }),
-                templateId: lxTemplateId,
-                salt: uint256(lxSalt),
-                globalValues: lxGlobalValues,
-                parties: lxParties,
-                partyValues: lxPartyValues,
-                agreementSignature: lxSig
-            });
-        }
-
-        // Minimal agreement signature for EOI
-        string[] memory glValues = new string[](1);
-        glValues[0] = "g";
-        string[] memory pv = new string[](2);
-        pv[0] = "Officer";
-        pv[1] = "CEO";
-        bytes memory sig = CyberCorpHelper.computeEOISignature(
-            registry,
-            CyberCorpHelper.TEMPLATE_ID,
-            salt,
-            glValues,
-            pv,
-            officerEOA,
-            investorPrivKey
-        );
-
-        //make sure lexchex is not valid
-        assert(!ILexChex(0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62).hasValidLexCheX(investor));
-
-        vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
-        rm.submitEOI(
-            roundId,
-            eoi,
-            glValues,
-            pv,
-            sig,
-            salt,
-            new address[](0),
-            bytes32(0)
-        );
-        vm.stopPrank();
-    }
-
-    function test_FCFS_PublicRound_LexChexMinting_Whitelist() public {
-        // This test uses CreateLexChexRound to include the LexChex condition
-        address me = address(this);
-        (
-            CyberAgreementRegistry registry,
-            CyberCorpFactory corpFactory,
-            ,
-            ,
-            ,
-            address rmFactoryAddr,
-            ,
-        ) = CyberCorpHelper.deployRegistryAndFactories(me);
-        CyberCorpHelper.createTemplate(registry);
-
-        MockPaymentToken usdc = new MockPaymentToken();
-
-        // Prepare officer
-        uint256 officerPrivKey = 0xBEEF02;
-        address officerEOA = vm.addr(officerPrivKey);
-
-        // Create a separate Corp and RoundManager for this test
-        (address corpPub, , , , address rmAddrPub) = CyberCorpHelper.deployCorp(
-            corpFactory,
-            "Corp Public Whitelist",
-            me,
-            me
-        );
-        RoundManager rmPub = RoundManager(rmAddrPub);
-
-        // Allow RoundManager to transfer certs
-        vm.prank(address(corpFactory));
-        CyberCorp(corpPub).setDealManager(address(rmPub));
-
-        // Create Public FCFS Round
-        bytes32 pubRoundId = CyberCorpHelper.CreateLexChexRound(
-            rmPub,
-            address(usdc),
-            CyberCorpHelper.TEMPLATE_ID,
-            1_000_000 * (10 ** usdc.decimals()),
-            2_000 * (10 ** usdc.decimals()),
-            300_000 * (10 ** usdc.decimals()),
-            10 * (10 ** usdc.decimals()),
-            10_000_000,
-            RoundType.FCFS,
-            officerPrivKey,
-            corpPub,
-            true // publicRound
-        );
-
-        // Investor 1: Non-whitelisted token
-        uint256 inv1PrivKey = 0x11111;
-        address inv1 = vm.addr(inv1PrivKey);
-        usdc.mint(inv1, 300_000 * (10 ** usdc.decimals()));
-        vm.startPrank(inv1);
-        usdc.approve(address(rmPub), type(uint256).max);
-
-        EOI memory eoi = EOI({
-            name: "High Roller 1",
-            investorType: "Individual",
-            jurisdiction: "US",
-            contact: "email",
-            minAmount: 200_000 * (10 ** usdc.decimals()),
-            maxAmount: 250_000 * (10 ** usdc.decimals()),
-            expiry: block.timestamp + 7 days,
-            naturalPerson: true,
-            lexchexDetails: CyberCorpHelper.emptyLex()
-        });
-
-        // LexChex Details setup (boilerplate to pass validation if minting were attempted)
-        {
-            LeXcheXMinter minter = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
-            CyberAgreementRegistry lxRegistry = CyberAgreementRegistry(minter.dealRegistry());
-            bytes32 lxTemplateId = bytes32(uint256(400));
-            uint256 lxSalt = block.timestamp;
-            (string memory legalUri, , string[] memory lxGlFields, string[] memory lxPartyFields) = lxRegistry.getTemplateDetails(lxTemplateId);
-            string[] memory lxGlobalValues = new string[](1);
-            lxGlobalValues[0] = "2029-01-01";
-            address[] memory lxParties = new address[](1);
-            lxParties[0] = inv1;
-            string[][] memory lxPartyValues = new string[][](1);
-            lxPartyValues[0] = new string[](4);
-            lxPartyValues[0][0] = eoi.name;
-            lxPartyValues[0][1] = eoi.investorType;
-            lxPartyValues[0][2] = eoi.jurisdiction;
-            lxPartyValues[0][3] = eoi.contact;
-
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties));
-            bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                lxRegistry.DOMAIN_SEPARATOR(),
-                lxRegistry.SIGNATUREDATA_TYPEHASH(),
-                lxContractId,
-                legalUri,
-                lxGlFields,
-                lxPartyFields,
-                lxGlobalValues,
-                lxPartyValues[0],
-                inv1PrivKey
-            );
-
-            eoi.lexchexDetails = LexChexDetails({
-                request: MintRequest({
-                    uuid: 1,
-                    owner: inv1,
-                    investorName: eoi.name,
-                    investorType: eoi.investorType,
-                    investorJurisdiction: eoi.jurisdiction,
-                    investorContact: eoi.contact,
-                    mintPrice: 0,
-                    expiry: block.timestamp + 30 days,
-                    paymentToken: address(usdc)
-                }),
-                templateId: lxTemplateId,
-                salt: uint256(lxSalt),
-                globalValues: lxGlobalValues,
-                parties: lxParties,
-                partyValues: lxPartyValues,
-                agreementSignature: lxSig
-            });
-        }
-
-        // EOI Signature
-        string[] memory glValues = new string[](1);
-        glValues[0] = "g";
-        string[] memory pv = new string[](2);
-        pv[0] = "Officer";
-        pv[1] = "CEO";
-        bytes memory sig = CyberCorpHelper.computeEOISignature(
-            registry,
-            CyberCorpHelper.TEMPLATE_ID,
-            123,
-            glValues,
-            pv,
-            officerEOA,
-            inv1PrivKey
-        );
-
-        // SUBMIT EOI - Should succeed but NOT mint LexChex because token is not whitelisted
-        vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
-        rmPub.submitEOI(
-            pubRoundId,
-            eoi,
-            glValues,
-            pv,
-            sig,
-            123,
-            new address[](0),
-            bytes32(0)
-        );
-        vm.stopPrank();
-
-        // Check LexChex balance
-        assertEq(ILexChex(CyberCorpHelper.LEXCHEX_ADDRESS).balanceOf(inv1), 0, "LexChex should not be minted for non-whitelisted token");
-
-        // PART 2: Whitelist Token
-        vm.prank(me);
-        RoundManagerFactory(rmFactoryAddr).setWhitelistedToken(address(usdc), true);
-
-
-        // Investor 2: Whitelisted token
-        uint256 inv2PrivKey = 0x22222;
-        address inv2 = vm.addr(inv2PrivKey);
-        usdc.mint(inv2, 300_000 * (10 ** usdc.decimals()));
-        vm.startPrank(inv2);
-        usdc.approve(address(rmPub), type(uint256).max);
-
-        // Reuse EOI struct but update signer info
-        eoi.name = "High Roller 2";
-        
-        // Update LexChex details for Investor 2
-        {
-            LeXcheXMinter minter = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
-            CyberAgreementRegistry lxRegistry = CyberAgreementRegistry(minter.dealRegistry());
-            bytes32 lxTemplateId = bytes32(uint256(400));
-            uint256 lxSalt = block.timestamp + 1;
-            (string memory legalUri, , string[] memory lxGlFields, string[] memory lxPartyFields) = lxRegistry.getTemplateDetails(lxTemplateId);
-            string[] memory lxGlobalValues = new string[](1);
-            lxGlobalValues[0] = "2029-01-01";
-            address[] memory lxParties = new address[](1);
-            lxParties[0] = inv2;
-            string[][] memory lxPartyValues = new string[][](1);
-            lxPartyValues[0] = new string[](4);
-            lxPartyValues[0][0] = eoi.name;
-            lxPartyValues[0][1] = eoi.investorType;
-            lxPartyValues[0][2] = eoi.jurisdiction;
-            lxPartyValues[0][3] = eoi.contact;
-
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties));
-            bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
-                vm,
-                lxRegistry.DOMAIN_SEPARATOR(),
-                lxRegistry.SIGNATUREDATA_TYPEHASH(),
-                lxContractId,
-                legalUri,
-                lxGlFields,
-                lxPartyFields,
-                lxGlobalValues,
-                lxPartyValues[0],
-                inv2PrivKey
-            );
-
-            eoi.lexchexDetails = LexChexDetails({
-                request: MintRequest({
-                    uuid: 2,
-                    owner: inv2,
-                    investorName: eoi.name,
-                    investorType: eoi.investorType,
-                    investorJurisdiction: eoi.jurisdiction,
-                    investorContact: eoi.contact,
-                    mintPrice: 0,
-                    expiry: block.timestamp + 30 days,
-                    paymentToken: address(usdc)
-                }),
-                templateId: lxTemplateId,
-                salt: uint256(lxSalt),
-                globalValues: lxGlobalValues,
-                parties: lxParties,
-                partyValues: lxPartyValues,
-                agreementSignature: lxSig
-            });
-        }
-
-        // Compute EOI Signature for Investor 2
-        sig = CyberCorpHelper.computeEOISignature(
-            registry,
-            CyberCorpHelper.TEMPLATE_ID,
-            124,
-            glValues,
-            pv,
-            officerEOA,
-            inv2PrivKey
-        );
-
-        // SUBMIT EOI - Should succeed AND mint LexChex
-        rmPub.submitEOI(
-            pubRoundId,
-            eoi,
-            glValues,
-            pv,
-            sig,
-            124,
-            new address[](0),
-            bytes32(0)
-        );
-        vm.stopPrank();
-
-        assertEq(ILexChex(CyberCorpHelper.LEXCHEX_ADDRESS).balanceOf(inv2), 1, "LexChex SHOULD be minted for whitelisted token");
-    }
 }
+
+// RoundManagerFCFSForkTest has been moved to RoundManagerForkTest.t.sol
 
 contract CyberCorpFactoryPublicRoundTest is Test {
     using RoundLib for Round;
@@ -4013,7 +3309,8 @@ contract CyberCorpFactoryPublicRoundTest is Test {
             startTime,
             endTime,
             true,
-            true
+            true,
+            false
         );
 
         // Validations

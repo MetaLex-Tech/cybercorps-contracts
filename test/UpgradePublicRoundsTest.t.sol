@@ -23,7 +23,7 @@ import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
 import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
-contract UpgradePublicRoundsTest is Test {
+contract UpgradePublicRoundsForkTest is Test {
     address metalexSafe = 0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C;
 
     // Assume Base-sepolia
@@ -38,8 +38,8 @@ contract UpgradePublicRoundsTest is Test {
     LeXcheXMinter leXcheXMinter = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
     ERC20 stable = ERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e);
 
-    uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
-    address deployer = vm.addr(deployerPrivateKey);
+    uint256 deployerPrivateKey;
+    address deployer;
 
     // Randomly generated to avoid contaminated common test addresses
     uint256 privateKeySalt = 0xe6fc9058b04996425a6f0e6479e6e06f7177a6c61043b10857eb0a72339853e0;
@@ -54,7 +54,11 @@ contract UpgradePublicRoundsTest is Test {
     bytes32 templateId = bytes32(uint256(20000));
     
     function setUp() public {
-        vm.label(deployer, "deployer");
+        vm.createSelectFork("base_sepolia", 34755849);
+
+        (deployer, deployerPrivateKey) = makeAddrAndKey("deployer");
+        (, uint256 testPrivateKey) = makeAddrAndKey("test");
+
         vm.label(companyOwner, "companyOwner");
         vm.label(alice, "alice");
         vm.label(bob, "bob");
@@ -71,7 +75,10 @@ contract UpgradePublicRoundsTest is Test {
         ); // so deployer can grant cyberCorpFactory permissions to it
         vm.stopPrank();
 
-        (new UpgradePublicRoundsScript()).run();
+        (new UpgradePublicRoundsScript()).runWithArgs({
+            deployerPrivateKey: deployerPrivateKey,
+            testPrivateKey: testPrivateKey
+        });
 
         cyberCorpSingleFactory = CyberCorpFactory(cyberCorpFactoryProxyAddr).cyberCorpSingleFactory();
         rmFactory = CyberCorpFactory(cyberCorpFactoryProxyAddr).roundManagerFactory();
@@ -228,7 +235,8 @@ contract UpgradePublicRoundsTest is Test {
                 block.timestamp - 1,
                 block.timestamp + 14 days,
                 true,
-                true
+                true,
+                false
             );
         }
 
@@ -289,10 +297,11 @@ contract UpgradePublicRoundsTest is Test {
                 block.timestamp - 1,
                 block.timestamp + 21 days,
                 true,
-                true
+                true,
+                false
             );
         }
-        
+
         vm.stopPrank();
 
         // Prepare bob for submission
@@ -591,7 +600,8 @@ contract UpgradePublicRoundsTest is Test {
             startTime,
             endTime,
             true, // publicRound
-            true // allowTimedOffers
+            true, // allowTimedOffers
+            false // restrictEndTimeReduction
         );
         vm.stopPrank();
 

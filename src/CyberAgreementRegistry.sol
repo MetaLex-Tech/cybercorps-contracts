@@ -174,6 +174,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     error ContractExpired();
     error InvalidSecret();
     error MismatchedPartyValuesLength();
+    error FinalizerNotDefined();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {}
@@ -204,7 +205,8 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         );
     }
 
-    modifier onlyFinalizer(bytes32 contractId) {
+    /// @notice allows only when finalizer is not defined, or msg.sender is the finalizer
+    modifier onlyFinalizerIfSet(bytes32 contractId) {
         if (
             agreements[contractId].finalizer != msg.sender &&
             agreements[contractId].finalizer != address(0)
@@ -212,6 +214,19 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         _;
     }
 
+    /// @notice allows only when finalizer is defined, and msg.sender is the finalizer
+    modifier onlyDefinedFinalizer(bytes32 contractId) {
+        if (
+            agreements[contractId].finalizer == address(0)
+        ) revert FinalizerNotDefined();
+        if (
+            agreements[contractId].finalizer != msg.sender
+        ) revert NotFinalizer();
+        _;
+    }
+
+    /// @notice Create a new agreement template. Only the owner can do it externally; however, the registry itself can
+    /// do it as well for just-in-time operations.
     function createTemplate(
         bytes32 templateId,
         string memory title,
@@ -219,22 +234,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         string[] memory globalFields,
         string[] memory partyFields
     ) external onlyOwner {
-        if (bytes(templates[templateId].legalContractUri).length > 0) {
-            revert TemplateAlreadyExists();
-        }
-
-        if (bytes(title).length == 0) {
-            revert TitleEmpty();
-        }
-
-        templates[templateId] = Template({
-            legalContractUri: legalContractUri,
-            title: title,
-            globalFields: globalFields,
-            partyFields: partyFields
-        });
-
-        emit TemplateCreated(
+        _createTemplate(
             templateId,
             title,
             legalContractUri,
@@ -252,7 +252,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         bytes32 secretHash,
         address finalizer,
         uint256 expiry
-    ) external returns (bytes32 contractId) {
+    ) public returns (bytes32 contractId) {
         contractId = keccak256(
             abi.encode(templateId, salt, globalValues, parties)
         );
@@ -308,6 +308,94 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         for (uint256 i = 0; i < parties.length; i++) {
             agreementsForParty[parties[i]].push(contractId);
         }
+    }
+
+    /// @notice See `createStandaloneContractAndSignFor()`
+    function createStandaloneContractAndSign(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        uint256 expiry,
+        bytes calldata signature
+    ) external returns (bytes32 contractId) {
+        return createStandaloneContractAndSignFor(
+            title,
+            legalContractUri,
+            globalFields,
+            partyFields,
+            salt,
+            globalValues,
+            parties,
+            partyValues,
+            expiry,
+            msg.sender, // signer
+            signature
+        );
+    }
+
+    /// @notice Create a standalone agreement that:
+    /// - Proposer can prepare & sign an agreement in one tx. For single-party agreements that means one tx and done
+    /// - Standalone means it creates its own template just-in-time if needed. No more waiting for admin to create the template for you
+    /// - Takes `salt` so agreement IDs are deterministic. You can also create identical agreements with distinct IDs if needed
+    ///
+    /// Note `finalizer` is intentionally fixed at `address(0)` because other values require
+    /// tighter integration with vetted smart contracts, which does not fit our use cases here
+    function createStandaloneContractAndSignFor(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        string[][] memory partyValues,
+        uint256 expiry,
+        address signer,
+        bytes calldata signature
+    ) public returns (bytes32 contractId) {
+        // Derive template ID
+        bytes32 templateId = keccak256(abi.encode(
+            title,
+            legalContractUri,
+            globalFields,
+            partyFields
+        ));
+
+        // Create the template if needed
+        if (bytes(templates[templateId].legalContractUri).length == 0) {
+            _createTemplate(
+                templateId,
+                title,
+                legalContractUri,
+                globalFields,
+                partyFields
+            );
+        }
+
+        contractId = createContract(
+            templateId,
+            salt,
+            globalValues,
+            parties,
+            partyValues,
+            "", // secretHash
+            address(0), // fixed finalizer, see notice above
+            expiry
+        );
+
+        signContractFor(
+            signer,
+            contractId,
+            partyValues[0], // proposer
+            signature,
+            false, // proposer should explicitly add himself to the parties
+            "" // secret
+        );
     }
 
     function signContract(
@@ -441,7 +529,11 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             revert SignatureVerificationFailed();
         }
 
-        if(msg.sender != agreementData.finalizer && msg.sender != signer)
+        if(
+            address(0) != agreementData.finalizer && // if finalizer is undefined, as long as the signature is valid we still allow it
+            msg.sender != agreementData.finalizer &&
+            msg.sender != signer
+        )
             revert NotFinalizer();
     
         if (partyValues.length != template.partyFields.length)
@@ -465,6 +557,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         }
     }
 
+    /// @notice Sign a contract with escrow signatures. It relies on the finalizer to enforce proper access control.
+    /// As a result, the finalizer is required to be a predefined smart contract.
+    /// @dev See `test_RevertIf_signContractWithEscrowUndefinedFinalizer` for how it prevent exploits
     function signContractWithEscrow(
         address escrowSigner,
         bytes32 contractId,
@@ -472,7 +567,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         bytes calldata signature,
         bool fillUnallocated, // to fill a 0 address or not
         string memory secret
-    ) onlyFinalizer(contractId) external {
+    ) onlyDefinedFinalizer(contractId) external {
         AgreementData storage agreementData = agreements[contractId];
         Template memory template = templates[agreementData.templateId];
         if (agreementData.parties.length == 0) revert ContractDoesNotExist();
@@ -521,11 +616,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         emit AgreementSigned(contractId, escrowSigner, timestamp);
 
         if (totalSignatures == agreementData.parties.length) {
-            if (agreementData.finalizer == address(0)) {
-                agreementData.finalized = true;
-                emit ContractFinalized(contractId, msg.sender, timestamp);
-            }
-
             emit ContractFullySigned(contractId, timestamp);
         }
     }
@@ -586,7 +676,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     function finalizeContract(
         bytes32 contractId
-    ) public onlyFinalizer(contractId) {
+    ) public onlyFinalizerIfSet(contractId) {
         AgreementData storage agreementData = agreements[contractId];
         if (agreementData.finalized) revert ContractAlreadyFinalized();
         if (agreementData.parties.length == 0) revert ContractDoesNotExist();
@@ -890,6 +980,37 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         );
         json = string.concat(json, "}");
         return json;
+    }
+
+    function _createTemplate(
+        bytes32 templateId,
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields
+    ) internal {
+        if (bytes(templates[templateId].legalContractUri).length > 0) {
+            revert TemplateAlreadyExists();
+        }
+
+        if (bytes(title).length == 0) {
+            revert TitleEmpty();
+        }
+
+        templates[templateId] = Template({
+            legalContractUri: legalContractUri,
+            title: title,
+            globalFields: globalFields,
+            partyFields: partyFields
+        });
+
+        emit TemplateCreated(
+            templateId,
+            title,
+            legalContractUri,
+            globalFields,
+            partyFields
+        );
     }
 
     function _verifySignature(
