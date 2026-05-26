@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
+import {DeploymentConstants} from "../script//libs/DeploymentConstants.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
@@ -45,6 +46,7 @@ import {
     ShareRepresentationType
 } from "../src/storage/extensions/ShareExtension.sol";
 import {ShareExtensionLogic} from "../src/storage/extensions/ShareExtensionLogic.sol";
+import {ILexChex} from "../src/interfaces/ILexChex.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 
 contract MockPaymentToken is ERC20 {
@@ -91,10 +93,22 @@ contract ShareExtensionForkTest is Test {
     bytes internal initialShareData;
 
     function setUp() public {
+        vm.createSelectFork("base_sepolia"); // depends on LeXcheX
+
         officer = vm.addr(officerPrivKey);
         investor = vm.addr(investorPrivKey);
         vm.etch(officer, bytes(""));
         vm.etch(investor, bytes(""));
+
+        DeploymentConstants.CoreDeployment memory core = DeploymentConstants.coreV2(block.chainid);
+
+        // v4 RoundManager always calls the hardcoded LexChex address during submitEOI.
+        // Mock it to return true so local tests bypass the production contract dependency.
+        vm.mockCall(
+            core.lexchex,
+            abi.encodeWithSelector(ILexChex.hasValidLexCheX.selector),
+            abi.encode(true)
+        );
 
         _deployFactories();
         _deployShareContracts();
@@ -490,6 +504,7 @@ contract ShareExtensionForkTest is Test {
                 RoundType.FCFS,
                 false,
                 true,
+                false,
                 RAISE_CAP,
                 OFFER_AMOUNT,
                 OFFER_AMOUNT,
