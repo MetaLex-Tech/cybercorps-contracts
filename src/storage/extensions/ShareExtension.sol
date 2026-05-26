@@ -42,7 +42,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
+import "openzeppelin-contracts/utils/Strings.sol";
 import "../../libs/auth.sol";
 import "./ICertificateExtension.sol";
 
@@ -419,21 +419,52 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         uint256 extra = 0;
         for (uint256 i = 0; i < b.length; i++) {
             bytes1 c = b[i];
-            if (c == '"' || c == '\\' || c == '\n' || c == '\r' || c == '\t') extra++;
+            if (c == '"' || c == '\\') {
+                // Group 1: Structural characters
+                extra++;
+            } else if (uint8(c) < 0x20) {
+                if (c == bytes1(0x08) || c == '\t' || c == '\n' || c == bytes1(0x0C) || c == '\r') {
+                    // Group 2: Named two-char control escapes
+                    extra++;
+                } else {
+                    // Group 3: Remaining control characters — the \uXXXX range 0x00–0x1F
+                    extra += 5; // \uXXXX: 1 byte → 6 bytes
+                }
+            }
         }
         if (extra == 0) return s;
         bytes memory out = new bytes(b.length + extra);
         uint256 j = 0;
         for (uint256 i = 0; i < b.length; i++) {
             bytes1 c = b[i];
-            if (c == '"')       { out[j++] = '\\'; out[j++] = '"';  }
-            else if (c == '\\') { out[j++] = '\\'; out[j++] = '\\'; }
-            else if (c == '\n') { out[j++] = '\\'; out[j++] = 'n';  }
-            else if (c == '\r') { out[j++] = '\\'; out[j++] = 'r';  }
-            else if (c == '\t') { out[j++] = '\\'; out[j++] = 't';  }
-            else                { out[j++] = c; }
+            // Group 1: Structural characters
+            if (c == '"')               { out[j++] = '\\'; out[j++] = '"';  }
+            else if (c == '\\')         { out[j++] = '\\'; out[j++] = '\\'; }
+
+            // Group 2: Named two-char control escapes
+            else if (c == bytes1(0x08)) { out[j++] = '\\'; out[j++] = 'b';  }
+            else if (c == '\t')         { out[j++] = '\\'; out[j++] = 't';  }
+            else if (c == '\n')         { out[j++] = '\\'; out[j++] = 'n';  }
+            else if (c == bytes1(0x0C)) { out[j++] = '\\'; out[j++] = 'f';  }
+            else if (c == '\r')         { out[j++] = '\\'; out[j++] = 'r';  }
+
+            // Group 3: Remaining control characters — the \uXXXX range 0x00–0x1F
+            else if (uint8(c) < 0x20) {
+                out[j++] = '\\';
+                out[j++] = 'u';
+                out[j++] = '0';
+                out[j++] = '0';
+                out[j++] = _hexNibble(uint8(c) >> 4);
+                out[j++] = _hexNibble(uint8(c) & 0x0F);
+            }
+            else { out[j++] = c; }
         }
         return string(out);
+    }
+
+    function _hexNibble(uint8 v) internal pure returns (bytes1) {
+        // converts a value 0–15 to its ASCII character (0-9, a-f)
+        return bytes1(v < 10 ? 0x30 + v : 0x61 + v - 10);
     }
 
     function _mandatoryConversionTriggerTypeToString(
