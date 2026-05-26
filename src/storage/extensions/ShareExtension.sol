@@ -44,6 +44,7 @@ pragma solidity 0.8.28;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "openzeppelin-contracts/utils/Strings.sol";
 import "../../libs/auth.sol";
+import "../../libs/JsonLib.sol";
 import "./ICertificateExtension.sol";
 
 enum LiquidationPreferenceType {
@@ -282,7 +283,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
                 '"terms": {',
                 string(abi.encodePacked(
                     '"shareClassKey": "', _shareClassKeyToString(terms.shareClassKey),
-                    '", "seriesName": "', _jsonEscape(terms.seriesName),
+                    '", "seriesName": "', JsonLib.jsonEscape(terms.seriesName),
                     '", "authorizedShares": "', Strings.toString(terms.authorizedShares),
                     '", "parValue": "', Strings.toString(terms.parValue),
                     '", "originalIssuePrice": "', Strings.toString(terms.originalIssuePrice),
@@ -290,42 +291,42 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
                     '", "liquidationPreferenceType": "', _liquidationPreferenceTypeToString(terms.liquidationPreferenceType),
                     '", "dividendType": "', _dividendTypeToString(terms.dividendType),
                     '", "dividendRate": "', Strings.toString(terms.dividendRate),
-                    '", "isConvertible": "', _boolToString(terms.isConvertible),
+                    '", "isConvertible": "', JsonLib.boolToString(terms.isConvertible),
                     '", "conversionPrice": "', Strings.toString(terms.conversionPrice),
                     '", "antiDilutionType": "', _antiDilutionTypeToString(terms.antiDilutionType),
                     '", "votesPerShare": "', Strings.toString(terms.votesPerShare),
                     '", "designatedBoardSeats": "', Strings.toString(uint256(terms.designatedBoardSeats)),
-                    '", "isRedeemable": "', _boolToString(terms.isRedeemable),
+                    '", "isRedeemable": "', JsonLib.boolToString(terms.isRedeemable),
                     '", "redemptionType": "', _redemptionTypeToString(terms.redemptionType),
                     '", "redemptionPrice": "', Strings.toString(terms.redemptionPrice),
                     '", '
                 )),
                 string(abi.encodePacked(
                     '"effectiveDate": "', Strings.toString(terms.effectiveDate),
-                    '", "sourceAuthorityURI": "', _jsonEscape(terms.sourceAuthorityURI),
+                    '", "sourceAuthorityURI": "', JsonLib.jsonEscape(terms.sourceAuthorityURI),
                     '", "participationCap": "', Strings.toString(terms.participationCap),
                     '", "seniorityRank": "', Strings.toString(terms.seniorityRank),
                     '", "dividendAccrualStartDate": "', Strings.toString(terms.dividendAccrualStartDate),
-                    '", "dividendCompounding": "', _boolToString(terms.dividendCompounding),
-                    '", "dividendIncreasesLiquidationAmount": "', _boolToString(terms.dividendIncreasesLiquidationAmount),
+                    '", "dividendCompounding": "', JsonLib.boolToString(terms.dividendCompounding),
+                    '", "dividendIncreasesLiquidationAmount": "', JsonLib.boolToString(terms.dividendIncreasesLiquidationAmount),
                     '", "targetConversionSeriesId": "', Strings.toHexString(uint256(terms.targetConversionSeriesId), 32),
-                    '", "allowsFractionalConversion": "', _boolToString(terms.allowsFractionalConversion),
-                    '", "hasMandatoryConversion": "', _boolToString(terms.hasMandatoryConversion),
-                    '", "hasClassVotingRights": "', _boolToString(terms.hasClassVotingRights),
-                    '", "hasSeriesVotingRights": "', _boolToString(terms.hasSeriesVotingRights),
+                    '", "allowsFractionalConversion": "', JsonLib.boolToString(terms.allowsFractionalConversion),
+                    '", "hasMandatoryConversion": "', JsonLib.boolToString(terms.hasMandatoryConversion),
+                    '", "hasClassVotingRights": "', JsonLib.boolToString(terms.hasClassVotingRights),
+                    '", "hasSeriesVotingRights": "', JsonLib.boolToString(terms.hasSeriesVotingRights),
                     '", '
                 )),
                 string(abi.encodePacked(
-                    '"redemptionSchedule": "', _jsonEscape(terms.redemptionSchedule),
-                    '", "redemptionTriggerDescription": "', _jsonEscape(terms.redemptionTriggerDescription),
-                    '", "hasPayToPlay": "', _boolToString(terms.hasPayToPlay),
-                    '", "payToPlayTermsURI": "', _jsonEscape(terms.payToPlayTermsURI),
-                    '", "hasRegistrationRights": "', _boolToString(terms.hasRegistrationRights),
-                    '", "registrationRightsURI": "', _jsonEscape(terms.registrationRightsURI),
-                    '", "hasProRataRights": "', _boolToString(terms.hasProRataRights),
-                    '", "hasInformationRights": "', _boolToString(terms.hasInformationRights),
-                    '", "hasDragAlongRights": "', _boolToString(terms.hasDragAlongRights),
-                    '", "dragAlongTermsURI": "', _jsonEscape(terms.dragAlongTermsURI),
+                    '"redemptionSchedule": "', JsonLib.jsonEscape(terms.redemptionSchedule),
+                    '", "redemptionTriggerDescription": "', JsonLib.jsonEscape(terms.redemptionTriggerDescription),
+                    '", "hasPayToPlay": "', JsonLib.boolToString(terms.hasPayToPlay),
+                    '", "payToPlayTermsURI": "', JsonLib.jsonEscape(terms.payToPlayTermsURI),
+                    '", "hasRegistrationRights": "', JsonLib.boolToString(terms.hasRegistrationRights),
+                    '", "registrationRightsURI": "', JsonLib.jsonEscape(terms.registrationRightsURI),
+                    '", "hasProRataRights": "', JsonLib.boolToString(terms.hasProRataRights),
+                    '", "hasInformationRights": "', JsonLib.boolToString(terms.hasInformationRights),
+                    '", "hasDragAlongRights": "', JsonLib.boolToString(terms.hasDragAlongRights),
+                    '", "dragAlongTermsURI": "', JsonLib.jsonEscape(terms.dragAlongTermsURI),
                     '"'
                 )),
                 '}, '
@@ -337,12 +338,12 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return string(
             abi.encodePacked(
                 '"certificateData": {',
-                '"isPartlyPaid": "', _boolToString(cert.isPartlyPaid),
+                '"isPartlyPaid": "', JsonLib.boolToString(cert.isPartlyPaid),
                 '", "amountPaid": "', Strings.toString(cert.amountPaid),
                 '", "totalConsideration": "', Strings.toString(cert.totalConsideration),
-                '", "sourceAuthorityURI": "', _jsonEscape(cert.sourceAuthorityURI),
+                '", "sourceAuthorityURI": "', JsonLib.jsonEscape(cert.sourceAuthorityURI),
                 '", "representationType": "', _representationTypeToString(cert.representationType),
-                '", "holdingPeriodTackingApplied": "', _boolToString(cert.holdingPeriodTackingApplied),
+                '", "holdingPeriodTackingApplied": "', JsonLib.boolToString(cert.holdingPeriodTackingApplied),
                 '"}, '
             )
         );
@@ -410,63 +411,6 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return "Unknown";
     }
 
-    function _boolToString(bool value) internal pure returns (string memory) {
-        return value ? "true" : "false";
-    }
-
-    function _jsonEscape(string memory s) internal pure returns (string memory) {
-        bytes memory b = bytes(s);
-        uint256 extra = 0;
-        for (uint256 i = 0; i < b.length; i++) {
-            bytes1 c = b[i];
-            if (c == '"' || c == '\\') {
-                // Group 1: Structural characters
-                extra++;
-            } else if (uint8(c) < 0x20) {
-                if (c == bytes1(0x08) || c == '\t' || c == '\n' || c == bytes1(0x0C) || c == '\r') {
-                    // Group 2: Named two-char control escapes
-                    extra++;
-                } else {
-                    // Group 3: Remaining control characters — the \uXXXX range 0x00–0x1F
-                    extra += 5; // \uXXXX: 1 byte → 6 bytes
-                }
-            }
-        }
-        if (extra == 0) return s;
-        bytes memory out = new bytes(b.length + extra);
-        uint256 j = 0;
-        for (uint256 i = 0; i < b.length; i++) {
-            bytes1 c = b[i];
-            // Group 1: Structural characters
-            if (c == '"')               { out[j++] = '\\'; out[j++] = '"';  }
-            else if (c == '\\')         { out[j++] = '\\'; out[j++] = '\\'; }
-
-            // Group 2: Named two-char control escapes
-            else if (c == bytes1(0x08)) { out[j++] = '\\'; out[j++] = 'b';  }
-            else if (c == '\t')         { out[j++] = '\\'; out[j++] = 't';  }
-            else if (c == '\n')         { out[j++] = '\\'; out[j++] = 'n';  }
-            else if (c == bytes1(0x0C)) { out[j++] = '\\'; out[j++] = 'f';  }
-            else if (c == '\r')         { out[j++] = '\\'; out[j++] = 'r';  }
-
-            // Group 3: Remaining control characters — the \uXXXX range 0x00–0x1F
-            else if (uint8(c) < 0x20) {
-                out[j++] = '\\';
-                out[j++] = 'u';
-                out[j++] = '0';
-                out[j++] = '0';
-                out[j++] = _hexNibble(uint8(c) >> 4);
-                out[j++] = _hexNibble(uint8(c) & 0x0F);
-            }
-            else { out[j++] = c; }
-        }
-        return string(out);
-    }
-
-    function _hexNibble(uint8 v) internal pure returns (bytes1) {
-        // converts a value 0–15 to its ASCII character (0-9, a-f)
-        return bytes1(v < 10 ? 0x30 + v : 0x61 + v - 10);
-    }
-
     function _mandatoryConversionTriggerTypeToString(
         MandatoryConversionTriggerType triggerType
     ) internal pure returns (string memory) {
@@ -503,8 +447,8 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
                 '{"triggerType": "', _mandatoryConversionTriggerTypeToString(trigger.triggerType),
                 '", "primaryThreshold": "', Strings.toString(trigger.primaryThreshold),
                 '", "secondaryThreshold": "', Strings.toString(trigger.secondaryThreshold),
-                '", "additionalConditions": "', _jsonEscape(trigger.additionalConditions),
-                '", "description": "', _jsonEscape(trigger.description),
+                '", "additionalConditions": "', JsonLib.jsonEscape(trigger.additionalConditions),
+                '", "description": "', JsonLib.jsonEscape(trigger.description),
                 '"}'
             )
         );
@@ -530,9 +474,9 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
                 '{"matterType": "', Strings.toHexString(uint256(right.matterType), 32),
                 '", "votesPerShare": "', Strings.toString(right.votesPerShare),
                 '", "threshold": "', Strings.toString(right.threshold),
-                '", "isVetoRight": "', _boolToString(right.isVetoRight),
+                '", "isVetoRight": "', JsonLib.boolToString(right.isVetoRight),
                 '", "scope": "', _votingScopeToString(right.scope),
-                '", "description": "', _jsonEscape(right.description),
+                '", "description": "', JsonLib.jsonEscape(right.description),
                 '"}'
             )
         );
@@ -556,8 +500,8 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return string(
             abi.encodePacked(
                 '{"exceptionType": "', Strings.toHexString(uint256(exception.exceptionType), 32),
-                '", "exceptionText": "', _jsonEscape(exception.exceptionText),
-                '", "requiresEvidence": "', _boolToString(exception.requiresEvidence),
+                '", "exceptionText": "', JsonLib.jsonEscape(exception.exceptionText),
+                '", "requiresEvidence": "', JsonLib.boolToString(exception.requiresEvidence),
                 '"}'
             )
         );
@@ -581,9 +525,9 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return string(
             abi.encodePacked(
                 '{"restrictionType": "', _transferRestrictionTypeToString(restriction.restrictionType),
-                '", "restrictionText": "', _jsonEscape(restriction.restrictionText),
-                '", "sourceAgreement": "', _jsonEscape(restriction.sourceAgreement),
-                '", "isRemovable": "', _boolToString(restriction.isRemovable),
+                '", "restrictionText": "', JsonLib.jsonEscape(restriction.restrictionText),
+                '", "sourceAgreement": "', JsonLib.jsonEscape(restriction.sourceAgreement),
+                '", "isRemovable": "', JsonLib.boolToString(restriction.isRemovable),
                 '", "exceptions": ', _buildTransferRestrictionExceptionsJson(restriction.exceptions),
                 '}'
             )
@@ -608,7 +552,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
                 '{"numerator": "', Strings.toString(record.numerator),
                 '", "denominator": "', Strings.toString(record.denominator),
                 '", "timestamp": "', Strings.toString(record.timestamp),
-                '", "sourceAuthorityURI": "', _jsonEscape(record.sourceAuthorityURI),
+                '", "sourceAuthorityURI": "', JsonLib.jsonEscape(record.sourceAuthorityURI),
                 '"}'
             )
         );
