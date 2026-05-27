@@ -7,7 +7,7 @@ import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 
 contract AddCyberstockTemplateScript is Script {
     // TODO update before production
-    string internal constant TEMPLATE_ID_STR = "mlx_cyberstock_reg_d_v1_0_dev1";
+    string internal constant TEMPLATE_ID_STR = "mlx_cyberstock_pref_v1_0_dev1";
     // TODO replace with CID assigned at pinning of cyberSTOCK Purchase Agreement v6
     string internal constant LEGAL_URI = "IPFS://bafybeid4xxgesjbxpdwx3dmcxlupzscurpnh6c3k7lukhzt2fsfkbxjr34";
 
