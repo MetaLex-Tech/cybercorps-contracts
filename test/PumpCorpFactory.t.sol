@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import {Test, console2} from "forge-std/Test.sol";
 import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {IERC1271} from "openzeppelin-contracts/interfaces/IERC1271.sol";
 import {DeployPumpCorpFactoryScript} from "../script/deploy-pump-factory.s.sol";
 import {PumpCorpFactory, PumpCorpFactoryLib} from "../src/PumpCorpFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
@@ -25,6 +26,8 @@ import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {MockERC20} from "./mock/MockERC20.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import {UUPSUpgradeable} from "openzeppelin-contracts/proxy/utils/UUPSUpgradeable.sol";
+import {MockERC1271Wallet} from "./mock/MockERC1271Wallet.sol";
 
 /// @dev Always-failing condition: any allocation attempt on its escrow is blocked.
 contract AlwaysFalseCondition {
@@ -114,7 +117,7 @@ contract PumpCorpFactoryForkTest is Test {
     string[]        internal officerPartyValues;
 
     function setUp() public {
-        vm.createSelectFork("base", 45993317); // pinned to an old block before deployment
+        vm.createSelectFork("base"); // pinned to an old block before deployment
 
         (deployer, deployerPk) = makeAddrAndKey("deployer");
         (officer, officerPk) = makeAddrAndKey("officer");
@@ -164,6 +167,11 @@ contract PumpCorpFactoryForkTest is Test {
         // ── Lifecycle setup ──────────────────────────────────────────────────
         payToken = new MockERC20("Test Token", "TT", 9);
         officerPartyValues = _lifecyclePartyValues("Alice Officer", officer);
+
+        // TODO: remove once the live CyberAgreementRegistry on Base is upgraded with EIP-1271 support
+        address newRegistryImpl = address(new CyberAgreementRegistry());
+        vm.prank(metalexSafe);
+        UUPSUpgradeable(REGISTRY).upgradeToAndCall(newRegistryImpl, "");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -2009,6 +2017,56 @@ contract PumpCorpFactoryForkTest is Test {
         assertTrue(
             CyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
             "agreement must be finalized after FCFS submitEOI with both credentials"
+        );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  EIP-1271 SMART WALLET AS INVESTOR
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// FCFS round: EIP-1271 smart wallet submits EOI with empty signature — registry
+    /// falls back to isValidSignature and auto-allocates in the same tx.
+    function test_HappyPath_ACERound_EIP1271_Investor_FCFS() public {
+        (, address rm, bytes32 roundId) = _deployLifecycle(400005, RoundType.FCFS, new address[](0));
+
+        MockERC1271Wallet wallet = new MockERC1271Wallet(IERC1271.isValidSignature.selector);
+
+        string[] memory globalValues = _lifecycleGlobalValues();
+        string[] memory walletPv = _lifecyclePartyValues("Safe Investor", address(wallet));
+        uint256 investAmount = MIN_TICKET;
+
+        payToken.mint(address(wallet), investAmount);
+        vm.prank(address(wallet));
+        payToken.approve(rm, investAmount);
+
+        EOI memory eoi = EOI({
+            name: "Safe Investor",
+            investorType: "Individual",
+            jurisdiction: "US",
+            contact: "investor@test.com",
+            minAmount: investAmount,
+            maxAmount: investAmount,
+            expiry: block.timestamp + 7 days,
+            naturalPerson: false,
+            lexchexDetails: _emptyLex()
+        });
+
+        vm.prank(address(wallet));
+        (bytes32 agreementId, ) = RoundManager(rm).submitEOI(
+            roundId, eoi,
+            globalValues, walletPv,
+            "", // empty sig → EIP-1271: wallet.isValidSignature returns IERC1271.isValidSignature.selector
+            1, new address[](0), bytes32(0)
+        );
+
+        assertTrue(
+            CyberAgreementRegistry(REGISTRY).isFinalized(agreementId),
+            "agreement must be finalized after FCFS submitEOI from EIP-1271 wallet"
+        );
+        assertEq(
+            RoundManager(rm).getRound(roundId).raised,
+            investAmount,
+            "raised must equal investAmount"
         );
     }
 }
