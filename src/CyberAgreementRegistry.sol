@@ -41,10 +41,11 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity ^0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
+import "openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
 import "./libs/auth.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     using ECDSA for bytes32;
@@ -1021,21 +1022,19 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         // Hash the data (AgreementData) according to EIP-712
         bytes32 digest = _hashTypedDataV4(data);
 
-        // Recover the signer address
-        address recoveredSigner = digest.recover(signature);
-        
-        // Check direct signature
-        if (recoveredSigner == signer) {
+        // Handles both EOA (ECDSA) and contract wallets (EIP-1271, e.g. Gnosis Safe)
+        if (SignatureChecker.isValidSignatureNow(signer, digest, signature)) {
             return true;
         }
-        
-        // Check delegation signature
+
+        // Check delegation: delegate may itself be a contract wallet
         Delegation storage delegation = delegations[signer];
-        if (delegation.delegate == recoveredSigner && 
-            (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
+        if (delegation.delegate != address(0) &&
+            (delegation.expiry == 0 || delegation.expiry > block.timestamp) &&
+            SignatureChecker.isValidSignatureNow(delegation.delegate, digest, signature)) {
             return true;
         }
-        
+
         return false;
     }
 
@@ -1152,21 +1151,19 @@ function _bytes32ToString(bytes32 _bytes32) public pure returns (string memory) 
         // Hash the data (VoidSignatureData) according to EIP-712
         bytes32 digest = _hashVoidTypedDataV4(data);
 
-        // Recover the signer address
-        address recoveredSigner = digest.recover(signature);
-        
-        // Check direct signature
-        if (recoveredSigner == signer) {
+        // Handles both EOA (ECDSA) and contract wallets (EIP-1271, e.g. Gnosis Safe)
+        if (SignatureChecker.isValidSignatureNow(signer, digest, signature)) {
             return true;
         }
-        
-        // Check delegation signature
+
+        // Check delegation: delegate may itself be a contract wallet
         Delegation storage delegation = delegations[signer];
-        if (delegation.delegate == recoveredSigner && 
-            (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
+        if (delegation.delegate != address(0) &&
+            (delegation.expiry == 0 || delegation.expiry > block.timestamp) &&
+            SignatureChecker.isValidSignatureNow(delegation.delegate, digest, signature)) {
             return true;
         }
-        
+
         return false;
     }
 

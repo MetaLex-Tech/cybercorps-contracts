@@ -3,9 +3,22 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {IERC1271} from "openzeppelin-contracts/interfaces/IERC1271.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
+
+contract MockERC1271Wallet {
+    bytes4 private _magicValue;
+
+    constructor(bytes4 magicValue) {
+        _magicValue = magicValue;
+    }
+
+    function isValidSignature(bytes32, bytes memory) external view returns (bytes4) {
+        return _magicValue;
+    }
+}
 
 contract CyberAgreementRegistryTest is Test {
     address deployer;
@@ -789,5 +802,156 @@ contract CyberAgreementRegistryTest is Test {
 
         assertNotEq(agreementId0, agreementId1, "two agreements should have different IDs");
         assertEq(templateId0, templateId1, "two agreements should share the same template");
+    }
+
+    // ==================== EIP-1271 (contract wallet) tests ====================
+
+    /// @notice A contract wallet implementing EIP-1271 should be able to sign an agreement
+    function test_eip1271_validWalletCanSign() public {
+        MockERC1271Wallet wallet = new MockERC1271Wallet(IERC1271.isValidSignature.selector);
+        uint256 salt = uint256(keccak256("test_eip1271_validWalletCanSign"));
+
+        address[] memory parties = new address[](2);
+        parties[0] = address(wallet);
+        parties[1] = bob;
+
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = testPartyValues[0];
+        partyValues[1] = testPartyValues[1];
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            salt,
+            testGlobalValues,
+            parties,
+            partyValues,
+            "",
+            address(0),
+            block.timestamp + 10
+        );
+
+        // Empty bytes: ECDSA recovery fails → SignatureChecker falls back to isValidSignature → IERC1271.isValidSignature.selector
+        registry.signContractFor(address(wallet), agreementId, testPartyValues[0], "", false, "");
+
+        assertTrue(registry.hasSigned(agreementId, address(wallet)), "EIP-1271 wallet should be marked as signed");
+    }
+
+    /// @notice A contract wallet whose isValidSignature returns a wrong magic value should be rejected
+    function test_RevertIf_eip1271_invalidWalletCannotSign() public {
+        MockERC1271Wallet wallet = new MockERC1271Wallet(bytes4(0xffffffff));
+        uint256 salt = uint256(keccak256("test_RevertIf_eip1271_invalidWalletCannotSign"));
+
+        address[] memory parties = new address[](2);
+        parties[0] = address(wallet);
+        parties[1] = bob;
+
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = testPartyValues[0];
+        partyValues[1] = testPartyValues[1];
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            salt,
+            testGlobalValues,
+            parties,
+            partyValues,
+            "",
+            address(0),
+            block.timestamp + 10
+        );
+
+        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        registry.signContractFor(address(wallet), agreementId, testPartyValues[0], "", false, "");
+    }
+
+    /// @notice A contract wallet set as delegate should be able to sign on behalf of an EOA party
+    function test_eip1271_walletAsDelegate() public {
+        MockERC1271Wallet wallet = new MockERC1271Wallet(IERC1271.isValidSignature.selector);
+        uint256 salt = uint256(keccak256("test_eip1271_walletAsDelegate"));
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            salt,
+            testGlobalValues,
+            testParties, // [alice, bob]
+            testPartyValues,
+            "",
+            address(0),
+            block.timestamp + 10
+        );
+
+        vm.prank(alice);
+        registry.setDelegation(address(wallet), block.timestamp + 100);
+
+        // Empty bytes: ECDSA misses alice, delegation path tries wallet.isValidSignature → IERC1271.isValidSignature.selector
+        registry.signContractFor(alice, agreementId, testPartyValues[0], "", false, "");
+
+        assertTrue(registry.hasSigned(agreementId, alice), "alice should be marked as signed via EIP-1271 delegate");
+    }
+
+    /// @notice A contract wallet that has signed should be able to void the agreement via EIP-1271
+    function test_eip1271_validWalletCanVoid() public {
+        MockERC1271Wallet wallet = new MockERC1271Wallet(IERC1271.isValidSignature.selector);
+        uint256 salt = uint256(keccak256("test_eip1271_validWalletCanVoid"));
+
+        address[] memory parties = new address[](2);
+        parties[0] = address(wallet); // parties[0] so single-signer void rule applies
+        parties[1] = bob;
+
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = testPartyValues[0];
+        partyValues[1] = testPartyValues[1];
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            salt,
+            testGlobalValues,
+            parties,
+            partyValues,
+            "",
+            address(0),
+            block.timestamp + 10
+        );
+
+        registry.signContractFor(address(wallet), agreementId, testPartyValues[0], "", false, "");
+        assertTrue(registry.hasSigned(agreementId, address(wallet)));
+
+        // void: parties[0] has signed (numSignatures == 1) → voided immediately
+        registry.voidContractFor(agreementId, address(wallet), "");
+
+        assertTrue(registry.isVoided(agreementId), "agreement should be voided by EIP-1271 wallet");
+    }
+
+    /// @notice A contract wallet returning a wrong magic value should not be able to void
+    function test_RevertIf_eip1271_invalidWalletCannotVoid() public {
+        MockERC1271Wallet wallet = new MockERC1271Wallet(bytes4(0xffffffff));
+        uint256 salt = uint256(keccak256("test_RevertIf_eip1271_invalidWalletCannotVoid"));
+
+        address[] memory parties = new address[](2);
+        parties[0] = address(wallet);
+        parties[1] = bob;
+
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = testPartyValues[0];
+        partyValues[1] = testPartyValues[1];
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            salt,
+            testGlobalValues,
+            parties,
+            partyValues,
+            "",
+            address(0),
+            block.timestamp + 10
+        );
+
+        vm.expectRevert(CyberAgreementRegistry.SignatureVerificationFailed.selector);
+        registry.voidContractFor(agreementId, address(wallet), "");
     }
 }
