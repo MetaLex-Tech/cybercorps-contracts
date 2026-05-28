@@ -1,14 +1,11 @@
 # Data Overview
 
 id: bytes32(bytes("metalex_cyberstock_reg_d_v1_0"))
-idHex: 0x6d6c785f637962657273746f636b5f7265675f645f76315f3000000000000000
+idHex: 0x6d6574616c65785f637962657273746f636b5f7265675f645f76315f30000000
 title: metalex_cyberstock_reg_d_v1_0
 
-<!-- TODO WIP -->
 legalURI: IPFS://bafybeih6uxz6xp2ncfow5achl6xz5yzz7hhicmi66embxk4wc7f5l6fhey
 
-<!-- TODO WIP -->
-doc: https://beige-just-flyingfish-108.mypinata.cloud/ipfs/[CID]
 
 ## Global Fields
 

@@ -7,9 +7,9 @@ import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 
 contract AddCyberstockTemplateScript is Script {
     // TODO update before production
-    string internal constant TEMPLATE_ID_STR = "mlx_cyberstock_pref_v1_0_dev1";
+    string internal constant TEMPLATE_ID_STR = "metalex_cyberstock_reg_d_v1_0";
     // TODO replace with CID assigned at pinning of cyberSTOCK Purchase Agreement v6
-    string internal constant LEGAL_URI = "IPFS://bafybeid4xxgesjbxpdwx3dmcxlupzscurpnh6c3k7lukhzt2fsfkbxjr34";
+    string internal constant LEGAL_URI = "IPFS://bafybeih6uxz6xp2ncfow5achl6xz5yzz7hhicmi66embxk4wc7f5l6fhey";
 
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
@@ -43,11 +43,12 @@ contract AddCyberstockTemplateScript is Script {
     }
 
     function _globalFields() internal pure returns (string[] memory fields) {
-        fields = new string[](4);
+        fields = new string[](5);
         fields[0] = "purchasePricePerShare";
         fields[1] = "numTokenizedShares";
         fields[2] = "governingJurisdiction";
         fields[3] = "disputeResolution";
+        fields[4] = "customProvisions";
     }
 
     function _partyFields() internal pure returns (string[] memory fields) {
