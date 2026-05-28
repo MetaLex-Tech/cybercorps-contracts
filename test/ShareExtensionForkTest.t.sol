@@ -212,7 +212,7 @@ contract ShareExtensionForkTest is Test {
 
         TransferRestrictionException[] memory exceptions = new TransferRestrictionException[](1);
         exceptions[0] = TransferRestrictionException({
-            exceptionType: keccak256("AFFILIATE_TRANSFER"),
+            exceptionType: "AFFILIATE_TRANSFER",
             exceptionText: "Transfers to affiliates are permitted",
             requiresEvidence: true
         });
@@ -298,7 +298,7 @@ contract ShareExtensionForkTest is Test {
         ShareCertData memory shareData = shareLogic.decodeExtensionData(certPrinter.getExtensionData(tokenId));
         shareData.terms.isConvertible = false;
         shareData.terms.conversionPrice = 1e18;
-        shareData.terms.targetConversionSeriesId = bytes32(0);
+        shareData.terms.targetConversionSeriesId = "";
         shareData.terms.hasMandatoryConversion = false;
 
         (bool valid, string memory error) = shareLogic.validateSeriesTerms(shareData.terms);
@@ -535,7 +535,7 @@ contract ShareExtensionForkTest is Test {
     function _buildInitialShareData() internal view returns (bytes memory) {
         TransferRestrictionException[] memory exceptions = new TransferRestrictionException[](1);
         exceptions[0] = TransferRestrictionException({
-            exceptionType: keccak256("ESTATE_PLANNING_TRANSFER"),
+            exceptionType: "ESTATE_PLANNING_TRANSFER",
             exceptionText: "Permitted estate planning transfer",
             requiresEvidence: true
         });
@@ -572,7 +572,6 @@ contract ShareExtensionForkTest is Test {
 
         ShareCertData memory shareData = ShareCertData({
             terms: SeriesTerms({
-                shareClassKey: keccak256("PREFERRED"),
                 seriesName: "Series A Preferred",
                 parValue: 0.01e18,
                 authorizedShares: 10_000_000e18,
@@ -589,7 +588,7 @@ contract ShareExtensionForkTest is Test {
                 dividendCompounding: false,
                 dividendIncreasesLiquidationAmount: true,
                 isConvertible: true,
-                targetConversionSeriesId: bytes32("COMMON"),
+                targetConversionSeriesId: "COMMON",
                 conversionPrice: 10e18,
                 antiDilutionType: AntiDilutionType.BroadBasedWeightedAverage,
                 allowsFractionalConversion: true,

@@ -269,7 +269,7 @@ contract ShareExtensionLogic {
             if (terms.conversionPrice != 0) {
                 return (false, "ShareExtensionLogic: conversionPrice must be 0 when not convertible");
             }
-            if (terms.targetConversionSeriesId != bytes32(0)) {
+            if (bytes(terms.targetConversionSeriesId).length != 0) {
                 return (false, "ShareExtensionLogic: targetConversionSeriesId must be zero when not convertible");
             }
             if (terms.hasMandatoryConversion) {
@@ -281,7 +281,7 @@ contract ShareExtensionLogic {
             if (terms.conversionPrice == 0) {
                 return (false, "ShareExtensionLogic: conversionPrice must be > 0 when convertible");
             }
-            if (terms.targetConversionSeriesId == bytes32(0)) {
+            if (bytes(terms.targetConversionSeriesId).length == 0) {
                 return (false, "ShareExtensionLogic: targetConversionSeriesId must be non-zero when convertible");
             }
         }

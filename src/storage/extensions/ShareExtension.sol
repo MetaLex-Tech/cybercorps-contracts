@@ -119,7 +119,7 @@ struct SpecialVotingRight {
 }
 
 struct TransferRestrictionException {
-    bytes32 exceptionType;
+    string exceptionType;
     string exceptionText;
     bool requiresEvidence;
 }
@@ -140,7 +140,6 @@ struct SplitRecord {
 }
 
 struct SeriesTerms {
-    bytes32 shareClassKey;
     string seriesName;
     uint256 parValue;
     uint256 authorizedShares;
@@ -157,7 +156,7 @@ struct SeriesTerms {
     bool dividendCompounding;
     bool dividendIncreasesLiquidationAmount;
     bool isConvertible;
-    bytes32 targetConversionSeriesId;
+    string targetConversionSeriesId;
     uint256 conversionPrice;
     AntiDilutionType antiDilutionType;
     bool allowsFractionalConversion;
@@ -284,8 +283,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
             abi.encodePacked(
                 '"terms": {',
                 string(abi.encodePacked(
-                    '"shareClassKey": "', _shareClassKeyToString(terms.shareClassKey),
-                    '", "seriesName": "', JsonLib.jsonEscape(terms.seriesName),
+                    '"seriesName": "', JsonLib.jsonEscape(terms.seriesName),
                     '", "authorizedShares": "', from18DecimalsToString(terms.authorizedShares),
                     '", "parValue": "', from18DecimalsToString(terms.parValue),
                     '", "originalIssuePrice": "', from18DecimalsToString(terms.originalIssuePrice),
@@ -311,7 +309,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
                     '", "dividendAccrualStartDate": "', Strings.toString(terms.dividendAccrualStartDate),
                     '", "dividendCompounding": "', JsonLib.boolToString(terms.dividendCompounding),
                     '", "dividendIncreasesLiquidationAmount": "', JsonLib.boolToString(terms.dividendIncreasesLiquidationAmount),
-                    '", "targetConversionSeriesId": "', Strings.toHexString(uint256(terms.targetConversionSeriesId), 32),
+                    '", "targetConversionSeriesId": "', JsonLib.jsonEscape(terms.targetConversionSeriesId),
                     '", "allowsFractionalConversion": "', JsonLib.boolToString(terms.allowsFractionalConversion),
                     '", "hasMandatoryConversion": "', JsonLib.boolToString(terms.hasMandatoryConversion),
                     '", "hasClassVotingRights": "', JsonLib.boolToString(terms.hasClassVotingRights),
@@ -361,12 +359,6 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
                 '"'
             )
         );
-    }
-
-    function _shareClassKeyToString(bytes32 key) internal pure returns (string memory) {
-        if (key == keccak256("COMMON")) return "Common";
-        if (key == keccak256("PREFERRED")) return "Preferred";
-        return Strings.toHexString(uint256(key), 32);
     }
 
     function _liquidationPreferenceTypeToString(
@@ -503,7 +495,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     ) internal pure returns (string memory) {
         return string(
             abi.encodePacked(
-                '{"exceptionType": "', Strings.toHexString(uint256(exception.exceptionType), 32),
+                '{"exceptionType": "', JsonLib.jsonEscape(exception.exceptionType),
                 '", "exceptionText": "', JsonLib.jsonEscape(exception.exceptionText),
                 '", "requiresEvidence": "', JsonLib.boolToString(exception.requiresEvidence),
                 '"}'
