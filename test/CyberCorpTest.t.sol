@@ -3909,8 +3909,8 @@ contract CyberCorpForkTest is Test {
         vm.startPrank(testAddress);
         bytes32 check = bytes32(bytes("ABV_safe_t"));
         console.logBytes32(check);
-     console.log("ace_safev1");
-        check = bytes32(bytes("ace_safev1"));
+     console.log("metalex_cyberstock_reg_d_v1_0");
+        check = bytes32(bytes("metalex_cyberstock_reg_d_v1_0"));
         console.logBytes32(check);
      
         bytes32 salt = bytes32(keccak256("TestSAFTE"));

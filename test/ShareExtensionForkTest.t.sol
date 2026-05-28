@@ -201,7 +201,7 @@ contract ShareExtensionForkTest is Test {
         workingData = shareLogic.addConversionTrigger(workingData, trigger);
 
         SpecialVotingRight memory votingRight = SpecialVotingRight({
-            matterType: keccak256("NEW_BOARD_SEAT"),
+            matterType: "NEW_BOARD_SEAT",
             votesPerShare: 2e18,
             threshold: 6000,
             isVetoRight: false,
@@ -560,7 +560,7 @@ contract ShareExtensionForkTest is Test {
 
         SpecialVotingRight[] memory votingRights = new SpecialVotingRight[](1);
         votingRights[0] = SpecialVotingRight({
-            matterType: keccak256("MERGER_APPROVAL"),
+            matterType: "MERGER_APPROVAL",
             votesPerShare: 1e18,
             threshold: 6000,
             isVetoRight: true,

@@ -110,7 +110,7 @@ struct MandatoryConversionTrigger {
 }
 
 struct SpecialVotingRight {
-    bytes32 matterType;
+    string matterType;
     uint256 votesPerShare;
     uint256 threshold;
     bool isVetoRight;
@@ -475,7 +475,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     ) internal pure returns (string memory) {
         return string(
             abi.encodePacked(
-                '{"matterType": "', Strings.toHexString(uint256(right.matterType), 32),
+                '{"matterType": "', JsonLib.jsonEscape(right.matterType),
                 '", "votesPerShare": "', from18DecimalsToString(right.votesPerShare),
                 '", "threshold": "', Strings.toString(right.threshold),
                 '", "isVetoRight": "', JsonLib.boolToString(right.isVetoRight),
