@@ -132,7 +132,7 @@ contract ShareExtensionForkTest is Test {
 
         string memory shareJson = _toJson(shareExtension.getExtensionURI(details.extensionData));
         assertEq(vm.parseJsonString(shareJson, ".shareDetails.terms.seriesName"), "Series A Preferred");
-        assertEq(vm.parseJsonString(shareJson, ".shareDetails.conversionRatio"), "1000000000000000000");
+        assertEq(vm.parseJsonString(shareJson, ".shareDetails.conversionRatio"), "1.00");
         assertEq(vm.parseJsonString(shareJson, ".shareDetails.terms.hasPayToPlay"), "true");
         assertEq(vm.parseJsonString(shareJson, ".shareDetails.terms.dragAlongTermsURI"), "ipfs://drag-along");
         assertEq(vm.parseJsonString(shareJson, ".shareDetails.mandatoryConversionTriggers[0].triggerType"), "QualifiedIPO");
@@ -166,7 +166,7 @@ contract ShareExtensionForkTest is Test {
         assertEq(ratio, (decoded.terms.originalIssuePrice * 1e18) / 8e18);
 
         string memory json = _toJson(shareExtension.getExtensionURI(updatedData));
-        assertEq(vm.parseJsonString(json, ".shareDetails.terms.conversionPrice"), "8000000000000000000");
+        assertEq(vm.parseJsonString(json, ".shareDetails.terms.conversionPrice"), "8.00");
     }
 
     function testLogic_RecordStockSplitAdjustsSharePayload() public {
@@ -175,7 +175,7 @@ contract ShareExtensionForkTest is Test {
 
         ShareCertData memory decoded = shareLogic.decodeExtensionData(updatedData);
 
-        assertEq(decoded.terms.authorizedShares, 20_000_000);
+        assertEq(decoded.terms.authorizedShares, 20_000_000e18);
         assertEq(decoded.terms.originalIssuePrice, 5e18);
         assertEq(decoded.terms.parValue, 5e15);
         assertEq(decoded.terms.conversionPrice, 5e18);
@@ -248,7 +248,7 @@ contract ShareExtensionForkTest is Test {
 
         // Series terms — scalar
         assertEq(vm.parseJsonString(json, ".shareDetails.terms.seriesName"), "Series A Preferred");
-        assertEq(vm.parseJsonString(json, ".shareDetails.terms.authorizedShares"), "10000000");
+        assertEq(vm.parseJsonString(json, ".shareDetails.terms.authorizedShares"), "10000000.00");
         assertEq(vm.parseJsonString(json, ".shareDetails.terms.liquidationPreferenceType"), "CappedParticipating");
         assertEq(vm.parseJsonString(json, ".shareDetails.terms.dividendType"), "Cumulative");
         assertEq(vm.parseJsonString(json, ".shareDetails.terms.isConvertible"), "true");
@@ -260,14 +260,14 @@ contract ShareExtensionForkTest is Test {
 
         // Certificate data
         assertEq(vm.parseJsonString(json, ".shareDetails.certificateData.isPartlyPaid"), "true");
-        assertEq(vm.parseJsonString(json, ".shareDetails.certificateData.amountPaid"), "50000000000000000000000");
-        assertEq(vm.parseJsonString(json, ".shareDetails.certificateData.totalConsideration"), "100000000000000000000000");
+        assertEq(vm.parseJsonString(json, ".shareDetails.certificateData.amountPaid"), "50000.00");
+        assertEq(vm.parseJsonString(json, ".shareDetails.certificateData.totalConsideration"), "100000.00");
         assertEq(vm.parseJsonString(json, ".shareDetails.certificateData.representationType"), "Certificated");
         assertEq(vm.parseJsonString(json, ".shareDetails.certificateData.holdingPeriodTackingApplied"), "false");
 
         // Derived / computed
         assertEq(vm.parseJsonString(json, ".shareDetails.paymentPercentage"), "5000");
-        assertEq(vm.parseJsonString(json, ".shareDetails.conversionRatio"), "1000000000000000000");
+        assertEq(vm.parseJsonString(json, ".shareDetails.conversionRatio"), "1.00");
 
         // Mandatory conversion trigger
         assertEq(vm.parseJsonString(json, ".shareDetails.mandatoryConversionTriggers[0].triggerType"), "QualifiedIPO");
@@ -571,7 +571,7 @@ contract ShareExtensionForkTest is Test {
                 shareClassKey: keccak256("PREFERRED"),
                 seriesName: "Series A Preferred",
                 parValue: 0.01e18,
-                authorizedShares: 10_000_000,
+                authorizedShares: 10_000_000e18,
                 originalIssuePrice: 10e18,
                 effectiveDate: block.timestamp,
                 sourceAuthorityURI: "ipfs://charter-series-a",

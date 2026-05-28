@@ -284,27 +284,27 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
                 string(abi.encodePacked(
                     '"shareClassKey": "', _shareClassKeyToString(terms.shareClassKey),
                     '", "seriesName": "', JsonLib.jsonEscape(terms.seriesName),
-                    '", "authorizedShares": "', Strings.toString(terms.authorizedShares),
-                    '", "parValue": "', Strings.toString(terms.parValue),
-                    '", "originalIssuePrice": "', Strings.toString(terms.originalIssuePrice),
-                    '", "liquidationPreferenceMultiple": "', Strings.toString(terms.liquidationPreferenceMultiple),
+                    '", "authorizedShares": "', from18DecimalsToString(terms.authorizedShares),
+                    '", "parValue": "', from18DecimalsToString(terms.parValue),
+                    '", "originalIssuePrice": "', from18DecimalsToString(terms.originalIssuePrice),
+                    '", "liquidationPreferenceMultiple": "', from18DecimalsToString(terms.liquidationPreferenceMultiple),
                     '", "liquidationPreferenceType": "', _liquidationPreferenceTypeToString(terms.liquidationPreferenceType),
                     '", "dividendType": "', _dividendTypeToString(terms.dividendType),
-                    '", "dividendRate": "', Strings.toString(terms.dividendRate),
+                    '", "dividendRate": "', from18DecimalsToString(terms.dividendRate),
                     '", "isConvertible": "', JsonLib.boolToString(terms.isConvertible),
-                    '", "conversionPrice": "', Strings.toString(terms.conversionPrice),
+                    '", "conversionPrice": "', from18DecimalsToString(terms.conversionPrice),
                     '", "antiDilutionType": "', _antiDilutionTypeToString(terms.antiDilutionType),
-                    '", "votesPerShare": "', Strings.toString(terms.votesPerShare),
+                    '", "votesPerShare": "', from18DecimalsToString(terms.votesPerShare),
                     '", "designatedBoardSeats": "', Strings.toString(uint256(terms.designatedBoardSeats)),
                     '", "isRedeemable": "', JsonLib.boolToString(terms.isRedeemable),
                     '", "redemptionType": "', _redemptionTypeToString(terms.redemptionType),
-                    '", "redemptionPrice": "', Strings.toString(terms.redemptionPrice),
+                    '", "redemptionPrice": "', from18DecimalsToString(terms.redemptionPrice),
                     '", '
                 )),
                 string(abi.encodePacked(
                     '"effectiveDate": "', Strings.toString(terms.effectiveDate),
                     '", "sourceAuthorityURI": "', JsonLib.jsonEscape(terms.sourceAuthorityURI),
-                    '", "participationCap": "', Strings.toString(terms.participationCap),
+                    '", "participationCap": "', from18DecimalsToString(terms.participationCap),
                     '", "seniorityRank": "', Strings.toString(terms.seniorityRank),
                     '", "dividendAccrualStartDate": "', Strings.toString(terms.dividendAccrualStartDate),
                     '", "dividendCompounding": "', JsonLib.boolToString(terms.dividendCompounding),
@@ -339,8 +339,8 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
             abi.encodePacked(
                 '"certificateData": {',
                 '"isPartlyPaid": "', JsonLib.boolToString(cert.isPartlyPaid),
-                '", "amountPaid": "', Strings.toString(cert.amountPaid),
-                '", "totalConsideration": "', Strings.toString(cert.totalConsideration),
+                '", "amountPaid": "', from18DecimalsToString(cert.amountPaid),
+                '", "totalConsideration": "', from18DecimalsToString(cert.totalConsideration),
                 '", "sourceAuthorityURI": "', JsonLib.jsonEscape(cert.sourceAuthorityURI),
                 '", "representationType": "', _representationTypeToString(cert.representationType),
                 '", "holdingPeriodTackingApplied": "', JsonLib.boolToString(cert.holdingPeriodTackingApplied),
@@ -353,7 +353,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return string(
             abi.encodePacked(
                 '"paymentPercentage": "', Strings.toString(_getPaymentPercentage(share.certificateData)),
-                '", "conversionRatio": "', Strings.toString(_getConversionRatio(share.terms)),
+                '", "conversionRatio": "', from18DecimalsToString(_getConversionRatio(share.terms)),
                 '"'
             )
         );
@@ -445,8 +445,8 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return string(
             abi.encodePacked(
                 '{"triggerType": "', _mandatoryConversionTriggerTypeToString(trigger.triggerType),
-                '", "primaryThreshold": "', Strings.toString(trigger.primaryThreshold),
-                '", "secondaryThreshold": "', Strings.toString(trigger.secondaryThreshold),
+                '", "primaryThreshold": "', from18DecimalsToString(trigger.primaryThreshold),
+                '", "secondaryThreshold": "', from18DecimalsToString(trigger.secondaryThreshold),
                 '", "additionalConditions": "', JsonLib.jsonEscape(trigger.additionalConditions),
                 '", "description": "', JsonLib.jsonEscape(trigger.description),
                 '"}'
@@ -472,7 +472,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return string(
             abi.encodePacked(
                 '{"matterType": "', Strings.toHexString(uint256(right.matterType), 32),
-                '", "votesPerShare": "', Strings.toString(right.votesPerShare),
+                '", "votesPerShare": "', from18DecimalsToString(right.votesPerShare),
                 '", "threshold": "', Strings.toString(right.threshold),
                 '", "isVetoRight": "', JsonLib.boolToString(right.isVetoRight),
                 '", "scope": "', _votingScopeToString(right.scope),
@@ -580,6 +580,19 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     function _getPaymentPercentage(CertificateData memory cert) internal pure returns (uint256 percentage) {
         if (!cert.isPartlyPaid || cert.totalConsideration == 0) return PERCENTAGE_PRECISION;
         percentage = (cert.amountPaid * PERCENTAGE_PRECISION) / cert.totalConsideration;
+    }
+
+    /// @notice Converts an 18-decimal value to a string with 2 decimal places.
+    function from18DecimalsToString(uint256 value) public pure returns (string memory) {
+        uint256 valueInCents = value / 1e16;
+        uint256 wholePart = valueInCents / 100;
+        uint256 centsPart = valueInCents % 100;
+
+        string memory centsStr = centsPart < 10
+            ? string(abi.encodePacked("0", Strings.toString(centsPart)))
+            : Strings.toString(centsPart);
+
+        return string(abi.encodePacked(Strings.toString(wholePart), ".", centsStr));
     }
 
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyOwner {}
