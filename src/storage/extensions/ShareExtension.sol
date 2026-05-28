@@ -176,7 +176,9 @@ struct SeriesTerms {
     bool hasRegistrationRights;
     string registrationRightsURI;
     bool hasProRataRights;
+    string proRataRightsURI;
     bool hasInformationRights;
+    string informationRightsURI;
     bool hasDragAlongRights;
     string dragAlongTermsURI;
 }
@@ -324,7 +326,9 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
                     '", "hasRegistrationRights": "', JsonLib.boolToString(terms.hasRegistrationRights),
                     '", "registrationRightsURI": "', JsonLib.jsonEscape(terms.registrationRightsURI),
                     '", "hasProRataRights": "', JsonLib.boolToString(terms.hasProRataRights),
+                    '", "proRataRightsURI": "', JsonLib.jsonEscape(terms.proRataRightsURI),
                     '", "hasInformationRights": "', JsonLib.boolToString(terms.hasInformationRights),
+                    '", "informationRightsURI": "', JsonLib.jsonEscape(terms.informationRightsURI),
                     '", "hasDragAlongRights": "', JsonLib.boolToString(terms.hasDragAlongRights),
                     '", "dragAlongTermsURI": "', JsonLib.jsonEscape(terms.dragAlongTermsURI),
                     '"'

@@ -134,6 +134,8 @@ contract ShareExtensionForkTest is Test {
         assertEq(vm.parseJsonString(shareJson, ".shareDetails.terms.seriesName"), "Series A Preferred");
         assertEq(vm.parseJsonString(shareJson, ".shareDetails.conversionRatio"), "1.00");
         assertEq(vm.parseJsonString(shareJson, ".shareDetails.terms.hasPayToPlay"), "true");
+        assertEq(vm.parseJsonString(shareJson, ".shareDetails.terms.proRataRightsURI"), "ipfs://pro-rata-rights");
+        assertEq(vm.parseJsonString(shareJson, ".shareDetails.terms.informationRightsURI"), "ipfs://information-rights");
         assertEq(vm.parseJsonString(shareJson, ".shareDetails.terms.dragAlongTermsURI"), "ipfs://drag-along");
         assertEq(vm.parseJsonString(shareJson, ".shareDetails.mandatoryConversionTriggers[0].triggerType"), "QualifiedIPO");
         assertEq(vm.parseJsonString(shareJson, ".shareDetails.transferRestrictions[0].restrictionType"), "SecuritiesActRestriction");
@@ -256,6 +258,8 @@ contract ShareExtensionForkTest is Test {
         assertEq(vm.parseJsonString(json, ".shareDetails.terms.seniorityRank"), "1");
         assertEq(vm.parseJsonString(json, ".shareDetails.terms.hasMandatoryConversion"), "true");
         assertEq(vm.parseJsonString(json, ".shareDetails.terms.hasPayToPlay"), "true");
+        assertEq(vm.parseJsonString(json, ".shareDetails.terms.proRataRightsURI"), "ipfs://pro-rata-rights");
+        assertEq(vm.parseJsonString(json, ".shareDetails.terms.informationRightsURI"), "ipfs://information-rights");
         assertEq(vm.parseJsonString(json, ".shareDetails.terms.dragAlongTermsURI"), "ipfs://drag-along");
 
         // Certificate data
@@ -604,7 +608,9 @@ contract ShareExtensionForkTest is Test {
                 hasRegistrationRights: true,
                 registrationRightsURI: "ipfs://registration-rights",
                 hasProRataRights: true,
+                proRataRightsURI: "ipfs://pro-rata-rights",
                 hasInformationRights: true,
+                informationRightsURI: "ipfs://information-rights",
                 hasDragAlongRights: true,
                 dragAlongTermsURI: "ipfs://drag-along"
             }),

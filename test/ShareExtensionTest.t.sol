@@ -110,6 +110,24 @@ contract ShareExtensionTest is Test {
         assertEq(vm.parseJsonString(json, ".terms.registrationRightsURI"), input);
     }
 
+    function testBuildSeriesJson_ProRataRightsURI_RealWorldValues() public view {
+        string memory input = 'https://example.com/pro-rata?rights="standard"';
+        SeriesTerms memory t;
+        t.proRataRightsURI = input;
+        string memory json = harness.buildSeriesJson(t);
+        vm.parseJson(json);
+        assertEq(vm.parseJsonString(json, ".terms.proRataRightsURI"), input);
+    }
+
+    function testBuildSeriesJson_InformationRightsURI_RealWorldValues() public view {
+        string memory input = 'https://example.com/information-rights?version="2024"';
+        SeriesTerms memory t;
+        t.informationRightsURI = input;
+        string memory json = harness.buildSeriesJson(t);
+        vm.parseJson(json);
+        assertEq(vm.parseJsonString(json, ".terms.informationRightsURI"), input);
+    }
+
     function testBuildSeriesJson_DragAlongTermsURI_RealWorldValues() public view {
         string memory input = 'https://example.com/drag-along?v="2024"';
         SeriesTerms memory t;
