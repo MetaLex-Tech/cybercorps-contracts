@@ -55,7 +55,7 @@ import "./storage/IssuanceManagerStorage.sol";
 /// @notice Manages the issuance and lifecycle of digital certificates representing securities and more
 /// @dev Implements UUPS upgradeable pattern and BorgAuth access control
 contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
-    string public constant DEPLOY_VERSION = "4"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "4.1"; // For version-tracking on all deployment and future upgrades
 
     // IssuanceManager errors
     error CompanyDetailsNotSet();
