@@ -75,8 +75,7 @@ interface IIssuanceManager {
         address indexed certificate,
         uint256 amount,
         uint256 cap,
-        CertificateDetails details,
-        string tokenURI
+        CertificateDetails details
     );
     event CompanyDetailsUpdated(string companyName, string jurisdiction);
     event CertPrinterBeaconImplementationUpgraded(address implementation);

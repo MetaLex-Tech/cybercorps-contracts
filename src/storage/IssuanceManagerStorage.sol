@@ -101,8 +101,7 @@ library IssuanceManagerStorage {
         address indexed certificate,
         uint256 amount,
         uint256 cap,
-        CertificateDetails details,
-        string tokenURI
+        CertificateDetails details
     );
     event ScripToCertMinimumSet(address indexed certAddress, uint256 minimum);
     event ScripifyWhitelistEnabledSet(address indexed certAddress, bool enabled);
@@ -566,7 +565,7 @@ library IssuanceManagerStorage {
         ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
         uint256 tokenId = cert.totalSupply();
         id = cert.safeMint(tokenId, to, details);
-        _emitCertificateCreated(tokenId, certAddress, details, cert.tokenURI(tokenId));
+        _emitCertificateCreated(tokenId, certAddress, details);
     }
 
     function executeAssignCert(
@@ -588,8 +587,7 @@ library IssuanceManagerStorage {
         uint256 timestamp
     ) external returns (uint256 tokenId) {
         ICyberCertPrinter cert;
-        string memory tokenURI;
-        (cert, tokenId, tokenURI) = _mintAssignedCert(
+        (cert, tokenId) = _mintAssignedCert(
             certAddress,
             investor,
             details,
@@ -616,7 +614,7 @@ library IssuanceManagerStorage {
             cert.addIssuerSignature(tokenId, escrowedOfficerSignature);
         }
 
-        _emitCertificateCreated(tokenId, certAddress, details, tokenURI);
+        _emitCertificateCreated(tokenId, certAddress, details);
     }
 
     function executeCreateCertSignAndAssign(
@@ -629,8 +627,7 @@ library IssuanceManagerStorage {
         string memory investorName
     ) external returns (uint256 tokenId) {
         ICyberCertPrinter cert;
-        string memory tokenURI;
-        (cert, tokenId, tokenURI) = _mintAssignedCert(
+        (cert, tokenId) = _mintAssignedCert(
             certAddress,
             investor,
             details,
@@ -657,7 +654,7 @@ library IssuanceManagerStorage {
             cert.addIssuerSignature(tokenId, escrowedOfficerSignature);
         }
 
-        _emitCertificateCreated(tokenId, certAddress, details, tokenURI);
+        _emitCertificateCreated(tokenId, certAddress, details);
     }
 
     function executeAddIssuerSignature(
@@ -1214,14 +1211,13 @@ library IssuanceManagerStorage {
         string memory investorName
     )
         internal
-        returns (ICyberCertPrinter cert, uint256 tokenId, string memory tokenURI)
+        returns (ICyberCertPrinter cert, uint256 tokenId)
     {
         _requireCompanyDetailsSet();
         cert = ICyberCertPrinter(certAddress);
         tokenId = cert.totalSupply();
         cert.safeMintAndAssign(investor, tokenId, details, investorName);
-        tokenURI = cert.tokenURI(tokenId);
-        _emitCertificateCreated(tokenId, certAddress, details, tokenURI);
+        _emitCertificateCreated(tokenId, certAddress, details);
     }
 
     function _requireCompanyDetailsSet() internal view {
@@ -1233,16 +1229,14 @@ library IssuanceManagerStorage {
     function _emitCertificateCreated(
         uint256 tokenId,
         address certAddress,
-        CertificateDetails memory details,
-        string memory tokenURI
+        CertificateDetails memory details
     ) internal {
         emit CertificateCreated(
             tokenId,
             certAddress,
             details.investmentAmountUSD,
             details.issuerUSDValuationAtTimeOfInvestment,
-            details,
-            tokenURI
+            details
         );
     }
 
