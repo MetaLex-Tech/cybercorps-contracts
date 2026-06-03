@@ -19,6 +19,10 @@ import {
     CyberCorpComplianceData,
     FeeDetail
 } from "../src/storage/extensions/CyberCorpComplianceExtension.sol";
+import {
+    CyberCorpFundExtension,
+    CyberCorpFundData
+} from "../src/storage/extensions/CyberCorpFundExtension.sol";
 
 contract CyberCorpExtensionTest is Test {
     address internal owner;
@@ -255,6 +259,69 @@ contract CyberCorpExtensionTest is Test {
         assertTrue(
             _contains(extensionJson, '"No sanctioned persons"'),
             "holder restrictions missing"
+        );
+    }
+
+    function test_SetFundExtensionDataWithFundWideTermsAndDocuments() public {
+        CyberCorpFundExtension fundExtension = new CyberCorpFundExtension();
+        fundExtension.initialize(address(auth));
+
+        string[] memory governingDocumentURIs = new string[](3);
+        governingDocumentURIs[0] = "ipfs://operating-agreement";
+        governingDocumentURIs[1] = "ipfs://subscription-agreement";
+        governingDocumentURIs[2] = "ipfs://ppm";
+
+        CyberCorpFundData memory fundData = CyberCorpFundData({
+            fundEntityType: "LP",
+            icaExceptionRelied: "3(c)(7)",
+            transferRestrictionHookAddress: address(0xF00D),
+            governingDocumentURIs: governingDocumentURIs,
+            metadataURI: "ipfs://fund-metadata"
+        });
+
+        bytes memory encoded = fundExtension.encodeExtensionData(fundData);
+
+        vm.startPrank(owner);
+        cyberCorp.setExtension(
+            address(fundExtension),
+            fundExtension.EXTENSION_TYPE()
+        );
+        cyberCorp.setExtensionData(encoded);
+        vm.stopPrank();
+
+        CyberCorpFundData memory decoded =
+            fundExtension.decodeExtensionData(cyberCorp.extensionData());
+
+        assertEq(cyberCorp.extension(), address(fundExtension));
+        assertEq(cyberCorp.extensionType(), fundExtension.EXTENSION_TYPE());
+        assertEq(decoded.fundEntityType, "LP");
+        assertEq(decoded.icaExceptionRelied, "3(c)(7)");
+        assertEq(decoded.transferRestrictionHookAddress, address(0xF00D));
+        assertEq(decoded.governingDocumentURIs.length, 3);
+        assertEq(decoded.governingDocumentURIs[2], "ipfs://ppm");
+        assertEq(decoded.metadataURI, "ipfs://fund-metadata");
+
+        string memory extensionJson = cyberCorp.getExtensionURI();
+        assertEq(extensionJson, fundExtension.getExtensionURI(encoded));
+        assertTrue(
+            bytes(extensionJson).length > 0,
+            "fund extension json should not be empty"
+        );
+        assertTrue(
+            _contains(extensionJson, '"fundEntityType": "LP"'),
+            "fund entity type missing"
+        );
+        assertTrue(
+            _contains(extensionJson, '"icaExceptionRelied": "3(c)(7)"'),
+            "ICA exception missing"
+        );
+        assertTrue(
+            _contains(extensionJson, "ipfs://operating-agreement"),
+            "governing document missing"
+        );
+        assertTrue(
+            _contains(extensionJson, '"metadataURI": "ipfs://fund-metadata"'),
+            "metadata URI missing"
         );
     }
 
