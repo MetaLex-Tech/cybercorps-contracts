@@ -50,4 +50,8 @@ interface IDealManagerFactory {
 
     function getDefaultFeeRatio() external view returns (uint256);
     function getPlatformPayable() external view returns (address);
+
+    // Integrator whitelist and fee split (cyberTRADE; implementation pending)
+    function isIntegratorWhitelisted(address integrator) external view returns (bool);
+    function getIntegratorFeeRatio() external view returns (uint256);
 }

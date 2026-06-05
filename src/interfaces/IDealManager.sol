@@ -42,6 +42,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "./IIssuanceManager.sol";
+import "../storage/SecondaryTradeStorage.sol";
 
 interface IDealManager {
     function proposeDeal(
@@ -125,6 +126,15 @@ interface IDealManager {
         address _corp,
         address _dealRegistry,
         address _issuanceManager,
-        address _upgradeFactory 
+        address _upgradeFactory
     ) external;
+
+    // Secondary trade
+    function postOffer(PostOfferParams calldata params) external returns (bytes32 offerAgreementId);
+    function cancelOffer(bytes32 offerAgreementId, bytes calldata signature) external;
+    function acceptOffer(AcceptOfferParams calldata params) external returns (bytes32 settlementAgreementId);
+    function setMinTradeThreshold(uint256 units, uint256 consideration) external;
+    function setDefaultIntegrator(address integrator) external;
+    function getOffer(bytes32 offerAgreementId) external view returns (Offer memory);
+    function getSecondaryEscrow(bytes32 agreementId) external view returns (SecondaryEscrow memory);
 }

@@ -137,4 +137,9 @@ interface ICyberCertPrinter is IERC721 {
     function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256);
     function legalOwnerOf(uint256 tokenId) external view returns (address);
     function setTokenTransferable(uint256 tokenId, bool value) external;
+
+    // Unit reservation system (cyberTRADE; implementation pending)
+    function reserveUnits(uint256 tokenId, bytes32 reservationId, uint256 units) external;
+    function releaseUnits(bytes32 reservationId) external;
+    function consumeUnits(bytes32 reservationId) external;
 }

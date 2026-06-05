@@ -187,4 +187,24 @@ interface ICyberAgreementRegistry {
     function isFinalized(bytes32 contractId) external view returns (bool);
 
     function allPartiesFinalized(bytes32 contractId) external view returns (bool);
+
+    // Open-agreement / binding-offer model (cyberTRADE; implementation pending)
+    function createOpenContract(
+        bytes32 templateId,
+        uint256 salt,
+        string[] calldata globalValues,
+        address[] calldata parties,
+        string[][] calldata partyValues,
+        bytes calldata offerorSignature,
+        address dealManager,
+        uint256 expiry
+    ) external returns (bytes32 agreementId);
+
+    function attachAndSignAsPartyB(
+        bytes32 offerAgreementId,
+        address partyB,
+        string[] calldata partyBValues,
+        bytes calldata partyBSignature,
+        address dealManager
+    ) external returns (bytes32 settlementAgreementId);
 }

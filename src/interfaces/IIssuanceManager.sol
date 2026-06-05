@@ -372,4 +372,15 @@ interface IIssuanceManager {
     function cyberScripBeacon() external view returns (UpgradeableBeacon);
     function printers(uint256 index) external view returns (address);
     function setUriBuilder(address _uriBuilder) external;
+
+    // Secondary trade entry points (cyberTRADE; implementation pending)
+    function secondaryTransfer(bytes calldata dealMetadata) external;
+    function attachOpenEndorsement(
+        address certPrinter,
+        uint256 tokenId,
+        address endorser,
+        address endorsee,
+        bytes calldata endorsementSig,
+        bytes32 agreementId
+    ) external;
 }
