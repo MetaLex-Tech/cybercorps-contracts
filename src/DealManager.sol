@@ -50,14 +50,20 @@ import "./libs/auth.sol";
 import "./storage/DealManagerStorage.sol";
 import "./storage/DealManagerFactoryStorage.sol";
 import "./storage/BorgAuthStorage.sol";
+import "./storage/SecondaryTradeStorage.sol";
 import "./interfaces/ICyberCorp.sol";
 import "./interfaces/IDealManagerFactory.sol";
+import "./interfaces/ICyberCertPrinter.sol";
+import "./interfaces/ICyberAgreementRegistry.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @title DealManager
 /// @notice Manages the lifecycle of deals between parties, including creation, signing, payment, and finalization for a CyberCorp
 /// @dev Implements UUPS upgradeable pattern and integrates with BorgAuth for access control
 contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeable, ReentrancyGuard {
     using DealManagerStorage for DealManagerStorage.DealManagerData;
+    using SafeERC20 for IERC20;
 
     string public constant DEPLOY_VERSION = "4"; // For version-tracking on all deployment and future upgrades
 
@@ -82,6 +88,14 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
     error NotUpgradeFactory();
     error DealNotExpired();
     error NotRefImplementation();
+    // Secondary trade errors
+    error OfferNotLive();
+    error OfferExpired();
+    error OfferBelowMinThreshold();
+    error IntegratorNotWhitelisted();
+    error PartialFillBelowMinThreshold();
+    error UnitsExceedOffer();
+    error NotOfferor();
 
     /// @notice Emitted when a new deal is proposed
     /// @param agreementId Unique identifier for the agreement
@@ -116,6 +130,13 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
         address dealRegistry,
         bool fillUnallocated
     );
+    // Secondary trade events
+    event OfferPosted(bytes32 indexed offerAgreementId, address indexed offeror, OfferSide side, uint256 units, uint256 consideration);
+    event OfferCancelled(bytes32 indexed offerAgreementId, address indexed offeror);
+    event OfferAccepted(bytes32 indexed offerAgreementId, bytes32 indexed settlementAgreementId, address indexed acceptor, uint256 units);
+    event SecondaryDealFinalized(bytes32 indexed agreementId, address seller, address buyer, uint256 consideration);
+    event MinTradeThresholdSet(uint256 minUnits, uint256 minConsideration, address setter);
+
 
     /// @notice Maps agreement IDs to arrays of counter party values for closed deals.
     mapping(bytes32 => string[]) public counterPartyValues;
@@ -367,8 +388,12 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
         // Effect: update status
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).finalizeContract(agreementId);
 
-        // Interaction: payments
-        finalizeEscrow(agreementId);
+        // Interaction: branch on trade type
+        if (SecondaryTradeStorage.hasSecondaryEscrow(agreementId)) {
+            _finalizeSecondaryEscrow(agreementId);
+        } else {
+            finalizeEscrow(agreementId);
+        }
         emit DealFinalized(
             agreementId,
             msg.sender,
@@ -390,21 +415,25 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
 
         // Effect: update status
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
-        for(uint256 i = 0; i < deal.corpAssets.length; i++) {
-            if(deal.corpAssets[i].tokenType == TokenType.ERC721) {
-                DealManagerStorage.getIssuanceManager().voidCertificate(
-                    deal.corpAssets[i].tokenAddress, 
-                    deal.corpAssets[i].tokenId
-                );
-            }
-        }
 
-        if(deal.status == EscrowStatus.PAID)
-            // Interaction: payment
-            voidAndRefund(agreementId);
-        else if(deal.status == EscrowStatus.PENDING)
-            // Effect: update status
-            voidEscrow(agreementId);
+        if (SecondaryTradeStorage.hasSecondaryEscrow(agreementId)) {
+            _voidSecondaryDeal(agreementId);
+        } else {
+            for(uint256 i = 0; i < deal.corpAssets.length; i++) {
+                if(deal.corpAssets[i].tokenType == TokenType.ERC721) {
+                    DealManagerStorage.getIssuanceManager().voidCertificate(
+                        deal.corpAssets[i].tokenAddress,
+                        deal.corpAssets[i].tokenId
+                    );
+                }
+            }
+            if(deal.status == EscrowStatus.PAID)
+                // Interaction: payment
+                voidAndRefund(agreementId);
+            else if(deal.status == EscrowStatus.PENDING)
+                // Effect: update status
+                voidEscrow(agreementId);
+        }
     }
 
     /// @notice Revokes a pending deal
@@ -598,6 +627,322 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
     /// @return Payable address for the fees
     function getPlatformPayable() public override view returns (address) {
         return IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).getPlatformPayable();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Secondary trade — threshold setters
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function setMinTradeThreshold(uint256 units, uint256 consideration) external onlyAdmin {
+        SecondaryTradeStorage.setMinTradeThreshold(units, consideration);
+        emit MinTradeThresholdSet(units, consideration, msg.sender);
+    }
+
+    function setDefaultIntegrator(address integrator) external onlyAdmin {
+        if (integrator != address(0)) {
+            if (!IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).isIntegratorWhitelisted(integrator))
+                revert IntegratorNotWhitelisted();
+        }
+        SecondaryTradeStorage.setDefaultIntegrator(integrator);
+    }
+
+    function getOffer(bytes32 offerAgreementId) external view returns (Offer memory) {
+        return SecondaryTradeStorage.getOffer(offerAgreementId);
+    }
+
+    function getSecondaryEscrow(bytes32 agreementId) external view returns (SecondaryEscrow memory) {
+        return SecondaryTradeStorage.getSecondaryEscrow(agreementId);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Secondary trade — offer lifecycle
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function postOffer(PostOfferParams calldata params) external nonReentrant returns (bytes32 offerAgreementId) {
+        // Validate integrator
+        address integrator = params.integrator != address(0)
+            ? params.integrator
+            : SecondaryTradeStorage.getDefaultIntegrator();
+        if (integrator != address(0)) {
+            if (!IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).isIntegratorWhitelisted(integrator))
+                revert IntegratorNotWhitelisted();
+        }
+
+        // Validate min threshold
+        uint256 minUnits = SecondaryTradeStorage.getMinTradeUnits();
+        if (minUnits > 0 && params.units < minUnits) revert OfferBelowMinThreshold();
+        uint256 minConsid = SecondaryTradeStorage.getMinTradeConsideration();
+        if (minConsid > 0 && params.consideration < minConsid) revert OfferBelowMinThreshold();
+
+        // Evaluate offeror-side threshold conditions
+        for (uint256 i = 0; i < params.thresholdConditions.length; i++) {
+            if (!ICondition(params.thresholdConditions[i]).checkCondition(address(this), msg.sig, ""))
+                revert AgreementConditionsNotMet();
+        }
+
+        // Create open-to-matching agreement in CyberAgreementRegistry
+        address[] memory parties = new address[](1);
+        parties[0] = msg.sender;
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = params.offerorPartyValues;
+
+        offerAgreementId = ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).createOpenContract(
+            params.templateId,
+            params.salt,
+            params.globalValues,
+            parties,
+            partyValues,
+            params.offerorAgreementSig,
+            address(this),
+            params.validUntil
+        );
+
+        bytes32 reservationId;
+
+        if (params.side == OfferSide.SELL) {
+            // Reserve units on the seller's cert
+            reservationId = keccak256(abi.encodePacked(offerAgreementId, msg.sender, params.tokenId));
+            ICyberCertPrinter(params.certPrinter).reserveUnits(params.tokenId, reservationId, params.units);
+        } else {
+            // BID: pull consideration into a LexScrowStorage holding escrow
+            Token[] memory corpAssets = new Token[](0);
+            Token[] memory buyerAssets = new Token[](1);
+            buyerAssets[0] = Token(TokenType.ERC20, params.paymentToken, 0, params.consideration, true);
+            createEscrow(offerAgreementId, msg.sender, corpAssets, buyerAssets, params.validUntil);
+            handleCounterPartyPayment(offerAgreementId);
+        }
+
+        // Store offer record
+        SecondaryTradeStorage.setOffer(offerAgreementId, Offer({
+            offeror: msg.sender,
+            side: params.side,
+            certPrinter: params.certPrinter,
+            tokenId: params.tokenId,
+            units: params.units,
+            paymentToken: params.paymentToken,
+            consideration: params.consideration,
+            exemptionPathway: params.exemptionPathway,
+            validUntil: params.validUntil,
+            counterpartyRestrictions: params.counterpartyRestrictions,
+            additionalTerms: params.additionalTerms,
+            integrator: integrator,
+            status: OfferStatus.LIVE,
+            unitsAccepted: 0,
+            offerAgreementId: offerAgreementId,
+            openEndorsementSig: params.openEndorsementSig,
+            unitReservationId: reservationId
+        }));
+
+        emit OfferPosted(offerAgreementId, msg.sender, params.side, params.units, params.consideration);
+    }
+
+    function cancelOffer(bytes32 offerAgreementId, bytes calldata signature) external nonReentrant {
+        Offer storage offer = SecondaryTradeStorage.getOffer(offerAgreementId);
+        if (offer.offeror != msg.sender) revert NotOfferor();
+        if (offer.status != OfferStatus.LIVE) revert OfferNotLive();
+
+        offer.status = OfferStatus.CANCELLED;
+
+        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(
+            offerAgreementId, msg.sender, signature
+        );
+
+        if (offer.side == OfferSide.SELL) {
+            if (offer.unitReservationId != bytes32(0)) {
+                ICyberCertPrinter(offer.certPrinter).releaseUnits(offer.unitReservationId);
+            }
+        } else {
+            // BID: refund holding escrow (agreement is already voided above)
+            voidAndRefund(offerAgreementId);
+        }
+
+        emit OfferCancelled(offerAgreementId, msg.sender);
+    }
+
+    function acceptOffer(AcceptOfferParams calldata params) external nonReentrant returns (bytes32 settlementAgreementId) {
+        Offer storage offer = SecondaryTradeStorage.getOffer(params.offerAgreementId);
+
+        if (offer.status != OfferStatus.LIVE) revert OfferNotLive();
+        if (block.timestamp > offer.validUntil) revert OfferExpired();
+
+        uint256 remainingUnits = offer.units - offer.unitsAccepted;
+        if (params.units > remainingUnits) revert UnitsExceedOffer();
+
+        uint256 minUnits = SecondaryTradeStorage.getMinTradeUnits();
+        if (minUnits > 0 && params.units < minUnits) revert PartialFillBelowMinThreshold();
+
+        // Evaluate acceptor-side threshold conditions
+        for (uint256 i = 0; i < params.thresholdConditions.length; i++) {
+            if (!ICondition(params.thresholdConditions[i]).checkCondition(address(this), msg.sig, ""))
+                revert AgreementConditionsNotMet();
+        }
+
+        // Create fully-signed settlement agreement via registry
+        settlementAgreementId = ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).attachAndSignAsPartyB(
+            params.offerAgreementId,
+            msg.sender,
+            params.acceptorPartyValues,
+            params.acceptorAgreementSig,
+            address(this)
+        );
+
+        // Resolve cert printer, tokenId, endorser, and endorsement sig per offer side
+        address certPrinter;
+        uint256 tokenId;
+        address endorser;
+        bytes memory endorsementSig;
+        bytes32 reservationId;
+
+        if (offer.side == OfferSide.SELL) {
+            certPrinter = offer.certPrinter;
+            tokenId = offer.tokenId;
+            endorser = offer.offeror;
+            endorsementSig = offer.openEndorsementSig;
+            reservationId = offer.unitReservationId;
+        } else {
+            certPrinter = params.sellerCertPrinter;
+            tokenId = params.sellerTokenId;
+            endorser = msg.sender;
+            endorsementSig = params.openEndorsementSig;
+            // Reserve units on the seller's cert at acceptance (bid flow)
+            reservationId = keccak256(abi.encodePacked(settlementAgreementId, msg.sender, tokenId));
+            ICyberCertPrinter(certPrinter).reserveUnits(tokenId, reservationId, params.units);
+        }
+
+        // Materialize open endorsement on seller's Ledger Entry Token
+        DealManagerStorage.getIssuanceManager().attachOpenEndorsement(
+            certPrinter,
+            tokenId,
+            endorser,
+            params.buyer,
+            endorsementSig,
+            settlementAgreementId
+        );
+
+        // Compute pro-rata consideration for partial fills
+        uint256 partialConsideration = offer.units > 0
+            ? offer.consideration * params.units / offer.units
+            : 0;
+
+        // Build settlement escrow in LexScrowStorage
+        Token[] memory corpAssets = new Token[](0);
+        Token[] memory buyerAssets = new Token[](1);
+        buyerAssets[0] = Token(TokenType.ERC20, offer.paymentToken, 0, partialConsideration, true);
+
+        if (offer.side == OfferSide.BID) {
+            // Funds are already held in the bid's holding escrow; migrate by voiding it
+            voidEscrow(params.offerAgreementId);
+            createEscrow(settlementAgreementId, params.buyer, corpAssets, buyerAssets, offer.validUntil);
+            // Mark PAID directly — funds are already in this contract from the holding escrow
+            Escrow storage settlementEscrow = LexScrowStorage.getEscrow(settlementAgreementId);
+            settlementEscrow.status = EscrowStatus.PAID;
+            emit DealPaidAt(settlementAgreementId, LexScrowStorage.getDealRegistry(), block.timestamp);
+        } else {
+            // SELL offer: create escrow and pull buyer's payment
+            createEscrow(settlementAgreementId, params.buyer, corpAssets, buyerAssets, offer.validUntil);
+            handleCounterPartyPayment(settlementAgreementId);
+        }
+
+        // Attach closing conditions to the settlement escrow
+        for (uint256 i = 0; i < params.closingConditions.length; i++) {
+            LexScrowStorage.addConditionToEscrow(settlementAgreementId, ICondition(params.closingConditions[i]));
+        }
+
+        // Build deal metadata for IssuanceManager.secondaryTransfer
+        bytes memory dealMetadata = abi.encode(
+            certPrinter,
+            tokenId,
+            params.units,
+            params.buyer,
+            params.buyerName,
+            params.fullSale,
+            params.buyerHostingMode,
+            params.adminMultisig,
+            offer.exemptionPathway,
+            reservationId,
+            settlementAgreementId
+        );
+
+        // Store companion SecondaryEscrow
+        SecondaryTradeStorage.setSecondaryEscrow(settlementAgreementId, SecondaryEscrow({
+            sellerAddress: offer.side == OfferSide.SELL ? offer.offeror : msg.sender,
+            feeDestination: offer.integrator,
+            offerId: params.offerAgreementId,
+            sellerCertPrinter: certPrinter,
+            unitReservationId: reservationId,
+            dealMetadata: dealMetadata
+        }));
+
+        // Update offer fill state
+        offer.unitsAccepted += params.units;
+        if (offer.unitsAccepted >= offer.units) {
+            offer.status = OfferStatus.FULLY_ACCEPTED;
+        } else {
+            offer.status = OfferStatus.PARTIALLY_ACCEPTED;
+        }
+
+        emit OfferAccepted(params.offerAgreementId, settlementAgreementId, msg.sender, params.units);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Secondary trade — internals
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function _finalizeSecondaryEscrow(bytes32 agreementId) internal {
+        Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
+        SecondaryEscrow storage secEscrow = SecondaryTradeStorage.getSecondaryEscrow(agreementId);
+
+        if (block.timestamp > escrow.expiry) revert DealExpired();
+        if (escrow.status != EscrowStatus.PAID) revert DealNotPaid();
+
+        // Effect: mark finalized before external calls
+        escrow.status = EscrowStatus.FINALIZED;
+        emit DealFinalizedAt(agreementId, LexScrowStorage.getDealRegistry(), block.timestamp);
+
+        uint256 consideration = escrow.buyerAssets[0].amount;
+        address paymentToken = escrow.buyerAssets[0].tokenAddress;
+
+        uint256 fee = computeFee(consideration);
+        uint256 toSeller = consideration - fee;
+
+        if (toSeller > 0) {
+            IERC20(paymentToken).safeTransfer(secEscrow.sellerAddress, toSeller);
+        }
+
+        if (fee > 0) {
+            emit FeeDistributed(agreementId, paymentToken, fee);
+            address feeDestination = secEscrow.feeDestination;
+            if (feeDestination != address(0)) {
+                uint256 integratorRatio = IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).getIntegratorFeeRatio();
+                uint256 integratorFee = fee * integratorRatio / DealManagerFactoryStorage.BASIS_POINTS;
+                uint256 platformFee = fee - integratorFee;
+                if (integratorFee > 0) IERC20(paymentToken).safeTransfer(feeDestination, integratorFee);
+                if (platformFee > 0) IERC20(paymentToken).safeTransfer(getPlatformPayable(), platformFee);
+            } else {
+                IERC20(paymentToken).safeTransfer(getPlatformPayable(), fee);
+            }
+        }
+
+        // Execute ownership change: void/decrement seller cert + mint buyer cert
+        DealManagerStorage.getIssuanceManager().secondaryTransfer(secEscrow.dealMetadata);
+
+        emit SecondaryDealFinalized(agreementId, secEscrow.sellerAddress, escrow.counterParty, consideration);
+    }
+
+    function _voidSecondaryDeal(bytes32 agreementId) internal {
+        SecondaryEscrow storage secEscrow = SecondaryTradeStorage.getSecondaryEscrow(agreementId);
+
+        // Release unit reservation on the seller's cert
+        if (secEscrow.sellerCertPrinter != address(0) && secEscrow.unitReservationId != bytes32(0)) {
+            ICyberCertPrinter(secEscrow.sellerCertPrinter).releaseUnits(secEscrow.unitReservationId);
+        }
+
+        Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
+        if (deal.status == EscrowStatus.PAID) {
+            voidAndRefund(agreementId);
+        } else {
+            voidEscrow(agreementId);
+        }
     }
 
     /// @notice UUPS upgrade authorization
