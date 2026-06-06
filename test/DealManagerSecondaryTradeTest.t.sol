@@ -52,6 +52,7 @@ import {CertificateDetails, Endorsement} from "../src/storage/CyberCertPrinterSt
 import {
     OfferSide,
     OfferStatus,
+    ExemptionPathway,
     Offer,
     SecondaryEscrow,
     PostOfferParams,
@@ -68,6 +69,7 @@ contract SecERC20Mock is ERC20 {
     function mint(address to, uint256 amount) public { _mint(to, amount); }
 }
 
+// TODO review after CyberCertPrinter updated
 contract SecCertPrinterMock is ERC721Enumerable {
     mapping(bytes32 => bool) public reservationActive;
     mapping(bytes32 => bool) public reservationReleased;
@@ -185,12 +187,16 @@ contract SecCorpMock {
 contract DealManagerSecondaryTradeTest is Test {
 
     bytes32 constant SALT = keccak256("DealManagerSecondaryTradeTest");
+    bytes32 constant corpSalt = keccak256("DealManagerSecondaryTradeTest.corp");
 
-    address public owner    = vm.addr(1);
-    address public seller   = vm.addr(2);  // alice
-    address public buyer    = vm.addr(3);  // bob
-    address public keeper   = vm.addr(4);
-    address public company  = address(0xC0);
+    address public owner;
+    uint256 public ownerKey;
+    address public seller;
+    uint256 public sellerKey;
+    address public buyer;
+    uint256 public buyerKey;
+    address public keeper;
+    address public company;
 
     SecERC20Mock      public paymentToken;
     SecCertPrinterMock public certPrinter;
@@ -206,6 +212,12 @@ contract DealManagerSecondaryTradeTest is Test {
     uint256 public sellerTokenId;
 
     function setUp() public {
+        (owner,  ownerKey)  = makeAddrAndKey("owner");
+        (seller, sellerKey) = makeAddrAndKey("seller");
+        (buyer,  buyerKey)  = makeAddrAndKey("buyer");
+        keeper  = makeAddr("keeper");
+        company = makeAddr("company");
+
         paymentToken = new SecERC20Mock();
         certPrinter  = new SecCertPrinterMock();
         im           = new SecIssuanceManagerMock();
@@ -225,18 +237,13 @@ contract DealManagerSecondaryTradeTest is Test {
             ))
         );
 
-        dm = DealManager(
-            address(new ERC1967Proxy(
-                address(new DealManager()),
-                abi.encodeWithSelector(
-                    DealManager.initialize.selector,
-                    address(auth),
-                    address(corp),
-                    address(registry),
-                    address(im),
-                    address(dmFactory)
-                )
-            ))
+        dm = DealManager(dmFactory.deployDealManager(corpSalt));
+        dm.initialize(
+            address(auth),
+            address(corp),
+            address(registry),
+            address(im),
+            address(dmFactory)
         );
 
         // Mint seller's Ledger Entry Token
@@ -266,7 +273,7 @@ contract DealManagerSecondaryTradeTest is Test {
             units: UNITS,
             paymentToken: address(paymentToken),
             consideration: CONSIDERATION,
-            exemptionPathway: 1,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             validUntil: block.timestamp + 1 days,
             counterpartyRestrictions: "",
             additionalTerms: "",
@@ -283,13 +290,13 @@ contract DealManagerSecondaryTradeTest is Test {
 
     function _defaultBidParams() internal view returns (PostOfferParams memory p) {
         p = PostOfferParams({
-            side: OfferSide.BID,
+            side: OfferSide.BUY,
             certPrinter: address(0),
             tokenId: 0,
             units: UNITS,
             paymentToken: address(paymentToken),
             consideration: CONSIDERATION,
-            exemptionPathway: 1,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             validUntil: block.timestamp + 1 days,
             counterpartyRestrictions: "",
             additionalTerms: "",
@@ -364,12 +371,14 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 offerId = _postSellOffer();
 
         Offer memory offer = dm.getOffer(offerId);
+        assertEq(offer.spvAddress, address(corp), "spvAddress should be corp");
         assertEq(offer.offeror, seller, "offeror should be seller");
         assertEq(uint8(offer.side), uint8(OfferSide.SELL));
         assertEq(offer.units, UNITS);
         assertEq(offer.consideration, CONSIDERATION);
         assertEq(uint8(offer.status), uint8(OfferStatus.LIVE));
         assertEq(offer.unitsAccepted, 0);
+        assertEq(offer.bidCommitmentEscrowId, bytes32(0), "sell offer should have no bidCommitmentEscrowId");
     }
 
     function test_Secondary_PostOffer_Sell_ReservesUnits() public {
@@ -394,9 +403,12 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 offerId = _postBid();
 
         Offer memory offer = dm.getOffer(offerId);
+        assertEq(offer.spvAddress, address(corp), "spvAddress should be corp");
         assertEq(offer.offeror, buyer, "offeror should be buyer");
-        assertEq(uint8(offer.side), uint8(OfferSide.BID));
+        assertEq(uint8(offer.side), uint8(OfferSide.BUY));
         assertEq(uint8(offer.status), uint8(OfferStatus.LIVE));
+        assertEq(offer.unitReservationId, bytes32(0), "bid should have no unitReservationId");
+        assertEq(offer.bidCommitmentEscrowId, offerId, "bidCommitmentEscrowId should equal offerAgreementId");
     }
 
     function test_Secondary_PostOffer_Bid_CreatesHoldingEscrow() public {
