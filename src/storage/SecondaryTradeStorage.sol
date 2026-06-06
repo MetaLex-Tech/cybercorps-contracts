@@ -45,7 +45,10 @@ enum OfferSide { SELL, BUY }
 
 enum OfferStatus { LIVE, CANCELLED, EXPIRED, PARTIALLY_ACCEPTED, FULLY_ACCEPTED }
 
+enum ExemptionPathway { RULE_144, SECTION_4A7, SECTION_4A1HALF, RULE_144A, REGULATION_S }
+
 struct Offer {
+    address spvAddress;             // cyberCORP address this offer belongs to
     address offeror;
     OfferSide side;
     address certPrinter;            // sell offers: seller's cert printer; buy offers: zero (known at acceptance)
@@ -53,16 +56,22 @@ struct Offer {
     uint256 units;                  // total units offered
     address paymentToken;
     uint256 consideration;          // total payment for all offered units
-    uint8 exemptionPathway;
+    ExemptionPathway exemptionPathway;
     uint256 validUntil;
-    bytes counterpartyRestrictions;
-    bytes additionalTerms;
+    // TODO add real test cases for it
+    bytes counterpartyRestrictions; // spec §8.1 Counterparty restrictions
+    bytes additionalTerms;          // spec §8.1 Supplemental fields
+    // TODO add real test cases for it
     address integrator;
     OfferStatus status;
     uint256 unitsAccepted;
     bytes32 offerAgreementId;       // open-to-matching agreement in CyberAgreementRegistry
-    bytes openEndorsementSig;       // sell offers: seller's pre-signed open endorsement; buy offers: zero
+    // TODO add real tests cases for it
+    bytes openEndorsementSig;       // spec §7.3.1 sell offers: seller's pre-signed open endorsement; buy offers: zero
+    // TODO review: exact ID schema not yet determined
     bytes32 unitReservationId;      // sell offers: reservation id from CertPrinter; buy offers: zero
+    // TODO review: exact ID schema not yet determined
+    bytes32 buyOfferCommitmentEscrowId;  // buy offers: holding escrow id in LexScrowStorage; sell offers: zero
 }
 
 // Companion to the LexScrowStorage settlement escrow, keyed by the same settlementAgreementId.
@@ -84,7 +93,7 @@ struct PostOfferParams {
     uint256 units;
     address paymentToken;
     uint256 consideration;
-    uint8 exemptionPathway;
+    ExemptionPathway exemptionPathway;
     uint256 validUntil;
     bytes counterpartyRestrictions;
     bytes additionalTerms;
@@ -95,6 +104,7 @@ struct PostOfferParams {
     string[] offerorPartyValues;
     bytes offerorAgreementSig;
     bytes openEndorsementSig;       // sell offers only
+    // TODO test multiple mock conditions
     address[] thresholdConditions;
 }
 

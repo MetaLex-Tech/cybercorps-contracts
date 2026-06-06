@@ -698,22 +698,27 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
         );
 
         bytes32 reservationId;
+        bytes32 buyOfferCommitmentEscrowId;
 
         if (params.side == OfferSide.SELL) {
             // Reserve units on the seller's cert
-            reservationId = keccak256(abi.encodePacked(offerAgreementId, msg.sender, params.tokenId));
+            // TODO review: exact ID schema for `unitReservationId` not yet determined
+            // TODO security: must think about collision attacks
+            reservationId = offerAgreementId;
             ICyberCertPrinter(params.certPrinter).reserveUnits(params.tokenId, reservationId, params.units);
         } else {
-            // BUY: pull consideration into a LexScrowStorage holding escrow
+            // BUY: pull consideration into a LexScrowStorage holding escrow keyed by offerAgreementId
             Token[] memory corpAssets = new Token[](0);
             Token[] memory buyerAssets = new Token[](1);
             buyerAssets[0] = Token(TokenType.ERC20, params.paymentToken, 0, params.consideration, true);
             createEscrow(offerAgreementId, msg.sender, corpAssets, buyerAssets, params.validUntil);
             handleCounterPartyPayment(offerAgreementId);
+            buyOfferCommitmentEscrowId = offerAgreementId;
         }
 
         // Store offer record
         SecondaryTradeStorage.setOffer(offerAgreementId, Offer({
+            spvAddress: LexScrowStorage.getCorp(),
             offeror: msg.sender,
             side: params.side,
             certPrinter: params.certPrinter,
@@ -730,7 +735,8 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
             unitsAccepted: 0,
             offerAgreementId: offerAgreementId,
             openEndorsementSig: params.openEndorsementSig,
-            unitReservationId: reservationId
+            unitReservationId: reservationId,
+            buyOfferCommitmentEscrowId: buyOfferCommitmentEscrowId
         }));
 
         emit OfferPosted(offerAgreementId, msg.sender, params.side, params.units, params.consideration);
