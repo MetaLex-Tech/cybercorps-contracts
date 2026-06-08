@@ -180,6 +180,12 @@ contract SecCorpMock {
     constructor(address _cp) { companyPayable = _cp; }
 }
 
+contract SecConditionMock {
+    bool private _pass;
+    constructor(bool pass_) { _pass = pass_; }
+    function checkCondition(address, bytes4, bytes memory) external view returns (bool) { return _pass; }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Test contract
 // ─────────────────────────────────────────────────────────────────────────────
@@ -423,6 +429,52 @@ contract DealManagerSecondaryTradeTest is Test {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // postOffer — threshold conditions
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function test_Secondary_PostOffer_Sell_MultipleThresholdConditionsAllPass() public {
+        address[] memory conds = new address[](2);
+        conds[0] = address(new SecConditionMock(true));
+        conds[1] = address(new SecConditionMock(true));
+
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.salt = 10;
+        p.thresholdConditions = conds;
+
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+        assertTrue(offerId != bytes32(0));
+    }
+
+    function test_Secondary_RevertIf_PostOffer_FirstThresholdConditionFails() public {
+        address[] memory conds = new address[](2);
+        conds[0] = address(new SecConditionMock(false));
+        conds[1] = address(new SecConditionMock(true));
+
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.salt = 11;
+        p.thresholdConditions = conds;
+
+        vm.prank(seller);
+        vm.expectRevert(DealManager.AgreementConditionsNotMet.selector);
+        dm.postOffer(p);
+    }
+
+    function test_Secondary_RevertIf_PostOffer_SecondThresholdConditionFails() public {
+        address[] memory conds = new address[](2);
+        conds[0] = address(new SecConditionMock(true));
+        conds[1] = address(new SecConditionMock(false));
+
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.salt = 12;
+        p.thresholdConditions = conds;
+
+        vm.prank(seller);
+        vm.expectRevert(DealManager.AgreementConditionsNotMet.selector);
+        dm.postOffer(p);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // cancelOffer — sell
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -577,6 +629,97 @@ contract DealManagerSecondaryTradeTest is Test {
 
         SecondaryEscrow memory se = dm.getSecondaryEscrow(settlementId);
         assertTrue(certPrinter.reservationActive(se.unitReservationId), "seller units should be reserved at bid acceptance");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // acceptOffer — threshold conditions
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function test_Secondary_AcceptOffer_Sell_MultipleThresholdConditionsAllPass() public {
+        bytes32 offerId = _postSellOffer();
+
+        address[] memory conds = new address[](2);
+        conds[0] = address(new SecConditionMock(true));
+        conds[1] = address(new SecConditionMock(true));
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerAgreementId: offerId,
+            units: UNITS,
+            buyer: buyer,
+            buyerName: "Bob",
+            fullSale: true,
+            buyerHostingMode: 0,
+            adminMultisig: address(0),
+            sellerCertPrinter: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: "",
+            openEndorsementSig: "",
+            closingConditions: new address[](0),
+            thresholdConditions: conds
+        });
+
+        vm.prank(buyer);
+        bytes32 settlementId = dm.acceptOffer(p);
+        assertTrue(settlementId != bytes32(0));
+    }
+
+    function test_Secondary_RevertIf_AcceptOffer_FirstThresholdConditionFails() public {
+        bytes32 offerId = _postSellOffer();
+
+        address[] memory conds = new address[](2);
+        conds[0] = address(new SecConditionMock(false));
+        conds[1] = address(new SecConditionMock(true));
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerAgreementId: offerId,
+            units: UNITS,
+            buyer: buyer,
+            buyerName: "Bob",
+            fullSale: true,
+            buyerHostingMode: 0,
+            adminMultisig: address(0),
+            sellerCertPrinter: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: "",
+            openEndorsementSig: "",
+            closingConditions: new address[](0),
+            thresholdConditions: conds
+        });
+
+        vm.prank(buyer);
+        vm.expectRevert(DealManager.AgreementConditionsNotMet.selector);
+        dm.acceptOffer(p);
+    }
+
+    function test_Secondary_RevertIf_AcceptOffer_SecondThresholdConditionFails() public {
+        bytes32 offerId = _postSellOffer();
+
+        address[] memory conds = new address[](2);
+        conds[0] = address(new SecConditionMock(true));
+        conds[1] = address(new SecConditionMock(false));
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerAgreementId: offerId,
+            units: UNITS,
+            buyer: buyer,
+            buyerName: "Bob",
+            fullSale: true,
+            buyerHostingMode: 0,
+            adminMultisig: address(0),
+            sellerCertPrinter: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: "",
+            openEndorsementSig: "",
+            closingConditions: new address[](0),
+            thresholdConditions: conds
+        });
+
+        vm.prank(buyer);
+        vm.expectRevert(DealManager.AgreementConditionsNotMet.selector);
+        dm.acceptOffer(p);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

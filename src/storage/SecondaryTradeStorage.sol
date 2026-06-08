@@ -104,7 +104,6 @@ struct PostOfferParams {
     string[] offerorPartyValues;
     bytes offerorAgreementSig;
     bytes openEndorsementSig;       // sell offers only
-    // TODO test multiple mock conditions
     address[] thresholdConditions;
 }
 
