@@ -190,6 +190,15 @@ library CyberCertPrinterStorage {
             if (!allowed) revert TransferRestricted(reason);
         }
 
+        ITransferRestrictionHook typeHook = CyberCertPrinterStorage.cyberCertStorage().restrictionHooksById[tokenId];
+            
+        if (address(typeHook) != address(0)) {
+            (bool allowed, string memory reason) = typeHook.checkTransferRestriction(
+                from, to, tokenId, ""
+            );
+            if (!allowed) revert TransferRestricted(reason);
+        }
+
         address ownerAddress = s.owners[tokenId].ownerAddress;
         uint256 endorsementCount = s.endorsements[tokenId].length;
         //check endorsement and update owners
