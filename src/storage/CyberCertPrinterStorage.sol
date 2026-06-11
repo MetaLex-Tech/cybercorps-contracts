@@ -77,6 +77,26 @@ library CyberCertPrinterStorage {
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.cert.printer.storage.v1");
 
+    // Mirrors of the printer's error/event signatures; identical selectors/topics,
+    // so reverts and logs surface exactly as if they came from the printer (delegatecall).
+    error TokenNotTransferable();
+    error TransferRestricted(string reason);
+    error EndorsementNotSignedOrInvalid();
+    error InvalidLegendIndex();
+
+    event CertificateAssigned(uint256 indexed tokenId, address indexed newOwner, string newOwnerName, string issuerName);
+    event CyberCertPrinter_CertificateCreated(uint256 indexed tokenId);
+    event CertificateEndorsed(
+        uint256 indexed tokenId,
+        address indexed endorser,
+        address indexed endorsee,
+        string endorseeName,
+        address registry,
+        bytes32 agreementId,
+        uint256 index,
+        uint256 timestamp
+    );
+
     // Main storage layout struct
     struct CyberCertStorage {
         // Token data
@@ -147,6 +167,129 @@ library CyberCertPrinterStorage {
             address(this),
             address(s.extension)
         );
+    }
+
+    /// @dev Transfer-time restriction and endorsement logic, extracted from
+    /// CyberCertPrinter._update to reduce the printer's bytecode size.
+    /// External so it runs via delegatecall against this deployed library.
+    /// Only called for true transfers (from != 0 && to != 0).
+    function processTransfer(address from, address to, uint256 tokenId) external {
+        CyberCertStorage storage s = cyberCertStorage();
+
+        // Check built-in transferability flag and per-token override
+        if (!s.transferable && !s.tokenTransferable[tokenId]) {
+            ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
+            if (from != corp.dealManager() && from != corp.roundManager()) revert TokenNotTransferable();
+        }
+
+        // Check global hook if it exists
+        if (address(s.globalRestrictionHook) != address(0)) {
+            (bool allowed, string memory reason) = s.globalRestrictionHook.checkTransferRestriction(
+                from, to, tokenId, ""
+            );
+            if (!allowed) revert TransferRestricted(reason);
+        }
+
+        address ownerAddress = s.owners[tokenId].ownerAddress;
+        uint256 endorsementCount = s.endorsements[tokenId].length;
+        //check endorsement and update owners
+        if (from == ownerAddress) {
+            if (!s.endorsementRequired) {
+                emit CertificateAssigned(tokenId, to, "", IIssuanceManager(s.issuanceManager).companyName());
+                s.owners[tokenId] = OwnerDetails("", to);
+            }
+            else if (endorsementCount > 0) {
+                Endorsement memory endorsement = s.endorsements[tokenId][endorsementCount - 1];
+                if (endorsement.endorsee == to) {
+                    // Endorsement exists; ownership will be updated
+                    emit CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(s.issuanceManager).companyName());
+                    s.owners[tokenId] = OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
+                }
+            }
+        // NOTE: we don't revert in this block: Owner is able to transfer to another address without an endorsement, but it does not update the owner
+        }
+        else if (endorsementCount > 0) {
+            // Token is not being transferred from the current owner. It can only be transferrred to the latest endorsee, or the current owner
+            Endorsement memory endorsement = s.endorsements[tokenId][endorsementCount - 1];
+            if (endorsement.endorsee != to && ownerAddress != to) revert EndorsementNotSignedOrInvalid();
+
+            emit CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(s.issuanceManager).companyName());
+            s.owners[tokenId] = OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
+        }
+        else revert EndorsementNotSignedOrInvalid();
+    }
+
+    /// @dev Post-mint bookkeeping for CyberCertPrinter.safeMint (the _safeMint itself stays in the printer).
+    function recordMint(uint256 tokenId, address to, CertificateDetails memory details) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        s.certLegend[tokenId] = s.defaultLegend;
+        s.certificateDetails[tokenId] = details;
+        s.owners[tokenId] = OwnerDetails("", to);
+        emit CyberCertPrinter_CertificateCreated(tokenId);
+    }
+
+    /// @dev Post-mint bookkeeping for CyberCertPrinter.safeMintAndAssign.
+    function recordMintAndAssign(
+        uint256 tokenId,
+        address to,
+        CertificateDetails memory details,
+        string memory investorName
+    ) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        s.certLegend[tokenId] = s.defaultLegend;
+        s.certificateDetails[tokenId] = details;
+        s.owners[tokenId] = OwnerDetails(investorName, to);
+        emit CertificateAssigned(tokenId, to, investorName, IIssuanceManager(s.issuanceManager).companyName());
+        emit CyberCertPrinter_CertificateCreated(tokenId);
+    }
+
+    /// @dev Bookkeeping for CyberCertPrinter.assignCert (the ownerOf check stays in the printer).
+    function recordAssign(uint256 tokenId, address to, CertificateDetails memory details) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        s.certificateDetails[tokenId] = details;
+        s.owners[tokenId] = OwnerDetails("", to);
+        emit CertificateAssigned(tokenId, to, "", IIssuanceManager(s.issuanceManager).companyName());
+    }
+
+    /// @dev Endorsement push + event for CyberCertPrinter.addEndorsement (the auth check stays in the printer).
+    function recordEndorsement(uint256 tokenId, Endorsement memory newEndorsement) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        s.endorsements[tokenId].push(newEndorsement);
+        emit CertificateEndorsed(
+            tokenId,
+            newEndorsement.endorser,
+            newEndorsement.endorsee,
+            newEndorsement.endorseeName,
+            newEndorsement.registry,
+            newEndorsement.agreementId,
+            s.endorsements[tokenId].length - 1,
+            block.timestamp
+        );
+    }
+
+    // Legend management; isDefault selects the defaultLegend array (tokenId ignored) vs a cert's legend
+    function _legendArray(uint256 tokenId, bool isDefault) private view returns (string[] storage) {
+        CyberCertStorage storage s = cyberCertStorage();
+        if (isDefault) return s.defaultLegend;
+        return s.certLegend[tokenId];
+    }
+
+    function addLegend(uint256 tokenId, bool isDefault, string memory newLegend) external {
+        _legendArray(tokenId, isDefault).push(newLegend);
+    }
+
+    function removeLegendAt(uint256 tokenId, bool isDefault, uint256 index) external {
+        string[] storage arr = _legendArray(tokenId, isDefault);
+        uint256 len = arr.length;
+        if (index >= len) revert InvalidLegendIndex();
+
+        // Move the last element to the index being removed (if it's not the last element)
+        // and then pop the last element
+        uint256 lastIndex = len - 1;
+        if (index != lastIndex) {
+            arr[index] = arr[lastIndex];
+        }
+        arr.pop();
     }
 
     // Internal getters for complex types
