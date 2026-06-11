@@ -51,8 +51,8 @@ struct Offer {
     address spvAddress;             // cyberCORP address this offer belongs to
     address offeror;
     OfferSide side;
-    address certPrinter;            // sell offers: seller's cert printer; bids: zero (known at acceptance)
-    uint256 tokenId;                // sell offers: seller's Ledger Entry Token id; bids: zero
+    address certPrinter;            // both sides: required; identifies the security class/series
+    uint256 tokenId;                // sell offer-only: seller's Ledger Entry Token id; zero for bids
     uint256 units;                  // total units offered
     address paymentToken;
     uint256 consideration;          // total payment for all offered units
@@ -65,13 +65,23 @@ struct Offer {
     address integrator;
     OfferStatus status;
     uint256 unitsAccepted;
-    bytes32 offerAgreementId;       // open-to-matching agreement in CyberAgreementRegistry
-    // TODO add real tests cases for it
-    bytes openEndorsementSig;       // spec §7.3.1 sell offers: seller's pre-signed open endorsement; bids: zero
+    bytes32 offerAgreementId;       // DealManager-generated offer key; NOT a CyberAgreementRegistry record
+    bytes32 templateId;             // agreement template id; stored for use at acceptOffer
+    uint256 salt;                   // offeror-supplied salt; used to derive unique settlementSalt per acceptance
+    string[] globalValues;          // agreement global values; stored for use at acceptOffer
+    string[] offerorPartyValues;    // offeror's party values; stored for use at acceptOffer
+    bytes offerorAgreementSig;      // offeror's EIP-712 sig over offerAgreementId+terms; verified at postOffer, passed to signContractWithEscrow at acceptOffer
+    // TODO add real test cases for it
+    bytes openEndorsementSig;       // sell offer-only: seller's pre-signed open endorsement (spec §7.3.1); zero for bids
     // TODO review: exact ID schema not yet determined
-    bytes32 unitReservationId;      // sell offers: reservation id from CertPrinter; bids: zero
+    bytes32 unitReservationId;      // sell offer-only: reservation id from CertPrinter; zero for bids
     // TODO review: exact ID schema not yet determined
-    bytes32 bidCommitmentEscrowId;  // bids: holding escrow id in LexScrowStorage; sell offers: zero
+    // TODO WIP: depend on how we are going to implement buy-offer partial fills
+    bytes32 bidCommitmentEscrowId;  // buy offer-only: holding escrow id in LexScrowStorage; zero for sell offers
+    string buyerName;               // buy offer-only: buyer's registered name for OwnerDetails; empty for sell offers
+    uint8 buyerHostingMode;         // buy offer-only: 0 = Direct, 1 = Administered; zero for sell offers
+    address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
+    bytes32[] settlementAgreementIds; // appended at each acceptOffer; length == 0 at postOffer (no buyer known yet)
 }
 
 // Companion to the LexScrowStorage settlement escrow, keyed by the same settlementAgreementId.
@@ -81,15 +91,14 @@ struct SecondaryEscrow {
     address sellerAddress;          // payment destination at finalizeDeal
     address feeDestination;         // integrator address for fee split; zero = all fees to MetaLeX
     bytes32 offerId;                // back-link to Offer (offerAgreementId)
-    address sellerCertPrinter;      // cert printer for unit reservation release on void
-    bytes32 unitReservationId;      // reservation id to release on void
+    bytes32 unitReservationId;      // sell offer-only: reservation id to release on void; zero for bids
     bytes dealMetadata;             // abi-encoded ownership-change params for IssuanceManager.secondaryTransfer
 }
 
 struct PostOfferParams {
     OfferSide side;
-    address certPrinter;            // sell offers: seller's cert printer; bids: zero
-    uint256 tokenId;                // sell offers: seller's Ledger Entry Token id; bids: zero
+    address certPrinter;            // sell offers: seller's cert printer; bids: required security class/series filter
+    uint256 tokenId;                // sell offer-only: seller's Ledger Entry Token id; zero for bids
     uint256 units;
     address paymentToken;
     uint256 consideration;
@@ -103,25 +112,26 @@ struct PostOfferParams {
     string[] globalValues;
     string[] offerorPartyValues;
     bytes offerorAgreementSig;
-    bytes openEndorsementSig;       // sell offers only
+    bytes openEndorsementSig;       // sell offer-only
     address[] thresholdConditions;
+    string buyerName;               // buy offer-only: buyer's registered name for OwnerDetails; empty for sell offers
+    uint8 buyerHostingMode;         // buy offer-only: 0 = Direct, 1 = Administered; zero for sell offers
+    // TODO should it be validated? What if the user provided the wrong address?
+    address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
 }
 
 struct AcceptOfferParams {
     bytes32 offerAgreementId;
     uint256 units;
-    address buyer;                  // registered owner; for BIDs typically offer.offeror
-    string buyerName;
-    bool fullSale;
-    uint8 buyerHostingMode;         // 0 = Direct, 1 = Administered
-    address adminMultisig;          // delivery address for Administered hosting
-    address sellerCertPrinter;      // bid acceptances only; sell offers: use offer.certPrinter
-    uint256 sellerTokenId;          // bid acceptances only; sell offers: use offer.tokenId
+    address buyer;                  // registered owner; for buy offers typically offer.offeror
+    string buyerName;               // sell offer-only: ignored for buy offer acceptances (read from Offer instead)
+    uint8 buyerHostingMode;         // sell offer-only: 0 = Direct, 1 = Administered; ignored for buy offer acceptances
+    // TODO should it be validated? What if the user provided the wrong address?
+    address adminMultisig;          // sell offer-only: delivery address for Administered hosting; ignored for buy offer acceptances
+    uint256 sellerTokenId;          // buy offer-only: seller's token id for bid acceptances; use offer.tokenId for sell offers
     string[] acceptorPartyValues;
     bytes acceptorAgreementSig;
-    bytes openEndorsementSig;       // bid acceptances only
-    address[] closingConditions;
-    address[] thresholdConditions;
+    bytes openEndorsementSig;       // buy offer-only: for bid acceptances
 }
 
 library SecondaryTradeStorage {

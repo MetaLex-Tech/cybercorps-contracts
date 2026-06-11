@@ -58,7 +58,7 @@ import {
     PostOfferParams,
     AcceptOfferParams
 } from "../src/storage/SecondaryTradeStorage.sol";
-import {EscrowStatus, Token, TokenType} from "../src/storage/LexScrowStorage.sol";
+import {EscrowStatus} from "../src/storage/LexScrowStorage.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mocks
@@ -143,20 +143,11 @@ contract SecAgreementRegistryMock {
         return keccak256(abi.encodePacked("primary", _nonce++));
     }
 
-    function createOpenContract(
-        bytes32, uint256, string[] memory, address[] memory,
-        string[][] memory, bytes calldata, address, uint256
-    ) external returns (bytes32 agreementId) {
-        agreementId = keccak256(abi.encodePacked("offer", _nonce++));
-    }
-
-    function attachAndSignAsPartyB(
-        bytes32 offerAgreementId, address, string[] calldata, bytes calldata, address
-    ) external returns (bytes32 settlementAgreementId) {
-        settlementAgreementId = keccak256(abi.encodePacked("settlement", offerAgreementId));
-    }
-
     function signContractFor(
+        address, bytes32, string[] memory, bytes calldata, bool, string memory
+    ) external {}
+
+    function signContractWithEscrow(
         address, bytes32, string[] memory, bytes calldata, bool, string memory
     ) external {}
 
@@ -186,21 +177,25 @@ contract SecConditionMock {
     function checkCondition(address, bytes4, bytes memory) external view returns (bool) { return _pass; }
 }
 
+contract DealManagerFactoryHelper is DealManagerFactory {
+    bool private _integWhitelisted;
+
+    function setIsIntegratorWhitelisted(bool v) external { _integWhitelisted = v; }
+    function isIntegratorWhitelisted(address) external view returns (bool) { return _integWhitelisted; }
+    function getIntegratorFeeRatio() external pure returns (uint256) { return 0; }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Test contract
 // ─────────────────────────────────────────────────────────────────────────────
 
 contract DealManagerSecondaryTradeTest is Test {
 
-    bytes32 constant SALT = keccak256("DealManagerSecondaryTradeTest");
     bytes32 constant corpSalt = keccak256("DealManagerSecondaryTradeTest.corp");
 
     address public owner;
-    uint256 public ownerKey;
     address public seller;
-    uint256 public sellerKey;
     address public buyer;
-    uint256 public buyerKey;
     address public keeper;
     address public company;
 
@@ -209,7 +204,7 @@ contract DealManagerSecondaryTradeTest is Test {
     SecIssuanceManagerMock public im;
     SecAgreementRegistryMock public registry;
     SecCorpMock        public corp;
-    DealManagerFactory public dmFactory;
+    DealManagerFactoryHelper   public dmFactory;
     DealManager        public dm;
     BorgAuth           public auth;
 
@@ -218,10 +213,10 @@ contract DealManagerSecondaryTradeTest is Test {
     uint256 public sellerTokenId;
 
     function setUp() public {
-        (owner,  ownerKey)  = makeAddrAndKey("owner");
-        (seller, sellerKey) = makeAddrAndKey("seller");
-        (buyer,  buyerKey)  = makeAddrAndKey("buyer");
-        keeper  = makeAddr("keeper");
+        owner  = makeAddr("owner");
+        seller = makeAddr("seller");
+        buyer  = makeAddr("buyer");
+        keeper = makeAddr("keeper");
         company = makeAddr("company");
 
         paymentToken = new SecERC20Mock();
@@ -232,9 +227,9 @@ contract DealManagerSecondaryTradeTest is Test {
 
         auth = new BorgAuth(owner);
 
-        dmFactory = DealManagerFactory(
+        dmFactory = DealManagerFactoryHelper(
             address(new ERC1967Proxy(
-                address(new DealManagerFactory()),
+                address(new DealManagerFactoryHelper()),
                 abi.encodeWithSelector(
                     DealManagerFactory.initialize.selector,
                     address(auth),
@@ -285,19 +280,22 @@ contract DealManagerSecondaryTradeTest is Test {
             additionalTerms: "",
             integrator: address(0),
             templateId: bytes32(0),
-            salt: 1,
+            salt: uint256(keccak256("defaultSellOffer")),
             globalValues: new string[](0),
             offerorPartyValues: new string[](0),
             offerorAgreementSig: "",
             openEndorsementSig: "sellerEndorsement",
-            thresholdConditions: new address[](0)
+            thresholdConditions: new address[](0),
+            buyerName: "",
+            buyerHostingMode: 0,
+            adminMultisig: address(0)
         });
     }
 
     function _defaultBidParams() internal view returns (PostOfferParams memory p) {
         p = PostOfferParams({
             side: OfferSide.BUY,
-            certPrinter: address(0),
+            certPrinter: address(certPrinter),
             tokenId: 0,
             units: UNITS,
             paymentToken: address(paymentToken),
@@ -308,12 +306,15 @@ contract DealManagerSecondaryTradeTest is Test {
             additionalTerms: "",
             integrator: address(0),
             templateId: bytes32(0),
-            salt: 2,
+            salt: uint256(keccak256("defaultBid")),
             globalValues: new string[](0),
             offerorPartyValues: new string[](0),
             offerorAgreementSig: "",
             openEndorsementSig: "",
-            thresholdConditions: new address[](0)
+            thresholdConditions: new address[](0),
+            buyerName: "Test Buyer",
+            buyerHostingMode: 0,
+            adminMultisig: address(0)
         });
     }
 
@@ -333,16 +334,12 @@ contract DealManagerSecondaryTradeTest is Test {
             units: UNITS,
             buyer: buyer,
             buyerName: "Bob",
-            fullSale: true,
             buyerHostingMode: 0,
             adminMultisig: address(0),
-            sellerCertPrinter: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
             acceptorAgreementSig: "",
-            openEndorsementSig: "",
-            closingConditions: new address[](0),
-            thresholdConditions: new address[](0)
+            openEndorsementSig: ""
         });
         vm.prank(buyer);
         settlementAgreementId = dm.acceptOffer(p);
@@ -354,16 +351,12 @@ contract DealManagerSecondaryTradeTest is Test {
             units: UNITS,
             buyer: buyer,
             buyerName: "Bob",
-            fullSale: true,
             buyerHostingMode: 0,
             adminMultisig: address(0),
-            sellerCertPrinter: address(certPrinter),
             sellerTokenId: sellerTokenId,
             acceptorPartyValues: new string[](0),
             acceptorAgreementSig: "",
-            openEndorsementSig: "sellerEndorsement",
-            closingConditions: new address[](0),
-            thresholdConditions: new address[](0)
+            openEndorsementSig: "sellerEndorsement"
         });
         vm.prank(seller);
         settlementAgreementId = dm.acceptOffer(p);
@@ -380,10 +373,14 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(offer.spvAddress, address(corp), "spvAddress should be corp");
         assertEq(offer.offeror, seller, "offeror should be seller");
         assertEq(uint8(offer.side), uint8(OfferSide.SELL));
+        assertEq(offer.certPrinter, address(certPrinter));
+        assertEq(offer.tokenId, sellerTokenId);
         assertEq(offer.units, UNITS);
+        assertEq(offer.paymentToken, address(paymentToken));
         assertEq(offer.consideration, CONSIDERATION);
         assertEq(uint8(offer.status), uint8(OfferStatus.LIVE));
         assertEq(offer.unitsAccepted, 0);
+        assertTrue(offer.unitReservationId != bytes32(0), "sell offer should have a unitReservationId");
         assertEq(offer.bidCommitmentEscrowId, bytes32(0), "sell offer should have no bidCommitmentEscrowId");
     }
 
@@ -412,7 +409,13 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(offer.spvAddress, address(corp), "spvAddress should be corp");
         assertEq(offer.offeror, buyer, "offeror should be buyer");
         assertEq(uint8(offer.side), uint8(OfferSide.BUY));
+        assertEq(offer.certPrinter, address(certPrinter), "bid certPrinter should be set at post");
+        assertEq(offer.tokenId, 0, "bid should have no tokenId");
+        assertEq(offer.units, UNITS);
+        assertEq(offer.paymentToken, address(paymentToken));
+        assertEq(offer.consideration, CONSIDERATION);
         assertEq(uint8(offer.status), uint8(OfferStatus.LIVE));
+        assertEq(offer.unitsAccepted, 0);
         assertEq(offer.unitReservationId, bytes32(0), "bid should have no unitReservationId");
         assertEq(offer.bidCommitmentEscrowId, offerId, "bidCommitmentEscrowId should equal offerAgreementId");
     }
@@ -428,6 +431,24 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(paymentToken.balanceOf(address(dm)), CONSIDERATION, "funds should be in DealManager");
     }
 
+    function test_Secondary_RevertIf_PostOffer_MissingCertPrinter_Sell() public {
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.certPrinter = address(0);
+
+        vm.prank(seller);
+        vm.expectRevert(DealManager.MissingCertPrinter.selector);
+        dm.postOffer(p);
+    }
+
+    function test_Secondary_RevertIf_PostOffer_MissingCertPrinter_Bid() public {
+        PostOfferParams memory p = _defaultBidParams();
+        p.certPrinter = address(0);
+
+        vm.prank(buyer);
+        vm.expectRevert(DealManager.MissingCertPrinter.selector);
+        dm.postOffer(p);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // postOffer — threshold conditions
     // ─────────────────────────────────────────────────────────────────────────
@@ -438,7 +459,7 @@ contract DealManagerSecondaryTradeTest is Test {
         conds[1] = address(new SecConditionMock(true));
 
         PostOfferParams memory p = _defaultSellOfferParams();
-        p.salt = 10;
+        p.salt = uint256(keccak256("test_Secondary_PostOffer_Sell_MultipleThresholdConditionsAllPass"));
         p.thresholdConditions = conds;
 
         vm.prank(seller);
@@ -452,7 +473,7 @@ contract DealManagerSecondaryTradeTest is Test {
         conds[1] = address(new SecConditionMock(true));
 
         PostOfferParams memory p = _defaultSellOfferParams();
-        p.salt = 11;
+        p.salt = uint256(keccak256("test_Secondary_RevertIf_PostOffer_FirstThresholdConditionFails"));
         p.thresholdConditions = conds;
 
         vm.prank(seller);
@@ -466,12 +487,95 @@ contract DealManagerSecondaryTradeTest is Test {
         conds[1] = address(new SecConditionMock(false));
 
         PostOfferParams memory p = _defaultSellOfferParams();
-        p.salt = 12;
+        p.salt = uint256(keccak256("test_Secondary_RevertIf_PostOffer_SecondThresholdConditionFails"));
         p.thresholdConditions = conds;
 
         vm.prank(seller);
         vm.expectRevert(DealManager.AgreementConditionsNotMet.selector);
         dm.postOffer(p);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // postOffer — integrator whitelist
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function test_Secondary_RevertIf_PostOffer_IntegratorNotWhitelisted() public {
+        dmFactory.setIsIntegratorWhitelisted(false);
+
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.salt = uint256(keccak256("test_Secondary_RevertIf_PostOffer_IntegratorNotWhitelisted"));
+        p.integrator = makeAddr("integrator");
+
+        vm.prank(seller);
+        vm.expectRevert(DealManager.IntegratorNotWhitelisted.selector);
+        dm.postOffer(p);
+    }
+
+    function test_Secondary_PostOffer_WhitelistedIntegratorPasses() public {
+        dmFactory.setIsIntegratorWhitelisted(true);
+
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.salt = uint256(keccak256("test_Secondary_PostOffer_WhitelistedIntegratorPasses"));
+        p.integrator = makeAddr("integrator");
+
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+        assertTrue(offerId != bytes32(0));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // postOffer - Min trade thresholds
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function test_Secondary_RevertIf_PostOffer_BelowMinUnitsThreshold() public {
+        vm.prank(owner);
+        dm.setMinTradeThreshold(UNITS + 1, 0);
+
+        vm.prank(seller);
+        vm.expectRevert(DealManager.OfferBelowMinThreshold.selector);
+        dm.postOffer(_defaultSellOfferParams()); // offers exactly UNITS
+    }
+
+    function test_Secondary_RevertIf_PostOffer_BelowMinConsiderationThreshold() public {
+        vm.prank(owner);
+        dm.setMinTradeThreshold(0, CONSIDERATION + 1);
+
+        vm.prank(seller);
+        vm.expectRevert(DealManager.OfferBelowMinThreshold.selector);
+        dm.postOffer(_defaultSellOfferParams()); // offers exactly CONSIDERATION
+    }
+
+    function test_Secondary_PostOffer_PassesAtMinThreshold() public {
+        vm.prank(owner);
+        dm.setMinTradeThreshold(UNITS, CONSIDERATION);
+
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(_defaultSellOfferParams()); // exactly at threshold
+        assertTrue(offerId != bytes32(0));
+    }
+
+    function test_Secondary_RevertIf_AcceptOffer_PartialFillBelowMinThreshold() public {
+        vm.prank(owner);
+        dm.setMinTradeThreshold(UNITS, 0); // require full fill
+
+        bytes32 offerId = _postSellOffer();
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerAgreementId: offerId,
+            units: UNITS - 1, // partial fill, below min
+            buyer: buyer,
+            buyerName: "Bob",
+            buyerHostingMode: 0,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: "",
+            openEndorsementSig: ""
+        });
+
+        vm.prank(buyer);
+        vm.expectRevert(DealManager.PartialFillBelowMinThreshold.selector);
+        dm.acceptOffer(p);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -484,7 +588,7 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 resId = offer.unitReservationId;
 
         vm.prank(seller);
-        dm.cancelOffer(offerId, "");
+        dm.cancelOffer(offerId);
 
         assertFalse(certPrinter.reservationActive(resId), "reservation should be released");
         assertTrue(certPrinter.reservationReleased(resId), "reservation should be marked released");
@@ -494,7 +598,7 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 offerId = _postSellOffer();
 
         vm.prank(seller);
-        dm.cancelOffer(offerId, "");
+        dm.cancelOffer(offerId);
 
         Offer memory offer = dm.getOffer(offerId);
         assertEq(uint8(offer.status), uint8(OfferStatus.CANCELLED));
@@ -505,8 +609,10 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.prank(buyer);
         vm.expectRevert(DealManager.NotOfferor.selector);
-        dm.cancelOffer(offerId, "");
+        dm.cancelOffer(offerId);
     }
+
+    // TODO add cases when offer is filled (or partially filled)
 
     // ─────────────────────────────────────────────────────────────────────────
     // cancelOffer — bid
@@ -517,7 +623,7 @@ contract DealManagerSecondaryTradeTest is Test {
         uint256 buyerBalanceBefore = paymentToken.balanceOf(buyer);
 
         vm.prank(buyer);
-        dm.cancelOffer(offerId, "");
+        dm.cancelOffer(offerId);
 
         assertEq(
             paymentToken.balanceOf(buyer),
@@ -530,7 +636,7 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 offerId = _postBid();
 
         vm.prank(buyer);
-        dm.cancelOffer(offerId, "");
+        dm.cancelOffer(offerId);
 
         Offer memory offer = dm.getOffer(offerId);
         assertEq(uint8(offer.status), uint8(OfferStatus.CANCELLED));
@@ -540,7 +646,7 @@ contract DealManagerSecondaryTradeTest is Test {
     // acceptOffer — sell offer
     // ─────────────────────────────────────────────────────────────────────────
 
-    function test_Secondary_AcceptOffer_Sell_CreatesSettlementEscrowInLexScrowStorage() public {
+    function test_Secondary_AcceptSellOffer_CreatesSettlementEscrowInLexScrowStorage() public {
         bytes32 offerId = _postSellOffer();
         bytes32 settlementId = _acceptSellOffer(offerId);
 
@@ -562,7 +668,7 @@ contract DealManagerSecondaryTradeTest is Test {
         );
     }
 
-    function test_Secondary_AcceptOffer_Sell_StoresSecondaryEscrow() public {
+    function test_Secondary_AcceptSellOffer_StoresSecondaryEscrow() public {
         bytes32 offerId = _postSellOffer();
         bytes32 settlementId = _acceptSellOffer(offerId);
 
@@ -572,7 +678,7 @@ contract DealManagerSecondaryTradeTest is Test {
         assertTrue(se.dealMetadata.length > 0, "deal metadata should be encoded");
     }
 
-    function test_Secondary_AcceptOffer_Sell_PullsBuyerFunds() public {
+    function test_Secondary_AcceptSellOffer_PullsBuyerFunds() public {
         bytes32 offerId = _postSellOffer();
         uint256 buyerBefore = paymentToken.balanceOf(buyer);
 
@@ -582,7 +688,7 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(paymentToken.balanceOf(address(dm)), CONSIDERATION, "funds in escrow");
     }
 
-    function test_Secondary_AcceptOffer_Sell_UpdatesOfferFillState() public {
+    function test_Secondary_AcceptSellOffer_UpdatesOfferFillState() public {
         bytes32 offerId = _postSellOffer();
         _acceptSellOffer(offerId);
 
@@ -591,11 +697,150 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(uint8(offer.status), uint8(OfferStatus.FULLY_ACCEPTED));
     }
 
+    function test_Secondary_AcceptSellOffer_PartialFill_UpdatesStateCorrectly() public {
+        bytes32 offerId = _postSellOffer();
+        bytes32 expectedResId = dm.getOffer(offerId).unitReservationId;
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerAgreementId: offerId,
+            units: UNITS / 2,
+            buyer: buyer,
+            buyerName: "Bob",
+            buyerHostingMode: 0,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: "",
+            openEndorsementSig: ""
+        });
+        vm.prank(buyer);
+        bytes32 settlementId = dm.acceptOffer(p);
+
+        Offer memory offer = dm.getOffer(offerId);
+        assertEq(uint8(offer.status), uint8(OfferStatus.PARTIALLY_ACCEPTED));
+        assertEq(offer.unitsAccepted, UNITS / 2);
+
+        SecondaryEscrow memory se = dm.getSecondaryEscrow(settlementId);
+        assertEq(se.sellerAddress, seller, "seller address should be set");
+        assertEq(se.offerId, offerId, "offerId back-link should be set");
+        assertEq(se.unitReservationId, expectedResId, "sell partial fill reuses the offer's unit reservation");
+    }
+
+    function test_Secondary_AcceptSellOffer_PartialFill_ProRataConsideration() public {
+        bytes32 offerId = _postSellOffer();
+        uint256 partialUnits = UNITS / 4;
+        uint256 expectedConsideration = CONSIDERATION * partialUnits / UNITS;
+
+        uint256 buyerBefore = paymentToken.balanceOf(buyer);
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerAgreementId: offerId,
+            units: partialUnits,
+            buyer: buyer,
+            buyerName: "Bob",
+            buyerHostingMode: 0,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: "",
+            openEndorsementSig: ""
+        });
+        vm.prank(buyer);
+        bytes32 settlementId = dm.acceptOffer(p);
+
+        assertEq(paymentToken.balanceOf(buyer), buyerBefore - expectedConsideration, "buyer pays pro-rata only");
+        assertEq(
+            dm.getEscrowDetails(settlementId).buyerAssets[0].amount,
+            expectedConsideration,
+            "settlement escrow holds pro-rata amount"
+        );
+    }
+
+    function test_Secondary_AcceptSellOffer_MultipleFillsFully() public {
+        bytes32 offerId = _postSellOffer();
+        uint256 firstUnits = UNITS / 2;
+        uint256 secondUnits = UNITS - firstUnits;
+        uint256 expectedFirst  = CONSIDERATION * firstUnits / UNITS;
+        uint256 expectedSecond = CONSIDERATION * secondUnits / UNITS;
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerAgreementId: offerId,
+            units: firstUnits,
+            buyer: buyer,
+            buyerName: "Bob",
+            buyerHostingMode: 0,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: "",
+            openEndorsementSig: ""
+        });
+        vm.prank(buyer);
+        bytes32 settlementId1 = dm.acceptOffer(p);
+
+        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.PARTIALLY_ACCEPTED));
+
+        p.units = secondUnits;
+        vm.prank(buyer);
+        bytes32 settlementId2 = dm.acceptOffer(p);
+
+        assertTrue(settlementId1 != settlementId2, "each fill gets its own settlement escrow");
+        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.FULLY_ACCEPTED));
+        assertEq(dm.getOffer(offerId).unitsAccepted, UNITS);
+        assertEq(dm.getEscrowDetails(settlementId1).buyerAssets[0].amount, expectedFirst);
+        assertEq(dm.getEscrowDetails(settlementId2).buyerAssets[0].amount, expectedSecond);
+    }
+
+    function test_Secondary_RevertIf_AcceptSellOffer_UnitsExceedOffer() public {
+        bytes32 offerId = _postSellOffer();
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerAgreementId: offerId,
+            units: UNITS + 1,
+            buyer: buyer,
+            buyerName: "Bob",
+            buyerHostingMode: 0,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: "",
+            openEndorsementSig: ""
+        });
+
+        vm.prank(buyer);
+        vm.expectRevert(DealManager.UnitsExceedOffer.selector);
+        dm.acceptOffer(p);
+    }
+
+    function test_Secondary_RevertIf_AcceptSellOffer_OverfillAfterPartialFill() public {
+        bytes32 offerId = _postSellOffer();
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerAgreementId: offerId,
+            units: UNITS / 2,
+            buyer: buyer,
+            buyerName: "Bob",
+            buyerHostingMode: 0,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: "",
+            openEndorsementSig: ""
+        });
+        vm.prank(buyer);
+        dm.acceptOffer(p);
+
+        p.units = UNITS / 2 + 1; // one more than remaining
+        vm.prank(buyer);
+        vm.expectRevert(DealManager.UnitsExceedOffer.selector);
+        dm.acceptOffer(p);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
-    // acceptOffer — bid
+    // acceptOffer — buy offer
     // ─────────────────────────────────────────────────────────────────────────
 
-    function test_Secondary_AcceptBid_CreatesSettlementEscrowAlreadyPaid() public {
+    function test_Secondary_AcceptBuyOffer_CreatesSettlementEscrowAlreadyPaid() public {
         bytes32 offerId = _postBid();
         bytes32 settlementId = _acceptBid(offerId);
 
@@ -606,7 +851,7 @@ contract DealManagerSecondaryTradeTest is Test {
         );
     }
 
-    function test_Secondary_AcceptBid_MigratesFundsFromHoldingEscrow() public {
+    function test_Secondary_AcceptBuyOffer_MigratesFundsFromHoldingEscrow() public {
         bytes32 offerId = _postBid();
 
         // Funds are in holding escrow (offerId) before acceptance
@@ -623,7 +868,7 @@ contract DealManagerSecondaryTradeTest is Test {
         );
     }
 
-    function test_Secondary_AcceptBid_ReservesSellerUnits() public {
+    function test_Secondary_AcceptBuyOffer_ReservesSellerUnits() public {
         bytes32 offerId = _postBid();
         bytes32 settlementId = _acceptBid(offerId);
 
@@ -631,95 +876,79 @@ contract DealManagerSecondaryTradeTest is Test {
         assertTrue(certPrinter.reservationActive(se.unitReservationId), "seller units should be reserved at bid acceptance");
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // acceptOffer — threshold conditions
-    // ─────────────────────────────────────────────────────────────────────────
+    function test_Secondary_RevertIf_AcceptBuyOffer_CannotAcceptTwice() public {
+        bytes32 offerId = _postBid();
 
-    function test_Secondary_AcceptOffer_Sell_MultipleThresholdConditionsAllPass() public {
-        bytes32 offerId = _postSellOffer();
+        // Full fill — succeeds
+        _acceptBid(offerId);
 
-        address[] memory conds = new address[](2);
-        conds[0] = address(new SecConditionMock(true));
-        conds[1] = address(new SecConditionMock(true));
-
+        // Second attempt reverts because offer is now FULLY_ACCEPTED
         AcceptOfferParams memory p = AcceptOfferParams({
             offerAgreementId: offerId,
             units: UNITS,
             buyer: buyer,
             buyerName: "Bob",
-            fullSale: true,
             buyerHostingMode: 0,
             adminMultisig: address(0),
-            sellerCertPrinter: address(0),
-            sellerTokenId: 0,
+            sellerTokenId: sellerTokenId,
             acceptorPartyValues: new string[](0),
             acceptorAgreementSig: "",
-            openEndorsementSig: "",
-            closingConditions: new address[](0),
-            thresholdConditions: conds
+            openEndorsementSig: "sellerEndorsement"
         });
-
-        vm.prank(buyer);
-        bytes32 settlementId = dm.acceptOffer(p);
-        assertTrue(settlementId != bytes32(0));
-    }
-
-    function test_Secondary_RevertIf_AcceptOffer_FirstThresholdConditionFails() public {
-        bytes32 offerId = _postSellOffer();
-
-        address[] memory conds = new address[](2);
-        conds[0] = address(new SecConditionMock(false));
-        conds[1] = address(new SecConditionMock(true));
-
-        AcceptOfferParams memory p = AcceptOfferParams({
-            offerAgreementId: offerId,
-            units: UNITS,
-            buyer: buyer,
-            buyerName: "Bob",
-            fullSale: true,
-            buyerHostingMode: 0,
-            adminMultisig: address(0),
-            sellerCertPrinter: address(0),
-            sellerTokenId: 0,
-            acceptorPartyValues: new string[](0),
-            acceptorAgreementSig: "",
-            openEndorsementSig: "",
-            closingConditions: new address[](0),
-            thresholdConditions: conds
-        });
-
-        vm.prank(buyer);
-        vm.expectRevert(DealManager.AgreementConditionsNotMet.selector);
+        vm.prank(seller);
+        vm.expectRevert(DealManager.OfferNotAvailable.selector);
         dm.acceptOffer(p);
     }
 
-    function test_Secondary_RevertIf_AcceptOffer_SecondThresholdConditionFails() public {
-        bytes32 offerId = _postSellOffer();
-
-        address[] memory conds = new address[](2);
-        conds[0] = address(new SecConditionMock(true));
-        conds[1] = address(new SecConditionMock(false));
+    function test_Secondary_RevertIf_AcceptBuyOffer_PartialFill() public {
+        bytes32 offerId = _postBid();
 
         AcceptOfferParams memory p = AcceptOfferParams({
             offerAgreementId: offerId,
-            units: UNITS,
+            units: UNITS - 1,
             buyer: buyer,
             buyerName: "Bob",
-            fullSale: true,
             buyerHostingMode: 0,
             adminMultisig: address(0),
-            sellerCertPrinter: address(0),
-            sellerTokenId: 0,
+            sellerTokenId: sellerTokenId,
             acceptorPartyValues: new string[](0),
             acceptorAgreementSig: "",
-            openEndorsementSig: "",
-            closingConditions: new address[](0),
-            thresholdConditions: conds
+            openEndorsementSig: "sellerEndorsement"
         });
 
-        vm.prank(buyer);
-        vm.expectRevert(DealManager.AgreementConditionsNotMet.selector);
+        vm.prank(seller);
+        vm.expectRevert(DealManager.BuyPartialFillNotAllowed.selector);
         dm.acceptOffer(p);
+    }
+
+    function test_Secondary_RevertIf_AcceptOffer_Buy_UnitsExceedOffer() public {
+        bytes32 offerId = _postBid();
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerAgreementId: offerId,
+            units: UNITS + 1,
+            buyer: buyer,
+            buyerName: "Bob",
+            buyerHostingMode: 0,
+            adminMultisig: address(0),
+            sellerTokenId: sellerTokenId,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: "",
+            openEndorsementSig: "sellerEndorsement"
+        });
+
+        vm.prank(seller);
+        vm.expectRevert(DealManager.UnitsExceedOffer.selector);
+        dm.acceptOffer(p);
+    }
+
+    function test_Secondary_AcceptBuyOffer_FullFill_StatusIsFullyAccepted() public {
+        bytes32 offerId = _postBid();
+        _acceptBid(offerId);
+
+        Offer memory offer = dm.getOffer(offerId);
+        assertEq(uint8(offer.status), uint8(OfferStatus.FULLY_ACCEPTED));
+        assertEq(offer.unitsAccepted, UNITS);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -913,65 +1142,6 @@ contract DealManagerSecondaryTradeTest is Test {
         // Cert should be burned (voided) via IssuanceManager.voidCertificate
         vm.expectRevert();
         certPrinter.ownerOf(certIds[0]); // burned token should revert on ownerOf
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Min trade threshold
-    // ─────────────────────────────────────────────────────────────────────────
-
-    function test_Secondary_RevertIf_PostOffer_BelowMinUnitsThreshold() public {
-        vm.prank(owner);
-        dm.setMinTradeThreshold(UNITS + 1, 0);
-
-        vm.prank(seller);
-        vm.expectRevert(DealManager.OfferBelowMinThreshold.selector);
-        dm.postOffer(_defaultSellOfferParams()); // offers exactly UNITS
-    }
-
-    function test_Secondary_RevertIf_PostOffer_BelowMinConsiderationThreshold() public {
-        vm.prank(owner);
-        dm.setMinTradeThreshold(0, CONSIDERATION + 1);
-
-        vm.prank(seller);
-        vm.expectRevert(DealManager.OfferBelowMinThreshold.selector);
-        dm.postOffer(_defaultSellOfferParams()); // offers exactly CONSIDERATION
-    }
-
-    function test_Secondary_PostOffer_PassesAtMinThreshold() public {
-        vm.prank(owner);
-        dm.setMinTradeThreshold(UNITS, CONSIDERATION);
-
-        vm.prank(seller);
-        bytes32 offerId = dm.postOffer(_defaultSellOfferParams()); // exactly at threshold
-        assertTrue(offerId != bytes32(0));
-    }
-
-    function test_Secondary_RevertIf_AcceptOffer_PartialFillBelowMinThreshold() public {
-        vm.prank(owner);
-        dm.setMinTradeThreshold(UNITS, 0); // require full fill
-
-        bytes32 offerId = _postSellOffer();
-
-        AcceptOfferParams memory p = AcceptOfferParams({
-            offerAgreementId: offerId,
-            units: UNITS - 1, // partial fill, below min
-            buyer: buyer,
-            buyerName: "Bob",
-            fullSale: false,
-            buyerHostingMode: 0,
-            adminMultisig: address(0),
-            sellerCertPrinter: address(0),
-            sellerTokenId: 0,
-            acceptorPartyValues: new string[](0),
-            acceptorAgreementSig: "",
-            openEndorsementSig: "",
-            closingConditions: new address[](0),
-            thresholdConditions: new address[](0)
-        });
-
-        vm.prank(buyer);
-        vm.expectRevert(DealManager.PartialFillBelowMinThreshold.selector);
-        dm.acceptOffer(p);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

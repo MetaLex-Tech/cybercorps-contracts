@@ -131,7 +131,7 @@ interface IDealManager {
 
     // Secondary trade
     function postOffer(PostOfferParams calldata params) external returns (bytes32 offerAgreementId);
-    function cancelOffer(bytes32 offerAgreementId, bytes calldata signature) external;
+    function cancelOffer(bytes32 offerAgreementId) external;
     function acceptOffer(AcceptOfferParams calldata params) external returns (bytes32 settlementAgreementId);
     function setMinTradeThreshold(uint256 units, uint256 consideration) external;
     function setDefaultIntegrator(address integrator) external;
