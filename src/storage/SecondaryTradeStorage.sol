@@ -47,6 +47,8 @@ enum OfferStatus { LIVE, CANCELLED, EXPIRED, PARTIALLY_ACCEPTED, FULLY_ACCEPTED 
 
 enum ExemptionPathway { RULE_144, SECTION_4A7, SECTION_4A1HALF, RULE_144A, REGULATION_S }
 
+enum SecondaryEscrowStatus { PAID, FINALIZED, VOIDED }
+
 struct Offer {
     address spvAddress;             // cyberCORP address this offer belongs to
     address offeror;
@@ -64,8 +66,9 @@ struct Offer {
     // TODO add real test cases for it
     address integrator;
     OfferStatus status;
-    uint256 unitsAccepted;
-    bytes32 offerAgreementId;       // DealManager-generated offer key; NOT a CyberAgreementRegistry record
+    uint256 unitsAccepted;           // units currently committed to active PAID settlements; decrements on void
+    uint256 paymentAccepted;         // consideration currently committed to active settlements; decrements on finalize and void
+    bytes32 offerId;                 // DealManager-generated offer key; NOT a CyberAgreementRegistry record
     bytes32 templateId;             // agreement template id; stored for use at acceptOffer
     uint256 salt;                   // offeror-supplied salt; used to derive unique settlementSalt per acceptance
     string[] globalValues;          // agreement global values; stored for use at acceptOffer
@@ -75,22 +78,26 @@ struct Offer {
     bytes openEndorsementSig;       // sell offer-only: seller's pre-signed open endorsement (spec §7.3.1); zero for bids
     // TODO review: exact ID schema not yet determined
     bytes32 unitReservationId;      // sell offer-only: reservation id from CertPrinter; zero for bids
-    // TODO review: exact ID schema not yet determined
-    // TODO WIP: depend on how we are going to implement buy-offer partial fills
-    bytes32 bidCommitmentEscrowId;  // buy offer-only: holding escrow id in LexScrowStorage; zero for sell offers
     string buyerName;               // buy offer-only: buyer's registered name for OwnerDetails; empty for sell offers
     uint8 buyerHostingMode;         // buy offer-only: 0 = Direct, 1 = Administered; zero for sell offers
     address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
     bytes32[] settlementAgreementIds; // appended at each acceptOffer; length == 0 at postOffer (no buyer known yet)
 }
 
-// Companion to the LexScrowStorage settlement escrow, keyed by the same settlementAgreementId.
-// LexScrowStorage.Escrow holds the base escrow (corpAssets=[], buyerAssets=[payment], status).
-// SecondaryEscrow holds the secondary-specific routing and ownership-change data.
+// Self-contained settlement escrow for secondary trades, keyed by settlementAgreementId.
+// Owns custody (payment in/out) and lifecycle (status, expiry) directly — no LexScrowStorage.Escrow companion.
 struct SecondaryEscrow {
+    // custody + lifecycle
+    address buyer;                  // acceptor / counterparty
+    address paymentToken;           // ERC20 payment token
+    uint256 paymentAmount;          // consideration for this settlement lot
+    uint256 units;                  // units in this settlement lot
+    uint256 expiry;                 // settlement deadline
+    SecondaryEscrowStatus status;   // PAID | FINALIZED | VOIDED
+    // secondary-specific routing
     address sellerAddress;          // payment destination at finalizeDeal
     address feeDestination;         // integrator address for fee split; zero = all fees to MetaLeX
-    bytes32 offerId;                // back-link to Offer (offerAgreementId)
+    bytes32 offerId;                // back-link to Offer
     bytes32 unitReservationId;      // sell offer-only: reservation id to release on void; zero for bids
     bytes dealMetadata;             // abi-encoded ownership-change params for IssuanceManager.secondaryTransfer
 }
@@ -121,7 +128,7 @@ struct PostOfferParams {
 }
 
 struct AcceptOfferParams {
-    bytes32 offerAgreementId;
+    bytes32 offerId;
     uint256 units;
     address buyer;                  // registered owner; for buy offers typically offer.offeror
     string buyerName;               // sell offer-only: ignored for buy offer acceptances (read from Offer instead)
@@ -156,12 +163,12 @@ library SecondaryTradeStorage {
         return secondaryTradeStorage().escrows[agreementId].sellerAddress != address(0);
     }
 
-    function getOffer(bytes32 offerAgreementId) internal view returns (Offer storage) {
-        return secondaryTradeStorage().offers[offerAgreementId];
+    function getOffer(bytes32 offerId) internal view returns (Offer storage) {
+        return secondaryTradeStorage().offers[offerId];
     }
 
-    function setOffer(bytes32 offerAgreementId, Offer memory offer) internal {
-        secondaryTradeStorage().offers[offerAgreementId] = offer;
+    function setOffer(bytes32 offerId, Offer memory offer) internal {
+        secondaryTradeStorage().offers[offerId] = offer;
     }
 
     function getSecondaryEscrow(bytes32 agreementId) internal view returns (SecondaryEscrow storage) {
