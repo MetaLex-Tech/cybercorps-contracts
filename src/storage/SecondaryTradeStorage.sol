@@ -43,7 +43,7 @@ pragma solidity 0.8.28;
 
 enum OfferSide { SELL, BUY }
 
-enum OfferStatus { LIVE, CANCELLED, EXPIRED, PARTIALLY_ACCEPTED, FULLY_ACCEPTED }
+enum OfferStatus { LIVE, CANCELLED, EXPIRED, PARTIALLY_ACCEPTED, FULLY_ACCEPTED, FINALIZED }
 
 enum ExemptionPathway { RULE_144, SECTION_4A7, SECTION_4A1HALF, RULE_144A, REGULATION_S }
 
@@ -55,7 +55,7 @@ struct Offer {
     OfferSide side;
     address certPrinter;            // both sides: required; identifies the security class/series
     uint256 tokenId;                // sell offer-only: seller's Ledger Entry Token id; zero for bids
-    uint256 units;                  // total units offered
+    uint256 units;                  // total units offered: immutable once offer is created
     address paymentToken;
     uint256 consideration;          // total payment for all offered units
     ExemptionPathway exemptionPathway;
@@ -66,9 +66,10 @@ struct Offer {
     // TODO add real test cases for it
     address integrator;
     OfferStatus status;
-    uint256 unitsAccepted;           // units currently committed to active PAID settlements; decrements on void
-    uint256 paymentAccepted;         // consideration currently committed to active settlements; decrements on finalize and void
-    bytes32 offerId;                 // DealManager-generated offer key; NOT a CyberAgreementRegistry record
+    uint256 unitsAccepted;          // units committed to active and finalized settlements; decrements on void only
+    uint256 paymentAccepted;        // consideration committed to active and finalized settlements; decrements on void only
+    uint256 unitsFinalized;         // units consumed by finalized settlements; monotonic (finalized lots never void), but may lag behind `unitsAccepted`
+    bytes32 offerId;                // DealManager-generated offer key; NOT a CyberAgreementRegistry record
     bytes32 templateId;             // agreement template id; stored for use at acceptOffer
     uint256 salt;                   // offeror-supplied salt; used to derive unique settlementSalt per acceptance
     string[] globalValues;          // agreement global values; stored for use at acceptOffer
@@ -76,8 +77,6 @@ struct Offer {
     bytes offerorAgreementSig;      // offeror's EIP-712 sig over offerAgreementId+terms; verified at postOffer, passed to signContractWithEscrow at acceptOffer
     // TODO add real test cases for it
     bytes openEndorsementSig;       // sell offer-only: seller's pre-signed open endorsement (spec §7.3.1); zero for bids
-    // TODO review: exact ID schema not yet determined
-    bytes32 unitReservationId;      // sell offer-only: reservation id from CertPrinter; zero for bids
     string buyerName;               // buy offer-only: buyer's registered name for OwnerDetails; empty for sell offers
     uint8 buyerHostingMode;         // buy offer-only: 0 = Direct, 1 = Administered; zero for sell offers
     address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
@@ -87,18 +86,18 @@ struct Offer {
 // Self-contained settlement escrow for secondary trades, keyed by settlementAgreementId.
 // Owns custody (payment in/out) and lifecycle (status, expiry) directly — no LexScrowStorage.Escrow companion.
 struct SecondaryEscrow {
+    // TODO it should have an agreementId
     // custody + lifecycle
-    address buyer;                  // acceptor / counterparty
+    address counterparty;           // acceptor (msg.sender of acceptOffer); buyer/seller derived from offer.side
     address paymentToken;           // ERC20 payment token
     uint256 paymentAmount;          // consideration for this settlement lot
     uint256 units;                  // units in this settlement lot
     uint256 expiry;                 // settlement deadline
     SecondaryEscrowStatus status;   // PAID | FINALIZED | VOIDED
     // secondary-specific routing
-    address sellerAddress;          // payment destination at finalizeDeal
     address feeDestination;         // integrator address for fee split; zero = all fees to MetaLeX
     bytes32 offerId;                // back-link to Offer
-    bytes32 unitReservationId;      // sell offer-only: reservation id to release on void; zero for bids
+    uint256 tokenId;                // seller's Ledger Entry Token id; reservation target for releaseUnits on void
     bytes dealMetadata;             // abi-encoded ownership-change params for IssuanceManager.secondaryTransfer
 }
 
@@ -130,7 +129,6 @@ struct PostOfferParams {
 struct AcceptOfferParams {
     bytes32 offerId;
     uint256 units;
-    address buyer;                  // registered owner; for buy offers typically offer.offeror
     string buyerName;               // sell offer-only: ignored for buy offer acceptances (read from Offer instead)
     uint8 buyerHostingMode;         // sell offer-only: 0 = Direct, 1 = Administered; ignored for buy offer acceptances
     // TODO should it be validated? What if the user provided the wrong address?
@@ -160,7 +158,7 @@ library SecondaryTradeStorage {
     }
 
     function hasSecondaryEscrow(bytes32 agreementId) internal view returns (bool) {
-        return secondaryTradeStorage().escrows[agreementId].sellerAddress != address(0);
+        return secondaryTradeStorage().escrows[agreementId].counterparty != address(0);
     }
 
     function getOffer(bytes32 offerId) internal view returns (Offer storage) {

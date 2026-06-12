@@ -139,7 +139,25 @@ interface ICyberCertPrinter is IERC721 {
     function setTokenTransferable(uint256 tokenId, bool value) external;
 
     // Unit reservation system (cyberTRADE; implementation pending)
-    function reserveUnits(uint256 tokenId, bytes32 reservationId, uint256 units) external;
-    function releaseUnits(bytes32 reservationId) external;
-    function consumeUnits(bytes32 reservationId) external;
+    //
+    // Expected use case: locking units ahead of an async, multi-transaction operation (e.g. an
+    // escrowed trade posted in one transaction and settled in another) so the units cannot be
+    // moved or re-reserved by anyone else in between (e.g. front-running). An operation that
+    // completes atomically within a single transaction has no need for these functions.
+    //
+    // Expected behavior as observed by callers:
+    // - Amount-based, no reservation IDs: after reserveUnits(tokenId, x), exactly x units of cert
+    //   `tokenId` are locked — not transferable, voidable, or reservable to anyone else — until
+    //   released or consumed. Repeated calls accumulate; callers do their own per-lot accounting.
+    // - Only the original reserver can release its reservation. releaseUnits(tokenId, x) unlocks x
+    //   units with no ownership change and must revert if x exceeds the caller's reserved amount.
+    // - consumeUnits(tokenId, x) settles x reserved units as part of an ownership change: the units
+    //   leave the cert together with the reservation. It is expected to be called under the hood by
+    //   the transfer logic (e.g. IssuanceManager.secondaryTransfer), so a reserver settling through
+    //   that path makes no reservation call of its own.
+    // - Each reserved unit should eventually be released or consumed exactly once. Multiple
+    //   reservers may hold reservations on the same cert independently, but their reservations should not overlap
+    function reserveUnits(uint256 tokenId, uint256 units) external;
+    function releaseUnits(uint256 tokenId, uint256 units) external;
+    function consumeUnits(uint256 tokenId, uint256 units) external;
 }
