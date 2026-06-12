@@ -53,6 +53,7 @@ import {
     OfferSide,
     OfferStatus,
     ExemptionPathway,
+    SecondaryEscrowStatus,
     Offer,
     SecondaryEscrow,
     PostOfferParams,
@@ -330,7 +331,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
     function _acceptSellOffer(bytes32 offerAgreementId) internal returns (bytes32 settlementAgreementId) {
         AcceptOfferParams memory p = AcceptOfferParams({
-            offerAgreementId: offerAgreementId,
+            offerId: offerAgreementId,
             units: UNITS,
             buyer: buyer,
             buyerName: "Bob",
@@ -347,7 +348,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
     function _acceptBuyOffer(bytes32 offerAgreementId) internal returns (bytes32 settlementAgreementId) {
         AcceptOfferParams memory p = AcceptOfferParams({
-            offerAgreementId: offerAgreementId,
+            offerId: offerAgreementId,
             units: UNITS,
             buyer: buyer,
             buyerName: "Bob",
@@ -381,7 +382,6 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(uint8(offer.status), uint8(OfferStatus.LIVE));
         assertEq(offer.unitsAccepted, 0);
         assertTrue(offer.unitReservationId != bytes32(0), "sell offer should have a unitReservationId");
-        assertEq(offer.buyOfferCommitmentEscrowId, bytes32(0), "sell offer should have no buyOfferCommitmentEscrowId");
     }
 
     function test_Secondary_PostOffer_Sell_ReservesUnits() public {
@@ -417,7 +417,6 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(uint8(offer.status), uint8(OfferStatus.LIVE));
         assertEq(offer.unitsAccepted, 0);
         assertEq(offer.unitReservationId, bytes32(0), "buy offer should have no unitReservationId");
-        assertEq(offer.buyOfferCommitmentEscrowId, offerId, "buyOfferCommitmentEscrowId should equal offerAgreementId");
     }
 
     function test_Secondary_PostOffer_BuyOffer_CreatesHoldingEscrow() public {
@@ -561,7 +560,7 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 offerId = _postSellOffer();
 
         AcceptOfferParams memory p = AcceptOfferParams({
-            offerAgreementId: offerId,
+            offerId: offerId,
             units: UNITS - 1, // partial fill, below min
             buyer: buyer,
             buyerName: "Bob",
@@ -646,26 +645,14 @@ contract DealManagerSecondaryTradeTest is Test {
     // acceptOffer — sell offer
     // ─────────────────────────────────────────────────────────────────────────
 
-    function test_Secondary_AcceptSellOffer_CreatesSettlementEscrowInLexScrowStorage() public {
+    function test_Secondary_AcceptSellOffer_CreatesSettlementEscrow() public {
         bytes32 offerId = _postSellOffer();
         bytes32 settlementId = _acceptSellOffer(offerId);
 
-        // Settlement escrow should be PAID (funds pulled from buyer)
-        assertEq(
-            uint8(dm.getEscrowDetails(settlementId).status),
-            uint8(EscrowStatus.PAID),
-            "settlement escrow should be PAID"
-        );
-        assertEq(
-            dm.getEscrowDetails(settlementId).buyerAssets[0].amount,
-            CONSIDERATION,
-            "consideration in settlement escrow"
-        );
-        assertEq(
-            dm.getEscrowDetails(settlementId).corpAssets.length,
-            0,
-            "corpAssets should be empty"
-        );
+        SecondaryEscrow memory se = dm.getSecondaryEscrow(settlementId);
+        assertEq(uint8(se.status), uint8(SecondaryEscrowStatus.PAID), "settlement escrow should be PAID");
+        assertEq(se.paymentAmount, CONSIDERATION, "consideration in settlement escrow");
+        assertEq(se.buyer, buyer, "buyer set correctly");
     }
 
     function test_Secondary_AcceptSellOffer_StoresSecondaryEscrow() public {
@@ -702,7 +689,7 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 expectedResId = dm.getOffer(offerId).unitReservationId;
 
         AcceptOfferParams memory p = AcceptOfferParams({
-            offerAgreementId: offerId,
+            offerId: offerId,
             units: UNITS / 2,
             buyer: buyer,
             buyerName: "Bob",
@@ -734,7 +721,7 @@ contract DealManagerSecondaryTradeTest is Test {
         uint256 buyerBefore = paymentToken.balanceOf(buyer);
 
         AcceptOfferParams memory p = AcceptOfferParams({
-            offerAgreementId: offerId,
+            offerId: offerId,
             units: partialUnits,
             buyer: buyer,
             buyerName: "Bob",
@@ -750,7 +737,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         assertEq(paymentToken.balanceOf(buyer), buyerBefore - expectedConsideration, "buyer pays pro-rata only");
         assertEq(
-            dm.getEscrowDetails(settlementId).buyerAssets[0].amount,
+            dm.getSecondaryEscrow(settlementId).paymentAmount,
             expectedConsideration,
             "settlement escrow holds pro-rata amount"
         );
@@ -764,7 +751,7 @@ contract DealManagerSecondaryTradeTest is Test {
         uint256 expectedSecond = CONSIDERATION * secondUnits / UNITS;
 
         AcceptOfferParams memory p = AcceptOfferParams({
-            offerAgreementId: offerId,
+            offerId: offerId,
             units: firstUnits,
             buyer: buyer,
             buyerName: "Bob",
@@ -787,15 +774,15 @@ contract DealManagerSecondaryTradeTest is Test {
         assertTrue(settlementId1 != settlementId2, "each fill gets its own settlement escrow");
         assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.FULLY_ACCEPTED));
         assertEq(dm.getOffer(offerId).unitsAccepted, UNITS);
-        assertEq(dm.getEscrowDetails(settlementId1).buyerAssets[0].amount, expectedFirst);
-        assertEq(dm.getEscrowDetails(settlementId2).buyerAssets[0].amount, expectedSecond);
+        assertEq(dm.getSecondaryEscrow(settlementId1).paymentAmount, expectedFirst);
+        assertEq(dm.getSecondaryEscrow(settlementId2).paymentAmount, expectedSecond);
     }
 
     function test_Secondary_RevertIf_AcceptSellOffer_UnitsExceedOffer() public {
         bytes32 offerId = _postSellOffer();
 
         AcceptOfferParams memory p = AcceptOfferParams({
-            offerAgreementId: offerId,
+            offerId: offerId,
             units: UNITS + 1,
             buyer: buyer,
             buyerName: "Bob",
@@ -816,7 +803,7 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 offerId = _postSellOffer();
 
         AcceptOfferParams memory p = AcceptOfferParams({
-            offerAgreementId: offerId,
+            offerId: offerId,
             units: UNITS / 2,
             buyer: buyer,
             buyerName: "Bob",
@@ -845,8 +832,8 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 settlementId = _acceptBuyOffer(offerId);
 
         assertEq(
-            uint8(dm.getEscrowDetails(settlementId).status),
-            uint8(EscrowStatus.PAID),
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.PAID),
             "settlement escrow should open PAID (migrated from holding)"
         );
     }
@@ -854,15 +841,15 @@ contract DealManagerSecondaryTradeTest is Test {
     function test_Secondary_AcceptBuyOffer_MigratesFundsFromHoldingEscrow() public {
         bytes32 offerId = _postBuyOffer();
 
-        // Funds are in holding escrow (offerId) before acceptance
+        // Funds are in contract from postOffer() before acceptance
         assertEq(paymentToken.balanceOf(address(dm)), CONSIDERATION);
 
         bytes32 settlementId = _acceptBuyOffer(offerId);
 
-        // Funds remain in DealManager but are now attributed to settlement escrow
+        // Funds remain in DealManager, now attributed to the settlement SecondaryEscrow
         assertEq(paymentToken.balanceOf(address(dm)), CONSIDERATION, "funds still in DealManager");
         assertEq(
-            dm.getEscrowDetails(settlementId).buyerAssets[0].amount,
+            dm.getSecondaryEscrow(settlementId).paymentAmount,
             CONSIDERATION,
             "consideration attributed to settlement escrow"
         );
@@ -884,7 +871,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         // Second attempt reverts because offer is now FULLY_ACCEPTED
         AcceptOfferParams memory p = AcceptOfferParams({
-            offerAgreementId: offerId,
+            offerId: offerId,
             units: UNITS,
             buyer: buyer,
             buyerName: "Bob",
@@ -900,32 +887,11 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.acceptOffer(p);
     }
 
-    function test_Secondary_RevertIf_AcceptBuyOffer_PartialFill() public {
-        bytes32 offerId = _postBuyOffer();
-
-        AcceptOfferParams memory p = AcceptOfferParams({
-            offerAgreementId: offerId,
-            units: UNITS - 1,
-            buyer: buyer,
-            buyerName: "Bob",
-            buyerHostingMode: 0,
-            adminMultisig: address(0),
-            sellerTokenId: sellerTokenId,
-            acceptorPartyValues: new string[](0),
-            acceptorAgreementSig: "",
-            openEndorsementSig: "sellerEndorsement"
-        });
-
-        vm.prank(seller);
-        vm.expectRevert(DealManager.BuyPartialFillNotAllowed.selector);
-        dm.acceptOffer(p);
-    }
-
     function test_Secondary_RevertIf_AcceptOffer_Buy_UnitsExceedOffer() public {
         bytes32 offerId = _postBuyOffer();
 
         AcceptOfferParams memory p = AcceptOfferParams({
-            offerAgreementId: offerId,
+            offerId: offerId,
             units: UNITS + 1,
             buyer: buyer,
             buyerName: "Bob",
@@ -1062,20 +1028,39 @@ contract DealManagerSecondaryTradeTest is Test {
     // voidExpiredDeal — secondary path
     // ─────────────────────────────────────────────────────────────────────────
 
-    function test_Secondary_VoidExpiredDeal_ReleasesUnitReservation() public {
+    function test_Secondary_VoidExpiredDeal_DoesNotReleaseReservation_OfferGoesBackToLive() public {
+        // Voiding an expired settlement on a non-cancelled offer reverts the offer to LIVE.
+        // The reservation must be held so future acceptors are still protected.
+        // The seller must call cancelOffer() to release it.
         bytes32 offerId = _postSellOffer();
         bytes32 settlementId = _acceptSellOffer(offerId);
 
         SecondaryEscrow memory se = dm.getSecondaryEscrow(settlementId);
         bytes32 resId = se.unitReservationId;
 
-        uint256 expiry = dm.getEscrowDetails(settlementId).expiry;
-        vm.warp(expiry + 1);
-
+        vm.warp(se.expiry + 1);
         vm.prank(keeper);
         dm.voidExpiredDeal(settlementId, keeper, "");
 
-        assertFalse(certPrinter.reservationActive(resId), "reservation should be released on void");
+        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.LIVE), "offer should be LIVE after void");
+        assertTrue(certPrinter.reservationActive(resId), "reservation must stay active: offer is LIVE");
+        assertFalse(certPrinter.reservationReleased(resId), "reservation must not have been released");
+    }
+
+    function test_Secondary_VoidExpiredDeal_ReleasesReservation_WhenOfferCancelled() public {
+        bytes32 offerId = _postSellOffer();
+        bytes32 settlementId = _acceptSellOffer(offerId);
+        bytes32 resId = dm.getOffer(offerId).unitReservationId;
+
+        vm.prank(seller);
+        dm.cancelOffer(offerId);
+        assertTrue(certPrinter.reservationActive(resId), "reservation held after cancel with active settlement");
+
+        vm.warp(dm.getSecondaryEscrow(settlementId).expiry + 1);
+        vm.prank(keeper);
+        dm.voidExpiredDeal(settlementId, keeper, "");
+
+        assertFalse(certPrinter.reservationActive(resId), "reservation released: offer CANCELLED, last settlement voided");
         assertTrue(certPrinter.reservationReleased(resId));
     }
 
@@ -1085,7 +1070,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         uint256 buyerBefore = paymentToken.balanceOf(buyer);
 
-        uint256 expiry = dm.getEscrowDetails(settlementId).expiry;
+        uint256 expiry = dm.getSecondaryEscrow(settlementId).expiry;
         vm.warp(expiry + 1);
 
         vm.prank(keeper);
@@ -1155,6 +1140,132 @@ contract DealManagerSecondaryTradeTest is Test {
         SecondaryEscrow memory se = dm.getSecondaryEscrow(settlementId);
         assertTrue(se.sellerAddress != address(0), "SecondaryEscrow should exist after accept");
     }
+
+    function _acceptSellOfferPartial(bytes32 offerAgreementId, uint256 units) internal returns (bytes32 settlementAgreementId) {
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerAgreementId,
+            units: units,
+            buyer: buyer,
+            buyerName: "Bob",
+            buyerHostingMode: 0,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: "",
+            openEndorsementSig: ""
+        });
+        vm.prank(buyer);
+        settlementAgreementId = dm.acceptOffer(p);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Reservation release guards — SELL offer
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function test_Secondary_FinalizeDeal_PartialFill_ReservationHeld_OfferStillOpen() public {
+        // Bug guard: paymentAccepted drops to 0 after a partial fill finalizes, but the offer
+        // is still PARTIALLY_ACCEPTED with remaining units — reservation must NOT be released.
+        bytes32 offerId = _postSellOffer();
+        bytes32 resId = dm.getOffer(offerId).unitReservationId;
+
+        bytes32 settlementId = _acceptSellOfferPartial(offerId, UNITS / 2);
+        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.PARTIALLY_ACCEPTED));
+
+        vm.prank(keeper);
+        dm.finalizeDeal(settlementId);
+
+        assertTrue(certPrinter.reservationActive(resId), "reservation must stay active: offer still open");
+        assertFalse(certPrinter.reservationReleased(resId));
+    }
+
+    function test_Secondary_FinalizeDeal_FullFill_ReleasesReservation() public {
+        bytes32 offerId = _postSellOffer();
+        bytes32 resId = dm.getOffer(offerId).unitReservationId;
+
+        bytes32 settlementId = _acceptSellOffer(offerId);
+        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.FULLY_ACCEPTED));
+
+        vm.prank(keeper);
+        dm.finalizeDeal(settlementId);
+
+        assertFalse(certPrinter.reservationActive(resId), "reservation released after full-fill finalized");
+        assertTrue(certPrinter.reservationReleased(resId));
+    }
+
+    function test_Secondary_FinalizeDeal_TwoPartialFills_ReservationReleasedOnlyAfterLast() public {
+        bytes32 offerId = _postSellOffer();
+        bytes32 resId = dm.getOffer(offerId).unitReservationId;
+
+        uint256 firstUnits  = UNITS / 2;
+        uint256 secondUnits = UNITS - firstUnits;
+
+        bytes32 sid1 = _acceptSellOfferPartial(offerId, firstUnits);
+        bytes32 sid2 = _acceptSellOfferPartial(offerId, secondUnits);
+
+        vm.prank(keeper);
+        dm.finalizeDeal(sid1);
+        assertTrue(certPrinter.reservationActive(resId), "reservation held while second settlement in-flight");
+
+        vm.prank(keeper);
+        dm.finalizeDeal(sid2);
+        assertFalse(certPrinter.reservationActive(resId), "reservation released after last settlement finalized");
+        assertTrue(certPrinter.reservationReleased(resId));
+    }
+
+    function test_Secondary_FinalizeDeal_CancelledOffer_ReleasesReservation() public {
+        bytes32 offerId = _postSellOffer();
+        bytes32 resId = dm.getOffer(offerId).unitReservationId;
+
+        bytes32 settlementId = _acceptSellOffer(offerId);
+
+        vm.prank(seller);
+        dm.cancelOffer(offerId);
+        assertTrue(certPrinter.reservationActive(resId), "reservation held after cancel with active settlement");
+
+        vm.prank(keeper);
+        dm.finalizeDeal(settlementId);
+
+        assertFalse(certPrinter.reservationActive(resId), "reservation released: CANCELLED + last settlement finalized");
+        assertTrue(certPrinter.reservationReleased(resId));
+    }
+
+    function test_Secondary_VoidSettlement_FullyAccepted_ReservationHeld_OfferGoesLive() public {
+        // Bug guard: voiding the only settlement of a FULLY_ACCEPTED offer reverts it to LIVE.
+        // The reservation must NOT be released — future acceptors still need it.
+        bytes32 offerId = _postSellOffer();
+        bytes32 resId = dm.getOffer(offerId).unitReservationId;
+
+        bytes32 settlementId = _acceptSellOffer(offerId);
+        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.FULLY_ACCEPTED));
+
+        vm.prank(buyer);
+        dm.voidSecondaryAgreement(settlementId, buyer, "");
+
+        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.LIVE), "offer should revert to LIVE");
+        assertTrue(certPrinter.reservationActive(resId), "reservation must stay active: offer is LIVE");
+        assertFalse(certPrinter.reservationReleased(resId));
+    }
+
+    function test_Secondary_VoidSettlement_CancelledOffer_ReleasesReservation() public {
+        bytes32 offerId = _postSellOffer();
+        bytes32 resId = dm.getOffer(offerId).unitReservationId;
+
+        bytes32 settlementId = _acceptSellOffer(offerId);
+
+        vm.prank(seller);
+        dm.cancelOffer(offerId);
+        assertTrue(certPrinter.reservationActive(resId), "reservation held after cancel with active settlement");
+
+        vm.prank(buyer);
+        dm.voidSecondaryAgreement(settlementId, buyer, "");
+
+        assertFalse(certPrinter.reservationActive(resId), "reservation released: CANCELLED + last settlement voided");
+        assertTrue(certPrinter.reservationReleased(resId));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // hasSecondaryEscrow discriminator
+    // ─────────────────────────────────────────────────────────────────────────
 
     function test_Secondary_HasSecondaryEscrow_FalseForPrimaryDeal() public {
         // A primary deal should have no SecondaryEscrow entry
