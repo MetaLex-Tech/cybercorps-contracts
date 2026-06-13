@@ -60,6 +60,8 @@ import {
     AcceptOfferParams
 } from "../src/storage/SecondaryTradeStorage.sol";
 import {EscrowStatus} from "../src/storage/LexScrowStorage.sol";
+import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mocks
@@ -140,41 +142,6 @@ contract SecIssuanceManagerMock {
     }
 }
 
-contract SecAgreementRegistryMock {
-    mapping(bytes32 => bool) public isVoided;
-    mapping(bytes32 => bool) public isFinalized;
-    uint256 private _nonce;
-
-    function createContract(
-        bytes32, uint256, string[] memory, address[] memory,
-        string[][] memory, bytes32, address, uint256
-    ) external returns (bytes32) {
-        return keccak256(abi.encodePacked("primary", _nonce++));
-    }
-
-    function signContractFor(
-        address, bytes32, string[] memory, bytes calldata, bool, string memory
-    ) external {}
-
-    function signContractWithEscrow(
-        address, bytes32, string[] memory, bytes calldata, bool, string memory
-    ) external {}
-
-    function voidContractFor(bytes32 contractId, address, bytes calldata) external {
-        isVoided[contractId] = true;
-    }
-
-    function finalizeContract(bytes32 contractId) external {
-        isFinalized[contractId] = true;
-    }
-
-    function allPartiesSigned(bytes32) external pure returns (bool) { return true; }
-    function hasSigned(bytes32, address) external pure returns (bool) { return false; }
-    function getSignerValues(bytes32, address) external pure returns (string[] memory) {
-        return new string[](0);
-    }
-}
-
 contract SecCorpMock {
     address public companyPayable;
     constructor(address _cp) { companyPayable = _cp; }
@@ -203,38 +170,53 @@ contract DealManagerSecondaryTradeTest is Test {
     bytes32 constant corpSalt = keccak256("DealManagerSecondaryTradeTest.corp");
 
     address public owner;
+    uint256 public ownerKey;
     address public seller;
+    uint256 public sellerKey;
     address public buyer;
+    uint256 public buyerKey;
     address public keeper;
     address public company;
 
     SecERC20Mock      public paymentToken;
     SecCertPrinterMock public certPrinter;
     SecIssuanceManagerMock public im;
-    SecAgreementRegistryMock public registry;
+    CyberAgreementRegistry public registry;
     SecCorpMock        public corp;
     DealManagerFactoryHelper   public dmFactory;
     DealManager        public dm;
     BorgAuth           public auth;
+
+    // Single template (empty global/party fields) reused for every offer and the primary regression deals.
+    bytes32 public constant TEMPLATE_ID = bytes32(0);
+    string public constant TEMPLATE_URI = "ipfs://secondary-template";
 
     uint256 public constant CONSIDERATION = 10 ether;
     uint256 public constant UNITS         = 100;
     uint256 public sellerTokenId;
 
     function setUp() public {
-        owner  = makeAddr("owner");
-        seller = makeAddr("seller");
-        buyer  = makeAddr("buyer");
+        (owner, ownerKey)   = makeAddrAndKey("owner");
+        (seller, sellerKey) = makeAddrAndKey("seller");
+        (buyer, buyerKey)   = makeAddrAndKey("buyer");
         keeper = makeAddr("keeper");
         company = makeAddr("company");
 
         paymentToken = new SecERC20Mock();
         certPrinter  = new SecCertPrinterMock();
         im           = new SecIssuanceManagerMock();
-        registry     = new SecAgreementRegistryMock();
         corp         = new SecCorpMock(company);
 
         auth = new BorgAuth(owner);
+
+        // Real CyberAgreementRegistry behind a proxy, sharing the same BorgAuth.
+        registry = CyberAgreementRegistry(address(new ERC1967Proxy(
+            address(new CyberAgreementRegistry()),
+            abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
+        )));
+        // Single reusable template with no global/party fields (matches the empty values used below).
+        vm.prank(owner);
+        registry.createTemplate(TEMPLATE_ID, "Secondary", TEMPLATE_URI, new string[](0), new string[](0));
 
         dmFactory = DealManagerFactoryHelper(
             address(new ERC1967Proxy(
@@ -346,7 +328,7 @@ contract DealManagerSecondaryTradeTest is Test {
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
-            acceptorAgreementSig: "",
+            acceptorAgreementSig: _acceptorSig(offerAgreementId, buyer, buyerKey),
             openEndorsementSig: ""
         });
         vm.prank(buyer);
@@ -366,11 +348,65 @@ contract DealManagerSecondaryTradeTest is Test {
             adminMultisig: address(0),
             sellerTokenId: sellerTokenId,
             acceptorPartyValues: new string[](0),
-            acceptorAgreementSig: "",
+            acceptorAgreementSig: _acceptorSig(offerAgreementId, seller, sellerKey),
             openEndorsementSig: "sellerEndorsement"
         });
         vm.prank(seller);
         settlementAgreementId = dm.acceptOffer(p);
+    }
+
+    /// @dev Both parties of a settlement are always {seller, buyer} regardless of offer side. A
+    /// settlement only reaches VOIDED once both have requested the void (registry quorum), so the
+    /// escrow flips on the second call.
+    function _voidSettlementBothParties(bytes32 settlementId) internal {
+        vm.prank(buyer);
+        dm.voidSecondaryAgreement(settlementId, buyer, "");
+        vm.prank(seller);
+        dm.voidSecondaryAgreement(settlementId, seller, "");
+    }
+
+    /// @dev EIP-712 agreement signature over a contractId for a signer with the given party values.
+    /// All offers/deals here use the empty-field template, so global/party fields and global values are empty.
+    function _agreementSig(bytes32 agreementId, string[] memory partyValues, uint256 key)
+        internal view returns (bytes memory)
+    {
+        return CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            agreementId,
+            TEMPLATE_URI,
+            new string[](0), // globalFields
+            new string[](0), // partyFields
+            new string[](0), // globalValues
+            partyValues,
+            key
+        );
+    }
+
+    /// @dev Recomputes the next settlement agreement id for an offer and returns the acceptor's
+    /// EIP-712 signature over it (the real registry verifies the acceptor via signContractFor).
+    function _acceptorSig(bytes32 offerId, address acceptor, uint256 key) internal view returns (bytes memory) {
+        Offer memory o = dm.getOffer(offerId);
+        bytes32 settlementSalt = keccak256(abi.encodePacked(o.salt, o.settlementAgreementIds.length));
+        address[] memory parties = new address[](2);
+        parties[0] = o.offeror;
+        parties[1] = acceptor;
+        bytes32 settlementId = keccak256(abi.encode(o.templateId, uint256(settlementSalt), o.globalValues, parties));
+        return _agreementSig(settlementId, new string[](0), key);
+    }
+
+    /// @dev EIP-712 void signature over a contractId (needed only for direct registry void calls,
+    /// i.e. not routed through DealManager, which is the finalizer and skips verification).
+    function _voidSig(bytes32 agreementId, address party, uint256 key) internal view returns (bytes memory) {
+        return CyberAgreementUtils.signVoidAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.VOIDSIGNATUREDATA_TYPEHASH(),
+            agreementId,
+            party,
+            key
+        );
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -592,7 +628,7 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 offerId = _postSellOffer();
 
         vm.prank(seller);
-        dm.cancelOffer(offerId, true);
+        dm.cancelOffer(offerId);
 
         assertEq(certPrinter.reservedUnits(sellerTokenId), 0, "reservation should be released");
         assertEq(certPrinter.releasedUnits(sellerTokenId), UNITS, "all units should be marked released");
@@ -602,7 +638,7 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 offerId = _postSellOffer();
 
         vm.prank(seller);
-        dm.cancelOffer(offerId, true);
+        dm.cancelOffer(offerId);
 
         Offer memory offer = dm.getOffer(offerId);
         assertEq(uint8(offer.status), uint8(OfferStatus.CANCELLED));
@@ -613,7 +649,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.prank(buyer);
         vm.expectRevert(DealManager.NotOfferor.selector);
-        dm.cancelOffer(offerId, true);
+        dm.cancelOffer(offerId);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -625,7 +661,7 @@ contract DealManagerSecondaryTradeTest is Test {
         uint256 buyerBalanceBefore = paymentToken.balanceOf(buyer);
 
         vm.prank(buyer);
-        dm.cancelOffer(offerId, true);
+        dm.cancelOffer(offerId);
 
         assertEq(
             paymentToken.balanceOf(buyer),
@@ -638,64 +674,81 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 offerId = _postBid();
 
         vm.prank(buyer);
-        dm.cancelOffer(offerId, true);
+        dm.cancelOffer(offerId);
 
         Offer memory offer = dm.getOffer(offerId);
         assertEq(uint8(offer.status), uint8(OfferStatus.CANCELLED));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // cancelOffer — voiding outstanding settlements
+    // cancelOffer — outstanding settlements stay active
     // ─────────────────────────────────────────────────────────────────────────
 
-    function test_Secondary_CancelOffer_Sell_VoidsOutstandingSettlements() public {
+    function test_Secondary_CancelOffer_Sell_KeepsOutstandingSettlements() public {
         bytes32 offerId = _postSellOffer();
         uint256 lotUnits = UNITS / 2;
         bytes32 settlementId = _acceptSellOfferPartial(offerId, lotUnits);
         uint256 buyerBalanceAfterAccept = paymentToken.balanceOf(buyer);
 
         vm.prank(seller);
-        dm.cancelOffer(offerId, true);
+        dm.cancelOffer(offerId);
 
+        // Cancel returns only the free pool; the accepted lot stays ACCEPTED and resolvable.
         assertEq(
             uint8(dm.getSecondaryEscrow(settlementId).status),
-            uint8(SecondaryEscrowStatus.VOIDED),
-            "outstanding settlement voided with the offer"
+            uint8(SecondaryEscrowStatus.ACCEPTED),
+            "outstanding settlement stays ACCEPTED after cancel"
         );
-        assertTrue(registry.isVoided(settlementId), "void requested in registry on the offeror's behalf");
+        assertFalse(registry.isVoided(settlementId), "cancel must not request a settlement void");
+        assertEq(paymentToken.balanceOf(buyer), buyerBalanceAfterAccept, "active lot not refunded by cancel");
+        assertEq(certPrinter.reservedUnits(sellerTokenId), lotUnits, "committed lot stays reserved");
+        assertEq(certPrinter.releasedUnits(sellerTokenId), UNITS - lotUnits, "only free units released");
+
+        // The active lot is still finalizable after the offer is cancelled.
+        vm.prank(keeper);
+        dm.finalizeDeal(settlementId);
         assertEq(
-            paymentToken.balanceOf(buyer),
-            buyerBalanceAfterAccept + CONSIDERATION * lotUnits / UNITS,
-            "buyer's lot payment refunded"
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.FINALIZED),
+            "active lot still finalizable after cancel"
         );
-        assertEq(certPrinter.reservedUnits(sellerTokenId), 0, "free units and voided lot both released");
     }
 
-    function test_Secondary_CancelOffer_Bid_VoidsOutstandingSettlements() public {
+    function test_Secondary_CancelOffer_Bid_KeepsOutstandingSettlements() public {
         bytes32 offerId = _postBid();
         bytes32 settlementId = _acceptBidPartial(offerId, 40);
+        uint256 lotPayment = CONSIDERATION * 40 / UNITS;
         uint256 buyerBalanceAfterAccept = paymentToken.balanceOf(buyer);
 
         vm.prank(buyer);
-        dm.cancelOffer(offerId, true);
+        dm.cancelOffer(offerId);
 
+        // Cancel refunds only the free pool; the accepted lot's funds stay in custody.
         assertEq(
             uint8(dm.getSecondaryEscrow(settlementId).status),
-            uint8(SecondaryEscrowStatus.VOIDED),
-            "outstanding settlement voided with the offer"
+            uint8(SecondaryEscrowStatus.ACCEPTED),
+            "outstanding settlement stays ACCEPTED after cancel"
         );
+        assertFalse(registry.isVoided(settlementId), "cancel must not request a settlement void");
         assertEq(
             paymentToken.balanceOf(buyer),
-            buyerBalanceAfterAccept + CONSIDERATION,
-            "offeror refunded free pool plus voided lot in one tx"
+            buyerBalanceAfterAccept + (CONSIDERATION - lotPayment),
+            "only free pool refunded at cancel"
         );
-        assertEq(certPrinter.reservedUnits(sellerTokenId), 0, "seller's per-settlement reservation released");
-        assertEq(paymentToken.balanceOf(address(dm)), 0, "no consideration left in custody");
+        assertEq(paymentToken.balanceOf(address(dm)), lotPayment, "committed lot's funds stay in custody");
+        assertEq(certPrinter.reservedUnits(sellerTokenId), 40, "seller's lot reservation held");
+
+        // The active lot is still finalizable after the offer is cancelled.
+        uint256 sellerBefore = paymentToken.balanceOf(seller);
+        vm.prank(keeper);
+        dm.finalizeDeal(settlementId);
+        assertEq(paymentToken.balanceOf(seller), sellerBefore + lotPayment, "active lot settles to the acceptor");
+        assertEq(paymentToken.balanceOf(address(dm)), 0, "custody drained after finalize");
     }
 
-    function test_Secondary_CancelOffer_Sell_VoidsOnlyPaidLots() public {
-        // SELL mirror of the bid case below: the finalized lot's units stay consumed and its
-        // payout stays with the seller; only the PAID lot and the free units come back.
+    function test_Secondary_CancelOffer_Sell_KeepsActiveLots_FinalizedUntouched() public {
+        // The finalized lot's units stay consumed and its payout stays with the seller; the still
+        // ACCEPTED lot is left active (not voided) and only the free units come back at cancel.
         bytes32 offerId = _postSellOffer();
         bytes32 settlementIdA = _acceptSellOfferPartial(offerId, 40);
         bytes32 settlementIdB = _acceptSellOfferPartial(offerId, 30);
@@ -708,7 +761,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.finalizeDeal(settlementIdA);
 
         vm.prank(seller);
-        dm.cancelOffer(offerId, true);
+        dm.cancelOffer(offerId);
 
         assertEq(
             uint8(dm.getSecondaryEscrow(settlementIdA).status),
@@ -717,21 +770,29 @@ contract DealManagerSecondaryTradeTest is Test {
         );
         assertEq(
             uint8(dm.getSecondaryEscrow(settlementIdB).status),
-            uint8(SecondaryEscrowStatus.VOIDED),
-            "PAID lot voided by cancel"
+            uint8(SecondaryEscrowStatus.ACCEPTED),
+            "active lot stays ACCEPTED after cancel"
         );
         assertEq(paymentToken.balanceOf(seller), sellerBalanceBefore + lotPaymentA, "seller keeps the finalized payout");
-        assertEq(paymentToken.balanceOf(buyer), buyerBalanceAfterAccept + lotPaymentB, "voided lot's payment refunded to its buyer");
-        assertEq(paymentToken.balanceOf(address(dm)), 0, "no payment left in custody");
+        assertEq(paymentToken.balanceOf(buyer), buyerBalanceAfterAccept, "active lot not refunded by cancel");
+        assertEq(paymentToken.balanceOf(address(dm)), lotPaymentB, "active lot's payment stays in custody");
         assertEq(certPrinter.consumedUnits(sellerTokenId), 40, "finalized lot's units consumed exactly once");
-        assertEq(certPrinter.reservedUnits(sellerTokenId), 0, "free units and voided lot both released");
+        assertEq(certPrinter.reservedUnits(sellerTokenId), 30, "active lot stays reserved; free units released");
+        assertEq(certPrinter.releasedUnits(sellerTokenId), UNITS - 70, "only the free units released at cancel");
+
+        // The active lot still settles after the offer is cancelled.
+        vm.prank(keeper);
+        dm.finalizeDeal(settlementIdB);
+        assertEq(paymentToken.balanceOf(seller), sellerBalanceBefore + lotPaymentA + lotPaymentB, "active lot settles after cancel");
+        assertEq(paymentToken.balanceOf(address(dm)), 0, "custody drained");
     }
 
-    function test_Secondary_CancelOffer_VoidsOnlyPaidLots() public {
+    function test_Secondary_CancelOffer_Bid_KeepsActiveLots_FinalizedUntouched() public {
         bytes32 offerId = _postBid();
         bytes32 settlementIdA = _acceptBidPartial(offerId, 40);
         bytes32 settlementIdB = _acceptBidPartial(offerId, 30);
         uint256 lotPaymentA = CONSIDERATION * 40 / UNITS;
+        uint256 lotPaymentB = CONSIDERATION * 30 / UNITS;
         uint256 buyerBalanceAfterAccept = paymentToken.balanceOf(buyer);
         uint256 sellerBalanceBefore = paymentToken.balanceOf(seller);
 
@@ -739,7 +800,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.finalizeDeal(settlementIdA);
 
         vm.prank(buyer);
-        dm.cancelOffer(offerId, true);
+        dm.cancelOffer(offerId);
 
         assertEq(
             uint8(dm.getSecondaryEscrow(settlementIdA).status),
@@ -748,16 +809,22 @@ contract DealManagerSecondaryTradeTest is Test {
         );
         assertEq(
             uint8(dm.getSecondaryEscrow(settlementIdB).status),
-            uint8(SecondaryEscrowStatus.VOIDED),
-            "PAID lot voided by cancel"
+            uint8(SecondaryEscrowStatus.ACCEPTED),
+            "active lot stays ACCEPTED after cancel"
         );
         assertEq(paymentToken.balanceOf(seller), sellerBalanceBefore + lotPaymentA, "seller keeps the finalized payout");
         assertEq(
             paymentToken.balanceOf(buyer),
-            buyerBalanceAfterAccept + (CONSIDERATION - lotPaymentA),
-            "refund covers free pool plus voided lot, excludes finalized lot"
+            buyerBalanceAfterAccept + (CONSIDERATION - lotPaymentA - lotPaymentB),
+            "cancel refunds only the free pool, excludes finalized and active lots"
         );
-        assertEq(paymentToken.balanceOf(address(dm)), 0, "custody fully drained, nothing over-refunded");
+        assertEq(paymentToken.balanceOf(address(dm)), lotPaymentB, "active lot's funds stay in custody");
+
+        // The active lot still settles after the offer is cancelled.
+        vm.prank(keeper);
+        dm.finalizeDeal(settlementIdB);
+        assertEq(paymentToken.balanceOf(seller), sellerBalanceBefore + lotPaymentA + lotPaymentB, "active lot settles after cancel");
+        assertEq(paymentToken.balanceOf(address(dm)), 0, "custody fully drained");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -769,7 +836,7 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 settlementId = _acceptSellOffer(offerId);
 
         SecondaryEscrow memory se = dm.getSecondaryEscrow(settlementId);
-        assertEq(uint8(se.status), uint8(SecondaryEscrowStatus.PAID), "settlement escrow should be PAID");
+        assertEq(uint8(se.status), uint8(SecondaryEscrowStatus.ACCEPTED), "settlement escrow should be ACCEPTED");
         assertEq(se.paymentAmount, CONSIDERATION, "consideration in settlement escrow");
         assertEq(se.counterparty, buyer, "counterparty is the acceptor (the buyer on a sell offer)");
     }
@@ -814,7 +881,7 @@ contract DealManagerSecondaryTradeTest is Test {
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
-            acceptorAgreementSig: "",
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey),
             openEndorsementSig: ""
         });
         vm.prank(buyer);
@@ -846,7 +913,7 @@ contract DealManagerSecondaryTradeTest is Test {
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
-            acceptorAgreementSig: "",
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey),
             openEndorsementSig: ""
         });
         vm.prank(buyer);
@@ -875,7 +942,7 @@ contract DealManagerSecondaryTradeTest is Test {
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
-            acceptorAgreementSig: "",
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey),
             openEndorsementSig: ""
         });
         vm.prank(buyer);
@@ -884,6 +951,7 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.PARTIALLY_ACCEPTED));
 
         p.units = secondUnits;
+        p.acceptorAgreementSig = _acceptorSig(offerId, buyer, buyerKey); // settlement id changes with each fill
         vm.prank(buyer);
         bytes32 settlementId2 = dm.acceptOffer(p);
 
@@ -925,13 +993,13 @@ contract DealManagerSecondaryTradeTest is Test {
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
-            acceptorAgreementSig: "",
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey),
             openEndorsementSig: ""
         });
         vm.prank(buyer);
         dm.acceptOffer(p);
 
-        p.units = UNITS / 2 + 1; // one more than remaining
+        p.units = UNITS / 2 + 1; // one more than remaining (reverts before signature check)
         vm.prank(buyer);
         vm.expectRevert(DealManager.UnitsExceedOffer.selector);
         dm.acceptOffer(p);
@@ -947,8 +1015,8 @@ contract DealManagerSecondaryTradeTest is Test {
 
         assertEq(
             uint8(dm.getSecondaryEscrow(settlementId).status),
-            uint8(SecondaryEscrowStatus.PAID),
-            "settlement escrow should open PAID (migrated from holding)"
+            uint8(SecondaryEscrowStatus.ACCEPTED),
+            "settlement escrow should open ACCEPTED (migrated from holding)"
         );
     }
 
@@ -1095,7 +1163,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.prank(seller);
         vm.expectRevert(DealManager.OfferNotAvailable.selector);
-        dm.cancelOffer(offerId, true);
+        dm.cancelOffer(offerId);
     }
 
     function test_Secondary_FinalizeDeal_DoesNotPayCompanyPayable() public {
@@ -1151,6 +1219,10 @@ contract DealManagerSecondaryTradeTest is Test {
         address[] memory printers = new address[](1);
         printers[0] = address(certPrinter);
 
+        bytes32 expectedAgreementId = keccak256(abi.encode(bytes32(0), uint256(999), new string[](0), parties));
+        // Precompute sigs before vm.prank: the helper's registry view calls would otherwise consume the prank.
+        bytes memory ownerSig = _agreementSig(expectedAgreementId, partyValues[0], ownerKey);
+
         vm.prank(owner);
         (bytes32 agreementId,) = dm.proposeAndSignDeal(
             printers,
@@ -1162,17 +1234,16 @@ contract DealManagerSecondaryTradeTest is Test {
             parties,
             certDetails,
             owner,
-            "",
+            ownerSig,
             partyValues,
             new address[](0),
             bytes32(0),
             block.timestamp + 1 days
         );
 
-        // registry mock already validates "" as a valid sig via the mock's any-sig behavior
-        // (SecAgreementRegistryMock.signContractFor is a no-op)
+        bytes memory buyerSig = _agreementSig(agreementId, new string[](0), buyerKey);
         vm.prank(buyer);
-        dm.signDealAndPay(buyer, agreementId, "", new string[](0), false, "Bob", "");
+        dm.signDealAndPay(buyer, agreementId, buyerSig, new string[](0), false, "Bob", "");
 
         uint256 companyBefore = paymentToken.balanceOf(company);
         uint256 sellerBefore  = paymentToken.balanceOf(seller);
@@ -1199,7 +1270,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.warp(se.expiry + 1);
         vm.prank(keeper);
-        dm.voidExpiredDeal(settlementId, keeper, "");
+        dm.voidExpiredDeal(settlementId, buyer, "");
 
         assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.LIVE), "offer should be LIVE after void");
         assertEq(certPrinter.reservedUnits(sellerTokenId), UNITS, "reservation must stay active: offer is LIVE");
@@ -1211,12 +1282,12 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 settlementId = _acceptSellOffer(offerId);
 
         vm.prank(seller);
-        dm.cancelOffer(offerId, false);
+        dm.cancelOffer(offerId);
         assertEq(certPrinter.reservedUnits(sellerTokenId), UNITS, "reservation held after cancel with active settlement");
 
         vm.warp(dm.getSecondaryEscrow(settlementId).expiry + 1);
         vm.prank(keeper);
-        dm.voidExpiredDeal(settlementId, keeper, "");
+        dm.voidExpiredDeal(settlementId, buyer, "");
 
         assertEq(certPrinter.reservedUnits(sellerTokenId), 0, "reservation released: offer CANCELLED, last settlement voided");
         assertEq(certPrinter.releasedUnits(sellerTokenId), UNITS);
@@ -1232,7 +1303,7 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.warp(expiry + 1);
 
         vm.prank(keeper);
-        dm.voidExpiredDeal(settlementId, keeper, "");
+        dm.voidExpiredDeal(settlementId, buyer, "");
 
         assertEq(paymentToken.balanceOf(buyer), buyerBefore + CONSIDERATION, "buyer should be refunded");
     }
@@ -1243,13 +1314,13 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.warp(dm.getSecondaryEscrow(settlementId).expiry + 1);
         vm.prank(keeper);
-        dm.voidExpiredDeal(settlementId, keeper, "");
+        dm.voidExpiredDeal(settlementId, buyer, "");
 
         uint256 buyerAfterVoid = paymentToken.balanceOf(buyer);
 
         vm.expectRevert(LexScroWLite.DealVoided.selector);
         vm.prank(keeper);
-        dm.voidExpiredDeal(settlementId, keeper, "");
+        dm.voidExpiredDeal(settlementId, buyer, "");
 
         assertEq(paymentToken.balanceOf(buyer), buyerAfterVoid, "buyer must not be refunded twice");
     }
@@ -1265,7 +1336,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.expectRevert(LexScroWLite.DealAlreadyFinalized.selector);
         vm.prank(keeper);
-        dm.voidExpiredDeal(settlementId, keeper, "");
+        dm.voidExpiredDeal(settlementId, buyer, "");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1287,6 +1358,10 @@ contract DealManagerSecondaryTradeTest is Test {
 
         uint256 expiry = block.timestamp + 1 days;
 
+        bytes32 expectedAgreementId = keccak256(abi.encode(bytes32(0), uint256(998), new string[](0), parties));
+        // Precompute sig before vm.prank: the helper's registry view calls would otherwise consume the prank.
+        bytes memory ownerSig = _agreementSig(expectedAgreementId, partyValues[0], ownerKey);
+
         vm.prank(owner);
         (bytes32 agreementId, uint256[] memory certIds) = dm.proposeAndSignDeal(
             printers,
@@ -1298,7 +1373,7 @@ contract DealManagerSecondaryTradeTest is Test {
             parties,
             certDetails,
             owner,
-            "",
+            ownerSig,
             partyValues,
             new address[](0),
             bytes32(0),
@@ -1310,8 +1385,9 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.warp(expiry + 1);
 
+        // signer must be a party to the agreement (owner); DealManager is the finalizer so no void sig is needed
         vm.prank(keeper);
-        dm.voidExpiredDeal(agreementId, keeper, "");
+        dm.voidExpiredDeal(agreementId, owner, "");
 
         // Cert should be burned (voided) via IssuanceManager.voidCertificate
         vm.expectRevert();
@@ -1339,7 +1415,7 @@ contract DealManagerSecondaryTradeTest is Test {
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
-            acceptorAgreementSig: "",
+            acceptorAgreementSig: _acceptorSig(offerAgreementId, buyer, buyerKey),
             openEndorsementSig: ""
         });
         vm.prank(buyer);
@@ -1405,7 +1481,7 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 settlementId = _acceptSellOffer(offerId);
 
         vm.prank(seller);
-        dm.cancelOffer(offerId, false);
+        dm.cancelOffer(offerId);
         assertEq(certPrinter.reservedUnits(sellerTokenId), UNITS, "in-flight lot held after cancel (no free units)");
 
         vm.prank(keeper);
@@ -1416,7 +1492,7 @@ contract DealManagerSecondaryTradeTest is Test {
     }
 
     function test_Secondary_FinalizeDeal_Bid_CancelKeepingLots_PaysOutLot() public {
-        // BUY mirror of the SELL case above: after cancel(false), the in-flight lot stays PAID
+        // BUY mirror of the SELL case above: after cancel(false), the in-flight lot stays ACCEPTED
         // and still settles — payout to the acceptor (seller), lot units consumed, free pool
         // already refunded to the offeror at cancel.
         bytes32 offerId = _postBid();
@@ -1426,7 +1502,7 @@ contract DealManagerSecondaryTradeTest is Test {
         uint256 sellerBalanceBefore = paymentToken.balanceOf(seller);
 
         vm.prank(buyer);
-        dm.cancelOffer(offerId, false);
+        dm.cancelOffer(offerId);
         assertEq(
             paymentToken.balanceOf(buyer),
             buyerBalanceAfterAccept + (CONSIDERATION - lotPayment),
@@ -1450,7 +1526,7 @@ contract DealManagerSecondaryTradeTest is Test {
         _acceptSellOfferPartial(offerId, lotUnits);
 
         vm.prank(seller);
-        dm.cancelOffer(offerId, false);
+        dm.cancelOffer(offerId);
 
         assertEq(certPrinter.releasedUnits(sellerTokenId), UNITS - lotUnits, "free units released at cancel");
         assertEq(certPrinter.reservedUnits(sellerTokenId), lotUnits, "in-flight lot stays reserved");
@@ -1464,25 +1540,35 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 settlementId = _acceptSellOffer(offerId);
         assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.FULLY_ACCEPTED));
 
+        // One party's request only records intent: escrow stays ACCEPTED, offer unchanged.
         vm.prank(buyer);
         dm.voidSecondaryAgreement(settlementId, buyer, "");
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.ACCEPTED),
+            "single request must not void the escrow"
+        );
+        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.FULLY_ACCEPTED), "offer unchanged after lone request");
+
+        // Second party completes the void.
+        vm.prank(seller);
+        dm.voidSecondaryAgreement(settlementId, seller, "");
 
         assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.LIVE), "offer should revert to LIVE");
         assertEq(certPrinter.reservedUnits(sellerTokenId), UNITS, "reservation must stay active: offer is LIVE");
         assertEq(certPrinter.releasedUnits(sellerTokenId), 0);
     }
 
-    function test_Secondary_VoidSettlement_CancelKeepingLots_ReleasesReservation() public {
+    function test_Secondary_VoidSettlement_AfterCancel_ReleasesReservation() public {
         bytes32 offerId = _postSellOffer();
 
         bytes32 settlementId = _acceptSellOffer(offerId);
 
         vm.prank(seller);
-        dm.cancelOffer(offerId, false);
+        dm.cancelOffer(offerId);
         assertEq(certPrinter.reservedUnits(sellerTokenId), UNITS, "in-flight lot held after cancel (no free units)");
 
-        vm.prank(buyer);
-        dm.voidSecondaryAgreement(settlementId, buyer, "");
+        _voidSettlementBothParties(settlementId);
 
         assertEq(certPrinter.reservedUnits(sellerTokenId), 0, "lot released: CANCELLED + last settlement voided");
         assertEq(certPrinter.releasedUnits(sellerTokenId), UNITS);
@@ -1495,15 +1581,14 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 settlementId = _acceptBid(offerId);
         uint256 buyerBalanceAfterAccept = paymentToken.balanceOf(buyer);
 
-        vm.prank(buyer);
-        dm.voidSecondaryAgreement(settlementId, buyer, "");
+        _voidSettlementBothParties(settlementId);
 
         assertEq(paymentToken.balanceOf(buyer), buyerBalanceAfterAccept, "no refund while offer still open");
         assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.LIVE), "offer should revert to LIVE");
         assertEq(certPrinter.reservedUnits(sellerTokenId), 0, "seller's per-settlement reservation released");
 
         vm.prank(buyer);
-        dm.cancelOffer(offerId, true);
+        dm.cancelOffer(offerId);
 
         assertEq(
             paymentToken.balanceOf(buyer),
@@ -1512,17 +1597,16 @@ contract DealManagerSecondaryTradeTest is Test {
         );
     }
 
-    function test_Secondary_VoidSettlement_Bid_CancelKeepingLots_RefundsLot() public {
+    function test_Secondary_VoidSettlement_Bid_AfterCancel_RefundsLot() public {
         bytes32 offerId = _postBid();
         bytes32 settlementId = _acceptBid(offerId);
         uint256 buyerBalanceAfterAccept = paymentToken.balanceOf(buyer);
 
         vm.prank(buyer);
-        dm.cancelOffer(offerId, false);
+        dm.cancelOffer(offerId);
         assertEq(paymentToken.balanceOf(buyer), buyerBalanceAfterAccept, "no free pool to refund: fully accepted");
 
-        vm.prank(buyer);
-        dm.voidSecondaryAgreement(settlementId, buyer, "");
+        _voidSettlementBothParties(settlementId);
 
         assertEq(
             paymentToken.balanceOf(buyer),
@@ -1545,7 +1629,7 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(dm.getOffer(offerId).paymentAccepted, lotPayment, "finalized lot stays counted as accepted");
 
         vm.prank(buyer);
-        dm.cancelOffer(offerId, true);
+        dm.cancelOffer(offerId);
 
         assertEq(
             paymentToken.balanceOf(buyer),
@@ -1568,11 +1652,10 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(keeper);
         dm.finalizeDeal(settlementIdA);
 
-        vm.prank(buyer);
-        dm.voidSecondaryAgreement(settlementIdB, buyer, "");
+        _voidSettlementBothParties(settlementIdB);
 
         vm.prank(buyer);
-        dm.cancelOffer(offerId, true);
+        dm.cancelOffer(offerId);
 
         assertEq(paymentToken.balanceOf(seller), sellerBalanceBefore + lotPaymentA, "seller paid the finalized lot");
         assertEq(
@@ -1591,8 +1674,7 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 offerId = _postSellOffer();
         bytes32 settlementId = _acceptSellOffer(offerId);
 
-        vm.prank(buyer);
-        dm.voidSecondaryAgreement(settlementId, buyer, "");
+        _voidSettlementBothParties(settlementId);
 
         uint256 buyerAfterVoid = paymentToken.balanceOf(buyer);
 
@@ -1619,8 +1701,7 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 offerId = _postSellOffer();
         bytes32 settlementId = _acceptSellOffer(offerId);
 
-        vm.prank(buyer);
-        dm.voidSecondaryAgreement(settlementId, buyer, "");
+        _voidSettlementBothParties(settlementId);
 
         vm.expectRevert(LexScroWLite.DealVoided.selector);
         dm.syncVoidedSettlement(settlementId);
@@ -1653,12 +1734,62 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 offerId = _postSellOffer();
         bytes32 settlementId = _acceptSellOffer(offerId);
 
-        vm.prank(buyer);
-        dm.voidSecondaryAgreement(settlementId, buyer, "");
+        _voidSettlementBothParties(settlementId);
 
         vm.expectRevert(LexScroWLite.DealVoided.selector);
         vm.prank(keeper);
         dm.finalizeDeal(settlementId);
+    }
+
+    function test_Secondary_VoidSettlement_SingleRequest_KeepsPaid_StillFinalizable() public {
+        bytes32 offerId = _postSellOffer();
+        bytes32 settlementId = _acceptSellOffer(offerId);
+
+        // One party's void request only records intent; it must not void locally.
+        vm.prank(buyer);
+        dm.voidSecondaryAgreement(settlementId, buyer, "");
+
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.ACCEPTED),
+            "single request must not void the escrow"
+        );
+        assertFalse(registry.isVoided(settlementId), "registry not voided on a single request");
+
+        // The counterparty can still finalize.
+        vm.prank(keeper);
+        dm.finalizeDeal(settlementId);
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.FINALIZED),
+            "still finalizable after a lone void request"
+        );
+    }
+
+    function test_Secondary_SyncVoidedSettlement_MirrorsRegistryVoid() public {
+        bytes32 offerId = _postSellOffer();
+        bytes32 settlementId = _acceptSellOffer(offerId);
+        uint256 buyerBefore = paymentToken.balanceOf(buyer);
+
+        // Both parties void directly at the registry (bypassing DealManager). Calls don't go through
+        // the finalizer, so each needs a real EIP-712 void signature.
+        registry.voidContractFor(settlementId, buyer, _voidSig(settlementId, buyer, buyerKey));
+        registry.voidContractFor(settlementId, seller, _voidSig(settlementId, seller, sellerKey));
+        assertTrue(registry.isVoided(settlementId), "registry voided by both parties directly");
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.ACCEPTED),
+            "DealManager escrow not yet synced"
+        );
+
+        dm.syncVoidedSettlement(settlementId);
+
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.VOIDED),
+            "escrow synced to VOIDED"
+        );
+        assertEq(paymentToken.balanceOf(buyer), buyerBefore + CONSIDERATION, "buyer refunded on sync");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
