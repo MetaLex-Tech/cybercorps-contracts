@@ -738,19 +738,19 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
 
     // TODO implement *For()
     /// @notice Cancels a non-terminal offer and returns its uncommitted assets to the offeror
+    /// @dev Only the free pool (uncommitted units / consideration) is refunded/released. Settlements already
+    /// accepted stay ACCEPTED and resolve on their own — finalized normally, or voided via the two-party
+    /// voidSecondaryAgreement / expiry path; their assets stay in DealManager custody until then.
     /// @param offerId Offer to cancel
-    /// @param voidOutstandingSettlements Whether to also void all outstanding (PAID) settlements
-    /// atomically. Pass true unless in-flight settlements should be left to finalize or void on
-    /// their own — true keeps the Offer and its settlement agreements' status in sync.
-    function cancelOffer(bytes32 offerId, bool voidOutstandingSettlements) external nonReentrant {
+    function cancelOffer(bytes32 offerId) external nonReentrant {
         Offer storage offer = SecondaryTradeStorage.getOffer(offerId);
         if (offer.offeror != msg.sender) revert NotOfferor();
         if (_isOfferTerminal(offer.status)) revert OfferNotAvailable();
 
         offer.status = OfferStatus.CANCELLED;
 
-        // Return the free pool first, while the accepted counters still include the in-flight
-        // lots; each void below then returns exactly its own lot.
+        // Return only the free pool; committed lots stay reserved / in custody and are consumed at
+        // finalize or released/refunded when their settlement is voided.
         if (offer.side == OfferSide.SELL) {
             // Release only the uncommitted units; in-flight settlement lots are consumed at finalize or released at void
             uint256 freeUnits = offer.units - offer.unitsAccepted;
@@ -763,18 +763,6 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
             uint256 freePayment = offer.consideration - offer.paymentAccepted;
             if (freePayment > 0) {
                 IERC20(offer.paymentToken).safeTransfer(offer.offeror, freePayment);
-            }
-        }
-
-        if (voidOutstandingSettlements) {
-            address registry = LexScrowStorage.getDealRegistry();
-            bytes32[] storage settlementIds = offer.settlementAgreementIds;
-            for (uint256 i = 0; i < settlementIds.length; i++) {
-                if (SecondaryTradeStorage.getSecondaryEscrow(settlementIds[i]).status != SecondaryEscrowStatus.PAID) continue;
-                // DealManager is the settlement's finalizer, so the registry accepts the void
-                // request without a signature; the offeror's intent is evidenced by this tx.
-                ICyberAgreementRegistry(registry).voidContractFor(settlementIds[i], msg.sender, "");
-                _voidSecondaryDeal(settlementIds[i]);
             }
         }
 
@@ -904,7 +892,7 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
             paymentAmount: partialConsideration,
             units: params.units,
             expiry: offer.validUntil,
-            status: SecondaryEscrowStatus.PAID,
+            status: SecondaryEscrowStatus.ACCEPTED,
             feeDestination: offer.integrator,
             offerId: params.offerId,
             tokenId: tokenId,
@@ -946,12 +934,12 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
             : (secEscrow.counterparty, offer.offeror);
     }
 
-    /// @dev Reverts unless the settlement escrow is active (PAID). Terminal states get
+    /// @dev Reverts unless the settlement escrow is active (ACCEPTED). Terminal states get
     /// explicit errors so callers never act on an already-settled escrow.
     function _requireActiveSecondaryEscrow(SecondaryEscrow storage secEscrow) internal view {
         if (secEscrow.status == SecondaryEscrowStatus.FINALIZED) revert DealAlreadyFinalized();
         if (secEscrow.status == SecondaryEscrowStatus.VOIDED) revert DealVoided();
-        if (secEscrow.status != SecondaryEscrowStatus.PAID) revert DealNotPaid();
+        if (secEscrow.status != SecondaryEscrowStatus.ACCEPTED) revert DealNotPaid();
     }
 
     function _finalizeSecondaryEscrow(bytes32 agreementId) internal {
@@ -1023,10 +1011,10 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
             offer.status = offer.unitsAccepted == 0 ? OfferStatus.LIVE : OfferStatus.PARTIALLY_ACCEPTED;
         }
 
-        bool wasPaid = secEscrow.status == SecondaryEscrowStatus.PAID;
+        bool wasAccepted = secEscrow.status == SecondaryEscrowStatus.ACCEPTED;
         secEscrow.status = SecondaryEscrowStatus.VOIDED;
         emit DealVoidedAt(agreementId, LexScrowStorage.getDealRegistry(), block.timestamp);
-        if (wasPaid) {
+        if (wasAccepted) {
             // Refund mirrors the reservation logic above, with sides swapped.
             // SELL: payment was pulled per-settlement at acceptOffer — always refund the buyer.
             // BUY: payment came from the offer's pool at postOffer — refund only when the offer is
@@ -1039,7 +1027,10 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
         }
     }
 
-    /// @notice Allows either party to void a PAID secondary settlement before it is finalized or expires
+    /// @notice Records a party's request to void an ACCEPTED secondary settlement before it is finalized or expires
+    /// @dev Finalizer-vouched request channel: the registry voids the agreement only once BOTH parties have
+    /// requested (or it is past expiry). The local escrow is settled only when that actually happens, keeping
+    /// DealManager and the registry in sync; a lone request just records intent and the counterparty can still finalize.
     /// @param agreementId Settlement agreement to void
     /// @param signer Caller's address (must equal msg.sender)
     /// @param signature Caller's EIP-712 void signature, forwarded to the agreement registry
@@ -1049,8 +1040,13 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
         _requireActiveSecondaryEscrow(secEscrow);
         Offer storage offer = SecondaryTradeStorage.getOffer(secEscrow.offerId);
         if (msg.sender != secEscrow.counterparty && msg.sender != offer.offeror) revert NotPartyToAgreement();
-        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
-        _voidSecondaryDeal(agreementId);
+        address registry = LexScrowStorage.getDealRegistry();
+        ICyberAgreementRegistry(registry).voidContractFor(agreementId, signer, signature);
+        // A lone request only records intent; the registry voids once both parties have requested
+        // (or past expiry). Settle the escrow locally only when that actually happens.
+        if (ICyberAgreementRegistry(registry).isVoided(agreementId)) {
+            _voidSecondaryDeal(agreementId);
+        }
     }
 
     /// @notice Syncs a secondary settlement that was voided directly in the agreement registry

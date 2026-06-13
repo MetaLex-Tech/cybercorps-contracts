@@ -27,12 +27,12 @@ stateDiagram-v2
         BUY: pulls full consideration into contract at postOffer
     end note
     note right of CANCELLED
+        cancelOffer touches only the free pool:
         SELL releases uncommitted units (units - unitsAccepted) immediately.
         BUY: refunds uncommitted consideration (consideration - paymentAccepted) immediately.
-        By default (voidOutstandingSettlements=true) cancelOffer also voids
-        all outstanding PAID settlements atomically, keeping Offer and
-        settlement agreement status in sync; each voided lot is released
-        (SELL) / refunded (BUY) along with the free pool.
+        Settlements already accepted will not cancel and will resolve on their own cadence:
+        finalized normally, or voided via the two-party voidSecondaryAgreement /
+        expiry path. Their assets stay in custody until then.
     end note
     note right of FINALIZED
         Terminal: all offered units consumed by finalized settlements.
@@ -50,18 +50,18 @@ stateDiagram-v2
 
 ### Offer status transitions
 
-| From                 | Event                                         | To                   | Notes                                                                                                |
-|----------------------|-----------------------------------------------|----------------------|------------------------------------------------------------------------------------------------------|
-| *(none)*             | `postOffer()`                                 | `LIVE`               | SELL: reserves units on cert; BUY: pulls full consideration into contract                            |
-| any non-terminal     | `cancelOffer()`                               | `CANCELLED`          | Releases/refunds the free pool; by default also voids all outstanding PAID settlements atomically    |
-| `LIVE`               | `acceptOffer()` — partial fill                | `PARTIALLY_ACCEPTED` | `unitsAccepted < units`                                                                              |
-| `LIVE`               | `acceptOffer()` — full fill                   | `FULLY_ACCEPTED`     | `unitsAccepted == units`                                                                             |
-| `PARTIALLY_ACCEPTED` | `acceptOffer()` — completes fill              | `FULLY_ACCEPTED`     |                                                                                                      |
-| `PARTIALLY_ACCEPTED` | settlement voided                             | `LIVE`               | `unitsAccepted` decrements; if back to 0 and not terminal                                            |
-| `FULLY_ACCEPTED`     | settlement voided, `unitsAccepted` drops to 0 | `LIVE`               | Same logic as `PARTIALLY_ACCEPTED`: status set purely by `unitsAccepted == 0` check                  |
-| `FULLY_ACCEPTED`     | settlement voided, `unitsAccepted` still > 0  | `PARTIALLY_ACCEPTED` | `unitsAccepted` decrements but offer not empty yet                                                   |
-| `FULLY_ACCEPTED`     | last settlement finalized                     | `FINALIZED`          | `unitsFinalized == units`; terminal and immutable. CANCELLED stays sticky if the offer was cancelled |
-| any                  | `block.timestamp > validUntil`                | `EXPIRED` (logical)  | No status field change; enforced at `acceptOffer()` and at `finalizeDeal()` (settlement expiry)      |
+| From                 | Event                                         | To                   | Notes                                                                                                           |
+|----------------------|-----------------------------------------------|----------------------|-----------------------------------------------------------------------------------------------------------------|
+| *(none)*             | `postOffer()`                                 | `LIVE`               | SELL: reserves units on cert; BUY: pulls full consideration into contract                                       |
+| any non-terminal     | `cancelOffer()`                               | `CANCELLED`          | Releases/refunds only the free pool; accepted settlements will not cancel and will resolve on their own cadence |
+| `LIVE`               | `acceptOffer()` — partial fill                | `PARTIALLY_ACCEPTED` | `unitsAccepted < units`                                                                                         |
+| `LIVE`               | `acceptOffer()` — full fill                   | `FULLY_ACCEPTED`     | `unitsAccepted == units`                                                                                        |
+| `PARTIALLY_ACCEPTED` | `acceptOffer()` — completes fill              | `FULLY_ACCEPTED`     |                                                                                                                 |
+| `PARTIALLY_ACCEPTED` | settlement voided                             | `LIVE`               | `unitsAccepted` decrements; if back to 0 and not terminal                                                       |
+| `FULLY_ACCEPTED`     | settlement voided, `unitsAccepted` drops to 0 | `LIVE`               | Same logic as `PARTIALLY_ACCEPTED`: status set purely by `unitsAccepted == 0` check                             |
+| `FULLY_ACCEPTED`     | settlement voided, `unitsAccepted` still > 0  | `PARTIALLY_ACCEPTED` | `unitsAccepted` decrements but offer not empty yet                                                              |
+| `FULLY_ACCEPTED`     | last settlement finalized                     | `FINALIZED`          | `unitsFinalized == units`; terminal and immutable. CANCELLED stays sticky if the offer was cancelled            |
+| any                  | `block.timestamp > validUntil`                | `EXPIRED` (logical)  | No status field change; enforced at `acceptOffer()` and at `finalizeDeal()` (settlement expiry)                 |
 
 ---
 
@@ -69,15 +69,14 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PAID: acceptOffer()
-    PAID --> FINALIZED: finalizeDeal()
-    PAID --> VOIDED: voidSecondaryAgreement()
-    PAID --> VOIDED: syncVoidedSettlement()
-    PAID --> VOIDED: voidExpiredDeal()
-    PAID --> VOIDED: cancelOffer() with voidOutstandingSettlements
-    note left of PAID
-        SELL: safeTransferFrom buyer, then escrow written as PAID.
-        BUY: funds already in contract from postOffer(), escrow written as PAID directly.
+    [*] --> ACCEPTED: acceptOffer()
+    ACCEPTED --> FINALIZED: finalizeDeal()
+    ACCEPTED --> VOIDED: voidSecondaryAgreement() (both parties)
+    ACCEPTED --> VOIDED: syncVoidedSettlement()
+    ACCEPTED --> VOIDED: voidExpiredDeal()
+    note left of ACCEPTED
+        SELL: safeTransferFrom buyer, then escrow written as ACCEPTED.
+        BUY: funds already in contract from postOffer(), escrow written as ACCEPTED directly.
     end note
     note right of FINALIZED
         Pays seller minus fee.
@@ -87,8 +86,9 @@ stateDiagram-v2
         consuming this lot's reserved units as part of the cert mutation.
     end note
     note right of VOIDED
-        voidSecondaryAgreement: party only.
-        syncVoidedSettlement: anyone if either party already voided through registry.
+        voidSecondaryAgreement: each party requests; VOIDED only once both have requested
+        (the finalizer-vouched request channel; a lone request only records intent).
+        syncVoidedSettlement: anyone, once the registry already shows the agreement voided.
         voidExpiredDeal: past secEscrow.expiry.
         Acceptor's asset always returned immediately: SELL refunds the buyer's payment, BUY releases the seller's unit reservation.
         Offeror's asset stays in custody for the next fill, returned only if the offer has been cancelled:
@@ -99,15 +99,14 @@ stateDiagram-v2
 
 ### Settlement escrow status transitions
 
-| From     | Event                                                 | To          | Notes                                                                                                                                                                                                                        |
-|----------|-------------------------------------------------------|-------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| *(none)* | `acceptOffer()` — SELL offer                          | `PAID`      | `safeTransferFrom` buyer pulls payment; escrow written directly as PAID                                                                                                                                                      |
-| *(none)* | `acceptOffer()` — BUY offer                           | `PAID`      | Funds already in contract from `postOffer()`; escrow written directly as PAID                                                                                                                                                |
-| `PAID`   | `finalizeDeal()` — conditions met, before expiry      | `FINALIZED` | Reverts past `secEscrow.expiry`; pays seller (minus fee), splits fee to integrator/platform, calls `IssuanceManager.secondaryTransfer` to mint buyer cert and void/decrement seller cert, consuming the lot's reserved units |
-| `PAID`   | `voidSecondaryAgreement()` — party requests void      | `VOIDED`    | Either party (offeror or counterparty) only                                                                                                                                                                                  |
-| `PAID`   | `syncVoidedSettlement()` — registry voided externally | `VOIDED`    | Callable by anyone; guards via `isVoided()` check                                                                                                                                                                            |
-| `PAID`   | `voidExpiredDeal()` — past `secEscrow.expiry`         | `VOIDED`    | Callable past expiry only                                                                                                                                                                                                    |
-| `PAID`   | `cancelOffer(voidOutstandingSettlements=true)`        | `VOIDED`    | Offeror cancels the offer and atomically voids every outstanding PAID lot (default); DealManager is the settlement's finalizer so the registry void request needs no signature                                               |
+| From       | Event                                                 | To          | Notes                                                                                                                                                                                                                        |
+|------------|-------------------------------------------------------|-------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| *(none)*   | `acceptOffer()` — SELL offer                          | `ACCEPTED`  | `safeTransferFrom` buyer pulls payment; escrow written directly as ACCEPTED                                                                                                                                                  |
+| *(none)*   | `acceptOffer()` — BUY offer                           | `ACCEPTED`  | Funds already in contract from `postOffer()`; escrow written directly as ACCEPTED                                                                                                                                            |
+| `ACCEPTED` | `finalizeDeal()` — conditions met, before expiry      | `FINALIZED` | Reverts past `secEscrow.expiry`; pays seller (minus fee), splits fee to integrator/platform, calls `IssuanceManager.secondaryTransfer` to mint buyer cert and void/decrement seller cert, consuming the lot's reserved units |
+| `ACCEPTED` | `voidSecondaryAgreement()` — party requests void      | `VOIDED`    | Each party (offeror or counterparty) requests; the escrow flips to VOIDED only once both have requested (or it is past expiry). A lone request just records intent and the counterparty can still finalize.                  |
+| `ACCEPTED` | `syncVoidedSettlement()` — registry voided externally | `VOIDED`    | Callable by anyone; guards via `isVoided()` check                                                                                                                                                                            |
+| `ACCEPTED` | `voidExpiredDeal()` — past `secEscrow.expiry`         | `VOIDED`    | Callable past expiry only                                                                                                                                                                                                    |
 
 All `VOIDED` paths share the same asset handling, symmetric between sides. The acceptor's asset is returned
 immediately: SELL refunds the buyer's payment (pulled per settlement at `acceptOffer()`), BUY releases the seller's
@@ -138,7 +137,7 @@ sequenceDiagram
     DM ->> Registry: signContractFor(acceptor, settlementAgreementId)
     DM ->> IM: attachOpenEndorsement(certPrinter, tokenId)
     Buyer ->> DM: safeTransferFrom(filledConsideration)
-    Note over DM: Settlement: PAID
+    Note over DM: Settlement: ACCEPTED
     Note over DM: Offer: PARTIALLY_ACCEPTED or FULLY_ACCEPTED
     Buyer ->> DM: finalizeDeal(settlementAgreementId)
     DM ->> Registry: finalizeContract(settlementAgreementId)
@@ -169,7 +168,7 @@ sequenceDiagram
     DM ->> Registry: signContractFor(acceptor, settlementAgreementId)
     DM ->> Cert: reserveUnits(sellerTokenId, units)
     DM ->> IM: attachOpenEndorsement(certPrinter, sellerTokenId)
-    Note over DM: Settlement: PAID, no token movement, funds already in contract
+    Note over DM: Settlement: ACCEPTED, no token movement, funds already in contract
     Note over DM: Offer: PARTIALLY_ACCEPTED or FULLY_ACCEPTED
     Seller ->> DM: finalizeDeal(settlementAgreementId)
     DM ->> Registry: finalizeContract(settlementAgreementId)
@@ -197,11 +196,11 @@ sequenceDiagram
     Note over DM: Offer: LIVE, unitsAccepted=0, paymentAccepted=0
     Alice ->> DM: acceptOffer(units=400)
     Alice ->> DM: safeTransferFrom(400 x P/1000)
-    Note over DM: Escrow_A: PAID, units=400, payment=400P/1000
+    Note over DM: Escrow_A: ACCEPTED, units=400, payment=400P/1000
     Note over DM: Offer: PARTIALLY_ACCEPTED, unitsAccepted=400
     Bob ->> DM: acceptOffer(units=600)
     Bob ->> DM: safeTransferFrom(600 x P/1000)
-    Note over DM: Escrow_B: PAID, units=600, payment=600P/1000
+    Note over DM: Escrow_B: ACCEPTED, units=600, payment=600P/1000
     Note over DM: Offer: FULLY_ACCEPTED, unitsAccepted=1000
     Alice ->> DM: finalizeDeal(settlementAgreementId_A)
     DM ->> Seller: safeTransfer(400P/1000 - fee)
@@ -225,17 +224,16 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     subgraph OFFER_LEVEL["Offer level"]
-        CO["cancelOffer(voidOutstandingSettlements)<br/>by offeror, any non-terminal status"]
+        CO["cancelOffer()<br/>by offeror, any non-terminal status"]
         OC["Offer: CANCELLED"]
         CO --> OC
-        CO -->|SELL| RU1["releaseUnits(tokenId, units - unitsAccepted)<br/>uncommitted units first"]
-        CO -->|BUY| RF1["refund uncommitted consideration first"]
-        CO -->|" voidOutstandingSettlements=true (default) "| VOS["void every outstanding PAID settlement<br/>via the settlement-level VOIDED path below"]
-        CO -->|" voidOutstandingSettlements=false "| KEEP["in-flight lots stay PAID<br/>resolve at finalize or void"]
+        CO -->|SELL| RU1["releaseUnits(tokenId, units - unitsAccepted)<br/>uncommitted units only"]
+        CO -->|BUY| RF1["refund uncommitted consideration only"]
+        CO --> KEEP["accepted lots stay ACCEPTED<br/>resolve at finalize or two-party/expiry void"]
     end
 
     subgraph SETTLEMENT_LEVEL["Settlement level"]
-        VSA["voidSecondaryAgreement()<br/>buyer or offeror only"]
+        VSA["voidSecondaryAgreement()<br/>each party requests; voids once both have"]
         SVS["syncVoidedSettlement()<br/>anyone, registry already voided"]
         VED["voidExpiredDeal()<br/>past secEscrow.expiry"]
         SV["Settlement: VOIDED"]
@@ -261,13 +259,13 @@ flowchart TD
 
 ## 6. Key Invariants
 
-| Invariant                                                                                   | Where enforced                                                                                                                                                                                                                                                               |
-|---------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `offerId` never registered in `CyberAgreementRegistry`                                      | `postOffer()` makes no registry call                                                                                                                                                                                                                                         |
-| `settlementAgreementId` always fully signed by both parties at creation                     | `acceptOffer()`: `signContractWithEscrow(offeror)` + `signContractFor(acceptor)`                                                                                                                                                                                             |
-| Buyer's payment enters contract custody before settlement `PAID` is set                     | SELL: `safeTransferFrom` then status flip in same tx; BUY: custody at `postOffer()`                                                                                                                                                                                          |
-| Seller cert units are reserved before any settlement is created                             | SELL: `reserveUnits` at `postOffer()`; BUY: `reserveUnits` at `acceptOffer()` per settlement                                                                                                                                                                                 |
-| Each reserved unit is released or consumed exactly once (amount-based reservations, no IDs) | finalize: `secondaryTransfer` consumes the lot; void: BUY releases the lot, SELL releases only if offer `CANCELLED` (else lot returns to free pool); cancel: releases `units - unitsAccepted` first, then each outstanding lot through the void rule when voiding by default |
-| Each unit of BUY consideration leaves custody exactly once (payout or refund)               | finalize: paid to seller; void: refunded only if offer `CANCELLED` (else returns to free pool); cancel: refunds `consideration - paymentAccepted` first, then each outstanding lot through the void rule when voiding by default                                             |
-| Fee always split: integrator portion + platform portion                                     | `_finalizeSecondaryEscrow`: `integratorFee + platformFee == totalFee`                                                                                                                                                                                                        |
-| Conditions checked at `finalizeDeal()`, not at `acceptOffer()`                              | `_finalizeSecondaryEscrow`: `conditionCheck(agreementId)`                                                                                                                                                                                                                    |
+| Invariant                                                                                   | Where enforced                                                                                                                                                                                                                                                       |
+|---------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `offerId` never registered in `CyberAgreementRegistry`                                      | `postOffer()` makes no registry call                                                                                                                                                                                                                                 |
+| `settlementAgreementId` always fully signed by both parties at creation                     | `acceptOffer()`: `signContractWithEscrow(offeror)` + `signContractFor(acceptor)`                                                                                                                                                                                     |
+| Buyer's payment enters contract custody before settlement `ACCEPTED` is set                 | SELL: `safeTransferFrom` then status flip in same tx; BUY: custody at `postOffer()`                                                                                                                                                                                  |
+| Seller cert units are reserved before any settlement is created                             | SELL: `reserveUnits` at `postOffer()`; BUY: `reserveUnits` at `acceptOffer()` per settlement                                                                                                                                                                         |
+| Each reserved unit is released or consumed exactly once (amount-based reservations, no IDs) | finalize: `secondaryTransfer` consumes the lot; void: BUY releases the lot, SELL releases only if offer `CANCELLED` (else lot returns to free pool); cancel: releases only `units - unitsAccepted` (the free pool) — accepted lots resolve later at finalize or void |
+| Each unit of BUY consideration leaves custody exactly once (payout or refund)               | finalize: paid to seller; void: refunded only if offer `CANCELLED` (else returns to free pool); cancel: refunds only `consideration - paymentAccepted` (the free pool) — accepted lots resolve later at finalize or void                                             |
+| Fee always split: integrator portion + platform portion                                     | `_finalizeSecondaryEscrow`: `integratorFee + platformFee == totalFee`                                                                                                                                                                                                |
+| Conditions checked at `finalizeDeal()`, not at `acceptOffer()`                              | `_finalizeSecondaryEscrow`: `conditionCheck(agreementId)`                                                                                                                                                                                                            |

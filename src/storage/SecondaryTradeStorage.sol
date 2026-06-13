@@ -47,7 +47,7 @@ enum OfferStatus { LIVE, CANCELLED, EXPIRED, PARTIALLY_ACCEPTED, FULLY_ACCEPTED,
 
 enum ExemptionPathway { RULE_144, SECTION_4A7, SECTION_4A1HALF, RULE_144A, REGULATION_S }
 
-enum SecondaryEscrowStatus { PAID, FINALIZED, VOIDED }
+enum SecondaryEscrowStatus { ACCEPTED, FINALIZED, VOIDED }
 
 struct Offer {
     address spvAddress;             // cyberCORP address this offer belongs to
@@ -93,7 +93,7 @@ struct SecondaryEscrow {
     uint256 paymentAmount;          // consideration for this settlement lot
     uint256 units;                  // units in this settlement lot
     uint256 expiry;                 // settlement deadline
-    SecondaryEscrowStatus status;   // PAID | FINALIZED | VOIDED
+    SecondaryEscrowStatus status;   // ACCEPTED | FINALIZED | VOIDED
     // secondary-specific routing
     address feeDestination;         // integrator address for fee split; zero = all fees to MetaLeX
     bytes32 offerId;                // back-link to Offer
