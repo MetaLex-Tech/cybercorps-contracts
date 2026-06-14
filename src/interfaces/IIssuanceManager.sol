@@ -225,6 +225,18 @@ interface IIssuanceManager {
         bool value
     ) external;
 
+    function increaseUnitsReserved(
+        address certAddress,
+        uint256 tokenId,
+        uint256 amount
+    ) external;
+
+    function decreaseUnitsReserved(
+        address certAddress,
+        uint256 tokenId,
+        uint256 amount
+    ) external;
+
     function addDefaultLegend(
         address certAddress,
         string memory newLegend

@@ -83,9 +83,12 @@ library CyberCertPrinterStorage {
     error TransferRestricted(string reason);
     error EndorsementNotSignedOrInvalid();
     error InvalidLegendIndex();
+    error ExceedsAvailableUnits();
+    error ExceedsReservedUnits();
 
     event CertificateAssigned(uint256 indexed tokenId, address indexed newOwner, string newOwnerName, string issuerName);
     event CyberCertPrinter_CertificateCreated(uint256 indexed tokenId);
+    event UnitsReservedUpdated(uint256 indexed tokenId, uint256 unitsReserved);
     event CertificateEndorsed(
         uint256 indexed tokenId,
         address indexed endorser,
@@ -120,13 +123,15 @@ library CyberCertPrinterStorage {
         // New variables must be appended below to preserve storage layout for upgrades
         mapping(uint256 => bool) tokenTransferable;
         mapping(uint256 => bytes[]) issuerSignatures;
+        // Units locked in a pending deal/loan; always <= certificateDetails[tokenId].unitsRepresented
+        mapping(uint256 => uint256) unitsReserved;
         
     }
 
     // Returns the storage layout
     function cyberCertStorage() internal pure returns (CyberCertStorage storage s) {
         bytes32 position = STORAGE_POSITION;
-        assembly {
+        assembly ("memory-safe") {
             s.slot := position
         }
     }
@@ -274,6 +279,31 @@ library CyberCertPrinterStorage {
             s.endorsements[tokenId].length - 1,
             block.timestamp
         );
+    }
+
+    /// @dev Reserve units against a pending deal/loan. Reverts if the total reserved
+    /// would exceed the certificate's units.
+    function increaseUnitsReserved(uint256 tokenId, uint256 amount) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        uint256 newReserved = s.unitsReserved[tokenId] + amount;
+        if (newReserved > s.certificateDetails[tokenId].unitsRepresented) revert ExceedsAvailableUnits();
+        s.unitsReserved[tokenId] = newReserved;
+        emit UnitsReservedUpdated(tokenId, newReserved);
+    }
+
+    /// @dev Release previously reserved units. Reverts if releasing more than is reserved.
+    function decreaseUnitsReserved(uint256 tokenId, uint256 amount) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        uint256 reserved = s.unitsReserved[tokenId];
+        if (amount > reserved) revert ExceedsReservedUnits();
+        uint256 newReserved;
+        unchecked { newReserved = reserved - amount; }
+        s.unitsReserved[tokenId] = newReserved;
+        emit UnitsReservedUpdated(tokenId, newReserved);
+    }
+
+    function getUnitsReserved(uint256 tokenId) internal view returns (uint256) {
+        return cyberCertStorage().unitsReserved[tokenId];
     }
 
     // Legend management; isDefault selects the defaultLegend array (tokenId ignored) vs a cert's legend

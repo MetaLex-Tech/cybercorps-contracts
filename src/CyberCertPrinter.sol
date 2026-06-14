@@ -67,6 +67,9 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     error InvalidEndorsement();
     error InvalidLegendIndex();
     error SignatureRequired();
+    // Reverted from the storage library via delegatecall; declared here for the ABI
+    error ExceedsAvailableUnits();
+    error ExceedsReservedUnits();
 
     //events
     event CertificateCreated(uint256 indexed tokenId, address indexed investor, uint256 amount, uint256 cap);
@@ -92,6 +95,8 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     event RestrictionHookSet(uint256 indexed id, address indexed hookAddress);
     event GlobalRestrictionHookSet(address indexed hookAddress);
     event GlobalTransferableSet(bool indexed transferable);
+    // Emitted from the storage library via delegatecall; declared here for the ABI
+    event UnitsReservedUpdated(uint256 indexed tokenId, uint256 unitsReserved);
     
     
     modifier onlyIssuanceManager() {
@@ -409,6 +414,22 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
 
     function setTokenTransferable(uint256 tokenId, bool value) external onlyIssuanceManager {
         CyberCertPrinterStorage.cyberCertStorage().tokenTransferable[tokenId] = value;
+    }
+
+    /// @notice Reserve units of a certificate against a pending deal/loan; cannot exceed the cert's units
+    function increaseUnitsReserved(uint256 tokenId, uint256 amount) external onlyIssuanceManager {
+        if (!_exists(tokenId)) revert TokenDoesNotExist();
+        CyberCertPrinterStorage.increaseUnitsReserved(tokenId, amount);
+    }
+
+    /// @notice Release previously reserved units; cannot release more than is reserved
+    function decreaseUnitsReserved(uint256 tokenId, uint256 amount) external onlyIssuanceManager {
+        if (!_exists(tokenId)) revert TokenDoesNotExist();
+        CyberCertPrinterStorage.decreaseUnitsReserved(tokenId, amount);
+    }
+
+    function unitsReserved(uint256 tokenId) public view returns (uint256) {
+        return CyberCertPrinterStorage.getUnitsReserved(tokenId);
     }
 
     function isTokenTransferable(uint256 tokenId) external view returns (bool) {

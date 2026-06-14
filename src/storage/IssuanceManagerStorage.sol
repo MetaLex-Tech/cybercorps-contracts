@@ -726,6 +726,22 @@ library IssuanceManagerStorage {
         ICyberCertPrinter(certAddress).setTokenTransferable(tokenId, value);
     }
 
+    function executeIncreaseUnitsReserved(
+        address certAddress,
+        uint256 tokenId,
+        uint256 amount
+    ) external {
+        ICyberCertPrinter(certAddress).increaseUnitsReserved(tokenId, amount);
+    }
+
+    function executeDecreaseUnitsReserved(
+        address certAddress,
+        uint256 tokenId,
+        uint256 amount
+    ) external {
+        ICyberCertPrinter(certAddress).decreaseUnitsReserved(tokenId, amount);
+    }
+
     function executeSetScripRatio(
         address certAddress,
         uint256 numerator,

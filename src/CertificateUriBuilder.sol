@@ -48,6 +48,10 @@ import "./interfaces/ICertificateImageBuilder.sol";
 import "./storage/extensions/ICertificateExtension.sol";
 import "./libs/auth.sol";
 
+interface ICertificateUnitsReserved {
+    function unitsReserved(uint256 tokenId) external view returns (uint256);
+}
+
 contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
 
     /// @notice Address of the external image builder contract
@@ -191,6 +195,11 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         return string(abi.encodePacked(wholeStr, ".", centsStr));
     }
 
+    function unitsReservedToString(address contractAddress, uint256 tokenId) internal view returns (string memory) {
+        if (contractAddress == address(0)) return "0.00";
+        return from18DecimalsToString(ICertificateUnitsReserved(contractAddress).unitsReserved(tokenId));
+    }
+
     // Helper function to convert bytes32 to string
     function bytes32ToString(bytes32 _bytes32) public pure returns (string memory) {
         bytes memory bytesArray = new bytes(64);
@@ -256,7 +265,6 @@ struct CertificateDetails {
         string name;
         address ownerAddress;
     }
-
 
     /// @notice Fetches the last signed timestamp from the registry for a given agreement
     /// @param registry The registry contract address
@@ -494,6 +502,7 @@ struct CertificateDetails {
             '", "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD),
             '", "issuerUSDValuationAtTimeOfInvestment": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
             '", "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented),
+            '", "unitsReserved": "', unitsReservedToString(contractAddress, tokenId),
             '", "legalDetails": "', details.legalDetails,
             '"'
         );
@@ -593,6 +602,7 @@ struct CertificateDetails {
             '", "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD),
             '", "issuerUSDValuationAtTimeOfInvestment": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
             '", "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented),
+            '", "unitsReserved": "', unitsReservedToString(contractAddress, tokenId),
             '", "legalDetails": "', details.legalDetails,
             '"'
         );
@@ -649,7 +659,7 @@ library Base64 {
 
         bytes memory table = TABLE;
 
-        assembly {
+        assembly ("memory-safe") {
             let tablePtr := add(table, 1)
             let resultPtr := add(result, 32)
 
