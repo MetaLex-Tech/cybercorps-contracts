@@ -65,6 +65,7 @@ import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderCon
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {DealManager} from "../src/DealManager.sol";
+import {DealManagerStorage} from "../src/storage/DealManagerStorage.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {Escrow} from "../src/storage/LexScrowStorage.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
@@ -1917,8 +1918,9 @@ contract CyberCorpForkTest is Test {
             block.timestamp + 1000000
         );
 
-        // Try to finalize without payment - should fail
-        vm.expectRevert(LexScroWLite.DealNotPaid.selector);
+        // Try to finalize without payment - should fail. parties[1] is address(0) and never signs,
+        // so the all-parties-signed check fires before the unpaid-escrow check.
+        vm.expectRevert(LexScroWLite.DealNotFullySigned.selector);
         IDealManager(dealManagerAddr).finalizeDeal(id);
         vm.stopPrank();
     }
@@ -2179,8 +2181,9 @@ contract CyberCorpForkTest is Test {
             ""
         );
 
-        // Try to finalize again - should fail
-        vm.expectRevert(LexScroWLite.DealNotPaid.selector);
+        // Try to finalize again - should fail. The deal is already finalized in the registry,
+        // so the already-finalized check fires before the unpaid-escrow check.
+        vm.expectRevert(LexScroWLite.DealAlreadyFinalized.selector);
         IDealManager(dealManagerAddr).finalizeDeal(id);
         vm.stopPrank();
     }
@@ -4139,8 +4142,8 @@ contract CyberCorpForkTest is Test {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Test Legend";
 
-        DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](1);
-        certData[0] = DealManager.CyberCertData({
+        DealManagerStorage.CyberCertData[] memory certData = new DealManagerStorage.CyberCertData[](1);
+        certData[0] = DealManagerStorage.CyberCertData({
             name: "Test Certificate",
             symbol: "TEST",
             uri: "ipfs://test-uri",
@@ -4301,8 +4304,8 @@ contract CyberCorpForkTest is Test {
         string[] memory warrantLegend = new string[](1);
         warrantLegend[0] = "Token Warrant Legend";
 
-        DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](2);
-        certData[0] = DealManager.CyberCertData({
+        DealManagerStorage.CyberCertData[] memory certData = new DealManagerStorage.CyberCertData[](2);
+        certData[0] = DealManagerStorage.CyberCertData({
             name: "SAFE Certificate",
             symbol: "SAFE",
             uri: "ipfs://safe-uri",
@@ -4311,7 +4314,7 @@ contract CyberCorpForkTest is Test {
             extension: address(0),
             defaultLegend: safeLegend
         });
-        certData[1] = DealManager.CyberCertData({
+        certData[1] = DealManagerStorage.CyberCertData({
             name: "Token Warrant",
             symbol: "TWARRANT",
             uri: "ipfs://warrant-uri",
@@ -4497,8 +4500,8 @@ contract CyberCorpForkTest is Test {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Test Legend";
 
-        DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](1);
-        certData[0] = DealManager.CyberCertData({
+        DealManagerStorage.CyberCertData[] memory certData = new DealManagerStorage.CyberCertData[](1);
+        certData[0] = DealManagerStorage.CyberCertData({
             name: "Test Certificate",
             symbol: "TEST",
             uri: "ipfs://test-uri",
