@@ -56,9 +56,10 @@ interface ISecondaryTradeStorage {
 
     error OfferNotAvailable();
     error OfferExpired();
-    error OfferBelowMinThreshold();
+    /// @notice A trade's units or consideration is below the admin-set minimum-ticket threshold;
+    /// enforced on the whole offer at postOffer and on each lot at acceptOffer
+    error BelowMinTradeThreshold();
     error IntegratorNotWhitelisted();
-    error PartialFillBelowMinThreshold();
     error UnitsExceedOffer();
     error NotOfferor();
     error MissingCertPrinter();

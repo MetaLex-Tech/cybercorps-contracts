@@ -95,6 +95,7 @@ struct Offer {
     uint8 buyerHostingMode;         // buy offer-only: 0 = Direct, 1 = Administered; zero for sell offers
     address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
     bytes32[] settlementAgreementIds; // appended at each acceptOffer; length == 0 at postOffer (no buyer known yet)
+    address[] thresholdConditions;    // stored at postOffer; re-evaluated at acceptOffer (gates both)
 }
 
 // Self-contained settlement escrow for secondary trades, keyed by settlementAgreementId.
@@ -207,32 +208,15 @@ library SecondaryTradeStorage {
                 revert ISecondaryTradeStorage.IntegratorNotWhitelisted();
         }
 
-        // Validate min threshold
-        uint256 minUnits = ds.minTradeUnits;
-        if (minUnits > 0 && params.units < minUnits) revert ISecondaryTradeStorage.OfferBelowMinThreshold();
-        uint256 minConsid = ds.minTradeConsideration;
-        if (minConsid > 0 && params.consideration < minConsid) revert ISecondaryTradeStorage.OfferBelowMinThreshold();
+        // Validate min threshold against the whole offer
+        _checkMinTradeThreshold(params.units, params.consideration);
 
         // Generate offer ID deterministically — DealManager-internal key, not a registry record
         offerId = keccak256(abi.encode(msg.sender, params.templateId, params.salt));
         if (ds.offers[offerId].offeror != address(0)) revert ISecondaryTradeStorage.OfferAlreadyExists();
 
-        // Evaluate offeror-side threshold conditions
-        bytes memory offerIdData = abi.encode(offerId);
-        for (uint256 i = 0; i < params.thresholdConditions.length; i++) {
-            if (!ICondition(params.thresholdConditions[i]).checkCondition(address(this), msg.sig, offerIdData))
-                revert ILexScrowStorage.AgreementConditionsNotMet();
-        }
-
-        if (params.side == OfferSide.SELL) {
-            // Reserve units on the seller's cert
-            ICyberCertPrinter(params.certPrinter).reserveUnits(params.tokenId, params.units);
-        } else {
-            // BUY: pull consideration directly into contract custody
-            IERC20(params.paymentToken).safeTransferFrom(msg.sender, address(this), params.consideration);
-        }
-
-        // Store offer record
+        // Store offer record before evaluating conditions so seller-side conditions that call
+        // getOffer(offerId) see the populated record; a condition revert rolls this write back.
         ds.offers[offerId] = Offer({
             spvAddress: LexScrowStorage.getCorp(),
             offeror: msg.sender,
@@ -261,8 +245,23 @@ library SecondaryTradeStorage {
             buyerName: params.side == OfferSide.BUY ? params.buyerName : "",
             buyerHostingMode: params.side == OfferSide.BUY ? params.buyerHostingMode : 0,
             adminMultisig: params.side == OfferSide.BUY ? params.adminMultisig : address(0),
-            settlementAgreementIds: new bytes32[](0)
+            settlementAgreementIds: new bytes32[](0),
+            // Persisted so they can be re-evaluated at acceptOffer (spec §conditions: threshold
+            // conditions gate both posting and acceptance).
+            thresholdConditions: params.thresholdConditions
         });
+
+        // Evaluate threshold conditions (offer is now readable via getOffer). At posting there are no
+        // settlements yet, so buyer-facing conditions short-circuit; seller/offer-wide conditions enforce.
+        _checkThresholdConditions(offerId);
+
+        if (params.side == OfferSide.SELL) {
+            // Reserve units on the seller's cert
+            ICyberCertPrinter(params.certPrinter).reserveUnits(params.tokenId, params.units);
+        } else {
+            // BUY: pull consideration directly into contract custody
+            IERC20(params.paymentToken).safeTransferFrom(msg.sender, address(this), params.consideration);
+        }
 
         emit ISecondaryTradeStorage.OfferPosted(offerId, msg.sender, params.side, params.units, params.consideration);
     }
@@ -307,12 +306,27 @@ library SecondaryTradeStorage {
         if (offer.status != OfferStatus.LIVE && offer.status != OfferStatus.PARTIALLY_ACCEPTED) revert ISecondaryTradeStorage.OfferNotAvailable();
         if (block.timestamp > offer.validUntil) revert ISecondaryTradeStorage.OfferExpired();
 
-        if (params.units == 0) revert ISecondaryTradeStorage.PartialFillBelowMinThreshold();
+        // Reject zero-unit fills outright: the min-threshold check below only catches this when a
+        // floor is configured, so a disabled-threshold offer would otherwise mint an empty settlement.
+        if (params.units == 0) revert ISecondaryTradeStorage.BelowMinTradeThreshold();
         uint256 remainingUnits = offer.units - offer.unitsAccepted;
         if (params.units > remainingUnits) revert ISecondaryTradeStorage.UnitsExceedOffer();
 
-        uint256 minUnits = secondaryTradeStorage().minTradeUnits;
-        if (minUnits > 0 && params.units < minUnits) revert ISecondaryTradeStorage.PartialFillBelowMinThreshold();
+        // Pro-rata consideration for this (possibly partial) fill. The final lot that exhausts the
+        // remaining units takes the leftover consideration (offer.consideration - offer.paymentAccepted)
+        // rather than another floored pro-rata amount; otherwise flooring across partial fills strands
+        // the rounding remainder — unpaid to the seller, or stuck in custody for a buy offer.
+        uint256 partialConsideration = params.units == remainingUnits
+            ? offer.consideration - offer.paymentAccepted
+            : offer.consideration * params.units / offer.units;
+
+        // Re-apply the admin-set minimum-ticket floors that postOffer enforced on the whole offer,
+        // now against this lot — otherwise a tiny partial fill can settle below the consideration floor.
+        // Exempt the final lot that exhausts the remaining units: that remainder was already cleared by
+        // postOffer's full-offer threshold check, and blocking it would strand the offer's tail.
+        if (params.units < remainingUnits) {
+            _checkMinTradeThreshold(params.units, partialConsideration);
+        }
 
         // Create fully-signed settlement agreement via registry.
         // settlementAgreementIds.length is a push-only monotonic nonce: unique per acceptance even if prior
@@ -381,11 +395,6 @@ library SecondaryTradeStorage {
             settlementAgreementId
         );
 
-        // Compute pro-rata consideration for partial fills
-        uint256 partialConsideration = offer.units > 0
-            ? offer.consideration * params.units / offer.units
-            : 0;
-
         // Build deal metadata for IssuanceManager.secondaryTransfer
         string memory buyerName;
         uint8 buyerHostingMode;
@@ -433,6 +442,12 @@ library SecondaryTradeStorage {
 
         // Record settlement for buyer-facing threshold condition lookup
         offer.settlementAgreementIds.push(settlementAgreementId);
+
+        // Re-evaluate threshold conditions now that a settlement exists: buyer-facing conditions
+        // (KYC/AML, accreditation, holder caps, etc.) that short-circuited at posting resolve the
+        // acceptor via the newly pushed settlement and enforce here. A failure reverts the whole
+        // acceptance, undoing the settlement, escrow funding, and reservations above.
+        _checkThresholdConditions(params.offerId);
 
         // Update offer accounting and fill state
         offer.unitsAccepted += params.units;
@@ -500,6 +515,28 @@ library SecondaryTradeStorage {
     // Secondary trade — internals
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// @dev Reverts if `units` or `consideration` falls below the admin-set minimum-ticket floors
+    /// (either floor disabled when 0). Shared by postOffer (whole offer) and acceptOffer (per lot)
+    /// so both gates stay in lockstep.
+    function _checkMinTradeThreshold(uint256 units, uint256 consideration) internal view {
+        SecondaryTradeData storage ds = secondaryTradeStorage();
+        if (ds.minTradeUnits > 0 && units < ds.minTradeUnits) revert ISecondaryTradeStorage.BelowMinTradeThreshold();
+        if (ds.minTradeConsideration > 0 && consideration < ds.minTradeConsideration) revert ISecondaryTradeStorage.BelowMinTradeThreshold();
+    }
+
+    /// @dev Walks the offer's stored threshold conditions, reverting on the first failure. Conditions
+    /// receive `abi.encode(offerId)` and resolve party context (offeror, and the acceptor via the offer's
+    /// settlementAgreementIds) themselves; buyer-facing ones short-circuit at posting when no settlement exists.
+    function _checkThresholdConditions(bytes32 offerId) internal {
+        address[] storage conditions = secondaryTradeStorage().offers[offerId].thresholdConditions;
+        bytes memory offerIdData = abi.encode(offerId);
+        for (uint256 i = 0; i < conditions.length; i++) {
+            // note: always double check if `Offer` is properly updated because `checkCondition()` depends on it
+            if (!ICondition(conditions[i]).checkCondition(address(this), msg.sig, offerIdData))
+                revert ILexScrowStorage.AgreementConditionsNotMet();
+        }
+    }
+
     /// @dev Terminal offer states: immutable, not cancellable, and never restored by a void
     function _isOfferTerminal(OfferStatus status) internal pure returns (bool) {
         return status == OfferStatus.CANCELLED || status == OfferStatus.FINALIZED;
@@ -533,6 +570,7 @@ library SecondaryTradeStorage {
         ICondition[] storage conditions = LexScrowStorage.getConditionsByEscrow(agreementId);
         bytes memory agreementIdBytes = abi.encodePacked(agreementId);
         for (uint256 i = 0; i < conditions.length; i++) {
+            // note: always double check if `Offer` is properly updated because `checkCondition()` depends on it
             if (!ICondition(conditions[i]).checkCondition(address(this), msg.sig, agreementIdBytes))
                 revert ILexScrowStorage.AgreementConditionsNotMet();
         }
