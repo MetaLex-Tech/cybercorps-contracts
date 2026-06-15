@@ -58,7 +58,7 @@ interface IDealManager {
         address[] memory conditions,
         bytes32 secretHash,
         uint256 expiry
-    ) external returns (bytes32 agreementId);
+    ) external returns (bytes32 agreementId, uint256[] memory certIds);
 
     function proposeAndSignDeal(
         address[] memory _certPrinterAddress,

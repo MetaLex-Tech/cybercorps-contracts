@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 import "../src/RoundManager.sol";
+import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import "../src/IssuanceManager.sol";
 import "../src/CyberCertPrinter.sol";
 import "../src/storage/RoundManagerStorage.sol";
@@ -2095,7 +2096,7 @@ contract RoundManagerTest is Test {
         vm.prank(corpOwner);
         vm.expectRevert(
             abi.encodeWithSelector(
-                RoundManager.AgreementConditionsNotMet.selector
+                ILexScrowStorage.AgreementConditionsNotMet.selector
             )
         );
         RoundManager(roundManager).allocate(agreementId, 10_000 * 10 ** 6);

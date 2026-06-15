@@ -5,7 +5,7 @@ import "openzeppelin-contracts/interfaces/IERC165.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./baseCondition.sol";
-import "../LexScroWLite.sol";
+import {ILexScrowStorage} from "../../interfaces/ILexScrowStorage.sol";
 import "../auth.sol";
 import "../../interfaces/IZKPassportVerifier.sol";
 
@@ -169,13 +169,13 @@ contract NonUSNationalityCondition is BaseCondition, UUPSUpgradeable, BorgAuthAC
         emit FounderOverrideUpdated(_manager, _investor, _approved, msg.sender);
     }
 
-    /// @notice Condition check used by LexScroWLite.conditionCheck
+    /// @notice Condition check used by LexScrowStorage.conditionCheck
     function checkCondition(
         address _contract,
         bytes4,
         bytes memory data
     ) public view override returns (bool) {
-        LexScroWLite lexScrow = LexScroWLite(_contract);
+        ILexScrowStorage lexScrow = ILexScrowStorage(_contract);
         bytes32 agreementId = abi.decode(data, (bytes32));
         address counterparty = lexScrow.getEscrowDetails(agreementId).counterParty;
         // check overrides first, then the ZK proof

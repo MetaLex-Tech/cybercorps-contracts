@@ -250,17 +250,9 @@ library RoundManagerStorage {
             true // Will be used as fee token
         );
 
-        // Emulates LexScroWLite.createEscrow() as we couldn't call it in a library
+        // Create the escrow via the shared LexScrowStorage library (no longer duplicated here)
         uint256 expiryForEscrow = round.allowTimedOffers ? eoi.expiry : round.endTime;
-        ls.escrows[agreementId] = Escrow({
-            agreementId: agreementId,
-            counterParty: counterParty,
-            corpAssets: corpAssets,
-            buyerAssets: buyerAssets,
-            signature: abi.encodePacked(bytes32(0)),
-            expiry: expiryForEscrow,
-            status: EscrowStatus.PENDING
-        });
+        LexScrowStorage.createEscrow(agreementId, counterParty, corpAssets, buyerAssets, expiryForEscrow);
 
         if (round.roundType == RoundType.FCFS) {
             ICyberAgreementRegistry(ls.DEAL_REGISTRY)
@@ -284,23 +276,8 @@ library RoundManagerStorage {
                 ""
             );
 
-        // Emulates LexScroWLite.updateEscrow() as we couldn't call it in a library
-        Escrow storage escrow = ls.escrows[agreementId];
-        escrow.counterParty = counterParty;
-        Endorsement memory newEndorsement = Endorsement(
-            address(this),
-            block.timestamp,
-            escrow.signature,
-            ls.DEAL_REGISTRY,
-            agreementId,
-            escrow.counterParty,
-            eoi.name
-        );
-        for(uint256 i = 0; i < escrow.corpAssets.length; i++) {
-            if(escrow.corpAssets[i].tokenType == TokenType.ERC721) {
-                ICyberCertPrinter(escrow.corpAssets[i].tokenAddress).addEndorsement(escrow.corpAssets[i].tokenId, newEndorsement);
-            }
-        }
+        // Update the escrow (set counterparty + endorsements) via the shared LexScrowStorage library
+        LexScrowStorage.updateEscrow(agreementId, counterParty, eoi.name);
 
         setAgreementToRound(agreementId, roundId);
         getRoundToAgreements(roundId).push(agreementId);
