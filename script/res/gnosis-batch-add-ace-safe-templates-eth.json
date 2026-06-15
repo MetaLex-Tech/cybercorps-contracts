@@ -1,0 +1,58 @@
+{
+  "version": "1.0",
+  "chainId": "1",
+  "createdAt": 1781472000000,
+  "meta": {
+    "name": "Transactions Batch",
+    "description": "Add ACE SAFE Reg D and Reg S templates",
+    "txBuilderVersion": "1.18.2",
+    "createdFromSafeAddress": "0x68Ab3F79622cBe74C9683aA54D7E1BBdCAE8003C",
+    "createdFromOwnerAddress": "",
+    "checksum": ""
+  },
+  "transactions": [
+    {
+      "to": "0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134",
+      "value": "0",
+      "data": null,
+      "contractMethod": {
+        "inputs": [
+          {
+            "internalType": "bytes32",
+            "name": "templateId",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "string",
+            "name": "title",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "legalContractUri",
+            "type": "string"
+          },
+          {
+            "internalType": "string[]",
+            "name": "globalFields",
+            "type": "string[]"
+          },
+          {
+            "internalType": "string[]",
+            "name": "partyFields",
+            "type": "string[]"
+          }
+        ],
+        "name": "createTemplate",
+        "payable": false
+      },
+      "contractInputsValues": {
+        "templateId": "0x6163655f736166655f726567645f763100000000000000000000000000000000",
+        "title": "MetaLeX cyberSAFE jx-neutral-style / Reg D ACE raise v 1",
+        "legalContractUri": "IPFS://bafybeifca22x3r2vkcanj446pe2bcn465rseff6ff3h7lwuaeaw54mjugi",
+        "globalFields": "[\"purchaseAmount\", \"postMoneyValuationCap\", \"expirationTime\", \"governingJurisdiction\", \"disputeResolution\"]",
+        "partyFields": "[\"name\", \"evmAddress\", \"contactDetails\", \"investorType\", \"investorJurisdiction\"]"
+      }
+    }
+  ]
+}
