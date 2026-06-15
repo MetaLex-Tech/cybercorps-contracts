@@ -156,6 +156,32 @@ contract SecConditionMock {
     function checkCondition(address, bytes4, bytes memory) external view returns (bool) { return _pass; }
 }
 
+// Mirrors a real seller-side threshold condition: it reads the offer back via getOffer(offerId)
+// (per specs/analysis/conditions.md) and derives eligibility from its fields. Returns false if the
+// offer is unreadable — which is what the pre-fix ordering produced, since the condition loop ran
+// before the offer was stored.
+contract SecOfferReadingConditionMock {
+    function checkCondition(address _contract, bytes4, bytes memory data) external view returns (bool) {
+        bytes32 offerId = abi.decode(data, (bytes32));
+        Offer memory o = IDealManager(_contract).getOffer(offerId);
+        return o.offeror != address(0) && o.certPrinter != address(0);
+    }
+}
+
+// Mirrors a real buyer-facing threshold condition (KYC/accreditation/holder-cap): it short-circuits
+// to `true` at posting when the offer has no settlements yet, and enforces once an acceptor exists.
+// Used to prove acceptOffer re-evaluates threshold conditions (post-fix); pre-fix it never ran here.
+contract SecBuyerFacingConditionMock {
+    bool private _acceptorAllowed;
+    constructor(bool acceptorAllowed_) { _acceptorAllowed = acceptorAllowed_; }
+    function checkCondition(address _contract, bytes4, bytes memory data) external view returns (bool) {
+        bytes32 offerId = abi.decode(data, (bytes32));
+        Offer memory o = IDealManager(_contract).getOffer(offerId);
+        if (o.settlementAgreementIds.length == 0) return true; // posting context: no buyer yet
+        return _acceptorAllowed;                               // acceptance context: enforce
+    }
+}
+
 contract DealManagerFactoryHelper is DealManagerFactory {
     bool private _integWhitelisted;
 
@@ -541,6 +567,78 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.postOffer(p);
     }
 
+    // Regression: threshold conditions must see the populated offer via getOffer(offerId).
+    // The condition mock reads the offer back during checkCondition and rejects an empty one;
+    // before the fix the loop ran ahead of the store, so it observed a zeroed offer and reverted.
+    function test_Secondary_PostOffer_ThresholdConditionSeesPopulatedOffer() public {
+        address[] memory conds = new address[](1);
+        conds[0] = address(new SecOfferReadingConditionMock());
+
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.salt = uint256(keccak256("test_Secondary_PostOffer_ThresholdConditionSeesPopulatedOffer"));
+        p.thresholdConditions = conds;
+
+        vm.prank(seller);
+        // SecOfferReadingConditionMock.checkCondition() would fail if `Offer` is not updated
+        bytes32 offerId = dm.postOffer(p);
+
+        Offer memory offer = dm.getOffer(offerId);
+        assertEq(offer.offeror, seller, "offeror must be readable by conditions");
+        assertEq(offer.certPrinter, address(certPrinter), "certPrinter must be readable by conditions");
+        assertEq(offer.tokenId, sellerTokenId, "tokenId must be readable by conditions");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // acceptOffer — threshold conditions re-evaluated for the acceptor
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // A buyer-facing threshold condition short-circuits at posting (no acceptor yet) and enforces at
+    // acceptance. Pre-fix, acceptOffer never re-ran threshold conditions, so a disallowed acceptor
+    // could finalize a trade. The condition must now reject the acceptance.
+    function test_Secondary_RevertIf_AcceptOffer_BuyerFacingThresholdConditionFails() public {
+        address[] memory conds = new address[](1);
+        conds[0] = address(new SecBuyerFacingConditionMock(false)); // posting passes, acceptance fails
+
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.salt = uint256(keccak256("test_Secondary_RevertIf_AcceptOffer_BuyerFacingThresholdConditionFails"));
+        p.thresholdConditions = conds;
+
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p); // posting succeeds: condition short-circuits with no acceptor
+
+        AcceptOfferParams memory ap = AcceptOfferParams({
+            offerId: offerId,
+            units: UNITS,
+            buyerName: "Bob",
+            buyerHostingMode: 0,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey),
+            openEndorsementSig: ""
+        });
+        vm.prank(buyer);
+        vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector);
+        dm.acceptOffer(ap);
+    }
+
+    // Counterpart to the above: when the acceptor satisfies the buyer-facing condition, the re-evaluation
+    // passes and acceptance proceeds — proving the re-check runs and is not an unconditional block.
+    function test_Secondary_AcceptOffer_BuyerFacingThresholdConditionPasses() public {
+        address[] memory conds = new address[](1);
+        conds[0] = address(new SecBuyerFacingConditionMock(true)); // passes at posting and acceptance
+
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.salt = uint256(keccak256("test_Secondary_AcceptOffer_BuyerFacingThresholdConditionPasses"));
+        p.thresholdConditions = conds;
+
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+
+        bytes32 settlementId = _acceptSellOffer(offerId);
+        assertTrue(settlementId != bytes32(0), "acceptance should succeed when the acceptor passes conditions");
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // postOffer — integrator whitelist
     // ─────────────────────────────────────────────────────────────────────────
@@ -578,7 +676,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.setMinTradeThreshold(UNITS + 1, 0);
 
         vm.prank(seller);
-        vm.expectRevert(ISecondaryTradeStorage.OfferBelowMinThreshold.selector);
+        vm.expectRevert(ISecondaryTradeStorage.BelowMinTradeThreshold.selector);
         dm.postOffer(_defaultSellOfferParams()); // offers exactly UNITS
     }
 
@@ -587,7 +685,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.setMinTradeThreshold(0, CONSIDERATION + 1);
 
         vm.prank(seller);
-        vm.expectRevert(ISecondaryTradeStorage.OfferBelowMinThreshold.selector);
+        vm.expectRevert(ISecondaryTradeStorage.BelowMinTradeThreshold.selector);
         dm.postOffer(_defaultSellOfferParams()); // offers exactly CONSIDERATION
     }
 
@@ -619,8 +717,57 @@ contract DealManagerSecondaryTradeTest is Test {
         });
 
         vm.prank(buyer);
-        vm.expectRevert(ISecondaryTradeStorage.PartialFillBelowMinThreshold.selector);
+        vm.expectRevert(ISecondaryTradeStorage.BelowMinTradeThreshold.selector);
         dm.acceptOffer(p);
+    }
+
+    function test_Secondary_RevertIf_AcceptOffer_PartialFillBelowMinConsideration() public {
+        // Units floor disabled, but a half fill's pro-rata consideration (CONSIDERATION/2)
+        // is below the admin-set minimum ticket value — acceptance must revert.
+        vm.prank(owner);
+        dm.setMinTradeThreshold(0, CONSIDERATION / 2 + 1);
+
+        bytes32 offerId = _postSellOffer();
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: UNITS / 2, // pro-rata consideration = CONSIDERATION / 2, below min
+            buyerName: "Bob",
+            buyerHostingMode: 0,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: "",
+            openEndorsementSig: ""
+        });
+
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.BelowMinTradeThreshold.selector);
+        dm.acceptOffer(p);
+    }
+
+    function test_Secondary_AcceptOffer_FinalLotExemptFromMinThreshold() public {
+        // Floors below the full offer (so postOffer passes) but above the tail remainder. The lot that
+        // exhausts the remaining units must be exempt, otherwise the offer's tail would be stranded.
+        vm.prank(owner);
+        dm.setMinTradeThreshold(UNITS / 4, CONSIDERATION / 4);
+
+        bytes32 offerId = _postSellOffer();
+
+        // First fill clears the floors, leaving a tail below both.
+        _acceptSellOfferPartial(offerId, (UNITS * 9) / 10); // 90 units, 9 ether
+
+        // Final lot: 10 units / 1 ether — under both floors but exempt as the remaining lot.
+        bytes32 settlementId = _acceptSellOfferPartial(offerId, UNITS - (UNITS * 9) / 10);
+
+        Offer memory offer = dm.getOffer(offerId);
+        assertEq(uint8(offer.status), uint8(OfferStatus.FULLY_ACCEPTED), "final lot should fully accept the offer");
+        assertEq(offer.unitsAccepted, UNITS);
+        assertEq(
+            dm.getSecondaryEscrow(settlementId).paymentAmount,
+            CONSIDERATION - (CONSIDERATION * 9) / 10,
+            "final lot settles its sub-floor pro-rata consideration"
+        );
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -963,6 +1110,34 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(dm.getOffer(offerId).unitsAccepted, UNITS);
         assertEq(dm.getSecondaryEscrow(settlementId1).paymentAmount, expectedFirst);
         assertEq(dm.getSecondaryEscrow(settlementId2).paymentAmount, expectedSecond);
+    }
+
+    function test_Secondary_AcceptSellOffer_FinalLotTakesRoundingRemainder() public {
+        // 3 units for 100 tokens: 100 * 1 / 3 floors to 33, so three 1-unit fills would pay
+        // 33 + 33 + 33 = 99 and strand 1 token. The final lot must take the leftover consideration.
+        PostOfferParams memory params = _defaultSellOfferParams();
+        params.units = 3;
+        params.consideration = 100;
+        params.salt = uint256(keccak256("roundingRemainderOffer"));
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(params);
+
+        bytes32 s1 = _acceptSellOfferPartial(offerId, 1);
+        bytes32 s2 = _acceptSellOfferPartial(offerId, 1);
+        bytes32 s3 = _acceptSellOfferPartial(offerId, 1);
+
+        assertEq(dm.getSecondaryEscrow(s1).paymentAmount, 33, "first fill floored pro-rata");
+        assertEq(dm.getSecondaryEscrow(s2).paymentAmount, 33, "second fill floored pro-rata");
+        assertEq(dm.getSecondaryEscrow(s3).paymentAmount, 34, "final lot takes the rounding remainder");
+
+        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.FULLY_ACCEPTED));
+        assertEq(
+            dm.getSecondaryEscrow(s1).paymentAmount
+                + dm.getSecondaryEscrow(s2).paymentAmount
+                + dm.getSecondaryEscrow(s3).paymentAmount,
+            100,
+            "settlements sum to the full offer consideration"
+        );
     }
 
     function test_Secondary_RevertIf_AcceptSellOffer_UnitsExceedOffer() public {
