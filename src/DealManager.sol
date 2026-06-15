@@ -47,13 +47,16 @@ import "openzeppelin-contracts/utils/ReentrancyGuard.sol";
 import "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import "./interfaces/IIssuanceManager.sol";
-import "./libs/LexScroWLite.sol";
 import "./libs/auth.sol";
 import "./storage/DealManagerStorage.sol";
 import "./storage/DealManagerFactoryStorage.sol";
 import "./storage/BorgAuthStorage.sol";
 import "./storage/SecondaryTradeStorage.sol";
 import "./interfaces/ICyberCorp.sol";
+import "./interfaces/IDealManager.sol";
+import "./interfaces/IDealManagerStorage.sol";
+import "./interfaces/ISecondaryTradeStorage.sol";
+import "./interfaces/ILexScrowStorage.sol";
 import "./interfaces/IDealManagerFactory.sol";
 import "./interfaces/ICyberCertPrinter.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
@@ -61,86 +64,31 @@ import "./interfaces/ICyberAgreementRegistry.sol";
 /// @title DealManager
 /// @notice Manages the lifecycle of deals between parties, including creation, signing, payment, and finalization for a CyberCorp
 /// @dev Implements UUPS upgradeable pattern and integrates with BorgAuth for access control
-contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeable, ReentrancyGuard {
+contract DealManager is
+    Initializable,
+    BorgAuthACL,
+    UUPSUpgradeable,
+    ReentrancyGuard,
+    IDealManager,
+    IDealManagerStorage,
+    ISecondaryTradeStorage,
+    ILexScrowStorage
+{
     using DealManagerStorage for DealManagerStorage.DealManagerData;
     using SafeERC20 for IERC20;
 
-    string public constant DEPLOY_VERSION = "4"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "4.0.1"; // For version-tracking on all deployment and future upgrades
 
-    // ───────────────────────────────────────────────────────────────────────────────────────────
-    // Events / errors.
-    // Most of the deal-lifecycle and secondary-trade logic runs in the linked libraries
-    // (DealManagerStorage / SecondaryTradeStorage), which is where these events/errors are actually
-    // emitted/reverted at runtime. Because those libraries are separate deployment units, their
-    // declarations do NOT appear in DealManager's ABI. Each one is therefore MIRRORED here — same
-    // name, hence identical selector/topic — solely so it shows up in DealManager's ABI for off-chain
-    // decoding. The library copy is the source of truth; keep these in sync. (Shared escrow
-    // events/errors are owned by LexScroWLite and qualified as LexScroWLite.X at their emit sites.)
-    // A handful below are genuinely DealManager-owned (declared and used here): ZeroAddress,
-    // PartyValuesLengthMismatch, ConditionAlreadyExists, ConditionDoesNotExist, NotRefImplementation,
-    // MinTradeThresholdSet.
-    // ───────────────────────────────────────────────────────────────────────────────────────────
+    // Library-emitted events/errors are inherited from the per-library interfaces (IDealManagerStorage,
+    // ISecondaryTradeStorage and ILexScrowStorage) so their selectors/topics appear in DealManager's ABI.
+
+    // The errors/event below are owned and used directly by DealManager. (Shared
     error ZeroAddress();
-    error CounterPartyValueMismatch();
-    error AgreementConditionsNotMet();
-    error DealNotPending();
     error PartyValuesLengthMismatch();
     error ConditionAlreadyExists();
     error ConditionDoesNotExist();
-    error DealNotExpired();
     error NotRefImplementation();
-    // Secondary trade errors (mirror SecondaryTradeStorage)
-    error OfferNotAvailable();
-    error OfferExpired();
-    error OfferBelowMinThreshold();
-    error IntegratorNotWhitelisted();
-    error PartialFillBelowMinThreshold();
-    error UnitsExceedOffer();
-    error NotOfferor();
-    error MissingCertPrinter();
-    error NotPartyToAgreement();
-    error OfferAlreadyExists();
-
-    /// @notice Emitted when a new deal is proposed
-    /// @param agreementId Unique identifier for the agreement
-    /// @param certAddress Address of the certificate contract
-    /// @param certId ID of the certificate
-    /// @param paymentToken Address of the token used for payment
-    /// @param paymentAmount Amount to be paid
-    /// @param templateId ID of the template used for the agreement
-    /// @param corp Address of the CyberCorp
-    /// @param dealRegistry Address of the CyberAgreementRegistry
-    /// @param parties Array of party addresses involved in the deal
-    /// @param conditions Array of condition contract addresses
-    /// @param hasSecret Whether the deal requires a secret for finalization
-    event DealProposed(
-        bytes32 indexed agreementId,
-        address[] certAddress,
-        uint256[] certId,
-        address paymentToken,
-        uint256 paymentAmount,
-        bytes32 templateId,
-        address corp,
-        address dealRegistry,
-        address[] parties,
-        address[] conditions,
-        bool hasSecret
-    );
-
-    event DealFinalized(
-        bytes32 indexed agreementId,
-        address indexed signer,
-        address indexed corp,
-        address dealRegistry,
-        bool fillUnallocated
-    );
-    // Secondary trade events (mirror SecondaryTradeStorage)
-    event OfferPosted(bytes32 indexed offerId, address indexed offeror, OfferSide side, uint256 units, uint256 consideration);
-    event OfferCancelled(bytes32 indexed offerId, address indexed offeror);
-    event OfferAccepted(bytes32 indexed offerId, bytes32 indexed settlementAgreementId, address indexed acceptor, uint256 units);
-    event SecondaryDealFinalized(bytes32 indexed agreementId, address seller, address buyer, uint256 consideration);
     event MinTradeThresholdSet(uint256 minUnits, uint256 minConsideration, address setter);
-
 
     /// @notice Maps agreement IDs to arrays of counter party values for closed deals.
     mapping(bytes32 => string[]) public counterPartyValues;
@@ -166,8 +114,9 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
         // Set storage values
         DealManagerStorage.setIssuanceManager(_issuanceManager);
 
-        // Initialize LexScroWLite core addresses
-        __LexScroWLite_init(_corp, _dealRegistry);
+        // Initialize LexScrowStorage core addresses (LexScrowStorage is now a library — set storage directly)
+        LexScrowStorage.setCorp(_corp);
+        LexScrowStorage.setDealRegistry(_dealRegistry);
         DealManagerStorage.setUpgradeFactory(_upgradeFactory);
     }
 
@@ -504,15 +453,40 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
     /// @dev Currently the factory owner (MetaLeX) unilaterally set the fee ratio;
     /// in the future, it could be determined through a governance process.
     /// @return Fee amount
-    function computeFee(uint256 size) public override view returns (uint256) {
+    function computeFee(uint256 size) public view returns (uint256) {
         return size * IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).getDefaultFeeRatio() / DealManagerFactoryStorage.BASIS_POINTS;
     }
 
     /// @notice Gets the payable address for the fees
     /// @dev The factory owner (MetaLeX) unilaterally set the payable address
     /// @return Payable address for the fees
-    function getPlatformPayable() public override view returns (address) {
+    function getPlatformPayable() public view returns (address) {
         return IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).getPlatformPayable();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // LexScrowStorage surface — thin wrappers (LexScrowStorage is now a library) so the proxy keeps
+    // exposing these selectors for off-chain callers and condition contracts (ILexScrowStorage).
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice Get escrow details for a given agreement id
+    function getEscrowDetails(bytes32 agreementId) public view returns (Escrow memory) {
+        return LexScrowStorage.getEscrow(agreementId);
+    }
+
+    /// @notice Check all conditions attached to the escrow for the given agreement
+    function conditionCheck(bytes32 agreementId) public view returns (bool) {
+        return LexScrowStorage.conditionCheck(agreementId);
+    }
+
+    /// @notice ERC721 receiver hook for safe transfers into escrow (moved here from LexScrowStorage)
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return this.onERC721Received.selector;
+    }
+
+    /// @notice ERC1155 receiver hook for safe transfers into escrow (moved here from LexScrowStorage)
+    function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
+        return this.onERC1155Received.selector;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

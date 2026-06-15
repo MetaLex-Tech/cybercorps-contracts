@@ -45,7 +45,10 @@ import {ERC20} from "../dependencies/openzeppelin-contracts/contracts/token/ERC2
 import {ERC721} from "../dependencies/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
 import {ERC721Enumerable} from "../dependencies/openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {DealManager, LexScroWLite} from "../src/DealManager.sol";
+import {DealManager, LexScrowStorage} from "../src/DealManager.sol";
+import {IDealManager} from "../src/interfaces/IDealManager.sol";
+import {ISecondaryTradeStorage} from "../src/interfaces/ISecondaryTradeStorage.sol";
+import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CertificateDetails, Endorsement} from "../src/storage/CyberCertPrinterStorage.sol";
@@ -437,7 +440,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
     function test_Secondary_PostOffer_Sell_EmitsEvent() public {
         vm.expectEmit(false, true, false, false); // don't check offerAgreementId (computed inside)
-        emit DealManager.OfferPosted(bytes32(0), seller, OfferSide.SELL, UNITS, CONSIDERATION);
+        emit ISecondaryTradeStorage.OfferPosted(bytes32(0), seller, OfferSide.SELL, UNITS, CONSIDERATION);
         vm.prank(seller);
         dm.postOffer(_defaultSellOfferParams());
     }
@@ -479,7 +482,7 @@ contract DealManagerSecondaryTradeTest is Test {
         p.certPrinter = address(0);
 
         vm.prank(seller);
-        vm.expectRevert(DealManager.MissingCertPrinter.selector);
+        vm.expectRevert(ISecondaryTradeStorage.MissingCertPrinter.selector);
         dm.postOffer(p);
     }
 
@@ -488,7 +491,7 @@ contract DealManagerSecondaryTradeTest is Test {
         p.certPrinter = address(0);
 
         vm.prank(buyer);
-        vm.expectRevert(DealManager.MissingCertPrinter.selector);
+        vm.expectRevert(ISecondaryTradeStorage.MissingCertPrinter.selector);
         dm.postOffer(p);
     }
 
@@ -520,7 +523,7 @@ contract DealManagerSecondaryTradeTest is Test {
         p.thresholdConditions = conds;
 
         vm.prank(seller);
-        vm.expectRevert(DealManager.AgreementConditionsNotMet.selector);
+        vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector);
         dm.postOffer(p);
     }
 
@@ -534,7 +537,7 @@ contract DealManagerSecondaryTradeTest is Test {
         p.thresholdConditions = conds;
 
         vm.prank(seller);
-        vm.expectRevert(DealManager.AgreementConditionsNotMet.selector);
+        vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector);
         dm.postOffer(p);
     }
 
@@ -550,7 +553,7 @@ contract DealManagerSecondaryTradeTest is Test {
         p.integrator = makeAddr("integrator");
 
         vm.prank(seller);
-        vm.expectRevert(DealManager.IntegratorNotWhitelisted.selector);
+        vm.expectRevert(ISecondaryTradeStorage.IntegratorNotWhitelisted.selector);
         dm.postOffer(p);
     }
 
@@ -575,7 +578,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.setMinTradeThreshold(UNITS + 1, 0);
 
         vm.prank(seller);
-        vm.expectRevert(DealManager.OfferBelowMinThreshold.selector);
+        vm.expectRevert(ISecondaryTradeStorage.OfferBelowMinThreshold.selector);
         dm.postOffer(_defaultSellOfferParams()); // offers exactly UNITS
     }
 
@@ -584,7 +587,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.setMinTradeThreshold(0, CONSIDERATION + 1);
 
         vm.prank(seller);
-        vm.expectRevert(DealManager.OfferBelowMinThreshold.selector);
+        vm.expectRevert(ISecondaryTradeStorage.OfferBelowMinThreshold.selector);
         dm.postOffer(_defaultSellOfferParams()); // offers exactly CONSIDERATION
     }
 
@@ -616,7 +619,7 @@ contract DealManagerSecondaryTradeTest is Test {
         });
 
         vm.prank(buyer);
-        vm.expectRevert(DealManager.PartialFillBelowMinThreshold.selector);
+        vm.expectRevert(ISecondaryTradeStorage.PartialFillBelowMinThreshold.selector);
         dm.acceptOffer(p);
     }
 
@@ -648,7 +651,7 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 offerId = _postSellOffer();
 
         vm.prank(buyer);
-        vm.expectRevert(DealManager.NotOfferor.selector);
+        vm.expectRevert(ISecondaryTradeStorage.NotOfferor.selector);
         dm.cancelOffer(offerId);
     }
 
@@ -978,7 +981,7 @@ contract DealManagerSecondaryTradeTest is Test {
         });
 
         vm.prank(buyer);
-        vm.expectRevert(DealManager.UnitsExceedOffer.selector);
+        vm.expectRevert(ISecondaryTradeStorage.UnitsExceedOffer.selector);
         dm.acceptOffer(p);
     }
 
@@ -1001,7 +1004,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         p.units = UNITS / 2 + 1; // one more than remaining (reverts before signature check)
         vm.prank(buyer);
-        vm.expectRevert(DealManager.UnitsExceedOffer.selector);
+        vm.expectRevert(ISecondaryTradeStorage.UnitsExceedOffer.selector);
         dm.acceptOffer(p);
     }
 
@@ -1065,7 +1068,7 @@ contract DealManagerSecondaryTradeTest is Test {
             openEndorsementSig: "sellerEndorsement"
         });
         vm.prank(seller);
-        vm.expectRevert(DealManager.OfferNotAvailable.selector);
+        vm.expectRevert(ISecondaryTradeStorage.OfferNotAvailable.selector);
         dm.acceptOffer(p);
     }
 
@@ -1085,7 +1088,7 @@ contract DealManagerSecondaryTradeTest is Test {
         });
 
         vm.prank(seller);
-        vm.expectRevert(DealManager.UnitsExceedOffer.selector);
+        vm.expectRevert(ISecondaryTradeStorage.UnitsExceedOffer.selector);
         dm.acceptOffer(p);
     }
 
@@ -1162,7 +1165,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.finalizeDeal(settlementId);
 
         vm.prank(seller);
-        vm.expectRevert(DealManager.OfferNotAvailable.selector);
+        vm.expectRevert(ISecondaryTradeStorage.OfferNotAvailable.selector);
         dm.cancelOffer(offerId);
     }
 
@@ -1195,7 +1198,7 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 settlementId = _acceptSellOffer(offerId);
 
         vm.expectEmit(true, false, false, false);
-        emit DealManager.SecondaryDealFinalized(settlementId, seller, buyer, CONSIDERATION);
+        emit ISecondaryTradeStorage.SecondaryDealFinalized(settlementId, seller, buyer, CONSIDERATION);
 
         vm.prank(keeper);
         dm.finalizeDeal(settlementId);
@@ -1318,7 +1321,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         uint256 buyerAfterVoid = paymentToken.balanceOf(buyer);
 
-        vm.expectRevert(LexScroWLite.DealVoided.selector);
+        vm.expectRevert(LexScrowStorage.DealVoided.selector);
         vm.prank(keeper);
         dm.voidExpiredDeal(settlementId, buyer, "");
 
@@ -1334,7 +1337,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.warp(dm.getSecondaryEscrow(settlementId).expiry + 1);
 
-        vm.expectRevert(LexScroWLite.DealAlreadyFinalized.selector);
+        vm.expectRevert(LexScrowStorage.DealAlreadyFinalized.selector);
         vm.prank(keeper);
         dm.voidExpiredDeal(settlementId, buyer, "");
     }
@@ -1678,7 +1681,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         uint256 buyerAfterVoid = paymentToken.balanceOf(buyer);
 
-        vm.expectRevert(LexScroWLite.DealVoided.selector);
+        vm.expectRevert(LexScrowStorage.DealVoided.selector);
         vm.prank(buyer);
         dm.voidSecondaryAgreement(settlementId, buyer, "");
 
@@ -1692,7 +1695,7 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(keeper);
         dm.finalizeDeal(settlementId);
 
-        vm.expectRevert(LexScroWLite.DealAlreadyFinalized.selector);
+        vm.expectRevert(LexScrowStorage.DealAlreadyFinalized.selector);
         vm.prank(buyer);
         dm.voidSecondaryAgreement(settlementId, buyer, "");
     }
@@ -1703,7 +1706,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         _voidSettlementBothParties(settlementId);
 
-        vm.expectRevert(LexScroWLite.DealVoided.selector);
+        vm.expectRevert(LexScrowStorage.DealVoided.selector);
         dm.syncVoidedSettlement(settlementId);
     }
 
@@ -1714,7 +1717,7 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(keeper);
         dm.finalizeDeal(settlementId);
 
-        vm.expectRevert(LexScroWLite.DealAlreadyFinalized.selector);
+        vm.expectRevert(LexScrowStorage.DealAlreadyFinalized.selector);
         dm.syncVoidedSettlement(settlementId);
     }
 
@@ -1725,7 +1728,7 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(keeper);
         dm.finalizeDeal(settlementId);
 
-        vm.expectRevert(LexScroWLite.DealAlreadyFinalized.selector);
+        vm.expectRevert(LexScrowStorage.DealAlreadyFinalized.selector);
         vm.prank(keeper);
         dm.finalizeDeal(settlementId);
     }
@@ -1736,7 +1739,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         _voidSettlementBothParties(settlementId);
 
-        vm.expectRevert(LexScroWLite.DealVoided.selector);
+        vm.expectRevert(LexScrowStorage.DealVoided.selector);
         vm.prank(keeper);
         dm.finalizeDeal(settlementId);
     }

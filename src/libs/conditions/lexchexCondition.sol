@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/interfaces/IERC165.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./baseCondition.sol";
 import "../../interfaces/ILexChex.sol";
-import "../LexScroWLite.sol";
+import {ILexScrowStorage} from "../../interfaces/ILexScrowStorage.sol";
 import "../auth.sol";
 
 /// @title  LexChexCondition - A condition that checks if the user has a valid LexChex accreditation
@@ -30,9 +30,9 @@ contract LexChexCondition is BaseCondition, BorgAuthACL {
     }
 
     function checkCondition(address _contract, bytes4 _functionSignature, bytes memory data) public view override returns (bool) {
-        LexScroWLite lexScrow = LexScroWLite(_contract);
+        ILexScrowStorage lexScrow = ILexScrowStorage(_contract);
         bytes32 agreementId = abi.decode(data, (bytes32));
-        
+
         // Get the counterparty address directly from escrow details
         address counterparty = lexScrow.getEscrowDetails(agreementId).counterParty;
         return ILexChex(lexchex).hasValidLexCheX(counterparty);

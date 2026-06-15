@@ -41,7 +41,15 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+import "../interfaces/ICyberCorp.sol";
+import "../interfaces/ICyberAgreementRegistry.sol";
+import "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICondition.sol";
+import {ILexScrowStorage} from "../interfaces/ILexScrowStorage.sol";
 
 enum TokenType {
     ERC20,
@@ -74,7 +82,30 @@ struct Escrow {
     EscrowStatus status;
 }
 
+/// @notice Escrow subsystem: storage layout plus the shared escrow logic, deployed once and linked
+/// into managers (DealManager / RoundManager) that DELEGATECALL into it (msg.sender / storage /
+/// address(this) preserved). Internal storage helpers are inlined; the shared escrow ops are `public`
+/// so they are linked + delegatecalled (on-chain dedup). Fee resolution is delegated back to the
+/// calling manager via `ILexScrowStorage(address(this))` so each manager keeps its own fee logic.
 library LexScrowStorage {
+    using SafeERC20 for IERC20;
+
+    error DealExpired();
+    error EscrowNotPending();
+    error EscrowNotPaid();
+    error CounterPartyNotSet();
+    error DealNotFullySigned();
+    error DealNotFinalized();
+    error DealAlreadyFinalized();
+    error DealNotVoided();
+    error DealNotPaid();
+    error DealVoided();
+
+    event DealVoidedAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
+    event DealPaidAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
+    event DealFinalizedAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
+    event FeeDistributed(bytes32 indexed agreementId, address indexed feeToken, uint256 totalFe);
+
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.lexscrow.storage.v1");
 
@@ -137,4 +168,210 @@ library LexScrowStorage {
         }
         conditions.pop();
     }
-} 
+
+    /// @notice Create a new escrow record for an agreement
+    /// @param agreementId Unique identifier of the agreement
+    /// @param counterParty Counterparty/buyer address
+    /// @param corpAssets Assets the company will deliver upon finalization
+    /// @param buyerAssets Assets the counterparty will deliver into escrow
+    /// @param expiry Unix timestamp after which the deal is considered expired
+    function createEscrow(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets, uint256 expiry) public {
+        bytes memory blankSignature = abi.encodePacked(bytes32(0));
+        Escrow memory newEscrow = Escrow({
+            agreementId: agreementId,
+            counterParty: counterParty,
+            corpAssets: corpAssets,
+            buyerAssets: buyerAssets,
+            signature: blankSignature,
+            expiry: expiry,
+            status: EscrowStatus.PENDING
+        });
+        setEscrow(agreementId, newEscrow);
+    }
+
+    /// @notice Update escrow counterparty and add endorsement to corp ERC721 certificates
+    /// @param agreementId Unique identifier of the agreement
+    /// @param counterParty Counterparty/buyer address to set
+    /// @param buyerName Human-readable buyer name stored in endorsements
+    function updateEscrow(bytes32 agreementId, address counterParty, string memory buyerName) public {
+        Escrow storage escrow = getEscrow(agreementId);
+        escrow.counterParty = counterParty;
+
+        Endorsement memory newEndorsement = Endorsement(
+            address(this),
+            block.timestamp,
+            escrow.signature,
+            getDealRegistry(),
+            agreementId,
+            escrow.counterParty,
+            buyerName
+        );
+        for(uint256 i = 0; i < escrow.corpAssets.length; i++) {
+            if(escrow.corpAssets[i].tokenType == TokenType.ERC721) {
+                ICyberCertPrinter(escrow.corpAssets[i].tokenAddress).addEndorsement(escrow.corpAssets[i].tokenId, newEndorsement);
+                // check if there is an escrowed officer signature in cybercorp
+                bytes memory officerSignature = "";
+                address corp = getCorp();
+                try ICyberCorp(corp).getEscrowedOfficerSignatureCount() returns (
+                    uint256 count
+                ) {
+                    if (count > 0) {
+                        try ICyberCorp(corp).getEscrowedOfficerSignature(0) returns (bytes memory sig) {
+                            officerSignature = sig;
+                        } catch {}
+                    }
+                } catch {}
+                if (officerSignature.length > 0) {
+                    ICyberCertPrinter(escrow.corpAssets[i].tokenAddress).addIssuerSignature(
+                        escrow.corpAssets[i].tokenId,
+                        officerSignature
+                    );
+                }
+            }
+        }
+    }
+
+    /// @notice Pull buyer assets into escrow and mark the escrow as PAID
+    /// @param agreementId Unique identifier of the agreement
+    function handleCounterPartyPayment(bytes32 agreementId) public {
+        Escrow storage escrow = getEscrow(agreementId);
+        if(escrow.status != EscrowStatus.PENDING) revert EscrowNotPending();
+        if(escrow.counterParty == address(0)) revert CounterPartyNotSet();
+
+        for(uint256 i = 0; i < escrow.buyerAssets.length; i++) {
+            if(escrow.buyerAssets[i].tokenType == TokenType.ERC20) {
+                IERC20(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(escrow.counterParty, address(this), escrow.buyerAssets[i].amount);
+            }
+            else if(escrow.buyerAssets[i].tokenType == TokenType.ERC721) {
+                IERC721(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(escrow.counterParty, address(this), escrow.buyerAssets[i].tokenId);
+            }
+            else if(escrow.buyerAssets[i].tokenType == TokenType.ERC1155) {
+                IERC1155(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(escrow.counterParty, address(this), escrow.buyerAssets[i].tokenId, escrow.buyerAssets[i].amount, "");
+            }
+        }
+
+        emit DealPaidAt(agreementId, getDealRegistry(), block.timestamp);
+        escrow.status = EscrowStatus.PAID;
+    }
+
+    /// @notice Void a PAID escrow and refund all buyer assets
+    /// @dev External callers should implement reentrancy guards
+    /// @param agreementId Unique identifier of the agreement
+    function voidAndRefund(bytes32 agreementId) public {
+        // Check: check status
+        Escrow storage escrow = getEscrow(agreementId);
+        if(escrow.status != EscrowStatus.PAID) revert EscrowNotPaid();
+        if(!ICyberAgreementRegistry(getDealRegistry()).isVoided(agreementId)) revert DealNotVoided();
+
+        // Effect: update status
+        voidEscrow(agreementId);
+
+        // Interaction: Refund buyer assets
+        for(uint256 i = 0; i < escrow.buyerAssets.length; i++) {
+            if(escrow.buyerAssets[i].tokenType == TokenType.ERC20) {
+                IERC20(escrow.buyerAssets[i].tokenAddress).safeTransfer(escrow.counterParty, escrow.buyerAssets[i].amount);
+            }
+            else if(escrow.buyerAssets[i].tokenType == TokenType.ERC721) {
+                IERC721(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), escrow.counterParty, escrow.buyerAssets[i].tokenId);
+            }
+            else if(escrow.buyerAssets[i].tokenType == TokenType.ERC1155) {
+                IERC1155(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), escrow.counterParty, escrow.buyerAssets[i].tokenId, escrow.buyerAssets[i].amount, "");
+            }
+        }
+    }
+
+    /// @notice Finalize a PAID escrow, transferring assets and distributing any fees
+    /// @dev External callers should implement reentrancy guards
+    /// @param agreementId Unique identifier of the agreement
+    function finalizeEscrow(bytes32 agreementId) public {
+        Escrow storage escrow = getEscrow(agreementId);
+
+        // Check: Check all conditions before proceeding
+        if(block.timestamp > escrow.expiry) revert DealExpired();
+        if(escrow.status != EscrowStatus.PAID) revert EscrowNotPaid();
+
+        // Effect: Update state before external calls
+        escrow.status = EscrowStatus.FINALIZED;
+        emit DealFinalizedAt(agreementId, getDealRegistry(), block.timestamp);
+
+        // Interaction: Transfer buyer assets to company and collect fees
+        for(uint256 i = 0; i < escrow.buyerAssets.length; i++) {
+            if(escrow.buyerAssets[i].tokenType == TokenType.ERC20) {
+                uint256 amountToCompany = escrow.buyerAssets[i].amount;
+                uint256 fee = 0;
+
+                // Check: if the asset is fee token
+                if (escrow.buyerAssets[i].isFee) {
+                    // Effect: Calculate fees. Fee logic lives on the calling manager (DealManager /
+                    // RoundManager) — call it back via ILexScrowStorage(address(this)) under delegatecall.
+                    fee = ILexScrowStorage(address(this)).computeFee(escrow.buyerAssets[i].amount);
+                    amountToCompany -= fee;
+
+                    emit FeeDistributed(agreementId, escrow.buyerAssets[i].tokenAddress, fee);
+                }
+
+                // Interaction: Distribute payment and fees
+                if (amountToCompany > 0) {
+                    IERC20(escrow.buyerAssets[i].tokenAddress).safeTransfer(ICyberCorp(getCorp()).companyPayable(), amountToCompany);
+                }
+                if (fee > 0) {
+                    IERC20(escrow.buyerAssets[i].tokenAddress).safeTransfer(ILexScrowStorage(address(this)).getPlatformPayable(), fee);
+                }
+            }
+            else if(escrow.buyerAssets[i].tokenType == TokenType.ERC721) {
+                IERC721(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), ICyberCorp(getCorp()).companyPayable(), escrow.buyerAssets[i].tokenId);
+            }
+            else if(escrow.buyerAssets[i].tokenType == TokenType.ERC1155) {
+                IERC1155(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(address(this), ICyberCorp(getCorp()).companyPayable(), escrow.buyerAssets[i].tokenId, escrow.buyerAssets[i].amount, "");
+            }
+        }
+
+        // Interaction: Transfer corp assets to counter party
+        for(uint256 i = 0; i < escrow.corpAssets.length; i++) {
+            if(escrow.corpAssets[i].tokenType == TokenType.ERC20) {
+                IERC20(escrow.corpAssets[i].tokenAddress).safeTransfer(escrow.counterParty, escrow.corpAssets[i].amount);
+            }
+            else if(escrow.corpAssets[i].tokenType == TokenType.ERC721) {
+                IERC721(escrow.corpAssets[i].tokenAddress).safeTransferFrom(address(this), escrow.counterParty, escrow.corpAssets[i].tokenId);
+            }
+            else if(escrow.corpAssets[i].tokenType == TokenType.ERC1155) {
+                IERC1155(escrow.corpAssets[i].tokenAddress).safeTransferFrom(address(this), escrow.counterParty, escrow.corpAssets[i].tokenId, escrow.corpAssets[i].amount, "");
+            }
+        }
+    }
+
+    /// @notice Check all conditions attached to the escrow for the given agreement
+    /// @param agreementId Unique identifier of the agreement
+    /// @return True if all conditions pass, false otherwise
+    function conditionCheck(bytes32 agreementId) public view returns (bool) {
+        ICondition[] storage conditions = getConditionsByEscrow(agreementId);
+        //convert bytes32 to bytes
+        bytes memory agreementIdBytes = abi.encodePacked(agreementId);
+
+        for(uint256 i = 0; i < conditions.length; i++) {
+            if(!ICondition(conditions[i]).checkCondition(address(this), msg.sig, agreementIdBytes))
+                return false;
+        }
+        return true;
+    }
+
+    /// @notice Mark an escrow as VOIDED and emit an event
+    /// @param agreementId Unique identifier of the agreement
+    function voidEscrow(bytes32 agreementId) public {
+        Escrow storage escrow = getEscrow(agreementId);
+        escrow.status = EscrowStatus.VOIDED;
+        emit DealVoidedAt(agreementId, getDealRegistry(), block.timestamp);
+    }
+
+    /// @notice Get escrow details for a given agreement id
+    /// @param agreementId Unique identifier of the agreement
+    /// @return Escrow struct containing current state
+    function getEscrowDetails(bytes32 agreementId) public view returns (Escrow memory) {
+        return getEscrow(agreementId);
+    }
+
+    // NOTE: fee resolution (computeFee / getPlatformPayable) is not declared here. As a library it
+    // cannot have overridable virtuals, so finalizeEscrow calls back into the manager via
+    // ILexScrowStorage(address(this)). The ERC721/ERC1155 receiver hooks live on the managers, since a
+    // library cannot expose externally-callable contract functions.
+}

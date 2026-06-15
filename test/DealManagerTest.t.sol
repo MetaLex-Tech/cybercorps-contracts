@@ -48,7 +48,9 @@ import {ERC721Enumerable} from "../dependencies/openzeppelin-contracts/contracts
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC1967} from "../dependencies/openzeppelin-contracts/contracts/interfaces/IERC1967.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
-import {DealManager, LexScroWLite} from "../src/DealManager.sol";
+import {DealManager, LexScrowStorage} from "../src/DealManager.sol";
+import {IDealManager} from "../src/interfaces/IDealManager.sol";
+import {IDealManagerStorage} from "../src/interfaces/IDealManagerStorage.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CertificateDetails, Endorsement} from "../src/storage/CyberCertPrinterStorage.sol";
@@ -364,7 +366,7 @@ contract DealManagerTest is Test {
 
     function test_PaymentFlow_ProposeDeal() public {
         // proposeDeal() is one of the two methods that'll pull certificates from the issuing company (first party)
-        // Unlike the more generic LexScroWLite, DealManager assumes the company's assets are certificates-only
+        // Unlike the more generic LexScrowStorage, DealManager assumes the company's assets are certificates-only
         // After the transaction, the company's certificates should be in escrow.
 
         // Deal configs
@@ -398,7 +400,7 @@ contract DealManagerTest is Test {
 
     function test_PaymentFlow_ProposeAndSignDeal() public {
         // proposeAndSignDeal() is one of the two methods that'll pull certificates from the issuing company (first party)
-        // Unlike the more generic LexScroWLite, DealManager assumes the company's assets are certificates-only
+        // Unlike the more generic LexScrowStorage, DealManager assumes the company's assets are certificates-only
         // The signature must be valid.
         // After the transaction, the company's certificates should be in escrow.
 
@@ -538,7 +540,7 @@ contract DealManagerTest is Test {
         );
 
         vm.expectEmit(true, true, true, true);
-        emit DealManager.DealFinalized(
+        emit IDealManagerStorage.DealFinalized(
             agreementId,
             alice,
             address(corp),
@@ -571,7 +573,7 @@ contract DealManagerTest is Test {
         );
 
         vm.expectEmit(true, true, true, true);
-        emit DealManager.DealFinalized(
+        emit IDealManagerStorage.DealFinalized(
             agreementId,
             bob,
             address(corp),
@@ -786,7 +788,7 @@ contract DealManagerTest is Test {
         );
 
         // Refund should fail because the deal is not voided
-        vm.expectRevert(LexScroWLite.DealNotVoided.selector);
+        vm.expectRevert(LexScrowStorage.DealNotVoided.selector);
         dm.refundVoidedDeal(agreementId);
     }
 
