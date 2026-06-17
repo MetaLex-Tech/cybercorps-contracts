@@ -71,6 +71,10 @@ contract IssuanceManagerMock {
     ) external returns (uint256) {
         return CyberCertPrinterMock(certAddress).mint(to);
     }
+
+    function voidCertificate(address certAddress, uint256 tokenId) external {
+        CyberCertPrinterMock(certAddress).burn(tokenId);
+    }
 }
 
 contract CyberCertPrinterMock is ERC721Enumerable {
@@ -90,6 +94,10 @@ contract CyberCertPrinterMock is ERC721Enumerable {
 
     function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (Endorsement memory) {
         return endorsements[tokenId][index];
+    }
+
+    function burn(uint256 tokenId) external {
+        _burn(tokenId);
     }
 }
 
@@ -806,6 +814,44 @@ contract DealManagerTest is Test {
     function test_RevertIf_VoidExpiredDeal_UnknownDeal() public {
         vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);
         dm.voidExpiredDeal(keccak256("unknown-deal"), alice, "");
+    }
+
+    function test_VoidExpiredDeal_VoidsCert() public {
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        uint256 expiry = block.timestamp + 1 days;
+
+        vm.prank(owner);
+        (bytes32 agreementId, uint256[] memory certIds) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            uint256(keccak256("DealManagerTest.Deal")),
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // TODO conditions
+            bytes32(0), // secretHash
+            expiry
+        );
+
+        // Cert is now in escrow (owned by DealManager)
+        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), address(dm));
+
+        vm.warp(expiry + 1);
+
+        // signer must be a party to the agreement (companyOwner); DealManager is the finalizer so no void sig is needed
+        dm.voidExpiredDeal(agreementId, companyOwner, "");
+
+        // Cert should be burned (voided) via IssuanceManager.voidCertificate
+        vm.expectRevert();
+        CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]); // burned token should revert on ownerOf
     }
 
     function test_RevertIf_RevokeDeal_UnknownDeal() public {
