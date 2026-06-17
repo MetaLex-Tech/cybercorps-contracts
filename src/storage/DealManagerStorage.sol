@@ -53,7 +53,6 @@ import "../interfaces/IDealManagerFactory.sol";
 import "../interfaces/ICondition.sol";
 import "../CyberCorpConstants.sol";
 import "./DealManagerFactoryStorage.sol";
-import {SecondaryTradeStorage} from "./SecondaryTradeStorage.sol";
 import {LexScrowStorage, Escrow, Token, TokenType, EscrowStatus} from "./LexScrowStorage.sol";
 import {IDealManagerStorage} from "../interfaces/IDealManagerStorage.sol";
 import {ILexScrowStorage} from "../interfaces/ILexScrowStorage.sol";
@@ -221,6 +220,7 @@ library DealManagerStorage {
         string memory name,
         string memory secret
     ) public {
+        if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
         address registry = LexScrowStorage.getDealRegistry();
         if(ICyberAgreementRegistry(registry).isVoided(agreementId)) revert LexScrowStorage.DealVoided();
         if(ICyberAgreementRegistry(registry).isFinalized(agreementId)) revert LexScrowStorage.DealAlreadyFinalized();
@@ -252,6 +252,7 @@ library DealManagerStorage {
         string memory name,
         string memory secret
     ) public {
+        if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
         address registry = LexScrowStorage.getDealRegistry();
         if(ICyberAgreementRegistry(registry).isVoided(agreementId)) revert LexScrowStorage.DealVoided();
         if(ICyberAgreementRegistry(registry).isFinalized(agreementId)) revert LexScrowStorage.DealAlreadyFinalized();
@@ -279,22 +280,21 @@ library DealManagerStorage {
         finalizeDeal(agreementId);
     }
 
-    /// @notice Finalizes a deal (checks signatures/conditions, settles escrow)
+    /// @notice Finalizes a primary deal (checks signatures/conditions, settles escrow)
     /// @dev nonReentrant is carried by the DealManager wrapper that delegatecalls here.
     function finalizeDeal(bytes32 agreementId) public {
+        if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
+
         address registry = LexScrowStorage.getDealRegistry();
         if (ICyberAgreementRegistry(registry).isVoided(agreementId)) revert LexScrowStorage.DealVoided();
         if (ICyberAgreementRegistry(registry).isFinalized(agreementId)) revert LexScrowStorage.DealAlreadyFinalized();
         if (!ICyberAgreementRegistry(registry).allPartiesSigned(agreementId)) revert LexScrowStorage.DealNotFullySigned();
 
-        if (SecondaryTradeStorage.hasSecondaryEscrow(agreementId)) {
-            SecondaryTradeStorage.finalizeSecondary(agreementId);
-        } else {
-            if (LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PAID) revert LexScrowStorage.DealNotPaid();
-            if (!LexScrowStorage.conditionCheck(agreementId)) revert ILexScrowStorage.AgreementConditionsNotMet();
-            ICyberAgreementRegistry(registry).finalizeContract(agreementId);
-            LexScrowStorage.finalizeEscrow(agreementId);
-        }
+        if (LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PAID) revert LexScrowStorage.DealNotPaid();
+        if (!LexScrowStorage.conditionCheck(agreementId)) revert ILexScrowStorage.AgreementConditionsNotMet();
+        ICyberAgreementRegistry(registry).finalizeContract(agreementId);
+        LexScrowStorage.finalizeEscrow(agreementId);
+
         emit IDealManagerStorage.DealFinalized(
             agreementId,
             msg.sender,
@@ -304,37 +304,35 @@ library DealManagerStorage {
         );
     }
 
-    /// @notice Voids an expired deal
+    /// @notice Voids an expired primary deal
     /// @dev nonReentrant is carried by the DealManager wrapper that delegatecalls here.
     function voidExpiredDeal(bytes32 agreementId, address signer, bytes memory signature) public {
-        address registry = LexScrowStorage.getDealRegistry();
+        if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
 
-        if (SecondaryTradeStorage.hasSecondaryEscrow(agreementId)) {
-            SecondaryTradeStorage.voidExpiredSecondary(agreementId, signer, signature);
-        } else {
-            Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
-            if (block.timestamp <= deal.expiry) revert IDealManagerStorage.DealNotExpired();
-            ICyberAgreementRegistry(registry).voidContractFor(agreementId, signer, signature);
-            for (uint256 i = 0; i < deal.corpAssets.length; i++) {
-                if (deal.corpAssets[i].tokenType == TokenType.ERC721) {
-                    getIssuanceManager().voidCertificate(
-                        deal.corpAssets[i].tokenAddress,
-                        deal.corpAssets[i].tokenId
-                    );
-                }
+        address registry = LexScrowStorage.getDealRegistry();
+        Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
+        if (block.timestamp <= deal.expiry) revert IDealManagerStorage.DealNotExpired();
+        ICyberAgreementRegistry(registry).voidContractFor(agreementId, signer, signature);
+        for (uint256 i = 0; i < deal.corpAssets.length; i++) {
+            if (deal.corpAssets[i].tokenType == TokenType.ERC721) {
+                getIssuanceManager().voidCertificate(
+                    deal.corpAssets[i].tokenAddress,
+                    deal.corpAssets[i].tokenId
+                );
             }
-            if (deal.status == EscrowStatus.PAID)
-                // Interaction: payment
-                LexScrowStorage.voidAndRefund(agreementId);
-            else if (deal.status == EscrowStatus.PENDING)
-                // Effect: update status
-                LexScrowStorage.voidEscrow(agreementId);
         }
+        if (deal.status == EscrowStatus.PAID)
+            // Interaction: payment
+            LexScrowStorage.voidAndRefund(agreementId);
+        else if (deal.status == EscrowStatus.PENDING)
+            // Effect: update status
+            LexScrowStorage.voidEscrow(agreementId);
     }
 
     /// @notice Revokes a pending deal
     /// @dev Access modifiers (if any) are carried by the DealManager wrapper that delegatecalls here.
     function revokeDeal(bytes32 agreementId, address signer, bytes memory signature) public {
+        if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
         if(msg.sender != signer) revert IDealManagerStorage.CounterPartyValueMismatch();
         if(LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PENDING)
             ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
@@ -346,6 +344,7 @@ library DealManagerStorage {
     /// @dev nonReentrant is carried by the DealManager wrapper that delegatecalls here.
     function signToVoid(bytes32 agreementId, address signer, bytes memory signature) public {
         // Check: status
+        if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
         if(msg.sender != signer) revert IDealManagerStorage.CounterPartyValueMismatch();
 
         // Effect: update status
@@ -358,6 +357,7 @@ library DealManagerStorage {
     /// @notice Refund a voided deal
     /// @dev nonReentrant is carried by the DealManager wrapper that delegatecalls here.
     function refundVoidedDeal(bytes32 agreementId) public {
+        if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
         // Interaction: Re-sync Deal Manager internal escrow to VOIDED, then refund
         LexScrowStorage.voidAndRefund(agreementId);
     }

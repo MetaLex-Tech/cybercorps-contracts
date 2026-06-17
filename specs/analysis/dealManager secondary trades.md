@@ -31,7 +31,7 @@ stateDiagram-v2
         SELL releases uncommitted units (units - unitsAccepted) immediately.
         BUY: refunds uncommitted consideration (consideration - paymentAccepted) immediately.
         Settlements already accepted will not cancel and will resolve on their own cadence:
-        finalized normally, or voided via the two-party voidSecondaryAgreement /
+        finalized normally, or voided via the two-party voidSecondaryTradeAgreement /
         expiry path. Their assets stay in custody until then.
     end note
     note right of FINALIZED
@@ -71,8 +71,8 @@ stateDiagram-v2
 stateDiagram-v2
     [*] --> ACCEPTED: acceptOffer()
     ACCEPTED --> FINALIZED: finalizeDeal()
-    ACCEPTED --> VOIDED: voidSecondaryAgreement() (both parties)
-    ACCEPTED --> VOIDED: syncVoidedSettlement()
+    ACCEPTED --> VOIDED: voidSecondaryTradeAgreement() (both parties)
+    ACCEPTED --> VOIDED: syncVoidedSecondaryTradeAgreement()
     ACCEPTED --> VOIDED: voidExpiredDeal()
     note left of ACCEPTED
         SELL: safeTransferFrom buyer, then escrow written as ACCEPTED.
@@ -86,9 +86,9 @@ stateDiagram-v2
         consuming this lot's reserved units as part of the cert mutation.
     end note
     note right of VOIDED
-        voidSecondaryAgreement: each party requests; VOIDED only once both have requested
+        voidSecondaryTradeAgreement: each party requests; VOIDED only once both have requested
         (the finalizer-vouched request channel; a lone request only records intent).
-        syncVoidedSettlement: anyone, once the registry already shows the agreement voided.
+        syncVoidedSecondaryTradeAgreement: anyone, once the registry already shows the agreement voided.
         voidExpiredDeal: past secEscrow.expiry.
         Acceptor's asset always returned immediately: SELL refunds the buyer's payment, BUY releases the seller's unit reservation.
         Offeror's asset stays in custody for the next fill, returned only if the offer has been cancelled:
@@ -104,8 +104,8 @@ stateDiagram-v2
 | *(none)*   | `acceptOffer()` — SELL offer                          | `ACCEPTED`  | `safeTransferFrom` buyer pulls payment; escrow written directly as ACCEPTED                                                                                                                                                  |
 | *(none)*   | `acceptOffer()` — BUY offer                           | `ACCEPTED`  | Funds already in contract from `postOffer()`; escrow written directly as ACCEPTED                                                                                                                                            |
 | `ACCEPTED` | `finalizeDeal()` — conditions met, before expiry      | `FINALIZED` | Reverts past `secEscrow.expiry`; pays seller (minus fee), splits fee to integrator/platform, calls `IssuanceManager.secondaryTransfer` to mint buyer cert and void/decrement seller cert, consuming the lot's reserved units |
-| `ACCEPTED` | `voidSecondaryAgreement()` — party requests void      | `VOIDED`    | Each party (offeror or counterparty) requests; the escrow flips to VOIDED only once both have requested (or it is past expiry). A lone request just records intent and the counterparty can still finalize.                  |
-| `ACCEPTED` | `syncVoidedSettlement()` — registry voided externally | `VOIDED`    | Callable by anyone; guards via `isVoided()` check                                                                                                                                                                            |
+| `ACCEPTED` | `voidSecondaryTradeAgreement()` — party requests void      | `VOIDED`    | Each party (offeror or counterparty) requests; the escrow flips to VOIDED only once both have requested (or it is past expiry). A lone request just records intent and the counterparty can still finalize.                  |
+| `ACCEPTED` | `syncVoidedSecondaryTradeAgreement()` — registry voided externally | `VOIDED`    | Callable by anyone; guards via `isVoided()` check                                                                                                                                                                            |
 | `ACCEPTED` | `voidExpiredDeal()` — past `secEscrow.expiry`         | `VOIDED`    | Callable past expiry only                                                                                                                                                                                                    |
 
 All `VOIDED` paths share the same asset handling, symmetric between sides. The acceptor's asset is returned
@@ -233,8 +233,8 @@ flowchart TD
     end
 
     subgraph SETTLEMENT_LEVEL["Settlement level"]
-        VSA["voidSecondaryAgreement()<br/>each party requests; voids once both have"]
-        SVS["syncVoidedSettlement()<br/>anyone, registry already voided"]
+        VSA["voidSecondaryTradeAgreement()<br/>each party requests; voids once both have"]
+        SVS["syncVoidedSecondaryTradeAgreement()<br/>anyone, registry already voided"]
         VED["voidExpiredDeal()<br/>past secEscrow.expiry"]
         SV["Settlement: VOIDED"]
         VSA --> SV
@@ -268,4 +268,4 @@ flowchart TD
 | Each reserved unit is released or consumed exactly once (amount-based reservations, no IDs) | finalize: `secondaryTransfer` consumes the lot; void: BUY releases the lot, SELL releases only if offer `CANCELLED` (else lot returns to free pool); cancel: releases only `units - unitsAccepted` (the free pool) — accepted lots resolve later at finalize or void |
 | Each unit of BUY consideration leaves custody exactly once (payout or refund)               | finalize: paid to seller; void: refunded only if offer `CANCELLED` (else returns to free pool); cancel: refunds only `consideration - paymentAccepted` (the free pool) — accepted lots resolve later at finalize or void                                             |
 | Fee always split: integrator portion + platform portion                                     | `_finalizeSecondaryEscrow`: `integratorFee + platformFee == totalFee`                                                                                                                                                                                                |
-| Conditions checked at `finalizeDeal()`, not at `acceptOffer()`                              | `_finalizeSecondaryEscrow`: `conditionCheck(agreementId)`                                                                                                                                                                                                            |
+| Closing conditions checked at `finalizeDeal()`, not at `acceptOffer()`                      | `_finalizeSecondaryEscrow` walks `offer.closingConditions` (snapshotted from DealManager config at `postOffer`); threshold conditions gate `postOffer`/`acceptOffer` instead                                                                                          |

@@ -100,6 +100,7 @@ library LexScrowStorage {
     error DealNotVoided();
     error DealNotPaid();
     error DealVoided();
+    error DealDoesNotExist();
 
     event DealVoidedAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
     event DealPaidAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
@@ -136,6 +137,10 @@ library LexScrowStorage {
 
     function getEscrow(bytes32 agreementId) internal view returns (Escrow storage) {
         return lexScrowStorage().escrows[agreementId];
+    }
+
+    function hasPrimaryEscrow(bytes32 agreementId) internal view returns (bool) {
+        return lexScrowStorage().escrows[agreementId].agreementId != bytes32(0);
     }
 
     function getConditionsByEscrow(bytes32 agreementId) internal view returns (ICondition[] storage) {

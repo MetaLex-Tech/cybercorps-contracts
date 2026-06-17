@@ -52,12 +52,10 @@ import "./DealManagerStorage.sol";
 import "./DealManagerFactoryStorage.sol";
 import {LexScrowStorage} from "./LexScrowStorage.sol";
 import {ISecondaryTradeStorage} from "../interfaces/ISecondaryTradeStorage.sol";
-import {IDealManagerStorage} from "../interfaces/IDealManagerStorage.sol";
-import {ILexScrowStorage} from "../interfaces/ILexScrowStorage.sol";
 
 enum OfferSide { SELL, BUY }
 
-enum OfferStatus { LIVE, CANCELLED, EXPIRED, PARTIALLY_ACCEPTED, FULLY_ACCEPTED, FINALIZED }
+enum OfferStatus { LIVE, CANCELLED, PARTIALLY_ACCEPTED, FULLY_ACCEPTED, FINALIZED }
 
 enum ExemptionPathway { RULE_144, SECTION_4A7, SECTION_4A1HALF, RULE_144A, REGULATION_S }
 
@@ -95,11 +93,11 @@ struct Offer {
     uint8 buyerHostingMode;         // buy offer-only: 0 = Direct, 1 = Administered; zero for sell offers
     address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
     bytes32[] settlementAgreementIds; // appended at each acceptOffer; length == 0 at postOffer (no buyer known yet)
-    address[] thresholdConditions;    // stored at postOffer; re-evaluated at acceptOffer (gates both)
+    address[] thresholdConditions;    // resolved from DealManager config at postOffer; re-evaluated at acceptOffer (gates both)
+    address[] closingConditions;      // snapshotted from DealManager config at postOffer; evaluated at finalize (gates asset transfer)
 }
 
 // Self-contained settlement escrow for secondary trades, keyed by settlementAgreementId.
-// Owns custody (payment in/out) and lifecycle (status, expiry) directly — no LexScrowStorage.Escrow companion.
 struct SecondaryEscrow {
     // TODO it should have an agreementId
     // custody + lifecycle
@@ -134,7 +132,6 @@ struct PostOfferParams {
     string[] offerorPartyValues;
     bytes offerorAgreementSig;
     bytes openEndorsementSig;       // sell offer-only
-    address[] thresholdConditions;
     string buyerName;               // buy offer-only: buyer's registered name for OwnerDetails; empty for sell offers
     uint8 buyerHostingMode;         // buy offer-only: 0 = Direct, 1 = Administered; zero for sell offers
     // TODO should it be validated? What if the user provided the wrong address?
@@ -158,16 +155,15 @@ struct AcceptOfferParams {
 /// @notice Diamond storage + secondary-trade business logic for DealManager.
 /// @dev The logic functions are `public`/`external` so the library is deployed separately and linked;
 /// DealManager calls them via DELEGATECALL (msg.sender / storage context preserved), keeping that logic out
-/// of DealManager's bytecode (EIP-170). Events/errors are duplicated here (same selectors/topics as the
-/// copies DealManager declares for its ABI); shared escrow events/errors are qualified via `LexScrowStorage`.
+/// of DealManager's bytecode (EIP-170). This path's events/errors live in ISecondaryTradeStorage and are
+/// referenced as ISecondaryTradeStorage.X
 library SecondaryTradeStorage {
     using SafeERC20 for IERC20;
 
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.secondary.trade.storage.v1");
 
     // This library's events/errors are declared once in ISecondaryTradeStorage and referenced as
-    // ISecondaryTradeStorage.X below. Shared symbols are referenced from their owning interfaces:
-    // AgreementConditionsNotMet (ILexScrowStorage) and DealNotExpired (IDealManagerStorage).
+    // ISecondaryTradeStorage.X below.
 
     struct SecondaryTradeData {
         mapping(bytes32 => Offer) offers;              // keyed by offerAgreementId
@@ -175,6 +171,13 @@ library SecondaryTradeStorage {
         uint256 minTradeUnits;
         uint256 minTradeConsideration;                 // 0 = disabled
         address defaultIntegrator;
+        // Condition config (owner-managed, per-DealManager). Threshold conditions gate post/accept;
+        // closing conditions gate finalize. Resolved/snapshotted onto each Offer at postOffer so an offer
+        // is governed by the rules in effect when it was posted. Offerors never supply condition addresses.
+        address[] universalThresholdConditions;                  // L1 — factory-seeded; applies to every offer
+        address[] spvThresholdConditions;                        // L2 — added at SPV onboarding; applies to every offer
+        mapping(ExemptionPathway => address[]) pathwayThresholdConditions; // L3 — selected by offer.exemptionPathway
+        address[] closingConditions;                             // default closing set
     }
 
     function secondaryTradeStorage() internal pure returns (SecondaryTradeData storage ds) {
@@ -215,6 +218,12 @@ library SecondaryTradeStorage {
         offerId = keccak256(abi.encode(msg.sender, params.templateId, params.salt));
         if (ds.offers[offerId].offeror != address(0)) revert ISecondaryTradeStorage.OfferAlreadyExists();
 
+        // Resolve conditions from this DealManager's config (never from the caller): threshold = L1+L2+L3,
+        // closing = the default set. Both are snapshotted onto the offer so it is governed by the rules in
+        // effect at posting; the kill switch still bites later since GlobalKill reads live state internally.
+        address[] memory resolvedThreshold = _resolveThresholdConditions(ds, params.exemptionPathway);
+        address[] memory resolvedClosing = ds.closingConditions;
+
         // Store offer record before evaluating conditions so seller-side conditions that call
         // getOffer(offerId) see the populated record; a condition revert rolls this write back.
         ds.offers[offerId] = Offer({
@@ -248,7 +257,10 @@ library SecondaryTradeStorage {
             settlementAgreementIds: new bytes32[](0),
             // Persisted so they can be re-evaluated at acceptOffer (spec §conditions: threshold
             // conditions gate both posting and acceptance).
-            thresholdConditions: params.thresholdConditions
+            thresholdConditions: resolvedThreshold,
+            // Persisted so they can be evaluated at finalize (spec §conditions: closing conditions
+            // gate asset transfer).
+            closingConditions: resolvedClosing
         });
 
         // Evaluate threshold conditions (offer is now readable via getOffer). At posting there are no
@@ -270,7 +282,7 @@ library SecondaryTradeStorage {
     /// @notice Cancels a non-terminal offer and returns its uncommitted assets to the offeror
     /// @dev Only the free pool (uncommitted units / consideration) is refunded/released. Settlements already
     /// accepted stay ACCEPTED and resolve on their own — finalized normally, or voided via the two-party
-    /// voidSecondaryAgreement / expiry path; their assets stay in DealManager custody until then.
+    /// voidSecondaryTradeAgreement / expiry path; their assets stay in DealManager custody until then.
     /// @param offerId Offer to cancel
     function cancelOffer(bytes32 offerId) external {
         Offer storage offer = secondaryTradeStorage().offers[offerId];
@@ -438,7 +450,7 @@ library SecondaryTradeStorage {
             tokenId: tokenId,
             dealMetadata: dealMetadata
         });
-        emit LexScrowStorage.DealPaidAt(settlementAgreementId, registry, block.timestamp);
+        emit ISecondaryTradeStorage.SecondaryDealPaid(settlementAgreementId, offer.paymentToken, partialConsideration);
 
         // Record settlement for buyer-facing threshold condition lookup
         offer.settlementAgreementIds.push(settlementAgreementId);
@@ -461,20 +473,23 @@ library SecondaryTradeStorage {
         emit ISecondaryTradeStorage.OfferAccepted(params.offerId, settlementAgreementId, msg.sender, params.units);
     }
 
-    /// @notice Finalizes the secondary settlement branch of DealManager.finalizeDeal
-    /// @dev Caller (DealManager.finalizeDeal) has already enforced not-voided / not-finalized / all-signed.
-    function finalizeSecondary(bytes32 agreementId) external {
+    /// @notice Finalizes an accepted secondary-trade settlement (pays the seller, executes the ownership change)
+    /// @dev Secondary counterpart of DealManager.finalizeDeal. Self-contained: the local escrow status is the
+    /// source of truth, so _requireActiveSecondaryEscrow rejects already-finalized/voided settlements; the
+    /// settlement is created fully-signed at acceptOffer, so no all-parties-signed check is needed here.
+    function finalizeSecondaryTradeAgreement(bytes32 agreementId) external {
         address registry = LexScrowStorage.getDealRegistry();
         _requireActiveSecondaryEscrow(secondaryTradeStorage().escrows[agreementId]);
         ICyberAgreementRegistry(registry).finalizeContract(agreementId);
         _finalizeSecondaryEscrow(agreementId);
     }
 
-    /// @notice Voids the secondary settlement branch of DealManager.voidExpiredDeal
-    function voidExpiredSecondary(bytes32 agreementId, address signer, bytes memory signature) external {
+    /// @notice Voids an expired secondary-trade settlement and refunds/releases its escrowed assets
+    /// @dev Secondary counterpart of DealManager.voidExpiredDeal.
+    function voidExpiredSecondaryTradeAgreement(bytes32 agreementId, address signer, bytes memory signature) external {
         SecondaryEscrow storage secEscrow = secondaryTradeStorage().escrows[agreementId];
         _requireActiveSecondaryEscrow(secEscrow);
-        if (block.timestamp <= secEscrow.expiry) revert IDealManagerStorage.DealNotExpired();
+        if (block.timestamp <= secEscrow.expiry) revert ISecondaryTradeStorage.SecondaryDealNotExpired();
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
         _voidSecondaryDeal(agreementId);
     }
@@ -486,7 +501,7 @@ library SecondaryTradeStorage {
     /// @param agreementId Settlement agreement to void
     /// @param signer Caller's address (must equal msg.sender)
     /// @param signature Caller's EIP-712 void signature, forwarded to the agreement registry
-    function voidSecondaryAgreement(bytes32 agreementId, address signer, bytes memory signature) external {
+    function voidSecondaryTradeAgreement(bytes32 agreementId, address signer, bytes memory signature) external {
         if (msg.sender != signer) revert ISecondaryTradeStorage.NotSigner();
         SecondaryEscrow storage secEscrow = secondaryTradeStorage().escrows[agreementId];
         _requireActiveSecondaryEscrow(secEscrow);
@@ -504,10 +519,10 @@ library SecondaryTradeStorage {
     /// @notice Syncs a secondary settlement that was voided directly in the agreement registry
     /// @dev Callable by anyone; guards against double-void via the terminal-state checks
     /// @param agreementId Settlement agreement that was already voided in the registry
-    function syncVoidedSettlement(bytes32 agreementId) external {
+    function syncVoidedSecondaryTradeAgreement(bytes32 agreementId) external {
         SecondaryEscrow storage secEscrow = secondaryTradeStorage().escrows[agreementId];
         _requireActiveSecondaryEscrow(secEscrow);
-        if (!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId)) revert LexScrowStorage.DealNotVoided();
+        if (!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId)) revert ISecondaryTradeStorage.SecondaryDealNotVoided();
         _voidSecondaryDeal(agreementId);
     }
 
@@ -533,8 +548,80 @@ library SecondaryTradeStorage {
         for (uint256 i = 0; i < conditions.length; i++) {
             // note: always double check if `Offer` is properly updated because `checkCondition()` depends on it
             if (!ICondition(conditions[i]).checkCondition(address(this), msg.sig, offerIdData))
-                revert ILexScrowStorage.AgreementConditionsNotMet();
+                revert ISecondaryTradeStorage.SecondaryConditionsNotMet(conditions[i]);
         }
+    }
+
+    /// @dev Builds an offer's threshold set from this DealManager's config: L1 (universal) ++ L2 (per-SPV)
+    /// ++ L3 (the subset registered for the offer's exemption pathway). Insertion order is preserved so
+    /// failures surface deterministically. Offerors choose the pathway, never the condition addresses.
+    function _resolveThresholdConditions(SecondaryTradeData storage ds, ExemptionPathway pathway)
+        internal view returns (address[] memory resolved)
+    {
+        address[] storage universal = ds.universalThresholdConditions;
+        address[] storage spv = ds.spvThresholdConditions;
+        address[] storage pathwayConds = ds.pathwayThresholdConditions[pathway];
+
+        resolved = new address[](universal.length + spv.length + pathwayConds.length);
+        uint256 k;
+        for (uint256 i = 0; i < universal.length; i++) resolved[k++] = universal[i];
+        for (uint256 i = 0; i < spv.length; i++) resolved[k++] = spv[i];
+        for (uint256 i = 0; i < pathwayConds.length; i++) resolved[k++] = pathwayConds[i];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Condition config management (linked logic; called via delegatecall by DealManager owner setters)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function addUniversalThresholdCondition(address condition) external {
+        _addCondition(secondaryTradeStorage().universalThresholdConditions, condition);
+    }
+
+    function removeUniversalThresholdConditionAt(uint256 index) external {
+        _removeConditionAt(secondaryTradeStorage().universalThresholdConditions, index);
+    }
+
+    function addSpvThresholdCondition(address condition) external {
+        _addCondition(secondaryTradeStorage().spvThresholdConditions, condition);
+    }
+
+    function removeSpvThresholdConditionAt(uint256 index) external {
+        _removeConditionAt(secondaryTradeStorage().spvThresholdConditions, index);
+    }
+
+    function addPathwayThresholdCondition(ExemptionPathway pathway, address condition) external {
+        _addCondition(secondaryTradeStorage().pathwayThresholdConditions[pathway], condition);
+    }
+
+    function removePathwayThresholdConditionAt(ExemptionPathway pathway, uint256 index) external {
+        _removeConditionAt(secondaryTradeStorage().pathwayThresholdConditions[pathway], index);
+    }
+
+    function addClosingCondition(address condition) external {
+        _addCondition(secondaryTradeStorage().closingConditions, condition);
+    }
+
+    function removeClosingConditionAt(uint256 index) external {
+        _removeConditionAt(secondaryTradeStorage().closingConditions, index);
+    }
+
+    /// @dev Appends to an owner-managed condition list, rejecting the zero address and duplicates so the
+    /// list behaves as a set. Lists are small (admin-curated), so the linear dedupe scan is cheap.
+    function _addCondition(address[] storage list, address condition) internal {
+        if (condition == address(0)) revert ISecondaryTradeStorage.InvalidSecondaryCondition();
+        for (uint256 i = 0; i < list.length; i++) {
+            if (list[i] == condition) revert ISecondaryTradeStorage.SecondaryConditionAlreadyExists();
+        }
+        list.push(condition);
+    }
+
+    /// @dev Swap-pop removal — order within the list is not significant for membership, only for the
+    /// deterministic evaluation order of an already-posted offer (which snapshots its own copy anyway).
+    function _removeConditionAt(address[] storage list, uint256 index) internal {
+        uint256 len = list.length;
+        if (index >= len) revert ISecondaryTradeStorage.SecondaryConditionIndexOutOfBounds();
+        list[index] = list[len - 1];
+        list.pop();
     }
 
     /// @dev Terminal offer states: immutable, not cancellable, and never restored by a void
@@ -552,12 +639,16 @@ library SecondaryTradeStorage {
             : (secEscrow.counterparty, offer.offeror);
     }
 
-    /// @dev Reverts unless the settlement escrow is active (ACCEPTED). Terminal states get
-    /// explicit errors so callers never act on an already-settled escrow.
+    /// @dev Reverts unless the settlement escrow exists and is active (ACCEPTED). The existence check
+    /// must come first: SecondaryEscrowStatus.ACCEPTED == 0, so an absent escrow would otherwise read
+    /// as ACCEPTED and pass. This positively validates the secondary id space (mirrors the primary
+    /// side's LexScrowStorage.hasPrimaryEscrow guard). Terminal states get explicit errors so callers
+    /// never act on an already-settled escrow.
     function _requireActiveSecondaryEscrow(SecondaryEscrow storage secEscrow) internal view {
-        if (secEscrow.status == SecondaryEscrowStatus.FINALIZED) revert LexScrowStorage.DealAlreadyFinalized();
-        if (secEscrow.status == SecondaryEscrowStatus.VOIDED) revert LexScrowStorage.DealVoided();
-        if (secEscrow.status != SecondaryEscrowStatus.ACCEPTED) revert LexScrowStorage.DealNotPaid();
+        if (secEscrow.counterparty == address(0)) revert ISecondaryTradeStorage.SecondaryEscrowNotFound();
+        if (secEscrow.status == SecondaryEscrowStatus.FINALIZED) revert ISecondaryTradeStorage.SecondaryDealAlreadyFinalized();
+        if (secEscrow.status == SecondaryEscrowStatus.VOIDED) revert ISecondaryTradeStorage.SecondaryDealAlreadyVoided();
+        if (secEscrow.status != SecondaryEscrowStatus.ACCEPTED) revert ISecondaryTradeStorage.SecondaryDealNotPaid();
     }
 
     function _finalizeSecondaryEscrow(bytes32 agreementId) internal {
@@ -565,14 +656,13 @@ library SecondaryTradeStorage {
         Offer storage offer = secondaryTradeStorage().offers[secEscrow.offerId];
 
         _requireActiveSecondaryEscrow(secEscrow);
-        if (block.timestamp > secEscrow.expiry) revert LexScrowStorage.DealExpired();
-        // Inline condition check (mirrors LexScrowStorage.conditionCheck) — all attached conditions must pass
-        ICondition[] storage conditions = LexScrowStorage.getConditionsByEscrow(agreementId);
-        bytes memory agreementIdBytes = abi.encodePacked(agreementId);
+        if (block.timestamp > secEscrow.expiry) revert ISecondaryTradeStorage.SecondaryDealExpired();
+        address[] storage conditions = offer.closingConditions;
+        bytes memory agreementIdBytes = abi.encode(agreementId);
         for (uint256 i = 0; i < conditions.length; i++) {
             // note: always double check if `Offer` is properly updated because `checkCondition()` depends on it
             if (!ICondition(conditions[i]).checkCondition(address(this), msg.sig, agreementIdBytes))
-                revert ILexScrowStorage.AgreementConditionsNotMet();
+                revert ISecondaryTradeStorage.SecondaryConditionsNotMet(conditions[i]);
         }
 
         // Effect: mark finalized before external calls
@@ -583,8 +673,6 @@ library SecondaryTradeStorage {
         if (offer.status != OfferStatus.CANCELLED && offer.unitsFinalized == offer.units) {
             offer.status = OfferStatus.FINALIZED;
         }
-        emit LexScrowStorage.DealFinalizedAt(agreementId, LexScrowStorage.getDealRegistry(), block.timestamp);
-
         (address seller, address buyer) = _settlementParties(offer, secEscrow);
         // Fee math (mirrors DealManager.computeFee / getPlatformPayable) computed directly from the factory
         address upgradeFactory = DealManagerStorage.getUpgradeFactory();
@@ -596,7 +684,7 @@ library SecondaryTradeStorage {
         }
 
         if (fee > 0) {
-            emit LexScrowStorage.FeeDistributed(agreementId, secEscrow.paymentToken, fee);
+            emit ISecondaryTradeStorage.SecondaryFeeDistributed(agreementId, secEscrow.paymentToken, fee);
             address feeDestination = secEscrow.feeDestination;
             if (feeDestination != address(0)) {
                 uint256 integratorRatio = IDealManagerFactory(upgradeFactory).getIntegratorFeeRatio();
@@ -640,7 +728,7 @@ library SecondaryTradeStorage {
 
         bool wasAccepted = secEscrow.status == SecondaryEscrowStatus.ACCEPTED;
         secEscrow.status = SecondaryEscrowStatus.VOIDED;
-        emit LexScrowStorage.DealVoidedAt(agreementId, LexScrowStorage.getDealRegistry(), block.timestamp);
+        emit ISecondaryTradeStorage.SecondaryDealVoided(agreementId);
         if (wasAccepted) {
             // Refund mirrors the reservation logic above, with sides swapped.
             // SELL: payment was pulled per-settlement at acceptOffer — always refund the buyer.

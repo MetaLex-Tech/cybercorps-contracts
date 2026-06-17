@@ -792,6 +792,39 @@ contract DealManagerTest is Test {
         dm.refundVoidedDeal(agreementId);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Id-space validation: primary entrypoints require a primary escrow. An id with no primary escrow
+    // (an unknown id, or a secondary-trade settlement — which never creates a LexScrow escrow) reverts
+    // DealDoesNotExist. The guard runs first, so caller/state checks are not reached.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function test_RevertIf_FinalizeDeal_UnknownDeal() public {
+        vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);
+        dm.finalizeDeal(keccak256("unknown-deal"));
+    }
+
+    function test_RevertIf_VoidExpiredDeal_UnknownDeal() public {
+        vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);
+        dm.voidExpiredDeal(keccak256("unknown-deal"), alice, "");
+    }
+
+    function test_RevertIf_RevokeDeal_UnknownDeal() public {
+        vm.prank(alice);
+        vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);
+        dm.revokeDeal(keccak256("unknown-deal"), alice, "");
+    }
+
+    function test_RevertIf_SignToVoid_UnknownDeal() public {
+        vm.prank(alice);
+        vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);
+        dm.signToVoid(keccak256("unknown-deal"), alice, "");
+    }
+
+    function test_RevertIf_RefundVoidedDeal_UnknownDeal() public {
+        vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);
+        dm.refundVoidedDeal(keccak256("unknown-deal"));
+    }
+
     function test_UpgradeNextDealManager() public {
         vm.startPrank(owner);
         DealManagerFactory(dmFactory).setRefImplementation(address(new MockDealManagerVTest()));

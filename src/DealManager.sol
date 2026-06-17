@@ -508,6 +508,62 @@ contract DealManager is
         SecondaryTradeStorage.secondaryTradeStorage().defaultIntegrator = integrator;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Secondary trade — condition config (owner-managed; snapshotted onto each offer at postOffer)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // L1 — universal threshold conditions (apply to every offer)
+    function addUniversalThresholdCondition(address condition) external onlyAdmin {
+        SecondaryTradeStorage.addUniversalThresholdCondition(condition);
+    }
+
+    function removeUniversalThresholdConditionAt(uint256 index) external onlyAdmin {
+        SecondaryTradeStorage.removeUniversalThresholdConditionAt(index);
+    }
+
+    // L2 — per-SPV threshold conditions (apply to every offer)
+    function addSpvThresholdCondition(address condition) external onlyAdmin {
+        SecondaryTradeStorage.addSpvThresholdCondition(condition);
+    }
+
+    function removeSpvThresholdConditionAt(uint256 index) external onlyAdmin {
+        SecondaryTradeStorage.removeSpvThresholdConditionAt(index);
+    }
+
+    // L3 — per-pathway threshold conditions (selected by offer.exemptionPathway)
+    function addPathwayThresholdCondition(ExemptionPathway pathway, address condition) external onlyAdmin {
+        SecondaryTradeStorage.addPathwayThresholdCondition(pathway, condition);
+    }
+
+    function removePathwayThresholdConditionAt(ExemptionPathway pathway, uint256 index) external onlyAdmin {
+        SecondaryTradeStorage.removePathwayThresholdConditionAt(pathway, index);
+    }
+
+    // Closing conditions (apply to every offer; evaluated at finalize)
+    function addClosingCondition(address condition) external onlyAdmin {
+        SecondaryTradeStorage.addClosingCondition(condition);
+    }
+
+    function removeClosingConditionAt(uint256 index) external onlyAdmin {
+        SecondaryTradeStorage.removeClosingConditionAt(index);
+    }
+
+    function getUniversalThresholdConditions() external view returns (address[] memory) {
+        return SecondaryTradeStorage.secondaryTradeStorage().universalThresholdConditions;
+    }
+
+    function getSpvThresholdConditions() external view returns (address[] memory) {
+        return SecondaryTradeStorage.secondaryTradeStorage().spvThresholdConditions;
+    }
+
+    function getPathwayThresholdConditions(ExemptionPathway pathway) external view returns (address[] memory) {
+        return SecondaryTradeStorage.secondaryTradeStorage().pathwayThresholdConditions[pathway];
+    }
+
+    function getClosingConditions() external view returns (address[] memory) {
+        return SecondaryTradeStorage.secondaryTradeStorage().closingConditions;
+    }
+
     function getOffer(bytes32 offerId) external view returns (Offer memory) {
         return SecondaryTradeStorage.secondaryTradeStorage().offers[offerId];
     }
@@ -530,7 +586,7 @@ contract DealManager is
     /// @notice Cancels a non-terminal offer and returns its uncommitted assets to the offeror
     /// @dev Only the free pool (uncommitted units / consideration) is refunded/released. Settlements already
     /// accepted stay ACCEPTED and resolve on their own — finalized normally, or voided via the two-party
-    /// voidSecondaryAgreement / expiry path; their assets stay in DealManager custody until then.
+    /// voidSecondaryTradeAgreement / expiry path; their assets stay in DealManager custody until then.
     /// @param offerId Offer to cancel
     function cancelOffer(bytes32 offerId) external nonReentrant {
         SecondaryTradeStorage.cancelOffer(offerId);
@@ -542,6 +598,18 @@ contract DealManager is
         return SecondaryTradeStorage.acceptOffer(params);
     }
 
+    /// @notice Finalizes an accepted secondary-trade settlement. Thin wrapper over the linked logic.
+    /// @dev Secondary counterpart of finalizeDeal; the two paths are kept fully separate.
+    function finalizeSecondaryTradeAgreement(bytes32 agreementId) external nonReentrant {
+        SecondaryTradeStorage.finalizeSecondaryTradeAgreement(agreementId);
+    }
+
+    /// @notice Voids an expired secondary-trade settlement. Thin wrapper over the linked logic.
+    /// @dev Secondary counterpart of voidExpiredDeal; the two paths are kept fully separate.
+    function voidExpiredSecondaryTradeAgreement(bytes32 agreementId, address signer, bytes memory signature) external nonReentrant {
+        SecondaryTradeStorage.voidExpiredSecondaryTradeAgreement(agreementId, signer, signature);
+    }
+
     /// @notice Records a party's request to void an ACCEPTED secondary settlement before it is finalized or expires
     /// @dev Finalizer-vouched request channel: the registry voids the agreement only once BOTH parties have
     /// requested (or it is past expiry). The local escrow is settled only when that actually happens, keeping
@@ -549,15 +617,15 @@ contract DealManager is
     /// @param agreementId Settlement agreement to void
     /// @param signer Caller's address (must equal msg.sender)
     /// @param signature Caller's EIP-712 void signature, forwarded to the agreement registry
-    function voidSecondaryAgreement(bytes32 agreementId, address signer, bytes memory signature) external nonReentrant {
-        SecondaryTradeStorage.voidSecondaryAgreement(agreementId, signer, signature);
+    function voidSecondaryTradeAgreement(bytes32 agreementId, address signer, bytes memory signature) external nonReentrant {
+        SecondaryTradeStorage.voidSecondaryTradeAgreement(agreementId, signer, signature);
     }
 
     /// @notice Syncs a secondary settlement that was voided directly in the agreement registry
     /// @dev Callable by anyone; guards against double-void via the terminal-state checks
     /// @param agreementId Settlement agreement that was already voided in the registry
-    function syncVoidedSettlement(bytes32 agreementId) external nonReentrant {
-        SecondaryTradeStorage.syncVoidedSettlement(agreementId);
+    function syncVoidedSecondaryTradeAgreement(bytes32 agreementId) external nonReentrant {
+        SecondaryTradeStorage.syncVoidedSecondaryTradeAgreement(agreementId);
     }
 
     /// @notice UUPS upgrade authorization
