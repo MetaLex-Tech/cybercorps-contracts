@@ -66,14 +66,19 @@ acceptors (partial fills). Buyer-facing conditions instead check `offer.settleme
 
 ### Two-array lifecycle
 
-DealManager maintains two separate condition arrays per deal:
+Both sets are owner-managed DealManager config (never offeror-supplied). At `postOffer` they are resolved
+and **snapshotted onto the offer** — so an offer is governed by the rules in effect when it was posted —
+and stored on the secondary-trade record itself (self-contained; no dependency on the primary-deal escrow
+library's `conditionsByEscrow`):
 
-| Array                         | Evaluated at              | Entry points                          |
-|-------------------------------|---------------------------|---------------------------------------|
-| `thresholdConditionsByEscrow` | Offer posted and accepted | `postOffer`, `acceptOffer`            |
-| `conditionsByEscrow`          | Finalization              | `finalizeDeal`, `signAndFinalizeDeal` |
+| Array                        | Evaluated at              | Entry points                          |
+|------------------------------|---------------------------|---------------------------------------|
+| `offer.thresholdConditions`  | Offer posted and accepted | `postOffer`, `acceptOffer`            |
+| `offer.closingConditions`    | Finalization              | `finalizeDeal`, `signAndFinalizeDeal` |
 
 Every condition in the array is walked in sequence at each entry point. Any failure reverts immediately.
+Snapshotting the addresses does not blunt the kill switch: `GlobalKillCondition` reads its live state
+internally, so a switch raised after posting still halts an in-flight settlement at finalize.
 
 ### Within threshold: posting vs. acceptance
 
@@ -95,16 +100,17 @@ point without filtering.
 
 ### Two condition sets (§4.1.5)
 
-DealManager holds two distinct condition sets, scoped differently:
+DealManager holds two distinct condition sets, both owner-managed and snapshotted onto the offer at `postOffer`:
 
-| Set                                                     | Scope                        | Attached to escrow?          | Default contents                                       |
-|---------------------------------------------------------|------------------------------|------------------------------|--------------------------------------------------------|
-| Closing-condition set (`conditionsByEscrow`)            | Every secondary-trade escrow | Yes — attached at acceptance | `GlobalKillCondition`, `TimeSettlementPeriodCondition` |
-| Threshold-condition set (`thresholdConditionsByEscrow`) | DealManager (not the escrow) | No                           | See below                                              |
+| Set                     | Scope                  | Snapshotted onto offer?       | Default contents                                       |
+|-------------------------|------------------------|-------------------------------|--------------------------------------------------------|
+| Closing-condition set   | Every offer            | Yes — at `postOffer`          | `GlobalKillCondition`, `TimeSettlementPeriodCondition` |
+| Threshold-condition set | Every offer (L1+L2+L3) | Yes — at `postOffer`          | See below                                              |
 
-The closing-condition set is attached to the escrow object at acceptance and is evaluated at finalization. Threshold
-conditions gate the escrow's creation — they are not part of the escrow record and are evaluated by DealManager at
-`postOffer` and `acceptOffer`.
+The closing-condition set is copied onto the offer at `postOffer` and evaluated at finalization (gating asset
+transfer). The threshold-condition set is resolved (L1 universal ++ L2 per-SPV ++ L3 per-pathway) and copied onto the
+offer at `postOffer`, then evaluated at `postOffer` and re-evaluated at `acceptOffer` (gating contract formation).
+Offerors supply only the exemption pathway, never condition addresses.
 
 ### Default closing set
 
