@@ -156,8 +156,7 @@ contract SecConditionMock {
     function checkCondition(address, bytes4, bytes memory) external view returns (bool) { return _pass; }
 }
 
-// Mirrors a real seller-side threshold condition: it reads the offer back via getOffer(offerId)
-// (per specs/analysis/conditions.md) and derives eligibility from its fields. Returns false if the
+// Mirrors a real seller-side threshold condition: Returns false if the
 // offer is unreadable — which is what the pre-fix ordering produced, since the condition loop ran
 // before the offer was stored.
 contract SecOfferReadingConditionMock {
@@ -560,7 +559,7 @@ contract DealManagerSecondaryTradeTest is Test {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // postOffer — threshold conditions
+    // threshold conditions in an Offer
     // ─────────────────────────────────────────────────────────────────────────
 
     // Conditions are owner-managed DealManager config (snapshotted onto the offer at postOffer), not
@@ -614,16 +613,13 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.postOffer(p);
     }
 
-    // Regression: threshold conditions must see the populated offer via getOffer(offerId).
-    // The condition mock reads the offer back during checkCondition and rejects an empty one;
-    // before the fix the loop ran ahead of the store, so it observed a zeroed offer and reverted.
-    function test_PostOffer_ThresholdConditionSeesPopulatedOffer() public {
+    function test_PostOffer_OfferHasThresholdConditions() public {
         address[] memory conds = new address[](1);
         conds[0] = address(new SecOfferReadingConditionMock());
+        _registerThresholdConditions(conds);
 
         PostOfferParams memory p = _defaultSellOfferParams();
-        p.salt = uint256(keccak256("test_PostOffer_ThresholdConditionSeesPopulatedOffer"));
-        _registerThresholdConditions(conds);
+        p.salt = uint256(keccak256("test_PostOffer_OfferHasThresholdConditions"));
 
         vm.prank(seller);
         // SecOfferReadingConditionMock.checkCondition() would fail if `Offer` is not updated
@@ -635,20 +631,13 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(offer.tokenId, sellerTokenId, "tokenId must be readable by conditions");
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // acceptOffer — threshold conditions re-evaluated for the acceptor
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // A buyer-facing threshold condition short-circuits at posting (no acceptor yet) and enforces at
-    // acceptance. Pre-fix, acceptOffer never re-ran threshold conditions, so a disallowed acceptor
-    // could finalize a trade. The condition must now reject the acceptance.
     function test_RevertIf_AcceptOffer_BuyerFacingThresholdConditionFails() public {
         address[] memory conds = new address[](1);
         conds[0] = address(new SecBuyerFacingConditionMock(false)); // posting passes, acceptance fails
+        _registerThresholdConditions(conds);
 
         PostOfferParams memory p = _defaultSellOfferParams();
         p.salt = uint256(keccak256("test_RevertIf_AcceptOffer_BuyerFacingThresholdConditionFails"));
-        _registerThresholdConditions(conds);
 
         vm.prank(seller);
         bytes32 offerId = dm.postOffer(p); // posting succeeds: condition short-circuits with no acceptor
@@ -674,10 +663,10 @@ contract DealManagerSecondaryTradeTest is Test {
     function test_AcceptOffer_BuyerFacingThresholdConditionPasses() public {
         address[] memory conds = new address[](1);
         conds[0] = address(new SecBuyerFacingConditionMock(true)); // passes at posting and acceptance
+        _registerThresholdConditions(conds);
 
         PostOfferParams memory p = _defaultSellOfferParams();
         p.salt = uint256(keccak256("test_AcceptOffer_BuyerFacingThresholdConditionPasses"));
-        _registerThresholdConditions(conds);
 
         vm.prank(seller);
         bytes32 offerId = dm.postOffer(p);
@@ -686,8 +675,48 @@ contract DealManagerSecondaryTradeTest is Test {
         assertTrue(settlementId != bytes32(0), "acceptance should succeed when the acceptor passes conditions");
     }
 
+    function test_ThresholdConditions_PathwayConditionAppliesToMatchingPathway() public {
+        address succeeding = address(new SecConditionMock(true));
+        vm.prank(owner);
+        dm.addPathwayThresholdCondition(ExemptionPathway.RULE_144, succeeding);
+
+        // RULE_144 offer: should have the L3 condition
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.salt = uint256(keccak256("test_Config_Pathway_144"));
+        p.exemptionPathway = ExemptionPathway.RULE_144;
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+        assertEq(dm.getOffer(offerId).thresholdConditions.length, 1, "pathway condition should be applied to Rule 144 offer");
+    }
+
+    function test_ThresholdConditions_PathwayConditionNotAppliesToOtherPathway() public {
+        address failing = address(new SecConditionMock(false));
+        vm.prank(owner);
+        dm.addPathwayThresholdCondition(ExemptionPathway.RULE_144, failing);
+
+        // SECTION_4A7 offer: the RULE_144 condition is not in its resolved set, so posting succeeds.
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.salt = uint256(keccak256("test_Config_Pathway_4a7"));
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+        assertEq(dm.getOffer(offerId).thresholdConditions.length, 0, "no pathway condition applied to 4(a)(7) offer");
+    }
+
+    function test_RevertIf_ThresholdConditions_PathwayConditionFailsForMatchingPathway() public {
+        address failing = address(new SecConditionMock(false));
+        vm.prank(owner);
+        dm.addPathwayThresholdCondition(ExemptionPathway.RULE_144, failing);
+
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.salt = uint256(keccak256("test_Config_Pathway_144"));
+        p.exemptionPathway = ExemptionPathway.RULE_144;
+        vm.prank(seller);
+        vm.expectRevert(abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, failing));
+        dm.postOffer(p);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
-    // condition config — owner-managed threshold/closing sets, resolved onto each offer at postOffer
+    // threshold condition configurations
     // ─────────────────────────────────────────────────────────────────────────
 
     // L1 ++ L2 ++ L3 are concatenated in order and snapshotted onto the offer at postOffer; the offeror
@@ -712,41 +741,65 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(resolved[2], l3, "L3 last");
     }
 
-    // L3 is keyed by the offer's exemption pathway: a condition registered for a different pathway
-    // must not apply. RULE_144's failing condition leaves a SECTION_4A7 offer unaffected.
-    function test_Config_PathwayConditionOnlyAppliesToMatchingPathway() public {
-        address failing = address(new SecConditionMock(false));
-        vm.prank(owner);
-        dm.addPathwayThresholdCondition(ExemptionPathway.RULE_144, failing);
-
-        // SECTION_4A7 offer: the RULE_144 condition is not in its resolved set, so posting succeeds.
-        PostOfferParams memory p = _defaultSellOfferParams();
-        p.salt = uint256(keccak256("test_Config_Pathway_4a7"));
-        vm.prank(seller);
-        bytes32 offerId = dm.postOffer(p);
-        assertEq(dm.getOffer(offerId).thresholdConditions.length, 0, "no pathway condition applied to 4(a)(7)");
-    }
-
-    function test_RevertIf_Config_PathwayConditionFailsForMatchingPathway() public {
-        address failing = address(new SecConditionMock(false));
-        vm.prank(owner);
-        dm.addPathwayThresholdCondition(ExemptionPathway.RULE_144, failing);
-
-        PostOfferParams memory p = _defaultSellOfferParams();
-        p.salt = uint256(keccak256("test_Config_Pathway_144"));
-        p.exemptionPathway = ExemptionPathway.RULE_144;
-        vm.prank(seller);
-        vm.expectRevert(abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, failing));
-        dm.postOffer(p);
-    }
-
-    function test_RevertIf_Config_AddZeroAddressCondition() public {
+    // Zero-address rejection — per threshold layer (L1/L2/L3).
+    function test_RevertIf_Config_AddUniversalZeroAddressCondition() public {
         vm.prank(owner);
         vm.expectRevert(ISecondaryTradeStorage.InvalidSecondaryCondition.selector);
         dm.addUniversalThresholdCondition(address(0));
     }
 
-    function test_RevertIf_Config_AddDuplicateCondition() public {
+    function test_RevertIf_Config_AddSpvZeroAddressCondition() public {
+        vm.prank(owner);
+        vm.expectRevert(ISecondaryTradeStorage.InvalidSecondaryCondition.selector);
+        dm.addSpvThresholdCondition(address(0));
+    }
+
+    function test_RevertIf_Config_AddPathwayZeroAddressCondition() public {
+        vm.prank(owner);
+        vm.expectRevert(ISecondaryTradeStorage.InvalidSecondaryCondition.selector);
+        dm.addPathwayThresholdCondition(ExemptionPathway.RULE_144, address(0));
+    }
+
+    // Closing-set zero-address rejection (same guarded add path as the threshold layers).
+    function test_RevertIf_Config_AddClosingZeroAddressCondition() public {
+        vm.prank(owner);
+        vm.expectRevert(ISecondaryTradeStorage.InvalidSecondaryCondition.selector);
+        dm.addClosingCondition(address(0));
+    }
+
+    // Duplicate rejection — per threshold layer (L1/L2/L3).
+    function test_RevertIf_Config_AddUniversalDuplicateCondition() public {
+        address c = address(new SecConditionMock(true));
+        vm.prank(owner);
+        dm.addUniversalThresholdCondition(c);
+
+        vm.prank(owner);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryConditionAlreadyExists.selector);
+        dm.addUniversalThresholdCondition(c);
+    }
+
+    function test_RevertIf_Config_AddSpvDuplicateCondition() public {
+        address c = address(new SecConditionMock(true));
+        vm.prank(owner);
+        dm.addSpvThresholdCondition(c);
+
+        vm.prank(owner);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryConditionAlreadyExists.selector);
+        dm.addSpvThresholdCondition(c);
+    }
+
+    function test_RevertIf_Config_AddPathwayDuplicateCondition() public {
+        address c = address(new SecConditionMock(true));
+        vm.prank(owner);
+        dm.addPathwayThresholdCondition(ExemptionPathway.RULE_144, c);
+
+        vm.prank(owner);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryConditionAlreadyExists.selector);
+        dm.addPathwayThresholdCondition(ExemptionPathway.RULE_144, c);
+    }
+
+    // Closing-set duplicate rejection (same guarded add path as the threshold layers).
+    function test_RevertIf_Config_AddClosingDuplicateCondition() public {
         address c = address(new SecConditionMock(true));
         vm.prank(owner);
         dm.addClosingCondition(c);
@@ -756,14 +809,33 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.addClosingCondition(c);
     }
 
-    function test_RevertIf_Config_RemoveIndexOutOfBounds() public {
+    // Out-of-bounds removal reverts — per threshold layer (L1/L2/L3).
+    function test_RevertIf_Config_RemoveUniversalIndexOutOfBounds() public {
         vm.prank(owner);
         vm.expectRevert(ISecondaryTradeStorage.SecondaryConditionIndexOutOfBounds.selector);
         dm.removeUniversalThresholdConditionAt(0);
     }
 
-    // Swap-pop removal: removing index 0 of [a,b] leaves [b].
-    function test_Config_RemoveConditionSwapPop() public {
+    function test_RevertIf_Config_RemoveSpvIndexOutOfBounds() public {
+        vm.prank(owner);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryConditionIndexOutOfBounds.selector);
+        dm.removeSpvThresholdConditionAt(0);
+    }
+
+    function test_RevertIf_Config_RemovePathwayIndexOutOfBounds() public {
+        vm.prank(owner);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryConditionIndexOutOfBounds.selector);
+        dm.removePathwayThresholdConditionAt(ExemptionPathway.RULE_144, 0);
+    }
+
+    function test_RevertIf_Config_RemoveClosingIndexOutOfBounds() public {
+        vm.prank(owner);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryConditionIndexOutOfBounds.selector);
+        dm.removeClosingConditionAt(0);
+    }
+
+    // Swap-pop removal (L1 universal): removing index 0 of [a,b] leaves [b].
+    function test_Config_RemoveUniversalConditionSwapPop() public {
         address a = address(new SecConditionMock(true));
         address b = address(new SecConditionMock(true));
         vm.prank(owner); dm.addUniversalThresholdCondition(a);
@@ -777,11 +849,87 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(remaining[0], b, "swap-pop moved the last element into the hole");
     }
 
-    function test_RevertIf_Config_AddByNonAdmin() public {
+    // Swap-pop removal (L2 per-SPV): removing index 0 of [a,b] leaves [b].
+    function test_Config_RemoveSpvConditionSwapPop() public {
+        address a = address(new SecConditionMock(true));
+        address b = address(new SecConditionMock(true));
+        vm.prank(owner); dm.addSpvThresholdCondition(a);
+        vm.prank(owner); dm.addSpvThresholdCondition(b);
+
+        vm.prank(owner);
+        dm.removeSpvThresholdConditionAt(0);
+
+        address[] memory remaining = dm.getSpvThresholdConditions();
+        assertEq(remaining.length, 1, "one condition remains");
+        assertEq(remaining[0], b, "swap-pop moved the last element into the hole");
+    }
+
+    // Swap-pop removal (L3 per-pathway): removing index 0 of [a,b] leaves [b]; keyed by pathway.
+    function test_Config_RemovePathwayConditionSwapPop() public {
+        address a = address(new SecConditionMock(true));
+        address b = address(new SecConditionMock(true));
+        vm.prank(owner); dm.addPathwayThresholdCondition(ExemptionPathway.RULE_144, a);
+        vm.prank(owner); dm.addPathwayThresholdCondition(ExemptionPathway.RULE_144, b);
+
+        vm.prank(owner);
+        dm.removePathwayThresholdConditionAt(ExemptionPathway.RULE_144, 0);
+
+        address[] memory remaining = dm.getPathwayThresholdConditions(ExemptionPathway.RULE_144);
+        assertEq(remaining.length, 1, "one condition remains");
+        assertEq(remaining[0], b, "swap-pop moved the last element into the hole");
+    }
+
+    // Swap-pop removal (closing set): removing index 0 of [a,b] leaves [b].
+    function test_Config_RemoveClosingConditionSwapPop() public {
+        address a = address(new SecConditionMock(true));
+        address b = address(new SecConditionMock(true));
+        vm.prank(owner); dm.addClosingCondition(a);
+        vm.prank(owner); dm.addClosingCondition(b);
+
+        vm.prank(owner);
+        dm.removeClosingConditionAt(0);
+
+        address[] memory remaining = dm.getClosingConditions();
+        assertEq(remaining.length, 1, "one condition remains");
+        assertEq(remaining[0], b, "swap-pop moved the last element into the hole");
+    }
+
+    // Every onlyAdmin secondary-trade config function must reject a non-admin caller.
+    function test_RevertIf_ConfigByNonAdmin() public {
         address c = address(new SecConditionMock(true));
-        vm.prank(makeAddr("stranger"));
+        vm.startPrank(makeAddr("stranger"));
+
+        vm.expectRevert();
+        dm.setMinTradeThreshold(1, 1);
+
+        vm.expectRevert();
+        dm.setDefaultIntegrator(address(0));
+
         vm.expectRevert();
         dm.addUniversalThresholdCondition(c);
+
+        vm.expectRevert();
+        dm.removeUniversalThresholdConditionAt(0);
+
+        vm.expectRevert();
+        dm.addSpvThresholdCondition(c);
+
+        vm.expectRevert();
+        dm.removeSpvThresholdConditionAt(0);
+
+        vm.expectRevert();
+        dm.addPathwayThresholdCondition(ExemptionPathway.RULE_144, c);
+
+        vm.expectRevert();
+        dm.removePathwayThresholdConditionAt(ExemptionPathway.RULE_144, 0);
+
+        vm.expectRevert();
+        dm.addClosingCondition(c);
+
+        vm.expectRevert();
+        dm.removeClosingConditionAt(0);
+
+        vm.stopPrank();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
