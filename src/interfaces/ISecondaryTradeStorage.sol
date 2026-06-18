@@ -52,9 +52,9 @@ interface ISecondaryTradeStorage {
     event OfferPosted(bytes32 indexed offerId, address indexed offeror, OfferSide side, uint256 units, uint256 consideration);
     event OfferCancelled(bytes32 indexed offerId, address indexed offeror);
     event OfferAccepted(bytes32 indexed offerId, bytes32 indexed settlementAgreementId, address indexed acceptor, uint256 units);
-    event SecondaryDealPaid(bytes32 indexed agreementId, address paymentToken, uint256 amount);
-    event SecondaryDealFinalized(bytes32 indexed agreementId, address seller, address buyer, uint256 consideration);
-    event SecondaryDealVoided(bytes32 indexed agreementId);
+    event SecondaryTradeAgreementPaid(bytes32 indexed agreementId, address paymentToken, uint256 amount);
+    event SecondaryTradeAgreementFinalized(bytes32 indexed agreementId, address seller, address buyer, uint256 consideration);
+    event SecondaryTradeAgreementVoided(bytes32 indexed agreementId);
     event SecondaryFeeDistributed(bytes32 indexed agreementId, address indexed feeToken, uint256 fee);
 
     error OfferNotAvailable();
@@ -71,12 +71,11 @@ interface ISecondaryTradeStorage {
     /// @notice Caller is not the signer they claim to be (signer must equal msg.sender)
     error NotSigner();
     error SecondaryEscrowNotFound();
-    error SecondaryDealAlreadyFinalized();
-    error SecondaryDealAlreadyVoided();
-    error SecondaryDealNotPaid();
-    error SecondaryDealExpired();
-    error SecondaryDealNotExpired();
-    error SecondaryDealNotVoided();
+    error SecondaryTradeAgreementAlreadyFinalized();
+    error SecondaryTradeAgreementAlreadyVoided();
+    error SecondaryTradeAgreementExpired();
+    error SecondaryTradeAgreementNotExpired();
+    error SecondaryTradeAgreementNotVoided();
     error SecondaryConditionsNotMet(address condition);
     /// @notice Condition address supplied to a config setter is the zero address
     error InvalidSecondaryCondition();
