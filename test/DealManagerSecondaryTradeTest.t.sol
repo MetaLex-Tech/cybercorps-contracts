@@ -312,7 +312,7 @@ contract DealManagerSecondaryTradeTest is Test {
         });
     }
 
-    function _defaultBidParams() internal view returns (PostOfferParams memory p) {
+    function _defaultBuyOfferParams() internal view returns (PostOfferParams memory p) {
         p = PostOfferParams({
             side: OfferSide.BUY,
             certPrinter: address(certPrinter),
@@ -364,7 +364,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
     function _postBid() internal returns (bytes32 offerAgreementId) {
         vm.prank(buyer);
-        offerAgreementId = dm.postOffer(_defaultBidParams());
+        offerAgreementId = dm.postOffer(_defaultBuyOfferParams());
     }
 
     function _acceptSellOffer(bytes32 offerAgreementId) internal returns (bytes32 settlementAgreementId) {
@@ -550,7 +550,7 @@ contract DealManagerSecondaryTradeTest is Test {
     }
 
     function test_RevertIf_PostOffer_MissingCertPrinter_Bid() public {
-        PostOfferParams memory p = _defaultBidParams();
+        PostOfferParams memory p = _defaultBuyOfferParams();
         p.certPrinter = address(0);
 
         vm.prank(buyer);
@@ -894,6 +894,33 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(remaining[0], b, "swap-pop moved the last element into the hole");
     }
 
+    function test_Config_GetMinTradeThreshold() public {
+        vm.prank(owner);
+        dm.setMinTradeThreshold(UNITS, CONSIDERATION);
+
+        (uint256 units, uint256 consideration) = dm.getMinTradeThreshold();
+        assertEq(units, UNITS, "min trade units");
+        assertEq(consideration, CONSIDERATION, "min trade consideration");
+    }
+
+    function test_Config_GetDefaultIntegrator() public {
+        dmFactory.setIsIntegratorWhitelisted(true);
+        address integrator = makeAddr("defaultIntegrator");
+
+        vm.prank(owner);
+        dm.setDefaultIntegrator(integrator);
+
+        assertEq(dm.getDefaultIntegrator(), integrator, "default integrator");
+    }
+
+    function test_RevertIf_SetDefaultIntegrator_NotWhitelisted() public {
+        dmFactory.setIsIntegratorWhitelisted(false);
+
+        vm.prank(owner);
+        vm.expectRevert(ISecondaryTradeStorage.IntegratorNotWhitelisted.selector);
+        dm.setDefaultIntegrator(makeAddr("integrator"));
+    }
+
     // Every onlyAdmin secondary-trade config function must reject a non-admin caller.
     function test_RevertIf_ConfigByNonAdmin() public {
         address c = address(new SecConditionMock(true));
@@ -964,7 +991,7 @@ contract DealManagerSecondaryTradeTest is Test {
     // postOffer - Min trade thresholds
     // ─────────────────────────────────────────────────────────────────────────
 
-    function test_RevertIf_PostOffer_BelowMinUnitsThreshold() public {
+    function test_RevertIf_PostOffer_BelowMinUnits() public {
         vm.prank(owner);
         dm.setMinTradeThreshold(UNITS + 1, 0);
 
@@ -973,7 +1000,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.postOffer(_defaultSellOfferParams()); // offers exactly UNITS
     }
 
-    function test_RevertIf_PostOffer_BelowMinConsiderationThreshold() public {
+    function test_RevertIf_PostOffer_BelowMinConsideration() public {
         vm.prank(owner);
         dm.setMinTradeThreshold(0, CONSIDERATION + 1);
 
@@ -982,16 +1009,35 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.postOffer(_defaultSellOfferParams()); // offers exactly CONSIDERATION
     }
 
+    function test_RevertIf_PostOffer_ZeroUnitsWithFloorsDisabled() public {
+        // Floors left disabled (never set), so the min-threshold check is a no-op. A zero-unit offer
+        // must still revert — otherwise it would mint an empty, un-acceptable offer.
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.units = 0;
+
+        vm.prank(seller);
+        vm.expectRevert(ISecondaryTradeStorage.BelowMinTradeThreshold.selector);
+        dm.postOffer(p);
+    }
+
     function test_PostOffer_PassesAtMinThreshold() public {
         vm.prank(owner);
         dm.setMinTradeThreshold(UNITS, CONSIDERATION);
 
-        vm.prank(seller);
-        bytes32 offerId = dm.postOffer(_defaultSellOfferParams()); // exactly at threshold
-        assertTrue(offerId != bytes32(0));
+        {
+            vm.prank(seller);
+            bytes32 offerId = dm.postOffer(_defaultSellOfferParams()); // exactly at threshold
+            assertTrue(offerId != bytes32(0));
+        }
+
+        {
+            vm.prank(seller);
+            bytes32 offerId = dm.postOffer(_defaultBuyOfferParams()); // exactly at threshold
+            assertTrue(offerId != bytes32(0));
+        }
     }
 
-    function test_RevertIf_AcceptOffer_PartialFillBelowMinThreshold() public {
+    function test_RevertIf_AcceptOffer_PartialFillBelowMinUnit() public {
         vm.prank(owner);
         dm.setMinTradeThreshold(UNITS, 0); // require full fill
 
@@ -1025,6 +1071,28 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS / 2, // pro-rata consideration = CONSIDERATION / 2, below min
+            buyerName: "Bob",
+            buyerHostingMode: 0,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: "",
+            openEndorsementSig: ""
+        });
+
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.BelowMinTradeThreshold.selector);
+        dm.acceptOffer(p);
+    }
+
+    function test_RevertIf_AcceptOffer_ZeroUnitsWithFloorsDisabled() public {
+        // Floors left disabled (never set), so the min-threshold check is a no-op. A zero-unit fill
+        // must still revert — otherwise it would mint an empty settlement.
+        bytes32 offerId = _postSellOffer();
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: 0,
             buyerName: "Bob",
             buyerHostingMode: 0,
             adminMultisig: address(0),
@@ -1539,7 +1607,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         // Finalize lot B (the last lot): offer reaches FINALIZED, reservation fully consumed, custody drained.
         vm.expectEmit(true, false, false, false);
-        emit ISecondaryTradeStorage.SecondaryDealFinalized(settlementIdB, seller, buyer, lotB);
+        emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(settlementIdB, seller, buyer, lotB);
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementIdB);
 
@@ -1591,7 +1659,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         // Finalize lot B (the last lot): bid reaches FINALIZED, reservation fully consumed, custody drained.
         vm.expectEmit(true, false, false, false);
-        emit ISecondaryTradeStorage.SecondaryDealFinalized(settlementIdB, seller, buyer, lotB);
+        emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(settlementIdB, seller, buyer, lotB);
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementIdB);
 
@@ -1716,7 +1784,7 @@ contract DealManagerSecondaryTradeTest is Test {
     // ─────────────────────────────────────────────────────────────────────────
 
     function test_VoidExpiredSecondaryTradeAgreement() public {
-        // Representative for the expiry path: voidExpired converges on the same _voidSecondaryDeal as the
+        // Representative for the expiry path: voidExpired converges on the same _voidSecondaryTradeAgreement as the
         // void/sync paths, so one peer-level case suffices (the before/after-cancel branches are covered
         // through the void path). On a non-cancelled offer the expired settlement voids → offer reverts
         // to LIVE, the acceptor (buyer) is refunded, custody drains, and the SELL reservation is HELD
@@ -1752,7 +1820,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         uint256 buyerAfterVoid = paymentToken.balanceOf(buyer);
 
-        vm.expectRevert(ISecondaryTradeStorage.SecondaryDealAlreadyVoided.selector);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryTradeAgreementAlreadyVoided.selector);
         vm.prank(keeper);
         dm.voidExpiredSecondaryTradeAgreement(settlementId, buyer, "");
 
@@ -1768,7 +1836,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.warp(dm.getSecondaryEscrow(settlementId).expiry + 1);
 
-        vm.expectRevert(ISecondaryTradeStorage.SecondaryDealAlreadyFinalized.selector);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryTradeAgreementAlreadyFinalized.selector);
         vm.prank(keeper);
         dm.voidExpiredSecondaryTradeAgreement(settlementId, buyer, "");
     }
@@ -1780,7 +1848,7 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 settlementId = _acceptSellOffer(offerId);
 
         // Not warped past expiry.
-        vm.expectRevert(ISecondaryTradeStorage.SecondaryDealNotExpired.selector);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryTradeAgreementNotExpired.selector);
         vm.prank(keeper);
         dm.voidExpiredSecondaryTradeAgreement(settlementId, buyer, "");
 
@@ -1995,7 +2063,7 @@ contract DealManagerSecondaryTradeTest is Test {
     function test_VoidSecondaryTradeAgreement_Sell_BeforeOfferCancellation() public {
         // Pairs with VoidSecondaryTradeAgreement_Sell_AfterOfferCancellation: same finalized + voided +
         // free mixed state, but here the void happens BEFORE the cancel. The order flips the offeror-
-        // asset branch (SecondaryTradeStorage `_voidSecondaryDeal`). A SELL offer's units are reserved at
+        // asset branch (SecondaryTradeStorage `_voidSecondaryTradeAgreement`). A SELL offer's units are reserved at
         // postOffer, so while the offer is still open the voided lot's units stay reserved (return to the
         // offer's free pool, NOT released); the later cancel releases them. The acceptor's asset is
         // returned immediately either way — here the buyer's consideration is refunded at the void. This
@@ -2099,7 +2167,7 @@ contract DealManagerSecondaryTradeTest is Test {
     function test_VoidSecondaryTradeAgreement_Buy_BeforeOfferCancellation() public {
         // Pairs with VoidSecondaryTradeAgreement_Buy_AfterOfferCancellation: same finalized + voided +
         // free mixed state, but here the void happens BEFORE the cancel. The order flips the void refund
-        // branch (SecondaryTradeStorage `_voidSecondaryDeal`): while the offer is still open the voided
+        // branch (SecondaryTradeStorage `_voidSecondaryTradeAgreement`): while the offer is still open the voided
         // lot's consideration returns to the free pool and stays in custody (no direct refund); the
         // later cancel then sweeps it out. Either way every unit of consideration leaves custody exactly
         // once — finalized lot via payout, voided lot via the free pool then the cancel refund.
@@ -2176,7 +2244,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         uint256 buyerAfterVoid = paymentToken.balanceOf(buyer);
 
-        vm.expectRevert(ISecondaryTradeStorage.SecondaryDealAlreadyVoided.selector);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryTradeAgreementAlreadyVoided.selector);
         vm.prank(buyer);
         dm.voidSecondaryTradeAgreement(settlementId, buyer, "");
 
@@ -2190,7 +2258,7 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementId);
 
-        vm.expectRevert(ISecondaryTradeStorage.SecondaryDealAlreadyFinalized.selector);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryTradeAgreementAlreadyFinalized.selector);
         vm.prank(buyer);
         dm.voidSecondaryTradeAgreement(settlementId, buyer, "");
     }
@@ -2201,7 +2269,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         _voidSettlementBothParties(settlementId);
 
-        vm.expectRevert(ISecondaryTradeStorage.SecondaryDealAlreadyVoided.selector);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryTradeAgreementAlreadyVoided.selector);
         dm.syncVoidedSecondaryTradeAgreement(settlementId);
     }
 
@@ -2212,7 +2280,7 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementId);
 
-        vm.expectRevert(ISecondaryTradeStorage.SecondaryDealAlreadyFinalized.selector);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryTradeAgreementAlreadyFinalized.selector);
         dm.syncVoidedSecondaryTradeAgreement(settlementId);
     }
 
@@ -2226,7 +2294,7 @@ contract DealManagerSecondaryTradeTest is Test {
         registry.voidContractFor(settlementId, buyer, _voidSig(settlementId, buyer, buyerKey));
         assertFalse(registry.isVoided(settlementId), "lone registry request: not voided yet");
 
-        vm.expectRevert(ISecondaryTradeStorage.SecondaryDealNotVoided.selector);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryTradeAgreementNotVoided.selector);
         dm.syncVoidedSecondaryTradeAgreement(settlementId);
 
         // Untouched and still finalizable.
@@ -2246,7 +2314,7 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementId);
 
-        vm.expectRevert(ISecondaryTradeStorage.SecondaryDealAlreadyFinalized.selector);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryTradeAgreementAlreadyFinalized.selector);
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementId);
     }
@@ -2257,7 +2325,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         _voidSettlementBothParties(settlementId);
 
-        vm.expectRevert(ISecondaryTradeStorage.SecondaryDealAlreadyVoided.selector);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryTradeAgreementAlreadyVoided.selector);
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementId);
     }
@@ -2326,11 +2394,11 @@ contract DealManagerSecondaryTradeTest is Test {
 
     function test_SyncVoidedSecondaryTradeAgreement() public {
         // The sync path's one job: detect a void done directly at the registry (bypassing DealManager)
-        // and mirror it into the local escrow via the shared _voidSecondaryDeal. Asserted to peer level
+        // and mirror it into the local escrow via the shared _voidSecondaryTradeAgreement. Asserted to peer level
         // so we're confident the synced settlement lands in the same state as a DealManager-driven void:
         // escrow VOIDED, acceptor (buyer) refunded, SELL reservation returned to the free pool but kept
         // (offer still open, not cancelled), custody drained. The before/after-cancel branches of
-        // _voidSecondaryDeal are exhaustively covered through the void path.
+        // _voidSecondaryTradeAgreement are exhaustively covered through the void path.
         bytes32 offerId = _postSellOffer();
         bytes32 settlementId = _acceptSellOffer(offerId);
         uint256 sellerBefore = paymentToken.balanceOf(seller);
@@ -2451,6 +2519,44 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(paymentToken.balanceOf(address(dm)), 0, "custody fully drained");
     }
 
+    // Spec §12B.4 fall-through: the integrator is validated at posting, but if it is removed from the
+    // factory whitelist before settlement the split must fall through to the unsplit MetaLeX-only flow
+    // (full fee to platform, integrator gets nothing) rather than revert — settlement is never blocked.
+    function test_FinalizeSecondaryTrade_DewhitelistedIntegrator_FallsThroughToPlatform() public {
+        address integrator = makeAddr("integrator");
+        address platform   = makeAddr("platform");
+
+        dmFactory.setIsIntegratorWhitelisted(true);
+        dmFactory.setIntegratorFeeRatio(3000);
+        vm.prank(owner);
+        dmFactory.setDefaultFeeRatio(1000);
+        vm.prank(owner);
+        dmFactory.setPlatformPayable(platform);
+
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.salt = uint256(keccak256("test_FinalizeSecondaryTrade_DewhitelistedIntegrator_FallsThroughToPlatform"));
+        p.integrator = integrator;
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+
+        bytes32 settlementId = _acceptSellOffer(offerId);
+
+        // Integrator loses whitelist status after the binding contract has formed.
+        dmFactory.setIsIntegratorWhitelisted(false);
+
+        uint256 sellerBefore = paymentToken.balanceOf(seller);
+
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+
+        uint256 fee = CONSIDERATION * 1000 / 10000; // 1 ether
+
+        assertEq(paymentToken.balanceOf(seller), sellerBefore + CONSIDERATION - fee, "seller paid amount minus fee");
+        assertEq(paymentToken.balanceOf(integrator), 0, "de-whitelisted integrator gets nothing");
+        assertEq(paymentToken.balanceOf(platform), fee, "full fee falls through to platform");
+        assertEq(paymentToken.balanceOf(address(dm)), 0, "custody fully drained");
+    }
+
     // Closing conditions are owner-managed DealManager config, snapshotted onto the offer at postOffer and
     // evaluated at finalizeDeal — distinct from the threshold conditions checked at post/accept. A failing
     // closing condition must block finalize.
@@ -2524,7 +2630,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
     // finalizeSecondaryTradeAgreement past the settlement's expiry reverts. The settlement agreement's
     // registry expiry equals secEscrow.expiry (both = offer.validUntil), so the registry
-    // finalizeContract call reverts ContractExpired before the escrow's own SecondaryDealExpired guard is
+    // finalizeContract call reverts ContractExpired before the escrow's own SecondaryTradeAgreementExpired guard is
     // reached — that guard is defensive/unreachable for secondary settlements in normal flow.
     function test_RevertIf_FinalizeSecondaryTrade_PastSettlementExpiry() public {
         bytes32 offerId = _postSellOffer();

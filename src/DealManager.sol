@@ -564,6 +564,15 @@ contract DealManager is
         return SecondaryTradeStorage.secondaryTradeStorage().closingConditions;
     }
 
+    function getMinTradeThreshold() external view returns (uint256 units, uint256 consideration) {
+        SecondaryTradeStorage.SecondaryTradeData storage ds = SecondaryTradeStorage.secondaryTradeStorage();
+        return (ds.minTradeUnits, ds.minTradeConsideration);
+    }
+
+    function getDefaultIntegrator() external view returns (address) {
+        return SecondaryTradeStorage.secondaryTradeStorage().defaultIntegrator;
+    }
+
     function getOffer(bytes32 offerId) external view returns (Offer memory) {
         return SecondaryTradeStorage.secondaryTradeStorage().offers[offerId];
     }
