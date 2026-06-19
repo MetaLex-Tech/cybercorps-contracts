@@ -181,16 +181,6 @@ contract SecBuyerFacingConditionMock {
     }
 }
 
-contract DealManagerFactoryHelper is DealManagerFactory {
-    bool private _integWhitelisted;
-    uint256 private _integratorFeeRatio;
-
-    function setIsIntegratorWhitelisted(bool v) external { _integWhitelisted = v; }
-    function isIntegratorWhitelisted(address) external view returns (bool) { return _integWhitelisted; }
-    function setIntegratorFeeRatio(uint256 v) external { _integratorFeeRatio = v; }
-    function getIntegratorFeeRatio() external view returns (uint256) { return _integratorFeeRatio; }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Test contract
 // ─────────────────────────────────────────────────────────────────────────────
@@ -213,7 +203,7 @@ contract DealManagerSecondaryTradeTest is Test {
     SecIssuanceManagerMock public im;
     CyberAgreementRegistry public registry;
     SecCorpMock        public corp;
-    DealManagerFactoryHelper   public dmFactory;
+    DealManagerFactory   public dmFactory;
     DealManager        public dm;
     BorgAuth           public auth;
 
@@ -248,9 +238,9 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(owner);
         registry.createTemplate(TEMPLATE_ID, "Secondary", TEMPLATE_URI, new string[](0), new string[](0));
 
-        dmFactory = DealManagerFactoryHelper(
+        dmFactory = DealManagerFactory(
             address(new ERC1967Proxy(
-                address(new DealManagerFactoryHelper()),
+                address(new DealManagerFactory()),
                 abi.encodeWithSelector(
                     DealManagerFactory.initialize.selector,
                     address(auth),
@@ -563,11 +553,12 @@ contract DealManagerSecondaryTradeTest is Test {
     // ─────────────────────────────────────────────────────────────────────────
 
     // Conditions are owner-managed DealManager config (snapshotted onto the offer at postOffer), not
-    // offeror-supplied. Register them as universal (L1) conditions so they apply to the test's offer.
+    // offeror-supplied. Register them as fund-specific (Layer 2 / per-SPV) conditions so they apply to
+    // every one of the test's offers regardless of exemption pathway.
     function _registerThresholdConditions(address[] memory conds) internal {
         for (uint256 i = 0; i < conds.length; i++) {
             vm.prank(owner);
-            dm.addUniversalThresholdCondition(conds[i]);
+            dm.addSpvThresholdCondition(conds[i]);
         }
     }
 
@@ -719,33 +710,24 @@ contract DealManagerSecondaryTradeTest is Test {
     // threshold condition configurations
     // ─────────────────────────────────────────────────────────────────────────
 
-    // L1 ++ L2 ++ L3 are concatenated in order and snapshotted onto the offer at postOffer; the offeror
+    // The two §7.2 threshold layers — fund-specific (Layer 2 / per-SPV) ++ exemption-specific (Layer 1 /
+    // per-pathway) — are concatenated in order and snapshotted onto the offer at postOffer; the offeror
     // supplies only the pathway, never the addresses.
-    function test_Config_ResolvesL1L2L3OntoOffer() public {
-        address l1 = address(new SecConditionMock(true));
-        address l2 = address(new SecConditionMock(true));
-        address l3 = address(new SecConditionMock(true));
-        vm.prank(owner); dm.addUniversalThresholdCondition(l1);
-        vm.prank(owner); dm.addSpvThresholdCondition(l2);
-        vm.prank(owner); dm.addPathwayThresholdCondition(ExemptionPathway.SECTION_4A7, l3);
+    function test_Config_ResolvesSpvAndPathwayOntoOffer() public {
+        address spv = address(new SecConditionMock(true));
+        address pathway = address(new SecConditionMock(true));
+        vm.prank(owner); dm.addSpvThresholdCondition(spv);
+        vm.prank(owner); dm.addPathwayThresholdCondition(ExemptionPathway.SECTION_4A7, pathway);
 
         PostOfferParams memory p = _defaultSellOfferParams();
-        p.salt = uint256(keccak256("test_Config_ResolvesL1L2L3OntoOffer"));
+        p.salt = uint256(keccak256("test_Config_ResolvesSpvAndPathwayOntoOffer"));
         vm.prank(seller);
         bytes32 offerId = dm.postOffer(p);
 
         address[] memory resolved = dm.getOffer(offerId).thresholdConditions;
-        assertEq(resolved.length, 3, "L1+L2+L3 all resolved");
-        assertEq(resolved[0], l1, "L1 first");
-        assertEq(resolved[1], l2, "L2 second");
-        assertEq(resolved[2], l3, "L3 last");
-    }
-
-    // Zero-address rejection — per threshold layer (L1/L2/L3).
-    function test_RevertIf_Config_AddUniversalZeroAddressCondition() public {
-        vm.prank(owner);
-        vm.expectRevert(ISecondaryTradeStorage.InvalidSecondaryCondition.selector);
-        dm.addUniversalThresholdCondition(address(0));
+        assertEq(resolved.length, 2, "fund-specific + exemption-specific both resolved");
+        assertEq(resolved[0], spv, "fund-specific (Layer 2) first");
+        assertEq(resolved[1], pathway, "exemption-specific (Layer 1) last");
     }
 
     function test_RevertIf_Config_AddSpvZeroAddressCondition() public {
@@ -767,17 +749,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.addClosingCondition(address(0));
     }
 
-    // Duplicate rejection — per threshold layer (L1/L2/L3).
-    function test_RevertIf_Config_AddUniversalDuplicateCondition() public {
-        address c = address(new SecConditionMock(true));
-        vm.prank(owner);
-        dm.addUniversalThresholdCondition(c);
-
-        vm.prank(owner);
-        vm.expectRevert(ISecondaryTradeStorage.SecondaryConditionAlreadyExists.selector);
-        dm.addUniversalThresholdCondition(c);
-    }
-
+    // Duplicate rejection — per threshold layer (fund-specific / exemption-specific).
     function test_RevertIf_Config_AddSpvDuplicateCondition() public {
         address c = address(new SecConditionMock(true));
         vm.prank(owner);
@@ -809,13 +781,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.addClosingCondition(c);
     }
 
-    // Out-of-bounds removal reverts — per threshold layer (L1/L2/L3).
-    function test_RevertIf_Config_RemoveUniversalIndexOutOfBounds() public {
-        vm.prank(owner);
-        vm.expectRevert(ISecondaryTradeStorage.SecondaryConditionIndexOutOfBounds.selector);
-        dm.removeUniversalThresholdConditionAt(0);
-    }
-
+    // Out-of-bounds removal reverts — per threshold layer (fund-specific / exemption-specific).
     function test_RevertIf_Config_RemoveSpvIndexOutOfBounds() public {
         vm.prank(owner);
         vm.expectRevert(ISecondaryTradeStorage.SecondaryConditionIndexOutOfBounds.selector);
@@ -834,22 +800,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.removeClosingConditionAt(0);
     }
 
-    // Swap-pop removal (L1 universal): removing index 0 of [a,b] leaves [b].
-    function test_Config_RemoveUniversalConditionSwapPop() public {
-        address a = address(new SecConditionMock(true));
-        address b = address(new SecConditionMock(true));
-        vm.prank(owner); dm.addUniversalThresholdCondition(a);
-        vm.prank(owner); dm.addUniversalThresholdCondition(b);
-
-        vm.prank(owner);
-        dm.removeUniversalThresholdConditionAt(0);
-
-        address[] memory remaining = dm.getUniversalThresholdConditions();
-        assertEq(remaining.length, 1, "one condition remains");
-        assertEq(remaining[0], b, "swap-pop moved the last element into the hole");
-    }
-
-    // Swap-pop removal (L2 per-SPV): removing index 0 of [a,b] leaves [b].
+    // Swap-pop removal (Layer 2 fund-specific / per-SPV): removing index 0 of [a,b] leaves [b].
     function test_Config_RemoveSpvConditionSwapPop() public {
         address a = address(new SecConditionMock(true));
         address b = address(new SecConditionMock(true));
@@ -864,7 +815,7 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(remaining[0], b, "swap-pop moved the last element into the hole");
     }
 
-    // Swap-pop removal (L3 per-pathway): removing index 0 of [a,b] leaves [b]; keyed by pathway.
+    // Swap-pop removal (Layer 1 exemption-specific / per-pathway): removing index 0 of [a,b] leaves [b]; keyed by pathway.
     function test_Config_RemovePathwayConditionSwapPop() public {
         address a = address(new SecConditionMock(true));
         address b = address(new SecConditionMock(true));
@@ -904,8 +855,9 @@ contract DealManagerSecondaryTradeTest is Test {
     }
 
     function test_Config_GetDefaultIntegrator() public {
-        dmFactory.setIsIntegratorWhitelisted(true);
         address integrator = makeAddr("defaultIntegrator");
+        vm.prank(owner);
+        dmFactory.setIntegrator(integrator, true, 0);
 
         vm.prank(owner);
         dm.setDefaultIntegrator(integrator);
@@ -914,8 +866,7 @@ contract DealManagerSecondaryTradeTest is Test {
     }
 
     function test_RevertIf_SetDefaultIntegrator_NotWhitelisted() public {
-        dmFactory.setIsIntegratorWhitelisted(false);
-
+        // Integrator never whitelisted on the factory (default mapping is false).
         vm.prank(owner);
         vm.expectRevert(ISecondaryTradeStorage.IntegratorNotWhitelisted.selector);
         dm.setDefaultIntegrator(makeAddr("integrator"));
@@ -931,12 +882,6 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.expectRevert();
         dm.setDefaultIntegrator(address(0));
-
-        vm.expectRevert();
-        dm.addUniversalThresholdCondition(c);
-
-        vm.expectRevert();
-        dm.removeUniversalThresholdConditionAt(0);
 
         vm.expectRevert();
         dm.addSpvThresholdCondition(c);
@@ -964,8 +909,7 @@ contract DealManagerSecondaryTradeTest is Test {
     // ─────────────────────────────────────────────────────────────────────────
 
     function test_RevertIf_PostOffer_IntegratorNotWhitelisted() public {
-        dmFactory.setIsIntegratorWhitelisted(false);
-
+        // Integrator never whitelisted on the factory (default mapping is false).
         PostOfferParams memory p = _defaultSellOfferParams();
         p.salt = uint256(keccak256("test_RevertIf_PostOffer_IntegratorNotWhitelisted"));
         p.integrator = makeAddr("integrator");
@@ -976,11 +920,13 @@ contract DealManagerSecondaryTradeTest is Test {
     }
 
     function test_PostOffer_WhitelistedIntegratorPasses() public {
-        dmFactory.setIsIntegratorWhitelisted(true);
+        address integrator = makeAddr("integrator");
+        vm.prank(owner);
+        dmFactory.setIntegrator(integrator, true, 0);
 
         PostOfferParams memory p = _defaultSellOfferParams();
         p.salt = uint256(keccak256("test_PostOffer_WhitelistedIntegratorPasses"));
-        p.integrator = makeAddr("integrator");
+        p.integrator = integrator;
 
         vm.prank(seller);
         bytes32 offerId = dm.postOffer(p);
@@ -2488,8 +2434,8 @@ contract DealManagerSecondaryTradeTest is Test {
         address integrator = makeAddr("integrator");
         address platform   = makeAddr("platform");
 
-        dmFactory.setIsIntegratorWhitelisted(true);
-        dmFactory.setIntegratorFeeRatio(3000); // 30% of the fee routes to the integrator
+        vm.prank(owner);
+        dmFactory.setIntegrator(integrator, true, 3000); // 30% of the fee routes to the integrator
         vm.prank(owner);
         dmFactory.setDefaultFeeRatio(1000);    // 10% ticket fee
         vm.prank(owner);
@@ -2526,8 +2472,8 @@ contract DealManagerSecondaryTradeTest is Test {
         address integrator = makeAddr("integrator");
         address platform   = makeAddr("platform");
 
-        dmFactory.setIsIntegratorWhitelisted(true);
-        dmFactory.setIntegratorFeeRatio(3000);
+        vm.prank(owner);
+        dmFactory.setIntegrator(integrator, true, 3000);
         vm.prank(owner);
         dmFactory.setDefaultFeeRatio(1000);
         vm.prank(owner);
@@ -2542,7 +2488,8 @@ contract DealManagerSecondaryTradeTest is Test {
         bytes32 settlementId = _acceptSellOffer(offerId);
 
         // Integrator loses whitelist status after the binding contract has formed.
-        dmFactory.setIsIntegratorWhitelisted(false);
+        vm.prank(owner);
+        dmFactory.setIntegrator(integrator, false, 0);
 
         uint256 sellerBefore = paymentToken.balanceOf(seller);
 

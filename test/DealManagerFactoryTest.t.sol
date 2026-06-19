@@ -206,4 +206,50 @@ contract DealManagerFactoryTest is Test {
         vm.expectRevert(DealManagerFactory.InvalidFeeRatio.selector);
         dmFactory.setDefaultFeeRatio(DealManagerFactoryStorage.BASIS_POINTS + 1);
     }
+
+    function test_SetIntegrator() public {
+        address integrator = address(0x123);
+        assertFalse(dmFactory.isIntegratorWhitelisted(integrator), "not whitelisted before set");
+        assertEq(dmFactory.getIntegratorFeeShare(integrator), 0, "no fee share before set");
+
+        vm.expectEmit(true, true, true, true);
+        emit DealManagerFactory.IntegratorSet(integrator, true, 3000);
+        vm.prank(owner);
+        dmFactory.setIntegrator(integrator, true, 3000);
+
+        assertTrue(dmFactory.isIntegratorWhitelisted(integrator), "whitelisted after set");
+        assertEq(dmFactory.getIntegratorFeeShare(integrator), 3000, "fee share set after set");
+    }
+
+    function test_SetIntegrator_Dewhitelist() public {
+        address integrator = address(0x123);
+        vm.prank(owner);
+        dmFactory.setIntegrator(integrator, true, 3000);
+
+        vm.expectEmit(true, true, true, true);
+        emit DealManagerFactory.IntegratorSet(integrator, false, 0);
+        vm.prank(owner);
+        dmFactory.setIntegrator(integrator, false, 0);
+
+        assertFalse(dmFactory.isIntegratorWhitelisted(integrator), "not whitelisted after de-whitelist");
+        assertEq(dmFactory.getIntegratorFeeShare(integrator), 0, "fee share cleared after de-whitelist");
+    }
+
+    function test_RevertIf_SetIntegratorNonOwner() public {
+        vm.prank(companyOwner);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, ownerRole, companyOwner));
+        dmFactory.setIntegrator(address(0x123), true, 3000);
+    }
+
+    function test_RevertIf_SetIntegratorZeroAddress() public {
+        vm.prank(owner);
+        vm.expectRevert(DealManagerFactory.ZeroAddress.selector);
+        dmFactory.setIntegrator(address(0), true, 3000);
+    }
+
+    function test_RevertIf_SetIntegratorFeeShareTooHigh() public {
+        vm.prank(owner);
+        vm.expectRevert(DealManagerFactory.InvalidFeeRatio.selector);
+        dmFactory.setIntegrator(address(0x123), true, DealManagerFactoryStorage.BASIS_POINTS + 1);
+    }
 }
