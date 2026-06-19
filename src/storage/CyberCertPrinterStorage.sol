@@ -88,7 +88,6 @@ struct RestrictiveLegend {
     string title;
     string text;
     string jurisdiction;
-    bytes32 referenceId;
     uint64 effectiveTimestamp;
     uint64 expirationTimestamp;
     bool active;
