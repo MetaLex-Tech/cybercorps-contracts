@@ -62,6 +62,27 @@ contract LegalOwnerMockUriBuilder is IUriBuilder {
         return "uri://mock";
     }
 
+    function buildCertificateUri(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        RestrictiveLegend[] memory,
+        CertificateDetails memory,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) {
+        return "uri://mock";
+    }
+
     function buildCertificateUriNotEncoded(
         string memory,
         string memory,
@@ -71,6 +92,27 @@ contract LegalOwnerMockUriBuilder is IUriBuilder {
         SecuritySeries,
         string memory,
         string[] memory,
+        CertificateDetails memory,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) {
+        return "uri://mock";
+    }
+
+    function buildCertificateUriNotEncoded(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        RestrictiveLegend[] memory,
         CertificateDetails memory,
         Endorsement[] memory,
         OwnerDetails memory,

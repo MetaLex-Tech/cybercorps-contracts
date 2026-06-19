@@ -808,6 +808,36 @@ library IssuanceManagerStorage {
         ICyberCertPrinter(certAddress).removeCertLegendAt(tokenId, index);
     }
 
+    function executeAddDefaultRestrictiveLegend(
+        address certAddress,
+        RestrictiveLegend memory newLegend
+    ) external {
+        ICyberCertPrinter(certAddress).addDefaultRestrictiveLegend(newLegend);
+    }
+
+    function executeRemoveDefaultRestrictiveLegendAt(
+        address certAddress,
+        uint256 index
+    ) external {
+        ICyberCertPrinter(certAddress).removeDefaultRestrictiveLegendAt(index);
+    }
+
+    function executeAddCertRestrictiveLegend(
+        address certAddress,
+        uint256 tokenId,
+        RestrictiveLegend memory newLegend
+    ) external {
+        ICyberCertPrinter(certAddress).addCertRestrictiveLegend(tokenId, newLegend);
+    }
+
+    function executeRemoveCertRestrictiveLegendAt(
+        address certAddress,
+        uint256 tokenId,
+        uint256 index
+    ) external {
+        ICyberCertPrinter(certAddress).removeCertRestrictiveLegendAt(tokenId, index);
+    }
+
     function executeDeployCyberScrip(
         address certAddress,
         address auth,

@@ -46,6 +46,7 @@ import "./CyberCorpConstants.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
 import "./interfaces/ICertificateImageBuilder.sol";
 import "./storage/extensions/ICertificateExtension.sol";
+import {RestrictionType, RestrictiveLegend} from "./storage/CyberCertPrinterStorage.sol";
 import "./libs/auth.sol";
 
 interface ICertificateUnitsReserved {
@@ -135,6 +136,62 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
             json = string.concat(json, '{"id": ', uint256ToString(i + 1), ', "legend": "', arr[i], '"}');
         }
         return string.concat(json, "]");
+    }
+
+    function legacyLegendsToRestrictiveLegends(
+        string[] memory arr
+    ) public pure returns (RestrictiveLegend[] memory legends) {
+        legends = new RestrictiveLegend[](arr.length);
+        for (uint256 i = 0; i < arr.length; i++) {
+            legends[i] = RestrictiveLegend({
+                restrictionType: RestrictionType.Custom,
+                title: "",
+                text: arr[i],
+                jurisdiction: "",
+                referenceId: bytes32(0),
+                effectiveTimestamp: 0,
+                expirationTimestamp: 0,
+                active: true,
+                data: ""
+            });
+        }
+    }
+
+    function restrictiveLegendsToJson(RestrictiveLegend[] memory arr) public pure returns (string memory) {
+        string memory json = "[";
+        for (uint256 i = 0; i < arr.length; i++) {
+            if (i > 0) json = string.concat(json, ",");
+            json = string.concat(
+                json,
+                '{"id": ', uint256ToString(i + 1),
+                ', "restrictionType": "', restrictionTypeToString(arr[i].restrictionType),
+                '", "title": "', arr[i].title,
+                '", "text": "', arr[i].text,
+                '", "jurisdiction": "', arr[i].jurisdiction,
+                '", "referenceId": "', bytes32ToString(arr[i].referenceId),
+                '", "effectiveTimestamp": "', uint256ToString(uint256(arr[i].effectiveTimestamp)),
+                '", "expirationTimestamp": "', uint256ToString(uint256(arr[i].expirationTimestamp)),
+                '", "active": "', boolToString(arr[i].active),
+                '", "data": "', bytesToHexString(arr[i].data),
+                '"}'
+            );
+        }
+        return string.concat(json, "]");
+    }
+
+    function restrictionTypeToString(RestrictionType restrictionType) public pure returns (string memory) {
+        if (restrictionType == RestrictionType.Unspecified) return "Unspecified";
+        if (restrictionType == RestrictionType.TransferConsentRequired) return "TransferConsentRequired";
+        if (restrictionType == RestrictionType.RestrictedSecurityRule144) return "RestrictedSecurityRule144";
+        if (restrictionType == RestrictionType.UnregisteredSecurities) return "UnregisteredSecurities";
+        if (restrictionType == RestrictionType.RegulationS) return "RegulationS";
+        if (restrictionType == RestrictionType.ContentiousHardfork) return "ContentiousHardfork";
+        if (restrictionType == RestrictionType.Custom) return "Custom";
+        return "Unknown";
+    }
+
+    function boolToString(bool value) public pure returns (string memory) {
+        return value ? "true" : "false";
     }
 
     // Helper function to convert address to string
@@ -451,6 +508,44 @@ struct CertificateDetails {
         address contractAddress,
         address extension
     ) public view returns (string memory) {
+        return buildCertificateUri(
+            cyberCORPName,
+            cyberCORPType,
+            cyberCORPJurisdiction,
+            cyberCORPContactDetails,
+            securityType,
+            securitySeries,
+            certificateUri,
+            legacyLegendsToRestrictiveLegends(certLegend),
+            details,
+            endorsements,
+            owner,
+            registry,
+            agreementId,
+            tokenId,
+            contractAddress,
+            extension
+        );
+    }
+
+    function buildCertificateUri(
+        string memory cyberCORPName,
+        string memory cyberCORPType,
+        string memory cyberCORPJurisdiction,
+        string memory cyberCORPContactDetails,
+        SecurityClass securityType,
+        SecuritySeries securitySeries,
+        string memory certificateUri,
+        RestrictiveLegend[] memory certLegend,
+        CertificateDetails memory details,
+        Endorsement[] memory endorsements,
+        OwnerDetails memory owner,
+        address registry,
+        bytes32 agreementId,
+        uint256 tokenId,
+        address contractAddress,
+        address extension
+    ) public view returns (string memory) {
         // Start building the JSON string with ERC-721 metadata standard format
         // Build on-chain SVG image using the image builder
         
@@ -524,7 +619,7 @@ struct CertificateDetails {
         );
 
         // Add restrictive legends at the end
-        json = string.concat(json, ', "restrictiveLegends": ', arrayToJsonString(certLegend));
+        json = string.concat(json, ', "restrictiveLegends": ', restrictiveLegendsToJson(certLegend));
 
         // Close the main JSON object
         json = string.concat(json, '}');
@@ -542,6 +637,44 @@ struct CertificateDetails {
         SecuritySeries securitySeries,
         string memory certificateUri,
         string[] memory certLegend,
+        CertificateDetails memory details,
+        Endorsement[] memory endorsements,
+        OwnerDetails memory owner,
+        address registry,
+        bytes32 agreementId,
+        uint256 tokenId,
+        address contractAddress,
+        address extension
+    ) public view returns (string memory) {
+        return buildCertificateUriNotEncoded(
+            cyberCORPName,
+            cyberCORPType,
+            cyberCORPJurisdiction,
+            cyberCORPContactDetails,
+            securityType,
+            securitySeries,
+            certificateUri,
+            legacyLegendsToRestrictiveLegends(certLegend),
+            details,
+            endorsements,
+            owner,
+            registry,
+            agreementId,
+            tokenId,
+            contractAddress,
+            extension
+        );
+    }
+
+    function buildCertificateUriNotEncoded(
+        string memory cyberCORPName,
+        string memory cyberCORPType,
+        string memory cyberCORPJurisdiction,
+        string memory cyberCORPContactDetails,
+        SecurityClass securityType,
+        SecuritySeries securitySeries,
+        string memory certificateUri,
+        RestrictiveLegend[] memory certLegend,
         CertificateDetails memory details,
         Endorsement[] memory endorsements,
         OwnerDetails memory owner,
@@ -624,7 +757,7 @@ struct CertificateDetails {
         );
 
         // Add restrictive legends at the end
-        json = string.concat(json, ', "restrictiveLegends": ', arrayToJsonString(certLegend));
+        json = string.concat(json, ', "restrictiveLegends": ', restrictiveLegendsToJson(certLegend));
 
         // Close the main JSON object
         json = string.concat(json, '}');

@@ -73,6 +73,28 @@ struct OwnerDetails {
     address ownerAddress;
 }
 
+enum RestrictionType {
+    Unspecified,
+    TransferConsentRequired,
+    RestrictedSecurityRule144,
+    UnregisteredSecurities,
+    RegulationS,
+    ContentiousHardfork,
+    Custom
+}
+
+struct RestrictiveLegend {
+    RestrictionType restrictionType;
+    string title;
+    string text;
+    string jurisdiction;
+    bytes32 referenceId;
+    uint64 effectiveTimestamp;
+    uint64 expirationTimestamp;
+    bool active;
+    bytes data;
+}
+
 library CyberCertPrinterStorage {
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.cert.printer.storage.v1");
@@ -125,6 +147,8 @@ library CyberCertPrinterStorage {
         mapping(uint256 => bytes[]) issuerSignatures;
         // Units locked in a pending deal/loan; always <= certificateDetails[tokenId].unitsRepresented
         mapping(uint256 => uint256) unitsReserved;
+        mapping(uint256 => RestrictiveLegend[]) certLegendsV2;
+        RestrictiveLegend[] defaultLegendsV2;
         
     }
 
@@ -139,7 +163,7 @@ library CyberCertPrinterStorage {
     // URI storage functionality
     function tokenURI(uint256 tokenId) external view returns (string memory) {
         CyberCertPrinterStorage.CyberCertStorage storage s = cyberCertStorage();
-        string[] memory certLegend = s.certLegend[tokenId];
+        RestrictiveLegend[] memory certLegend = getEffectiveRestrictiveLegends(tokenId);
         ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
         CertificateDetails memory effectiveDetails = getCertificateDetails(
             tokenId
@@ -237,6 +261,7 @@ library CyberCertPrinterStorage {
     function recordMint(uint256 tokenId, address to, CertificateDetails memory details) external {
         CyberCertStorage storage s = cyberCertStorage();
         s.certLegend[tokenId] = s.defaultLegend;
+        copyDefaultRestrictiveLegendsToCert(s, tokenId);
         s.certificateDetails[tokenId] = details;
         s.owners[tokenId] = OwnerDetails("", to);
         emit CyberCertPrinter_CertificateCreated(tokenId);
@@ -251,6 +276,7 @@ library CyberCertPrinterStorage {
     ) external {
         CyberCertStorage storage s = cyberCertStorage();
         s.certLegend[tokenId] = s.defaultLegend;
+        copyDefaultRestrictiveLegendsToCert(s, tokenId);
         s.certificateDetails[tokenId] = details;
         s.owners[tokenId] = OwnerDetails(investorName, to);
         emit CertificateAssigned(tokenId, to, investorName, IIssuanceManager(s.issuanceManager).companyName());
@@ -329,6 +355,59 @@ library CyberCertPrinterStorage {
             arr[index] = arr[lastIndex];
         }
         arr.pop();
+    }
+
+    function _restrictiveLegendArray(uint256 tokenId, bool isDefault) private view returns (RestrictiveLegend[] storage) {
+        CyberCertStorage storage s = cyberCertStorage();
+        if (isDefault) return s.defaultLegendsV2;
+        return s.certLegendsV2[tokenId];
+    }
+
+    function copyDefaultRestrictiveLegendsToCert(CyberCertStorage storage s, uint256 tokenId) private {
+        RestrictiveLegend[] storage certLegends = s.certLegendsV2[tokenId];
+        delete s.certLegendsV2[tokenId];
+        for (uint256 i = 0; i < s.defaultLegendsV2.length; i++) {
+            certLegends.push(s.defaultLegendsV2[i]);
+        }
+    }
+
+    function addRestrictiveLegend(uint256 tokenId, bool isDefault, RestrictiveLegend memory newLegend) external {
+        _restrictiveLegendArray(tokenId, isDefault).push(newLegend);
+    }
+
+    function removeRestrictiveLegendAt(uint256 tokenId, bool isDefault, uint256 index) external {
+        RestrictiveLegend[] storage arr = _restrictiveLegendArray(tokenId, isDefault);
+        uint256 len = arr.length;
+        if (index >= len) revert InvalidLegendIndex();
+
+        uint256 lastIndex = len - 1;
+        if (index != lastIndex) {
+            arr[index] = arr[lastIndex];
+        }
+        arr.pop();
+    }
+
+    function getEffectiveRestrictiveLegends(uint256 tokenId) internal view returns (RestrictiveLegend[] memory legends) {
+        CyberCertStorage storage s = cyberCertStorage();
+        if (s.certLegendsV2[tokenId].length > 0) {
+            legends = s.certLegendsV2[tokenId];
+        } else {
+            string[] storage legacyLegends = s.certLegend[tokenId];
+            legends = new RestrictiveLegend[](legacyLegends.length);
+            for (uint256 i = 0; i < legacyLegends.length; i++) {
+                legends[i] = RestrictiveLegend({
+                    restrictionType: RestrictionType.Custom,
+                    title: "",
+                    text: legacyLegends[i],
+                    jurisdiction: "",
+                    referenceId: bytes32(0),
+                    effectiveTimestamp: 0,
+                    expirationTimestamp: 0,
+                    active: true,
+                    data: ""
+                });
+            }
+        }
     }
 
     // Internal getters for complex types

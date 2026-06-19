@@ -768,6 +768,44 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         );
     }
 
+    /// @notice Adds a structured default restrictive legend to a certificate contract
+    /// @dev Only callable by admin
+    function addDefaultRestrictiveLegend(
+        address certAddress,
+        RestrictiveLegend memory newLegend
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeAddDefaultRestrictiveLegend(certAddress, newLegend);
+    }
+
+    /// @notice Removes a structured default restrictive legend from a certificate contract
+    /// @dev Only callable by admin
+    function removeDefaultRestrictiveLegendAt(
+        address certAddress,
+        uint256 index
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeRemoveDefaultRestrictiveLegendAt(certAddress, index);
+    }
+
+    /// @notice Adds a structured restrictive legend to a specific certificate
+    /// @dev Only callable by admin
+    function addCertRestrictiveLegend(
+        address certAddress,
+        uint256 tokenId,
+        RestrictiveLegend memory newLegend
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeAddCertRestrictiveLegend(certAddress, tokenId, newLegend);
+    }
+
+    /// @notice Removes a structured restrictive legend from a specific certificate
+    /// @dev Only callable by admin
+    function removeCertRestrictiveLegendAt(
+        address certAddress,
+        uint256 tokenId,
+        uint256 index
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeRemoveCertRestrictiveLegendAt(certAddress, tokenId, index);
+    }
+
     //deploy matching erc20 contract for a cert
     function deployCyberScrip(
         address certAddress,

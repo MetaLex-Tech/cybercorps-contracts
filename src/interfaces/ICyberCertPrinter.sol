@@ -41,7 +41,12 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import "./IIssuanceManager.sol";
+import {
+    CertificateDetails,
+    Endorsement,
+    OwnerDetails,
+    RestrictiveLegend
+} from "../storage/CyberCertPrinterStorage.sol";
 import "../CyberCorpConstants.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
@@ -61,6 +66,7 @@ interface ICyberCertPrinter is IERC721 {
     function updateIssuanceManager(address _issuanceManager) external;
     function updateDefaultLegend(string[] memory _ledger) external;
     function defaultLegend() external view returns (string[] memory);
+    function defaultRestrictiveLegends() external view returns (RestrictiveLegend[] memory);
     function setRestrictionHook(uint256 _id, address _hookAddress) external;
     function setGlobalRestrictionHook(address hookAddress) external;
     function safeMint(
@@ -115,6 +121,14 @@ interface ICyberCertPrinter is IERC721 {
     function removeCertLegendAt(uint256 tokenId, uint256 index) external;
     function addDefaultLegend(string memory newLegend) external;
     function removeDefaultLegendAt(uint256 index) external;
+    function addDefaultRestrictiveLegend(RestrictiveLegend memory newLegend) external;
+    function removeDefaultRestrictiveLegendAt(uint256 index) external;
+    function getDefaultRestrictiveLegendAt(uint256 index) external view returns (RestrictiveLegend memory);
+    function getDefaultRestrictiveLegendCount() external view returns (uint256);
+    function addCertRestrictiveLegend(uint256 tokenId, RestrictiveLegend memory newLegend) external;
+    function removeCertRestrictiveLegendAt(uint256 tokenId, uint256 index) external;
+    function getCertRestrictiveLegendAt(uint256 tokenId, uint256 index) external view returns (RestrictiveLegend memory);
+    function getCertRestrictiveLegendCount(uint256 tokenId) external view returns (uint256);
     function getEndorsementHistory(
         uint256 tokenId,
         uint256 index

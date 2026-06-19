@@ -5,9 +5,13 @@ import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
+import {IUriBuilder} from "../src/interfaces/IUriBuilder.sol";
 import {
     CertificateDetails,
-    Endorsement
+    Endorsement,
+    OwnerDetails,
+    RestrictionType,
+    RestrictiveLegend
 } from "../src/storage/CyberCertPrinterStorage.sol";
 
 contract MockCyberCorp {
@@ -18,13 +22,31 @@ contract MockCyberCorp {
         dealManager = _dealManager;
         roundManager = _roundManager;
     }
+
+    function cyberCORPName() external pure returns (string memory) {
+        return "Mock Corp";
+    }
+
+    function cyberCORPType() external pure returns (string memory) {
+        return "C-Corp";
+    }
+
+    function cyberCORPJurisdiction() external pure returns (string memory) {
+        return "DE";
+    }
+
+    function cyberCORPContactDetails() external pure returns (string memory) {
+        return "mock@example.com";
+    }
 }
 
 contract MockIssuanceManager {
     address public immutable CORP;
+    address public immutable uriBuilder;
 
-    constructor(address corp) {
+    constructor(address corp, address builder) {
         CORP = corp;
+        uriBuilder = builder;
     }
 
     function companyName() external pure returns (string memory) {
@@ -36,6 +58,112 @@ contract MockIssuanceManager {
         uint256
     ) external pure returns (bool isScripified, uint256 scripifiedUnits, uint256 maxUnitsRepresented) {
         return (false, 0, 0);
+    }
+}
+
+contract MockUriBuilder is IUriBuilder {
+    function buildCertificateUri(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        string[] memory certLegend,
+        CertificateDetails memory,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) {
+        return certLegend.length == 0 ? "legacy-empty" : string.concat("legacy:", certLegend[0]);
+    }
+
+    function buildCertificateUri(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        RestrictiveLegend[] memory certLegend,
+        CertificateDetails memory,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) {
+        if (certLegend.length == 0) return "structured-empty";
+        return string.concat(
+            _restrictionTypeToString(certLegend[0].restrictionType),
+            "|",
+            certLegend[0].title,
+            "|",
+            certLegend[0].text
+        );
+    }
+
+    function buildCertificateUriNotEncoded(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        string[] memory certLegend,
+        CertificateDetails memory,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) {
+        return certLegend.length == 0 ? "legacy-empty" : string.concat("legacy:", certLegend[0]);
+    }
+
+    function buildCertificateUriNotEncoded(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        RestrictiveLegend[] memory certLegend,
+        CertificateDetails memory,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) {
+        if (certLegend.length == 0) return "structured-empty";
+        return string.concat(
+            _restrictionTypeToString(certLegend[0].restrictionType),
+            "|",
+            certLegend[0].title,
+            "|",
+            certLegend[0].text
+        );
+    }
+
+    function _restrictionTypeToString(RestrictionType restrictionType) private pure returns (string memory) {
+        if (restrictionType == RestrictionType.RegulationS) return "RegulationS";
+        if (restrictionType == RestrictionType.Custom) return "Custom";
+        return "Other";
     }
 }
 
@@ -53,7 +181,8 @@ contract CyberCertPrinterTest is Test {
 
     function setUp() public {
         MockCyberCorp corp = new MockCyberCorp(address(0xDE1), address(0xA0));
-        issuanceManager = new MockIssuanceManager(address(corp));
+        MockUriBuilder uriBuilder = new MockUriBuilder();
+        issuanceManager = new MockIssuanceManager(address(corp), address(uriBuilder));
 
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Default legend";
@@ -234,6 +363,69 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.getCertLegendAt(1, 0), "Default legend");
     }
 
+    function test_AddDefaultRestrictiveLegend_StoresAndCopiesOnMint() public {
+        RestrictiveLegend memory legend = _legend(
+            RestrictionType.RegulationS,
+            "Reg S Legend",
+            "Transfer only offshore",
+            "US",
+            true
+        );
+
+        vm.prank(address(issuanceManager));
+        printer.addDefaultRestrictiveLegend(legend);
+
+        assertEq(printer.getDefaultRestrictiveLegendCount(), 1);
+        RestrictiveLegend memory storedDefault = printer.getDefaultRestrictiveLegendAt(0);
+        assertEq(uint8(storedDefault.restrictionType), uint8(RestrictionType.RegulationS));
+        assertEq(storedDefault.title, "Reg S Legend");
+        assertEq(storedDefault.text, "Transfer only offshore");
+        assertEq(storedDefault.jurisdiction, "US");
+        assertTrue(storedDefault.active);
+
+        _mintCert(1, investor, 100, bytes(""));
+
+        assertEq(printer.getCertRestrictiveLegendCount(1), 1);
+        RestrictiveLegend memory storedCert = printer.getCertRestrictiveLegendAt(1, 0);
+        assertEq(uint8(storedCert.restrictionType), uint8(RestrictionType.RegulationS));
+        assertEq(storedCert.title, "Reg S Legend");
+        assertEq(storedCert.text, "Transfer only offshore");
+    }
+
+    function test_AddAndRemoveCertRestrictiveLegend() public {
+        _mintCert(1, investor, 100, bytes(""));
+
+        vm.prank(address(issuanceManager));
+        printer.addCertRestrictiveLegend(
+            1,
+            _legend(RestrictionType.Custom, "Custom Legend", "Board approval required", "DE", true)
+        );
+
+        assertEq(printer.getCertRestrictiveLegendCount(1), 1);
+        assertEq(printer.getCertRestrictiveLegendAt(1, 0).text, "Board approval required");
+
+        vm.prank(address(issuanceManager));
+        printer.removeCertRestrictiveLegendAt(1, 0);
+
+        assertEq(printer.getCertRestrictiveLegendCount(1), 0);
+    }
+
+    function test_TokenURI_UsesStructuredRestrictiveLegend() public {
+        vm.prank(address(issuanceManager));
+        printer.addDefaultRestrictiveLegend(
+            _legend(RestrictionType.RegulationS, "Reg S Legend", "Transfer only offshore", "US", true)
+        );
+        _mintCert(1, investor, 100, bytes(""));
+
+        assertEq(printer.tokenURI(1), "RegulationS|Reg S Legend|Transfer only offshore");
+    }
+
+    function test_TokenURI_FallsBackToLegacyLegendAsCustom() public {
+        _mintCert(1, investor, 100, bytes(""));
+
+        assertEq(printer.tokenURI(1), "Custom||Default legend");
+    }
+
     function test_UpdateCertificateDetails_ReplacesStoredDetails() public {
         _mintCert(1, investor, 100, bytes("initial"));
 
@@ -329,6 +521,26 @@ contract CyberCertPrinterTest is Test {
                 legalDetails: "Legal details",
                 extensionData: extensionData
             });
+    }
+
+    function _legend(
+        RestrictionType restrictionType,
+        string memory title,
+        string memory text,
+        string memory jurisdiction,
+        bool active
+    ) private pure returns (RestrictiveLegend memory) {
+        return RestrictiveLegend({
+            restrictionType: restrictionType,
+            title: title,
+            text: text,
+            jurisdiction: jurisdiction,
+            referenceId: bytes32(0),
+            effectiveTimestamp: 0,
+            expirationTimestamp: 0,
+            active: active,
+            data: ""
+        });
     }
 
     function _endorsement(

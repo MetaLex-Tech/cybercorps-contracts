@@ -259,6 +259,28 @@ interface IIssuanceManager {
         uint256 index
     ) external;
 
+    function addDefaultRestrictiveLegend(
+        address certAddress,
+        RestrictiveLegend memory newLegend
+    ) external;
+
+    function removeDefaultRestrictiveLegendAt(
+        address certAddress,
+        uint256 index
+    ) external;
+
+    function addCertRestrictiveLegend(
+        address certAddress,
+        uint256 tokenId,
+        RestrictiveLegend memory newLegend
+    ) external;
+
+    function removeCertRestrictiveLegendAt(
+        address certAddress,
+        uint256 tokenId,
+        uint256 index
+    ) external;
+
     function deployCyberScrip(
         address certAddress,
         ITransferRestrictionHook[] memory typeRestrictionHooks,

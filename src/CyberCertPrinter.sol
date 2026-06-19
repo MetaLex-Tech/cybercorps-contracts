@@ -334,6 +334,10 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         return CyberCertPrinterStorage.cyberCertStorage().defaultLegend;
     }
 
+    function defaultRestrictiveLegends() public view returns (RestrictiveLegend[] memory) {
+        return CyberCertPrinterStorage.cyberCertStorage().defaultLegendsV2;
+    }
+
     function certificateUri() public view returns (string memory) {
         return CyberCertPrinterStorage.cyberCertStorage().certificateUri;
     }
@@ -381,6 +385,25 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         return CyberCertPrinterStorage.cyberCertStorage().defaultLegend.length;
     }
 
+    function addDefaultRestrictiveLegend(RestrictiveLegend memory newLegend) external onlyIssuanceManager {
+        CyberCertPrinterStorage.addRestrictiveLegend(0, true, newLegend);
+    }
+
+    function removeDefaultRestrictiveLegendAt(uint256 index) external onlyIssuanceManager {
+        CyberCertPrinterStorage.removeRestrictiveLegendAt(0, true, index);
+    }
+
+    function getDefaultRestrictiveLegendAt(uint256 index) external view returns (RestrictiveLegend memory) {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        if (index >= s.defaultLegendsV2.length) revert InvalidLegendIndex();
+
+        return s.defaultLegendsV2[index];
+    }
+
+    function getDefaultRestrictiveLegendCount() external view returns (uint256) {
+        return CyberCertPrinterStorage.cyberCertStorage().defaultLegendsV2.length;
+    }
+
     function addCertLegend(uint256 tokenId, string memory newLegend) external onlyIssuanceManager {
         CyberCertPrinterStorage.addLegend(tokenId, false, newLegend);
     }
@@ -398,6 +421,25 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
 
     function getCertLegendCount(uint256 tokenId) external view returns (uint256) {
         return CyberCertPrinterStorage.cyberCertStorage().certLegend[tokenId].length;
+    }
+
+    function addCertRestrictiveLegend(uint256 tokenId, RestrictiveLegend memory newLegend) external onlyIssuanceManager {
+        CyberCertPrinterStorage.addRestrictiveLegend(tokenId, false, newLegend);
+    }
+
+    function removeCertRestrictiveLegendAt(uint256 tokenId, uint256 index) external onlyIssuanceManager {
+        CyberCertPrinterStorage.removeRestrictiveLegendAt(tokenId, false, index);
+    }
+
+    function getCertRestrictiveLegendAt(uint256 tokenId, uint256 index) external view returns (RestrictiveLegend memory) {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        if (index >= s.certLegendsV2[tokenId].length) revert InvalidLegendIndex();
+
+        return s.certLegendsV2[tokenId][index];
+    }
+
+    function getCertRestrictiveLegendCount(uint256 tokenId) external view returns (uint256) {
+        return CyberCertPrinterStorage.cyberCertStorage().certLegendsV2[tokenId].length;
     }
 
     function getExtension(uint256 tokenId) external view returns (address) {
