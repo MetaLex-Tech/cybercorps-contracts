@@ -71,10 +71,10 @@ and **snapshotted onto the offer** — so an offer is governed by the rules in e
 and stored on the secondary-trade record itself (self-contained; no dependency on the primary-deal escrow
 library's `conditionsByEscrow`):
 
-| Array                        | Evaluated at              | Entry points                          |
-|------------------------------|---------------------------|---------------------------------------|
-| `offer.thresholdConditions`  | Offer posted and accepted | `postOffer`, `acceptOffer`            |
-| `offer.closingConditions`    | Finalization              | `finalizeDeal`, `signAndFinalizeDeal` |
+| Array                       | Evaluated at              | Entry points                          |
+|-----------------------------|---------------------------|---------------------------------------|
+| `offer.thresholdConditions` | Offer posted and accepted | `postOffer`, `acceptOffer`            |
+| `offer.closingConditions`   | Finalization              | `finalizeDeal`, `signAndFinalizeDeal` |
 
 Every condition in the array is walked in sequence at each entry point. Any failure reverts immediately.
 Snapshotting the addresses does not blunt the kill switch: `GlobalKillCondition` reads its live state
@@ -102,13 +102,13 @@ point without filtering.
 
 DealManager holds two distinct condition sets, both owner-managed and snapshotted onto the offer at `postOffer`:
 
-| Set                     | Scope                  | Snapshotted onto offer?       | Default contents                                       |
-|-------------------------|------------------------|-------------------------------|--------------------------------------------------------|
-| Closing-condition set   | Every offer            | Yes — at `postOffer`          | `GlobalKillCondition`, `TimeSettlementPeriodCondition` |
-| Threshold-condition set | Every offer (L1+L2+L3) | Yes — at `postOffer`          | See below                                              |
+| Set                     | Scope                         | Snapshotted onto offer? | Default contents                                       |
+|-------------------------|-------------------------------|-------------------------|--------------------------------------------------------|
+| Closing-condition set   | Every offer                   | Yes — at `postOffer`    | `GlobalKillCondition`, `TimeSettlementPeriodCondition` |
+| Threshold-condition set | Every offer (two §7.2 layers) | Yes — at `postOffer`    | See below                                              |
 
 The closing-condition set is copied onto the offer at `postOffer` and evaluated at finalization (gating asset
-transfer). The threshold-condition set is resolved (L1 universal ++ L2 per-SPV ++ L3 per-pathway) and copied onto the
+transfer). The threshold-condition set is resolved (fund-specific (§6) ++ exemption-specific (§5)) and copied onto the
 offer at `postOffer`, then evaluated at `postOffer` and re-evaluated at `acceptOffer` (gating contract formation).
 Offerors supply only the exemption pathway, never condition addresses.
 
@@ -121,44 +121,39 @@ Every DealManager gets `GlobalKillCondition` and `TimeSettlementPeriodCondition`
 | `GlobalKillCondition`           | Deployed once at protocol initialization; shared across all Legion DealManagers | MetaLeX + Legion each hold one admin key; either can raise unilaterally; both required to lower             |
 | `TimeSettlementPeriodCondition` | Deployed once; configured per-DealManager                                       | Default delay: 24h from acceptance; reparameterized to 45-day gate from listing timestamp for QMS-mode SPVs |
 
-### Threshold set: three layers
+### Threshold set: two layers (§7.2)
 
-The threshold-condition set combines three layers, scoped to different points in the deployment lifecycle:
+The threshold-condition set combines two layers per v3.53 §7.2. At `postOffer` they are resolved in the
+order fund-specific (Layer 2) ++ exemption-specific (Layer 1) and snapshotted onto the offer:
 
-| Layer            | Where configured                  | When                                                                                                          | Conditions                                                                                                                                                                                                                                                  |
-|------------------|-----------------------------------|---------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| L1 — Universal   | `DealManagerFactory`              | Protocol initialization; injected into every DealManager at deployment                                        | `KYCAMLCondition`, `TaxInfoCondition`, `AgreementSignedCondition`, `ERISACondition`, `USStateOfResidenceCondition`                                                                                                                                          |
-| L2 — Per-SPV     | Individual `DealManager`          | SPV onboarding; added after factory deployment                                                                | `HolderCapCondition`, `QualifiedPurchaserCondition`, `CFIUSCondition`, `LegionSoulboundCondition`, `GPLPApprovalCondition`, `QMSModeCondition`                                                                                                              |
-| L3 — Per-pathway | Individual `DealManager` registry | Protocol initialization (addresses registered); selected per-offer at `postOffer` based on `exemptionPathway` | `HoldingPeriodCondition`, `Rule144DisclosureCondition`, `AccreditedInvestorCondition`, `Section4a7DisclosureCondition`, `LegalOpinionCondition`, `QualifiedInstitutionalBuyerCondition`, `NonUSNationalityCondition`, `RegSDistributionComplianceCondition` |
+| Layer                             | Where configured                  | When                                                                                                          | Conditions                                                                                                                                                                                                                                                  |
+|-----------------------------------|-----------------------------------|---------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Layer 2 — Fund-specific (§6)      | Individual `DealManager`          | SPV onboarding; applies to every offer for the SPV                                                            | `KYCAMLCondition`, `TaxInfoCondition`, `ERISACondition`, `USStateOfResidenceCondition`, `HolderCapCondition`, `QualifiedPurchaserCondition`, `CFIUSCondition`, `LegionSoulboundCondition`, `GPLPApprovalCondition`, `QMSModeCondition`                      |
+| Layer 1 — Exemption-specific (§5) | Individual `DealManager` registry | Protocol initialization (addresses registered); selected per-offer at `postOffer` based on `exemptionPathway` | `HoldingPeriodCondition`, `Rule144DisclosureCondition`, `AccreditedInvestorCondition`, `Section4a7DisclosureCondition`, `LegalOpinionCondition`, `QualifiedInstitutionalBuyerCondition`, `NonUSNationalityCondition`, `RegSDistributionComplianceCondition` |
 
-#### L1 — Universal (`DealManagerFactory`)
+#### Layer 2 — Fund-specific (§6) (individual `DealManager`, configured at SPV onboarding)
 
-The factory injects these into every DealManager it deploys. Same instances shared across all SPVs; no per-SPV
-parameterization.
+Added to the individual DealManager during SPV onboarding and applied to every offer for that SPV. Only conditions
+applicable to the SPV are added. §7.2 classifies the baseline buyer-credential gates (the first four below) as
+fund-specific, so each SPV must register them explicitly — there is no platform-wide tier that injects them
+automatically.
 
-| Condition                      | Notes                                                                                                                                                                                               |
-|--------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `KYCAMLCondition`              | All paths                                                                                                                                                                                           |
-| `TaxInfoCondition`             | All paths; blocks acceptance until W-9/W-8BEN recorded in LeXcheX                                                                                                                                   |
-| ~~`AgreementSignedCondition`~~ | ~~All paths~~ — dropped; see table above                                                                                                                                                            |
-| `ERISACondition`               | All U.S. pathways; silent for Reg S non-U.S. buyers                                                                                                                                                 |
-| `USStateOfResidenceCondition`  | Issuer-configurable blocked-states list; **New York is on the default blocked-states list** for every SPV that has not registered under NY Martin Act Article 23-A, regardless of exemption pathway |
+| Condition                     | When present                                                                 | Parameterization                                                                                                                                                                                    |
+|-------------------------------|------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `KYCAMLCondition`             | All SPVs / all paths                                                         | None                                                                                                                                                                                                |
+| `TaxInfoCondition`            | All SPVs / all paths; blocks acceptance until W-9/W-8BEN recorded in LeXcheX | None                                                                                                                                                                                                |
+| `ERISACondition`              | All U.S. pathways; silent for Reg S non-U.S. buyers                          | None                                                                                                                                                                                                |
+| `USStateOfResidenceCondition` | All SPVs                                                                     | Issuer-configurable blocked-states list; **New York is on the default blocked-states list** for every SPV that has not registered under NY Martin Act Article 23-A, regardless of exemption pathway |
+| `HolderCapCondition`          | All SPVs                                                                     | ICA exception (`§3(c)(1)`, `§3(c)(1)(C)`, or `§3(c)(7)`); SPV domicile (for Touche Remnant U.S.-resident-only count); cap (100 / 250 / none)                                                        |
+| `QualifiedPurchaserCondition` | §3(c)(7) funds only                                                          | Parameterizes `LexChexCondition` for QP `investorType`                                                                                                                                              |
+| `CFIUSCondition`              | SPVs that do not satisfy the FIRRMA §800.307 fund exception                  | SPV CFIUS sensitivity flag; blocked jurisdictions                                                                                                                                                   |
+| `LegionSoulboundCondition`    | Optional; GP-configurable                                                    | Soulbound credential category/tier required of buyer (and optionally seller)                                                                                                                        |
+| `GPLPApprovalCondition`       | Optional; only if governing documents require per-deal approval              | Authorized approver address (GP, managing member, or delegated compliance officer)                                                                                                                  |
+| `QMSModeCondition`            | Optional; per-SPV opt-in for §1.7704-1(g) QMS safe harbor                    | Frequency cap value (counsel-determined per SPV); listing timestamp stored at `postOffer`                                                                                                           |
 
-#### L2 — Per-SPV (individual `DealManager`, configured at SPV onboarding)
+> Note: `AgreementSignedCondition` was previously listed in this baseline set but has been dropped.
 
-Added to the individual DealManager after factory deployment, during SPV onboarding. Only conditions applicable to the
-SPV are added.
-
-| Condition                     | When present                                                    | Parameterization                                                                                                                             |
-|-------------------------------|-----------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
-| `HolderCapCondition`          | All SPVs                                                        | ICA exception (`§3(c)(1)`, `§3(c)(1)(C)`, or `§3(c)(7)`); SPV domicile (for Touche Remnant U.S.-resident-only count); cap (100 / 250 / none) |
-| `QualifiedPurchaserCondition` | §3(c)(7) funds only                                             | Parameterizes `LexChexCondition` for QP `investorType`                                                                                       |
-| `CFIUSCondition`              | SPVs that do not satisfy the FIRRMA §800.307 fund exception     | SPV CFIUS sensitivity flag; blocked jurisdictions                                                                                            |
-| `LegionSoulboundCondition`    | Optional; GP-configurable                                       | Soulbound credential category/tier required of buyer (and optionally seller)                                                                 |
-| `GPLPApprovalCondition`       | Optional; only if governing documents require per-deal approval | Authorized approver address (GP, managing member, or delegated compliance officer)                                                           |
-| `QMSModeCondition`            | Optional; per-SPV opt-in for §1.7704-1(g) QMS safe harbor       | Frequency cap value (counsel-determined per SPV); listing timestamp stored at `postOffer`                                                    |
-
-#### L3 — Per-pathway (individual `DealManager`, selected at `postOffer`)
+#### Layer 1 — Exemption-specific (§5) (individual `DealManager`, selected at `postOffer`)
 
 Condition contract addresses are registered in the DealManager (or a shared registry) at protocol initialization. At
 `postOffer`, DealManager reads the offer's `exemptionPathway` field and appends the corresponding subset to the
@@ -179,6 +174,6 @@ threshold-condition array for that offer's `agreementId`. The same condition ins
 
 | Scope                                                             | Who                                     | When                                                                     |
 |-------------------------------------------------------------------|-----------------------------------------|--------------------------------------------------------------------------|
-| L1 conditions + L3 condition addresses                            | MetaLeX                                 | Protocol initialization                                                  |
+| Layer 1 (exemption-specific) condition addresses                  | MetaLeX                                 | Protocol initialization                                                  |
 | `GlobalKillCondition` + `TimeSettlementPeriodCondition` (closing) | MetaLeX                                 | Protocol initialization; MetaLeX + Legion admin roles assigned at deploy |
-| L2 conditions                                                     | MetaLeX or Legion via factory contracts | SPV onboarding                                                           |
+| Layer 2 (fund-specific) conditions                                | MetaLeX or Legion via factory contracts | SPV onboarding                                                           |

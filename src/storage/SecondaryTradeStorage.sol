@@ -174,9 +174,8 @@ library SecondaryTradeStorage {
         // Condition config (owner-managed, per-DealManager). Threshold conditions gate post/accept;
         // closing conditions gate finalize. Resolved/snapshotted onto each Offer at postOffer so an offer
         // is governed by the rules in effect when it was posted. Offerors never supply condition addresses.
-        address[] universalThresholdConditions;                  // L1 — factory-seeded; applies to every offer
-        address[] spvThresholdConditions;                        // L2 — added at SPV onboarding; applies to every offer
-        mapping(ExemptionPathway => address[]) pathwayThresholdConditions; // L3 — selected by offer.exemptionPathway
+        address[] spvThresholdConditions;                        // Layer 2 — fund-specific (§6); added at SPV onboarding; applies to every offer
+        mapping(ExemptionPathway => address[]) pathwayThresholdConditions; // Layer 1 — exemption-specific (§5); selected by offer.exemptionPathway
         address[] closingConditions;                             // default closing set
     }
 
@@ -222,8 +221,8 @@ library SecondaryTradeStorage {
         offerId = keccak256(abi.encode(msg.sender, params.templateId, params.salt));
         if (ds.offers[offerId].offeror != address(0)) revert ISecondaryTradeStorage.OfferAlreadyExists();
 
-        // Resolve conditions from this DealManager's config (never from the caller): threshold = L1+L2+L3,
-        // closing = the default set. Both are snapshotted onto the offer so it is governed by the rules in
+        // Resolve conditions from this DealManager's config (never from the caller): threshold = fund-specific
+        // (§6) ++ exemption-specific (§5), closing = the default set. Both are snapshotted onto the offer so it is governed by the rules in
         // effect at posting; the kill switch still bites later since GlobalKill reads live state internally.
         address[] memory resolvedThreshold = _resolveThresholdConditions(ds, params.exemptionPathway);
         address[] memory resolvedClosing = ds.closingConditions;
@@ -525,7 +524,8 @@ library SecondaryTradeStorage {
             // de-whitelisted integrator falls through to the unsplit MetaLeX-only flow (never reverts).
             address feeDestination = secEscrow.feeDestination;
             if (feeDestination != address(0) && IDealManagerFactory(upgradeFactory).isIntegratorWhitelisted(feeDestination)) {
-                uint256 integratorRatio = IDealManagerFactory(upgradeFactory).getIntegratorFeeRatio();
+                // Per spec §12B.4: this integrator's own share of the fee, keyed by feeDestination.
+                uint256 integratorRatio = IDealManagerFactory(upgradeFactory).getIntegratorFeeShare(feeDestination);
                 uint256 integratorFee = fee * integratorRatio / DealManagerFactoryStorage.BASIS_POINTS;
                 uint256 platformFee = fee - integratorFee;
                 if (integratorFee > 0) IERC20(secEscrow.paymentToken).safeTransfer(feeDestination, integratorFee);
@@ -610,19 +610,18 @@ library SecondaryTradeStorage {
         }
     }
 
-    /// @dev Builds an offer's threshold set from this DealManager's config: L1 (universal) ++ L2 (per-SPV)
-    /// ++ L3 (the subset registered for the offer's exemption pathway). Insertion order is preserved so
-    /// failures surface deterministically. Offerors choose the pathway, never the condition addresses.
+    /// @dev Builds an offer's threshold set from this DealManager's config per v3.53 §7.2: the fund-specific
+    /// (§6, per-SPV) layer ++ the exemption-specific (§5) layer registered for the offer's exemption pathway.
+    /// Insertion order is preserved so failures surface deterministically. Offerors choose the pathway, never
+    /// the condition addresses.
     function _resolveThresholdConditions(SecondaryTradeData storage ds, ExemptionPathway pathway)
         internal view returns (address[] memory resolved)
     {
-        address[] storage universal = ds.universalThresholdConditions;
         address[] storage spv = ds.spvThresholdConditions;
         address[] storage pathwayConds = ds.pathwayThresholdConditions[pathway];
 
-        resolved = new address[](universal.length + spv.length + pathwayConds.length);
+        resolved = new address[](spv.length + pathwayConds.length);
         uint256 k;
-        for (uint256 i = 0; i < universal.length; i++) resolved[k++] = universal[i];
         for (uint256 i = 0; i < spv.length; i++) resolved[k++] = spv[i];
         for (uint256 i = 0; i < pathwayConds.length; i++) resolved[k++] = pathwayConds[i];
     }
@@ -630,14 +629,6 @@ library SecondaryTradeStorage {
     // ─────────────────────────────────────────────────────────────────────────
     // Condition config management (linked logic; called via delegatecall by DealManager owner setters)
     // ─────────────────────────────────────────────────────────────────────────
-
-    function addUniversalThresholdCondition(address condition) external {
-        _addCondition(secondaryTradeStorage().universalThresholdConditions, condition);
-    }
-
-    function removeUniversalThresholdConditionAt(uint256 index) external {
-        _removeConditionAt(secondaryTradeStorage().universalThresholdConditions, index);
-    }
 
     function addSpvThresholdCondition(address condition) external {
         _addCondition(secondaryTradeStorage().spvThresholdConditions, condition);
