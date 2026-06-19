@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {IUriBuilder} from "../src/interfaces/IUriBuilder.sol";
@@ -402,7 +403,8 @@ contract CyberCertPrinterTest is Test {
         );
 
         assertEq(printer.getCertRestrictiveLegendCount(1), 1);
-        assertEq(printer.getCertRestrictiveLegendAt(1, 0).text, "Board approval required");
+        RestrictiveLegend memory stored = printer.getCertRestrictiveLegendAt(1, 0);
+        assertEq(stored.text, "Board approval required");
 
         vm.prank(address(issuanceManager));
         printer.removeCertRestrictiveLegendAt(1, 0);
@@ -424,6 +426,29 @@ contract CyberCertPrinterTest is Test {
         _mintCert(1, investor, 100, bytes(""));
 
         assertEq(printer.tokenURI(1), "Custom||Default legend");
+    }
+
+    function test_CertificateUriBuilder_RendersStructuredRestrictiveLegends() public {
+        CertificateUriBuilder builder = new CertificateUriBuilder();
+        RestrictiveLegend[] memory legends = new RestrictiveLegend[](1);
+        legends[0] = _legend(
+            RestrictionType.RegulationS,
+            "Reg S Legend",
+            "Transfer only offshore",
+            "US",
+            true
+        );
+        legends[0].data = hex"1234";
+
+        assertEq(
+            builder.restrictiveLegendsToJson(legends),
+            string.concat(
+                '[{"id": 1, "restrictionType": "RegulationS", "title": "Reg S Legend", ',
+                '"text": "Transfer only offshore", "jurisdiction": "US", ',
+                '"referenceId": "0x0000000000000000000000000000000000000000000000000000000000000000", ',
+                '"effectiveTimestamp": "0", "expirationTimestamp": "0", "active": "true", "data": "0x1234"}]'
+            )
+        );
     }
 
     function test_UpdateCertificateDetails_ReplacesStoredDetails() public {

@@ -13,6 +13,7 @@ import "../src/interfaces/ITransferRestrictionHook.sol";
 import "../src/interfaces/ICondition.sol";
 import "../src/interfaces/IUriBuilder.sol";
 import "../src/libs/auth.sol";
+import {RestrictiveLegend} from "../src/storage/CyberCertPrinterStorage.sol";
 
 contract LegalOwnerMockCyberCorp {
     function cyberCORPName() external pure returns (string memory) {

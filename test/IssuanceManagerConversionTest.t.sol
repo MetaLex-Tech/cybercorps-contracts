@@ -14,6 +14,7 @@ import "../src/libs/auth.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
+import {RestrictiveLegend} from "../src/storage/CyberCertPrinterStorage.sol";
 
 contract MockRoundManagerForConversion {
     bool public exists;

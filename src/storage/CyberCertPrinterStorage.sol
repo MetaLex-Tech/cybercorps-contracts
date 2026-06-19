@@ -88,6 +88,7 @@ struct RestrictiveLegend {
     string title;
     string text;
     string jurisdiction;
+    bytes32 referenceId;
     uint64 effectiveTimestamp;
     uint64 expirationTimestamp;
     bool active;
@@ -351,7 +352,8 @@ library CyberCertPrinterStorage {
         // and then pop the last element
         uint256 lastIndex = len - 1;
         if (index != lastIndex) {
-            arr[index] = arr[lastIndex];
+            string memory lastLegend = arr[lastIndex];
+            arr[index] = lastLegend;
         }
         arr.pop();
     }
@@ -363,10 +365,11 @@ library CyberCertPrinterStorage {
     }
 
     function copyDefaultRestrictiveLegendsToCert(CyberCertStorage storage s, uint256 tokenId) private {
-        RestrictiveLegend[] storage certLegends = s.certLegendsV2[tokenId];
         delete s.certLegendsV2[tokenId];
+        RestrictiveLegend[] storage certLegends = s.certLegendsV2[tokenId];
         for (uint256 i = 0; i < s.defaultLegendsV2.length; i++) {
-            certLegends.push(s.defaultLegendsV2[i]);
+            RestrictiveLegend memory legend = s.defaultLegendsV2[i];
+            certLegends.push(legend);
         }
     }
 
@@ -389,7 +392,11 @@ library CyberCertPrinterStorage {
     function getEffectiveRestrictiveLegends(uint256 tokenId) internal view returns (RestrictiveLegend[] memory legends) {
         CyberCertStorage storage s = cyberCertStorage();
         if (s.certLegendsV2[tokenId].length > 0) {
-            legends = s.certLegendsV2[tokenId];
+            RestrictiveLegend[] storage storedLegends = s.certLegendsV2[tokenId];
+            legends = new RestrictiveLegend[](storedLegends.length);
+            for (uint256 i = 0; i < storedLegends.length; i++) {
+                legends[i] = storedLegends[i];
+            }
         } else {
             string[] storage legacyLegends = s.certLegend[tokenId];
             legends = new RestrictiveLegend[](legacyLegends.length);

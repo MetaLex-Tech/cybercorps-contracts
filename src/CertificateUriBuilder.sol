@@ -161,22 +161,32 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         string memory json = "[";
         for (uint256 i = 0; i < arr.length; i++) {
             if (i > 0) json = string.concat(json, ",");
-            json = string.concat(
-                json,
-                '{"id": ', uint256ToString(i + 1),
-                ', "restrictionType": "', restrictionTypeToString(arr[i].restrictionType),
-                '", "title": "', arr[i].title,
-                '", "text": "', arr[i].text,
-                '", "jurisdiction": "', arr[i].jurisdiction,
-                '", "referenceId": "', bytes32ToString(arr[i].referenceId),
-                '", "effectiveTimestamp": "', uint256ToString(uint256(arr[i].effectiveTimestamp)),
-                '", "expirationTimestamp": "', uint256ToString(uint256(arr[i].expirationTimestamp)),
-                '", "active": "', boolToString(arr[i].active),
-                '", "data": "', bytesToHexString(arr[i].data),
-                '"}'
-            );
+            json = string.concat(json, restrictiveLegendToJson(i + 1, arr[i]));
         }
         return string.concat(json, "]");
+    }
+
+    function restrictiveLegendToJson(
+        uint256 id,
+        RestrictiveLegend memory legend
+    ) public pure returns (string memory) {
+        string memory part1 = string.concat(
+            '{"id": ', uint256ToString(id),
+            ', "restrictionType": "', restrictionTypeToString(legend.restrictionType),
+            '", "title": "', legend.title,
+            '", "text": "', legend.text,
+            '", "jurisdiction": "', legend.jurisdiction,
+            '"'
+        );
+        string memory part2 = string.concat(
+            ', "referenceId": "0x', bytes32ToString(legend.referenceId),
+            '", "effectiveTimestamp": "', uint256ToString(uint256(legend.effectiveTimestamp)),
+            '", "expirationTimestamp": "', uint256ToString(uint256(legend.expirationTimestamp)),
+            '", "active": "', boolToString(legend.active),
+            '", "data": "', bytesToHexString(legend.data),
+            '"}'
+        );
+        return string.concat(part1, part2);
     }
 
     function restrictionTypeToString(RestrictionType restrictionType) public pure returns (string memory) {
