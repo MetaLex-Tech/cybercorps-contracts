@@ -42,6 +42,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity ^0.8.18;
 
 import {Test, console} from "forge-std/Test.sol";
+import {IERC1271} from "openzeppelin-contracts/interfaces/IERC1271.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCertPrinter, Endorsement} from "../src/CyberCertPrinter.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
@@ -80,6 +81,7 @@ import {LeXcheXUtils} from "./libs/LeXcheXUtils.sol";
 import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {ILegacyFactory} from "../script/interfaces/ILegacyFactory.sol";
+import {MockERC1271Wallet} from "./mock/MockERC1271Wallet.sol";
 
 contract CyberCorpForkTest is Test {
     using ERC1967ProxyLib for address;
@@ -110,8 +112,8 @@ contract CyberCorpForkTest is Test {
 
     function setUp() public {
         vm.createSelectFork("base_sepolia");
-        testPrivateKey = 1337;
-        testAddress = vm.addr(testPrivateKey);
+        // explicit seed to avoid contaminated common test addresses
+        (testAddress, testPrivateKey) = makeAddrAndKey("metalex-test-officer");
         vm.startPrank(testAddress);
 
         /*        string name;
@@ -6173,5 +6175,117 @@ contract CyberCorpForkTest is Test {
         vm.prank(dealManagerAddr);
         CyberCertPrinter(certPrinter).transferFrom(dealManagerAddr, recipient, 0);
         assertEq(CyberCertPrinter(certPrinter).ownerOf(0), recipient);
+    }
+
+    /// EIP-1271 smart wallet as deal counterparty — signDealAndPay accepted via
+    /// contract wallet signature; registry falls back to isValidSignature.
+    function test_HappyPath_TicketByTicket_EIP1271_Counterparty() public {
+        MockERC1271Wallet wallet = new MockERC1271Wallet(IERC1271.isValidSignature.selector);
+
+        CertificateDetails[] memory _details = new CertificateDetails[](1);
+        _details[0] = CertificateDetails({
+            signingOfficerName: "",
+            signingOfficerTitle: "",
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 10000000,
+            unitsRepresented: 0,
+            legalDetails: "Legal Details",
+            extensionData: ""
+        });
+
+        CompanyOfficer memory officer = CompanyOfficer({
+            eoa: testAddress,
+            name: "Test Officer",
+            contact: "test@example.com",
+            title: "CEO"
+        });
+
+        string[] memory globalFields = new string[](1);
+        globalFields[0] = "Global Field 1";
+        string[] memory partyFields = new string[](1);
+        partyFields[0] = "Party Field 1";
+        string[] memory globalValues = new string[](1);
+        globalValues[0] = "Global Value 1";
+
+        address[] memory parties = new address[](2);
+        parties[0] = testAddress;
+        parties[1] = address(wallet);
+
+        uint256 _paymentAmount = 1_000_000; // 1 USDC (6 decimals)
+
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](1);
+        partyValues[0][0] = "Officer Party Value";
+        partyValues[1] = new string[](1);
+        partyValues[1][0] = "Safe Wallet Party Value";
+
+        bytes32 contractId = keccak256(abi.encode(
+            bytes32(uint256(1)),
+            block.timestamp,
+            globalValues,
+            parties
+        ));
+
+        bytes memory officerSignature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            contractId,
+            "ipfs.io/ipfs/[cid]",
+            globalFields,
+            partyFields,
+            globalValues,
+            partyValues[0],
+            testPrivateKey
+        );
+
+        vm.prank(testAddress);
+        (
+            ,,,
+            address dealManagerAddr,
+            ,,
+            bytes32 id,
+        ) = cyberCorpFactory.deployCyberCorpAndCreateOffer(
+            block.timestamp,
+            "CyberCorp",
+            "Limited Liability Company",
+            "Juris",
+            "Contact Details",
+            "Dispute Res",
+            testAddress,
+            officer,
+            certData,
+            bytes32(uint256(1)),
+            globalValues,
+            parties,
+            _paymentAmount,
+            partyValues,
+            officerSignature,
+            _details,
+            conditions,
+            bytes32(0),
+            block.timestamp + 1000000
+        );
+
+        address stable = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
+        deal(stable, address(wallet), _paymentAmount);
+        vm.prank(address(wallet));
+        IERC20(stable).approve(dealManagerAddr, _paymentAmount);
+
+        vm.prank(address(wallet));
+        IDealManager(dealManagerAddr).signDealAndPay(
+            address(wallet),
+            id,
+            "", // empty sig → EIP-1271: wallet.isValidSignature returns IERC1271.isValidSignature.selector
+            partyValues[1],
+            true,
+            "Safe Wallet",
+            ""
+        );
+
+        IDealManager(dealManagerAddr).finalizeDeal(id);
+
+        assertTrue(registry.hasSigned(id, address(wallet)), "wallet must have signed");
+        assertTrue(registry.isFinalized(id), "agreement must be finalized after EIP-1271 wallet signs");
     }
 }

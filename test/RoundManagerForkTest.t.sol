@@ -593,8 +593,8 @@ contract RoundManagerFCFSForkTest is Test {
         );
 
         // Investor 1: Non-whitelisted token
-        uint256 inv1PrivKey = 0x11111;
-        address inv1 = vm.addr(inv1PrivKey);
+        // explicit seed to avoid contaminated common test addresses
+        (address inv1, uint256 inv1PrivKey) = makeAddrAndKey("fcfs-investor-1");
         usdc.mint(inv1, 300_000 * (10 ** usdc.decimals()));
         vm.startPrank(inv1);
         usdc.approve(address(rmPub), type(uint256).max);
@@ -703,8 +703,8 @@ contract RoundManagerFCFSForkTest is Test {
 
 
         // Investor 2: Whitelisted token
-        uint256 inv2PrivKey = 0x22222;
-        address inv2 = vm.addr(inv2PrivKey);
+        // explicit seed to avoid contaminated common test addresses
+        (address inv2, uint256 inv2PrivKey) = makeAddrAndKey("fcfs-investor-2");
         usdc.mint(inv2, 300_000 * (10 ** usdc.decimals()));
         vm.startPrank(inv2);
         usdc.approve(address(rmPub), type(uint256).max);
