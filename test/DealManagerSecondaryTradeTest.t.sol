@@ -40,7 +40,7 @@ mechanical, including photocopying, recording, or by any information storage and
 except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
-import {Test, console} from "forge-std/Test.sol";
+import {Test, console2} from "forge-std/Test.sol";
 import {ERC20} from "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {ERC721} from "../dependencies/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
 import {ERC721Enumerable} from "../dependencies/openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
@@ -119,6 +119,16 @@ contract SecCertPrinterMock is ERC721Enumerable {
 contract SecIssuanceManagerMock {
     bool public secondaryTransferCalled;
     bool public attachOpenEndorsementCalled;
+    // Last open-endorsement payload, captured so tests can assert the §7.3.1 fields were forwarded.
+    address public capCertPrinter;
+    bytes32 public capOfferId;
+    address public capSpvAddress;
+    uint256 public capTokenId;
+    address public capEndorser;
+    uint256 public capUnitsCommitted;
+    ExemptionPathway public capExemptionPathway;
+    uint256 public capValidUntil;
+    bytes public capEndorsementSig;
 
     function createCert(address certAddress, address to, CertificateDetails memory) external returns (uint256) {
         return SecCertPrinterMock(certAddress).mint(to);
@@ -135,9 +145,26 @@ contract SecIssuanceManagerMock {
     }
 
     function attachOpenEndorsement(
-        address, uint256, address, address, bytes calldata, bytes32
+        address certPrinter,
+        bytes32 offerId,
+        address spvAddress,
+        uint256 tokenId,
+        address endorser,
+        uint256 unitsCommitted,
+        ExemptionPathway exemptionPathway,
+        uint256 validUntil,
+        bytes calldata endorsementSig
     ) external {
         attachOpenEndorsementCalled = true;
+        capCertPrinter = certPrinter;
+        capOfferId = offerId;
+        capSpvAddress = spvAddress;
+        capTokenId = tokenId;
+        capEndorser = endorser;
+        capUnitsCommitted = unitsCommitted;
+        capExemptionPathway = exemptionPathway;
+        capValidUntil = validUntil;
+        capEndorsementSig = endorsementSig;
     }
 
     function voidCertificate(address certAddress, uint256 tokenId) external {
@@ -161,23 +188,33 @@ contract SecConditionMock {
 // before the offer was stored.
 contract SecOfferReadingConditionMock {
     function checkCondition(address _contract, bytes4, bytes memory data) external view returns (bool) {
-        bytes32 offerId = abi.decode(data, (bytes32));
+        (bytes32 offerId, ) = abi.decode(data, (bytes32, bytes32));
         Offer memory o = IDealManager(_contract).getOffer(offerId);
         return o.offeror != address(0) && o.certPrinter != address(0);
     }
 }
 
 // Mirrors a real buyer-facing threshold condition (KYC/accreditation/holder-cap): it short-circuits
-// to `true` at posting when the offer has no settlements yet, and enforces once an acceptor exists.
-// Used to prove acceptOffer re-evaluates threshold conditions (post-fix); pre-fix it never ran here.
+// to `true` at posting when there is no settlement yet (agreementId == 0), and enforces once an acceptor
+// exists. Used to prove acceptOffer re-evaluates threshold conditions (post-fix); pre-fix it never ran here.
 contract SecBuyerFacingConditionMock {
     bool private _acceptorAllowed;
     constructor(bool acceptorAllowed_) { _acceptorAllowed = acceptorAllowed_; }
+    function checkCondition(address, bytes4, bytes memory data) external view returns (bool) {
+        (, bytes32 agreementId) = abi.decode(data, (bytes32, bytes32));
+        if (agreementId == bytes32(0)) return true; // posting context: no buyer yet
+        return _acceptorAllowed;                    // acceptance context: enforce
+    }
+}
+
+contract SecCounterpartyRestrictionsConditionMock {
+    bytes private _expected;
+    constructor(bytes memory expected_) { _expected = expected_; }
     function checkCondition(address _contract, bytes4, bytes memory data) external view returns (bool) {
-        bytes32 offerId = abi.decode(data, (bytes32));
+        (bytes32 offerId, bytes32 agreementId) = abi.decode(data, (bytes32, bytes32));
+        if (agreementId == bytes32(0)) return true; // short-circuit to pass if no acceptor yet
         Offer memory o = IDealManager(_contract).getOffer(offerId);
-        if (o.settlementAgreementIds.length == 0) return true; // posting context: no buyer yet
-        return _acceptorAllowed;                               // acceptance context: enforce
+        return keccak256(o.counterpartyRestrictions) == keccak256(_expected); // acceptance: enforce the blob
     }
 }
 
@@ -214,6 +251,20 @@ contract DealManagerSecondaryTradeTest is Test {
     uint256 public constant CONSIDERATION = 10 ether;
     uint256 public constant UNITS         = 100;
     uint256 public sellerTokenId;
+
+    // Placeholder counterpartyRestrictions blob (spec §8.1); real encoding is not implemented yet, so any
+    // non-empty value the SecCounterpartyRestrictionsConditionMock can match on suffices.
+    bytes public constant COUNTERPARTY_RESTRICTIONS = "mock counterparty restrictions";
+
+    // Supplemental fields blob (spec §8.1): memorialized only, never enforced — carried by the default
+    // offers purely to prove it round-trips through postOffer/getOffer unchanged.
+    bytes public constant ADDITIONAL_TERMS = "mock additional terms";
+
+    // Seller's open-endorsement signature (spec §7.3.1): opaque blob, not recovered yet.
+    bytes public constant OPEN_ENDORSEMENT_SIG = "sellerEndorsement";
+
+    // Buyer name the acceptor supplies when filling a sell offer (memorialized on the settlement escrow).
+    string public constant SELL_ACCEPT_BUYER_NAME = "Bob";
 
     function setUp() public {
         (owner, ownerKey)   = makeAddrAndKey("owner");
@@ -288,14 +339,14 @@ contract DealManagerSecondaryTradeTest is Test {
             exemptionPathway: ExemptionPathway.SECTION_4A7,
             validUntil: block.timestamp + 1 days,
             counterpartyRestrictions: "",
-            additionalTerms: "",
+            additionalTerms: ADDITIONAL_TERMS,
             integrator: address(0),
             templateId: bytes32(0),
             salt: uint256(keccak256("defaultSellOffer")),
             globalValues: new string[](0),
             offerorPartyValues: new string[](0),
             offerorAgreementSig: "",
-            openEndorsementSig: "sellerEndorsement",
+            openEndorsementSig: OPEN_ENDORSEMENT_SIG,
             buyerName: "",
             buyerHostingMode: 0,
             adminMultisig: address(0)
@@ -313,7 +364,7 @@ contract DealManagerSecondaryTradeTest is Test {
             exemptionPathway: ExemptionPathway.SECTION_4A7,
             validUntil: block.timestamp + 1 days,
             counterpartyRestrictions: "",
-            additionalTerms: "",
+            additionalTerms: ADDITIONAL_TERMS,
             integrator: address(0),
             templateId: bytes32(0),
             salt: uint256(keccak256("defaultBid")),
@@ -361,7 +412,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerAgreementId,
             units: UNITS,
-            buyerName: "Bob",
+            buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: 0,
             adminMultisig: address(0),
             sellerTokenId: 0,
@@ -381,13 +432,13 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerAgreementId,
             units: units,
-            buyerName: "Bob",
+            buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: 0,
             adminMultisig: address(0),
             sellerTokenId: sellerTokenId,
             acceptorPartyValues: new string[](0),
             acceptorAgreementSig: _acceptorSig(offerAgreementId, seller, sellerKey),
-            openEndorsementSig: "sellerEndorsement"
+            openEndorsementSig: OPEN_ENDORSEMENT_SIG
         });
         vm.prank(seller);
         settlementAgreementId = dm.acceptOffer(p);
@@ -414,7 +465,168 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(se.expiry, block.timestamp + 1 days, "expiry mirrors offer validUntil");
         assertEq(se.feeDestination, address(0), "no integrator set -> fees route to platform");
         assertEq(se.tokenId, sellerTokenId, "reservation target is the seller's tokenId");
-        assertTrue(se.dealMetadata.length > 0, "deal metadata encoded for IssuanceManager.secondaryTransfer");
+
+        // Per-settlement materialization fields, recorded for both sides (redundant for the side that
+        // already carries the value on the Offer). Sourced per offer side:
+        //  - bid: buyer info from the offer (the offeror is the buyer); endorsement from the acceptance params
+        //  - sell: buyer info from the acceptance params; endorsement copied from the offer's pre-signed one
+        Offer memory o = dm.getOffer(offerId);
+        assertEq(se.buyerHostingMode, 0, "buyerHostingMode");
+        assertEq(se.adminMultisig, address(0), "adminMultisig");
+        if (o.side == OfferSide.BUY) {
+            assertEq(se.buyerName, o.buyerName, "buyerName from the bid offer");
+            assertEq(se.openEndorsementSig, OPEN_ENDORSEMENT_SIG, "endorsement from the acceptance params");
+        } else {
+            assertEq(se.buyerName, SELL_ACCEPT_BUYER_NAME, "buyerName from the acceptance params");
+            assertEq(se.openEndorsementSig, o.openEndorsementSig, "endorsement copied from the offer");
+        }
+    }
+
+    /// @dev Asserts the open endorsement was materialized at acceptOffer with its §7.3.1 payload fields.
+    function _assertOpenEndorsementAttached(bytes32 offerId, address endorser, bytes memory sig) internal view {
+        assertTrue(im.attachOpenEndorsementCalled(), "open endorsement attached at acceptOffer");
+        Offer memory o = dm.getOffer(offerId);
+        assertEq(im.capOfferId(), offerId, "endorsement bound to offerId");
+        assertEq(im.capSpvAddress(), o.spvAddress, "spvAddress");
+        assertEq(im.capCertPrinter(), o.certPrinter, "certPrinter");
+        assertEq(im.capEndorser(), endorser, "endorser");
+        assertEq(im.capUnitsCommitted(), o.units, "unitsCommitted");
+        assertEq(uint8(im.capExemptionPathway()), uint8(o.exemptionPathway), "exemptionPathway"); // no enum overload in forge-std
+        assertEq(im.capValidUntil(), o.validUntil, "validUntil");
+        assertEq(im.capEndorsementSig(), sig, "endorsementSig forwarded verbatim");
+    }
+
+    /// @dev Asserts every field of a freshly posted Offer matches the post params and DealManager config,
+    /// so the stored record is known complete and clean.
+    function _assertPostedOffer(bytes32 offerId, PostOfferParams memory p, address offeror) internal view {
+        Offer memory offer = dm.getOffer(offerId);
+
+        // identity & classification
+        assertEq(offer.offerId, offerId, "offerId self-reference");
+        assertEq(offer.spvAddress, address(corp), "spvAddress");
+        assertEq(offer.offeror, offeror, "offeror");
+        assertEq(uint8(offer.side), uint8(p.side), "side");
+        assertEq(offer.certPrinter, p.certPrinter, "certPrinter");
+        assertEq(offer.tokenId, p.tokenId, "tokenId");
+
+        // economics
+        assertEq(offer.units, p.units, "units");
+        assertEq(offer.paymentToken, p.paymentToken, "paymentToken");
+        assertEq(offer.consideration, p.consideration, "consideration");
+        assertEq(uint8(offer.exemptionPathway), uint8(p.exemptionPathway), "exemptionPathway");
+        assertEq(offer.validUntil, p.validUntil, "validUntil");
+        address expectedIntegrator = p.integrator != address(0) ? p.integrator : dm.getDefaultIntegrator();
+        assertEq(offer.integrator, expectedIntegrator, "integrator");
+
+        // §8.1 opaque blobs
+        assertEq(offer.counterpartyRestrictions, p.counterpartyRestrictions, "counterpartyRestrictions");
+        assertEq(offer.additionalTerms, p.additionalTerms, "additionalTerms");
+
+        // fresh offer: LIVE, zeroed counters, no settlements
+        assertEq(uint8(offer.status), uint8(OfferStatus.LIVE), "status LIVE");
+        assertEq(offer.unitsAccepted, 0, "unitsAccepted");
+        assertEq(offer.paymentAccepted, 0, "paymentAccepted");
+        assertEq(offer.unitsFinalized, 0, "unitsFinalized");
+        assertEq(offer.settlementAgreementIds.length, 0, "no settlements at post");
+
+        // agreement-template fields
+        assertEq(offer.templateId, p.templateId, "templateId");
+        assertEq(offer.salt, p.salt, "salt");
+        assertEq(offer.globalValues.length, p.globalValues.length, "globalValues length");
+        for (uint256 i = 0; i < p.globalValues.length; i++)
+            assertEq(offer.globalValues[i], p.globalValues[i], "globalValues element");
+        assertEq(offer.offerorPartyValues.length, p.offerorPartyValues.length, "offerorPartyValues length");
+        for (uint256 i = 0; i < p.offerorPartyValues.length; i++)
+            assertEq(offer.offerorPartyValues[i], p.offerorPartyValues[i], "offerorPartyValues element");
+        assertEq(offer.offerorAgreementSig, p.offerorAgreementSig, "offerorAgreementSig");
+        assertEq(offer.openEndorsementSig, p.openEndorsementSig, "openEndorsementSig");
+
+        // buyer fields: carried on BUY, empty on SELL
+        if (p.side == OfferSide.BUY) {
+            assertEq(offer.buyerName, p.buyerName, "buyerName");
+            assertEq(offer.buyerHostingMode, p.buyerHostingMode, "buyerHostingMode");
+            assertEq(offer.adminMultisig, p.adminMultisig, "adminMultisig");
+        } else {
+            assertEq(offer.buyerName, "", "sell offers carry no buyerName");
+            assertEq(offer.buyerHostingMode, 0, "sell offers carry no buyerHostingMode");
+            assertEq(offer.adminMultisig, address(0), "sell offers carry no adminMultisig");
+        }
+
+        // condition snapshots from DealManager config
+        address[] memory spv = dm.getSpvThresholdConditions();
+        address[] memory pathway = dm.getPathwayThresholdConditions(p.exemptionPathway);
+        assertEq(offer.thresholdConditions.length, spv.length + pathway.length, "thresholdConditions length");
+        for (uint256 i = 0; i < spv.length; i++)
+            assertEq(offer.thresholdConditions[i], spv[i], "thresholdConditions SPV element");
+        for (uint256 i = 0; i < pathway.length; i++)
+            assertEq(offer.thresholdConditions[spv.length + i], pathway[i], "thresholdConditions pathway element");
+        address[] memory closing = dm.getClosingConditions();
+        assertEq(offer.closingConditions.length, closing.length, "closingConditions length");
+        for (uint256 i = 0; i < closing.length; i++)
+            assertEq(offer.closingConditions[i], closing[i], "closingConditions element");
+    }
+
+    /// @dev Asserts an offer's whole record after a state change: the mutable fields (status, the three
+    /// accounting counters, the settlement nonce) match the expected values, and its identity fields are
+    /// unchanged from the post-time baseline. Capture `baseline` right after postOffer and reuse it.
+    function _assertOfferState(
+        bytes32 offerId,
+        Offer memory baseline,
+        OfferStatus status,
+        uint256 unitsAccepted,
+        uint256 paymentAccepted,
+        uint256 unitsFinalized,
+        uint256 settlementCount
+    ) internal view {
+        Offer memory o = dm.getOffer(offerId);
+
+        // mutable fields
+        assertEq(uint8(o.status), uint8(status), "status");
+        assertEq(o.unitsAccepted, unitsAccepted, "unitsAccepted");
+        assertEq(o.paymentAccepted, paymentAccepted, "paymentAccepted");
+        assertEq(o.unitsFinalized, unitsFinalized, "unitsFinalized");
+        assertEq(o.settlementAgreementIds.length, settlementCount, "settlementAgreementIds length");
+
+        _assertOfferImmutableUnchanged(o, baseline);
+    }
+
+    /// @dev Asserts the offer's identity fields still equal the post-time baseline `b`.
+    function _assertOfferImmutableUnchanged(Offer memory o, Offer memory b) internal pure {
+        assertEq(o.offerId, b.offerId, "offerId immutable");
+        assertEq(o.spvAddress, b.spvAddress, "spvAddress immutable");
+        assertEq(o.offeror, b.offeror, "offeror immutable");
+        assertEq(uint8(o.side), uint8(b.side), "side immutable");
+        assertEq(o.certPrinter, b.certPrinter, "certPrinter immutable");
+        assertEq(o.tokenId, b.tokenId, "tokenId immutable");
+        assertEq(o.units, b.units, "units immutable");
+        assertEq(o.paymentToken, b.paymentToken, "paymentToken immutable");
+        assertEq(o.consideration, b.consideration, "consideration immutable");
+        assertEq(uint8(o.exemptionPathway), uint8(b.exemptionPathway), "exemptionPathway immutable");
+        assertEq(o.validUntil, b.validUntil, "validUntil immutable");
+        assertEq(o.integrator, b.integrator, "integrator immutable");
+        assertEq(o.counterpartyRestrictions, b.counterpartyRestrictions, "counterpartyRestrictions immutable");
+        assertEq(o.additionalTerms, b.additionalTerms, "additionalTerms immutable");
+        assertEq(o.templateId, b.templateId, "templateId immutable");
+        assertEq(o.salt, b.salt, "salt immutable");
+        assertEq(o.offerorAgreementSig, b.offerorAgreementSig, "offerorAgreementSig immutable");
+        assertEq(o.openEndorsementSig, b.openEndorsementSig, "openEndorsementSig immutable");
+        // Buyer fields stay as posted on the Offer for both sides; the per-settlement buyer info and the
+        // endorsement actually used live on each SecondaryEscrow, not here.
+        assertEq(o.buyerName, b.buyerName, "buyerName immutable");
+        assertEq(o.buyerHostingMode, b.buyerHostingMode, "buyerHostingMode immutable");
+        assertEq(o.adminMultisig, b.adminMultisig, "adminMultisig immutable");
+        assertEq(o.globalValues.length, b.globalValues.length, "globalValues length immutable");
+        for (uint256 i = 0; i < b.globalValues.length; i++)
+            assertEq(o.globalValues[i], b.globalValues[i], "globalValues element immutable");
+        assertEq(o.offerorPartyValues.length, b.offerorPartyValues.length, "offerorPartyValues length immutable");
+        for (uint256 i = 0; i < b.offerorPartyValues.length; i++)
+            assertEq(o.offerorPartyValues[i], b.offerorPartyValues[i], "offerorPartyValues element immutable");
+        assertEq(o.thresholdConditions.length, b.thresholdConditions.length, "thresholdConditions length immutable");
+        for (uint256 i = 0; i < b.thresholdConditions.length; i++)
+            assertEq(o.thresholdConditions[i], b.thresholdConditions[i], "thresholdConditions element immutable");
+        assertEq(o.closingConditions.length, b.closingConditions.length, "closingConditions length immutable");
+        for (uint256 i = 0; i < b.closingConditions.length; i++)
+            assertEq(o.closingConditions[i], b.closingConditions[i], "closingConditions element immutable");
     }
 
     /// @dev Both parties of a settlement are always {seller, buyer} regardless of offer side. A
@@ -477,23 +689,17 @@ contract DealManagerSecondaryTradeTest is Test {
 
     function test_PostOffer_Sell() public {
         // ∅ → LIVE: stores the offer record, reserves the offered units, and emits OfferPosted.
-        vm.expectEmit(false, true, false, false); // don't check offerAgreementId (computed inside)
-        emit ISecondaryTradeStorage.OfferPosted(bytes32(0), seller, OfferSide.SELL, UNITS, CONSIDERATION);
+        vm.expectEmit(false, true, true, true); // skip offerId (computed inside); check offeror, certPrinter, and all data
+        emit ISecondaryTradeStorage.OfferPosted(
+            bytes32(0), seller, address(certPrinter), address(corp), OfferSide.SELL,
+            sellerTokenId, UNITS, address(paymentToken), CONSIDERATION,
+            ExemptionPathway.SECTION_4A7, block.timestamp + 1 days, address(0),
+            bytes32(0), "", 0, address(0), "", new address[](0), new address[](0)
+        );
         bytes32 offerId = _postSellOffer();
 
-        Offer memory offer = dm.getOffer(offerId);
-        assertEq(offer.spvAddress, address(corp), "spvAddress should be corp");
-        assertEq(offer.offeror, seller, "offeror should be seller");
-        assertEq(uint8(offer.side), uint8(OfferSide.SELL));
-        assertEq(offer.certPrinter, address(certPrinter));
-        assertEq(offer.tokenId, sellerTokenId);
-        assertEq(offer.units, UNITS);
-        assertEq(offer.paymentToken, address(paymentToken));
-        assertEq(offer.consideration, CONSIDERATION);
-        assertEq(uint8(offer.status), uint8(OfferStatus.LIVE));
-        assertEq(offer.unitsAccepted, 0);
-        assertEq(offer.paymentAccepted, 0);
-        assertEq(offer.unitsFinalized, 0);
+        // Assert every Offer field is stored clean (see _assertPostedOffer).
+        _assertPostedOffer(offerId, _defaultSellOfferParams(), seller);
 
         assertEq(certPrinter.reservedUnits(sellerTokenId), UNITS, "units should be reserved");
     }
@@ -505,21 +711,18 @@ contract DealManagerSecondaryTradeTest is Test {
     function test_PostOffer_Buy() public {
         // ∅ → LIVE: stores the offer record (no units reserved) and pulls consideration into holding escrow.
         uint256 buyerBalanceBefore = paymentToken.balanceOf(buyer);
+        vm.expectEmit(false, true, true, true); // skip offerId; check offeror, certPrinter, and all data
+        emit ISecondaryTradeStorage.OfferPosted(
+            bytes32(0), buyer, address(certPrinter), address(corp), OfferSide.BUY,
+            0, UNITS, address(paymentToken), CONSIDERATION,
+            ExemptionPathway.SECTION_4A7, block.timestamp + 1 days, address(0),
+            bytes32(0), "Test Buyer", 0, address(0), "", new address[](0), new address[](0)
+        );
         bytes32 offerId = _postBid();
 
-        Offer memory offer = dm.getOffer(offerId);
-        assertEq(offer.spvAddress, address(corp), "spvAddress should be corp");
-        assertEq(offer.offeror, buyer, "offeror should be buyer");
-        assertEq(uint8(offer.side), uint8(OfferSide.BUY));
-        assertEq(offer.certPrinter, address(certPrinter), "bid certPrinter should be set at post");
-        assertEq(offer.tokenId, 0, "bid should have no tokenId");
-        assertEq(offer.units, UNITS);
-        assertEq(offer.paymentToken, address(paymentToken));
-        assertEq(offer.consideration, CONSIDERATION);
-        assertEq(uint8(offer.status), uint8(OfferStatus.LIVE));
-        assertEq(offer.unitsAccepted, 0);
-        assertEq(offer.paymentAccepted, 0);
-        assertEq(offer.unitsFinalized, 0);
+        // Assert every Offer field is stored clean (see _assertPostedOffer).
+        _assertPostedOffer(offerId, _defaultBuyOfferParams(), buyer);
+
         assertEq(certPrinter.reservedUnits(sellerTokenId), 0, "bid should reserve no units at post");
 
         assertEq(
@@ -636,7 +839,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory ap = AcceptOfferParams({
             offerId: offerId,
             units: UNITS,
-            buyerName: "Bob",
+            buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: 0,
             adminMultisig: address(0),
             sellerTokenId: 0,
@@ -664,6 +867,54 @@ contract DealManagerSecondaryTradeTest is Test {
 
         bytes32 settlementId = _acceptSellOffer(offerId);
         assertTrue(settlementId != bytes32(0), "acceptance should succeed when the acceptor passes conditions");
+    }
+
+    // counterpartyRestrictions (spec §8.1): an acceptor-side threshold condition reads the offer's blob and
+    // gates acceptance on it. Posting short-circuits (no acceptor yet), so the check bites at acceptOffer.
+    function test_AcceptOffer_CounterpartyRestrictionsConditionPasses() public {
+        address[] memory conds = new address[](1);
+        conds[0] = address(new SecCounterpartyRestrictionsConditionMock(COUNTERPARTY_RESTRICTIONS));
+        _registerThresholdConditions(conds);
+
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.salt = uint256(keccak256("test_AcceptOffer_CounterpartyRestrictionsConditionPasses"));
+        p.counterpartyRestrictions = COUNTERPARTY_RESTRICTIONS; // matches the condition's expected blob
+
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+
+        bytes32 settlementId = _acceptSellOffer(offerId);
+        assertTrue(settlementId != bytes32(0), "acceptance should succeed when restrictions match");
+    }
+
+    // Counterpart: when the offer's blob does not match what the condition requires, posting still succeeds
+    // (the gate short-circuits with no acceptor) but acceptance reverts — the spec's acceptance-time failure.
+    function test_RevertIf_AcceptOffer_CounterpartyRestrictionsConditionFails() public {
+        address[] memory conds = new address[](1);
+        conds[0] = address(new SecCounterpartyRestrictionsConditionMock(COUNTERPARTY_RESTRICTIONS));
+        _registerThresholdConditions(conds);
+
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.salt = uint256(keccak256("test_RevertIf_AcceptOffer_CounterpartyRestrictionsConditionFails"));
+        // counterpartyRestrictions left empty -> mismatch against the condition's expected blob
+
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p); // posting succeeds: condition short-circuits with no acceptor
+
+        AcceptOfferParams memory ap = AcceptOfferParams({
+            offerId: offerId,
+            units: UNITS,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: 0,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey),
+            openEndorsementSig: ""
+        });
+        vm.prank(buyer);
+        vm.expectRevert(abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, conds[0]));
+        dm.acceptOffer(ap);
     }
 
     function test_ThresholdConditions_PathwayConditionAppliesToMatchingPathway() public {
@@ -992,7 +1243,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS - 1, // partial fill, below min
-            buyerName: "Bob",
+            buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: 0,
             adminMultisig: address(0),
             sellerTokenId: 0,
@@ -1017,7 +1268,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS / 2, // pro-rata consideration = CONSIDERATION / 2, below min
-            buyerName: "Bob",
+            buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: 0,
             adminMultisig: address(0),
             sellerTokenId: 0,
@@ -1039,7 +1290,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: 0,
-            buyerName: "Bob",
+            buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: 0,
             adminMultisig: address(0),
             sellerTokenId: 0,
@@ -1107,12 +1358,13 @@ contract DealManagerSecondaryTradeTest is Test {
 
     function test_CancelOffer_Sell_Uncommited() public {
         bytes32 offerId = _postSellOffer();
+        Offer memory baseline = dm.getOffer(offerId);
 
         vm.prank(seller);
         dm.cancelOffer(offerId);
 
-        Offer memory offer = dm.getOffer(offerId);
-        assertEq(uint8(offer.status), uint8(OfferStatus.CANCELLED));
+        // LIVE → CANCELLED with nothing committed
+        _assertOfferState(offerId, baseline, OfferStatus.CANCELLED, 0, 0, 0, 0);
     }
 
     function test_RevertIf_CancelOffer_NotOfferor() public {
@@ -1161,12 +1413,13 @@ contract DealManagerSecondaryTradeTest is Test {
 
     function test_CancelOffer_Buy_Uncommited() public {
         bytes32 offerId = _postBid();
+        Offer memory baseline = dm.getOffer(offerId);
 
         vm.prank(buyer);
         dm.cancelOffer(offerId);
 
-        Offer memory offer = dm.getOffer(offerId);
-        assertEq(uint8(offer.status), uint8(OfferStatus.CANCELLED));
+        // LIVE → CANCELLED with nothing committed
+        _assertOfferState(offerId, baseline, OfferStatus.CANCELLED, 0, 0, 0, 0);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1175,6 +1428,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
     function test_CancelOffer_Sell_PartiallyFilled() public {
         bytes32 offerId = _postSellOffer();
+        Offer memory baseline = dm.getOffer(offerId);
         uint256 lotUnits = UNITS / 2;
         bytes32 settlementId = _acceptSellOfferPartial(offerId, lotUnits);
         uint256 buyerBalanceAfterAccept = paymentToken.balanceOf(buyer);
@@ -1182,7 +1436,8 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(seller);
         dm.cancelOffer(offerId);
 
-        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.CANCELLED), "offer CANCELLED with a lot outstanding");
+        // → CANCELLED with a lot outstanding: the committed lot's counters stay
+        _assertOfferState(offerId, baseline, OfferStatus.CANCELLED, lotUnits, CONSIDERATION * lotUnits / UNITS, 0, 1);
 
         // Cancel returns only the free pool; the accepted lot stays ACCEPTED and resolvable.
         assertEq(
@@ -1198,6 +1453,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
     function test_CancelOffer_Buy_PartiallyFilled() public {
         bytes32 offerId = _postBid();
+        Offer memory baseline = dm.getOffer(offerId);
         bytes32 settlementId = _acceptBidPartial(offerId, 40);
         uint256 lotPayment = CONSIDERATION * 40 / UNITS;
         uint256 buyerBalanceAfterAccept = paymentToken.balanceOf(buyer);
@@ -1205,7 +1461,8 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(buyer);
         dm.cancelOffer(offerId);
 
-        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.CANCELLED), "offer CANCELLED with a lot outstanding");
+        // → CANCELLED with a lot outstanding: the committed lot's counters stay
+        _assertOfferState(offerId, baseline, OfferStatus.CANCELLED, 40, lotPayment, 0, 1);
 
         // Cancel refunds only the free pool; the accepted lot's funds stay in custody.
         assertEq(
@@ -1227,13 +1484,15 @@ contract DealManagerSecondaryTradeTest is Test {
         // Fully-filled variant of the partial case: no free pool to release; the committed lot
         // stays ACCEPTED and its units stay reserved.
         bytes32 offerId = _postSellOffer();
+        Offer memory baseline = dm.getOffer(offerId);
         bytes32 settlementId = _acceptSellOffer(offerId);
         uint256 buyerBalanceAfterAccept = paymentToken.balanceOf(buyer);
 
         vm.prank(seller);
         dm.cancelOffer(offerId);
 
-        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.CANCELLED), "offer CANCELLED while fully accepted");
+        // → CANCELLED while fully accepted: the full fill's counters stay committed
+        _assertOfferState(offerId, baseline, OfferStatus.CANCELLED, UNITS, CONSIDERATION, 0, 1);
         assertEq(
             uint8(dm.getSecondaryEscrow(settlementId).status),
             uint8(SecondaryEscrowStatus.ACCEPTED),
@@ -1249,13 +1508,15 @@ contract DealManagerSecondaryTradeTest is Test {
         // Fully-filled variant of the partial case: no free pool to refund; the committed lot's
         // funds stay in custody.
         bytes32 offerId = _postBid();
+        Offer memory baseline = dm.getOffer(offerId);
         bytes32 settlementId = _acceptBid(offerId);
         uint256 buyerBalanceAfterAccept = paymentToken.balanceOf(buyer);
 
         vm.prank(buyer);
         dm.cancelOffer(offerId);
 
-        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.CANCELLED), "offer CANCELLED while fully accepted");
+        // → CANCELLED while fully accepted: the full fill's counters stay committed
+        _assertOfferState(offerId, baseline, OfferStatus.CANCELLED, UNITS, CONSIDERATION, 0, 1);
         assertEq(
             uint8(dm.getSecondaryEscrow(settlementId).status),
             uint8(SecondaryEscrowStatus.ACCEPTED),
@@ -1274,13 +1535,12 @@ contract DealManagerSecondaryTradeTest is Test {
     function test_AcceptOffer_Sell_SingleFullyFills() public {
         // LIVE → FULLY_ACCEPTED directly in a single fill, with no PARTIALLY_ACCEPTED step.
         bytes32 offerId = _postSellOffer();
+        Offer memory baseline = dm.getOffer(offerId);
         uint256 buyerBefore = paymentToken.balanceOf(buyer);
 
         bytes32 settlementId = _acceptSellOffer(offerId);
 
-        Offer memory offer = dm.getOffer(offerId);
-        assertEq(uint8(offer.status), uint8(OfferStatus.FULLY_ACCEPTED));
-        assertEq(offer.unitsAccepted, UNITS);
+        _assertOfferState(offerId, baseline, OfferStatus.FULLY_ACCEPTED, UNITS, CONSIDERATION, 0, 1);
 
         // ∅ → ACCEPTED: every escrow field is populated for the full lot.
         _assertAcceptedEscrow(settlementId, offerId, buyer, UNITS, CONSIDERATION);
@@ -1290,11 +1550,15 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(paymentToken.balanceOf(buyer), buyerBefore - CONSIDERATION, "buyer funds pulled");
         assertEq(paymentToken.balanceOf(address(dm)), CONSIDERATION, "consideration held in escrow");
         assertEq(certPrinter.reservedUnits(sellerTokenId), UNITS, "seller units reserved");
+
+        // Sell: the seller's pre-signed open endorsement is materialized at acceptance.
+        _assertOpenEndorsementAttached(offerId, seller, OPEN_ENDORSEMENT_SIG);
     }
 
     function test_AcceptOffer_Sell_MultipleFills() public {
         // Walks the full LIVE → PARTIALLY_ACCEPTED → FULLY_ACCEPTED lifecycle in two fills.
         bytes32 offerId = _postSellOffer();
+        Offer memory baseline = dm.getOffer(offerId);
         uint256 firstUnits = UNITS / 2;
         uint256 secondUnits = UNITS - firstUnits;
         uint256 expectedFirst  = CONSIDERATION * firstUnits / UNITS;
@@ -1304,7 +1568,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: firstUnits,
-            buyerName: "Bob",
+            buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: 0,
             adminMultisig: address(0),
             sellerTokenId: 0,
@@ -1315,10 +1579,8 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(buyer);
         bytes32 settlementId1 = dm.acceptOffer(p);
 
-        // LIVE → PARTIALLY_ACCEPTED: the partial fill keeps the offer's full reservation.
-        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.PARTIALLY_ACCEPTED));
-        assertEq(dm.getOffer(offerId).unitsAccepted, firstUnits);
-        assertEq(dm.getOffer(offerId).paymentAccepted, expectedFirst, "offer tracks committed consideration");
+        // LIVE → PARTIALLY_ACCEPTED on the first fill
+        _assertOfferState(offerId, baseline, OfferStatus.PARTIALLY_ACCEPTED, firstUnits, expectedFirst, 0, 1);
         assertEq(certPrinter.reservedUnits(sellerTokenId), UNITS, "partial fill keeps the offer's full reservation");
         _assertAcceptedEscrow(settlementId1, offerId, buyer, firstUnits, expectedFirst);
         assertEq(paymentToken.balanceOf(buyer), buyerStart - expectedFirst, "buyer pays pro-rata for the first lot only");
@@ -1328,11 +1590,9 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(buyer);
         bytes32 settlementId2 = dm.acceptOffer(p);
 
-        // PARTIALLY_ACCEPTED → FULLY_ACCEPTED: each fill is its own pro-rata settlement.
+        // PARTIALLY_ACCEPTED → FULLY_ACCEPTED: each fill is its own pro-rata settlement
         assertTrue(settlementId1 != settlementId2, "each fill gets its own settlement escrow");
-        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.FULLY_ACCEPTED));
-        assertEq(dm.getOffer(offerId).unitsAccepted, UNITS);
-        assertEq(dm.getOffer(offerId).paymentAccepted, CONSIDERATION, "committed consideration sums to the full offer");
+        _assertOfferState(offerId, baseline, OfferStatus.FULLY_ACCEPTED, UNITS, CONSIDERATION, 0, 2);
         // Each lot's escrow is independent and immutable: the second fill leaves the first untouched.
         _assertAcceptedEscrow(settlementId1, offerId, buyer, firstUnits, expectedFirst);
         _assertAcceptedEscrow(settlementId2, offerId, buyer, secondUnits, expectedSecond);
@@ -1375,7 +1635,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS + 1,
-            buyerName: "Bob",
+            buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: 0,
             adminMultisig: address(0),
             sellerTokenId: 0,
@@ -1395,7 +1655,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS / 2,
-            buyerName: "Bob",
+            buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: 0,
             adminMultisig: address(0),
             sellerTokenId: 0,
@@ -1426,13 +1686,13 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS,
-            buyerName: "Bob",
+            buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: 0,
             adminMultisig: address(0),
             sellerTokenId: sellerTokenId,
             acceptorPartyValues: new string[](0),
             acceptorAgreementSig: "",
-            openEndorsementSig: "sellerEndorsement"
+            openEndorsementSig: OPEN_ENDORSEMENT_SIG
         });
         vm.prank(seller);
         vm.expectRevert(ISecondaryTradeStorage.OfferNotAvailable.selector);
@@ -1445,13 +1705,13 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS + 1,
-            buyerName: "Bob",
+            buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: 0,
             adminMultisig: address(0),
             sellerTokenId: sellerTokenId,
             acceptorPartyValues: new string[](0),
             acceptorAgreementSig: "",
-            openEndorsementSig: "sellerEndorsement"
+            openEndorsementSig: OPEN_ENDORSEMENT_SIG
         });
 
         vm.prank(seller);
@@ -1462,15 +1722,14 @@ contract DealManagerSecondaryTradeTest is Test {
     function test_AcceptOffer_Buy_SingleFullyFills() public {
         // LIVE → FULLY_ACCEPTED directly in a single fill, with no PARTIALLY_ACCEPTED step.
         bytes32 offerId = _postBid();
+        Offer memory baseline = dm.getOffer(offerId);
 
         // Bid is pre-funded at postOffer; acceptance must migrate, not pull additional funds.
         assertEq(paymentToken.balanceOf(address(dm)), CONSIDERATION, "bid pre-funded at postOffer");
 
         bytes32 settlementId = _acceptBid(offerId);
 
-        Offer memory offer = dm.getOffer(offerId);
-        assertEq(uint8(offer.status), uint8(OfferStatus.FULLY_ACCEPTED));
-        assertEq(offer.unitsAccepted, UNITS);
+        _assertOfferState(offerId, baseline, OfferStatus.FULLY_ACCEPTED, UNITS, CONSIDERATION, 0, 1);
 
         // ∅ → ACCEPTED: the escrow opens already-funded, migrated from the holding escrow (acceptor = seller).
         _assertAcceptedEscrow(settlementId, offerId, seller, UNITS, CONSIDERATION);
@@ -1479,11 +1738,15 @@ contract DealManagerSecondaryTradeTest is Test {
         // units are reserved at acceptance (bids reserve on accept, not at postOffer).
         assertEq(paymentToken.balanceOf(address(dm)), CONSIDERATION, "funds remain in DealManager");
         assertEq(certPrinter.reservedUnits(sellerTokenId), UNITS, "seller units reserved at bid acceptance");
+
+        // Bid: the acceptor (seller) signs the open endorsement at acceptance.
+        _assertOpenEndorsementAttached(offerId, seller, OPEN_ENDORSEMENT_SIG);
     }
 
     function test_AcceptOffer_Buy_MultipleFills() public {
         // Walks the full LIVE → PARTIALLY_ACCEPTED → FULLY_ACCEPTED lifecycle in two fills.
         bytes32 offerId = _postBid();
+        Offer memory baseline = dm.getOffer(offerId);
         uint256 firstUnits = UNITS / 2;
         uint256 secondUnits = UNITS - firstUnits;
         uint256 expectedFirst  = CONSIDERATION * firstUnits / UNITS;
@@ -1491,20 +1754,16 @@ contract DealManagerSecondaryTradeTest is Test {
 
         bytes32 settlementId1 = _acceptBidPartial(offerId, firstUnits);
 
-        // LIVE → PARTIALLY_ACCEPTED
-        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.PARTIALLY_ACCEPTED));
-        assertEq(dm.getOffer(offerId).unitsAccepted, firstUnits);
-        assertEq(dm.getOffer(offerId).paymentAccepted, expectedFirst, "offer tracks committed consideration");
+        // LIVE → PARTIALLY_ACCEPTED on the first fill
+        _assertOfferState(offerId, baseline, OfferStatus.PARTIALLY_ACCEPTED, firstUnits, expectedFirst, 0, 1);
         _assertAcceptedEscrow(settlementId1, offerId, seller, firstUnits, expectedFirst);
         assertEq(certPrinter.reservedUnits(sellerTokenId), firstUnits, "first lot reserves its own units at acceptance");
 
         bytes32 settlementId2 = _acceptBidPartial(offerId, secondUnits);
 
-        // PARTIALLY_ACCEPTED → FULLY_ACCEPTED: each fill is its own pro-rata settlement.
+        // PARTIALLY_ACCEPTED → FULLY_ACCEPTED: each fill is its own pro-rata settlement
         assertTrue(settlementId1 != settlementId2, "each fill gets its own settlement escrow");
-        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.FULLY_ACCEPTED));
-        assertEq(dm.getOffer(offerId).unitsAccepted, UNITS);
-        assertEq(dm.getOffer(offerId).paymentAccepted, CONSIDERATION, "committed consideration sums to the full offer");
+        _assertOfferState(offerId, baseline, OfferStatus.FULLY_ACCEPTED, UNITS, CONSIDERATION, 0, 2);
         // Each lot's escrow is independent and immutable: the second fill leaves the first untouched.
         _assertAcceptedEscrow(settlementId1, offerId, seller, firstUnits, expectedFirst);
         _assertAcceptedEscrow(settlementId2, offerId, seller, secondUnits, expectedSecond);
@@ -1525,6 +1784,7 @@ contract DealManagerSecondaryTradeTest is Test {
         uint256 lotB = CONSIDERATION * unitsB / UNITS;
 
         bytes32 offerId = _postSellOffer();
+        Offer memory baseline = dm.getOffer(offerId);
         bytes32 settlementIdA = _acceptSellOfferPartial(offerId, unitsA);
         bytes32 settlementIdB = _acceptSellOfferPartial(offerId, unitsB);
 
@@ -1539,10 +1799,8 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementIdA);
 
-        Offer memory afterA = dm.getOffer(offerId);
-        assertEq(uint8(afterA.status), uint8(OfferStatus.FULLY_ACCEPTED), "offer not terminal until every lot settles");
-        assertEq(afterA.unitsFinalized, unitsA, "first lot's units counted as finalized");
-        assertEq(afterA.unitsAccepted, UNITS, "unitsFinalized lags unitsAccepted while a lot is outstanding");
+        // lot A settles: unitsFinalized advances, offer stays FULLY_ACCEPTED until every lot settles
+        _assertOfferState(offerId, baseline, OfferStatus.FULLY_ACCEPTED, UNITS, CONSIDERATION, unitsA, 2);
         assertEq(uint8(dm.getSecondaryEscrow(settlementIdA).status), uint8(SecondaryEscrowStatus.FINALIZED), "lot A escrow FINALIZED");
         assertEq(uint8(dm.getSecondaryEscrow(settlementIdB).status), uint8(SecondaryEscrowStatus.ACCEPTED), "lot B still ACCEPTED");
         assertEq(paymentToken.balanceOf(seller), sellerBefore + lotA, "seller paid lot A");
@@ -1552,14 +1810,13 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(paymentToken.balanceOf(address(dm)), lotB, "only lot B's payment remains in custody");
 
         // Finalize lot B (the last lot): offer reaches FINALIZED, reservation fully consumed, custody drained.
-        vm.expectEmit(true, false, false, false);
+        vm.expectEmit(true, false, false, true);
         emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(settlementIdB, seller, buyer, lotB);
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementIdB);
 
-        Offer memory afterB = dm.getOffer(offerId);
-        assertEq(uint8(afterB.status), uint8(OfferStatus.FINALIZED), "all offered units settled");
-        assertEq(afterB.unitsFinalized, UNITS, "gate met: unitsFinalized == units");
+        // FULLY_ACCEPTED → FINALIZED once the last lot settles
+        _assertOfferState(offerId, baseline, OfferStatus.FINALIZED, UNITS, CONSIDERATION, UNITS, 2);
         assertEq(uint8(dm.getSecondaryEscrow(settlementIdB).status), uint8(SecondaryEscrowStatus.FINALIZED), "lot B escrow FINALIZED");
         assertEq(paymentToken.balanceOf(seller), sellerBefore + CONSIDERATION, "seller received full consideration across lots");
         assertEq(certPrinter.consumedUnits(sellerTokenId), UNITS, "all units consumed");
@@ -1577,6 +1834,7 @@ contract DealManagerSecondaryTradeTest is Test {
         uint256 lotB = CONSIDERATION * unitsB / UNITS;
 
         bytes32 offerId = _postBid();
+        Offer memory baseline = dm.getOffer(offerId);
         bytes32 settlementIdA = _acceptBidPartial(offerId, unitsA);
         bytes32 settlementIdB = _acceptBidPartial(offerId, unitsB);
 
@@ -1591,10 +1849,8 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementIdA);
 
-        Offer memory afterA = dm.getOffer(offerId);
-        assertEq(uint8(afterA.status), uint8(OfferStatus.FULLY_ACCEPTED), "offer not terminal until every lot settles");
-        assertEq(afterA.unitsFinalized, unitsA, "first lot's units counted as finalized");
-        assertEq(afterA.unitsAccepted, UNITS, "unitsFinalized lags unitsAccepted while a lot is outstanding");
+        // lot A settles: unitsFinalized advances, bid stays FULLY_ACCEPTED until every lot settles
+        _assertOfferState(offerId, baseline, OfferStatus.FULLY_ACCEPTED, UNITS, CONSIDERATION, unitsA, 2);
         assertEq(uint8(dm.getSecondaryEscrow(settlementIdA).status), uint8(SecondaryEscrowStatus.FINALIZED), "lot A escrow FINALIZED");
         assertEq(uint8(dm.getSecondaryEscrow(settlementIdB).status), uint8(SecondaryEscrowStatus.ACCEPTED), "lot B still ACCEPTED");
         assertEq(paymentToken.balanceOf(seller), sellerBefore + lotA, "acceptor (seller) paid lot A");
@@ -1604,14 +1860,13 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(paymentToken.balanceOf(address(dm)), lotB, "only lot B's payment remains in custody");
 
         // Finalize lot B (the last lot): bid reaches FINALIZED, reservation fully consumed, custody drained.
-        vm.expectEmit(true, false, false, false);
+        vm.expectEmit(true, false, false, true);
         emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(settlementIdB, seller, buyer, lotB);
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementIdB);
 
-        Offer memory afterB = dm.getOffer(offerId);
-        assertEq(uint8(afterB.status), uint8(OfferStatus.FINALIZED), "all offered units settled");
-        assertEq(afterB.unitsFinalized, UNITS, "gate met: unitsFinalized == units");
+        // FULLY_ACCEPTED → FINALIZED once the last lot settles
+        _assertOfferState(offerId, baseline, OfferStatus.FINALIZED, UNITS, CONSIDERATION, UNITS, 2);
         assertEq(uint8(dm.getSecondaryEscrow(settlementIdB).status), uint8(SecondaryEscrowStatus.FINALIZED), "lot B escrow FINALIZED");
         assertEq(paymentToken.balanceOf(seller), sellerBefore + CONSIDERATION, "acceptor received full consideration across lots");
         assertEq(certPrinter.consumedUnits(sellerTokenId), UNITS, "all units consumed");
@@ -1737,16 +1992,19 @@ contract DealManagerSecondaryTradeTest is Test {
         // (returned to the free pool, not released) so future acceptors stay protected — the seller must
         // cancelOffer() to release it.
         bytes32 offerId = _postSellOffer();
+        Offer memory baseline = dm.getOffer(offerId);
         bytes32 settlementId = _acceptSellOffer(offerId);
         uint256 buyerBefore = paymentToken.balanceOf(buyer);
 
         vm.warp(dm.getSecondaryEscrow(settlementId).expiry + 1);
+        vm.expectEmit(true, false, false, false);
+        emit ISecondaryTradeStorage.SecondaryTradeAgreementVoided(settlementId);
         vm.prank(keeper);
         dm.voidExpiredSecondaryTradeAgreement(settlementId, buyer, "");
 
-        // escrow + offer state
+        // settlement VOIDED, offer reverts to LIVE
         assertEq(uint8(dm.getSecondaryEscrow(settlementId).status), uint8(SecondaryEscrowStatus.VOIDED), "expired settlement VOIDED");
-        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.LIVE), "offer reverts to LIVE (not cancelled)");
+        _assertOfferState(offerId, baseline, OfferStatus.LIVE, 0, 0, 0, 1);
         // units: reservation held, nothing released or consumed
         assertEq(certPrinter.reservedUnits(sellerTokenId), UNITS, "reservation held: offer LIVE, future acceptors protected");
         assertEq(certPrinter.releasedUnits(sellerTokenId), 0, "reservation not released while the offer stays open");
@@ -1835,7 +2093,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerAgreementId,
             units: units,
-            buyerName: "Bob",
+            buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: 0,
             adminMultisig: address(0),
             sellerTokenId: 0,
@@ -1857,18 +2115,16 @@ contract DealManagerSecondaryTradeTest is Test {
         // Each void refunds its buyer immediately and returns units to the free pool, but the SELL
         // reservation stays held throughout — the offer is never cancelled.
         bytes32 offerId = _postSellOffer();
+        Offer memory baseline = dm.getOffer(offerId);
         bytes32 lotA = _acceptSellOfferPartial(offerId, 40);
         bytes32 lotB = _acceptSellOfferPartial(offerId, 60);
-        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.FULLY_ACCEPTED));
+        _assertOfferState(offerId, baseline, OfferStatus.FULLY_ACCEPTED, UNITS, CONSIDERATION, 0, 2);
 
         // FULLY_ACCEPTED → PARTIALLY_ACCEPTED: void one of the two lots, the other survives.
         uint256 buyerBeforeB = paymentToken.balanceOf(buyer);
         _voidSettlementBothParties(lotB);
 
-        Offer memory offer = dm.getOffer(offerId);
-        assertEq(uint8(offer.status), uint8(OfferStatus.PARTIALLY_ACCEPTED), "offer drops to PARTIALLY_ACCEPTED, not LIVE");
-        assertEq(offer.unitsAccepted, 40, "only the surviving lot's units remain accepted");
-        assertEq(offer.paymentAccepted, CONSIDERATION * 40 / UNITS, "voided lot's consideration decremented from committed");
+        _assertOfferState(offerId, baseline, OfferStatus.PARTIALLY_ACCEPTED, 40, CONSIDERATION * 40 / UNITS, 0, 2);
         assertEq(certPrinter.reservedUnits(sellerTokenId), UNITS, "voided lot returns to free pool, reservation stays held");
         assertEq(
             paymentToken.balanceOf(buyer),
@@ -1880,10 +2136,7 @@ contract DealManagerSecondaryTradeTest is Test {
         uint256 buyerBeforeA = paymentToken.balanceOf(buyer);
         _voidSettlementBothParties(lotA);
 
-        offer = dm.getOffer(offerId);
-        assertEq(uint8(offer.status), uint8(OfferStatus.LIVE), "last lot voided reverts the offer to LIVE");
-        assertEq(offer.unitsAccepted, 0, "no units remain accepted");
-        assertEq(offer.paymentAccepted, 0, "no consideration remains committed");
+        _assertOfferState(offerId, baseline, OfferStatus.LIVE, 0, 0, 0, 2);
         assertEq(certPrinter.reservedUnits(sellerTokenId), UNITS, "reservation held: offer is LIVE, not cancelled");
         assertEq(certPrinter.releasedUnits(sellerTokenId), 0);
         assertEq(
@@ -1894,8 +2147,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         // Ready for another lifecycle: the reverted-to-LIVE offer accepts a fresh full fill.
         bytes32 reaccept = _acceptSellOffer(offerId);
-        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.FULLY_ACCEPTED), "LIVE offer runs a fresh acceptance");
-        assertEq(dm.getOffer(offerId).unitsAccepted, UNITS, "fresh fill re-accepts the full quantity");
+        _assertOfferState(offerId, baseline, OfferStatus.FULLY_ACCEPTED, UNITS, CONSIDERATION, 0, 3);
         assertEq(certPrinter.reservedUnits(sellerTokenId), UNITS, "held reservation backs the fresh fill");
         assertEq(
             uint8(dm.getSecondaryEscrow(reaccept).status),
@@ -1911,9 +2163,10 @@ contract DealManagerSecondaryTradeTest is Test {
         // while the offer is open). The bid walks FULLY_ACCEPTED → PARTIALLY_ACCEPTED → LIVE and
         // then accepts a fresh lifecycle.
         bytes32 offerId = _postBid();
+        Offer memory baseline = dm.getOffer(offerId);
         bytes32 lotA = _acceptBidPartial(offerId, 40);
         bytes32 lotB = _acceptBidPartial(offerId, 60);
-        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.FULLY_ACCEPTED));
+        _assertOfferState(offerId, baseline, OfferStatus.FULLY_ACCEPTED, UNITS, CONSIDERATION, 0, 2);
         assertEq(certPrinter.reservedUnits(sellerTokenId), UNITS, "both lots reserve the seller's units");
 
         uint256 buyerBalance = paymentToken.balanceOf(buyer);
@@ -1921,10 +2174,7 @@ contract DealManagerSecondaryTradeTest is Test {
         // FULLY_ACCEPTED → PARTIALLY_ACCEPTED: void one lot; the seller's lot reservation is released.
         _voidSettlementBothParties(lotB);
 
-        Offer memory offer = dm.getOffer(offerId);
-        assertEq(uint8(offer.status), uint8(OfferStatus.PARTIALLY_ACCEPTED), "offer drops to PARTIALLY_ACCEPTED, not LIVE");
-        assertEq(offer.unitsAccepted, 40, "only the surviving lot's units remain accepted");
-        assertEq(offer.paymentAccepted, CONSIDERATION * 40 / UNITS, "voided lot's consideration decremented from committed");
+        _assertOfferState(offerId, baseline, OfferStatus.PARTIALLY_ACCEPTED, 40, CONSIDERATION * 40 / UNITS, 0, 2);
         assertEq(certPrinter.reservedUnits(sellerTokenId), 40, "voided lot's seller reservation released");
         assertEq(paymentToken.balanceOf(buyer), buyerBalance, "no buyer refund while offer is open");
         assertEq(paymentToken.balanceOf(address(dm)), CONSIDERATION, "consideration stays whole in custody");
@@ -1932,18 +2182,14 @@ contract DealManagerSecondaryTradeTest is Test {
         // PARTIALLY_ACCEPTED → LIVE: void the last lot, unitsAccepted → 0.
         _voidSettlementBothParties(lotA);
 
-        offer = dm.getOffer(offerId);
-        assertEq(uint8(offer.status), uint8(OfferStatus.LIVE), "last lot voided reverts the offer to LIVE");
-        assertEq(offer.unitsAccepted, 0, "no units remain accepted");
-        assertEq(offer.paymentAccepted, 0, "no consideration remains committed");
+        _assertOfferState(offerId, baseline, OfferStatus.LIVE, 0, 0, 0, 2);
         assertEq(certPrinter.reservedUnits(sellerTokenId), 0, "all seller reservations released");
         assertEq(paymentToken.balanceOf(buyer), buyerBalance, "still no buyer refund: offer open, not cancelled");
         assertEq(paymentToken.balanceOf(address(dm)), CONSIDERATION, "full consideration in custody, ready to back a fresh fill");
 
         // Ready for another lifecycle: the reverted-to-LIVE bid accepts a fresh full fill.
         bytes32 reaccept = _acceptBid(offerId);
-        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.FULLY_ACCEPTED), "LIVE bid runs a fresh acceptance");
-        assertEq(dm.getOffer(offerId).unitsAccepted, UNITS, "fresh fill re-accepts the full quantity");
+        _assertOfferState(offerId, baseline, OfferStatus.FULLY_ACCEPTED, UNITS, CONSIDERATION, 0, 3);
         assertEq(certPrinter.reservedUnits(sellerTokenId), UNITS, "fresh fill re-reserves the seller's units");
         assertEq(
             uint8(dm.getSecondaryEscrow(reaccept).status),
@@ -2411,7 +2657,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS,
-            buyerName: "Bob",
+            buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: 0,
             adminMultisig: address(0),
             sellerTokenId: 0,
@@ -2451,12 +2697,15 @@ contract DealManagerSecondaryTradeTest is Test {
 
         uint256 sellerBefore = paymentToken.balanceOf(seller);
 
-        vm.prank(keeper);
-        dm.finalizeSecondaryTradeAgreement(settlementId);
-
         uint256 fee           = CONSIDERATION * 1000 / 10000; // 1 ether
         uint256 integratorFee = fee * 3000 / 10000;           // 0.3 ether
         uint256 platformFee   = fee - integratorFee;          // 0.7 ether
+
+        // The event reports the realized split: credited integrator (feeDestination) + the two portions.
+        vm.expectEmit(true, true, true, true);
+        emit ISecondaryTradeStorage.SecondaryFeeDistributed(settlementId, address(paymentToken), integrator, fee, integratorFee, platformFee);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
 
         assertEq(paymentToken.balanceOf(seller), sellerBefore + CONSIDERATION - fee, "seller paid amount minus fee");
         assertEq(paymentToken.balanceOf(integrator), integratorFee, "integrator gets its fee share");
@@ -2493,10 +2742,13 @@ contract DealManagerSecondaryTradeTest is Test {
 
         uint256 sellerBefore = paymentToken.balanceOf(seller);
 
+        uint256 fee = CONSIDERATION * 1000 / 10000; // 1 ether
+
+        // Fall-through: feeDestination zero, no integrator share, full fee to the platform.
+        vm.expectEmit(true, true, true, true);
+        emit ISecondaryTradeStorage.SecondaryFeeDistributed(settlementId, address(paymentToken), address(0), fee, 0, fee);
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementId);
-
-        uint256 fee = CONSIDERATION * 1000 / 10000; // 1 ether
 
         assertEq(paymentToken.balanceOf(seller), sellerBefore + CONSIDERATION - fee, "seller paid amount minus fee");
         assertEq(paymentToken.balanceOf(integrator), 0, "de-whitelisted integrator gets nothing");
@@ -2603,7 +2855,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS,
-            buyerName: "Bob",
+            buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: 0,
             adminMultisig: address(0),
             sellerTokenId: 0,
@@ -2612,8 +2864,13 @@ contract DealManagerSecondaryTradeTest is Test {
             openEndorsementSig: ""
         });
 
-        vm.expectEmit(true, false, true, true); // check offerId + acceptor + units; skip computed settlement id
-        emit ISecondaryTradeStorage.OfferAccepted(offerId, bytes32(0), buyer, UNITS);
+        // Check offerId + acceptor topics and the full data; skip only the settlement id topic, which is
+        // computed internally and can't be predicted here.
+        vm.expectEmit(true, false, true, true);
+        emit ISecondaryTradeStorage.OfferAccepted(
+            offerId, bytes32(0), buyer, UNITS, address(paymentToken), CONSIDERATION,
+            sellerTokenId, block.timestamp + 1 days, SELL_ACCEPT_BUYER_NAME, 0, address(0), OPEN_ENDORSEMENT_SIG
+        );
         vm.prank(buyer);
         dm.acceptOffer(p);
     }

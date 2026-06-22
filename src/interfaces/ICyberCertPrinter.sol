@@ -157,6 +157,7 @@ interface ICyberCertPrinter is IERC721 {
     //   that path makes no reservation call of its own.
     // - Each reserved unit should eventually be released or consumed exactly once. Multiple
     //   reservers may hold reservations on the same cert independently, but their reservations should not overlap
+    // TODO WIP: merge with feat/legion
     function reserveUnits(uint256 tokenId, uint256 units) external;
     function releaseUnits(uint256 tokenId, uint256 units) external;
     function consumeUnits(uint256 tokenId, uint256 units) external;

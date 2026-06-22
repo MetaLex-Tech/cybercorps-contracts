@@ -47,6 +47,7 @@ import "./ITransferRestrictionHook.sol";
 import "./ICondition.sol";
 import "../CyberCorpConstants.sol";
 import "../storage/CyberCertPrinterStorage.sol";
+import {ExemptionPathway} from "./ISecondaryTradeStorage.sol";
 
 interface IIssuanceManager {
     // Events
@@ -377,10 +378,13 @@ interface IIssuanceManager {
     function secondaryTransfer(bytes calldata dealMetadata) external;
     function attachOpenEndorsement(
         address certPrinter,
+        bytes32 offerId,
+        address spvAddress,
         uint256 tokenId,
         address endorser,
-        address endorsee,
-        bytes calldata endorsementSig,
-        bytes32 agreementId
+        uint256 unitsCommitted,
+        ExemptionPathway exemptionPathway,
+        uint256 validUntil,
+        bytes calldata endorsementSig
     ) external;
 }
