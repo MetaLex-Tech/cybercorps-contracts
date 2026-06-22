@@ -81,6 +81,62 @@ PR #745 (Mainframe ownership UI) and the auth findings in its `notes/plans/mainf
 
 ---
 
+## P2 — Class-level security terms have no on-chain home (stored per-certificate) — `PROPOSED`
+
+**Problem.** A `CyberCertPrinter` is the per-security-class contract, but it stores only class
+**identity** — `initialize(... name, ticker, certificateUri, SecurityClass, SecuritySeries, extension)`
+(`src/CyberCertPrinter.sol:107`); there is no slot for the class's economic terms. The actual
+class-level terms — `seriesName, parValue, authorizedShares, originalIssuePrice, effectiveDate,
+liquidationPreferenceMultiple / Type, conversionPrice` — live in the **`ShareExtension` terms struct**
+(`src/storage/extensions/ShareExtension.sol:143-150`) and are **ABI-encoded into EACH certificate's
+`extensionData` per mint** (`CertificateDetails.extensionData`, `src/storage/CyberCertPrinterStorage.sol:51`),
+surfaced only on the per-cert `tokenURI` JSON (`ShareExtension.sol:286-305`). So terms that are
+conceptually **class invariants are modeled per-certificate.** Consequences:
+
+- **Divergence.** Every issuance re-supplies the terms; nothing keeps them consistent, so two certs of
+  the *same* class can carry different `parValue` / `authorizedShares` / `originalIssuePrice`.
+- **No authoritative class record.** There is no single on-chain source of truth for a class's terms —
+  which the cap table, §219 reporting, and OCF export all want, and which is exactly why the webapp
+  cannot pre-fill them when issuing under an existing class (see `metalex-webapp` **M1**).
+- **`authorizedShares` is unenforced.** Authorized shares is a hard **class-level cap**, but because it
+  lives per-cert there is nothing on-chain that tracks issued-vs-authorized or prevents over-issuance —
+  and different certs can even claim different authorized amounts.
+
+**Desired model.** Give the security class (the `CyberCertPrinter`, or a class-config record it owns) an
+on-chain home for its **class-level terms**, set once at class creation, so issuance **reads/validates
+against the class** (the source of truth) and `authorizedShares` can be enforced as a cap. Genuinely
+per-certificate fields (units represented, investment amount, holder, issuance date) stay per-cert.
+
+**Design direction (high-level — details TBD).**
+
+- Add a class-terms struct to `CyberCertPrinter` storage, populated at `initialize` / `createCertPrinter`
+  (`src/IssuanceManager.sol:229`); split the `ShareExtension` terms into **class-level** (seriesName, par
+  value, original issue price, effective date, authorized shares, liquidation preference) vs **per-cert**.
+- On issuance, default per-cert extension data from the class terms and **validate**: reject mismatched
+  class terms and enforce `Σ unitsRepresented ≤ authorizedShares` at the class.
+- **Migration / back-compat:** existing printers have no class terms; backfill from the most-recent prior
+  cert (the only current source) or via a one-shot migration (cf. the `*WithMigration` pattern). Until
+  then the webapp M1 pre-fill can only seed from a prior cert.
+
+**Open questions.**
+
+1. Which terms are truly class-level vs allowed to vary per cert (e.g. can `originalIssuePrice` differ by
+   round / tranche, or is it fixed per class)?
+2. On-chain class storage vs a canonical off-chain class row — and how that interacts with the
+   constitutive-register thesis (the class terms are arguably part of the authoritative record).
+3. Enforce the `authorizedShares` cap **on-chain** at issuance, or track/report it off-chain only?
+4. Interaction with scrip / unit accounting (scripified units still count against authorized) and with
+   non-share instruments (SAFE/SAFT/etc., which have different "class terms").
+5. OCF / cap-table mapping for the class-level fields.
+
+**References.** `src/CyberCertPrinter.sol:107` (initialize — identity only, no terms);
+`src/storage/extensions/ShareExtension.sol:143-150` (the terms struct, encoded per-cert) + `:286-305`
+(rendered per-cert into tokenURI); `src/storage/CyberCertPrinterStorage.sol:51` (`CertificateDetails.extensionData`);
+`src/IssuanceManager.sol:229` (`createCertPrinter`). Webapp side: `metalex-webapp` **M1** (pre-fill blocked by
+this) in its `notes/plans/mainframe-changes-plan.md`.
+
+---
+
 ## Backlog (unprioritized)
 
 _(none yet — add future protocol improvements here)_
