@@ -51,15 +51,7 @@ import "../interfaces/ICondition.sol";
 import "./DealManagerStorage.sol";
 import "./DealManagerFactoryStorage.sol";
 import {LexScrowStorage} from "./LexScrowStorage.sol";
-import {ISecondaryTradeStorage} from "../interfaces/ISecondaryTradeStorage.sol";
-
-enum OfferSide { SELL, BUY }
-
-enum OfferStatus { LIVE, CANCELLED, PARTIALLY_ACCEPTED, FULLY_ACCEPTED, FINALIZED }
-
-enum ExemptionPathway { RULE_144, SECTION_4A7, SECTION_4A1HALF, RULE_144A, REGULATION_S }
-
-enum SecondaryEscrowStatus { ACCEPTED, FINALIZED, VOIDED }
+import {ISecondaryTradeStorage, OfferSide, OfferStatus, SecondaryEscrowStatus, ExemptionPathway} from "../interfaces/ISecondaryTradeStorage.sol";
 
 struct Offer {
     address spvAddress;             // cyberCORP address this offer belongs to
@@ -72,10 +64,8 @@ struct Offer {
     uint256 consideration;          // total payment for all offered units
     ExemptionPathway exemptionPathway;
     uint256 validUntil;
-    // TODO add real test cases for it
     bytes counterpartyRestrictions; // spec §8.1 Counterparty restrictions
     bytes additionalTerms;          // spec §8.1 Supplemental fields
-    // TODO add real test cases for it
     address integrator;
     OfferStatus status;
     uint256 unitsAccepted;          // units committed to active and finalized settlements; decrements on void only
@@ -87,8 +77,7 @@ struct Offer {
     string[] globalValues;          // agreement global values; stored for use at acceptOffer
     string[] offerorPartyValues;    // offeror's party values; stored for use at acceptOffer
     bytes offerorAgreementSig;      // offeror's EIP-712 sig over offerAgreementId+terms; verified at postOffer, passed to signContractWithEscrow at acceptOffer
-    // TODO add real test cases for it
-    bytes openEndorsementSig;       // sell offer-only: seller's pre-signed open endorsement (spec §7.3.1); zero for buy offers
+    bytes openEndorsementSig;       // sell offer-only: seller's pre-signed open endorsement (spec §7.3.1); in contrast, buy offer's open endorsement is acquired at acceptance and stored in SecondaryEscrow
     string buyerName;               // buy offer-only: buyer's registered name for OwnerDetails; empty for sell offers
     uint8 buyerHostingMode;         // buy offer-only: 0 = Direct, 1 = Administered; zero for sell offers
     address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
@@ -97,9 +86,8 @@ struct Offer {
     address[] closingConditions;      // snapshotted from DealManager config at postOffer; evaluated at finalize (gates asset transfer)
 }
 
-// Self-contained settlement escrow for secondary trades, keyed by settlementAgreementId.
+// Per-settlement escrow for secondary trades, keyed by settlementAgreementId.
 struct SecondaryEscrow {
-    // TODO it should have an agreementId
     // custody + lifecycle
     address counterparty;           // acceptor (msg.sender of acceptOffer); buyer/seller derived from offer.side
     address paymentToken;           // ERC20 payment token
@@ -111,7 +99,10 @@ struct SecondaryEscrow {
     address feeDestination;         // integrator address for fee split; zero = all fees to MetaLeX
     bytes32 offerId;                // back-link to Offer
     uint256 tokenId;                // seller's Ledger Entry Token id; reservation target for releaseUnits on void
-    bytes dealMetadata;             // abi-encoded ownership-change params for IssuanceManager.secondaryTransfer
+    string buyerName;               // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
+    uint8 buyerHostingMode;         // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
+    address adminMultisig;          // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
+    bytes openEndorsementSig;       // redundant for sell offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
 }
 
 struct PostOfferParams {
@@ -267,8 +258,9 @@ library SecondaryTradeStorage {
         });
 
         // Evaluate threshold conditions (offer is now readable via getOffer). At posting there are no
-        // settlements yet, so buyer-facing conditions short-circuit; seller/offer-wide conditions enforce.
-        _checkThresholdConditions(offerId);
+        // settlements yet (agreementId == 0), so buyer-facing conditions short-circuit; seller/offer-wide
+        // conditions enforce.
+        _checkThresholdConditions(offerId, bytes32(0));
 
         if (params.side == OfferSide.SELL) {
             // Reserve units on the seller's cert
@@ -278,7 +270,16 @@ library SecondaryTradeStorage {
             IERC20(params.paymentToken).safeTransferFrom(msg.sender, address(this), params.consideration);
         }
 
-        emit ISecondaryTradeStorage.OfferPosted(offerId, msg.sender, params.side, params.units, params.consideration);
+        // Emit the full offer record (read back from storage so buy-side fields carry their normalized values)
+        // so an off-chain indexer can rebuild the offer status from this single log.
+        Offer storage posted = ds.offers[offerId];
+        emit ISecondaryTradeStorage.OfferPosted(
+            offerId, msg.sender, params.certPrinter, posted.spvAddress, params.side,
+            params.tokenId, params.units, params.paymentToken, params.consideration,
+            params.exemptionPathway, params.validUntil, integrator,
+            posted.templateId, posted.buyerName, posted.buyerHostingMode, posted.adminMultisig,
+            posted.counterpartyRestrictions, posted.thresholdConditions, posted.closingConditions
+        );
     }
 
     // TODO implement *For()
@@ -400,17 +401,22 @@ library SecondaryTradeStorage {
             ICyberCertPrinter(certPrinter).reserveUnits(tokenId, params.units);
         }
 
-        // Materialize open endorsement on seller's Ledger Entry Token
+        // Materialize the open endorsement on the seller's Ledger Entry Token. Signed in blank: binds to
+        // the offer, carries no endorsee (spec §7.3.1).
         DealManagerStorage.getIssuanceManager().attachOpenEndorsement(
             certPrinter,
+            offer.offerId,
+            offer.spvAddress,
             tokenId,
             endorser,
-            buyer,
-            endorsementSig,
-            settlementAgreementId
+            offer.units,
+            offer.exemptionPathway,
+            offer.validUntil,
+            endorsementSig
         );
 
-        // Build deal metadata for IssuanceManager.secondaryTransfer
+        // Resolve the buyer info per side: buy offers carry it on the offer (the offeror is the buyer),
+        // sells take it from the acceptance.
         string memory buyerName;
         uint8 buyerHostingMode;
         address adminMultisig;
@@ -423,17 +429,6 @@ library SecondaryTradeStorage {
             buyerHostingMode = params.buyerHostingMode;
             adminMultisig = params.adminMultisig;
         }
-        bytes memory dealMetadata = abi.encode(
-            certPrinter,
-            tokenId,
-            params.units,
-            buyer,
-            buyerName,
-            buyerHostingMode,
-            adminMultisig,
-            offer.exemptionPathway,
-            settlementAgreementId
-        );
 
         // Fund the settlement escrow.
         // BUY: funds are already in contract from postOffer(); no token movement needed.
@@ -451,18 +446,20 @@ library SecondaryTradeStorage {
             feeDestination: offer.integrator,
             offerId: params.offerId,
             tokenId: tokenId,
-            dealMetadata: dealMetadata
+            buyerName: buyerName,
+            buyerHostingMode: buyerHostingMode,
+            adminMultisig: adminMultisig,
+            openEndorsementSig: endorsementSig
         });
-        emit ISecondaryTradeStorage.SecondaryTradeAgreementPaid(settlementAgreementId, offer.paymentToken, partialConsideration);
 
         // Record settlement for buyer-facing threshold condition lookup
         offer.settlementAgreementIds.push(settlementAgreementId);
 
         // Re-evaluate threshold conditions now that a settlement exists: buyer-facing conditions
         // (KYC/AML, accreditation, holder caps, etc.) that short-circuited at posting resolve the
-        // acceptor via the newly pushed settlement and enforce here. A failure reverts the whole
+        // acceptor via the settlementAgreementId passed here and enforce. A failure reverts the whole
         // acceptance, undoing the settlement, escrow funding, and reservations above.
-        _checkThresholdConditions(params.offerId);
+        _checkThresholdConditions(params.offerId, settlementAgreementId);
 
         // Update offer accounting and fill state
         offer.unitsAccepted += params.units;
@@ -473,7 +470,31 @@ library SecondaryTradeStorage {
             offer.status = OfferStatus.PARTIALLY_ACCEPTED;
         }
 
-        emit ISecondaryTradeStorage.OfferAccepted(params.offerId, settlementAgreementId, msg.sender, params.units);
+        // Acceptance funds the escrow atomically, so this event carries the settlement's payment too.
+        emit ISecondaryTradeStorage.OfferAccepted(
+            params.offerId, settlementAgreementId, msg.sender, params.units, offer.paymentToken, partialConsideration,
+            tokenId, offer.validUntil,
+            buyerName, buyerHostingMode, adminMultisig, endorsementSig
+        );
+    }
+
+    /// @dev abi-encodes the ownership-change params for IssuanceManager.secondaryTransfer. Built from
+    /// per-settlement state (the offer plus the SecondaryEscrow), so acceptOffer and finalize stay in lockstep.
+    function _encodeDealMetadata(
+        address certPrinter,
+        uint256 tokenId,
+        uint256 units,
+        address buyer,
+        string memory buyerName,
+        uint8 buyerHostingMode,
+        address adminMultisig,
+        ExemptionPathway exemptionPathway,
+        bytes32 settlementAgreementId
+    ) internal pure returns (bytes memory) {
+        return abi.encode(
+            certPrinter, tokenId, units, buyer, buyerName,
+            buyerHostingMode, adminMultisig, exemptionPathway, settlementAgreementId
+        );
     }
 
     /// @notice Finalizes an accepted secondary-trade settlement (pays the seller, executes the ownership change)
@@ -493,10 +514,11 @@ library SecondaryTradeStorage {
         // local guard is effectively unreachable, but kept in case the registry and escrow expiry ever diverge.
         if (block.timestamp > secEscrow.expiry) revert ISecondaryTradeStorage.SecondaryTradeAgreementExpired();
         address[] storage conditions = offer.closingConditions;
-        bytes memory agreementIdBytes = abi.encode(agreementId);
+        // Same uniform secondary-trade payload as threshold conditions; at finalize both ids are known.
+        bytes memory conditionData = abi.encode(secEscrow.offerId, agreementId);
         for (uint256 i = 0; i < conditions.length; i++) {
             // note: always double check if `Offer` is properly updated because `checkCondition()` depends on it
-            if (!ICondition(conditions[i]).checkCondition(address(this), msg.sig, agreementIdBytes))
+            if (!ICondition(conditions[i]).checkCondition(address(this), msg.sig, conditionData))
                 revert ISecondaryTradeStorage.SecondaryConditionsNotMet(conditions[i]);
         }
 
@@ -519,25 +541,33 @@ library SecondaryTradeStorage {
         }
 
         if (fee > 0) {
-            emit ISecondaryTradeStorage.SecondaryFeeDistributed(agreementId, secEscrow.paymentToken, fee);
             // Re-validate the integrator against the whitelist at settlement: per spec §12B.4 a
             // de-whitelisted integrator falls through to the unsplit MetaLeX-only flow (never reverts).
             address feeDestination = secEscrow.feeDestination;
+            uint256 integratorFee;
             if (feeDestination != address(0) && IDealManagerFactory(upgradeFactory).isIntegratorWhitelisted(feeDestination)) {
                 // Per spec §12B.4: this integrator's own share of the fee, keyed by feeDestination.
                 uint256 integratorRatio = IDealManagerFactory(upgradeFactory).getIntegratorFeeShare(feeDestination);
-                uint256 integratorFee = fee * integratorRatio / DealManagerFactoryStorage.BASIS_POINTS;
-                uint256 platformFee = fee - integratorFee;
-                if (integratorFee > 0) IERC20(secEscrow.paymentToken).safeTransfer(feeDestination, integratorFee);
-                if (platformFee > 0) IERC20(secEscrow.paymentToken).safeTransfer(IDealManagerFactory(upgradeFactory).getPlatformPayable(), platformFee);
+                integratorFee = fee * integratorRatio / DealManagerFactoryStorage.BASIS_POINTS;
             } else {
-                IERC20(secEscrow.paymentToken).safeTransfer(IDealManagerFactory(upgradeFactory).getPlatformPayable(), fee);
+                feeDestination = address(0); // fell through to platform-only; report no credited integrator
             }
+            uint256 platformFee = fee - integratorFee;
+            if (integratorFee > 0) IERC20(secEscrow.paymentToken).safeTransfer(feeDestination, integratorFee);
+            if (platformFee > 0) IERC20(secEscrow.paymentToken).safeTransfer(IDealManagerFactory(upgradeFactory).getPlatformPayable(), platformFee);
+            // Emit the realized split (feeDestination zero = platform-only) so an indexer needn't recompute it.
+            emit ISecondaryTradeStorage.SecondaryFeeDistributed(agreementId, secEscrow.paymentToken, feeDestination, fee, integratorFee, platformFee);
         }
 
         // Execute ownership change: void/decrement seller cert + mint buyer cert;
         // also consumes this lot's reserved units as part of the cert mutation
-        DealManagerStorage.getIssuanceManager().secondaryTransfer(secEscrow.dealMetadata);
+        DealManagerStorage.getIssuanceManager().secondaryTransfer(
+            _encodeDealMetadata(
+                offer.certPrinter, secEscrow.tokenId, secEscrow.units, buyer,
+                secEscrow.buyerName, secEscrow.buyerHostingMode, secEscrow.adminMultisig,
+                offer.exemptionPathway, agreementId
+            )
+        );
 
         emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(agreementId, seller, buyer, secEscrow.paymentAmount);
     }
@@ -598,14 +628,16 @@ library SecondaryTradeStorage {
     }
 
     /// @dev Walks the offer's stored threshold conditions, reverting on the first failure. Conditions
-    /// receive `abi.encode(offerId)` and resolve party context (offeror, and the acceptor via the offer's
-    /// settlementAgreementIds) themselves; buyer-facing ones short-circuit at posting when no settlement exists.
-    function _checkThresholdConditions(bytes32 offerId) internal {
+    /// receive the uniform secondary-trade payload `abi.encode(offerId, agreementId)`; `agreementId` is
+    /// `bytes32(0)` at posting (no settlement yet) and the just-created settlement at acceptance, so a
+    /// buyer-facing condition reads its acceptor directly instead of reaching into settlementAgreementIds.
+    function _checkThresholdConditions(bytes32 offerId, bytes32 agreementId) internal {
         address[] storage conditions = secondaryTradeStorage().offers[offerId].thresholdConditions;
-        bytes memory offerIdData = abi.encode(offerId);
+        bytes memory conditionData = abi.encode(offerId, agreementId);
         for (uint256 i = 0; i < conditions.length; i++) {
             // note: always double check if `Offer` is properly updated because `checkCondition()` depends on it
-            if (!ICondition(conditions[i]).checkCondition(address(this), msg.sig, offerIdData))
+            // TODO review needed: consider a dedicated function (ex. checkSecondaryTradeCondition()) so we could type-check the arguments
+            if (!ICondition(conditions[i]).checkCondition(address(this), msg.sig, conditionData))
                 revert ISecondaryTradeStorage.SecondaryConditionsNotMet(conditions[i]);
         }
     }

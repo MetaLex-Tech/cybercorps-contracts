@@ -41,7 +41,13 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import {OfferSide} from "../storage/SecondaryTradeStorage.sol";
+enum OfferSide { SELL, BUY }
+
+enum OfferStatus { LIVE, CANCELLED, PARTIALLY_ACCEPTED, FULLY_ACCEPTED, FINALIZED }
+
+enum SecondaryEscrowStatus { ACCEPTED, FINALIZED, VOIDED }
+
+enum ExemptionPathway { RULE_144, SECTION_4A7, SECTION_4A1HALF, RULE_144A, REGULATION_S }
 
 /// @title ISecondaryTradeStorage
 /// @notice Events/errors owned by the SecondaryTradeStorage library — the single source of truth.
@@ -49,13 +55,66 @@ import {OfferSide} from "../storage/SecondaryTradeStorage.sol";
 /// any manager that links the library (e.g. DealManager) inherits this interface so the selectors/topics
 /// appear in its ABI for off-chain decoding.
 interface ISecondaryTradeStorage {
-    event OfferPosted(bytes32 indexed offerId, address indexed offeror, OfferSide side, uint256 units, uint256 consideration);
+    // Events below carry every field an off-chain indexer needs to reconstruct secondary-trade status
+    // (open offers + settlements) from logs alone: an Offer is fully described by OfferPosted, each settlement
+    // by OfferAccepted (which also reports its funding), and lifecycle transitions by the remaining events.
+    /// @dev offerId/offeror/certPrinter indexed so a UI can filter offers by security and by user.
+    event OfferPosted(
+        bytes32 indexed offerId,
+        address indexed offeror,
+        address indexed certPrinter,
+        address spvAddress,
+        OfferSide side,
+        uint256 tokenId,
+        uint256 units,
+        address paymentToken,
+        uint256 consideration,
+        ExemptionPathway exemptionPathway,
+        uint256 validUntil,
+        address integrator,
+        bytes32 templateId,
+        string buyerName,
+        uint8 buyerHostingMode,
+        address adminMultisig,
+        bytes counterpartyRestrictions,
+        address[] thresholdConditions,
+        address[] closingConditions
+    );
     event OfferCancelled(bytes32 indexed offerId, address indexed offeror);
-    event OfferAccepted(bytes32 indexed offerId, bytes32 indexed settlementAgreementId, address indexed acceptor, uint256 units);
-    event SecondaryTradeAgreementPaid(bytes32 indexed agreementId, address paymentToken, uint256 amount);
+    event OfferAccepted(
+        bytes32 indexed offerId,
+        bytes32 indexed settlementAgreementId,
+        address indexed acceptor,
+        uint256 units,
+        address paymentToken,
+        uint256 paymentAmount,
+        uint256 tokenId,
+        uint256 agreementExpiry,
+        // per-settlement materialization fields, mirroring SecondaryEscrow (sourced from the offer or the
+        // acceptance per side); feeDestination is omitted as it equals the offer's integrator (see OfferPosted).
+        string buyerName,
+        uint8 buyerHostingMode,
+        address adminMultisig,
+        bytes openEndorsementSig
+    );
     event SecondaryTradeAgreementFinalized(bytes32 indexed agreementId, address seller, address buyer, uint256 consideration);
     event SecondaryTradeAgreementVoided(bytes32 indexed agreementId);
-    event SecondaryFeeDistributed(bytes32 indexed agreementId, address indexed feeToken, uint256 fee);
+    /// @dev Reports the realized fee split: feeDestination is the credited integrator (zero when the fee
+    /// routed entirely to the platform). The split is read from live factory state at settlement, so it is
+    /// captured here rather than left for the indexer to recompute.
+    /// @param fee Total fee taken from the trade consideration (paymentAmount * defaultFeeRatio).
+    /// Always equals integratorFee + platformFee; the two split fields are its breakdown, not additions to it.
+    /// @param integratorFee Portion of `fee` credited to feeDestination, fee * integratorFeeShare(feeDestination)
+    /// (0 if no whitelisted integrator).
+    /// @param platformFee Remainder of `fee` routed to the platform (fee - integratorFee).
+    event SecondaryFeeDistributed(
+        bytes32 indexed agreementId,
+        address indexed feeToken,
+        address indexed feeDestination,
+        uint256 fee,
+        uint256 integratorFee,
+        uint256 platformFee
+    );
 
     error OfferNotAvailable();
     error OfferExpired();
