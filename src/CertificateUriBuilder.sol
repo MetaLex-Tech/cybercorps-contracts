@@ -41,12 +41,12 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity ^0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./CyberCorpConstants.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
 import "./interfaces/ICertificateImageBuilder.sol";
+import {RestrictionType, RestrictiveLegend} from "./interfaces/ICyberCertPrinter.sol";
 import "./storage/extensions/ICertificateExtension.sol";
-import {RestrictionType, RestrictiveLegend} from "./storage/CyberCertPrinterStorage.sol";
 import "./libs/auth.sol";
 
 interface ICertificateUnitsReserved {

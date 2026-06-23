@@ -13,7 +13,7 @@ import {
     OwnerDetails,
     RestrictionType,
     RestrictiveLegend
-} from "../src/storage/CyberCertPrinterStorage.sol";
+} from "../src/interfaces/ICyberCertPrinter.sol";
 
 contract MockCyberCorp {
     address public dealManager;
