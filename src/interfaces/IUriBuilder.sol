@@ -47,7 +47,7 @@ import {
     Endorsement,
     OwnerDetails,
     RestrictiveLegend
-} from "../storage/CyberCertPrinterStorage.sol";
+} from "./ICyberCertPrinter.sol";
 
 interface IUriBuilder {
     function buildCertificateUri(

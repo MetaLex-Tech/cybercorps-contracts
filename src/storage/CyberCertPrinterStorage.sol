@@ -42,58 +42,18 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "../CyberCorpConstants.sol";
+import {
+    CertificateDetails,
+    Endorsement,
+    OwnerDetails,
+    RestrictiveLegend,
+    RestrictionType
+} from "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICyberCorp.sol";
 import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/IUriBuilder.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import "./extensions/ICertificateExtension.sol";
-
-struct CertificateDetails {
-    string signingOfficerName;
-    string signingOfficerTitle;
-    uint256 investmentAmountUSD;
-    uint256 issuerUSDValuationAtTimeOfInvestment;
-    uint256 unitsRepresented;
-    string legalDetails;
-    bytes extensionData;
-}
-
-struct Endorsement {
-    address endorser;
-    uint256 timestamp;
-    bytes signatureHash;
-    address registry;  //optional
-    bytes32 agreementId; //optional
-    address endorsee;
-    string endorseeName;
-}
-
-struct OwnerDetails {
-    string name;
-    address ownerAddress;
-}
-
-enum RestrictionType {
-    Unspecified,
-    TransferConsentRequired,
-    RestrictedSecurityRule144,
-    UnregisteredSecurities,
-    RegulationS,
-    ContentiousHardfork,
-    Custom
-}
-
-struct RestrictiveLegend {
-    RestrictionType restrictionType;
-    string title;
-    string text;
-    string jurisdiction;
-    bytes32 referenceId;
-    uint64 effectiveTimestamp;
-    uint64 expirationTimestamp;
-    bool active;
-    bytes data;
-}
 
 library CyberCertPrinterStorage {
     // Storage slot for our struct

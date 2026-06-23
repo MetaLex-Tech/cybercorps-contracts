@@ -41,14 +41,55 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import {
-    CertificateDetails,
-    Endorsement,
-    OwnerDetails,
-    RestrictiveLegend
-} from "../storage/CyberCertPrinterStorage.sol";
 import "../CyberCorpConstants.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "openzeppelin-contracts/token/ERC721/IERC721.sol";
+
+struct CertificateDetails {
+    string signingOfficerName;
+    string signingOfficerTitle;
+    uint256 investmentAmountUSD;
+    uint256 issuerUSDValuationAtTimeOfInvestment;
+    uint256 unitsRepresented;
+    string legalDetails;
+    bytes extensionData;
+}
+
+struct Endorsement {
+    address endorser;
+    uint256 timestamp;
+    bytes signatureHash;
+    address registry;  //optional
+    bytes32 agreementId; //optional
+    address endorsee;
+    string endorseeName;
+}
+
+struct OwnerDetails {
+    string name;
+    address ownerAddress;
+}
+
+enum RestrictionType {
+    Unspecified,
+    TransferConsentRequired,
+    RestrictedSecurityRule144,
+    UnregisteredSecurities,
+    RegulationS,
+    ContentiousHardfork,
+    Custom
+}
+
+struct RestrictiveLegend {
+    RestrictionType restrictionType;
+    string title;
+    string text;
+    string jurisdiction;
+    bytes32 referenceId;
+    uint64 effectiveTimestamp;
+    uint64 expirationTimestamp;
+    bool active;
+    bytes data;
+}
 
 interface ICyberCertPrinter is IERC721 {
     function initialize(
