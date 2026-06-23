@@ -9,6 +9,7 @@ import "../src/IssuanceManagerFactory.sol";
 import "../src/CyberCertPrinter.sol";
 import "../src/CyberScrip.sol";
 import "../src/interfaces/ICyberCertPrinter.sol";
+import "../src/interfaces/ICyberScrip.sol";
 import "../src/interfaces/ITransferRestrictionHook.sol";
 import "../src/interfaces/ICondition.sol";
 import "../src/interfaces/IUriBuilder.sol";
@@ -189,8 +190,8 @@ contract LegalOwnerBugPOCTest is Test {
         assertEq(certPrinter.ownerOf(certId), investor, "ERC721 owner should be investor");
         assertEq(
             certPrinter.legalOwnerOf(certId),
-            address(0),
-            "legal owner mapping is never initialized on mint"
+            investor,
+            "legal owner should be set to investor on mint"
         );
     }
 
@@ -201,7 +202,7 @@ contract LegalOwnerBugPOCTest is Test {
             _details(10)
         );
 
-        issuanceManager.deployCyberScrip(
+        address scrip = issuanceManager.deployCyberScrip(
             address(certPrinter),
             new ITransferRestrictionHook[](0),
             new ICondition[](0),
@@ -217,11 +218,12 @@ contract LegalOwnerBugPOCTest is Test {
         );
 
         assertEq(certPrinter.ownerOf(certId), investor, "ERC721 owner should be investor");
-        assertEq(certPrinter.legalOwnerOf(certId), address(0), "legal owner should still be unset");
+        assertEq(certPrinter.legalOwnerOf(certId), investor, "legal owner should be set to investor");
 
+        // With legal owner correctly set, scripify succeeds
         vm.prank(investor);
-        vm.expectRevert(IssuanceManager.ConditionCheckFailed.selector);
         issuanceManager.scripifyCert(address(certPrinter), certId, 1, address(0));
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 1, "scrip should be minted after scripify");
     }
 
     function test_POC_CreateCertAndAssign_AlsoLeavesLegalOwnerUnset() public {
@@ -234,8 +236,8 @@ contract LegalOwnerBugPOCTest is Test {
         assertEq(certPrinter.ownerOf(certId), investor, "ERC721 owner should be investor");
         assertEq(
             certPrinter.legalOwnerOf(certId),
-            address(0),
-            "recert mint path also leaves legal owner unset"
+            investor,
+            "legal owner should be set to investor on createCertAndAssign"
         );
     }
 

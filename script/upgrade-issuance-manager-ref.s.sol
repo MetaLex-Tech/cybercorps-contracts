@@ -16,11 +16,13 @@ import {DeploymentConstants} from "./libs/DeploymentConstants.sol";
 ///      Requires `PRIVATE_KEY_MAIN` for an address with `AUTH.OWNER_ROLE()`.
 contract UpgradeIssuanceManagerRefScript is Script {
     bytes32 internal constant UPGRADE_SALT =
-        keccak256("MetaLexCyberCorp.IssuanceManager.RefUpgrade.1");
+        keccak256("MetaLexCyberCorp.IssuanceManager.RefUpgrade.4.1");
 
     function run() public {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
         address deployer = vm.addr(deployerPrivateKey);
+        console2.log("deployer: %s", deployer);
+
         DeploymentConstants.CoreDeployment memory deployment = DeploymentConstants
             .coreV2(block.chainid);
 
@@ -59,18 +61,22 @@ contract UpgradeIssuanceManagerRefScript is Script {
             "New IssuanceManager implementation:",
             newIssuanceManagerImpl
         );
+        console2.log(
+            "New IssuanceManager DEPLOY_VERSION: %s",
+            IssuanceManager(newIssuanceManagerImpl).DEPLOY_VERSION()
+        );
 
         address oldRef = issuanceManagerFactory.getRefImplementation();
         console2.log("IssuanceManagerFactory:", issuanceManagerFactoryAddr);
         console2.log("  previous ref implementation:", oldRef);
 
-       /* issuanceManagerFactory.setRefImplementation(newIssuanceManagerImpl);
+        issuanceManagerFactory.setRefImplementation(newIssuanceManagerImpl);
 
         vm.assertEq(
             issuanceManagerFactory.getRefImplementation(),
             newIssuanceManagerImpl,
             "IssuanceManagerFactory reference implementation mismatch"
-        );*/
+        );
 
         console2.log("  new ref implementation:", newIssuanceManagerImpl);
 

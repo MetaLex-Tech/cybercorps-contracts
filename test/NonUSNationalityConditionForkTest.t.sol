@@ -15,6 +15,7 @@ import {
 import {NonUSNationalityCondition} from "../src/libs/conditions/NonUSNationalityCondition.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {stdJson} from "forge-std/StdJson.sol";
+import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract MockManager {
     BorgAuth public AUTH;
@@ -97,6 +98,7 @@ contract NonUSNationalityConditionForkTest is Test {
     string[] excludedCountries;
 
     function setUp() public {
+        vm.createSelectFork("sepolia", 10408265); // must pin to an old block because the proofs are time-sensitive
         excludedCountries = new string[](9);
         excludedCountries[0] = "IRN";
         excludedCountries[1] = "IRQ";
@@ -110,13 +112,19 @@ contract NonUSNationalityConditionForkTest is Test {
 
         zkpassportAuth = new BorgAuth(address(this));
 
-        condition = new NonUSNationalityCondition(
-            address(zkpassportAuth),
-            domain,
-            scope,
-            REAL_VERIFIER,
-            MAX_VALIDITY_PERIOD,
-            excludedCountries
+        NonUSNationalityCondition impl = new NonUSNationalityCondition();
+        condition = NonUSNationalityCondition(
+            address(new ERC1967Proxy(
+                address(impl),
+                abi.encodeCall(NonUSNationalityCondition.initialize, (
+                    address(zkpassportAuth),
+                    domain,
+                    scope,
+                    REAL_VERIFIER,
+                    MAX_VALIDITY_PERIOD,
+                    excludedCountries
+                ))
+            ))
         );
     }
 

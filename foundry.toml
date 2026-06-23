@@ -10,6 +10,15 @@ fs_permissions = [
     { access = "read", path = "./test/res" }
 ]
 
+[rpc_endpoints]
+ethereum        = { endpoint = "https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+base            = { endpoint = "https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+sepolia         = { endpoint = "https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+base_sepolia    = { endpoint = "https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+
+[profile.ci]
+# inherits [profile.default]
+
 [fmt]
 sort_imports = true
 

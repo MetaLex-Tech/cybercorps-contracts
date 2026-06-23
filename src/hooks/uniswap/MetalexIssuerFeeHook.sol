@@ -2,6 +2,7 @@ pragma solidity 0.8.28;
 
 import "../../libs/auth.sol";
 
+/// @notice https://github.com/Uniswap/v4-core/blob/main/src/types/PoolOperation.sol
 interface IPoolManager {
     struct SwapParams {
         bool zeroForOne;
@@ -27,9 +28,34 @@ struct PoolKey {
     address hooks;
 }
 
+// from https://github.com/Uniswap/v4-core/blob/main/src/types/BalanceDelta.sol
+
 type BalanceDelta is int256;
 
+library BalanceDeltaLib {
+    function amount0(BalanceDelta delta) internal pure returns (int128) {
+        return int128(int256(BalanceDelta.unwrap(delta) >> 128));
+    }
+    function amount1(BalanceDelta delta) internal pure returns (int128) {
+        return int128(int256(BalanceDelta.unwrap(delta)));
+    }
+}
+
+function toBalanceDelta(int128 _amount0, int128 _amount1) pure returns (BalanceDelta balanceDelta) {
+    assembly ("memory-safe") {
+        balanceDelta := or(shl(128, _amount0), and(sub(shl(128, 1), 1), _amount1))
+    }
+}
+
+// from https://github.com/Uniswap/v4-core/blob/main/src/types/BeforeSwapDelta.sol
+
 type BeforeSwapDelta is int256;
+
+function toBeforeSwapDelta(int128 deltaSpecified, int128 deltaUnspecified) pure returns (BeforeSwapDelta beforeSwapDelta) {
+    assembly ("memory-safe") {
+        beforeSwapDelta := or(shl(128, deltaSpecified), and(sub(shl(128, 1), 1), deltaUnspecified))
+    }
+}
 
 struct HookPermissions {
     bool beforeInitialize;
@@ -42,6 +68,10 @@ struct HookPermissions {
     bool afterSwap;
     bool beforeDonate;
     bool afterDonate;
+    bool beforeSwapReturnDelta;
+    bool afterSwapReturnDelta;
+    bool beforeAddLiquidityReturnDelta;
+    bool afterAddLiquidityReturnDelta;
 }
 
 interface IHooks {
@@ -105,7 +135,7 @@ interface IHooks {
         IPoolManager.SwapParams calldata params,
         BalanceDelta delta,
         bytes calldata hookData
-    ) external returns (bytes4);
+    ) external returns (bytes4, int128);
 
     function beforeDonate(
         address sender,
@@ -125,6 +155,8 @@ interface IHooks {
 }
 
 contract MetalexIssuerFeeHook is IHooks, BorgAuthACL {
+    using BalanceDeltaLib for BalanceDelta;
+
     uint24 public constant BPS_DENOMINATOR = 10_000;
 
     IPoolManager public poolManager;
@@ -202,7 +234,10 @@ contract MetalexIssuerFeeHook is IHooks, BorgAuthACL {
     }
 
     function getHookPermissions() external pure returns (HookPermissions memory permissions) {
+        permissions.beforeSwap = true;
+        permissions.beforeSwapReturnDelta = true;
         permissions.afterSwap = true;
+        permissions.afterSwapReturnDelta = true;
     }
 
     function beforeInitialize(
@@ -264,11 +299,25 @@ contract MetalexIssuerFeeHook is IHooks, BorgAuthACL {
 
     function beforeSwap(
         address,
-        PoolKey calldata,
-        IPoolManager.SwapParams calldata,
+        PoolKey calldata key,
+        IPoolManager.SwapParams calldata params,
         bytes calldata
-    ) external pure returns (bytes4, BeforeSwapDelta, uint24) {
-        return (MetalexIssuerFeeHook.beforeSwap.selector, BeforeSwapDelta.wrap(0), 0);
+    ) external returns (bytes4, BeforeSwapDelta, uint24) {
+        if (msg.sender != address(poolManager)) {
+            revert UnauthorizedPoolManager();
+        }
+
+        PoolFeeConfig memory config = poolFeeConfig[_poolId(key)];
+        // only exact-input swaps (amountSpecified < 0) have a known input amount at this point
+        if (!config.enabled || params.amountSpecified >= 0) {
+            return (MetalexIssuerFeeHook.beforeSwap.selector, BeforeSwapDelta.wrap(0), 0);
+        }
+
+        address currencyIn = params.zeroForOne ? key.currency0 : key.currency1;
+        uint256 totalFee = _collectFees(uint256(-params.amountSpecified), currencyIn, config);
+
+        // positive specifiedDelta credits the hook's input-token debt, settling the take() calls above
+        return (MetalexIssuerFeeHook.beforeSwap.selector, toBeforeSwapDelta(int128(uint128(totalFee)), 0), 0);
     }
 
     function afterSwap(
@@ -277,24 +326,32 @@ contract MetalexIssuerFeeHook is IHooks, BorgAuthACL {
         IPoolManager.SwapParams calldata params,
         BalanceDelta delta,
         bytes calldata
-    ) external returns (bytes4) {
+    ) external returns (bytes4, int128) {
         if (msg.sender != address(poolManager)) {
             revert UnauthorizedPoolManager();
         }
 
         PoolFeeConfig memory config = poolFeeConfig[_poolId(key)];
-        if (!config.enabled) {
-            return MetalexIssuerFeeHook.afterSwap.selector;
+        // exact-input swaps are handled in beforeSwap
+        if (!config.enabled || params.amountSpecified < 0) {
+            return (MetalexIssuerFeeHook.afterSwap.selector, 0);
         }
 
-        uint256 inputAmount = _inputAmount(delta, params.zeroForOne);
-        if (inputAmount == 0) {
-            return MetalexIssuerFeeHook.afterSwap.selector;
-        }
-
-        uint256 metalexFee = (inputAmount * config.metalexFeeBps) / BPS_DENOMINATOR;
-        uint256 issuerFee = (inputAmount * config.issuerFeeBps) / BPS_DENOMINATOR;
+        // for exact-output: input token delta is negative (user pays); take absolute value
         address currencyIn = params.zeroForOne ? key.currency0 : key.currency1;
+        uint256 inputAmount = uint256(uint128(-(params.zeroForOne ? delta.amount0() : delta.amount1())));
+        uint256 totalFee = _collectFees(inputAmount, currencyIn, config);
+
+        return (MetalexIssuerFeeHook.afterSwap.selector, int128(uint128(totalFee)));
+    }
+
+    function _collectFees(
+        uint256 inputAmount,
+        address currencyIn,
+        PoolFeeConfig memory config
+    ) internal returns (uint256 totalFee) {
+        uint256 metalexFee = (inputAmount * config.metalexFeeBps) / BPS_DENOMINATOR;
+        uint256 issuerFee  = (inputAmount * config.issuerFeeBps)  / BPS_DENOMINATOR;
 
         if (metalexFee > 0) {
             poolManager.take(currencyIn, config.metalexRecipient, metalexFee);
@@ -303,7 +360,7 @@ contract MetalexIssuerFeeHook is IHooks, BorgAuthACL {
             poolManager.take(currencyIn, config.issuerRecipient, issuerFee);
         }
 
-        return MetalexIssuerFeeHook.afterSwap.selector;
+        totalFee = metalexFee + issuerFee;
     }
 
     function beforeDonate(
@@ -326,31 +383,8 @@ contract MetalexIssuerFeeHook is IHooks, BorgAuthACL {
         return MetalexIssuerFeeHook.afterDonate.selector;
     }
 
-    function _inputAmount(BalanceDelta delta, bool zeroForOne) internal pure returns (uint256) {
-        if (zeroForOne) {
-            int128 amount0 = _amount0(delta);
-            if (amount0 <= 0) {
-                return 0;
-            }
-            return uint256(uint128(amount0));
-        }
-
-        int128 amount1 = _amount1(delta);
-        if (amount1 <= 0) {
-            return 0;
-        }
-        return uint256(uint128(amount1));
-    }
-
     function _poolId(PoolKey calldata key) internal pure returns (bytes32) {
         return keccak256(abi.encode(key));
     }
 
-    function _amount0(BalanceDelta delta) internal pure returns (int128) {
-        return int128(int256(BalanceDelta.unwrap(delta) >> 128));
-    }
-
-    function _amount1(BalanceDelta delta) internal pure returns (int128) {
-        return int128(int256(BalanceDelta.unwrap(delta)));
-    }
 }

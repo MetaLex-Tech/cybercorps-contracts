@@ -55,6 +55,7 @@ import "./storage/CyberCertPrinterStorage.sol";
 import "./libs/auth.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
@@ -74,6 +75,7 @@ interface ICyberCorpLocal {
 
 contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     using Strings for string;
+    using ECDSA for bytes32;
     
     error InvalidSalt();
     error RoundManagerAlreadyExists();
@@ -88,7 +90,11 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     bytes public parentCoSignatureHash;
     address public stable;
     // stored ParentCo officer details used in agreements
-    CompanyOfficer public parentCoOfficer;
+    CompanyOfficer[] public parentCoOfficers;
+
+    // EIP-712
+    bytes32 public DOMAIN_SEPARATOR;
+    bytes32 public ESCROW_AUTHORIZATION_TYPEHASH;
 
     // Parent corp (ParentCo) deployment record
     address public parentCorp;
@@ -99,7 +105,7 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     bool public parentCorpCreated;
 
     //adjust storage gap based on new variable
-    uint256[38] private __gap; // keep storage gap similar to CyberCorpFactory
+    uint256[39] private __gap; // keep storage gap similar to CyberCorpFactory
 
     struct CyberCertData {
         string name;
@@ -150,11 +156,14 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         address oldRoundManagerFactory
     );
 
+    event RoundManagerDeployed(address indexed cyberCorp, address indexed roundManager);
+
     event UriBuilderUpdated(address indexed uriBuilder, address oldUriBuilder);
     event RegistryAddressUpdated(address indexed registryAddress, address oldRegistryAddress);
 
     error GlobalOrPartyValuesMismatch();
     error OfficerValuesMismatch();
+    error UnauthorizedEscrowSigner();
 
     function initialize(
         address _auth,
@@ -176,6 +185,17 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         roundManagerFactory = _roundManagerFactory;
         uriBuilder = _uriBuilder;
         stable = _stable;
+
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256("ParentCoFactory"),
+                keccak256("1"),
+                block.chainid,
+                address(this)
+            )
+        );
+        ESCROW_AUTHORIZATION_TYPEHASH = keccak256("EscrowAuthorization(string name,string contact)");
     }
 
     function setParentCoSignatureHash(bytes memory _parentCoSignatureHash) public onlyOwner {
@@ -186,24 +206,29 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         stable = _stable;
     }
 
-    function setParentCoOfficer(CompanyOfficer memory _officer) public onlyOwner {
-        parentCoOfficer = _officer;
+    function setParentCoOfficers(CompanyOfficer[] memory _officers) public onlyOwner {
+        delete parentCoOfficers;
+        for (uint256 i = 0; i < _officers.length; i++)
+            parentCoOfficers.push(_officers[i]);
     }
 
-    function setParentCoOfficerEOA(address _eoa) public onlyOwner {
-        parentCoOfficer.eoa = _eoa;
-    }
-
-    function setParentCoOfficerName(string memory _name) public onlyOwner {
-        parentCoOfficer.name = _name;
-    }
-
-    function setParentCoOfficerContact(string memory _contact) public onlyOwner {
-        parentCoOfficer.contact = _contact;
-    }
-
-    function setParentCoOfficerTitle(string memory _title) public onlyOwner {
-        parentCoOfficer.title = _title;
+    /// @notice Authorization should include everything used to escrow-sign:
+    /// - escrow contract (implicit)
+    /// - EOA (implicit)
+    /// - name (explicit)
+    /// - contact (explicit)
+    function escrowAuthorizationHash(string memory name, string memory contact) public view returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                DOMAIN_SEPARATOR,
+                keccak256(abi.encode(
+                    ESCROW_AUTHORIZATION_TYPEHASH,
+                    keccak256(bytes(name)),
+                    keccak256(bytes(contact))
+                ))
+            )
+        );
     }
 
     function setIssuanceManagerFactory(address _issuanceManagerFactory) external onlyOwner {
@@ -319,8 +344,27 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             dealManagerFactory
         );
 
+        if (ICyberCorp(cyberCorpAddress).roundManager() != address(0)) {
+            revert RoundManagerAlreadyExists();
+        }
+
+        roundManagerAddress = IRoundManagerFactory(roundManagerFactory).deployRoundManager(salt);
+
+        IRoundManagerInit(roundManagerAddress).initialize(
+            address(BorgAuthACL(cyberCorpAddress).AUTH()),
+            cyberCorpAddress,
+            registryAddress,
+            ICyberCorpLocal(cyberCorpAddress).issuanceManager(),
+            roundManagerFactory
+        );
+
+        ICyberCorp(cyberCorpAddress).setRoundManager(roundManagerAddress);
+
+        emit RoundManagerDeployed(cyberCorpAddress, roundManagerAddress);
+
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
+        BorgAuth(authAddress).updateRole(roundManagerAddress, 99);
 
         emit CorpDeployed(cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress, roundManagerAddress, address(0), 0, _officer.eoa);
     }
@@ -342,7 +386,7 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         address roundMgr
     ) {
         if (parentCorpCreated) revert("ParentCorpAlreadyCreated");
-        CompanyOfficer memory officer = parentCoOfficer;
+        CompanyOfficer memory officer = parentCoOfficers[0];
         if (officer.eoa == address(0)) revert("ParentCoOfficerNotSet");
 
         (
@@ -362,6 +406,11 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             officer
         );
 
+        // Add the remaining officers
+        for (uint256 i = 1; i < parentCoOfficers.length; i++) {
+            ICyberCorp(corp).addOfficer(parentCoOfficers[i]);
+        }
+
         parentCorp = corp;
         parentAuth = auth;
         parentIssuanceManager = issuance;
@@ -380,7 +429,7 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         string memory companyContactDetails,
         string memory defaultDisputeResolution,
         address _companyPayable,
-        CompanyOfficer memory _officer,
+        CompanyOfficer memory _officer, // PC always has only one officer
         bytes32 _segCoTemplateId,
         bytes32 _boardConsentTempateId,
         string[] memory _globalValues,
@@ -400,6 +449,22 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             uint256[] memory certIds
         )
     {
+        // Resolve which officer pre-signed the escrow authorization
+        CompanyOfficer memory signingOfficer;
+        bool signerFound;
+        for (uint256 i = 0; i < parentCoOfficers.length; i++) {
+            address escrowSigner = escrowAuthorizationHash(
+                parentCoOfficers[i].name,
+                parentCoOfficers[i].contact
+            ).recover(parentCoSignatureHash);
+            if (parentCoOfficers[i].eoa == escrowSigner) {
+                signingOfficer = parentCoOfficers[i];
+                signerFound = true;
+                break;
+            }
+        }
+        if (!signerFound) revert UnauthorizedEscrowSigner();
+
         // Check: validate key fields
 
         if (_partyValues.length < 2
@@ -419,13 +484,13 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
 
         // Effect: construct parties
         address[] memory partiesOverride = new address[](2);
-        partiesOverride[0] = parentCoOfficer.eoa;
+        partiesOverride[0] = signingOfficer.eoa;
         partiesOverride[1] = deployer;
 
         string[][] memory partyValuesOverride = new string[][](2);
         partyValuesOverride[0] = new string[](2);
-        partyValuesOverride[0][0] = parentCoOfficer.name;
-        partyValuesOverride[0][1] = parentCoOfficer.contact;
+        partyValuesOverride[0][0] = signingOfficer.name;
+        partyValuesOverride[0][1] = signingOfficer.contact;
         partyValuesOverride[1] = _partyValues;
 
         //create bytes32 salt
@@ -463,7 +528,7 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         ICyberAgreementRegistry(registryAddress).signContractFor(deployer, agreementId, partyValuesOverride[1], signature, false, "");
 
         ICyberAgreementRegistry(registryAddress).signContractWithEscrow(
-            parentCoOfficer.eoa,
+            signingOfficer.eoa,
             agreementId,
             partyValuesOverride[0],
             parentCoSignatureHash,
@@ -488,7 +553,7 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         );
 
         ICyberAgreementRegistry(registryAddress).signContractWithEscrow(
-            parentCoOfficer.eoa,
+            signingOfficer.eoa,
             meetingNotesId,
             meetingNotesPartyValues[0],
             parentCoSignatureHash,
