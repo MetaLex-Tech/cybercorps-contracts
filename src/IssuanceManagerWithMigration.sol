@@ -39,42 +39,43 @@ distributed, transmitted, sublicensed, sold, or otherwise used in any form or by
 mechanical, including photocopying, recording, or by any information storage and retrieval system, 
 except with the express prior written permission of the copyright holder.*/
 
-pragma solidity 0.8.28;
-
-import {UpgradeableBeacon} from "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
-import {IssuanceManager} from "./IssuanceManager.sol";
-import {IssuanceManagerStorage} from "./storage/IssuanceManagerStorage.sol";
-import {IIssuanceManagerFactory} from "./interfaces/IIssuanceManagerFactory.sol";
-
-contract IssuanceManagerWithMigration is IssuanceManager {
-
-    address public constant NEW_UPGRADE_FACTORY = 0xD353972D7955F421d94d0eA8c42c88c417F7155A; // TODO TBD
-
-    /// @notice Migrate legacy contracts and set upgradeFactory to the known new contract (for reference implementation lookup)
-    /// Also migrate its beacons for CyberCertPrinter and CyberScrip to new reference implementations
-    /// @dev Since the migration target is predefined, it doesn't matter who called it or when it is called
-    /// Note older contracts may not have CyberScrip beacon setup yet, in such case we will create it for them
-    function migrateUpgradeFactory() public {
-        IssuanceManagerStorage.setUpgradeFactory(NEW_UPGRADE_FACTORY);
-
-        address cyberCertPrinterRefImpl = IIssuanceManagerFactory(NEW_UPGRADE_FACTORY).getCyberCertPrinterRefImplementation();
-        IssuanceManagerStorage.upgradeCertPrinterBeaconImplementation(cyberCertPrinterRefImpl);
-        emit CertPrinterBeaconImplementationUpgraded(cyberCertPrinterRefImpl);
-
-        address cyberScripRefImpl = IIssuanceManagerFactory(NEW_UPGRADE_FACTORY).getCyberScripRefImplementation();
-        if (address(IssuanceManagerStorage.getCyberScripBeacon()) == address(0)) {
-            // Legacy contract does not have CyberScripBeacon set yet, create it for them
-            UpgradeableBeacon beaconScrip = new UpgradeableBeacon(
-                cyberScripRefImpl,
-                address(this)
-            );
-            IssuanceManagerStorage.setCyberScripBeacon(beaconScrip);
-            emit ScripBeaconImplementationUpgraded(cyberScripRefImpl);
-
-        } else {
-            // Legacy contract has CyberScripBeacon set, update it the regular way
-            IssuanceManagerStorage.updateScripBeaconImplementation(cyberScripRefImpl);
-            emit ScripBeaconImplementationUpgraded(cyberScripRefImpl);
-        }
-    }
-}
+// TODO commented out for now due to contract size violation
+//pragma solidity 0.8.28;
+//
+//import {UpgradeableBeacon} from "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
+//import {IssuanceManager} from "./IssuanceManager.sol";
+//import {IssuanceManagerStorage} from "./storage/IssuanceManagerStorage.sol";
+//import {IIssuanceManagerFactory} from "./interfaces/IIssuanceManagerFactory.sol";
+//
+//contract IssuanceManagerWithMigration is IssuanceManager {
+//
+//    address public constant NEW_UPGRADE_FACTORY = 0xD353972D7955F421d94d0eA8c42c88c417F7155A; // TODO TBD
+//
+//    /// @notice Migrate legacy contracts and set upgradeFactory to the known new contract (for reference implementation lookup)
+//    /// Also migrate its beacons for CyberCertPrinter and CyberScrip to new reference implementations
+//    /// @dev Since the migration target is predefined, it doesn't matter who called it or when it is called
+//    /// Note older contracts may not have CyberScrip beacon setup yet, in such case we will create it for them
+//    function migrateUpgradeFactory() public {
+//        IssuanceManagerStorage.setUpgradeFactory(NEW_UPGRADE_FACTORY);
+//
+//        address cyberCertPrinterRefImpl = IIssuanceManagerFactory(NEW_UPGRADE_FACTORY).getCyberCertPrinterRefImplementation();
+//        IssuanceManagerStorage.upgradeCertPrinterBeaconImplementation(cyberCertPrinterRefImpl);
+//        emit CertPrinterBeaconImplementationUpgraded(cyberCertPrinterRefImpl);
+//
+//        address cyberScripRefImpl = IIssuanceManagerFactory(NEW_UPGRADE_FACTORY).getCyberScripRefImplementation();
+//        if (address(IssuanceManagerStorage.getCyberScripBeacon()) == address(0)) {
+//            // Legacy contract does not have CyberScripBeacon set yet, create it for them
+//            UpgradeableBeacon beaconScrip = new UpgradeableBeacon(
+//                cyberScripRefImpl,
+//                address(this)
+//            );
+//            IssuanceManagerStorage.setCyberScripBeacon(beaconScrip);
+//            emit ScripBeaconImplementationUpgraded(cyberScripRefImpl);
+//
+//        } else {
+//            // Legacy contract has CyberScripBeacon set, update it the regular way
+//            IssuanceManagerStorage.updateScripBeaconImplementation(cyberScripRefImpl);
+//            emit ScripBeaconImplementationUpgraded(cyberScripRefImpl);
+//        }
+//    }
+//}
