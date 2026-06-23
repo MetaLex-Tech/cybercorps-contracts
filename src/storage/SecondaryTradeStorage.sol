@@ -43,7 +43,6 @@ pragma solidity 0.8.28;
 
 import "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
-import "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/IDealManagerFactory.sol";
@@ -98,7 +97,7 @@ struct SecondaryEscrow {
     // secondary-specific routing
     address feeDestination;         // integrator address for fee split; zero = all fees to MetaLeX
     bytes32 offerId;                // back-link to Offer
-    uint256 tokenId;                // seller's Ledger Entry Token id; reservation target for releaseUnits on void
+    uint256 tokenId;                // seller's Ledger Entry Token id; reservation target for decreaseUnitsReserved on void
     string buyerName;               // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
     uint8 buyerHostingMode;         // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
     address adminMultisig;          // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
@@ -263,8 +262,8 @@ library SecondaryTradeStorage {
         _checkThresholdConditions(offerId, bytes32(0));
 
         if (params.side == OfferSide.SELL) {
-            // Reserve units on the seller's cert
-            ICyberCertPrinter(params.certPrinter).reserveUnits(params.tokenId, params.units);
+            // Reserve units on the seller's cert (routed through IssuanceManager, the only caller the printer allows)
+            DealManagerStorage.getIssuanceManager().increaseUnitsReserved(params.certPrinter, params.tokenId, params.units);
         } else {
             // BUY: pull consideration directly into contract custody
             IERC20(params.paymentToken).safeTransferFrom(msg.sender, address(this), params.consideration);
@@ -301,7 +300,7 @@ library SecondaryTradeStorage {
             // Release only the uncommitted units; in-flight settlement lots are consumed at finalize or released at void
             uint256 freeUnits = offer.units - offer.unitsAccepted;
             if (freeUnits > 0) {
-                ICyberCertPrinter(offer.certPrinter).releaseUnits(offer.tokenId, freeUnits);
+                DealManagerStorage.getIssuanceManager().decreaseUnitsReserved(offer.certPrinter, offer.tokenId, freeUnits);
             }
         } else {
             // BUY: refund only the uncommitted portion; paymentAccepted tracks what's committed to
@@ -397,8 +396,8 @@ library SecondaryTradeStorage {
             buyer = offer.offeror;
             endorser = msg.sender;
             endorsementSig = params.openEndorsementSig;
-            // Reserve units on the seller's cert at acceptance (buy-offer flow)
-            ICyberCertPrinter(certPrinter).reserveUnits(tokenId, params.units);
+            // Reserve units on the seller's cert at acceptance (buy-offer flow, routed through IssuanceManager)
+            DealManagerStorage.getIssuanceManager().increaseUnitsReserved(certPrinter, tokenId, params.units);
         }
 
         // Materialize the open endorsement on the seller's Ledger Entry Token. Signed in blank: binds to
@@ -747,7 +746,7 @@ library SecondaryTradeStorage {
         // (the lot can never be re-accepted); otherwise the lot returns to the offer's free pool
         // and stays reserved.
         if (offer.side == OfferSide.BUY || offer.status == OfferStatus.CANCELLED) {
-            ICyberCertPrinter(offer.certPrinter).releaseUnits(secEscrow.tokenId, secEscrow.units);
+            DealManagerStorage.getIssuanceManager().decreaseUnitsReserved(offer.certPrinter, secEscrow.tokenId, secEscrow.units);
         }
 
         // Restore offer status (keep terminal offers closed)
