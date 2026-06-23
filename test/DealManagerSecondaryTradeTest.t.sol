@@ -89,15 +89,21 @@ contract SecCertPrinterMock is ERC721Enumerable {
         _safeMint(to, tokenId);
     }
 
-    function reserveUnits(uint256 tokenId, uint256 units) external {
+    function increaseUnitsReserved(uint256 tokenId, uint256 units) external {
         reservedUnits[tokenId] += units;
     }
 
-    function releaseUnits(uint256 tokenId, uint256 units) external {
+    function decreaseUnitsReserved(uint256 tokenId, uint256 units) external {
         reservedUnits[tokenId] -= units;
         releasedUnits[tokenId] += units;
     }
 
+    function unitsReserved(uint256 tokenId) external view returns (uint256) {
+        return reservedUnits[tokenId];
+    }
+
+    // Test-only: mirrors the reservation drawdown the real secondaryTransfer performs as part of the
+    // cert mutation, tracked separately from explicit releases so tests can tell the two paths apart.
     function consumeUnits(uint256 tokenId, uint256 units) external {
         reservedUnits[tokenId] -= units;
         consumedUnits[tokenId] += units;
@@ -132,6 +138,14 @@ contract SecIssuanceManagerMock {
 
     function createCert(address certAddress, address to, CertificateDetails memory) external returns (uint256) {
         return SecCertPrinterMock(certAddress).mint(to);
+    }
+
+    function increaseUnitsReserved(address certAddress, uint256 tokenId, uint256 amount) external {
+        SecCertPrinterMock(certAddress).increaseUnitsReserved(tokenId, amount);
+    }
+
+    function decreaseUnitsReserved(address certAddress, uint256 tokenId, uint256 amount) external {
+        SecCertPrinterMock(certAddress).decreaseUnitsReserved(tokenId, amount);
     }
 
     function secondaryTransfer(bytes calldata dealMetadata) external {
