@@ -15,10 +15,10 @@ contract DeployNonUsZkPassportConditionScript is Script {
             // Production
             "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.2.0",
             vm.envUint("PRIVATE_KEY_MAIN"),
-            "ace.metalex.tech",
+            "cyberraise.metalex.tech",
             "non-us-non-sanctioned",
             2592000, // 3600 * 24 * 30 days
-            DeploymentConstants.BASE,
+            DeploymentConstants.ETH,
             false // ownedByDeployer
 
 //            // Staging (localhost)
@@ -27,16 +27,16 @@ contract DeployNonUsZkPassportConditionScript is Script {
 //            "localhost",
 //            "non-us-non-sanctioned",
 //            2592000, // 3600 * 24 * 30 days
-//            DeploymentConstants.BASE,
+//            DeploymentConstants.ETH_SEPOLIA,
 //            true // ownedByDeployer
 
-//            // Staging (staging.ace.metalex.tech)
-//            "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.2.0.staging.dev0-staging.ace.metalex.tech",
+//            // Staging (staging.cyberraise.metalex.tech)
+//            "MetaLexCyberCorp.NonUSNationalityZkpassport.V1.2.0.staging.dev0-staging.cyberraise.metalex.tech",
 //            vm.envUint("PRIVATE_KEY_MAIN"),
-//            "staging.ace.metalex.tech",
+//            "staging.cyberraise.metalex.tech",
 //            "non-us-non-sanctioned",
 //            2592000, // 3600 * 24 * 30 days
-//            DeploymentConstants.BASE,
+//            DeploymentConstants.ETH_SEPOLIA,
 //            true // ownedByDeployer
         );
     }
@@ -50,6 +50,7 @@ contract DeployNonUsZkPassportConditionScript is Script {
         uint256 chainId,
         bool ownedByDeployer // for test because our staging env is Base mainnet
     ) public returns (BorgAuth zkpassportAuth, NonUSNationalityCondition zkpassportCondition) {
+        vm.assertEq(block.chainid, chainId, "Unexpected chain ID");
 
         bytes32 salt = keccak256(bytes(saltStr));
 
@@ -92,7 +93,7 @@ contract DeployNonUsZkPassportConditionScript is Script {
         address[] memory orAddrs = new address[](2);
         orAddrs[0] = address(zkpassportCondition);
         orAddrs[1] = deployment.lexchexCondition;
-        OrCondition orCondition = new OrCondition(orAddrs);
+        OrCondition orCondition = new OrCondition{salt: salt}(orAddrs);
 
         if (!ownedByDeployer) {
             // Assign ownership to MetaLeX multisig

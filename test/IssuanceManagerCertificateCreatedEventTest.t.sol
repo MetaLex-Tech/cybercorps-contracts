@@ -7,6 +7,7 @@ import "../src/CyberCertPrinter.sol";
 import "../src/CyberScrip.sol";
 import "../src/interfaces/ICyberCertPrinter.sol";
 import "../src/interfaces/IUriBuilder.sol";
+import {RestrictiveLegend} from "../src/storage/CyberCertPrinterStorage.sol";
 import "../src/libs/auth.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
@@ -40,6 +41,25 @@ contract MockUriBuilderForCertEvent is IUriBuilder {
         address
     ) external pure returns (string memory) { return "uri://mock"; }
 
+    function buildCertificateUri(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        RestrictiveLegend[] memory,
+        CertificateDetails memory,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) { return "uri://mock"; }
+
     function buildCertificateUriNotEncoded(
         string memory,
         string memory,
@@ -49,6 +69,25 @@ contract MockUriBuilderForCertEvent is IUriBuilder {
         SecuritySeries,
         string memory,
         string[] memory,
+        CertificateDetails memory,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) { return "uri://mock"; }
+
+    function buildCertificateUriNotEncoded(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        RestrictiveLegend[] memory,
         CertificateDetails memory,
         Endorsement[] memory,
         OwnerDetails memory,

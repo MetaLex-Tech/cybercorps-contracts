@@ -18,15 +18,15 @@ o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o8888
                                                                                                       
                                                                                                       
                                                                                                       
-  .oooooo.                .o8                            .oooooo.                                     
- d8P'  `Y8b              "888                           d8P'  `Y8b                                    
+ .oooooo.                .o8                            .oooooo.                                     
+d8P'  `Y8b              "888                           d8P'  `Y8b                                    
 888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.      
 888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b     
 888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888     
 `88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
  `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P 
              .o..P'                                                                     888           
-             `Y8P'                                                                     o888o          
+             `Y8P'                                                                     o888o           
 _______________________________________________________________________________________________________
 
 All software, documentation and other files and information in this repository (collectively, the "Software")
@@ -39,43 +39,69 @@ distributed, transmitted, sublicensed, sold, or otherwise used in any form or by
 mechanical, including photocopying, recording, or by any information storage and retrieval system, 
 except with the express prior written permission of the copyright holder.*/
 
-// TODO commented out for now due to contract size violation
-//pragma solidity 0.8.28;
-//
-//import {UpgradeableBeacon} from "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
-//import {IssuanceManager} from "./IssuanceManager.sol";
-//import {IssuanceManagerStorage} from "./storage/IssuanceManagerStorage.sol";
-//import {IIssuanceManagerFactory} from "./interfaces/IIssuanceManagerFactory.sol";
-//
-//contract IssuanceManagerWithMigration is IssuanceManager {
-//
-//    address public constant NEW_UPGRADE_FACTORY = 0xD353972D7955F421d94d0eA8c42c88c417F7155A; // TODO TBD
-//
-//    /// @notice Migrate legacy contracts and set upgradeFactory to the known new contract (for reference implementation lookup)
-//    /// Also migrate its beacons for CyberCertPrinter and CyberScrip to new reference implementations
-//    /// @dev Since the migration target is predefined, it doesn't matter who called it or when it is called
-//    /// Note older contracts may not have CyberScrip beacon setup yet, in such case we will create it for them
-//    function migrateUpgradeFactory() public {
-//        IssuanceManagerStorage.setUpgradeFactory(NEW_UPGRADE_FACTORY);
-//
-//        address cyberCertPrinterRefImpl = IIssuanceManagerFactory(NEW_UPGRADE_FACTORY).getCyberCertPrinterRefImplementation();
-//        IssuanceManagerStorage.upgradeCertPrinterBeaconImplementation(cyberCertPrinterRefImpl);
-//        emit CertPrinterBeaconImplementationUpgraded(cyberCertPrinterRefImpl);
-//
-//        address cyberScripRefImpl = IIssuanceManagerFactory(NEW_UPGRADE_FACTORY).getCyberScripRefImplementation();
-//        if (address(IssuanceManagerStorage.getCyberScripBeacon()) == address(0)) {
-//            // Legacy contract does not have CyberScripBeacon set yet, create it for them
-//            UpgradeableBeacon beaconScrip = new UpgradeableBeacon(
-//                cyberScripRefImpl,
-//                address(this)
-//            );
-//            IssuanceManagerStorage.setCyberScripBeacon(beaconScrip);
-//            emit ScripBeaconImplementationUpgraded(cyberScripRefImpl);
-//
-//        } else {
-//            // Legacy contract has CyberScripBeacon set, update it the regular way
-//            IssuanceManagerStorage.updateScripBeaconImplementation(cyberScripRefImpl);
-//            emit ScripBeaconImplementationUpgraded(cyberScripRefImpl);
-//        }
-//    }
-//}
+pragma solidity 0.8.28;
+
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "./ICyberCorpExtension.sol";
+import "../../libs/auth.sol";
+
+struct CyberCorpData {
+    string website;
+    string primaryBusinessLine;
+    string entityId;
+    string metadataURI;
+}
+
+contract CyberCorpExtension is UUPSUpgradeable, ICyberCorpExtension, BorgAuthACL {
+    bytes32 public constant EXTENSION_TYPE = keccak256("CYBERCORP");
+
+    uint256[30] private __gap;
+
+    function initialize(address _auth) external initializer {
+        __UUPSUpgradeable_init();
+        __BorgAuthACL_init(_auth);
+    }
+
+    function decodeExtensionData(
+        bytes memory data
+    ) external pure returns (CyberCorpData memory) {
+        return abi.decode(data, (CyberCorpData));
+    }
+
+    function encodeExtensionData(
+        CyberCorpData memory data
+    ) external pure returns (bytes memory) {
+        return abi.encode(data);
+    }
+
+    function supportsExtensionType(
+        bytes32 extensionType
+    ) external pure override returns (bool) {
+        return extensionType == EXTENSION_TYPE;
+    }
+
+    function getExtensionURI(
+        bytes memory data
+    ) external pure override returns (string memory) {
+        CyberCorpData memory decoded = abi.decode(data, (CyberCorpData));
+
+        return string(
+            abi.encodePacked(
+                ', "CyberCorpDetails": {',
+                '"website": "',
+                decoded.website,
+                '", "primaryBusinessLine": "',
+                decoded.primaryBusinessLine,
+                '", "entityId": "',
+                decoded.entityId,
+                '", "metadataURI": "',
+                decoded.metadataURI,
+                '"}'
+            )
+        );
+    }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal virtual override onlyOwner {}
+}

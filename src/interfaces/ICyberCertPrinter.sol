@@ -41,9 +41,55 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import "./IIssuanceManager.sol";
 import "../CyberCorpConstants.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "openzeppelin-contracts/token/ERC721/IERC721.sol";
+
+struct CertificateDetails {
+    string signingOfficerName;
+    string signingOfficerTitle;
+    uint256 investmentAmountUSD;
+    uint256 issuerUSDValuationAtTimeOfInvestment;
+    uint256 unitsRepresented;
+    string legalDetails;
+    bytes extensionData;
+}
+
+struct Endorsement {
+    address endorser;
+    uint256 timestamp;
+    bytes signatureHash;
+    address registry;  //optional
+    bytes32 agreementId; //optional
+    address endorsee;
+    string endorseeName;
+}
+
+struct OwnerDetails {
+    string name;
+    address ownerAddress;
+}
+
+enum RestrictionType {
+    Unspecified,
+    TransferConsentRequired,
+    RestrictedSecurityRule144,
+    UnregisteredSecurities,
+    RegulationS,
+    ContentiousHardfork,
+    Custom
+}
+
+struct RestrictiveLegend {
+    RestrictionType restrictionType;
+    string title;
+    string text;
+    string jurisdiction;
+    bytes32 referenceId;
+    uint64 effectiveTimestamp;
+    uint64 expirationTimestamp;
+    bool active;
+    bytes data;
+}
 
 interface ICyberCertPrinter is IERC721 {
     function initialize(
@@ -61,6 +107,7 @@ interface ICyberCertPrinter is IERC721 {
     function updateIssuanceManager(address _issuanceManager) external;
     function updateDefaultLegend(string[] memory _ledger) external;
     function defaultLegend() external view returns (string[] memory);
+    function defaultRestrictiveLegends() external view returns (RestrictiveLegend[] memory);
     function setRestrictionHook(uint256 _id, address _hookAddress) external;
     function setGlobalRestrictionHook(address hookAddress) external;
     function safeMint(
@@ -115,6 +162,14 @@ interface ICyberCertPrinter is IERC721 {
     function removeCertLegendAt(uint256 tokenId, uint256 index) external;
     function addDefaultLegend(string memory newLegend) external;
     function removeDefaultLegendAt(uint256 index) external;
+    function addDefaultRestrictiveLegend(RestrictiveLegend memory newLegend) external;
+    function removeDefaultRestrictiveLegendAt(uint256 index) external;
+    function getDefaultRestrictiveLegendAt(uint256 index) external view returns (RestrictiveLegend memory);
+    function getDefaultRestrictiveLegendCount() external view returns (uint256);
+    function addCertRestrictiveLegend(uint256 tokenId, RestrictiveLegend memory newLegend) external;
+    function removeCertRestrictiveLegendAt(uint256 tokenId, uint256 index) external;
+    function getCertRestrictiveLegendAt(uint256 tokenId, uint256 index) external view returns (RestrictiveLegend memory);
+    function getCertRestrictiveLegendCount(uint256 tokenId) external view returns (uint256);
     function getEndorsementHistory(
         uint256 tokenId,
         uint256 index
@@ -137,28 +192,7 @@ interface ICyberCertPrinter is IERC721 {
     function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256);
     function legalOwnerOf(uint256 tokenId) external view returns (address);
     function setTokenTransferable(uint256 tokenId, bool value) external;
-
-    // Unit reservation system (cyberTRADE; implementation pending)
-    //
-    // Expected use case: locking units ahead of an async, multi-transaction operation (e.g. an
-    // escrowed trade posted in one transaction and settled in another) so the units cannot be
-    // moved or re-reserved by anyone else in between (e.g. front-running). An operation that
-    // completes atomically within a single transaction has no need for these functions.
-    //
-    // Expected behavior as observed by callers:
-    // - Amount-based, no reservation IDs: after reserveUnits(tokenId, x), exactly x units of cert
-    //   `tokenId` are locked — not transferable, voidable, or reservable to anyone else — until
-    //   released or consumed. Repeated calls accumulate; callers do their own per-lot accounting.
-    // - Only the original reserver can release its reservation. releaseUnits(tokenId, x) unlocks x
-    //   units with no ownership change and must revert if x exceeds the caller's reserved amount.
-    // - consumeUnits(tokenId, x) settles x reserved units as part of an ownership change: the units
-    //   leave the cert together with the reservation. It is expected to be called under the hood by
-    //   the transfer logic (e.g. IssuanceManager.secondaryTransfer), so a reserver settling through
-    //   that path makes no reservation call of its own.
-    // - Each reserved unit should eventually be released or consumed exactly once. Multiple
-    //   reservers may hold reservations on the same cert independently, but their reservations should not overlap
-    // TODO WIP: merge with feat/legion
-    function reserveUnits(uint256 tokenId, uint256 units) external;
-    function releaseUnits(uint256 tokenId, uint256 units) external;
-    function consumeUnits(uint256 tokenId, uint256 units) external;
+    function increaseUnitsReserved(uint256 tokenId, uint256 amount) external;
+    function decreaseUnitsReserved(uint256 tokenId, uint256 amount) external;
+    function unitsReserved(uint256 tokenId) external view returns (uint256);
 }

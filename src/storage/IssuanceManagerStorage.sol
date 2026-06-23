@@ -723,6 +723,22 @@ library IssuanceManagerStorage {
         ICyberCertPrinter(certAddress).setTokenTransferable(tokenId, value);
     }
 
+    function executeIncreaseUnitsReserved(
+        address certAddress,
+        uint256 tokenId,
+        uint256 amount
+    ) external {
+        ICyberCertPrinter(certAddress).increaseUnitsReserved(tokenId, amount);
+    }
+
+    function executeDecreaseUnitsReserved(
+        address certAddress,
+        uint256 tokenId,
+        uint256 amount
+    ) external {
+        ICyberCertPrinter(certAddress).decreaseUnitsReserved(tokenId, amount);
+    }
+
     function executeSetScripRatio(
         address certAddress,
         uint256 numerator,
@@ -787,6 +803,36 @@ library IssuanceManagerStorage {
         uint256 index
     ) external {
         ICyberCertPrinter(certAddress).removeCertLegendAt(tokenId, index);
+    }
+
+    function executeAddDefaultRestrictiveLegend(
+        address certAddress,
+        RestrictiveLegend memory newLegend
+    ) external {
+        ICyberCertPrinter(certAddress).addDefaultRestrictiveLegend(newLegend);
+    }
+
+    function executeRemoveDefaultRestrictiveLegendAt(
+        address certAddress,
+        uint256 index
+    ) external {
+        ICyberCertPrinter(certAddress).removeDefaultRestrictiveLegendAt(index);
+    }
+
+    function executeAddCertRestrictiveLegend(
+        address certAddress,
+        uint256 tokenId,
+        RestrictiveLegend memory newLegend
+    ) external {
+        ICyberCertPrinter(certAddress).addCertRestrictiveLegend(tokenId, newLegend);
+    }
+
+    function executeRemoveCertRestrictiveLegendAt(
+        address certAddress,
+        uint256 tokenId,
+        uint256 index
+    ) external {
+        ICyberCertPrinter(certAddress).removeCertRestrictiveLegendAt(tokenId, index);
     }
 
     function executeDeployCyberScrip(

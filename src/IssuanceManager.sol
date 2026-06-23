@@ -637,6 +637,34 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         );
     }
 
+    /// @notice Reserve units of a certificate against a pending deal/loan
+    /// @dev Reverts in the printer if the total reserved would exceed the cert's units
+    function increaseUnitsReserved(
+        address certAddress,
+        uint256 tokenId,
+        uint256 amount
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeIncreaseUnitsReserved(
+            certAddress,
+            tokenId,
+            amount
+        );
+    }
+
+    /// @notice Release previously reserved units of a certificate
+    /// @dev Reverts in the printer if releasing more than is currently reserved
+    function decreaseUnitsReserved(
+        address certAddress,
+        uint256 tokenId,
+        uint256 amount
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeDecreaseUnitsReserved(
+            certAddress,
+            tokenId,
+            amount
+        );
+    }
+
     /// @notice Sets the minimum scrip amount required to convert back into certs
     /// @dev Only callable by owner; set to 0 to disable the minimum
     /// @param certAddress Address of the certificate printer contract
@@ -737,6 +765,44 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             tokenId,
             index
         );
+    }
+
+    /// @notice Adds a structured default restrictive legend to a certificate contract
+    /// @dev Only callable by admin
+    function addDefaultRestrictiveLegend(
+        address certAddress,
+        RestrictiveLegend memory newLegend
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeAddDefaultRestrictiveLegend(certAddress, newLegend);
+    }
+
+    /// @notice Removes a structured default restrictive legend from a certificate contract
+    /// @dev Only callable by admin
+    function removeDefaultRestrictiveLegendAt(
+        address certAddress,
+        uint256 index
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeRemoveDefaultRestrictiveLegendAt(certAddress, index);
+    }
+
+    /// @notice Adds a structured restrictive legend to a specific certificate
+    /// @dev Only callable by admin
+    function addCertRestrictiveLegend(
+        address certAddress,
+        uint256 tokenId,
+        RestrictiveLegend memory newLegend
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeAddCertRestrictiveLegend(certAddress, tokenId, newLegend);
+    }
+
+    /// @notice Removes a structured restrictive legend from a specific certificate
+    /// @dev Only callable by admin
+    function removeCertRestrictiveLegendAt(
+        address certAddress,
+        uint256 tokenId,
+        uint256 index
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeRemoveCertRestrictiveLegendAt(certAddress, tokenId, index);
     }
 
     //deploy matching erc20 contract for a cert
