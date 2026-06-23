@@ -38,7 +38,7 @@ contract DeployPumpCorpFactoryScript is Script {
             runWithArgs(
                 // Production
                 DeploymentConstants.BASE,
-                "PumpCorp.V1.0.0",
+                "PumpCorp.V1.0.1",
                 vm.envUint("PRIVATE_KEY_MAIN") // deployerPrivateKey
 
 //                // Staging

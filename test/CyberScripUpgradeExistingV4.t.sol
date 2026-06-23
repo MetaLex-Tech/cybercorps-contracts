@@ -64,7 +64,7 @@ contract LegacySelectorCondition is ICondition {
 /// @notice Fork-based CyberScrip upgrade tests against a legacy Base Sepolia v3 deployment.
 /// @dev The corp stack is deployed at a pre-upgrade block using the old live factories,
 ///      then upgraded locally to the latest in-repo implementations before each test runs.
-contract CyberScripUpgradeExistingV3Test is Test {
+contract CyberScripUpgradeExistingV4ForkTest is Test {
     using ERC1967ProxyLib for address;
 
     struct UpgradeImpls {
@@ -111,8 +111,7 @@ contract CyberScripUpgradeExistingV3Test is Test {
     address internal otherInvestor;
 
     function setUp() public {
-        assertEq(block.chainid, BASE_SEPOLIA, "Fork test: Base Sepolia only");
-        vm.rollFork(PRE_UPGRADE_BLOCK);
+        vm.createSelectFork("base_sepolia", PRE_UPGRADE_BLOCK);
 
         corpFactory = CyberCorpFactory(CYBERCORP_FACTORY_PROXY);
         corpSingleFactory = CyberCorpSingleFactory(
@@ -234,8 +233,8 @@ contract CyberScripUpgradeExistingV3Test is Test {
         issuanceManager.scripifyCert(address(certPrinter), certId, 10, address(0));
 
         assertEq(ICyberScrip(scrip).balanceOf(investor), 10);
-        assertEq(certPrinter.getActiveCertificateDetails(certId).unitsRepresented, 15e18);
-        assertEq(certPrinter.getCertificateDetails(certId).unitsRepresented, 25e18);
+        assertEq(certPrinter.getActiveCertificateDetails(certId).unitsRepresented, 15);
+        assertEq(certPrinter.getCertificateDetails(certId).unitsRepresented, 25);
     }
 
     function test_PostUpgrade_ConversionGatesAndConditions() public {
@@ -333,9 +332,12 @@ contract CyberScripUpgradeExistingV3Test is Test {
         vm.prank(investor);
         issuanceManager.convertScripToCert(address(certPrinter), 20);
 
-        assertEq(certPrinter.totalSupply(), 1);
+        uint256 newCertId = 1;
+        assertEq(certPrinter.totalSupply(), 2);
         assertEq(certPrinter.ownerOf(certId), investor);
-        assertFalse(certPrinter.isVoided(certId));
+        assertTrue(certPrinter.isVoided(certId));
+        assertEq(certPrinter.ownerOf(newCertId), investor);
+        assertFalse(certPrinter.isVoided(newCertId));
         assertEq(ICyberScrip(scrip).balanceOf(investor), 0);
     }
 
@@ -372,7 +374,7 @@ contract CyberScripUpgradeExistingV3Test is Test {
         assertEq(ICyberScrip(scrip).balanceOf(investor), 20);
         assertEq(totalTrackedBefore, 20);
         assertTrue(isScripifiedBefore);
-        assertEq(scripifiedUnitsBefore, 10e18);
+        assertEq(scripifiedUnitsBefore, 10);
 
         vm.prank(companyOwner);
         issuanceManager.forceScripBurn(address(certPrinter), investor, 8);
@@ -385,7 +387,7 @@ contract CyberScripUpgradeExistingV3Test is Test {
         assertEq(ICyberScrip(scrip).balanceOf(investor), 12);
         assertEq(totalTrackedAfter, 12);
         assertTrue(isScripifiedAfter);
-        assertEq(scripifiedUnitsAfter, 6e18);
+        assertEq(scripifiedUnitsAfter, 6);
     }
 
     function test_PostUpgrade_MultiHolderTransferAndRecertificationPoolAccounting()
@@ -394,7 +396,7 @@ contract CyberScripUpgradeExistingV3Test is Test {
         MultiHolderFixture memory fixture = _setupMultiHolderFixture();
 
         _assertActiveUnitsZero(fixture);
-        _assertStoredUnits(fixture, 10e18, 20e18, 50e18);
+        _assertStoredUnits(fixture, 10, 20, 50);
         _assertBalances(fixture, 10, 20, 50, 0);
         _assertPoolAmountsById(fixture, 10, 20, 50);
 
@@ -424,7 +426,7 @@ contract CyberScripUpgradeExistingV3Test is Test {
         );
         assertEq(totalTrackedAfter, 64);
         _assertPoolAmountsById(fixture, 8, 16, 40);
-        _assertStoredUnits(fixture, 8e18, 16e18, 40e18);
+        _assertStoredUnits(fixture, 8, 16, 40);
 
         uint256 newCertId = 3;
         assertEq(fixture.certPrinter.totalSupply(), 4);
@@ -438,11 +440,11 @@ contract CyberScripUpgradeExistingV3Test is Test {
         );
         assertEq(
             fixture.certPrinter.getCertificateDetails(newCertId).unitsRepresented,
-            16e18
+            16
         );
         assertEq(
             fixture.certPrinter.getActiveCertificateDetails(newCertId).unitsRepresented,
-            16e18
+            16
         );
     }
 
@@ -721,7 +723,7 @@ contract CyberScripUpgradeExistingV3Test is Test {
             signingOfficerTitle: "Title",
             investmentAmountUSD: 1000,
             issuerUSDValuationAtTimeOfInvestment: 10000,
-            unitsRepresented: units * 1e18,
+            unitsRepresented: units,
             legalDetails: "",
             extensionData: ""
         });

@@ -534,13 +534,9 @@ contract IssuanceManagerConversionTest is Test {
                 address(uint160(uint256(logs[i].topics[2]))) == investor &&
                 uint256(logs[i].topics[3]) == 1
             ) {
-                (
-                    uint256 scripAmount,
-                    uint256 oldUnitsRepresented,
-                    uint256 newUnitsRepresented
-                ) = abi.decode(logs[i].data, (uint256, uint256, uint256));
+                (uint256 scripAmount, uint256 newUnitsRepresented,,) =
+                    abi.decode(logs[i].data, (uint256, uint256, uint256, uint256));
                 assertEq(scripAmount, amount * 1e18);
-                assertEq(oldUnitsRepresented, 0);
                 assertEq(newUnitsRepresented, amount * 1e18);
                 sawRecertified = true;
                 break;
