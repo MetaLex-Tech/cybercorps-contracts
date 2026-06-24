@@ -151,9 +151,9 @@ contract SecIssuanceManagerMock {
     function secondaryTransfer(bytes calldata dealMetadata) external {
         secondaryTransferCalled = true;
         // Mirror the pending real implementation: consume this lot's reserved units
-        (address certPrinter, uint256 tokenId, uint256 units,,,,,,) = abi.decode(
+        (address certPrinter, uint256 tokenId, uint256 units,,,,,,,) = abi.decode(
             dealMetadata,
-            (address, uint256, uint256, address, string, uint8, address, ExemptionPathway, bytes32)
+            (address, uint256, uint256, address, string, uint8, address, ExemptionPathway, bytes32, bytes)
         );
         SecCertPrinterMock(certPrinter).consumeUnits(tokenId, units);
     }
