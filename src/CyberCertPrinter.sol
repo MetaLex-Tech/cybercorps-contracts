@@ -232,6 +232,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
             to,
             tokenId
         );
+        CyberCertPrinterStorage.recordHolderChange(from, to);
         
         // Call the parent implementation to handle the actual transfer
         return super._update(to, tokenId, auth);
@@ -356,6 +357,10 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
 
     function transferable() public view returns (bool) {
         return CyberCertPrinterStorage.cyberCertStorage().transferable;
+    }
+
+    function holderCount() external view returns (uint256) {
+        return CyberCertPrinterStorage.getHolderCount();
     }
     
     function _exists(uint256 tokenId) internal view virtual returns (bool) {
