@@ -170,29 +170,12 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         // beacon proxies because they are managed by the same company owner and are expected to
         // share the same implementation or upgraded to a new version all at the same time.
         // Maintenance-wise, since IssuanceManager itself is upgradeable, we don't need to worry about beacon ownership transfers
-
-        address cyberCertPrinterRefImpl = IIssuanceManagerFactory(
-            _upgradeFactory
-        ).getCyberCertPrinterRefImplementation();
-        UpgradeableBeacon beaconCertPrinter = new UpgradeableBeacon(
-            cyberCertPrinterRefImpl,
-            address(this)
+        // Delegated to IssuanceManagerStorage to keep this contract under the EIP-170 size limit.
+        IssuanceManagerStorage.executeInitialize(
+            _upgradeFactory,
+            _CORP,
+            _uriBuilder
         );
-        emit CertPrinterBeaconImplementationUpgraded(cyberCertPrinterRefImpl);
-
-        address cyberScripRefImpl = IIssuanceManagerFactory(_upgradeFactory)
-            .getCyberScripRefImplementation();
-        UpgradeableBeacon beaconScrip = new UpgradeableBeacon(
-            cyberScripRefImpl,
-            address(this)
-        );
-        emit ScripBeaconImplementationUpgraded(cyberScripRefImpl);
-
-        IssuanceManagerStorage.setCORP(_CORP);
-        IssuanceManagerStorage.setUriBuilder(_uriBuilder);
-        IssuanceManagerStorage.setCyberCertPrinterBeacon(beaconCertPrinter);
-        IssuanceManagerStorage.setUpgradeFactory(_upgradeFactory);
-        IssuanceManagerStorage.setCyberScripBeacon(beaconScrip);
     }
 
     modifier onlyUpgradeFactory() {
@@ -411,6 +394,36 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             signature,
             agreementId
         );
+    }
+
+    /// @notice Materializes the seller's open endorsement on the Ledger Entry Token at acceptOffer (spec §7.3.1)
+    /// @dev Gated on OWNER_ROLE, which the SPV's DealManager holds (granted at deployment). The off-chain-only
+    /// EIP-712 fields (spvAddress/unitsCommitted/exemptionPathway/validUntil) are not stored on-chain.
+    function attachOpenEndorsement(
+        address certPrinter,
+        bytes32 offerId,
+        address /* spvAddress */,
+        uint256 tokenId,
+        address endorser,
+        uint256 /* unitsCommitted */,
+        ExemptionPathway /* exemptionPathway */,
+        uint256 /* validUntil */,
+        bytes calldata endorsementSig
+    ) external onlyOwner {
+        IssuanceManagerStorage.executeAttachOpenEndorsement(
+            certPrinter,
+            offerId,
+            tokenId,
+            endorser,
+            endorsementSig
+        );
+    }
+
+    /// @notice Effectuates the secondary-trade ownership change at finalization (spec §7.4A / §7.5)
+    /// @dev Gated on OWNER_ROLE, which the SPV's DealManager holds. dealMetadata is the abi-encoded tuple
+    /// produced by DealManager.finalizeSecondaryTradeAgreement; see IssuanceManagerStorage.executeSecondaryTransfer.
+    function secondaryTransfer(bytes calldata dealMetadata) external onlyOwner {
+        IssuanceManagerStorage.executeSecondaryTransfer(dealMetadata);
     }
 
    /* /// @notice Updates the details of an existing certificate

@@ -49,6 +49,7 @@ import "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICyberCorp.sol";
 import "../interfaces/ICyberScrip.sol";
 import "../interfaces/IIssuanceManager.sol";
+import "../interfaces/IIssuanceManagerFactory.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import "./CyberCertPrinterStorage.sol";
 
@@ -523,6 +524,40 @@ library IssuanceManagerStorage {
         return _assetsOfVaultPosition(certAddress, id);
     }
 
+    /// @notice Deploys the CyberCertPrinter and CyberScrip beacons and wires up core storage.
+    /// @dev Split out of IssuanceManager.initialize to keep that contract under the EIP-170 size
+    /// limit. Runs via delegatecall, so `address(this)` is the IssuanceManager and it owns the beacons.
+    function executeInitialize(
+        address upgradeFactory,
+        address corp,
+        address uriBuilder
+    ) external {
+        address cyberCertPrinterRefImpl = IIssuanceManagerFactory(
+            upgradeFactory
+        ).getCyberCertPrinterRefImplementation();
+        UpgradeableBeacon beaconCertPrinter = new UpgradeableBeacon(
+            cyberCertPrinterRefImpl,
+            address(this)
+        );
+        emit IIssuanceManager.CertPrinterBeaconImplementationUpgraded(
+            cyberCertPrinterRefImpl
+        );
+
+        address cyberScripRefImpl = IIssuanceManagerFactory(upgradeFactory)
+            .getCyberScripRefImplementation();
+        UpgradeableBeacon beaconScrip = new UpgradeableBeacon(
+            cyberScripRefImpl,
+            address(this)
+        );
+        emit IIssuanceManager.ScripBeaconImplementationUpgraded(cyberScripRefImpl);
+
+        setCORP(corp);
+        setUriBuilder(uriBuilder);
+        setCyberCertPrinterBeacon(beaconCertPrinter);
+        setUpgradeFactory(upgradeFactory);
+        setCyberScripBeacon(beaconScrip);
+    }
+
     function executeCreateCertPrinter(
         string[] memory ledger,
         string memory name,
@@ -683,6 +718,110 @@ library IssuanceManagerStorage {
             endorseeName: ""
         });
         ICyberCertPrinter(certAddress).addEndorsement(tokenId, newEndorsement);
+    }
+
+    /// @notice Materializes the seller's open endorsement on the Ledger Entry Token at acceptance.
+    /// @dev Open endorsement (no endorsee), signed in blank, binding to the offer (spec §7.3.1). Reservation
+    /// is handled by the DealManager (SELL reserves the whole offer at postOffer, BUY per-lot at acceptOffer),
+    /// so none is taken here. spvAddress/unitsCommitted/exemptionPathway/validUntil from the EIP-712 payload
+    /// have no slot in the on-chain Endorsement struct; only the signed blob is recorded.
+    function executeAttachOpenEndorsement(
+        address certPrinter,
+        bytes32 offerId,
+        uint256 tokenId,
+        address endorser,
+        bytes memory endorsementSig
+    ) external {
+        Endorsement memory openEndorsement = Endorsement({
+            endorser: endorser,
+            timestamp: block.timestamp,
+            signatureHash: endorsementSig,
+            registry: address(0),
+            agreementId: offerId,
+            endorsee: address(0),
+            endorseeName: ""
+        });
+        ICyberCertPrinter(certPrinter).addEndorsement(tokenId, openEndorsement);
+    }
+
+    // TOOD WIP: review needed
+    /// @notice Executes the secondary-trade ownership change at finalization (spec §7.4A steps a–d).
+    /// @dev Mutate-and-mint: the seller's Ledger Entry Token never moves wallets; ownership transfers via
+    /// metadata. Core scope — acquisitionDate / Rule 144(d)(3) tacking / per-pathway certLegend updates are
+    /// deferred (need a FundInterest extensionData format that does not exist yet), so exemptionPathway is
+    /// decoded for the record but otherwise unused here.
+    function executeSecondaryTransfer(bytes calldata dealMetadata)
+        external
+        returns (uint256 buyerTokenId)
+    {
+        (
+            address certPrinter,
+            uint256 tokenId,
+            uint256 units,
+            address buyer,
+            string memory buyerName,
+            uint8 buyerHostingMode,
+            address adminMultisig,
+            ,
+            bytes32 settlementAgreementId,
+            bytes memory openEndorsementSig
+        ) = abi.decode(
+            dealMetadata,
+            (address, uint256, uint256, address, string, uint8, address, ExemptionPathway, bytes32, bytes)
+        );
+
+        ICyberCertPrinter cert = ICyberCertPrinter(certPrinter);
+        // Registered owner of the seller's Ledger Entry Token, unchanged by hosting mode (the token never moves).
+        address seller = cert.legalOwnerOf(tokenId);
+
+        // (a) Consume this lot's unit reservation engaged at posting/acceptance.
+        cert.decreaseUnitsReserved(tokenId, units);
+
+        // (b) Mutate the seller's Ledger Entry Token in place: void on a full sale, decrement on a partial.
+        CertificateDetails memory details = cert.getCertificateDetails(tokenId);
+        bool sellerVoided = units >= details.unitsRepresented;
+        if (sellerVoided) {
+            cert.voidCert(tokenId);
+        } else {
+            details.unitsRepresented -= units;
+            cert.updateCertificateDetails(tokenId, details);
+        }
+        // The buyer's new token inherits the seller's terms (legalDetails, valuation, …) for the sold quantity.
+        // Build a fresh struct rather than aliasing `details` (memory assignment is by reference).
+        CertificateDetails memory buyerDetails = CertificateDetails({
+            signingOfficerName: details.signingOfficerName,
+            signingOfficerTitle: details.signingOfficerTitle,
+            investmentAmountUSD: details.investmentAmountUSD,
+            issuerUSDValuationAtTimeOfInvestment: details.issuerUSDValuationAtTimeOfInvestment,
+            unitsRepresented: units,
+            legalDetails: details.legalDetails,
+            extensionData: details.extensionData
+        });
+
+        // (c) Mint the buyer's new Ledger Entry Token. Direct hosting delivers to the buyer's wallet;
+        // Administered delivers to the admin multisig.
+        // TODO(administered hosting): recordMintAndAssign sets OwnerDetails.ownerAddress to the mint recipient,
+        // so for Administered (mode 1) the registered owner is the multisig, not the buyer (spec §7.4A wants the
+        // buyer recorded in both cases). Needs a printer-side owner override; out of core scope.
+        address to = buyerHostingMode == 1 ? adminMultisig : buyer;
+        (, buyerTokenId) = _mintAssignedCert(certPrinter, to, buyerDetails, buyerName);
+
+        // (d) Mirror endorsement on the new token: chain-of-title back-pointer to the seller and the agreement,
+        // reusing the seller's open-endorsement signature.
+        Endorsement memory mirror = Endorsement({
+            endorser: seller,
+            timestamp: block.timestamp,
+            signatureHash: openEndorsementSig,
+            registry: address(0),
+            agreementId: settlementAgreementId,
+            endorsee: buyer,
+            endorseeName: buyerName
+        });
+        cert.addEndorsement(buyerTokenId, mirror);
+
+        emit IIssuanceManager.SecondaryTransferExecuted(
+            settlementAgreementId, certPrinter, tokenId, buyerTokenId, seller, buyer, units, sellerVoided
+        );
     }
 
     function executeVoidCertificate(address certAddress, uint256 tokenId) external {

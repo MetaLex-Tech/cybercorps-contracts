@@ -408,6 +408,21 @@ interface IIssuanceManager {
     function printers(uint256 index) external view returns (address);
     function setUriBuilder(address _uriBuilder) external;
 
+    /// @notice Single-source signal for the buyer's newly minted Ledger Entry Token at secondary settlement.
+    /// @dev Emitted from the linked storage lib in the IssuanceManager's context; agreementId is the
+    /// settlementAgreementId (joins the DealManager's finalization event) and sellerVoided distinguishes a
+    /// full sale (seller token voided) from a partial (decremented in place).
+    event SecondaryTransferExecuted(
+        bytes32 indexed agreementId,
+        address indexed certPrinter,
+        uint256 sellerTokenId,
+        uint256 buyerTokenId,
+        address seller,
+        address buyer,
+        uint256 units,
+        bool sellerVoided
+    );
+
     // Secondary trade entry points (cyberTRADE; implementation pending)
     function secondaryTransfer(bytes calldata dealMetadata) external;
     function attachOpenEndorsement(

@@ -488,11 +488,12 @@ library SecondaryTradeStorage {
         uint8 buyerHostingMode,
         address adminMultisig,
         ExemptionPathway exemptionPathway,
-        bytes32 settlementAgreementId
+        bytes32 settlementAgreementId,
+        bytes memory openEndorsementSig
     ) internal pure returns (bytes memory) {
         return abi.encode(
             certPrinter, tokenId, units, buyer, buyerName,
-            buyerHostingMode, adminMultisig, exemptionPathway, settlementAgreementId
+            buyerHostingMode, adminMultisig, exemptionPathway, settlementAgreementId, openEndorsementSig
         );
     }
 
@@ -570,7 +571,7 @@ library SecondaryTradeStorage {
             _encodeDealMetadata(
                 offer.certPrinter, secEscrow.tokenId, secEscrow.units, buyer,
                 secEscrow.buyerName, secEscrow.buyerHostingMode, secEscrow.adminMultisig,
-                offer.exemptionPathway, agreementId
+                offer.exemptionPathway, agreementId, secEscrow.openEndorsementSig
             )
         );
 
