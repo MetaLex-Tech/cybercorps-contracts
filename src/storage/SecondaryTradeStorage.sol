@@ -81,7 +81,7 @@ struct Offer {
     uint8 buyerHostingMode;         // buy offer-only: 0 = Direct, 1 = Administered; zero for sell offers
     address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
     bytes32[] settlementAgreementIds; // appended at each acceptOffer; length == 0 at postOffer (no buyer known yet)
-    address[] thresholdConditions;    // resolved from DealManager config at postOffer; re-evaluated at acceptOffer (gates both)
+    address[] thresholdConditions;    // resolved from DealManager config at postOffer; re-evaluated at acceptOffer and at finalize
     address[] closingConditions;      // snapshotted from DealManager config at postOffer; evaluated at finalize (gates asset transfer)
 }
 
@@ -161,8 +161,8 @@ library SecondaryTradeStorage {
         uint256 minTradeUnits;
         uint256 minTradeConsideration;                 // 0 = disabled
         address defaultIntegrator;
-        // Condition config (owner-managed, per-DealManager). Threshold conditions gate post/accept;
-        // closing conditions gate finalize. Resolved/snapshotted onto each Offer at postOffer so an offer
+        // Condition config (owner-managed, per-DealManager). Threshold conditions gate post/accept and are
+        // re-checked at finalize; closing conditions gate finalize. Resolved/snapshotted onto each Offer at postOffer so an offer
         // is governed by the rules in effect when it was posted. Offerors never supply condition addresses.
         address[] spvThresholdConditions;                        // Layer 2 — fund-specific (§6); added at SPV onboarding; applies to every offer
         mapping(ExemptionPathway => address[]) pathwayThresholdConditions; // Layer 1 — exemption-specific (§5); selected by offer.exemptionPathway
@@ -512,6 +512,12 @@ library SecondaryTradeStorage {
         // Defensive backstop: finalizeContract already reverts ContractExpired on the same deadline, so this
         // local guard is effectively unreachable, but kept in case the registry and escrow expiry ever diverge.
         if (block.timestamp > secEscrow.expiry) revert ISecondaryTradeStorage.SecondaryTradeAgreementExpired();
+        // Re-check threshold (eligibility) conditions at finalization: a buyer who was eligible at
+        // acceptance may have lost eligibility before settlement (credential revoked, holder cap
+        // breached, blocked-state move, kill of an approval). Both ids are known, so buyer-facing
+        // conditions read this lot's acceptor directly.
+        _checkThresholdConditions(secEscrow.offerId, agreementId);
+
         address[] storage conditions = offer.closingConditions;
         // Same uniform secondary-trade payload as threshold conditions; at finalize both ids are known.
         bytes memory conditionData = abi.encode(secEscrow.offerId, agreementId);
@@ -568,7 +574,7 @@ library SecondaryTradeStorage {
             )
         );
 
-        emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(agreementId, seller, buyer, secEscrow.paymentAmount);
+        emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(agreementId, seller, buyer, secEscrow.units, secEscrow.paymentAmount);
     }
 
     /// @notice Voids an expired secondary-trade settlement and refunds/releases its escrowed assets
@@ -628,8 +634,9 @@ library SecondaryTradeStorage {
 
     /// @dev Walks the offer's stored threshold conditions, reverting on the first failure. Conditions
     /// receive the uniform secondary-trade payload `abi.encode(offerId, agreementId)`; `agreementId` is
-    /// `bytes32(0)` at posting (no settlement yet) and the just-created settlement at acceptance, so a
-    /// buyer-facing condition reads its acceptor directly instead of reaching into settlementAgreementIds.
+    /// `bytes32(0)` at posting (no settlement yet) and the settlement id at acceptance and at finalization,
+    /// so a buyer-facing condition reads its acceptor directly instead of reaching into settlementAgreementIds.
+    /// Re-run at finalization so eligibility lost between acceptance and settlement blocks the asset transfer.
     function _checkThresholdConditions(bytes32 offerId, bytes32 agreementId) internal {
         address[] storage conditions = secondaryTradeStorage().offers[offerId].thresholdConditions;
         bytes memory conditionData = abi.encode(offerId, agreementId);

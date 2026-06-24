@@ -432,14 +432,15 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
 
     function _handleFinalized(Vm.Log memory log) private {
         bytes32 agreementId = log.topics[1];
-        (address sellerAddr, address buyerAddr, uint256 consideration) =
-            abi.decode(log.data, (address, address, uint256));
+        (address sellerAddr, address buyerAddr, uint256 units, uint256 consideration) =
+            abi.decode(log.data, (address, address, uint256, uint256));
 
         IdxSettlement storage s = idxSettlements[agreementId];
         s.status = uint8(SecondaryEscrowStatus.FINALIZED);
         s.seller = sellerAddr;
         s.buyer = buyerAddr;
-        // Cross-event consistency: the finalized consideration must equal the funded payment.
+        // Cross-event consistency: the finalized units/consideration must equal the funded settlement.
+        require(units == s.units, "indexer: finalized units mismatch");
         require(consideration == s.paymentAmount, "indexer: finalized consideration mismatch");
 
         IdxOffer storage o = idxOffers[s.offerId];
