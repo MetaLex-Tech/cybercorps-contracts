@@ -1,7 +1,7 @@
 # cyberTRADE — Conditions Reference
 
-**Stage:** `threshold` = checked at `postOffer` and `acceptOffer`, gates contract formation · `closing` = checked at
-`finalizeDeal` / `signAndFinalizeDeal`, gates asset transfer
+**Stage:** `threshold` = checked at `postOffer` and `acceptOffer` (gates contract formation) and re-checked at
+finalization (gates asset transfer) · `closing` = checked at finalization only, gates asset transfer
 
 **`data` encoding:** All threshold conditions receive `data = abi.encode(offerAgreementId)`. There is
 no `partyAddr` in `data`. Each condition derives party addresses and all other context by calling
@@ -71,14 +71,16 @@ and **snapshotted onto the offer** — so an offer is governed by the rules in e
 and stored on the secondary-trade record itself (self-contained; no dependency on the primary-deal escrow
 library's `conditionsByEscrow`):
 
-| Array                       | Evaluated at              | Entry points                          |
-|-----------------------------|---------------------------|---------------------------------------|
-| `offer.thresholdConditions` | Offer posted and accepted | `postOffer`, `acceptOffer`            |
-| `offer.closingConditions`   | Finalization              | `finalizeDeal`, `signAndFinalizeDeal` |
+| Array                       | Evaluated at                       | Entry points                                                     |
+|-----------------------------|------------------------------------|------------------------------------------------------------------|
+| `offer.thresholdConditions` | Offer posted, accepted, finalized  | `postOffer`, `acceptOffer`, `finalizeSecondaryTradeAgreement`    |
+| `offer.closingConditions`   | Finalization                       | `finalizeSecondaryTradeAgreement`                                |
 
 Every condition in the array is walked in sequence at each entry point. Any failure reverts immediately.
 Snapshotting the addresses does not blunt the kill switch: `GlobalKillCondition` reads its live state
-internally, so a switch raised after posting still halts an in-flight settlement at finalize.
+internally, so a switch raised after posting still halts an in-flight settlement at finalize. Likewise,
+re-running the threshold set at finalize means eligibility lost after acceptance (revoked credential,
+breached holder cap, blocked-state move, withdrawn approval) blocks the asset transfer.
 
 ### Within threshold: posting vs. acceptance
 
@@ -109,8 +111,8 @@ DealManager holds two distinct condition sets, both owner-managed and snapshotte
 
 The closing-condition set is copied onto the offer at `postOffer` and evaluated at finalization (gating asset
 transfer). The threshold-condition set is resolved (fund-specific (§6) ++ exemption-specific (§5)) and copied onto the
-offer at `postOffer`, then evaluated at `postOffer` and re-evaluated at `acceptOffer` (gating contract formation).
-Offerors supply only the exemption pathway, never condition addresses.
+offer at `postOffer`, then evaluated at `postOffer` and re-evaluated at `acceptOffer` (gating contract formation)
+and again at finalization (gating asset transfer). Offerors supply only the exemption pathway, never condition addresses.
 
 ### Default closing set
 

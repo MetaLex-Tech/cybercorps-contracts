@@ -97,7 +97,7 @@ interface ISecondaryTradeStorage {
         address adminMultisig,
         bytes openEndorsementSig
     );
-    event SecondaryTradeAgreementFinalized(bytes32 indexed agreementId, address seller, address buyer, uint256 consideration);
+    event SecondaryTradeAgreementFinalized(bytes32 indexed agreementId, address seller, address buyer, uint256 units, uint256 consideration);
     event SecondaryTradeAgreementVoided(bytes32 indexed agreementId);
     /// @dev Reports the realized fee split: feeDestination is the credited integrator (zero when the fee
     /// routed entirely to the platform). The split is read from live factory state at settlement, so it is

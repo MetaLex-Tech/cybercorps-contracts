@@ -197,6 +197,16 @@ contract SecConditionMock {
     function checkCondition(address, bytes4, bytes memory) external view returns (bool) { return _pass; }
 }
 
+// Stateful threshold-condition mock: returns `pass`, which the test flips between acceptance and
+// finalization. Used to prove the threshold set is re-checked at finalize — it passes through
+// posting/acceptance, is then flipped to fail, and must block the asset transfer.
+contract SecFlippableConditionMock {
+    bool public pass;
+    constructor(bool pass_) { pass = pass_; }
+    function setPass(bool v) external { pass = v; }
+    function checkCondition(address, bytes4, bytes memory) external view returns (bool) { return pass; }
+}
+
 // Mirrors a real seller-side threshold condition: Returns false if the
 // offer is unreadable — which is what the pre-fix ordering produced, since the condition loop ran
 // before the offer was stored.
@@ -1825,7 +1835,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         // Finalize lot B (the last lot): offer reaches FINALIZED, reservation fully consumed, custody drained.
         vm.expectEmit(true, false, false, true);
-        emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(settlementIdB, seller, buyer, lotB);
+        emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(settlementIdB, seller, buyer, unitsB, lotB);
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementIdB);
 
@@ -1875,7 +1885,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         // Finalize lot B (the last lot): bid reaches FINALIZED, reservation fully consumed, custody drained.
         vm.expectEmit(true, false, false, true);
-        emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(settlementIdB, seller, buyer, lotB);
+        emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(settlementIdB, seller, buyer, unitsB, lotB);
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementIdB);
 
@@ -2808,6 +2818,46 @@ contract DealManagerSecondaryTradeTest is Test {
             uint8(dm.getSecondaryEscrow(settlementId).status),
             uint8(SecondaryEscrowStatus.FINALIZED),
             "finalize proceeds when the closing condition passes"
+        );
+    }
+
+    // Threshold conditions are re-checked at finalization (spec §7.3.3): a buyer eligible at acceptance
+    // who loses eligibility before settlement must be blocked. The flippable condition passes through
+    // posting and acceptance, is flipped to fail, and the finalize call must revert.
+    function test_RevertIf_FinalizeSecondaryTrade_ThresholdConditionLapsesAfterAcceptance() public {
+        SecFlippableConditionMock cond = new SecFlippableConditionMock(true);
+        address[] memory conds = new address[](1);
+        conds[0] = address(cond);
+        _registerThresholdConditions(conds);
+
+        bytes32 offerId = _postSellOffer();
+        bytes32 settlementId = _acceptSellOffer(offerId); // passes while eligible
+
+        cond.setPass(false); // eligibility lapses in the settlement window
+
+        vm.prank(keeper);
+        vm.expectRevert(abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, address(cond)));
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+    }
+
+    // Counterpart: a threshold condition that still passes at finalize lets the settlement close,
+    // proving the re-check runs and is not an unconditional block.
+    function test_FinalizeSecondaryTrade_ThresholdConditionStillPasses() public {
+        SecFlippableConditionMock cond = new SecFlippableConditionMock(true);
+        address[] memory conds = new address[](1);
+        conds[0] = address(cond);
+        _registerThresholdConditions(conds);
+
+        bytes32 offerId = _postSellOffer();
+        bytes32 settlementId = _acceptSellOffer(offerId);
+
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.FINALIZED),
+            "finalize proceeds when the re-checked threshold condition still passes"
         );
     }
 
