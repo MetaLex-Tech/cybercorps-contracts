@@ -109,6 +109,8 @@ library CyberCertPrinterStorage {
         mapping(uint256 => uint256) unitsReserved;
         mapping(uint256 => RestrictiveLegend[]) certLegendsV2;
         RestrictiveLegend[] defaultLegendsV2;
+        mapping(address => uint256) holderTokenCount;
+        uint256 uniqueHolderCount;
         
     }
 
@@ -290,6 +292,32 @@ library CyberCertPrinterStorage {
 
     function getUnitsReserved(uint256 tokenId) internal view returns (uint256) {
         return cyberCertStorage().unitsReserved[tokenId];
+    }
+
+    function recordHolderChange(address from, address to) internal {
+        CyberCertStorage storage s = cyberCertStorage();
+
+        if (from == to) return;
+
+        if (from != address(0)) {
+            uint256 fromBalance = s.holderTokenCount[from] - 1;
+            s.holderTokenCount[from] = fromBalance;
+            if (fromBalance == 0) {
+                s.uniqueHolderCount--;
+            }
+        }
+
+        if (to != address(0)) {
+            uint256 toBalance = s.holderTokenCount[to];
+            if (toBalance == 0) {
+                s.uniqueHolderCount++;
+            }
+            s.holderTokenCount[to] = toBalance + 1;
+        }
+    }
+
+    function getHolderCount() internal view returns (uint256) {
+        return cyberCertStorage().uniqueHolderCount;
     }
 
     // Legend management; isDefault selects the defaultLegend array (tokenId ignored) vs a cert's legend
