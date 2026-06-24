@@ -355,6 +355,80 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.getCertLegendAt(1, 0), "Default legend");
     }
 
+    function test_HolderCount_TracksUniqueHoldersOnMint() public {
+        assertEq(printer.holderCount(), 0);
+
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.holderCount(), 1);
+
+        _mintCert(2, investor, 100, bytes(""));
+        assertEq(printer.holderCount(), 1);
+
+        _mintCert(3, recipient, 100, bytes(""));
+        assertEq(printer.holderCount(), 2);
+    }
+
+    function test_HolderCount_TracksUniqueHoldersOnTransfers() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, investor, 100, bytes(""));
+
+        vm.prank(address(issuanceManager));
+        printer.setGlobalTransferable(true);
+
+        vm.prank(investor);
+        printer.addEndorsement(1, _endorsement(investor, recipient));
+        vm.prank(investor);
+        printer.transferFrom(investor, recipient, 1);
+        assertEq(printer.holderCount(), 2);
+
+        vm.prank(investor);
+        printer.addEndorsement(2, _endorsement(investor, recipient));
+        vm.prank(investor);
+        printer.transferFrom(investor, recipient, 2);
+        assertEq(printer.holderCount(), 1);
+    }
+
+    function test_HolderCount_TransferBetweenExistingHoldersDoesNotIncreaseCount() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, recipient, 100, bytes(""));
+
+        vm.prank(address(issuanceManager));
+        printer.setGlobalTransferable(true);
+
+        vm.prank(investor);
+        printer.addEndorsement(1, _endorsement(investor, recipient));
+        vm.prank(investor);
+        printer.transferFrom(investor, recipient, 1);
+
+        assertEq(printer.holderCount(), 1);
+    }
+
+    function test_HolderCount_SelfTransferDoesNotChangeCount() public {
+        _mintCert(1, investor, 100, bytes(""));
+
+        vm.prank(address(issuanceManager));
+        printer.setGlobalTransferable(true);
+
+        vm.prank(investor);
+        printer.transferFrom(investor, investor, 1);
+
+        assertEq(printer.holderCount(), 1);
+    }
+
+    function test_HolderCount_TracksUniqueHoldersOnBurn() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, investor, 100, bytes(""));
+        assertEq(printer.holderCount(), 1);
+
+        vm.prank(address(issuanceManager));
+        printer.burn(1);
+        assertEq(printer.holderCount(), 1);
+
+        vm.prank(address(issuanceManager));
+        printer.burn(2);
+        assertEq(printer.holderCount(), 0);
+    }
+
     function test_SafeMintAndAssign_StoresNamedLegalOwner() public {
         vm.prank(address(issuanceManager));
         printer.safeMintAndAssign(investor, 1, _details(100, bytes("")), "Alice Investor");
