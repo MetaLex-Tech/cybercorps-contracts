@@ -40,27 +40,39 @@ mechanical, including photocopying, recording, or by any information storage and
 except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
-import {Test, console2} from "forge-std/Test.sol";
-import {Vm} from "forge-std/Vm.sol";
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {DealManager} from "../src/DealManager.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
+import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
+import {ISecondaryTradeStorage} from "../src/interfaces/ISecondaryTradeStorage.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {
+    AcceptOfferParams,
+    ExemptionPathway,
+    Offer,
     OfferSide,
     OfferStatus,
-    ExemptionPathway,
-    SecondaryEscrowStatus,
-    Offer,
-    SecondaryEscrow,
     PostOfferParams,
-    AcceptOfferParams
+    SecondaryEscrow,
+    SecondaryEscrowStatus
 } from "../src/storage/SecondaryTradeStorage.sol";
-import {ISecondaryTradeStorage} from "../src/interfaces/ISecondaryTradeStorage.sol";
-import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
-// Reuse the secondary-trade test mocks rather than redeclaring them.
-import {SecERC20Mock, SecCertPrinterMock, SecIssuanceManagerMock, SecCorpMock} from "./DealManagerSecondaryTradeTest.t.sol";
+import {Test, console2} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
+// Real contract stack for the IssuanceManager + CyberCertPrinter side.
+import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
+import {CyberScrip} from "../src/CyberScrip.sol";
+import {IssuanceManager} from "../src/IssuanceManager.sol";
+import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {CertificateDetails, ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
+// Reuse the payment-token mock and the minimal CyberCorp / uriBuilder fixtures from sibling test files.
+import {SecERC20Mock} from "./DealManagerSecondaryTradeTest.t.sol";
+import {
+    MockCyberCorpForCertEvent,
+    MockUriBuilderForCertEvent
+} from "./IssuanceManagerCertificateCreatedEventTest.t.sol";
 
 /// @title DealManagerSecondaryTradeIndexerTest
 /// @notice Simulates an off-chain indexer (e.g. powering the Legion UI) and proves the secondary-trade
@@ -75,7 +87,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
 
     struct IdxOffer {
         bool exists;
-        bytes32 offerId;         // from OfferPosted's indexed topic
+        bytes32 offerId; // from OfferPosted's indexed topic
         address offeror;
         address spvAddress;
         uint8 side;
@@ -87,7 +99,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         uint8 exemptionPathway;
         uint256 validUntil;
         address integrator;
-        uint8 status;            // OfferStatus
+        uint8 status; // OfferStatus
         uint256 unitsAccepted;
         uint256 paymentAccepted;
         uint256 unitsFinalized;
@@ -109,20 +121,25 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         address paymentToken;
         uint256 paymentAmount;
         uint256 units;
-        uint256 tokenId;         // seller's Ledger Entry Token (from OfferAccepted; acceptor-supplied for bids)
-        uint256 expiry;          // escrow settlement deadline (agreementExpiry from OfferAccepted)
-        string buyerName;        // per-settlement materialization (from OfferAccepted)
+        uint256 tokenId; // seller's Ledger Entry Token (from OfferAccepted; acceptor-supplied for bids)
+        uint256 expiry; // escrow settlement deadline (agreementExpiry from OfferAccepted)
+        string buyerName; // per-settlement materialization (from OfferAccepted)
         uint8 buyerHostingMode;
         address adminMultisig;
         bytes openEndorsementSig; // per-settlement endorsement used (from OfferAccepted)
-        uint8 status;            // SecondaryEscrowStatus
-        address feeDestination;  // escrow routing: snapshotted from the offer's integrator
-        address seller;          // from Finalized
-        address buyer;           // from Finalized
-        uint256 fee;             // realized total fee (from SecondaryFeeDistributed; 0 if none)
+        uint8 status; // SecondaryEscrowStatus
+        address feeDestination; // escrow routing: snapshotted from the offer's integrator
+        address seller; // from Finalized
+        address buyer; // from Finalized
+        uint256 fee; // realized total fee (from SecondaryFeeDistributed; 0 if none)
         uint256 integratorFee;
         uint256 platformFee;
         address creditedIntegrator; // realized fee recipient (zero = platform-only)
+        // Stock-ledger columns, populated from SecondaryTransferExecuted (emitted by the IssuanceManager).
+        bool transferred; // a secondary-transfer fired for this settlement
+        uint256 surrenderedTokenId; // seller's Ledger Entry Token (CERTIFICATES SURRENDERED → CERTIF NO.)
+        uint256 issuedTokenId; // buyer's newly minted Ledger Entry Token (CERTIFICATES ISSUED → CERTIF NO.)
+        bool sellerVoided; // full sale (seller cert voided) vs partial (decremented)
     }
 
     mapping(bytes32 => IdxOffer) internal idxOffers;
@@ -137,12 +154,16 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
     bytes32 immutable TOPIC_FINALIZED = ISecondaryTradeStorage.SecondaryTradeAgreementFinalized.selector;
     bytes32 immutable TOPIC_VOIDED = ISecondaryTradeStorage.SecondaryTradeAgreementVoided.selector;
     bytes32 immutable TOPIC_FEE = ISecondaryTradeStorage.SecondaryFeeDistributed.selector;
+    // Emitted by the IssuanceManager (not the DealManager), so the indexer also watches that emitter.
+    bytes32 immutable TOPIC_SECONDARY_TRANSFER = IIssuanceManager.SecondaryTransferExecuted.selector;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Chain fixtures (mirrors DealManagerSecondaryTradeTest setUp)
     // ─────────────────────────────────────────────────────────────────────────
 
     bytes32 constant corpSalt = keccak256("DealManagerSecondaryTradeIndexerTest.corp");
+
+    bytes32 constant imSalt = keccak256("DealManagerSecondaryTradeIndexerTest.im");
 
     address public owner;
     uint256 public ownerKey;
@@ -151,13 +172,12 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
     address public buyer;
     uint256 public buyerKey;
     address public keeper;
-    address public company;
 
     SecERC20Mock public paymentToken;
-    SecCertPrinterMock public certPrinter;
-    SecIssuanceManagerMock public im;
+    ICyberCertPrinter public certPrinter;
+    IssuanceManager public im;
     CyberAgreementRegistry public registry;
-    SecCorpMock public corp;
+    MockCyberCorpForCertEvent public corp;
     DealManagerFactory public dmFactory;
     DealManager public dm;
     BorgAuth public auth;
@@ -174,34 +194,74 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         (seller, sellerKey) = makeAddrAndKey("seller");
         (buyer, buyerKey) = makeAddrAndKey("buyer");
         keeper = makeAddr("keeper");
-        company = makeAddr("company");
 
         paymentToken = new SecERC20Mock();
-        certPrinter = new SecCertPrinterMock();
-        im = new SecIssuanceManagerMock();
-        corp = new SecCorpMock(company);
-
         auth = new BorgAuth(owner);
+        corp = new MockCyberCorpForCertEvent();
 
-        registry = CyberAgreementRegistry(address(new ERC1967Proxy(
-            address(new CyberAgreementRegistry()),
-            abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
-        )));
+        // Real IssuanceManager + CyberCertPrinter, deployed through the IssuanceManagerFactory beacon stack
+        // (mirrors IssuanceManagerSecondaryTransferTest), so the secondary-transfer logs are the real ones.
+        IssuanceManagerFactory imFactory = IssuanceManagerFactory(
+            address(
+                new ERC1967Proxy(
+                    address(new IssuanceManagerFactory()),
+                    abi.encodeWithSelector(
+                        IssuanceManagerFactory.initialize.selector,
+                        address(auth),
+                        new IssuanceManager(),
+                        new CyberCertPrinter(),
+                        new CyberScrip()
+                    )
+                )
+            )
+        );
+        im = IssuanceManager(imFactory.deployIssuanceManager(imSalt));
+        im.initialize(address(auth), address(corp), address(new MockUriBuilderForCertEvent()), address(imFactory));
+
+        registry = CyberAgreementRegistry(
+            address(
+                new ERC1967Proxy(
+                    address(new CyberAgreementRegistry()),
+                    abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
+                )
+            )
+        );
         vm.prank(owner);
         registry.createTemplate(TEMPLATE_ID, "Secondary", TEMPLATE_URI, new string[](0), new string[](0));
 
-        dmFactory = DealManagerFactory(address(new ERC1967Proxy(
-            address(new DealManagerFactory()),
-            abi.encodeWithSelector(
-                DealManagerFactory.initialize.selector, address(auth), address(new DealManager())
+        dmFactory = DealManagerFactory(
+            address(
+                new ERC1967Proxy(
+                    address(new DealManagerFactory()),
+                    abi.encodeWithSelector(
+                        DealManagerFactory.initialize.selector, address(auth), address(new DealManager())
+                    )
+                )
             )
-        )));
+        );
 
         dm = DealManager(dmFactory.deployDealManager(corpSalt));
         dm.initialize(address(auth), address(corp), address(registry), address(im), address(dmFactory));
+        // The DealManager invokes the IssuanceManager's owner-gated reservation and secondary-transfer
+        // entry points, so it needs the same role the real onboarding grants it.
+        vm.prank(owner);
+        auth.updateRole(address(dm), 99);
 
-        vm.prank(seller);
-        sellerTokenId = certPrinter.mint(seller);
+        // Real seller Ledger Entry Token, minted through the IssuanceManager with UNITS represented.
+        vm.startPrank(owner);
+        certPrinter = ICyberCertPrinter(
+            im.createCertPrinter(
+                new string[](0),
+                "Indexer Cert",
+                "ICERT",
+                "uri://cert",
+                SecurityClass.CommonStock,
+                SecuritySeries.SeriesA,
+                address(0)
+            )
+        );
+        sellerTokenId = im.createCertAndAssign(address(certPrinter), seller, _sellerCertDetails(UNITS));
+        vm.stopPrank();
 
         paymentToken.mint(buyer, CONSIDERATION * 10);
         vm.prank(buyer);
@@ -210,6 +270,18 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         paymentToken.mint(seller, CONSIDERATION * 10);
         vm.prank(seller);
         paymentToken.approve(address(dm), type(uint256).max);
+    }
+
+    function _sellerCertDetails(uint256 units) internal pure returns (CertificateDetails memory) {
+        return CertificateDetails({
+            signingOfficerName: "Officer",
+            signingOfficerTitle: "Title",
+            investmentAmountUSD: 1000,
+            issuerUSDValuationAtTimeOfInvestment: 10000,
+            unitsRepresented: units,
+            legalDetails: "",
+            extensionData: bytes("")
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -316,7 +388,9 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
     }
 
     function _agreementSig(bytes32 agreementId, string[] memory partyValues, uint256 key)
-        internal view returns (bytes memory)
+        internal
+        view
+        returns (bytes memory)
     {
         return CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -349,8 +423,9 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
     function _index(Vm.Log[] memory logs) internal {
         for (uint256 i = 0; i < logs.length; i++) {
             Vm.Log memory log = logs[i];
-            // Only this DealManager's secondary-trade events; everything else (ERC20, registry, …) is ignored.
-            if (log.emitter != address(dm) || log.topics.length == 0) continue;
+            // The DealManager's order-book/settlement events plus the IssuanceManager's secondary-transfer
+            // event; everything else (ERC20, registry, …) is ignored.
+            if ((log.emitter != address(dm) && log.emitter != address(im)) || log.topics.length == 0) continue;
             bytes32 topic = log.topics[0];
             if (topic == TOPIC_OFFER_POSTED) _handleOfferPosted(log);
             else if (topic == TOPIC_OFFER_ACCEPTED) _handleOfferAccepted(log);
@@ -358,6 +433,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
             else if (topic == TOPIC_FINALIZED) _handleFinalized(log);
             else if (topic == TOPIC_VOIDED) _handleVoided(log);
             else if (topic == TOPIC_FEE) _handleFee(log);
+            else if (topic == TOPIC_SECONDARY_TRANSFER) _handleSecondaryTransfer(log);
         }
     }
 
@@ -372,15 +448,44 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
 
         // Decode the flat OfferPosted data tuple straight into the offer record (order matches the event).
         (
-            o.spvAddress, o.side, o.tokenId, o.units, o.paymentToken, o.consideration,
-            o.exemptionPathway, o.validUntil, o.integrator, o.templateId, o.buyerName,
-            o.buyerHostingMode, o.adminMultisig, o.counterpartyRestrictions,
-            o.thresholdConditions, o.closingConditions
-        ) = abi.decode(
-            log.data,
-            (address, uint8, uint256, uint256, address, uint256, uint8, uint256, address,
-             bytes32, string, uint8, address, bytes, address[], address[])
-        );
+            o.spvAddress,
+            o.side,
+            o.tokenId,
+            o.units,
+            o.paymentToken,
+            o.consideration,
+            o.exemptionPathway,
+            o.validUntil,
+            o.integrator,
+            o.templateId,
+            o.buyerName,
+            o.buyerHostingMode,
+            o.adminMultisig,
+            o.counterpartyRestrictions,
+            o.thresholdConditions,
+            o.closingConditions
+        ) =
+            abi.decode(
+                log.data,
+                (
+                    address,
+                    uint8,
+                    uint256,
+                    uint256,
+                    address,
+                    uint256,
+                    uint8,
+                    uint256,
+                    address,
+                    bytes32,
+                    string,
+                    uint8,
+                    address,
+                    bytes,
+                    address[],
+                    address[]
+                )
+            );
 
         o.exists = true;
         o.offerId = offerId;
@@ -394,9 +499,17 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         bytes32 offerId = log.topics[1];
         bytes32 settlementId = log.topics[2];
         address acceptor = _addr(log.topics[3]);
-        (uint256 units, address payToken, uint256 paymentAmount, uint256 tokenId, uint256 expiry,
-         string memory buyerName, uint8 buyerHostingMode, address adminMultisig, bytes memory openEndorsementSig) =
-            abi.decode(log.data, (uint256, address, uint256, uint256, uint256, string, uint8, address, bytes));
+        (
+            uint256 units,
+            address payToken,
+            uint256 paymentAmount,
+            uint256 tokenId,
+            uint256 expiry,
+            string memory buyerName,
+            uint8 buyerHostingMode,
+            address adminMultisig,
+            bytes memory openEndorsementSig
+        ) = abi.decode(log.data, (uint256, address, uint256, uint256, uint256, string, uint8, address, bytes));
 
         IdxSettlement storage s = idxSettlements[settlementId];
         require(!s.exists, "indexer: settlement accepted twice");
@@ -421,9 +534,8 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         s.feeDestination = o.integrator;
         o.unitsAccepted += units;
         o.paymentAccepted += paymentAmount;
-        o.status = o.unitsAccepted >= o.units
-            ? uint8(OfferStatus.FULLY_ACCEPTED)
-            : uint8(OfferStatus.PARTIALLY_ACCEPTED);
+        o.status =
+            o.unitsAccepted >= o.units ? uint8(OfferStatus.FULLY_ACCEPTED) : uint8(OfferStatus.PARTIALLY_ACCEPTED);
     }
 
     function _handleOfferCancelled(Vm.Log memory log) private {
@@ -467,6 +579,17 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         IdxSettlement storage s = idxSettlements[log.topics[1]];
         s.creditedIntegrator = _addr(log.topics[3]);
         (s.fee, s.integratorFee, s.platformFee) = abi.decode(log.data, (uint256, uint256, uint256));
+    }
+
+    function _handleSecondaryTransfer(Vm.Log memory log) private {
+        // topics: [0]=sig, [1]=agreementId, [2]=certPrinter
+        IdxSettlement storage s = idxSettlements[log.topics[1]];
+        (uint256 sellerTokenId, uint256 buyerTokenId,,,, bool sellerVoided) =
+            abi.decode(log.data, (uint256, uint256, address, address, uint256, bool));
+        s.transferred = true;
+        s.surrenderedTokenId = sellerTokenId;
+        s.issuedTokenId = buyerTokenId;
+        s.sellerVoided = sellerVoided;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -733,7 +856,9 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         uint256 expectedIntegratorFee = fee * 3000 / 10000; // 0.3 ether
         uint256 expectedPlatformFee = fee - expectedIntegratorFee; // 0.7 ether
         // Sell offer finalized with a fee: seller=offeror, buyer=acceptor, split credited to the integrator.
-        _assertSettlementDerived(settlementId, seller, buyer, fee, expectedIntegratorFee, expectedPlatformFee, integrator);
+        _assertSettlementDerived(
+            settlementId, seller, buyer, fee, expectedIntegratorFee, expectedPlatformFee, integrator
+        );
 
         IdxSettlement storage s = idxSettlements[settlementId];
         assertEq(s.integratorFee + s.platformFee, s.fee, "split sums to total");
@@ -741,5 +866,60 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         // Events agree with reality.
         assertEq(paymentToken.balanceOf(integrator), s.integratorFee, "integrator balance == reconstructed fee");
         assertEq(paymentToken.balanceOf(platform), s.platformFee, "platform balance == reconstructed fee");
+    }
+
+    // Stock-ledger reconstruction: a SELL offer filled in two lots (partial then closing) yields two transfer
+    // rows. SecondaryTransferExecuted supplies the buyer's newly issued cert number, the seller's surrendered
+    // cert number, and the full-vs-partial flag — the columns the DealManager events alone could not provide.
+    function test_Indexer_StockLedger_BuyerSellerCertNumbers() public {
+        uint256 unitsA = 40;
+        uint256 unitsB = 60;
+
+        vm.recordLogs();
+        bytes32 offerId = _postSellOffer();
+        bytes32 lotA = _acceptSellOfferPartial(offerId, unitsA);
+        bytes32 lotB = _acceptSellOfferPartial(offerId, unitsB);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(lotA);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(lotB);
+
+        _index(vm.getRecordedLogs());
+
+        // Lot A — partial sale: seller cert decremented (not voided), buyer gets the first new cert.
+        _assertLedgerRow(lotA, sellerTokenId, 1, seller, buyer, "Bob", unitsA, false);
+        // Lot B — closing the position: the last units settle, so the seller cert is voided; second new cert.
+        _assertLedgerRow(lotB, sellerTokenId, 2, seller, buyer, "Bob", unitsB, true);
+
+        // Both lots surrender the same origin cert and issue distinct buyer certs — a coherent chain of title.
+        assertEq(idxSettlements[lotA].surrenderedTokenId, idxSettlements[lotB].surrenderedTokenId, "same origin cert");
+        assertTrue(idxSettlements[lotA].issuedTokenId != idxSettlements[lotB].issuedTokenId, "distinct issued certs");
+    }
+
+    /// @dev Asserts one reconstructed stock-ledger transfer row matches the on-chain transfer. The buyer
+    /// name / units / parties come from the DealManager events; the cert numbers and full/partial flag come
+    /// from SecondaryTransferExecuted.
+    function _assertLedgerRow(
+        bytes32 settlementId,
+        uint256 expectedSurrendered,
+        uint256 expectedIssued,
+        address expectedSeller,
+        address expectedBuyer,
+        string memory expectedBuyerName,
+        uint256 expectedUnits,
+        bool expectedVoided
+    ) internal view {
+        IdxSettlement storage s = idxSettlements[settlementId];
+        assertTrue(s.transferred, "transfer indexed for settlement");
+        // CERTIFICATES SURRENDERED → CERTIF NO. / CERTIFICATES ISSUED → CERTIF NO.
+        assertEq(s.surrenderedTokenId, expectedSurrendered, "surrendered cert number");
+        assertEq(s.issuedTokenId, expectedIssued, "issued cert number");
+        // FROM WHOM / TO WHOM TRANSFERRED — the transfer event agrees with the finalization parties.
+        assertEq(s.seller, expectedSeller, "from-whom (seller)");
+        assertEq(s.buyer, expectedBuyer, "to-whom (buyer)");
+        // NAME OF SHAREHOLDER / NO. OF SHARES.
+        assertEq(s.buyerName, expectedBuyerName, "shareholder name");
+        assertEq(s.units, expectedUnits, "shares transferred");
+        assertEq(s.sellerVoided, expectedVoided, "full-vs-partial flag");
     }
 }

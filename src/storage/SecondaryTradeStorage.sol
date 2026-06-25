@@ -377,42 +377,27 @@ library SecondaryTradeStorage {
             params.acceptorAgreementSig, false, ""
         );
 
-        // Resolve cert printer, tokenId, buyer, endorser, and endorsement sig per offer side;
+        // Resolve cert printer, tokenId, buyer, and endorsement sig per offer side. The seller's open-endorsement
+        // signature is only captured here (parked on the SecondaryEscrow below); it is not written to the token
+        // until finalization, where secondaryTransfer materializes the real endorsement with the known buyer.
         address certPrinter;
         uint256 tokenId;
         address buyer;
-        address endorser;
         bytes memory endorsementSig;
 
         if (offer.side == OfferSide.SELL) {
             certPrinter = offer.certPrinter;
             tokenId = offer.tokenId;
             buyer = msg.sender;
-            endorser = offer.offeror;
             endorsementSig = offer.openEndorsementSig;
         } else {
             certPrinter = offer.certPrinter;
             tokenId = params.sellerTokenId;
             buyer = offer.offeror;
-            endorser = msg.sender;
             endorsementSig = params.openEndorsementSig;
             // Reserve units on the seller's cert at acceptance (bid flow, routed through IssuanceManager)
             DealManagerStorage.getIssuanceManager().increaseUnitsReserved(certPrinter, tokenId, params.units);
         }
-
-        // Materialize the open endorsement on the seller's Ledger Entry Token. Signed in blank: binds to
-        // the offer, carries no endorsee (spec §7.3.1).
-        DealManagerStorage.getIssuanceManager().attachOpenEndorsement(
-            certPrinter,
-            offer.offerId,
-            offer.spvAddress,
-            tokenId,
-            endorser,
-            offer.units,
-            offer.exemptionPathway,
-            offer.validUntil,
-            endorsementSig
-        );
 
         // Resolve the buyer info per side: bids carry it on the offer (the offeror is the buyer),
         // sells take it from the acceptance.

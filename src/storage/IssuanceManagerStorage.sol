@@ -51,6 +51,7 @@ import "../interfaces/ICyberScrip.sol";
 import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/IIssuanceManagerFactory.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
+import {ExemptionPathway} from "../interfaces/ISecondaryTradeStorage.sol";
 import "./CyberCertPrinterStorage.sol";
 
 library IssuanceManagerStorage {
@@ -720,30 +721,6 @@ library IssuanceManagerStorage {
         ICyberCertPrinter(certAddress).addEndorsement(tokenId, newEndorsement);
     }
 
-    /// @notice Materializes the seller's open endorsement on the Ledger Entry Token at acceptance.
-    /// @dev Open endorsement (no endorsee), signed in blank, binding to the offer (spec §7.3.1). Reservation
-    /// is handled by the DealManager (SELL reserves the whole offer at postOffer, BUY per-lot at acceptOffer),
-    /// so none is taken here. spvAddress/unitsCommitted/exemptionPathway/validUntil from the EIP-712 payload
-    /// have no slot in the on-chain Endorsement struct; only the signed blob is recorded.
-    function executeAttachOpenEndorsement(
-        address certPrinter,
-        bytes32 offerId,
-        uint256 tokenId,
-        address endorser,
-        bytes memory endorsementSig
-    ) external {
-        Endorsement memory openEndorsement = Endorsement({
-            endorser: endorser,
-            timestamp: block.timestamp,
-            signatureHash: endorsementSig,
-            registry: address(0),
-            agreementId: offerId,
-            endorsee: address(0),
-            endorseeName: ""
-        });
-        ICyberCertPrinter(certPrinter).addEndorsement(tokenId, openEndorsement);
-    }
-
     // TOOD WIP: review needed
     /// @notice Executes the secondary-trade ownership change at finalization (spec §7.4A steps a–d).
     /// @dev Mutate-and-mint: the seller's Ledger Entry Token never moves wallets; ownership transfers via
@@ -777,7 +754,23 @@ library IssuanceManagerStorage {
         // (a) Consume this lot's unit reservation engaged at posting/acceptance.
         cert.decreaseUnitsReserved(tokenId, units);
 
-        // (b) Mutate the seller's Ledger Entry Token in place: void on a full sale, decrement on a partial.
+        // (b) Materialize the seller's endorsement on the Ledger Entry Token. The seller signs in blank at
+        // posting/acceptance (spec §7.3.1) and that signature rides in dealMetadata; the endorsement is written
+        // here, at finalization, with the now-known buyer as endorsee (spec §7.4A step 1). Recorded while the
+        // token is still Assigned, before the void/decrement below. The seller is always the endorser of record
+        // (spec §3676-3680); the IssuanceManager is only the operational executor.
+        Endorsement memory sellerEndorsement = Endorsement({
+            endorser: seller,
+            timestamp: block.timestamp,
+            signatureHash: openEndorsementSig,
+            registry: address(0),
+            agreementId: settlementAgreementId,
+            endorsee: buyer,
+            endorseeName: buyerName
+        });
+        cert.addEndorsement(tokenId, sellerEndorsement);
+
+        // (c) Mutate the seller's Ledger Entry Token in place: void on a full sale, decrement on a partial.
         CertificateDetails memory details = cert.getCertificateDetails(tokenId);
         bool sellerVoided = units >= details.unitsRepresented;
         if (sellerVoided) {
@@ -798,7 +791,7 @@ library IssuanceManagerStorage {
             extensionData: details.extensionData
         });
 
-        // (c) Mint the buyer's new Ledger Entry Token. Direct hosting delivers to the buyer's wallet;
+        // (d) Mint the buyer's new Ledger Entry Token. Direct hosting delivers to the buyer's wallet;
         // Administered delivers to the admin multisig.
         // TODO(administered hosting): recordMintAndAssign sets OwnerDetails.ownerAddress to the mint recipient,
         // so for Administered (mode 1) the registered owner is the multisig, not the buyer (spec §7.4A wants the
@@ -806,7 +799,7 @@ library IssuanceManagerStorage {
         address to = buyerHostingMode == 1 ? adminMultisig : buyer;
         (, buyerTokenId) = _mintAssignedCert(certPrinter, to, buyerDetails, buyerName);
 
-        // (d) Mirror endorsement on the new token: chain-of-title back-pointer to the seller and the agreement,
+        // (e) Mirror endorsement on the new token: chain-of-title back-pointer to the seller and the agreement,
         // reusing the seller's open-endorsement signature.
         Endorsement memory mirror = Endorsement({
             endorser: seller,

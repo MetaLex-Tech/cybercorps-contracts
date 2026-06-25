@@ -18,9 +18,9 @@ import {
 } from "./IssuanceManagerCertificateCreatedEventTest.t.sol";
 
 /// @title IssuanceManagerSecondaryTransferTest
-/// @notice Exercises the real IssuanceManager.attachOpenEndorsement + secondaryTransfer against a real
-/// CyberCertPrinter (no mocks), proving the mutate-and-mint ownership change and the SecondaryTransferExecuted
-/// signal an indexer reads for the buyer's new Ledger Entry Token id.
+/// @notice Exercises the real IssuanceManager.secondaryTransfer against a real CyberCertPrinter (no mocks),
+/// proving the mutate-and-mint ownership change, the seller-token and buyer-token endorsements materialized at
+/// finalization, and the SecondaryTransferExecuted signal an indexer reads for the buyer's new token id.
 contract IssuanceManagerSecondaryTransferTest is Test {
     bytes32 constant SALT = bytes32(keccak256("IssuanceManagerSecondaryTransferTest"));
 
@@ -33,7 +33,6 @@ contract IssuanceManagerSecondaryTransferTest is Test {
 
     uint256 constant UNITS = 100;
     bytes constant SELLER_SIG = hex"deadbeef";
-    bytes32 constant OFFER_ID = keccak256("offer");
     bytes32 constant SETTLEMENT_ID = keccak256("settlement");
 
     function setUp() public {
@@ -84,9 +83,10 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         );
         issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, UNITS, "Bob", 0, address(0)));
 
-        // Seller side: token voided, reservation cleared.
+        // Seller side: token voided, reservation cleared, real endorsement materialized.
         assertTrue(cert.isVoided(0), "seller cert voided on full sale");
         assertEq(cert.unitsReserved(0), 0, "reservation consumed");
+        _assertSellerEndorsement(cert, 0, "Bob");
 
         // Buyer side: new token minted to the buyer for all units.
         assertEq(cert.legalOwnerOf(expectedBuyerTokenId), buyer, "buyer is registered owner");
@@ -111,6 +111,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         assertFalse(cert.isVoided(0), "seller cert survives a partial sale");
         assertEq(cert.getCertificateDetails(0).unitsRepresented, UNITS - soldUnits, "seller remainder");
         assertEq(cert.unitsReserved(0), UNITS - soldUnits, "reservation reduced by consumed lot");
+        _assertSellerEndorsement(cert, 0, "Bob");
 
         // Buyer side: new token for the sold units only.
         assertEq(cert.legalOwnerOf(expectedBuyerTokenId), buyer, "buyer is registered owner");
@@ -133,8 +134,8 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// @dev Deploys a printer, mints the seller's Ledger Entry Token (id 0, `units` units), reserves the whole
-    /// position, and attaches the seller's open endorsement — the state the DealManager leaves at acceptOffer.
+    /// @dev Deploys a printer, mints the seller's Ledger Entry Token (id 0, `units` units), and reserves the
+    /// whole position — the state the DealManager leaves at acceptOffer (no endorsement is written until finalize).
     function _deployPrinterWithSellerCert(uint256 units) internal returns (ICyberCertPrinter cert) {
         cert = ICyberCertPrinter(
             issuanceManager.createCertPrinter(
@@ -158,17 +159,6 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         });
         issuanceManager.createCertAndAssign(address(cert), seller, details);
         issuanceManager.increaseUnitsReserved(address(cert), 0, units);
-        issuanceManager.attachOpenEndorsement(
-            address(cert),
-            OFFER_ID,
-            address(0),
-            0,
-            seller,
-            units,
-            ExemptionPathway.SECTION_4A7,
-            block.timestamp + 1 days,
-            SELLER_SIG
-        );
     }
 
     function _dealMetadata(
@@ -207,5 +197,21 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         assertEq(mirror.endorseeName, buyerName, "mirror endorsee name");
         assertEq(mirror.agreementId, SETTLEMENT_ID, "mirror bound to the settlement");
         assertEq(mirror.signatureHash, SELLER_SIG, "mirror reuses the seller signature");
+    }
+
+    /// @dev secondaryTransfer materializes the seller's real endorsement on the seller token at finalization
+    /// (no open endorsement is written at acceptance). It sits at index 1 — index 0 is the endorsement the mint
+    /// (createCertAndAssign) records. Endorser is the seller of record (spec §3676-3680), endorsee the now-known
+    /// buyer.
+    function _assertSellerEndorsement(ICyberCertPrinter cert, uint256 sellerTokenId, string memory buyerName)
+        internal
+        view
+    {
+        Endorsement memory e = CyberCertPrinter(address(cert)).getEndorsementHistory(sellerTokenId, 1);
+        assertEq(e.endorser, seller, "seller-token endorser is the seller");
+        assertEq(e.endorsee, buyer, "seller-token endorsee is the buyer");
+        assertEq(e.endorseeName, buyerName, "seller-token endorsee name");
+        assertEq(e.agreementId, SETTLEMENT_ID, "seller endorsement bound to the settlement");
+        assertEq(e.signatureHash, SELLER_SIG, "seller endorsement carries the seller signature");
     }
 }

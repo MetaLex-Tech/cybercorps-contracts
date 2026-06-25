@@ -396,29 +396,6 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         );
     }
 
-    /// @notice Materializes the seller's open endorsement on the Ledger Entry Token at acceptOffer (spec §7.3.1)
-    /// @dev Gated on OWNER_ROLE, which the SPV's DealManager holds (granted at deployment). The off-chain-only
-    /// EIP-712 fields (spvAddress/unitsCommitted/exemptionPathway/validUntil) are not stored on-chain.
-    function attachOpenEndorsement(
-        address certPrinter,
-        bytes32 offerId,
-        address /* spvAddress */,
-        uint256 tokenId,
-        address endorser,
-        uint256 /* unitsCommitted */,
-        ExemptionPathway /* exemptionPathway */,
-        uint256 /* validUntil */,
-        bytes calldata endorsementSig
-    ) external onlyOwner {
-        IssuanceManagerStorage.executeAttachOpenEndorsement(
-            certPrinter,
-            offerId,
-            tokenId,
-            endorser,
-            endorsementSig
-        );
-    }
-
     /// @notice Effectuates the secondary-trade ownership change at finalization (spec §7.4A / §7.5)
     /// @dev Gated on OWNER_ROLE, which the SPV's DealManager holds. dealMetadata is the abi-encoded tuple
     /// produced by DealManager.finalizeSecondaryTradeAgreement; see IssuanceManagerStorage.executeSecondaryTransfer.
