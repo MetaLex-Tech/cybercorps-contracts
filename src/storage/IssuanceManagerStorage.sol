@@ -626,6 +626,7 @@ library IssuanceManagerStorage {
         (cert, tokenId) = _mintAssignedCert(
             certAddress,
             investor,
+            investor, // primary issuance is always direct-hosted for now
             details,
             investorName
         );
@@ -666,6 +667,7 @@ library IssuanceManagerStorage {
         (cert, tokenId) = _mintAssignedCert(
             certAddress,
             investor,
+            investor, // primary issuance is always direct-hosted for now
             details,
             investorName
         );
@@ -792,12 +794,11 @@ library IssuanceManagerStorage {
         });
 
         // (d) Mint the buyer's new Ledger Entry Token. Direct hosting delivers to the buyer's wallet;
-        // Administered delivers to the admin multisig.
-        // TODO(administered hosting): recordMintAndAssign sets OwnerDetails.ownerAddress to the mint recipient,
-        // so for Administered (mode 1) the registered owner is the multisig, not the buyer (spec §7.4A wants the
-        // buyer recorded in both cases). Needs a printer-side owner override; out of core scope.
-        address to = buyerHostingMode == 1 ? adminMultisig : buyer;
-        (, buyerTokenId) = _mintAssignedCert(certPrinter, to, buyerDetails, buyerName);
+        // Administered custodies it with the admin multisig. In both cases the buyer is the registered legal
+        // owner (spec §7.4A) — so legalOwnerOf and the CertificateAssigned event name the buyer, not the
+        // custodian, while the multisig merely holds the NFT under administered hosting.
+        address custodian = buyerHostingMode == 1 ? adminMultisig : buyer;
+        (, buyerTokenId) = _mintAssignedCert(certPrinter, custodian, buyer, buyerDetails, buyerName);
 
         // (e) Mirror endorsement on the new token: chain-of-title back-pointer to the seller and the agreement,
         // reusing the seller's open-endorsement signature.
@@ -1382,11 +1383,15 @@ library IssuanceManagerStorage {
         }
     }
 
+    /// @dev Mint a new cert: the NFT is custodied by `to` while `owner` is recorded as the legal owner of
+    /// record. Direct issuance passes to == owner; administered hosting custodies with a multisig (`to`) for
+    /// the buyer/holder of record (`owner`).
     function _mintAssignedCert(
         address certAddress,
-        address investor,
+        address to,
+        address owner,
         CertificateDetails memory details,
-        string memory investorName
+        string memory ownerName
     )
         internal
         returns (ICyberCertPrinter cert, uint256 tokenId)
@@ -1394,7 +1399,7 @@ library IssuanceManagerStorage {
         _requireCompanyDetailsSet();
         cert = ICyberCertPrinter(certAddress);
         tokenId = cert.totalSupply();
-        cert.safeMintAndAssign(investor, tokenId, details, investorName);
+        cert.safeMintAndAssign(to, owner, tokenId, details, ownerName);
         _emitCertificateCreated(tokenId, certAddress, details);
     }
 

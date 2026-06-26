@@ -119,15 +119,19 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         _assertMirrorEndorsement(cert, expectedBuyerTokenId, "Bob");
     }
 
-    // Administered hosting (buyerHostingMode == 1) delivers the new token to the admin multisig.
-    function test_SecondaryTransfer_AdministeredHosting_DeliversToMultisig() public {
+    // Administered hosting (buyerHostingMode == 1) custodies the new token with the admin multisig, but the
+    // buyer is still the registered legal owner of record (spec §7.4A) — custody and ownership are distinct.
+    function test_SecondaryTransfer_AdministeredHosting_MultisigCustodiesBuyerOwns() public {
         ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
         address adminMultisig = makeAddr("adminMultisig");
 
         issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, UNITS, "Bob", 1, adminMultisig));
 
-        // Token custody is the multisig under administered hosting.
-        assertEq(cert.ownerOf(1), adminMultisig, "administered token held by multisig");
+        // Custody: the multisig holds the NFT. Ownership of record: the buyer, not the custodian.
+        assertEq(cert.ownerOf(1), adminMultisig, "administered token custodied by multisig");
+        assertEq(cert.legalOwnerOf(1), buyer, "buyer is the registered legal owner under administered hosting");
+        assertEq(cert.balanceOf(buyer), 0, "buyer does not custody the NFT");
+        _assertMirrorEndorsement(cert, 1, "Bob");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
