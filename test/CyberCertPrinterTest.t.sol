@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {CyberCertPrinterStorage} from "../src/storage/CyberCertPrinterStorage.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {IUriBuilder} from "../src/interfaces/IUriBuilder.sol";
 import {
@@ -168,6 +169,24 @@ contract MockUriBuilder is IUriBuilder {
     }
 }
 
+/// @dev Test-only subclass exposing a hook to recreate the pre-enumeration ("legacy") storage state directly —
+/// owners[] populated but the legal-owner enumeration empty — so tests don't have to vm.store into the diamond
+/// storage by hand. It only ADDS a function; all production CyberCertPrinter logic is inherited unchanged.
+contract CyberCertPrinterEnhanced is CyberCertPrinter {
+    /// @dev Clear the legal-owner enumeration for `owner`/`tokenIds`, mimicking certs minted before the
+    /// enumeration existed (owners[] stays; count/index/tracked are zeroed).
+    function debugClearLegalOwnerEnumeration(address owner, uint256[] calldata tokenIds) external {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            uint256 tokenId = tokenIds[i];
+            delete s.legalOwnedTokens[owner][s.legalOwnedTokensIndex[tokenId]];
+            delete s.legalOwnedTokensIndex[tokenId];
+            s.legalOwnedTokenTracked[tokenId] = false;
+        }
+        s.legalOwnerTokenCount[owner] = 0;
+    }
+}
+
 contract CyberCertPrinterTest is Test {
     CyberCertPrinter private printer;
     MockIssuanceManager private issuanceManager;
@@ -188,7 +207,7 @@ contract CyberCertPrinterTest is Test {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Default legend";
 
-        CyberCertPrinter implementation = new CyberCertPrinter();
+        CyberCertPrinter implementation = new CyberCertPrinterEnhanced();
         bytes memory initData = abi.encodeCall(
             CyberCertPrinter.initialize,
             (
@@ -436,6 +455,86 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.ownerOf(1), investor);
         assertEq(printer.legalOwnerOf(1), investor);
         assertEq(printer.getCertLegendAt(1, 0), "Default legend");
+    }
+
+    // ── Legal-owner enumeration: backward compatibility for legacy printers ──
+
+    // Re-running the backfill on a printer that already tracks every token is a no-op (idempotent), never
+    // double-counting.
+    function test_BackfillLegalOwners_IdempotentOnTrackedPrinter() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, investor, 100, bytes(""));
+        _mintCert(3, recipient, 100, bytes(""));
+
+        printer.backfillLegalOwners(0, printer.totalSupply());
+        printer.backfillLegalOwners(0, 100); // over-wide range clamps to supply
+
+        assertEq(printer.balanceOfLegalOwner(investor), 2);
+        assertEq(printer.balanceOfLegalOwner(recipient), 1);
+        assertEq(printer.tokenOfLegalOwnerByIndex(investor, 0), 1);
+        assertEq(printer.tokenOfLegalOwnerByIndex(investor, 1), 2);
+    }
+
+    // A legacy token (enumeration never populated) must not underflow legalOwnerTokenCount when it is burned.
+    function test_LegalOwnerEnumeration_LegacyBurnDoesNotUnderflow() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, investor, 100, bytes(""));
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 1;
+        ids[1] = 2;
+        CyberCertPrinterEnhanced(address(printer)).debugClearLegalOwnerEnumeration(investor, ids);
+        assertEq(printer.balanceOfLegalOwner(investor), 0, "legacy enumeration starts empty");
+
+        vm.prank(address(issuanceManager));
+        printer.burn(1); // must not revert (guarded no-op remove)
+
+        assertEq(printer.balanceOfLegalOwner(investor), 0);
+    }
+
+    // An owner-write (endorsed transfer) on a legacy token lazily backfills it under the new owner — and the
+    // implicit remove from the old owner is a safe no-op (no underflow).
+    function test_LegalOwnerEnumeration_LegacyOwnerWriteLazilyBackfills() public {
+        _mintCert(1, investor, 100, bytes(""));
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 1;
+        CyberCertPrinterEnhanced(address(printer)).debugClearLegalOwnerEnumeration(investor, ids);
+        assertEq(printer.balanceOfLegalOwner(investor), 0);
+
+        vm.prank(address(issuanceManager));
+        printer.setGlobalTransferable(true);
+        vm.prank(investor);
+        printer.addEndorsement(1, _endorsement(investor, recipient));
+        vm.prank(investor);
+        printer.transferFrom(investor, recipient, 1);
+
+        assertEq(printer.legalOwnerOf(1), recipient);
+        assertEq(printer.balanceOfLegalOwner(recipient), 1, "lazily tracked under new owner");
+        assertEq(printer.tokenOfLegalOwnerByIndex(recipient, 0), 1);
+        assertEq(printer.balanceOfLegalOwner(investor), 0, "old owner stays empty, no underflow add");
+    }
+
+    // The explicit batched backfill repopulates the enumeration from owners[] for all live tokens, in batches,
+    // and is safe to re-run.
+    function test_BackfillLegalOwners_RepopulatesLegacyEnumeration() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, investor, 100, bytes(""));
+        _mintCert(3, investor, 100, bytes(""));
+        uint256[] memory ids = new uint256[](3);
+        ids[0] = 1;
+        ids[1] = 2;
+        ids[2] = 3;
+        CyberCertPrinterEnhanced(address(printer)).debugClearLegalOwnerEnumeration(investor, ids);
+        assertEq(printer.balanceOfLegalOwner(investor), 0);
+
+        printer.backfillLegalOwners(0, 2);
+        assertEq(printer.balanceOfLegalOwner(investor), 2);
+        printer.backfillLegalOwners(2, 10); // clamps to supply
+        assertEq(printer.balanceOfLegalOwner(investor), 3);
+
+        printer.backfillLegalOwners(0, 3); // re-run safe
+        assertEq(printer.balanceOfLegalOwner(investor), 3);
+        assertEq(printer.tokenOfLegalOwnerByIndex(investor, 0), 1);
+        assertEq(printer.tokenOfLegalOwnerByIndex(investor, 2), 3);
     }
 
     function test_AddDefaultRestrictiveLegend_StoresAndCopiesOnMint() public {

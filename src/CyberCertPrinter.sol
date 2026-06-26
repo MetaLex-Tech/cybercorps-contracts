@@ -505,4 +505,12 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         return s.legalOwnedTokens[owner][index];
     }
 
+    /// @notice Backfill the legal-owner enumeration for tokens in [startIndex, startIndex+count) of the supply.
+    /// For printers deployed before the enumeration existed: permissionless and idempotent (already-tracked
+    /// tokens are skipped), call in batches over [0, totalSupply()) after a beacon upgrade. New printers need it
+    /// only if you want to (harmlessly) re-run it.
+    function backfillLegalOwners(uint256 startIndex, uint256 count) external {
+        CyberCertPrinterStorage.backfillLegalOwnerEnumeration(startIndex, count);
+    }
+
 }
