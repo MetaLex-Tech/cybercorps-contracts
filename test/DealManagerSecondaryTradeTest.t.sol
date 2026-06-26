@@ -1350,27 +1350,102 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.acceptOffer(p);
     }
 
-    function test_AcceptOffer_FinalLotExemptFromMinThreshold() public {
-        // Floors below the full offer (so postOffer passes) but above the tail remainder. The lot that
-        // exhausts the remaining units must be exempt, otherwise the offer's tail would be stranded.
+    function test_RevertIf_AcceptOffer_PartialFillLeavesSubFloorRemainderUnits() public {
+        // Floors below the full offer (postOffer passes) but the fill would leave a units remainder below
+        // the floor. Rejecting it keeps the offer's tail above the floor, so no exhausting-lot exemption
+        // is ever needed.
         vm.prank(owner);
-        dm.setMinTradeThreshold(UNITS / 4, CONSIDERATION / 4);
+        dm.setMinTradeThreshold(UNITS / 4, CONSIDERATION / 4); // 25 units / 2.5 ether
 
         bytes32 offerId = _postSellOffer();
 
-        // First fill clears the floors, leaving a tail below both.
-        _acceptSellOfferPartial(offerId, (UNITS * 9) / 10); // 90 units, 9 ether
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: (UNITS * 9) / 10, // 90 units → 10-unit remainder, below the 25-unit floor
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: 0,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: "",
+            openEndorsementSig: ""
+        });
 
-        // Final lot: 10 units / 1 ether — under both floors but exempt as the remaining lot.
-        bytes32 settlementId = _acceptSellOfferPartial(offerId, UNITS - (UNITS * 9) / 10);
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.BelowMinTradeThreshold.selector);
+        dm.acceptOffer(p);
+    }
+
+    function test_RevertIf_AcceptOffer_PartialFillLeavesSubFloorRemainderConsideration() public {
+        // Units floor disabled; the fill clears its own consideration floor but would leave a consideration
+        // remainder below it. The remainder check must reject it.
+        vm.prank(owner);
+        dm.setMinTradeThreshold(0, (CONSIDERATION * 3) / 10); // 3 ether floor
+
+        bytes32 offerId = _postSellOffer();
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: (UNITS * 8) / 10, // 80 units → pro-rata 8 ether (ok), remainder 2 ether < 3 ether floor
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: 0,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: "",
+            openEndorsementSig: ""
+        });
+
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.BelowMinTradeThreshold.selector);
+        dm.acceptOffer(p);
+    }
+
+    function test_AcceptOffer_ExhaustingFinalLotNeedsNoExemption() public {
+        // With the remainder kept above the floor on every partial fill, the lot that finally exhausts the
+        // offer is provably above the floor and settles with no exemption. Splitting 100 as 75 + 25 (vs the
+        // old 90 + sub-floor 10) keeps both lots — and the remainder between them — above the floor.
+        vm.prank(owner);
+        dm.setMinTradeThreshold(UNITS / 4, CONSIDERATION / 4); // 25 units / 2.5 ether
+
+        bytes32 offerId = _postSellOffer();
+
+        // First fill: 75 units / 7.5 ether, leaving a 25-unit / 2.5-ether remainder (exactly at the floor).
+        _acceptSellOfferPartial(offerId, (UNITS * 3) / 4);
+
+        // Final lot exhausts the offer; no remainder check runs on it.
+        bytes32 settlementId = _acceptSellOfferPartial(offerId, UNITS - (UNITS * 3) / 4);
 
         Offer memory offer = dm.getOffer(offerId);
         assertEq(uint8(offer.status), uint8(OfferStatus.FULLY_ACCEPTED), "final lot should fully accept the offer");
         assertEq(offer.unitsAccepted, UNITS);
         assertEq(
             dm.getSecondaryEscrow(settlementId).paymentAmount,
-            CONSIDERATION - (CONSIDERATION * 9) / 10,
-            "final lot settles its sub-floor pro-rata consideration"
+            CONSIDERATION - (CONSIDERATION * 3) / 4,
+            "final lot settles the leftover consideration"
+        );
+    }
+
+    function test_AcceptOffer_PartialFill_NoThresholds_AllowsTinyLotAndRemainder() public {
+        // Floors left disabled (never set): partial fills of any size are allowed, including a tiny lot that
+        // leaves a large remainder and a tail fill that leaves a single-unit remainder. Neither the accepted
+        // lot nor the remainder is floored, so the only guard is the zero-unit reject.
+        bytes32 offerId = _postSellOffer();
+
+        // Tiny first lot leaves a 99-unit remainder.
+        _acceptSellOfferPartial(offerId, 1);
+        // Next lot leaves a single-unit remainder.
+        _acceptSellOfferPartial(offerId, UNITS - 2);
+        // Exhaust the single-unit tail.
+        bytes32 settlementId = _acceptSellOfferPartial(offerId, 1);
+
+        Offer memory offer = dm.getOffer(offerId);
+        assertEq(uint8(offer.status), uint8(OfferStatus.FULLY_ACCEPTED), "tiny fills should fully accept with no floors");
+        assertEq(offer.unitsAccepted, UNITS);
+        assertEq(
+            dm.getSecondaryEscrow(settlementId).paymentAmount,
+            CONSIDERATION - (CONSIDERATION * 1) / UNITS - (CONSIDERATION * (UNITS - 2)) / UNITS,
+            "final lot takes the leftover consideration"
         );
     }
 

@@ -335,12 +335,16 @@ library SecondaryTradeStorage {
             ? offer.consideration - offer.paymentAccepted
             : offer.consideration * params.units / offer.units;
 
-        // Re-apply the admin-set minimum-ticket floors that postOffer enforced on the whole offer,
-        // now against this lot — otherwise a tiny partial fill can settle below the consideration floor.
-        // Exempt the final lot that exhausts the remaining units: that remainder was already cleared by
-        // postOffer's full-offer threshold check, and blocking it would strand the offer's tail.
+        // Re-apply the admin-set minimum-ticket floors that postOffer enforced on the whole offer, now
+        // against this lot — otherwise a tiny partial fill can settle below the floor. For a non-exhausting
+        // fill we also require the remainder left on the offer to clear the floor, so a sub-floor tail can
+        // never be created; that makes the eventual exhausting fill provably above the floor (by induction
+        // from postOffer's full-offer check) and needs no exemption.
         if (params.units < remainingUnits) {
             _checkMinTradeThreshold(params.units, partialConsideration);
+            uint256 remainderUnits = remainingUnits - params.units;
+            uint256 remainderConsideration = (offer.consideration - offer.paymentAccepted) - partialConsideration;
+            _checkMinTradeThreshold(remainderUnits, remainderConsideration);
         }
 
         // Create fully-signed settlement agreement via registry.
