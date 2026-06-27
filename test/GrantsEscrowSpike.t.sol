@@ -10,14 +10,12 @@ import {CyberScrip} from "../src/CyberScrip.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
-import {VestingAllowlistHook} from "../src/hooks/transfer/VestingAllowlistHook.sol";
 import {TestableCyberScrip} from "./mock/TestableCyberScrip.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {VestingAllocation} from "./vendor/metavest/VestingAllocation.sol";
 import {BaseAllocation} from "./vendor/metavest/BaseAllocation.sol";
 
-/// Minimal cert printer that satisfies the IssuanceManager scripify path
-/// (legalOwnerOf / unitsRepresented), mirroring the existing compliance test.
+/// Minimal cert printer satisfying the IssuanceManager scripify path.
 contract MockCertPrinterBasic {
     mapping(uint256 => address) private _owners;
     mapping(uint256 => CertificateDetails) private _details;
@@ -36,31 +34,34 @@ contract MockCertPrinterBasic {
     function updateCertificateDetails(uint256 id, CertificateDetails calldata det) external { _details[id] = det; }
 }
 
-/// Stands in for a MetaVesTController: the allocation only ever reads controller.authority(),
-/// and only on authority-gated paths (terminate / confirmMilestone), never on fund+withdraw.
+/// Stands in for a MetaVesTController: the allocation only reads controller.authority()
+/// on authority-gated paths, never on fund + withdraw.
 contract MockController {
     address public authority;
     constructor(address _authority) { authority = _authority; }
 }
 
-/// P0 spike: prove a CyberScrip can be escrowed in a MetaVesT VestingAllocation, vest over
-/// time, and be withdrawn to the recipient through the scrip's restriction hook — and that
-/// under allocation-authority mode (force-ops disabled at deploy) the issuer cannot claw it back.
+/// P0 spike: prove a CyberScrip vests through a MetaVesT VestingAllocation with NO custom
+/// transfer hook. The escrow itself plus MetaVesT's two curves are the lockup —
+///   withdrawable = min(vested, unlocked) - withdrawn
+/// so anything not both vested AND unlocked stays in the allocation, untouchable. A slower
+/// unlock curve than the vesting curve keeps earned-but-locked scrip locked. Issuer clawback
+/// is barred by deploying the scrip with force-ops disabled (allocation-authority mode).
 contract GrantsEscrowSpike is Test {
     bytes32 private constant SALT = keccak256("GrantsEscrowSpike");
     uint256 private constant TOTAL = 1000 ether;
-    uint160 private constant RATE = 1e18; // tokens/sec -> fully vests in 1000s; within [100, 1000e18]
+    uint160 private constant VEST_RATE = 2e18; // tokens/sec earned — fast
+    uint160 private constant UNLOCK_RATE = 1e18; // tokens/sec released — slower lockup
 
     BorgAuth public auth;
     IssuanceManager public issuanceManager;
     IssuanceManagerFactory public imFactory;
     MockCertPrinterBasic public cert;
     CyberScrip public scrip;
-    VestingAllowlistHook public hook;
     MockController public controller;
     VestingAllocation public vest;
 
-    address public admin;     // ADMIN_ROLE: configures the hook + would call force ops
+    address public admin;     // ADMIN_ROLE: would call force ops
     address public authority; // grantor: owns the cert, holds + funds the scrip
     address public grantee;   // service provider receiving the vesting award
 
@@ -69,11 +70,9 @@ contract GrantsEscrowSpike is Test {
         authority = makeAddr("authority");
         grantee = makeAddr("grantee");
 
-        // Auth: this test contract is OWNER (deploys scrip); admin gets ADMIN_ROLE.
         auth = new BorgAuth(address(this));
         auth.updateRole(admin, auth.ADMIN_ROLE());
 
-        // IssuanceManager via its factory (mirrors IssuanceManagerScripComplianceTest).
         imFactory = IssuanceManagerFactory(
             address(
                 new ERC1967Proxy(
@@ -91,25 +90,17 @@ contract GrantsEscrowSpike is Test {
         issuanceManager = IssuanceManager(imFactory.deployIssuanceManager(SALT));
         issuanceManager.initialize(address(auth), address(0xC0DE), address(0xBEEF), address(imFactory));
 
-        // Cert held by the authority, with units to scripify.
         cert = new MockCertPrinterBasic();
         cert.mockMintCert(0, authority, TOTAL);
 
-        // Restriction hook (enabled on init). Authority must be an escrow party so the
-        // scripify mint (to = authority) and later funding leg (from = authority) pass.
-        hook = new VestingAllowlistHook();
-        hook.initialize(address(auth));
-        vm.prank(admin);
-        hook.setEscrowParty(authority, true);
-
-        // allocation-authority mode: deploy the vesting scrip with ALL force powers OFF.
-        ITransferRestrictionHook[] memory hooks = new ITransferRestrictionHook[](1);
-        hooks[0] = ITransferRestrictionHook(address(hook));
+        // allocation-authority mode: deploy the vesting scrip with force-ops OFF, and with NO
+        // transfer-restriction hooks — the escrow + unlock curve are the lockup.
+        ITransferRestrictionHook[] memory noHooks = new ITransferRestrictionHook[](0);
         ICondition[] memory noConds = new ICondition[](0);
         uint256[] memory noIds = new uint256[](0);
         scrip = CyberScrip(
             issuanceManager.deployCyberScrip(
-                address(cert), hooks, noConds, noConds,
+                address(cert), noHooks, noConds, noConds,
                 0, 1, 1, noIds, false,
                 false, // enableForceTransfer
                 false, // enableForceBurn
@@ -117,103 +108,80 @@ contract GrantsEscrowSpike is Test {
             )
         );
 
-        // Mint scrip to the authority by scripifying the cert (1:1).
         vm.prank(authority);
         issuanceManager.scripifyCert(address(cert), 0, TOTAL, address(0));
         assertEq(scrip.balanceOf(authority), TOTAL, "authority should hold scrip");
 
-        // Deploy the vesting allocation and register it as an escrow party (needed for BOTH
-        // the funding leg's `to` and the withdraw leg's `from`).
         controller = new MockController(authority);
         BaseAllocation.Allocation memory alloc = BaseAllocation.Allocation({
             tokenStreamTotal: TOTAL,
             vestingCliffCredit: 0,
             unlockingCliffCredit: 0,
-            vestingRate: RATE,
+            vestingRate: VEST_RATE,
             vestingStartTime: uint48(block.timestamp),
-            unlockRate: RATE,
+            unlockRate: UNLOCK_RATE,
             unlockStartTime: uint48(block.timestamp),
             tokenContract: address(scrip)
         });
         BaseAllocation.Milestone[] memory ms = new BaseAllocation.Milestone[](0);
         vest = new VestingAllocation(grantee, grantee, address(controller), alloc, ms);
-        vm.prank(admin);
-        hook.setEscrowParty(address(vest), true);
 
         // Fund escrow (this is what the controller does via safeTransferFrom on signDealAndCreateMetavest).
         vm.prank(authority);
         scrip.transfer(address(vest), TOTAL);
-        assertEq(scrip.balanceOf(address(vest)), TOTAL, "escrow should be funded");
+        assertEq(scrip.balanceOf(address(vest)), TOTAL, "escrow funded");
     }
 
-    /// Core proof: vested scrip can be withdrawn to the recipient through the restriction hook.
-    function test_fundVestWithdraw_throughHook() public {
-        assertEq(vest.getAmountWithdrawable(), 0, "nothing withdrawable at t0");
+    /// The lockup IS the unlock curve: with vesting faster than unlock, some scrip is earned
+    /// (vested) but still locked, and stays in escrow — withdrawable tracks the slower curve.
+    function test_lockupViaSlowerUnlockCurve() public {
+        vm.warp(block.timestamp + 250);
 
-        vm.warp(block.timestamp + 500);
-        uint256 w = vest.getAmountWithdrawable();
-        assertEq(w, 500 ether, "half should be withdrawable at t+500s");
+        // 250s in: 500 earned, only 250 released.
+        assertEq(vest.getVestedTokenAmount(), 500 ether, "500 vested (earned)");
+        assertEq(vest.getUnlockedTokenAmount(), 250 ether, "250 unlocked (released)");
+        assertEq(vest.getAmountWithdrawable(), 250 ether, "withdrawable = min(vested, unlocked)");
 
+        // Grantee can take the unlocked portion...
         vm.prank(grantee);
-        vest.withdraw(w);
-        assertEq(scrip.balanceOf(grantee), w, "recipient received vested scrip through the hook");
-        assertEq(scrip.balanceOf(address(vest)), TOTAL - w, "remainder stays escrowed");
+        vest.withdraw(250 ether);
+        assertEq(scrip.balanceOf(grantee), 250 ether, "recipient got unlocked scrip");
+
+        // ...but the 250 that is vested-yet-locked cannot be pulled: it stays in escrow.
+        assertEq(vest.getAmountWithdrawable(), 0, "nothing more withdrawable while locked");
+        vm.prank(grantee);
+        vm.expectRevert(); // MetaVesT_MoreThanAvailable
+        vest.withdraw(1);
+        assertEq(scrip.balanceOf(address(vest)), TOTAL - 250 ether, "earned-but-locked scrip remains escrowed");
     }
 
-    /// The hook blocks the recipient from re-selling still-restricted scrip to a third party.
-    function test_publicResaleBlocked() public {
-        vm.warp(block.timestamp + 500);
+    /// Once both curves complete, the whole grant is withdrawable.
+    function test_fullyVestedUnlocked_allWithdrawable() public {
+        vm.warp(block.timestamp + 1001); // unlock (slower) finishes at 1000s
+        assertEq(vest.getAmountWithdrawable(), TOTAL, "all vested + unlocked");
         vm.prank(grantee);
-        vest.withdraw(500 ether);
-
-        address outsider = makeAddr("outsider");
-        vm.prank(grantee);
-        vm.expectRevert(abi.encodeWithSelector(CyberScrip.RestrictedTransfer.selector, "scrip locked: vesting escrow only"));
-        scrip.transfer(outsider, 1);
+        vest.withdraw(TOTAL);
+        assertEq(scrip.balanceOf(grantee), TOTAL, "recipient holds the full grant");
+        assertEq(scrip.balanceOf(address(vest)), 0, "escrow drained");
     }
 
     /// allocation-authority guarantee: with force-ops disabled at deploy, the issuer cannot
     /// reclaim escrowed scrip by any admin override.
     function test_issuerCannotClawback_forceOpsDisabled() public {
-        // Primary clawback vector: force-transfer escrowed scrip back to the issuer.
         vm.prank(admin);
         vm.expectRevert(CyberScrip.ComplianceFeatureDisabled.selector);
         issuanceManager.forceScripTransfer(address(cert), address(vest), authority, TOTAL);
 
-        // Freeze the escrow account: blocked by the disabled flag.
         vm.prank(admin);
         vm.expectRevert(CyberScrip.ComplianceFeatureDisabled.selector);
         issuanceManager.setScripFrozen(address(cert), address(vest), true);
 
-        // Burn the escrow: also impossible with force-burn disabled (the IM's vault accounting
-        // reverts before the burn here, but the property — escrow cannot be destroyed — holds).
+        // Force-burn is likewise impossible (the IM's vault accounting reverts before the burn
+        // here, but the property — escrow cannot be destroyed — holds).
         vm.prank(admin);
         vm.expectRevert();
         issuanceManager.forceScripBurn(address(cert), address(vest), TOTAL);
 
-        // Escrow is untouched after every clawback attempt.
         assertEq(scrip.balanceOf(address(vest)), TOTAL, "escrow intact - no clawback possible");
-    }
-
-    /// The "register the allocation as an escrow party" step is load-bearing for the WITHDRAW
-    /// leg: if the allocation is not an escrow party, allocation -> grantee fails the hook
-    /// (neither endpoint is allowlisted), so vested tokens cannot be released.
-    function test_withdrawBlockedIfAllocationNotAllowlisted() public {
-        vm.warp(block.timestamp + 500);
-        assertEq(vest.getAmountWithdrawable(), 500 ether, "tokens are vested");
-
-        // De-register the allocation, simulating a grant whose post-deploy registration was skipped.
-        vm.prank(admin);
-        hook.setEscrowParty(address(vest), false);
-
-        // The hook blocks allocation -> grantee. NB: MetaVesT's withdraw routes through its inline
-        // SafeTransferLib, which masks the scrip's RestrictedTransfer reason as a generic
-        // TransferFailed() — a UX/diagnostics consideration for the frontend.
-        vm.prank(grantee);
-        vm.expectRevert();
-        vest.withdraw(500 ether);
-
-        assertEq(scrip.balanceOf(grantee), 0, "no tokens released while allocation de-allowlisted");
-        assertEq(scrip.balanceOf(address(vest)), TOTAL, "escrow intact");
     }
 }
