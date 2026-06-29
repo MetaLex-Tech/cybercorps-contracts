@@ -45,6 +45,7 @@ import "./libs/auth.sol";
 import "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "./interfaces/ITransferRestrictionHook.sol";
 
 import "./interfaces/ICertificateConverter.sol";
@@ -54,7 +55,7 @@ import "./storage/IssuanceManagerStorage.sol";
 /// @title IssuanceManager
 /// @notice Manages the issuance and lifecycle of digital certificates representing securities and more
 /// @dev Implements UUPS upgradeable pattern and BorgAuth access control
-contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
+contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable, ReentrancyGuardUpgradeable {
     string public constant DEPLOY_VERSION = "4.1"; // For version-tracking on all deployment and future upgrades
 
     // IssuanceManager errors
@@ -72,6 +73,13 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     error RecertificationApprovalRequired();
     error InvalidInvestor();
     error InvalidInvestorName();
+    error CertEncumbered();
+    error InvalidControlAgreement();
+    error InvalidLienParty();
+    error NoActiveLien();
+    error NotSeniorLien();
+    error NotLender();
+    error DefaultNotMet();
     event ScripifiedCert(
         address indexed certAddress,
         uint256 indexed id,
@@ -164,6 +172,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         address _upgradeFactory
     ) external initializer {
         __BorgAuthACL_init(_auth);
+        __ReentrancyGuard_init();
 
         // Create beacons for CyberCertPrinter and CyberScrip
         // Unlike IssuanceManager which is individually upgradeable, CyberCertPrinter and CyberScrip deployments are
@@ -634,6 +643,65 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             certAddress,
             tokenId,
             value
+        );
+    }
+
+    function encumberCert(
+        address certAddress,
+        uint256 tokenId,
+        address lender,
+        address registry,
+        bytes32 agreementId,
+        address defaultCondition,
+        address repaidCondition,
+        address arbiter,
+        uint256 maturity,
+        uint256 sunset,
+        uint256 ranking
+    ) external onlyAdmin nonReentrant {
+        IssuanceManagerStorage.executeEncumberCert(
+            certAddress,
+            tokenId,
+            lender,
+            registry,
+            agreementId,
+            defaultCondition,
+            repaidCondition,
+            arbiter,
+            maturity,
+            sunset,
+            ranking,
+            msg.sender
+        );
+    }
+
+    function releaseEncumbrance(
+        address certAddress,
+        uint256 tokenId,
+        uint256 lienIndex
+    ) external nonReentrant {
+        IssuanceManagerStorage.executeReleaseEncumbrance(
+            certAddress,
+            tokenId,
+            lienIndex,
+            msg.sender
+        );
+    }
+
+    function foreclose(
+        address certAddress,
+        uint256 tokenId,
+        uint256 lienIndex,
+        address to,
+        string calldata toName
+    ) external nonReentrant {
+        IssuanceManagerStorage.executeForeclose(
+            certAddress,
+            tokenId,
+            lienIndex,
+            to,
+            toName,
+            msg.sender
         );
     }
 

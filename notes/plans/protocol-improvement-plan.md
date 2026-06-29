@@ -137,6 +137,96 @@ this) in its `notes/plans/mainframe-changes-plan.md`.
 
 ---
 
+## P3 — Control-agreement liens & permissionless foreclosure for share-NFTs — `PROPOSED`
+
+**Problem.** The protocol can mint registered-share NFTs (`CyberCertPrinter` certs), but there is no
+on-chain way for a lender to take a perfected-by-control security interest in a specific cert while the
+borrower remains the registered owner. Today, a borrower that remains `ownerOf` / `legalOwnerOf` can still
+move or dissolve the collateral through ordinary transfer, endorsement, scripification, conversion, or
+issuer-admin paths; and a lender has no permissionless foreclosure path that honors an up-front issuer
+control agreement without requiring a fresh issuer act at default.
+
+This leaves the protocol unable to model the PEB/UCC Article 8 / 9 / 12 control-agreement case study for
+tokenized registered shares: control by the secured party must be distinct from possession or registered
+ownership, and foreclosure must be driven by the secured party's instruction once default is objectively
+established.
+
+**Desired model.** Add a **Control-Agreement Lien (CAL)** regime directly to the cert printer / issuance
+manager surface:
+
+- The share-NFT stays in the borrower's wallet, and `legalOwnerOf(tokenId)` remains the borrower until
+  foreclosure, preserving voting and distribution rights keyed to the registered owner.
+- Control is represented by an ordered, active `Lien` record on the cert printer, not by custody. The
+  senior active `Lien.lender` is the party whose re-registration instruction the protocol will honor.
+- `encumberCert` is the issuer's one-time 8-106(c)(2) pre-consent: it validates a finalized, signed
+  three-party `CyberAgreementRegistry` control agreement whose signed terms bind the exact
+  `certAddress`, `tokenId`, and units represented.
+- While a lien is active, the cert printer itself blocks borrower and issuer escape paths: transfer,
+  borrower endorsement shadowing, scripification drain, convert-scrip mutation of the encumbered cert,
+  void, burn, assign, per-token re-enabling of transferability, and latent certificate-detail mutation.
+- `foreclose` is permissionless with respect to the issuer: it has no role modifier, but internally honors
+  only the senior lender's instruction after the lien's `defaultCondition` reads true.
+- Release is borrower-protective: the lender can release, but repayment / satisfaction / sunset paths can
+  also clear the lien without letting a repaid lender grief the borrower.
+
+**Design direction (implementation sketch).**
+
+- Append a `Lien` model and lien indexes to `CyberCertPrinterStorage`: ordered `liens[tokenId]`,
+  `lienActive[tokenId]`, and indexing-only `encumberedCount`, with terminal `Released` / `Foreclosed`
+  statuses and `createdAt` evidence for time-of-control.
+- Add `CyberCertPrinter.encumber`, `releaseLien`, `forecloseTo`, and views
+  `getLiens`, `seniorActiveLien`, `hasActiveLien`. Add a foreclosure context flag on the printer so
+  `_update` can distinguish authorized foreclosure from ordinary transfer.
+- Edit `CyberCertPrinter._update` so the encumbrance gate runs before transferability checks,
+  deal/round-manager carve-outs, and global restriction hooks. The foreclosure branch bypasses those
+  gates and re-registers `owners[tokenId]` directly from lien-derived `to` / `toName`; foreclosure
+  endorsements are audit records only.
+- Add `IssuanceManager.encumberCert`, `releaseEncumbrance`, and `foreclose`, with `ReentrancyGuard` on
+  both the manager and printer. `encumberCert` stays `onlyAdmin`; release and foreclosure are
+  modifier-less but internally gated by lien status, signature/condition checks, seniority, and lender
+  identity.
+- Add on-chain validation helpers around `CyberAgreementRegistry`: the agreement must be finalized,
+  non-voided, signed by the resolved issuer officer, borrower, and lender, and expose signed global
+  values for `certAddress`, `tokenId`, and units represented.
+- Add `ICondition` predicates under `src/libs/conditions/` for default and release triggers:
+  maturity default, neutral-arbiter default, oracle/non-payment default, and repayment/satisfaction
+  release. Conditions authorize; they never move the NFT.
+- Close collateral-integrity drains in the state-owning contracts: `executeScripifyCert` rejects
+  encumbered certs; `_selectRecertToken` skips encumbered certs; issuer void/burn/assign/detail-update
+  paths reject active liens; borrower `addEndorsement` rejects while encumbered.
+- Surface events and errors for indexers and callers: `CertEncumbered`, `CertReleased`,
+  `CertForeclosed`, plus `CertEncumbered()`, `NoActiveLien()`, `NotSeniorLien()`, `NotLender()`, and
+  `DefaultNotMet()`.
+- Treat storage as append-only and deploy through the existing UUPS / beacon upgrade paths, with storage
+  layout diff tests and no back-fill: existing certs read unencumbered until explicitly pledged.
+
+**Open questions.**
+
+1. **Sale proceeds.** v1 can re-register to the lender or a lender-designated buyer with proceeds handled
+   off-chain; v2 may add an on-chain buyer → lender → surplus-to-borrower waterfall.
+2. **Foreclosure buyer policy.** Should v1 allow any lender-designated `to`, or require `to == lender`
+   unless a designated-buyer condition / agreement value is present?
+3. **Transient storage.** Use Solidity transient storage for foreclosure context on Base if the pinned
+   0.8.28 target supports it; otherwise use an appended regular slot set and cleared inside
+   `nonReentrant forecloseTo`.
+4. **Subordination / re-ranking.** v1 should use strict first-recorded array order; contractual
+   subordination or dual-consent re-ranking is a v2 feature.
+5. **Satisfaction evidence.** Define the minimal registry shape for a lender-signed satisfaction
+   agreement and the safest snapshot/finalized repayment predicate so a spot balance cannot trigger
+   premature release.
+6. **Webapp/indexer split.** Track the companion surface separately: encumbrance badges, create-lien
+   wizard, lender foreclosure action, release action, disabled borrower/issuer escape actions, and Envio
+   `Lien` / `Encumbrance` entities.
+
+**References.** `src/CyberCertPrinter.sol` (`_update`, ownership registration, transferability,
+endorsement, void/burn/assign paths); `src/storage/CyberCertPrinterStorage.sol` (append-only cert
+storage); `src/IssuanceManager.sol` / `src/storage/IssuanceManagerStorage.sol` (issuance, scripify,
+convert-scrip-to-cert, UUPS surface); `src/CyberAgreementRegistry.sol` (finalized signed control
+agreement and signed global values); `src/interfaces/ICondition.sol` and `src/libs/conditions/`
+(default/release predicates); PEB UCC tokenization report, Case Study 2.
+
+---
+
 ## Backlog (unprioritized)
 
 _(none yet — add future protocol improvements here)_

@@ -45,6 +45,8 @@ import "../CyberCorpConstants.sol";
 import {
     CertificateDetails,
     Endorsement,
+    Lien,
+    LienStatus,
     OwnerDetails,
     RestrictiveLegend,
     RestrictionType
@@ -67,6 +69,8 @@ library CyberCertPrinterStorage {
     error InvalidLegendIndex();
     error ExceedsAvailableUnits();
     error ExceedsReservedUnits();
+    error CertEncumbered();
+    error NoActiveLien();
 
     event CertificateAssigned(uint256 indexed tokenId, address indexed newOwner, string newOwnerName, string issuerName);
     event CyberCertPrinter_CertificateCreated(uint256 indexed tokenId);
@@ -80,6 +84,23 @@ library CyberCertPrinterStorage {
         bytes32 agreementId,
         uint256 index,
         uint256 timestamp
+    );
+    event LienEncumbered(
+        address indexed cert,
+        uint256 indexed tokenId,
+        address indexed lender,
+        bytes32 agreementId,
+        address registry,
+        uint256 ranking
+    );
+    event CertReleased(address indexed cert, uint256 indexed tokenId, uint256 lienIndex, address releasedBy);
+    event CertForeclosed(
+        address indexed cert,
+        uint256 indexed tokenId,
+        uint256 lienIndex,
+        address indexed to,
+        address lender,
+        bytes32 agreementId
     );
 
     // Main storage layout struct
@@ -111,6 +132,9 @@ library CyberCertPrinterStorage {
         RestrictiveLegend[] defaultLegendsV2;
         mapping(address => uint256) holderTokenCount;
         uint256 uniqueHolderCount;
+        mapping(uint256 => Lien[]) liens;
+        mapping(uint256 => bool) lienActive;
+        uint256 encumberedCount;
         
     }
 
@@ -166,6 +190,7 @@ library CyberCertPrinterStorage {
     /// Only called for true transfers (from != 0 && to != 0).
     function processTransfer(address from, address to, uint256 tokenId) external {
         CyberCertStorage storage s = cyberCertStorage();
+        if (s.lienActive[tokenId]) revert CertEncumbered();
 
         // Check built-in transferability flag and per-token override
         if (!s.transferable && !s.tokenTransferable[tokenId]) {
@@ -219,6 +244,13 @@ library CyberCertPrinterStorage {
         else revert EndorsementNotSignedOrInvalid();
     }
 
+    /// @dev Foreclosure-only registration path. The caller decides whether foreclosure is authorized.
+    function processForeclosureTransfer(uint256 tokenId, address to, string calldata toName) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        emit CertificateAssigned(tokenId, to, toName, IIssuanceManager(s.issuanceManager).companyName());
+        s.owners[tokenId] = OwnerDetails(toName, to);
+    }
+
     /// @dev Post-mint bookkeeping for CyberCertPrinter.safeMint (the _safeMint itself stays in the printer).
     function recordMint(uint256 tokenId, address to, CertificateDetails memory details) external {
         CyberCertStorage storage s = cyberCertStorage();
@@ -267,6 +299,71 @@ library CyberCertPrinterStorage {
             s.endorsements[tokenId].length - 1,
             block.timestamp
         );
+    }
+
+    function addLien(uint256 tokenId, Lien memory lien) external returns (uint256 lienIndex) {
+        CyberCertStorage storage s = cyberCertStorage();
+        lienIndex = s.liens[tokenId].length;
+        lien.createdAt = block.timestamp;
+        lien.ranking = lienIndex;
+        lien.status = LienStatus.Active;
+        s.liens[tokenId].push(lien);
+        if (!s.lienActive[tokenId]) {
+            s.lienActive[tokenId] = true;
+            s.encumberedCount++;
+        }
+        emit LienEncumbered(address(this), tokenId, lien.lender, lien.agreementId, lien.registry, lien.ranking);
+    }
+
+    function setLienStatus(uint256 tokenId, uint256 lienIndex, LienStatus status) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        s.liens[tokenId][lienIndex].status = status;
+        recomputeLienActive(tokenId);
+    }
+
+    function recomputeLienActive(uint256 tokenId) internal returns (bool active) {
+        CyberCertStorage storage s = cyberCertStorage();
+        uint256 length = s.liens[tokenId].length;
+        for (uint256 i = 0; i < length; i++) {
+            if (s.liens[tokenId][i].status == LienStatus.Active) {
+                active = true;
+                break;
+            }
+        }
+
+        bool wasActive = s.lienActive[tokenId];
+        if (wasActive != active) {
+            s.lienActive[tokenId] = active;
+            if (active) {
+                s.encumberedCount++;
+            } else if (s.encumberedCount > 0) {
+                s.encumberedCount--;
+            }
+        }
+    }
+
+    function getLiens(uint256 tokenId) internal view returns (Lien[] memory liens) {
+        return cyberCertStorage().liens[tokenId];
+    }
+
+    function getLien(uint256 tokenId, uint256 lienIndex) internal view returns (Lien memory lien) {
+        return cyberCertStorage().liens[tokenId][lienIndex];
+    }
+
+    function seniorActiveLien(
+        uint256 tokenId
+    ) internal view returns (Lien memory lien, uint256 index, bool found) {
+        CyberCertStorage storage s = cyberCertStorage();
+        uint256 length = s.liens[tokenId].length;
+        for (uint256 i = 0; i < length; i++) {
+            if (s.liens[tokenId][i].status == LienStatus.Active) {
+                return (s.liens[tokenId][i], i, true);
+            }
+        }
+    }
+
+    function hasActiveLien(uint256 tokenId) internal view returns (bool) {
+        return cyberCertStorage().lienActive[tokenId];
     }
 
     /// @dev Reserve units against a pending deal/loan. Reverts if the total reserved

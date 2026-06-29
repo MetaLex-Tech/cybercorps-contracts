@@ -42,6 +42,7 @@ pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./interfaces/ITransferRestrictionHook.sol";
 import "./storage/CyberCertPrinterStorage.sol";
@@ -49,7 +50,7 @@ import "./interfaces/IUriBuilder.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
 
 
-contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
+contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable, ReentrancyGuardUpgradeable {
     using CyberCertPrinterStorage for CyberCertPrinterStorage.CyberCertStorage;
 
     string public constant DEPLOY_VERSION = "4"; // For version-tracking on all deployment and future upgrades
@@ -67,6 +68,8 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     error InvalidEndorsement();
     error InvalidLegendIndex();
     error SignatureRequired();
+    error CertEncumbered();
+    error NoActiveLien();
     // Reverted from the storage library via delegatecall; declared here for the ABI
     error ExceedsAvailableUnits();
     error ExceedsReservedUnits();
@@ -97,6 +100,25 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     event GlobalTransferableSet(bool indexed transferable);
     // Emitted from the storage library via delegatecall; declared here for the ABI
     event UnitsReservedUpdated(uint256 indexed tokenId, uint256 unitsReserved);
+    event LienEncumbered(
+        address indexed cert,
+        uint256 indexed tokenId,
+        address indexed lender,
+        bytes32 agreementId,
+        address registry,
+        uint256 ranking
+    );
+    event CertReleased(address indexed cert, uint256 indexed tokenId, uint256 lienIndex, address releasedBy);
+    event CertForeclosed(
+        address indexed cert,
+        uint256 indexed tokenId,
+        uint256 lienIndex,
+        address indexed to,
+        address lender,
+        bytes32 agreementId
+    );
+
+    uint256 private _foreclosingToken;
     
     
     modifier onlyIssuanceManager() {
@@ -112,6 +134,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     function initialize(string[] memory _defaultLegend, string memory name, string memory ticker, string memory _certificateUri, address _issuanceManager, SecurityClass _securityType, SecuritySeries _securitySeries, address _extension) external initializer {
         __ERC721_init(name, ticker);
         __ERC721Enumerable_init_unchained();
+        __ReentrancyGuard_init();
         
         CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
         s.issuanceManager = _issuanceManager;
@@ -174,6 +197,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         CertificateDetails memory details
     ) external onlyIssuanceManager returns (uint256) {
         if(ownerOf(tokenId) != from) revert InvalidTokenId();
+        if (CyberCertPrinterStorage.hasActiveLien(tokenId)) revert CertEncumbered();
         CyberCertPrinterStorage.recordAssign(tokenId, to, details);
         return tokenId;
     }
@@ -181,6 +205,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     // Add endorsement (for transfers in secondary market)
     function addEndorsement(uint256 tokenId, Endorsement memory newEndorsement) public {
         if(msg.sender != CyberCertPrinterStorage.cyberCertStorage().issuanceManager && msg.sender != ownerOf(tokenId)) revert InvalidEndorsement();
+        if (msg.sender == ownerOf(tokenId) && CyberCertPrinterStorage.hasActiveLien(tokenId)) revert CertEncumbered();
         CyberCertPrinterStorage.recordEndorsement(tokenId, newEndorsement);
     }
 
@@ -201,11 +226,13 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     
     // Update agreement details
     function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external onlyIssuanceManager {
+        if (CyberCertPrinterStorage.hasActiveLien(tokenId)) revert CertEncumbered();
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
     }
 
     // Restricted burning
     function burn(uint256 tokenId) external onlyIssuanceManager {
+        if (CyberCertPrinterStorage.hasActiveLien(tokenId)) revert CertEncumbered();
         _burn(tokenId);
         
         // Clear agreement details
@@ -222,9 +249,13 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         
         // Skip restriction checks for minting (from == address(0)) and burning (to == address(0))
         if (from != address(0) && to != address(0)) {
-            // Restriction + endorsement logic lives in the external library (delegatecall)
-            // to keep this contract under the bytecode size limit
-            CyberCertPrinterStorage.processTransfer(from, to, tokenId);
+            bool isForeclosure = msg.sender == CyberCertPrinterStorage.cyberCertStorage().issuanceManager
+                && _foreclosingToken == tokenId + 1;
+            if (!isForeclosure) {
+                // Restriction + endorsement logic lives in the external library (delegatecall)
+                // to keep this contract under the bytecode size limit.
+                CyberCertPrinterStorage.processTransfer(from, to, tokenId);
+            }
         }
         // Emit custom transfer event for indexing
         emit CyberCertTransfer(
@@ -270,6 +301,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     }
 
     function voidCert(uint256 tokenId) external onlyIssuanceManager {
+        if (CyberCertPrinterStorage.hasActiveLien(tokenId)) revert CertEncumbered();
         CyberCertPrinterStorage.setSecurityStatus(tokenId, SecurityStatus.Void);
         emit CertificateVoided(tokenId, block.timestamp);
     }
@@ -460,6 +492,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     }
 
     function setTokenTransferable(uint256 tokenId, bool value) external onlyIssuanceManager {
+        if (value && CyberCertPrinterStorage.hasActiveLien(tokenId)) revert CertEncumbered();
         CyberCertPrinterStorage.cyberCertStorage().tokenTransferable[tokenId] = value;
     }
 
@@ -486,6 +519,49 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     function legalOwnerOf(uint256 tokenId) external view returns (address) {
         if (!_exists(tokenId)) revert TokenDoesNotExist();
         return CyberCertPrinterStorage.cyberCertStorage().owners[tokenId].ownerAddress;
+    }
+
+    function encumber(uint256 tokenId, Lien calldata lien) external onlyIssuanceManager {
+        if (!_exists(tokenId)) revert TokenDoesNotExist();
+        if (CyberCertPrinterStorage.getSecurityStatus(tokenId) == SecurityStatus.Void) revert CertEncumbered();
+        CyberCertPrinterStorage.addLien(tokenId, lien);
+    }
+
+    function releaseLien(uint256 tokenId, uint256 lienIndex) external onlyIssuanceManager {
+        if (!_exists(tokenId)) revert TokenDoesNotExist();
+        CyberCertPrinterStorage.setLienStatus(tokenId, lienIndex, LienStatus.Released);
+        emit CertReleased(address(this), tokenId, lienIndex, msg.sender);
+    }
+
+    function forecloseTo(
+        uint256 tokenId,
+        uint256 lienIndex,
+        address to,
+        string calldata toName
+    ) external onlyIssuanceManager nonReentrant {
+        if (!_exists(tokenId)) revert TokenDoesNotExist();
+        Lien memory lien = CyberCertPrinterStorage.getLien(tokenId, lienIndex);
+        CyberCertPrinterStorage.setLienStatus(tokenId, lienIndex, LienStatus.Foreclosed);
+        CyberCertPrinterStorage.processForeclosureTransfer(tokenId, to, toName);
+        _foreclosingToken = tokenId + 1;
+        _transfer(ownerOf(tokenId), to, tokenId);
+        _foreclosingToken = 0;
+        emit CertForeclosed(address(this), tokenId, lienIndex, to, lien.lender, lien.agreementId);
+    }
+
+    function getLiens(uint256 tokenId) external view returns (Lien[] memory) {
+        if (!_exists(tokenId)) revert TokenDoesNotExist();
+        return CyberCertPrinterStorage.getLiens(tokenId);
+    }
+
+    function seniorActiveLien(uint256 tokenId) external view returns (Lien memory lien, uint256 index, bool found) {
+        if (!_exists(tokenId)) revert TokenDoesNotExist();
+        return CyberCertPrinterStorage.seniorActiveLien(tokenId);
+    }
+
+    function hasActiveLien(uint256 tokenId) external view returns (bool) {
+        if (!_exists(tokenId)) revert TokenDoesNotExist();
+        return CyberCertPrinterStorage.hasActiveLien(tokenId);
     }
 
 }

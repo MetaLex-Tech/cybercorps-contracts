@@ -69,6 +69,27 @@ struct OwnerDetails {
     address ownerAddress;
 }
 
+enum LienStatus {
+    None,
+    Active,
+    Released,
+    Foreclosed
+}
+
+struct Lien {
+    address lender;
+    address registry;
+    bytes32 agreementId;
+    address defaultCondition;
+    address repaidCondition;
+    address arbiter;
+    uint256 maturity;
+    uint256 createdAt;
+    uint256 sunset;
+    uint256 ranking;
+    LienStatus status;
+}
+
 enum RestrictionType {
     Unspecified,
     TransferConsentRequired,
@@ -196,4 +217,10 @@ interface ICyberCertPrinter is IERC721 {
     function increaseUnitsReserved(uint256 tokenId, uint256 amount) external;
     function decreaseUnitsReserved(uint256 tokenId, uint256 amount) external;
     function unitsReserved(uint256 tokenId) external view returns (uint256);
+    function encumber(uint256 tokenId, Lien calldata lien) external;
+    function releaseLien(uint256 tokenId, uint256 lienIndex) external;
+    function forecloseTo(uint256 tokenId, uint256 lienIndex, address to, string calldata toName) external;
+    function getLiens(uint256 tokenId) external view returns (Lien[] memory);
+    function seniorActiveLien(uint256 tokenId) external view returns (Lien memory lien, uint256 index, bool found);
+    function hasActiveLien(uint256 tokenId) external view returns (bool);
 }

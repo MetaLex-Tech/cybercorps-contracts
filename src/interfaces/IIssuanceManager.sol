@@ -224,6 +224,34 @@ interface IIssuanceManager {
         bool value
     ) external;
 
+    function encumberCert(
+        address certAddress,
+        uint256 tokenId,
+        address lender,
+        address registry,
+        bytes32 agreementId,
+        address defaultCondition,
+        address repaidCondition,
+        address arbiter,
+        uint256 maturity,
+        uint256 sunset,
+        uint256 ranking
+    ) external;
+
+    function releaseEncumbrance(
+        address certAddress,
+        uint256 tokenId,
+        uint256 lienIndex
+    ) external;
+
+    function foreclose(
+        address certAddress,
+        uint256 tokenId,
+        uint256 lienIndex,
+        address to,
+        string calldata toName
+    ) external;
+
     function increaseUnitsReserved(
         address certAddress,
         uint256 tokenId,

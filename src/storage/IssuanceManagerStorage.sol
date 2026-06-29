@@ -44,7 +44,9 @@ pragma solidity 0.8.28;
 import "openzeppelin-contracts/proxy/beacon/BeaconProxy.sol";
 import "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "openzeppelin-contracts/utils/Create2.sol";
+import "openzeppelin-contracts/utils/Strings.sol";
 import "../interfaces/ICondition.sol";
+import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICyberCorp.sol";
 import "../interfaces/ICyberScrip.sol";
@@ -72,6 +74,13 @@ library IssuanceManagerStorage {
     error EmptyVault();
     error VaultRedemptionExceedsClaim();
     error VaultWithdrawalExceedsAssets();
+    error CertEncumbered();
+    error InvalidControlAgreement();
+    error InvalidLienParty();
+    error NoActiveLien();
+    error NotSeniorLien();
+    error NotLender();
+    error DefaultNotMet();
 
     /// @dev Ray precision for vault price-per-share (assets per 1 nominal share, 1e27 = 1.0).
     uint256 internal constant VAULT_RAY = 1e27;
@@ -723,6 +732,122 @@ library IssuanceManagerStorage {
         ICyberCertPrinter(certAddress).setTokenTransferable(tokenId, value);
     }
 
+    function executeEncumberCert(
+        address certAddress,
+        uint256 tokenId,
+        address lender,
+        address registry,
+        bytes32 agreementId,
+        address defaultCondition,
+        address repaidCondition,
+        address arbiter,
+        uint256 maturity,
+        uint256 sunset,
+        uint256 ranking,
+        address issuerOfficer
+    ) external {
+        if (
+            lender == address(0) ||
+            registry == address(0) ||
+            defaultCondition == address(0)
+        ) revert InvalidLienParty();
+
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        address borrower = certificate.legalOwnerOf(tokenId);
+        if (
+            borrower == address(0) ||
+            borrower == lender ||
+            borrower == issuerOfficer ||
+            lender == issuerOfficer ||
+            arbiter == issuerOfficer ||
+            arbiter == borrower
+        ) revert InvalidLienParty();
+
+        if (certificate.isVoided(tokenId)) revert CertificateVoided();
+        (bool isScripified, uint256 scripifiedUnits, ) = getCertScripifiedStatus(certAddress, tokenId);
+        if (isScripified || scripifiedUnits > 0) revert CertEncumbered();
+
+        CertificateDetails memory details = certificate.getActiveCertificateDetails(tokenId);
+        _validateControlAgreement(
+            registry,
+            agreementId,
+            certAddress,
+            tokenId,
+            details.unitsRepresented,
+            issuerOfficer,
+            borrower,
+            lender
+        );
+
+        Lien memory lien = Lien({
+            lender: lender,
+            registry: registry,
+            agreementId: agreementId,
+            defaultCondition: defaultCondition,
+            repaidCondition: repaidCondition,
+            arbiter: arbiter,
+            maturity: maturity,
+            createdAt: 0,
+            sunset: sunset,
+            ranking: ranking,
+            status: LienStatus.Active
+        });
+        certificate.encumber(tokenId, lien);
+    }
+
+    function executeReleaseEncumbrance(
+        address certAddress,
+        uint256 tokenId,
+        uint256 lienIndex,
+        address caller
+    ) external {
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        (Lien memory lien, uint256 seniorIndex, bool found) = certificate.seniorActiveLien(tokenId);
+        if (!found) revert NoActiveLien();
+        if (lienIndex != seniorIndex) revert NotSeniorLien();
+
+        bool canRelease = caller == lien.lender;
+        if (!canRelease && lien.repaidCondition != address(0)) {
+            canRelease = ICondition(lien.repaidCondition).checkCondition(
+                certAddress,
+                bytes4(keccak256("releaseEncumbrance(address,uint256,uint256)")),
+                abi.encode(certAddress, tokenId, lienIndex)
+            );
+        }
+        if (!canRelease && lien.sunset != 0 && block.timestamp >= lien.sunset) {
+            canRelease = true;
+        }
+        if (!canRelease) revert DefaultNotMet();
+
+        certificate.releaseLien(tokenId, lienIndex);
+    }
+
+    function executeForeclose(
+        address certAddress,
+        uint256 tokenId,
+        uint256 lienIndex,
+        address to,
+        string calldata toName,
+        address caller
+    ) external {
+        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        (Lien memory lien, uint256 seniorIndex, bool found) = certificate.seniorActiveLien(tokenId);
+        if (!found) revert NoActiveLien();
+        if (lienIndex != seniorIndex) revert NotSeniorLien();
+        if (caller != lien.lender) revert NotLender();
+        if (ICyberAgreementRegistry(lien.registry).isVoided(lien.agreementId)) revert InvalidControlAgreement();
+        if (
+            !ICondition(lien.defaultCondition).checkCondition(
+                certAddress,
+                bytes4(keccak256("foreclose(address,uint256,uint256,address,string)")),
+                abi.encode(certAddress, tokenId, lienIndex)
+            )
+        ) revert DefaultNotMet();
+
+        certificate.forecloseTo(tokenId, lienIndex, to, toName);
+        if (certificate.legalOwnerOf(tokenId) != to) revert InvalidControlAgreement();
+    }
+
     function executeIncreaseUnitsReserved(
         address certAddress,
         uint256 tokenId,
@@ -909,6 +1034,7 @@ library IssuanceManagerStorage {
 
         address scripifiedCert = getScripifiedCert(certAddress);
         if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
+        if (ICyberCertPrinter(certAddress).hasActiveLien(id)) revert CertEncumbered();
 
         if (getScripifyWhitelistEnabled(certAddress)) {
             if (!isScripifyWhitelisted(certAddress, id)) {
@@ -1233,6 +1359,65 @@ library IssuanceManagerStorage {
         emit RecertificationApprovalCleared(certAddress, investor);
     }
 
+    function _validateControlAgreement(
+        address registry,
+        bytes32 agreementId,
+        address certAddress,
+        uint256 tokenId,
+        uint256 unitsRepresented,
+        address issuerOfficer,
+        address borrower,
+        address lender
+    ) internal view {
+        ICyberAgreementRegistry agreementRegistry = ICyberAgreementRegistry(registry);
+        if (!agreementRegistry.isFinalized(agreementId) || agreementRegistry.isVoided(agreementId)) {
+            revert InvalidControlAgreement();
+        }
+        if (
+            !agreementRegistry.hasSigned(agreementId, issuerOfficer) ||
+            !agreementRegistry.hasSigned(agreementId, borrower) ||
+            !agreementRegistry.hasSigned(agreementId, lender)
+        ) revert InvalidControlAgreement();
+
+        (
+            ,
+            ,
+            string[] memory globalFields,
+            ,
+            string[] memory globalValues,
+            ,
+            ,
+            ,
+            ,
+            ,
+
+        ) = agreementRegistry.getContractDetails(agreementId);
+
+        if (
+            !_hasGlobalValue(globalFields, globalValues, "certAddress", Strings.toHexString(uint160(certAddress), 20)) ||
+            !_hasGlobalValue(globalFields, globalValues, "tokenId", Strings.toString(tokenId)) ||
+            !_hasGlobalValue(globalFields, globalValues, "unitsRepresented", Strings.toString(unitsRepresented))
+        ) revert InvalidControlAgreement();
+    }
+
+    function _hasGlobalValue(
+        string[] memory fields,
+        string[] memory values,
+        string memory key,
+        string memory expected
+    ) internal pure returns (bool) {
+        bytes32 keyHash = keccak256(bytes(key));
+        bytes32 expectedHash = keccak256(bytes(expected));
+        uint256 length = fields.length;
+        if (values.length < length) length = values.length;
+        for (uint256 i = 0; i < length; i++) {
+            if (keccak256(bytes(fields[i])) == keyHash) {
+                return keccak256(bytes(values[i])) == expectedHash;
+            }
+        }
+        return false;
+    }
+
     function _selectRecertToken(
         address certAddress,
         address account
@@ -1244,6 +1429,7 @@ library IssuanceManagerStorage {
             uint256 tokenId = certificate.tokenOfOwnerByIndex(account, i);
             if (certificate.legalOwnerOf(tokenId) != account) continue;
             if (certificate.isVoided(tokenId)) continue;
+            if (certificate.hasActiveLien(tokenId)) continue;
             selection.foundActive = true;
             selection.activeTokenId = tokenId;
             return selection;
