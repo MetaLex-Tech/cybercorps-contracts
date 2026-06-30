@@ -51,7 +51,7 @@ import "../interfaces/ICyberScrip.sol";
 import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/IIssuanceManagerFactory.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
-import {ExemptionPathway} from "../interfaces/ISecondaryTradeStorage.sol";
+import {ExemptionPathway, HostingMode} from "../interfaces/ISecondaryTradeStorage.sol";
 import "./CyberCertPrinterStorage.sol";
 
 library IssuanceManagerStorage {
@@ -739,14 +739,14 @@ library IssuanceManagerStorage {
             uint256 units,
             address buyer,
             string memory buyerName,
-            uint8 buyerHostingMode,
+            HostingMode buyerHostingMode,
             address adminMultisig,
             ,
             bytes32 settlementAgreementId,
             bytes memory openEndorsementSig
         ) = abi.decode(
             dealMetadata,
-            (address, uint256, uint256, address, string, uint8, address, ExemptionPathway, bytes32, bytes)
+            (address, uint256, uint256, address, string, HostingMode, address, ExemptionPathway, bytes32, bytes)
         );
 
         ICyberCertPrinter cert = ICyberCertPrinter(certPrinter);
@@ -802,8 +802,9 @@ library IssuanceManagerStorage {
         // (the folded units inherit the existing cert's terms). We look the buyer up by legal owner of record,
         // so this is correct under both hosting modes — including Administered, where the multisig custodies the
         // NFT but the buyer is the registered owner. The custodian only decides where a freshly minted NFT lands.
-        address custodian = buyerHostingMode == 1 ? adminMultisig : buyer;
+        address custodian = buyerHostingMode == HostingMode.ADMINISTERED ? adminMultisig : buyer;
         RecertSelection memory existing = _selectFirstLegalOwnedToken(certPrinter, buyer);
+        bool buyerTokenIsMinted = !existing.foundActive;
         if (existing.foundActive) {
             // Fold the purchased units into the buyer's existing cert, leaving its basis fields
             // (investmentAmountUSD / issuerUSDValuationAtTimeOfInvestment) unchanged: they stay a snapshot of
@@ -830,7 +831,7 @@ library IssuanceManagerStorage {
         cert.addEndorsement(buyerTokenId, mirror);
 
         emit IIssuanceManager.SecondaryTransferExecuted(
-            settlementAgreementId, certPrinter, tokenId, buyerTokenId, seller, buyer, units, sellerVoided
+            settlementAgreementId, certPrinter, tokenId, buyerTokenId, seller, buyer, units, sellerVoided, buyerTokenIsMinted
         );
     }
 

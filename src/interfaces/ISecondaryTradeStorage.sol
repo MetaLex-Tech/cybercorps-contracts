@@ -49,6 +49,8 @@ enum SecondaryEscrowStatus { ACCEPTED, FINALIZED, VOIDED }
 
 enum ExemptionPathway { RULE_144, SECTION_4A7, SECTION_4A1HALF, RULE_144A, REGULATION_S }
 
+enum HostingMode { DIRECT, ADMINISTERED }
+
 /// @title ISecondaryTradeStorage
 /// @notice Events/errors owned by the SecondaryTradeStorage library — the single source of truth.
 /// @dev SecondaryTradeStorage emits/reverts these via the qualified ISecondaryTradeStorage.X form, and
@@ -74,7 +76,7 @@ interface ISecondaryTradeStorage {
         address integrator,
         bytes32 templateId,
         string buyerName,
-        uint8 buyerHostingMode,
+        HostingMode buyerHostingMode,
         address adminMultisig,
         bytes counterpartyRestrictions,
         address[] thresholdConditions,
@@ -93,7 +95,7 @@ interface ISecondaryTradeStorage {
         // per-settlement materialization fields, mirroring SecondaryEscrow (sourced from the offer or the
         // acceptance per side); feeDestination is omitted as it equals the offer's integrator (see OfferPosted).
         string buyerName,
-        uint8 buyerHostingMode,
+        HostingMode buyerHostingMode,
         address adminMultisig,
         bytes openEndorsementSig
     );
