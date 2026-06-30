@@ -781,13 +781,15 @@ library IssuanceManagerStorage {
             details.unitsRepresented -= units;
             cert.updateCertificateDetails(tokenId, details);
         }
-        // The buyer's new token inherits the seller's terms (legalDetails, valuation, …) for the sold quantity.
+        // The buyer's new token inherits the seller's non-basis terms (legalDetails, extensionData) for the
+        // sold quantity. Per-cert cost basis (investmentAmountUSD / issuerUSDValuationAtTimeOfInvestment) is
+        // left blank on a secondary acquisition — those record the primary issuance, which the buyer never had.
         // Build a fresh struct rather than aliasing `details` (memory assignment is by reference).
         CertificateDetails memory buyerDetails = CertificateDetails({
             signingOfficerName: details.signingOfficerName,
             signingOfficerTitle: details.signingOfficerTitle,
-            investmentAmountUSD: details.investmentAmountUSD,
-            issuerUSDValuationAtTimeOfInvestment: details.issuerUSDValuationAtTimeOfInvestment,
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
             unitsRepresented: units,
             legalDetails: details.legalDetails,
             extensionData: details.extensionData
@@ -803,10 +805,9 @@ library IssuanceManagerStorage {
         address custodian = buyerHostingMode == 1 ? adminMultisig : buyer;
         RecertSelection memory existing = _selectFirstLegalOwnedToken(certPrinter, buyer);
         if (existing.foundActive) {
-            // TODO: accumulating lots bought across different offers keeps the existing cert's per-cert basis
-            // (investmentAmountUSD / issuerUSDValuationAtTimeOfInvestment) and drops the new lot's — a
-            // heterogeneous merge. Fills of one offer share a source cert so stay homogeneous; revisit if
-            // cross-offer basis must be preserved.
+            // Fold the purchased units into the buyer's existing cert, leaving its basis fields
+            // (investmentAmountUSD / issuerUSDValuationAtTimeOfInvestment) unchanged: they stay a snapshot of
+            // that cert's primary issuance, regardless of how many secondary lots accumulate into it.
             buyerTokenId = existing.activeTokenId;
             CertificateDetails memory accDetails = cert.getCertificateDetails(buyerTokenId);
             accDetails.unitsRepresented += units;

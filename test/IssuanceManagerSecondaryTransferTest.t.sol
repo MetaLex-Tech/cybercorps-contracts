@@ -91,6 +91,13 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         // Buyer side: new token minted to the buyer for all units.
         assertEq(cert.legalOwnerOf(expectedBuyerTokenId), buyer, "buyer is registered owner");
         assertEq(cert.getCertificateDetails(expectedBuyerTokenId).unitsRepresented, UNITS, "buyer units");
+        // A secondary-acquired cert carries no primary-issuance basis: those fields are blank.
+        assertEq(cert.getCertificateDetails(expectedBuyerTokenId).investmentAmountUSD, 0, "buyer cost basis blank");
+        assertEq(
+            cert.getCertificateDetails(expectedBuyerTokenId).issuerUSDValuationAtTimeOfInvestment,
+            0,
+            "buyer valuation blank"
+        );
         _assertMirrorEndorsement(cert, expectedBuyerTokenId, "Bob");
     }
 
@@ -111,11 +118,24 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         assertFalse(cert.isVoided(0), "seller cert survives a partial sale");
         assertEq(cert.getCertificateDetails(0).unitsRepresented, UNITS - soldUnits, "seller remainder");
         assertEq(cert.unitsReserved(0), UNITS - soldUnits, "reservation reduced by consumed lot");
+        // The seller's cert keeps its primary-issuance basis snapshot; only units decrement.
+        assertEq(cert.getCertificateDetails(0).investmentAmountUSD, 1000, "seller cost basis unchanged");
+        assertEq(
+            cert.getCertificateDetails(0).issuerUSDValuationAtTimeOfInvestment,
+            10000,
+            "seller valuation unchanged"
+        );
         _assertSellerEndorsement(cert, 0, "Bob");
 
-        // Buyer side: new token for the sold units only.
+        // Buyer side: new token for the sold units only, with blank cost basis (secondary acquisition).
         assertEq(cert.legalOwnerOf(expectedBuyerTokenId), buyer, "buyer is registered owner");
         assertEq(cert.getCertificateDetails(expectedBuyerTokenId).unitsRepresented, soldUnits, "buyer units");
+        assertEq(cert.getCertificateDetails(expectedBuyerTokenId).investmentAmountUSD, 0, "buyer cost basis blank");
+        assertEq(
+            cert.getCertificateDetails(expectedBuyerTokenId).issuerUSDValuationAtTimeOfInvestment,
+            0,
+            "buyer valuation blank"
+        );
         _assertMirrorEndorsement(cert, expectedBuyerTokenId, "Bob");
     }
 
@@ -152,6 +172,32 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         assertEq(cert.totalSupply(), 2, "no new cert minted (seller 0 + buyer 1)");
         assertEq(cert.balanceOf(buyer), 1, "buyer still holds a single consolidated cert");
         assertEq(cert.getCertificateDetails(1).unitsRepresented, 80, "units accumulated into the existing cert");
+    }
+
+    // Merging a secondary purchase into a cert the buyer already holds from PRIMARY issuance must leave that
+    // cert's cost-basis snapshot untouched — only units accumulate (spec: snapshot at primary issuance).
+    function test_SecondaryTransfer_MergeIntoPrimaryCert_PreservesBasisSnapshot() public {
+        ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
+
+        // The buyer already holds a primary-issued cert (id 1) with its own cost basis.
+        CertificateDetails memory primaryDetails = CertificateDetails({
+            signingOfficerName: "Officer",
+            signingOfficerTitle: "Title",
+            investmentAmountUSD: 2000,
+            issuerUSDValuationAtTimeOfInvestment: 20000,
+            unitsRepresented: 50,
+            legalDetails: "",
+            extensionData: bytes("")
+        });
+        issuanceManager.createCertAndAssign(address(cert), buyer, primaryDetails);
+
+        // A secondary purchase of 30 units folds into the buyer's existing primary cert (id 1).
+        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 30, "Bob", 0, address(0)));
+
+        CertificateDetails memory merged = cert.getCertificateDetails(1);
+        assertEq(merged.unitsRepresented, 80, "secondary units folded into the primary cert");
+        assertEq(merged.investmentAmountUSD, 2000, "primary cost-basis snapshot unchanged");
+        assertEq(merged.issuerUSDValuationAtTimeOfInvestment, 20000, "primary valuation snapshot unchanged");
     }
 
     // TODO should test administered hosted as well
