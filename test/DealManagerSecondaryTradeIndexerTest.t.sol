@@ -187,6 +187,12 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
     // +1-based row slots into idxTransferLedger (0 == absent), keyed by tokenId for the internal open→enrich
     // linkage. Reads address the ledger by row index directly.
     mapping(uint256 => uint256) internal idxLedgerRowByToken;
+    // Set once a SecondaryTransferExecuted has claimed a cert's mint row. A later transfer naming the same
+    // issued cert is an accumulation (the buyer's repeat purchase folded into their existing cert, minting no
+    // new cert) and opens its own transfer row rather than re-enriching the first.
+    // TODO: a secondary purchase that accumulates into a buyer's pre-existing PRIMARY cert isn't reconstructed
+    // here (no test exercises it); the contract handles it, but this logs-only indexer would mis-enrich.
+    mapping(uint256 => bool) internal idxTokenTransferClaimed;
 
     // Event topic0 hashes taken straight from the declarations, so they can't drift from the emitted signatures.
     bytes32 immutable TOPIC_OFFER_POSTED = ISecondaryTradeStorage.OfferPosted.selector;
@@ -667,29 +673,56 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
     function _handleSecondaryTransfer(Vm.Log memory log) private {
         // topics: [0]=sig, [1]=agreementId, [2]=certPrinter
         IdxSettlement storage s = idxSettlements[log.topics[1]];
-        (uint256 surrenderedTokenId, uint256 issuedTokenId, address sellerAddr,, uint256 units, bool sellerVoided) =
+        (uint256 surrenderedTokenId, uint256 issuedTokenId, address sellerAddr, address buyerAddr, uint256 units, bool sellerVoided) =
             abi.decode(log.data, (uint256, uint256, address, address, uint256, bool));
         s.transferred = true;
         s.surrenderedTokenId = surrenderedTokenId;
         s.issuedTokenId = issuedTokenId;
         s.sellerVoided = sellerVoided;
-        // NUMBER OF SHARES HELD: the seller surrenders `units`; the buyer's matching credit already landed via
-        // the buyer cert's CertificateCreated. The buyer's new cert is a secondary mint, not an original issue.
+        // NUMBER OF SHARES HELD: the seller surrenders `units` on every fill.
         sharesHeld[sellerAddr] -= units;
         idxIssuances[issuedTokenId].originalIssue = false;
 
-        // Enrich the buyer cert's ledger row (opened by its CertificateCreated) with the SURRENDER side and
-        // the consideration, turning it from an issuance into a full transfer row.
         uint256 slot = idxLedgerRowByToken[issuedTokenId];
         require(slot != 0, "indexer: transfer before issuance");
-        IdxLedgerRow storage r = idxTransferLedger[slot - 1];
-        r.originalIssue = false;
-        r.fromWhom = sellerAddr;
-        r.surrenderedCertNo = surrenderedTokenId;
-        r.surrenderedShares = units;
-        r.sellerVoided = sellerVoided;
-        r.amountPaid = s.paymentAmount;
-        r.paymentToken = s.paymentToken;
+
+        if (!idxTokenTransferClaimed[issuedTokenId]) {
+            // First fill onto a freshly minted cert: enrich the row CertificateCreated opened (which already
+            // credited the buyer) with the SURRENDER side and the consideration, turning issuance into transfer.
+            idxTokenTransferClaimed[issuedTokenId] = true;
+            IdxLedgerRow storage r = idxTransferLedger[slot - 1];
+            r.originalIssue = false;
+            r.fromWhom = sellerAddr;
+            r.surrenderedCertNo = surrenderedTokenId;
+            r.surrenderedShares = units;
+            r.sellerVoided = sellerVoided;
+            r.amountPaid = s.paymentAmount;
+            r.paymentToken = s.paymentToken;
+        } else {
+            // Repeat purchase accumulated into the buyer's existing cert: no new cert was minted (so no
+            // CertificateCreated credited the buyer), but the units still moved — open a fresh transfer row
+            // onto the same issued cert number and credit the buyer here.
+            sharesHeld[buyerAddr] += units;
+            uint256 rowIndex = idxTransferLedger.length;
+            idxTransferLedger.push(
+                IdxLedgerRow({
+                    rowNo: rowIndex,
+                    originalIssue: false,
+                    shareholderName: s.buyerName,
+                    shareholder: buyerAddr,
+                    issuedCertNo: issuedTokenId,
+                    issuedShares: units,
+                    fromWhom: sellerAddr,
+                    amountPaid: s.paymentAmount,
+                    paymentToken: s.paymentToken,
+                    surrenderedCertNo: surrenderedTokenId,
+                    surrenderedShares: units,
+                    sellerVoided: sellerVoided,
+                    sharesHeldByShareholder: sharesHeld[buyerAddr],
+                    transferDate: block.timestamp
+                })
+            );
+        }
     }
 
     function _handleCertificateAssigned(Vm.Log memory log) private {
@@ -1019,8 +1052,8 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
     }
 
     // Stock-ledger reconstruction: a SELL offer filled in two lots (partial then closing) yields two transfer
-    // rows. SecondaryTransferExecuted supplies the buyer's newly issued cert number, the seller's surrendered
-    // cert number, and the full-vs-partial flag — the columns the DealManager events alone could not provide.
+    // rows. The buyer's first fill mints a new cert; the second purchase accumulates into that same cert (no new
+    // cert minted), so both transfer rows carry the SAME issued cert number — the default consolidation behavior.
     function test_Indexer_StockLedger_DirectHosting_MultipleFills() public {
         uint256 unitsA = 40;
         uint256 unitsB = 60;
@@ -1042,29 +1075,30 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
 
         // The full expected Stock Transfer Ledger once both lots settle — row 0 the founding issue (from
         // setUp), rows 1–2 the two transfers. NUMBER OF SHARES HELD is the row holder's running balance after
-        // that row; the seller's whole position ends up with the buyer.
+        // that row; the seller's whole position ends up with the buyer, consolidated in a single cert.
         //
         //  NO. | SHAREHOLDER | CERT. ISSUED   | FROM WHOM       | AMOUNT | CERT. SURRENDERED | VOID | SHARES
         //      |             | CERT# | SHARES |  TRANSFERRED    |  PAID  | CERT# | SHARES    |      | HELD
         //  ----+-------------+-------+--------+-----------------+--------+-------+-----------+------+-------
         //   0  | Alice       |   0   |  100   | — (orig. issue) |   0    |   —   |    0      |  no  |  100
         //   1  | Bob         |   1   |   40   | seller          | 4 eth  |   0   |   40      |  no  |   40
-        //   2  | Bob         |   2   |   60   | seller          | 6 eth  |   0   |   60      | yes  |  100
+        //   2  | Bob         |   1   |   60   | seller          | 6 eth  |   0   |   60      | yes  |  100
         assertEq(idxTransferLedger.length, 3, "ledger has the original issue + two transfers");
         // Row 0 — the original issue is unchanged by the trading that followed.
         _assertLedgerRow(0, true, seller, "Alice", sellerTokenId, UNITS, address(0), 0, 0, false, 0, address(0), UNITS);
-        // Row 1 — lot A, partial sale of 40: seller cert decremented (not voided), buyer gets the first new cert.
+        // Row 1 — lot A, partial sale of 40: seller cert decremented (not voided), buyer's new cert (#1) holds 40.
         _assertLedgerRow(
             1, false, buyer, "Bob", 1, unitsA, seller, sellerTokenId, unitsA, false, paidA, address(paymentToken), unitsA
         );
-        // Row 2 — lot B, closing the position: the last units settle, so the seller cert is voided; second new cert.
+        // Row 2 — lot B, closing the position: the seller cert is voided, and the 60 units accumulate into Bob's
+        // SAME cert (#1), which now represents the full 100.
         _assertLedgerRow(
-            2, false, buyer, "Bob", 2, unitsB, seller, sellerTokenId, unitsB, true, paidB, address(paymentToken), UNITS
+            2, false, buyer, "Bob", 1, unitsB, seller, sellerTokenId, unitsB, true, paidB, address(paymentToken), UNITS
         );
 
-        // Both lots surrender the same origin cert and issue distinct buyer certs — a coherent chain of title.
+        // Both lots surrender the same origin cert and consolidate into one buyer cert — a coherent chain of title.
         assertEq(idxSettlements[lotA].surrenderedTokenId, idxSettlements[lotB].surrenderedTokenId, "same origin cert");
-        assertTrue(idxSettlements[lotA].issuedTokenId != idxSettlements[lotB].issuedTokenId, "distinct issued certs");
+        assertEq(idxSettlements[lotA].issuedTokenId, idxSettlements[lotB].issuedTokenId, "both fills consolidate into one cert");
 
         // NUMBER OF SHARES HELD: the whole position moved from the seller to the buyer across the two lots.
         assertEq(sharesHeld[seller], 0, "seller fully divested");
@@ -1095,7 +1129,8 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         uint256 paidA = CONSIDERATION * unitsA / UNITS; // 4 ether
         uint256 paidB = CONSIDERATION * unitsB / UNITS; // 6 ether
 
-        // On-chain split: the multisig custodies both buyer certs, but the buyer is the registered legal owner.
+        // On-chain split: the multisig custodies the buyer's (consolidated) cert, but the buyer is the registered
+        // legal owner. Both fills land on the same cert, so the two lookups address one token.
         assertEq(
             CyberCertPrinter(address(certPrinter)).ownerOf(idxSettlements[lotA].issuedTokenId),
             adminMultisig,
@@ -1117,22 +1152,23 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         //  ----+-------------+-------+--------+-----------------+--------+-------+-----------+------+-------
         //   0  | Alice       |   0   |  100   | — (orig. issue) |   0    |   —   |    0      |  no  |  100
         //   1  | Bob         |   1   |   40   | seller          | 4 eth  |   0   |   40      |  no  |   40
-        //   2  | Bob         |   2   |   60   | seller          | 6 eth  |   0   |   60      | yes  |  100
+        //   2  | Bob         |   1   |   60   | seller          | 6 eth  |   0   |   60      | yes  |  100
         assertEq(idxTransferLedger.length, 3, "ledger has the original issue + two transfers");
         // Row 0 — the original issue is unchanged by the trading that followed.
         _assertLedgerRow(0, true, seller, "Alice", sellerTokenId, UNITS, address(0), 0, 0, false, 0, address(0), UNITS);
-        // Row 1 — lot A, partial sale of 40: seller cert decremented (not voided), buyer gets the first new cert.
+        // Row 1 — lot A, partial sale of 40: seller cert decremented (not voided), buyer's new cert (#1) holds 40.
         _assertLedgerRow(
             1, false, buyer, "Bob", 1, unitsA, seller, sellerTokenId, unitsA, false, paidA, address(paymentToken), unitsA
         );
-        // Row 2 — lot B, closing the position: the last units settle, so the seller cert is voided; second new cert.
+        // Row 2 — lot B, closing the position: the seller cert is voided, and the 60 units accumulate into Bob's
+        // SAME cert (#1), which now represents the full 100.
         _assertLedgerRow(
-            2, false, buyer, "Bob", 2, unitsB, seller, sellerTokenId, unitsB, true, paidB, address(paymentToken), UNITS
+            2, false, buyer, "Bob", 1, unitsB, seller, sellerTokenId, unitsB, true, paidB, address(paymentToken), UNITS
         );
 
-        // Both lots surrender the same origin cert and issue distinct buyer certs — a coherent chain of title.
+        // Both lots surrender the same origin cert and consolidate into one buyer cert — a coherent chain of title.
         assertEq(idxSettlements[lotA].surrenderedTokenId, idxSettlements[lotB].surrenderedTokenId, "same origin cert");
-        assertTrue(idxSettlements[lotA].issuedTokenId != idxSettlements[lotB].issuedTokenId, "distinct issued certs");
+        assertEq(idxSettlements[lotA].issuedTokenId, idxSettlements[lotB].issuedTokenId, "both fills consolidate into one cert");
 
         // NUMBER OF SHARES HELD: the whole position moved to the buyer of record; the custodian holds none.
         assertEq(sharesHeld[seller], 0, "seller fully divested");

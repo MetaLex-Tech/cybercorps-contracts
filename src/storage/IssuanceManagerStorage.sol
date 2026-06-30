@@ -793,12 +793,27 @@ library IssuanceManagerStorage {
             extensionData: details.extensionData
         });
 
-        // (d) Mint the buyer's new Ledger Entry Token. Direct hosting delivers to the buyer's wallet;
-        // Administered custodies it with the admin multisig. In both cases the buyer is the registered legal
-        // owner (spec §7.4A) — so legalOwnerOf and the CertificateAssigned event name the buyer, not the
-        // custodian, while the multisig merely holds the NFT under administered hosting.
+        // (d) Deliver the buyer's units. By default we consolidate: if the buyer already holds an active
+        // (non-voided) Ledger Entry Token on this printer, fold the purchased units into it rather than
+        // fragmenting their position across one cert per fill; mint a fresh token only when they hold none.
+        // A printer is scoped to one security class/series, so consolidation never merges across security types
+        // (the folded units inherit the existing cert's terms). We look the buyer up by legal owner of record,
+        // so this is correct under both hosting modes — including Administered, where the multisig custodies the
+        // NFT but the buyer is the registered owner. The custodian only decides where a freshly minted NFT lands.
         address custodian = buyerHostingMode == 1 ? adminMultisig : buyer;
-        (, buyerTokenId) = _mintAssignedCert(certPrinter, custodian, buyer, buyerDetails, buyerName);
+        RecertSelection memory existing = _selectFirstLegalOwnedToken(certPrinter, buyer);
+        if (existing.foundActive) {
+            // TODO: accumulating lots bought across different offers keeps the existing cert's per-cert basis
+            // (investmentAmountUSD / issuerUSDValuationAtTimeOfInvestment) and drops the new lot's — a
+            // heterogeneous merge. Fills of one offer share a source cert so stay homogeneous; revisit if
+            // cross-offer basis must be preserved.
+            buyerTokenId = existing.activeTokenId;
+            CertificateDetails memory accDetails = cert.getCertificateDetails(buyerTokenId);
+            accDetails.unitsRepresented += units;
+            cert.updateCertificateDetails(buyerTokenId, accDetails);
+        } else {
+            (, buyerTokenId) = _mintAssignedCert(certPrinter, custodian, buyer, buyerDetails, buyerName);
+        }
 
         // (e) Mirror endorsement on the new token: chain-of-title back-pointer to the seller and the agreement,
         // reusing the seller's open-endorsement signature.
@@ -1148,7 +1163,7 @@ library IssuanceManagerStorage {
         }
 
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
-        RecertSelection memory selection = _selectRecertToken(
+        RecertSelection memory selection = _selectFirstLegalOwnedToken(
             certAddress,
             account
         );
@@ -1366,16 +1381,18 @@ library IssuanceManagerStorage {
         emit RecertificationApprovalCleared(certAddress, investor);
     }
 
-    function _selectRecertToken(
+    /// @dev First active (non-voided) cert that `owner` is the legal owner of record for, via the printer's
+    /// per-legal-owner enumeration. Independent of ERC-721 custody, so it works under administered hosting
+    /// where a multisig custodies many holders' certs — no scan of the custodian's whole balance.
+    function _selectFirstLegalOwnedToken(
         address certAddress,
-        address account
+        address owner
     ) internal view returns (RecertSelection memory selection) {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
-        uint256 ownedBalance = certificate.balanceOf(account);
+        uint256 ownedBalance = certificate.balanceOfLegalOwner(owner);
 
         for (uint256 i = 0; i < ownedBalance; i++) {
-            uint256 tokenId = certificate.tokenOfOwnerByIndex(account, i);
-            if (certificate.legalOwnerOf(tokenId) != account) continue;
+            uint256 tokenId = certificate.tokenOfLegalOwnerByIndex(owner, i);
             if (certificate.isVoided(tokenId)) continue;
             selection.foundActive = true;
             selection.activeTokenId = tokenId;
