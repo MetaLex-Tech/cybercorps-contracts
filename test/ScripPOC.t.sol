@@ -72,6 +72,15 @@ contract POCMockCertPrinter {
         return _ownedTokens[owner_][index];
     }
 
+    // In this mock custody owner == legal owner, so the per-legal-owner enumeration is the same backing data.
+    function balanceOfLegalOwner(address owner_) external view returns (uint256) {
+        return _balances[owner_];
+    }
+
+    function tokenOfLegalOwnerByIndex(address owner_, uint256 index) external view returns (uint256) {
+        return _ownedTokens[owner_][index];
+    }
+
     function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory) {
         return _details[tokenId];
     }
