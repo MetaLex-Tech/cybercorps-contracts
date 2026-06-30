@@ -7,7 +7,7 @@ import "../src/IssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import "../src/interfaces/ICyberCertPrinter.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
-import {ExemptionPathway} from "../src/interfaces/ISecondaryTradeStorage.sol";
+import {ExemptionPathway, HostingMode} from "../src/interfaces/ISecondaryTradeStorage.sol";
 import "../src/libs/auth.sol";
 import "forge-std/Test.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -79,9 +79,9 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         uint256 expectedBuyerTokenId = 1;
         vm.expectEmit(true, true, false, true, address(issuanceManager));
         emit IIssuanceManager.SecondaryTransferExecuted(
-            SETTLEMENT_ID, address(cert), 0, expectedBuyerTokenId, seller, buyer, UNITS, true
+            SETTLEMENT_ID, address(cert), 0, expectedBuyerTokenId, seller, buyer, UNITS, true, true
         );
-        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, UNITS, "Bob", 0, address(0)));
+        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, UNITS, "Bob", HostingMode.DIRECT, address(0)));
 
         // Seller side: token voided, reservation cleared, real endorsement materialized.
         assertTrue(cert.isVoided(0), "seller cert voided on full sale");
@@ -110,9 +110,9 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         uint256 expectedBuyerTokenId = 1;
         vm.expectEmit(true, true, false, true, address(issuanceManager));
         emit IIssuanceManager.SecondaryTransferExecuted(
-            SETTLEMENT_ID, address(cert), 0, expectedBuyerTokenId, seller, buyer, soldUnits, false
+            SETTLEMENT_ID, address(cert), 0, expectedBuyerTokenId, seller, buyer, soldUnits, false, true
         );
-        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, soldUnits, "Bob", 0, address(0)));
+        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, soldUnits, "Bob", HostingMode.DIRECT, address(0)));
 
         // Seller side: not voided, units decremented, reservation reduced by the consumed lot.
         assertFalse(cert.isVoided(0), "seller cert survives a partial sale");
@@ -139,13 +139,13 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         _assertMirrorEndorsement(cert, expectedBuyerTokenId, "Bob");
     }
 
-    // Administered hosting (buyerHostingMode == 1) custodies the new token with the admin multisig, but the
+    // Administered hosting (HostingMode.ADMINISTERED) custodies the new token with the admin multisig, but the
     // buyer is still the registered legal owner of record (spec §7.4A) — custody and ownership are distinct.
     function test_SecondaryTransfer_AdministeredHosting_MultisigCustodiesBuyerOwns() public {
         ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
         address adminMultisig = makeAddr("adminMultisig");
 
-        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, UNITS, "Bob", 1, adminMultisig));
+        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, UNITS, "Bob", HostingMode.ADMINISTERED, adminMultisig));
 
         // Custody: the multisig holds the NFT. Ownership of record: the buyer, not the custodian.
         assertEq(cert.ownerOf(1), adminMultisig, "administered token custodied by multisig");
@@ -160,14 +160,14 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
 
         // First purchase: 40 units mints the buyer a fresh cert (id 1).
-        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 40, "Bob", 0, address(0)));
+        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 40, "Bob", HostingMode.DIRECT, address(0)));
         assertEq(cert.balanceOf(buyer), 1, "buyer holds one cert after the first purchase");
         assertEq(cert.getCertificateDetails(1).unitsRepresented, 40, "first cert holds 40");
 
         // Second purchase: another 40 units reuses cert 1 (the event reports the existing token, not a new mint).
         vm.expectEmit(true, true, false, true, address(issuanceManager));
-        emit IIssuanceManager.SecondaryTransferExecuted(SETTLEMENT_ID, address(cert), 0, 1, seller, buyer, 40, false);
-        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 40, "Bob", 0, address(0)));
+        emit IIssuanceManager.SecondaryTransferExecuted(SETTLEMENT_ID, address(cert), 0, 1, seller, buyer, 40, false, false);
+        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 40, "Bob", HostingMode.DIRECT, address(0)));
 
         assertEq(cert.totalSupply(), 2, "no new cert minted (seller 0 + buyer 1)");
         assertEq(cert.balanceOf(buyer), 1, "buyer still holds a single consolidated cert");
@@ -192,7 +192,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         issuanceManager.createCertAndAssign(address(cert), buyer, primaryDetails);
 
         // A secondary purchase of 30 units folds into the buyer's existing primary cert (id 1).
-        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 30, "Bob", 0, address(0)));
+        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 30, "Bob", HostingMode.DIRECT, address(0)));
 
         CertificateDetails memory merged = cert.getCertificateDetails(1);
         assertEq(merged.unitsRepresented, 80, "secondary units folded into the primary cert");
@@ -211,11 +211,11 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         (address buyer2,) = makeAddrAndKey("buyer2");
 
         // The same multisig custodies both buyers' certs.
-        issuanceManager.secondaryTransfer(_dealMetadataFor(buyer, address(cert), 0, 30, "Bob", 1, adminMultisig));
-        issuanceManager.secondaryTransfer(_dealMetadataFor(buyer2, address(cert), 0, 40, "Carol", 1, adminMultisig));
+        issuanceManager.secondaryTransfer(_dealMetadataFor(buyer, address(cert), 0, 30, "Bob", HostingMode.ADMINISTERED, adminMultisig));
+        issuanceManager.secondaryTransfer(_dealMetadataFor(buyer2, address(cert), 0, 40, "Carol", HostingMode.ADMINISTERED, adminMultisig));
 
         // Bob buys again: must accumulate into Bob's cert (id 1), not Carol's (id 2).
-        issuanceManager.secondaryTransfer(_dealMetadataFor(buyer, address(cert), 0, 30, "Bob", 1, adminMultisig));
+        issuanceManager.secondaryTransfer(_dealMetadataFor(buyer, address(cert), 0, 30, "Bob", HostingMode.ADMINISTERED, adminMultisig));
 
         assertEq(cert.balanceOf(adminMultisig), 2, "multisig custodies one cert per legal owner");
         assertEq(cert.legalOwnerOf(1), buyer, "cert 1 owned of record by Bob");
@@ -260,7 +260,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         uint256 tokenId,
         uint256 units,
         string memory buyerName,
-        uint8 buyerHostingMode,
+        HostingMode buyerHostingMode,
         address adminMultisig
     ) internal view returns (bytes memory) {
         return _dealMetadataFor(buyer, cert, tokenId, units, buyerName, buyerHostingMode, adminMultisig);
@@ -272,7 +272,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         uint256 tokenId,
         uint256 units,
         string memory buyerName,
-        uint8 buyerHostingMode,
+        HostingMode buyerHostingMode,
         address adminMultisig
     ) internal pure returns (bytes memory) {
         return abi.encode(

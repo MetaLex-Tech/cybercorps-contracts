@@ -59,6 +59,7 @@ import {EscrowStatus} from "../src/storage/LexScrowStorage.sol";
 import {
     AcceptOfferParams,
     ExemptionPathway,
+    HostingMode,
     Offer,
     OfferSide,
     OfferStatus,
@@ -349,7 +350,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerorAgreementSig: "",
             openEndorsementSig: OPEN_ENDORSEMENT_SIG,
             buyerName: "",
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0)
         });
     }
@@ -374,7 +375,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerorAgreementSig: "",
             openEndorsementSig: "",
             buyerName: "Test Buyer",
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0)
         });
     }
@@ -424,7 +425,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerId: offerAgreementId,
             units: UNITS,
             buyerName: SELL_ACCEPT_BUYER_NAME,
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
@@ -447,7 +448,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerId: offerAgreementId,
             units: units,
             buyerName: SELL_ACCEPT_BUYER_NAME,
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: sellerTokenId,
             acceptorPartyValues: new string[](0),
@@ -485,7 +486,7 @@ contract DealManagerSecondaryTradeTest is Test {
         //  - buy offer: buyer info from the offer (the offeror is the buyer); endorsement from the acceptance params
         //  - sell: buyer info from the acceptance params; endorsement copied from the offer's pre-signed one
         Offer memory o = dm.getOffer(offerId);
-        assertEq(se.buyerHostingMode, 0, "buyerHostingMode");
+        assertEq(uint8(se.buyerHostingMode), uint8(HostingMode.DIRECT), "buyerHostingMode");
         assertEq(se.adminMultisig, address(0), "adminMultisig");
         if (o.side == OfferSide.BUY) {
             assertEq(se.buyerName, o.buyerName, "buyerName from the buy offer");
@@ -546,11 +547,11 @@ contract DealManagerSecondaryTradeTest is Test {
         // buyer fields: carried on BUY, empty on SELL
         if (p.side == OfferSide.BUY) {
             assertEq(offer.buyerName, p.buyerName, "buyerName");
-            assertEq(offer.buyerHostingMode, p.buyerHostingMode, "buyerHostingMode");
+            assertEq(uint8(offer.buyerHostingMode), uint8(p.buyerHostingMode), "buyerHostingMode");
             assertEq(offer.adminMultisig, p.adminMultisig, "adminMultisig");
         } else {
             assertEq(offer.buyerName, "", "sell offers carry no buyerName");
-            assertEq(offer.buyerHostingMode, 0, "sell offers carry no buyerHostingMode");
+            assertEq(uint8(offer.buyerHostingMode), uint8(HostingMode.DIRECT), "sell offers carry no buyerHostingMode");
             assertEq(offer.adminMultisig, address(0), "sell offers carry no adminMultisig");
         }
 
@@ -618,7 +619,7 @@ contract DealManagerSecondaryTradeTest is Test {
         // Buyer fields stay as posted on the Offer for both sides; the per-settlement buyer info and the
         // endorsement actually used live on each SecondaryEscrow, not here.
         assertEq(o.buyerName, b.buyerName, "buyerName immutable");
-        assertEq(o.buyerHostingMode, b.buyerHostingMode, "buyerHostingMode immutable");
+        assertEq(uint8(o.buyerHostingMode), uint8(b.buyerHostingMode), "buyerHostingMode immutable");
         assertEq(o.adminMultisig, b.adminMultisig, "adminMultisig immutable");
         assertEq(o.globalValues.length, b.globalValues.length, "globalValues length immutable");
         for (uint256 i = 0; i < b.globalValues.length; i++) {
@@ -711,7 +712,7 @@ contract DealManagerSecondaryTradeTest is Test {
             address(0),
             bytes32(0),
             "",
-            0,
+            HostingMode.DIRECT,
             address(0),
             "",
             new address[](0),
@@ -748,7 +749,7 @@ contract DealManagerSecondaryTradeTest is Test {
             address(0),
             bytes32(0),
             "Test Buyer",
-            0,
+            HostingMode.DIRECT,
             address(0),
             "",
             new address[](0),
@@ -876,7 +877,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerId: offerId,
             units: UNITS,
             buyerName: SELL_ACCEPT_BUYER_NAME,
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
@@ -941,7 +942,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerId: offerId,
             units: UNITS,
             buyerName: SELL_ACCEPT_BUYER_NAME,
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
@@ -1290,7 +1291,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerId: offerId,
             units: UNITS - 1, // partial fill, below min
             buyerName: SELL_ACCEPT_BUYER_NAME,
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
@@ -1315,7 +1316,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerId: offerId,
             units: UNITS / 2, // pro-rata consideration = CONSIDERATION / 2, below min
             buyerName: SELL_ACCEPT_BUYER_NAME,
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
@@ -1337,7 +1338,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerId: offerId,
             units: 0,
             buyerName: SELL_ACCEPT_BUYER_NAME,
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
@@ -1363,7 +1364,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerId: offerId,
             units: (UNITS * 9) / 10, // 90 units → 10-unit remainder, below the 25-unit floor
             buyerName: SELL_ACCEPT_BUYER_NAME,
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
@@ -1388,7 +1389,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerId: offerId,
             units: (UNITS * 8) / 10, // 80 units → pro-rata 8 ether (ok), remainder 2 ether < 3 ether floor
             buyerName: SELL_ACCEPT_BUYER_NAME,
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
@@ -1682,7 +1683,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerId: offerId,
             units: firstUnits,
             buyerName: SELL_ACCEPT_BUYER_NAME,
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
@@ -1750,7 +1751,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerId: offerId,
             units: UNITS + 1,
             buyerName: SELL_ACCEPT_BUYER_NAME,
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
@@ -1770,7 +1771,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerId: offerId,
             units: UNITS / 2,
             buyerName: SELL_ACCEPT_BUYER_NAME,
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
@@ -1801,7 +1802,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerId: offerId,
             units: UNITS,
             buyerName: SELL_ACCEPT_BUYER_NAME,
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: sellerTokenId,
             acceptorPartyValues: new string[](0),
@@ -1820,7 +1821,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerId: offerId,
             units: UNITS + 1,
             buyerName: SELL_ACCEPT_BUYER_NAME,
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: sellerTokenId,
             acceptorPartyValues: new string[](0),
@@ -2311,7 +2312,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerId: offerAgreementId,
             units: units,
             buyerName: SELL_ACCEPT_BUYER_NAME,
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
@@ -2981,7 +2982,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerId: offerId,
             units: UNITS,
             buyerName: SELL_ACCEPT_BUYER_NAME,
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
@@ -3225,7 +3226,7 @@ contract DealManagerSecondaryTradeTest is Test {
             offerId: offerId,
             units: UNITS,
             buyerName: SELL_ACCEPT_BUYER_NAME,
-            buyerHostingMode: 0,
+            buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: 0,
             acceptorPartyValues: new string[](0),
@@ -3246,7 +3247,7 @@ contract DealManagerSecondaryTradeTest is Test {
             sellerTokenId,
             block.timestamp + 1 days,
             SELL_ACCEPT_BUYER_NAME,
-            0,
+            HostingMode.DIRECT,
             address(0),
             OPEN_ENDORSEMENT_SIG
         );

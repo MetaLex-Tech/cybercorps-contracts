@@ -419,7 +419,8 @@ interface IIssuanceManager {
         address seller,
         address buyer,
         uint256 units,
-        bool sellerVoided
+        bool sellerVoided,
+        bool buyerTokenIsMinted // indicates whether it's a freshly minted token or folded into an existing one
     );
 
     // Secondary trade entry points (cyberTRADE; implementation pending)

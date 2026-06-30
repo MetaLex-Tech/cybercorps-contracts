@@ -50,7 +50,7 @@ import "../interfaces/ICondition.sol";
 import "./DealManagerStorage.sol";
 import "./DealManagerFactoryStorage.sol";
 import {LexScrowStorage} from "./LexScrowStorage.sol";
-import {ISecondaryTradeStorage, OfferSide, OfferStatus, SecondaryEscrowStatus, ExemptionPathway} from "../interfaces/ISecondaryTradeStorage.sol";
+import {ISecondaryTradeStorage, OfferSide, OfferStatus, SecondaryEscrowStatus, ExemptionPathway, HostingMode} from "../interfaces/ISecondaryTradeStorage.sol";
 
 struct Offer {
     address spvAddress;             // cyberCORP address this offer belongs to
@@ -78,7 +78,7 @@ struct Offer {
     bytes offerorAgreementSig;      // offeror's EIP-712 sig over offerAgreementId+terms; verified at postOffer, passed to signContractWithEscrow at acceptOffer
     bytes openEndorsementSig;       // sell offer-only: seller's pre-signed open endorsement (spec §7.3.1); in contrast, buy offer's open endorsement is acquired at acceptance and stored in SecondaryEscrow
     string buyerName;               // buy offer-only: buyer's registered name for OwnerDetails; empty for sell offers
-    uint8 buyerHostingMode;         // buy offer-only: 0 = Direct, 1 = Administered; zero for sell offers
+    HostingMode buyerHostingMode;   // buy offer-only: Direct or Administered; defaults to Direct for sell offers
     address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
     bytes32[] settlementAgreementIds; // appended at each acceptOffer; length == 0 at postOffer (no buyer known yet)
     address[] thresholdConditions;    // resolved from DealManager config at postOffer; re-evaluated at acceptOffer and at finalize
@@ -99,7 +99,7 @@ struct SecondaryEscrow {
     bytes32 offerId;                // back-link to Offer
     uint256 tokenId;                // seller's Ledger Entry Token id; reservation target for decreaseUnitsReserved on void
     string buyerName;               // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
-    uint8 buyerHostingMode;         // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
+    HostingMode buyerHostingMode;   // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
     address adminMultisig;          // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
     bytes openEndorsementSig;       // redundant for sell offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
 }
@@ -123,8 +123,7 @@ struct PostOfferParams {
     bytes offerorAgreementSig;
     bytes openEndorsementSig;       // sell offer-only
     string buyerName;               // buy offer-only: buyer's registered name for OwnerDetails; empty for sell offers
-    uint8 buyerHostingMode;         // buy offer-only: 0 = Direct, 1 = Administered; zero for sell offers
-    // TODO should it be validated? What if the user provided the wrong address?
+    HostingMode buyerHostingMode;   // buy offer-only: Direct or Administered; defaults to Direct for sell offers
     address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
 }
 
@@ -132,8 +131,7 @@ struct AcceptOfferParams {
     bytes32 offerId;
     uint256 units;
     string buyerName;               // sell offer-only: ignored for buy offer acceptances (read from Offer instead)
-    uint8 buyerHostingMode;         // sell offer-only: 0 = Direct, 1 = Administered; ignored for buy offer acceptances
-    // TODO should it be validated? What if the user provided the wrong address?
+    HostingMode buyerHostingMode;   // sell offer-only: Direct or Administered; ignored for buy offer acceptances
     address adminMultisig;          // sell offer-only: delivery address for Administered hosting; ignored for buy offer acceptances
     uint256 sellerTokenId;          // buy offer-only: seller's token id for buy-offer acceptances; use offer.tokenId for sell offers
     string[] acceptorPartyValues;
@@ -245,7 +243,7 @@ library SecondaryTradeStorage {
             offerorAgreementSig: params.offerorAgreementSig,
             openEndorsementSig: params.openEndorsementSig,
             buyerName: params.side == OfferSide.BUY ? params.buyerName : "",
-            buyerHostingMode: params.side == OfferSide.BUY ? params.buyerHostingMode : 0,
+            buyerHostingMode: params.side == OfferSide.BUY ? params.buyerHostingMode : HostingMode.DIRECT,
             adminMultisig: params.side == OfferSide.BUY ? params.adminMultisig : address(0),
             settlementAgreementIds: new bytes32[](0),
             // Persisted so they can be re-evaluated at acceptOffer (spec §conditions: threshold
@@ -406,7 +404,7 @@ library SecondaryTradeStorage {
         // Resolve the buyer info per side: buy offers carry it on the offer (the offeror is the buyer),
         // sells take it from the acceptance.
         string memory buyerName;
-        uint8 buyerHostingMode;
+        HostingMode buyerHostingMode;
         address adminMultisig;
         if (offer.side == OfferSide.BUY) {
             buyerName = offer.buyerName;
@@ -474,7 +472,7 @@ library SecondaryTradeStorage {
         uint256 units,
         address buyer,
         string memory buyerName,
-        uint8 buyerHostingMode,
+        HostingMode buyerHostingMode,
         address adminMultisig,
         ExemptionPathway exemptionPathway,
         bytes32 settlementAgreementId,
