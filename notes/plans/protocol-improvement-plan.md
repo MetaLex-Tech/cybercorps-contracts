@@ -137,6 +137,63 @@ this) in its `notes/plans/mainframe-changes-plan.md`.
 
 ---
 
+## P3 — Issuer-defined award templates (grants) — `PROPOSED`
+
+**Full evaluation:** `notes/plans/issuer-award-templates-plan.md` (three options, recommendation,
+per-option contract + app changes). Summary below.
+
+**Problem.** cyberCORPs grants register the award agreement in the **global, MetaLeX-owned**
+`CyberAgreementRegistry`, and the MetaVesT controller's `proposeAndSignDeal(templateId, …)`
+calls `registry.createContract`, which reverts `TemplateDoesNotExist` unless the template is
+pre-registered (`src/CyberAgreementRegistry.sol:263-266`; `MetaVesTControllerStorage.sol:220`).
+The only registration entry point, `createTemplate`, is **`onlyOwner`** (`:230-244`;
+`onlyOwner` = registry BorgAuth role ≥ 99, `src/libs/auth.sol:190`). So **every corp shares one
+award template that only MetaLeX can register** — a founder cannot register their own custom
+award agreement. This is the last setup blocker for self-serve grants (the webapp already ships
+an admin "Register award template" page, but it can only be driven by the registry owner —
+`metalex-webapp` PR #771).
+
+**Desired model.** An **issuer (corp officer)** registers their **own** award template
+permissionlessly, without MetaLeX per corp, without weakening registry integrity.
+
+**Design direction.** The registry **already** creates templates permissionlessly + **content-
+addressed** in `createStandaloneContractAndSignFor` (`:341-399`, `public`): `templateId =
+keccak256(title, uri, globalFields, partyFields)`, `_createTemplate` just-in-time. Content-
+addressing is the key security property — a content hash id **cannot be squatted** (the
+caller-chosen-id `createTemplate` could be, which is exactly why it's owner-gated). Options:
+- **(A, recommended)** add a thin permissionless **content-addressed** `createTemplatePublic`
+  (the template-half of the standalone path, idempotent). Squat-proof, **no** controller change,
+  **no** corp-identity verification; app makes the grants templateId per-corp and opens the
+  admin page to officers. ~6-line registry change.
+- **(B, reserve)** route grants through the existing permissionless `createStandaloneContract
+  AndSignFor` (bespoke per-grant doc). Needs a new controller propose variant; **caveat:** the
+  zero finalizer auto-finalizes on the grantee's signature (`:550-554`), so it also needs either
+  a registry `finalizer` param or a conditional controller finalize. Best for per-grant custom
+  docs; complementary to A.
+- **(A2, defer)** per-corp-namespaced `createCorpTemplate` with on-chain officer verification —
+  needs a new `CyberCorpFactory.isCyberCorp` oracle (no corp registry exists today) + a
+  registry→factory dependency. Adds provenance/listing; content-addressing already gives the
+  security guarantee, so defer.
+- **(C, reject)** owner-delegated `TEMPLATE_CREATOR` role / `setRoleAdapter` — most centralized,
+  wrong granularity (an `OWNER_ROLE` adapter grants full owner powers); the existing
+  `delegations` mapping is signing-only. Only if MetaLeX wants to curate templates.
+
+**Recommendation:** ship **A**; keep **B** for bespoke per-grant docs; defer **A2**; reject **C**.
+
+**Open questions.** Idempotent vs revert on duplicate content; on-chain creator provenance
+(event field / A2) vs off-chain indexing; per-corp templateId storage in the webapp; B's
+finalize trade-off (registry `finalizer` param vs conditional controller finalize); whether to
+keep the curated owner-only `createTemplate` (recommended yes). See the full doc.
+
+**References.** `src/CyberAgreementRegistry.sol` (`createTemplate` `:230`, `createContract`
+`:246`, standalone path `:341-399`, auto-finalize `:550-554`, `finalizeContract`/
+`onlyFinalizerIfSet` `:677`/`:209`); `src/libs/auth.sol` (roles, `setRoleAdapter` `:117`);
+`src/CyberCorp.sol:184` (`isCyberCORPOfficer`); `src/CyberCorpFactory.sol` (no corp registry);
+MetaVesT `feat/re-enable-options` `MetaVesTControllerStorage.sol:220/331`. Webapp:
+`metalex-webapp` PR #771 + `notes/plans/cybercorps-grants-build-spec.md`.
+
+---
+
 ## Backlog (unprioritized)
 
 _(none yet — add future protocol improvements here)_
