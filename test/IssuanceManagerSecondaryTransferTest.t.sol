@@ -134,6 +134,50 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         _assertMirrorEndorsement(cert, 1, "Bob");
     }
 
+    // A buyer's repeat purchase consolidates by default: a second secondary transfer folds its units into the
+    // buyer's existing active cert rather than minting a new one (mirrors the scrip-to-cert recert behavior).
+    function test_SecondaryTransfer_RepeatPurchase_AccumulatesIntoExistingCert() public {
+        ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
+
+        // First purchase: 40 units mints the buyer a fresh cert (id 1).
+        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 40, "Bob", 0, address(0)));
+        assertEq(cert.balanceOf(buyer), 1, "buyer holds one cert after the first purchase");
+        assertEq(cert.getCertificateDetails(1).unitsRepresented, 40, "first cert holds 40");
+
+        // Second purchase: another 40 units reuses cert 1 (the event reports the existing token, not a new mint).
+        vm.expectEmit(true, true, false, true, address(issuanceManager));
+        emit IIssuanceManager.SecondaryTransferExecuted(SETTLEMENT_ID, address(cert), 0, 1, seller, buyer, 40, false);
+        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 40, "Bob", 0, address(0)));
+
+        assertEq(cert.totalSupply(), 2, "no new cert minted (seller 0 + buyer 1)");
+        assertEq(cert.balanceOf(buyer), 1, "buyer still holds a single consolidated cert");
+        assertEq(cert.getCertificateDetails(1).unitsRepresented, 80, "units accumulated into the existing cert");
+    }
+
+    // TODO should test administered hosted as well
+
+    // Administered hosting where ONE multisig custodies certs for two different legal owners. Consolidation must
+    // target the buyer's OWN cert by legal owner of record — never another holder's cert that happens to share
+    // the custodian. This is the case a custody (balanceOf) scan could not get right.
+    function test_SecondaryTransfer_AdministeredHosting_AccumulatesByLegalOwnerNotCustodian() public {
+        ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
+        address adminMultisig = makeAddr("adminMultisig");
+        (address buyer2,) = makeAddrAndKey("buyer2");
+
+        // The same multisig custodies both buyers' certs.
+        issuanceManager.secondaryTransfer(_dealMetadataFor(buyer, address(cert), 0, 30, "Bob", 1, adminMultisig));
+        issuanceManager.secondaryTransfer(_dealMetadataFor(buyer2, address(cert), 0, 40, "Carol", 1, adminMultisig));
+
+        // Bob buys again: must accumulate into Bob's cert (id 1), not Carol's (id 2).
+        issuanceManager.secondaryTransfer(_dealMetadataFor(buyer, address(cert), 0, 30, "Bob", 1, adminMultisig));
+
+        assertEq(cert.balanceOf(adminMultisig), 2, "multisig custodies one cert per legal owner");
+        assertEq(cert.legalOwnerOf(1), buyer, "cert 1 owned of record by Bob");
+        assertEq(cert.legalOwnerOf(2), buyer2, "cert 2 owned of record by Carol");
+        assertEq(cert.getCertificateDetails(1).unitsRepresented, 60, "Bob's cert accumulated both his fills");
+        assertEq(cert.getCertificateDetails(2).unitsRepresented, 40, "Carol's cert untouched");
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
@@ -173,11 +217,23 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         uint8 buyerHostingMode,
         address adminMultisig
     ) internal view returns (bytes memory) {
+        return _dealMetadataFor(buyer, cert, tokenId, units, buyerName, buyerHostingMode, adminMultisig);
+    }
+
+    function _dealMetadataFor(
+        address buyerAddr,
+        address cert,
+        uint256 tokenId,
+        uint256 units,
+        string memory buyerName,
+        uint8 buyerHostingMode,
+        address adminMultisig
+    ) internal pure returns (bytes memory) {
         return abi.encode(
             cert,
             tokenId,
             units,
-            buyer,
+            buyerAddr,
             buyerName,
             buyerHostingMode,
             adminMultisig,
