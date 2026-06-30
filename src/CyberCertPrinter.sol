@@ -67,6 +67,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     error InvalidEndorsement();
     error InvalidLegendIndex();
     error SignatureRequired();
+    error LegalOwnerIndexOutOfBounds();
     // Reverted from the storage library via delegatecall; declared here for the ABI
     error ExceedsAvailableUnits();
     error ExceedsReservedUnits();
@@ -221,7 +222,10 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     // Restricted burning
     function burn(uint256 tokenId) external onlyIssuanceManager {
         _burn(tokenId);
-        
+
+        // No transfer hook fires for a burn (to == 0), so drop the legal-owner enumeration entry explicitly.
+        CyberCertPrinterStorage.recordBurnLegalOwner(tokenId);
+
         // Clear agreement details
         delete CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId];
         delete CyberCertPrinterStorage.cyberCertStorage().issuerSignatures[tokenId];
@@ -500,6 +504,27 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     function legalOwnerOf(uint256 tokenId) external view returns (address) {
         if (!_exists(tokenId)) revert TokenDoesNotExist();
         return CyberCertPrinterStorage.cyberCertStorage().owners[tokenId].ownerAddress;
+    }
+
+    /// @notice Number of certificates `owner` is the legal owner of record for (distinct from ERC-721 custody).
+    function balanceOfLegalOwner(address owner) external view returns (uint256) {
+        return CyberCertPrinterStorage.cyberCertStorage().legalOwnerTokenCount[owner];
+    }
+
+    /// @notice The `index`-th certificate `owner` is the legal owner of record for. Enumerates by legal owner,
+    /// so it lists a holder's certs even when a custodian (e.g. an admin multisig) holds the NFTs.
+    function tokenOfLegalOwnerByIndex(address owner, uint256 index) external view returns (uint256) {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        if (index >= s.legalOwnerTokenCount[owner]) revert LegalOwnerIndexOutOfBounds();
+        return s.legalOwnedTokens[owner][index];
+    }
+
+    /// @notice Backfill the legal-owner enumeration for tokens in [startIndex, startIndex+count) of the supply.
+    /// For printers deployed before the enumeration existed: permissionless and idempotent (already-tracked
+    /// tokens are skipped), call in batches over [0, totalSupply()) after a beacon upgrade. New printers need it
+    /// only if you want to (harmlessly) re-run it.
+    function backfillLegalOwners(uint256 startIndex, uint256 count) external {
+        CyberCertPrinterStorage.backfillLegalOwnerEnumeration(startIndex, count);
     }
 
 }
