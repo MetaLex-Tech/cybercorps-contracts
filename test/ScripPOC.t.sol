@@ -103,6 +103,7 @@ contract POCMockCertPrinter {
 
     function voidCert(uint256 tokenId) external { _voided[tokenId] = true; }
     function isVoided(uint256 tokenId) external view returns (bool) { return _voided[tokenId]; }
+    function unitsReserved(uint256) external pure returns (uint256) { return 0; }
     function legalOwnerOf(uint256 tokenId) external view returns (address) { return _owners[tokenId]; }
 
     /// @dev Mock safeTransferFrom -- no IERC721Receiver check, no endorsement check.
