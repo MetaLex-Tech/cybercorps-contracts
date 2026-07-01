@@ -77,9 +77,9 @@ contract IssuanceManagerSecondaryTransferTest is Test {
 
         // The buyer's new token is the next minted id (seller cert is tokenId 0).
         uint256 expectedBuyerTokenId = 1;
-        vm.expectEmit(true, true, false, true, address(issuanceManager));
+        vm.expectEmit(true, true, true, true, address(issuanceManager));
         emit IIssuanceManager.SecondaryTransferExecuted(
-            SETTLEMENT_ID, address(cert), 0, expectedBuyerTokenId, seller, buyer, UNITS, true, true
+            SETTLEMENT_ID, address(cert), buyer, 0, expectedBuyerTokenId, seller, UNITS, 0, UNITS, true, true
         );
         issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, UNITS, "Bob", HostingMode.DIRECT, address(0)));
 
@@ -108,9 +108,9 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         uint256 soldUnits = 40;
 
         uint256 expectedBuyerTokenId = 1;
-        vm.expectEmit(true, true, false, true, address(issuanceManager));
+        vm.expectEmit(true, true, true, true, address(issuanceManager));
         emit IIssuanceManager.SecondaryTransferExecuted(
-            SETTLEMENT_ID, address(cert), 0, expectedBuyerTokenId, seller, buyer, soldUnits, false, true
+            SETTLEMENT_ID, address(cert), buyer, 0, expectedBuyerTokenId, seller, soldUnits, UNITS - soldUnits, soldUnits, false, true
         );
         issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, soldUnits, "Bob", HostingMode.DIRECT, address(0)));
 
@@ -165,8 +165,8 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         assertEq(cert.getCertificateDetails(1).unitsRepresented, 40, "first cert holds 40");
 
         // Second purchase: another 40 units reuses cert 1 (the event reports the existing token, not a new mint).
-        vm.expectEmit(true, true, false, true, address(issuanceManager));
-        emit IIssuanceManager.SecondaryTransferExecuted(SETTLEMENT_ID, address(cert), 0, 1, seller, buyer, 40, false, false);
+        vm.expectEmit(true, true, true, true, address(issuanceManager));
+        emit IIssuanceManager.SecondaryTransferExecuted(SETTLEMENT_ID, address(cert), buyer, 0, 1, seller, 40, 20, 80, false, false);
         issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 40, "Bob", HostingMode.DIRECT, address(0)));
 
         assertEq(cert.totalSupply(), 2, "no new cert minted (seller 0 + buyer 1)");

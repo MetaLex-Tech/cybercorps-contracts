@@ -667,10 +667,12 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
     }
 
     function _handleSecondaryTransfer(Vm.Log memory log) private {
-        // topics: [0]=sig, [1]=agreementId, [2]=certPrinter
+        // topics: [0]=sig, [1]=agreementId, [2]=certPrinter, [3]=buyer
         IdxSettlement storage s = idxSettlements[log.topics[1]];
-        (uint256 surrenderedTokenId, uint256 issuedTokenId, address sellerAddr, address buyerAddr, uint256 units, bool sellerVoided, bool buyerTokenIsMinted) =
-            abi.decode(log.data, (uint256, uint256, address, address, uint256, bool, bool));
+        address buyerAddr = _addr(log.topics[3]);
+        // data: sellerTokenId, buyerTokenId, seller, units, sellerUnitsAfter, buyerUnitsAfter, sellerVoided, buyerTokenIsMinted
+        (uint256 surrenderedTokenId, uint256 issuedTokenId, address sellerAddr, uint256 units,,, bool sellerVoided, bool buyerTokenIsMinted) =
+            abi.decode(log.data, (uint256, uint256, address, uint256, uint256, uint256, bool, bool));
         s.transferred = true;
         s.surrenderedTokenId = surrenderedTokenId;
         s.issuedTokenId = issuedTokenId;
