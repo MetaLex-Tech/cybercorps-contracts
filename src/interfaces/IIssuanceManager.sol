@@ -414,11 +414,13 @@ interface IIssuanceManager {
     event SecondaryTransferExecuted(
         bytes32 indexed agreementId,
         address indexed certPrinter,
+        address indexed buyer,
         uint256 sellerTokenId,
         uint256 buyerTokenId,
         address seller,
-        address buyer,
         uint256 units,
+        uint256 sellerUnitsAfter, // 0 when the seller token is voided (full sale)
+        uint256 buyerUnitsAfter, // == units on a fresh mint; existing balance + units on a fold
         bool sellerVoided,
         bool buyerTokenIsMinted // indicates whether it's a freshly minted token or folded into an existing one
     );

@@ -772,39 +772,26 @@ library IssuanceManagerStorage {
         });
         cert.addEndorsement(tokenId, sellerEndorsement);
 
-        // (c) Mutate the seller's Ledger Entry Token in place: void on a full sale, decrement on a partial.
-        CertificateDetails memory details = cert.getCertificateDetails(tokenId);
-        bool sellerVoided = units >= details.unitsRepresented;
+        // (c) Mutate the seller's Ledger Entry Token in place: decrement the sold units, then void if the
+        // token is fully sold (nothing left). Decrement-first so the struct carries no stale balance at void.
+        CertificateDetails memory sellerDetails = cert.getCertificateDetails(tokenId);
+        if (units > sellerDetails.unitsRepresented) revert AmountExceedsAvailableUnits();
+        sellerDetails.unitsRepresented -= units;
+        cert.updateCertificateDetails(tokenId, sellerDetails);
+        bool sellerVoided = sellerDetails.unitsRepresented == 0;
         if (sellerVoided) {
             cert.voidCert(tokenId);
-        } else {
-            details.unitsRepresented -= units;
-            cert.updateCertificateDetails(tokenId, details);
         }
-        // The buyer's new token inherits the seller's non-basis terms (legalDetails, extensionData) for the
-        // sold quantity. Per-cert cost basis (investmentAmountUSD / issuerUSDValuationAtTimeOfInvestment) is
-        // left blank on a secondary acquisition — those record the primary issuance, which the buyer never had.
-        // Build a fresh struct rather than aliasing `details` (memory assignment is by reference).
-        CertificateDetails memory buyerDetails = CertificateDetails({
-            signingOfficerName: details.signingOfficerName,
-            signingOfficerTitle: details.signingOfficerTitle,
-            investmentAmountUSD: 0,
-            issuerUSDValuationAtTimeOfInvestment: 0,
-            unitsRepresented: units,
-            legalDetails: details.legalDetails,
-            extensionData: details.extensionData
-        });
-
         // (d) Deliver the buyer's units. By default we consolidate: if the buyer already holds an active
         // (non-voided) Ledger Entry Token on this printer, fold the purchased units into it rather than
         // fragmenting their position across one cert per fill; mint a fresh token only when they hold none.
         // A printer is scoped to one security class/series, so consolidation never merges across security types
         // (the folded units inherit the existing cert's terms). We look the buyer up by legal owner of record,
         // so this is correct under both hosting modes — including Administered, where the multisig custodies the
-        // NFT but the buyer is the registered owner. The custodian only decides where a freshly minted NFT lands.
-        address custodian = buyerHostingMode == HostingMode.ADMINISTERED ? adminMultisig : buyer;
+        // NFT but the buyer is the registered owner.
         RecertSelection memory existing = _selectFirstLegalOwnedToken(certPrinter, buyer);
         bool buyerTokenIsMinted = !existing.foundActive;
+        uint256 buyerUnitsAfter; // absolute post-mutation balance on the buyer token, reported in the event
         if (existing.foundActive) {
             // Fold the purchased units into the buyer's existing cert, leaving its basis fields
             // (investmentAmountUSD / issuerUSDValuationAtTimeOfInvestment) unchanged: they stay a snapshot of
@@ -813,25 +800,33 @@ library IssuanceManagerStorage {
             CertificateDetails memory accDetails = cert.getCertificateDetails(buyerTokenId);
             accDetails.unitsRepresented += units;
             cert.updateCertificateDetails(buyerTokenId, accDetails);
+            buyerUnitsAfter = accDetails.unitsRepresented;
         } else {
+            // Mint a fresh token for the sold units. It inherits the seller's non-basis terms (signing officer,
+            // legalDetails, extensionData); cost basis stays blank since a secondary acquisition has no
+            // primary-issuance basis of its own. The custodian only decides where the NFT lands: the admin
+            // multisig under Administered hosting, otherwise the buyer (who is the legal owner either way).
+            address custodian = buyerHostingMode == HostingMode.ADMINISTERED ? adminMultisig : buyer;
+            CertificateDetails memory buyerDetails = CertificateDetails({
+                signingOfficerName: sellerDetails.signingOfficerName,
+                signingOfficerTitle: sellerDetails.signingOfficerTitle,
+                investmentAmountUSD: 0,
+                issuerUSDValuationAtTimeOfInvestment: 0,
+                unitsRepresented: units,
+                legalDetails: sellerDetails.legalDetails,
+                extensionData: sellerDetails.extensionData
+            });
             (, buyerTokenId) = _mintAssignedCert(certPrinter, custodian, buyer, buyerDetails, buyerName);
+            buyerUnitsAfter = units;
         }
 
-        // (e) Mirror endorsement on the new token: chain-of-title back-pointer to the seller and the agreement,
-        // reusing the seller's open-endorsement signature.
-        Endorsement memory mirror = Endorsement({
-            endorser: seller,
-            timestamp: block.timestamp,
-            signatureHash: openEndorsementSig,
-            registry: address(0),
-            agreementId: settlementAgreementId,
-            endorsee: buyer,
-            endorseeName: buyerName
-        });
-        cert.addEndorsement(buyerTokenId, mirror);
+        // (e) Mirror the seller's endorsement onto the buyer's token: both tokens carry the identical
+        // chain-of-title record (endorser = seller, endorsee = buyer, this agreement), so reuse the (b) struct.
+        cert.addEndorsement(buyerTokenId, sellerEndorsement);
 
         emit IIssuanceManager.SecondaryTransferExecuted(
-            settlementAgreementId, certPrinter, tokenId, buyerTokenId, seller, buyer, units, sellerVoided, buyerTokenIsMinted
+            settlementAgreementId, certPrinter, buyer, tokenId, buyerTokenId, seller, units,
+            sellerDetails.unitsRepresented, buyerUnitsAfter, sellerVoided, buyerTokenIsMinted
         );
     }
 
