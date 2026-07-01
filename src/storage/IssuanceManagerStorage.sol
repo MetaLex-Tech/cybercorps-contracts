@@ -723,7 +723,6 @@ library IssuanceManagerStorage {
         ICyberCertPrinter(certAddress).addEndorsement(tokenId, newEndorsement);
     }
 
-    // TOOD WIP: review needed
     /// @notice Executes the secondary-trade ownership change at finalization (spec §7.4A steps a–d).
     /// @dev Mutate-and-mint: the seller's Ledger Entry Token never moves wallets; ownership transfers via
     /// metadata. Core scope — acquisitionDate / Rule 144(d)(3) tacking / per-pathway certLegend updates are
@@ -753,10 +752,7 @@ library IssuanceManagerStorage {
         // Registered owner of the seller's Ledger Entry Token, unchanged by hosting mode (the token never moves).
         address seller = cert.legalOwnerOf(tokenId);
 
-        // (a) Consume this lot's unit reservation engaged at posting/acceptance.
-        cert.decreaseUnitsReserved(tokenId, units);
-
-        // (b) Materialize the seller's endorsement on the Ledger Entry Token. The seller signs in blank at
+        // (a) Materialize the seller's endorsement on the Ledger Entry Token. The seller signs in blank at
         // posting/acceptance (spec §7.3.1) and that signature rides in dealMetadata; the endorsement is written
         // here, at finalization, with the now-known buyer as endorsee (spec §7.4A step 1). Recorded while the
         // token is still Assigned, before the void/decrement below. The seller is always the endorser of record
@@ -772,9 +768,9 @@ library IssuanceManagerStorage {
         });
         cert.addEndorsement(tokenId, sellerEndorsement);
 
-        // (c) Mutate the seller's Ledger Entry Token in place: decrement the sold units, then void if the
+        // (b) Mutate the seller's Ledger Entry Token in place: decrement the sold units, then void if the
         // token is fully sold (nothing left). Decrement-first so the struct carries no stale balance at void.
-        CertificateDetails memory sellerDetails = cert.getCertificateDetails(tokenId);
+        CertificateDetails memory sellerDetails = cert.getActiveCertificateDetails(tokenId);
         if (units > sellerDetails.unitsRepresented) revert AmountExceedsAvailableUnits();
         sellerDetails.unitsRepresented -= units;
         cert.updateCertificateDetails(tokenId, sellerDetails);
@@ -782,7 +778,7 @@ library IssuanceManagerStorage {
         if (sellerVoided) {
             cert.voidCert(tokenId);
         }
-        // (d) Deliver the buyer's units. By default we consolidate: if the buyer already holds an active
+        // (c) Deliver the buyer's units. By default we consolidate: if the buyer already holds an active
         // (non-voided) Ledger Entry Token on this printer, fold the purchased units into it rather than
         // fragmenting their position across one cert per fill; mint a fresh token only when they hold none.
         // A printer is scoped to one security class/series, so consolidation never merges across security types
@@ -797,7 +793,7 @@ library IssuanceManagerStorage {
             // (investmentAmountUSD / issuerUSDValuationAtTimeOfInvestment) unchanged: they stay a snapshot of
             // that cert's primary issuance, regardless of how many secondary lots accumulate into it.
             buyerTokenId = existing.activeTokenId;
-            CertificateDetails memory accDetails = cert.getCertificateDetails(buyerTokenId);
+            CertificateDetails memory accDetails = cert.getActiveCertificateDetails(buyerTokenId);
             accDetails.unitsRepresented += units;
             cert.updateCertificateDetails(buyerTokenId, accDetails);
             buyerUnitsAfter = accDetails.unitsRepresented;
@@ -820,7 +816,7 @@ library IssuanceManagerStorage {
             buyerUnitsAfter = units;
         }
 
-        // (e) Mirror the seller's endorsement onto the buyer's token: both tokens carry the identical
+        // (d) Mirror the seller's endorsement onto the buyer's token: both tokens carry the identical
         // chain-of-title record (endorser = seller, endorsee = buyer, this agreement), so reuse the (b) struct.
         cert.addEndorsement(buyerTokenId, sellerEndorsement);
 

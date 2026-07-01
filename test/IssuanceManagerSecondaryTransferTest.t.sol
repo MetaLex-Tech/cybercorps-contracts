@@ -7,6 +7,8 @@ import "../src/IssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import "../src/interfaces/ICyberCertPrinter.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
+import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
+import {ICondition} from "../src/interfaces/ICondition.sol";
 import {ExemptionPathway, HostingMode} from "../src/interfaces/ISecondaryTradeStorage.sol";
 import "../src/libs/auth.sol";
 import "forge-std/Test.sol";
@@ -83,9 +85,8 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         );
         issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, UNITS, "Bob", HostingMode.DIRECT, address(0)));
 
-        // Seller side: token voided, reservation cleared, real endorsement materialized.
+        // Seller side: token voided, real endorsement materialized.
         assertTrue(cert.isVoided(0), "seller cert voided on full sale");
-        assertEq(cert.unitsReserved(0), 0, "reservation consumed");
         _assertSellerEndorsement(cert, 0, "Bob");
 
         // Buyer side: new token minted to the buyer for all units.
@@ -114,10 +115,9 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         );
         issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, soldUnits, "Bob", HostingMode.DIRECT, address(0)));
 
-        // Seller side: not voided, units decremented, reservation reduced by the consumed lot.
+        // Seller side: not voided, units decremented by the sold lot.
         assertFalse(cert.isVoided(0), "seller cert survives a partial sale");
         assertEq(cert.getCertificateDetails(0).unitsRepresented, UNITS - soldUnits, "seller remainder");
-        assertEq(cert.unitsReserved(0), UNITS - soldUnits, "reservation reduced by consumed lot");
         // The seller's cert keeps its primary-issuance basis snapshot; only units decrement.
         assertEq(cert.getCertificateDetails(0).investmentAmountUSD, 1000, "seller cost basis unchanged");
         assertEq(
@@ -137,6 +137,48 @@ contract IssuanceManagerSecondaryTransferTest is Test {
             "buyer valuation blank"
         );
         _assertMirrorEndorsement(cert, expectedBuyerTokenId, "Bob");
+    }
+
+    // A scripified seller token must decrement its RAW (in-cert) units, not the effective balance that folds
+    // scripified units back in. Reading effective and writing it straight back would corrupt the stored raw
+    // count, double-counting the scripified portion on the next read.
+    function test_SecondaryTransfer_ScripifiedSellerToken_DecrementsRawUnits() public {
+        ICyberCertPrinter cert = ICyberCertPrinter(
+            issuanceManager.createCertPrinter(
+                new string[](0), "Cert", "CERT", "uri://cert",
+                SecurityClass.CommonStock, SecuritySeries.SeriesA, address(0)
+            )
+        );
+        CertificateDetails memory details = CertificateDetails({
+            signingOfficerName: "Officer",
+            signingOfficerTitle: "Title",
+            investmentAmountUSD: 1000,
+            issuerUSDValuationAtTimeOfInvestment: 10000,
+            unitsRepresented: 100,
+            legalDetails: "",
+            extensionData: bytes("")
+        });
+        issuanceManager.createCertAndAssign(address(cert), seller, details);
+
+        // Scripify 30 of the 100 units: raw -> 70, scripified 30, effective stays 100.
+        _deployScrip(address(cert));
+        vm.prank(seller);
+        issuanceManager.scripifyCert(address(cert), 0, 30, address(0));
+        assertEq(cert.getActiveCertificateDetails(0).unitsRepresented, 70, "raw after scripify");
+        assertEq(cert.getCertificateDetails(0).unitsRepresented, 100, "effective after scripify");
+
+        // Sell 40 of the raw 70.
+        issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 40, "Bob", HostingMode.DIRECT, address(0)));
+
+        // Seller raw drops by exactly the sold units (70 -> 30); the scripified portion is untouched, so the
+        // effective view is 30 + 30. An effective read-write would have stored 60 raw (effective 90) — corruption.
+        assertEq(cert.getActiveCertificateDetails(0).unitsRepresented, 30, "seller raw should decrement and not include scripified units");
+        assertEq(cert.getCertificateDetails(0).unitsRepresented, 60, "seller effective = raw + scripified");
+        assertFalse(cert.isVoided(0), "partial sale keeps seller token active");
+
+        // Buyer gets a fresh token for the sold units only.
+        assertEq(cert.getActiveCertificateDetails(1).unitsRepresented, 40, "buyer raw units");
+        assertEq(cert.legalOwnerOf(1), buyer, "buyer owns new token");
     }
 
     // Administered hosting (HostingMode.ADMINISTERED) custodies the new token with the admin multisig, but the
@@ -228,8 +270,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// @dev Deploys a printer, mints the seller's Ledger Entry Token (id 0, `units` units), and reserves the
-    /// whole position — the state the DealManager leaves at acceptOffer (no endorsement is written until finalize).
+    /// @dev Deploys a printer and mints the seller's Ledger Entry Token (id 0, `units` units)
     function _deployPrinterWithSellerCert(uint256 units) internal returns (ICyberCertPrinter cert) {
         cert = ICyberCertPrinter(
             issuanceManager.createCertPrinter(
@@ -252,7 +293,23 @@ contract IssuanceManagerSecondaryTransferTest is Test {
             extensionData: bytes("")
         });
         issuanceManager.createCertAndAssign(address(cert), seller, details);
-        issuanceManager.increaseUnitsReserved(address(cert), 0, units);
+    }
+
+    function _deployScrip(address cert) internal {
+        issuanceManager.deployCyberScrip(
+            cert,
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            0, // scripToCertMinimum
+            1, // ratio numerator
+            1, // ratio denominator
+            new uint256[](0),
+            false, // whitelist disabled
+            true,
+            true,
+            true
+        );
     }
 
     function _dealMetadata(
