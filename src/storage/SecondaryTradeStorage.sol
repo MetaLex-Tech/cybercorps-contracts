@@ -552,8 +552,10 @@ library SecondaryTradeStorage {
             emit ISecondaryTradeStorage.SecondaryFeeDistributed(agreementId, secEscrow.paymentToken, feeDestination, fee, integratorFee, platformFee);
         }
 
-        // Execute ownership change: void/decrement seller cert + mint buyer cert;
-        // also consumes this lot's reserved units as part of the cert mutation
+        // Ready to transfer units, release this lot's reservation first
+        DealManagerStorage.getIssuanceManager().decreaseUnitsReserved(offer.certPrinter, secEscrow.tokenId, secEscrow.units);
+
+        // Execute ownership change: void/decrement seller cert + mint buyer cert.
         DealManagerStorage.getIssuanceManager().secondaryTransfer(
             _encodeDealMetadata(
                 offer.certPrinter, secEscrow.tokenId, secEscrow.units, buyer,
