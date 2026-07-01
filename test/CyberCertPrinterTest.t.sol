@@ -636,6 +636,31 @@ contract CyberCertPrinterTest is Test {
         assertEq(stored.extensionData, bytes("updated"));
     }
 
+    // Chokepoint invariant: raw unitsRepresented may never be written below the units locked in pending deals.
+    function test_UpdateCertificateDetails_RevertsWhenBelowReserved() public {
+        _mintCert(1, investor, 100, bytes(""));
+        vm.prank(address(issuanceManager));
+        printer.increaseUnitsReserved(1, 40);
+
+        CertificateDetails memory updated = _details(39, bytes(""));
+        vm.prank(address(issuanceManager));
+        vm.expectRevert(CyberCertPrinter.ExceedsAvailableUnits.selector);
+        printer.updateCertificateDetails(1, updated);
+    }
+
+    // Boundary: lowering exactly to the reserved amount is allowed (guard is strict `<`, not `<=`).
+    function test_UpdateCertificateDetails_AllowsLoweringToReserved() public {
+        _mintCert(1, investor, 100, bytes(""));
+        vm.prank(address(issuanceManager));
+        printer.increaseUnitsReserved(1, 40);
+
+        CertificateDetails memory updated = _details(40, bytes(""));
+        vm.prank(address(issuanceManager));
+        printer.updateCertificateDetails(1, updated);
+
+        assertEq(printer.getActiveCertificateDetails(1).unitsRepresented, 40);
+    }
+
     function test_GetActiveCertificateDetails_ReturnsStoredDetails() public {
         _mintCert(1, investor, 123, bytes("active"));
 
