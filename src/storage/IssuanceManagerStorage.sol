@@ -1087,7 +1087,9 @@ library IssuanceManagerStorage {
         CertificateDetails memory details = certificate
             .getActiveCertificateDetails(id);
 
-        if (amount > details.unitsRepresented) {
+        // Reserved units are committed to pending deals; only free units may be scripified,
+        // otherwise scripify could pull collateral out from under a live reservation.
+        if (amount > details.unitsRepresented - certificate.unitsReserved(id)) {
             revert AmountExceedsAvailableUnits();
         }
 

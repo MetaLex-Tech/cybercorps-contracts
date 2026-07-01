@@ -216,6 +216,10 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     
     // Update agreement details
     function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external onlyIssuanceManager {
+        // Enforce the reserved-units invariant at the single write chokepoint: raw unitsRepresented may never
+        // drop below the units locked in pending deals. Guards against a caller writing back an effective
+        // (scripified-inflated) or otherwise under-counted balance.
+        if (details.unitsRepresented < CyberCertPrinterStorage.getUnitsReserved(tokenId)) revert ExceedsAvailableUnits();
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
     }
 
@@ -256,6 +260,8 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         return super._update(to, tokenId, auth);
     }
     
+    /// @notice `CertificateDetails.unitsRepresented` is re-purposed to `details.unitsRepresented + scripifiedUnits` in this case
+    ///         If you need raw `unitsRepresented`, use `getActiveCertificateDetails()` instead
     // Get full agreement details
     function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory) {
         if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
