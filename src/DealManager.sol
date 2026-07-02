@@ -572,13 +572,23 @@ contract DealManager is
     // Secondary trade — offer lifecycle
     // ─────────────────────────────────────────────────────────────────────────
 
-    // TODO implement *For()
+    /// @notice Posts a secondary-trade offer on behalf of `forAddr` (relayer path). `sig` is `forAddr`'s
+    /// EIP-712 authorization over `params` + `forAddr` + `nonce`. Thin wrapper over the linked logic.
+    function postOffer(PostOfferParams calldata params, address forAddr, uint256 nonce, bytes memory sig) external nonReentrant returns (bytes32 offerId) {
+        return SecondaryTradeStorage.postOffer(params, forAddr, nonce, sig);
+    }
+
     /// @notice Posts a secondary-trade offer. Thin wrapper over the linked SecondaryTradeStorage logic.
     function postOffer(PostOfferParams calldata params) external nonReentrant returns (bytes32 offerId) {
         return SecondaryTradeStorage.postOffer(params);
     }
 
-    // TODO implement *For()
+    /// @notice Cancels a secondary-trade offer on behalf of `forAddr` (relayer path). `sig` is `forAddr`'s
+    /// EIP-712 authorization over `offerId` + `forAddr` + `nonce`. Thin wrapper over the linked logic.
+    function cancelOffer(bytes32 offerId, address forAddr, uint256 nonce, bytes memory sig) external nonReentrant {
+        return SecondaryTradeStorage.cancelOffer(offerId, forAddr, nonce, sig);
+    }
+
     /// @notice Cancels a non-terminal offer and returns its uncommitted assets to the offeror
     /// @dev Only the free pool (uncommitted units / consideration) is refunded/released. Settlements already
     /// accepted stay ACCEPTED and resolve on their own — finalized normally, or voided via the two-party
@@ -588,7 +598,12 @@ contract DealManager is
         SecondaryTradeStorage.cancelOffer(offerId);
     }
 
-    // TODO implement *For()
+    /// @notice Accepts a secondary-trade offer on behalf of `forAddr` (relayer path). `sig` is `forAddr`'s
+    /// EIP-712 authorization over `params` + `forAddr` + `nonce`. Thin wrapper over the linked logic.
+    function acceptOffer(AcceptOfferParams calldata params, address forAddr, uint256 nonce, bytes memory sig) external nonReentrant returns (bytes32 settlementAgreementId) {
+        return SecondaryTradeStorage.acceptOffer(params, forAddr, nonce, sig);
+    }
+
     /// @notice Accepts (fully or partially) a secondary-trade offer. Thin wrapper over the linked logic.
     function acceptOffer(AcceptOfferParams calldata params) external nonReentrant returns (bytes32 settlementAgreementId) {
         return SecondaryTradeStorage.acceptOffer(params);

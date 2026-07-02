@@ -162,6 +162,22 @@ contract SecCounterpartyRestrictionsConditionMock is BaseSecondaryTradingConditi
 // Does not implement ISecondaryTradingCondition (no ERC-165 support): the config setters must reject it.
 contract SecNonConditionMock {}
 
+// Passes when handed any of the selectors it was configured with. Models a real phase-gating condition:
+// each of post/accept has a direct and a relayer overload with distinct selectors, so a condition that gates
+// "the post phase" registers both. Selectors are the library-internal ones conditions actually receive
+// (struct kept by name, not tuple-expanded), e.g. keccak256("postOffer(PostOfferParams)").
+contract SecSelectorAssertingConditionMock is BaseSecondaryTradingCondition {
+    mapping(bytes4 => bool) public accepted;
+
+    constructor(bytes4[] memory selectors) {
+        for (uint256 i = 0; i < selectors.length; i++) accepted[selectors[i]] = true;
+    }
+
+    function checkCondition(IDealManager, bytes4 functionSignature, bytes32, bytes32) external view override returns (bool) {
+        return accepted[functionSignature];
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Test contract
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3287,5 +3303,239 @@ contract DealManagerSecondaryTradeTest is Test {
         emit ISecondaryTradeStorage.OfferCancelled(offerId, seller);
         vm.prank(seller);
         dm.cancelOffer(offerId);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Relayer overloads — EIP-712 authorization on behalf of `forAddr`
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // The two param-type strings must byte-match SecondaryTradeStorage's typehash literals.
+    string constant _POST_PARAMS_TYPE =
+        "PostOfferParams(uint8 side,address certPrinter,uint256 tokenId,uint256 units,address paymentToken,uint256 consideration,uint8 exemptionPathway,uint256 validUntil,bytes counterpartyRestrictions,bytes additionalTerms,address integrator,bytes32 templateId,uint256 salt,string[] globalValues,string[] offerorPartyValues,bytes offerorAgreementSig,bytes openEndorsementSig,string buyerName,uint8 buyerHostingMode,address adminMultisig)";
+    string constant _ACCEPT_PARAMS_TYPE =
+        "AcceptOfferParams(bytes32 offerId,uint256 units,string buyerName,uint8 buyerHostingMode,address adminMultisig,uint256 sellerTokenId,string[] acceptorPartyValues,bytes acceptorAgreementSig,bytes openEndorsementSig)";
+
+    function _dmDomainSep() internal view returns (bytes32) {
+        return keccak256(abi.encode(
+            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+            keccak256(bytes("DealManager")),
+            keccak256(bytes("1")),
+            block.chainid,
+            address(dm)
+        ));
+    }
+
+    function _hashStrs(string[] memory arr) internal pure returns (bytes32) {
+        bytes32[] memory h = new bytes32[](arr.length);
+        for (uint256 i = 0; i < arr.length; i++) h[i] = keccak256(bytes(arr[i]));
+        return keccak256(abi.encodePacked(h));
+    }
+
+    function _hashPostParams(PostOfferParams memory p) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            keccak256(bytes(_POST_PARAMS_TYPE)),
+            uint8(p.side), p.certPrinter, p.tokenId, p.units, p.paymentToken, p.consideration,
+            uint8(p.exemptionPathway), p.validUntil, keccak256(p.counterpartyRestrictions),
+            keccak256(p.additionalTerms), p.integrator, p.templateId, p.salt,
+            _hashStrs(p.globalValues), _hashStrs(p.offerorPartyValues), keccak256(p.offerorAgreementSig),
+            keccak256(p.openEndorsementSig), keccak256(bytes(p.buyerName)), uint8(p.buyerHostingMode), p.adminMultisig
+        ));
+    }
+
+    function _hashAcceptParams(AcceptOfferParams memory p) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            keccak256(bytes(_ACCEPT_PARAMS_TYPE)),
+            p.offerId, p.units, keccak256(bytes(p.buyerName)), uint8(p.buyerHostingMode),
+            p.adminMultisig, p.sellerTokenId, _hashStrs(p.acceptorPartyValues),
+            keccak256(p.acceptorAgreementSig), keccak256(p.openEndorsementSig)
+        ));
+    }
+
+    function _sign(bytes32 structHash, uint256 key) internal view returns (bytes memory) {
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", _dmDomainSep(), structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, digest);
+        return abi.encodePacked(r, s, v);
+    }
+
+    function _postAuthSig(PostOfferParams memory p, address forAddr, uint256 nonce, uint256 key)
+        internal view returns (bytes memory)
+    {
+        bytes32 typeHash = keccak256(bytes(string.concat(
+            "PostOfferAuth(PostOfferParams params,address forAddr,uint256 nonce)", _POST_PARAMS_TYPE)));
+        return _sign(keccak256(abi.encode(typeHash, _hashPostParams(p), forAddr, nonce)), key);
+    }
+
+    function _acceptAuthSig(AcceptOfferParams memory p, address forAddr, uint256 nonce, uint256 key)
+        internal view returns (bytes memory)
+    {
+        bytes32 typeHash = keccak256(bytes(string.concat(
+            "AcceptOfferAuth(AcceptOfferParams params,address forAddr,uint256 nonce)", _ACCEPT_PARAMS_TYPE)));
+        return _sign(keccak256(abi.encode(typeHash, _hashAcceptParams(p), forAddr, nonce)), key);
+    }
+
+    function _cancelAuthSig(bytes32 offerId, address forAddr, uint256 nonce, uint256 key)
+        internal view returns (bytes memory)
+    {
+        bytes32 typeHash = keccak256("CancelOfferAuth(bytes32 offerId,address forAddr,uint256 nonce)");
+        return _sign(keccak256(abi.encode(typeHash, offerId, forAddr, nonce)), key);
+    }
+
+    function _sellAcceptParams(bytes32 offerId) internal view returns (AcceptOfferParams memory) {
+        return AcceptOfferParams({
+            offerId: offerId,
+            units: UNITS,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey),
+            openEndorsementSig: ""
+        });
+    }
+
+    // A relayer posts a SELL offer for the seller: identity + reservation attribute to `forAddr`.
+    function test_PostOffer_Relayer_SellAttributesToForAddr() public {
+        address relayer = makeAddr("relayer");
+        PostOfferParams memory p = _defaultSellOfferParams();
+        bytes memory sig = _postAuthSig(p, seller, 7, sellerKey);
+
+        vm.prank(relayer);
+        bytes32 offerId = dm.postOffer(p, seller, 7, sig);
+
+        assertEq(dm.getOffer(offerId).offeror, seller);
+        assertEq(offerId, keccak256(abi.encode(seller, p.templateId, p.salt)));
+        assertEq(certPrinter.unitsReserved(sellerTokenId), UNITS);
+    }
+
+    // A relayer posts a BUY offer for the buyer: consideration is pulled from `forAddr`, not the relayer
+    // (the relayer holds no tokens/allowance, so success proves the pull came from `forAddr`).
+    function test_PostOffer_Relayer_BuyPullsFromForAddr() public {
+        address relayer = makeAddr("relayer");
+        PostOfferParams memory p = _defaultBuyOfferParams();
+        uint256 buyerBefore = paymentToken.balanceOf(buyer);
+        bytes memory sig = _postAuthSig(p, buyer, 1, buyerKey);
+
+        vm.prank(relayer);
+        bytes32 offerId = dm.postOffer(p, buyer, 1, sig);
+
+        assertEq(dm.getOffer(offerId).offeror, buyer);
+        assertEq(paymentToken.balanceOf(buyer), buyerBefore - CONSIDERATION);
+        assertEq(paymentToken.balanceOf(address(dm)), CONSIDERATION);
+    }
+
+    // A relayer cancels the seller's offer: status flips and the reservation is released.
+    function test_CancelOffer_Relayer() public {
+        bytes32 offerId = _postSellOffer();
+        address relayer = makeAddr("relayer");
+        bytes memory sig = _cancelAuthSig(offerId, seller, 3, sellerKey);
+
+        vm.prank(relayer);
+        dm.cancelOffer(offerId, seller, 3, sig);
+
+        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.CANCELLED));
+        assertEq(certPrinter.unitsReserved(sellerTokenId), 0);
+    }
+
+    // A relayer accepts a SELL offer for the buyer: escrow counterparty is `forAddr` and payment is pulled
+    // from `forAddr`.
+    function test_AcceptOffer_Relayer_AttributesToForAddr() public {
+        bytes32 offerId = _postSellOffer();
+        address relayer = makeAddr("relayer");
+        AcceptOfferParams memory p = _sellAcceptParams(offerId);
+        uint256 buyerBefore = paymentToken.balanceOf(buyer);
+        bytes memory sig = _acceptAuthSig(p, buyer, 9, buyerKey);
+
+        vm.prank(relayer);
+        bytes32 settlementId = dm.acceptOffer(p, buyer, 9, sig);
+
+        assertEq(dm.getSecondaryEscrow(settlementId).counterparty, buyer);
+        assertEq(paymentToken.balanceOf(buyer), buyerBefore - CONSIDERATION);
+    }
+
+    // A signature by the wrong key does not recover to `forAddr`.
+    function test_RevertIf_Relayer_WrongSigner() public {
+        address relayer = makeAddr("relayer");
+        PostOfferParams memory p = _defaultSellOfferParams();
+        bytes memory sig = _postAuthSig(p, seller, 1, buyerKey); // signed by buyer, not seller
+
+        vm.prank(relayer);
+        vm.expectRevert(ISecondaryTradeStorage.InvalidSecondaryAuthSignature.selector);
+        dm.postOffer(p, seller, 1, sig);
+    }
+
+    // Tampering with an authorized field (here `forAddr`) breaks recovery.
+    function test_RevertIf_Relayer_TamperedForAddr() public {
+        address relayer = makeAddr("relayer");
+        PostOfferParams memory p = _defaultSellOfferParams();
+        bytes memory sig = _postAuthSig(p, seller, 1, sellerKey);
+
+        vm.prank(relayer);
+        vm.expectRevert(ISecondaryTradeStorage.InvalidSecondaryAuthSignature.selector);
+        dm.postOffer(p, buyer, 1, sig); // forAddr swapped to buyer; sig was over seller
+    }
+
+    // Reusing a consumed nonce is rejected at the auth layer (before any downstream state check).
+    function test_RevertIf_Relayer_ReplayNonce() public {
+        address relayer = makeAddr("relayer");
+        PostOfferParams memory p = _defaultSellOfferParams();
+        bytes memory sig = _postAuthSig(p, seller, 5, sellerKey);
+
+        vm.prank(relayer);
+        dm.postOffer(p, seller, 5, sig);
+
+        vm.prank(relayer);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryAuthReplayed.selector);
+        dm.postOffer(p, seller, 5, sig);
+    }
+
+    // Unordered nonces: two authorizations with different, out-of-order nonces both succeed.
+    function test_Relayer_UnorderedNonces() public {
+        address relayer = makeAddr("relayer");
+        PostOfferParams memory p1 = _defaultSellOfferParams();
+        p1.salt = uint256(keccak256("relayerUnordered1"));
+        p1.units = 30;
+        PostOfferParams memory p2 = _defaultSellOfferParams();
+        p2.salt = uint256(keccak256("relayerUnordered2"));
+        p2.units = 30;
+        bytes memory sig1 = _postAuthSig(p1, seller, 100, sellerKey);
+        bytes memory sig2 = _postAuthSig(p2, seller, 5, sellerKey);
+
+        vm.prank(relayer);
+        dm.postOffer(p1, seller, 100, sig1);
+        vm.prank(relayer);
+        dm.postOffer(p2, seller, 5, sig2);
+
+        assertEq(certPrinter.unitsReserved(sellerTokenId), 60);
+    }
+
+    // The direct and relayer postOffer overloads present distinct selectors to conditions. A phase-gating
+    // threshold condition registers both, so it is satisfied whether the offer is posted directly or via the
+    // relayer overload — the real-world pattern documented on ISecondaryTradingCondition.
+    function test_ThresholdCondition_HandlesBothPostOfferOverloads() public {
+        bytes4[] memory sels = new bytes4[](2);
+        sels[0] = bytes4(keccak256("postOffer(PostOfferParams)"));                       // direct
+        sels[1] = bytes4(keccak256("postOffer(PostOfferParams,address,uint256,bytes)")); // relayer
+        SecSelectorAssertingConditionMock cond = new SecSelectorAssertingConditionMock(sels);
+        vm.prank(owner);
+        dm.addSpvThresholdCondition(address(cond));
+
+        // direct path
+        PostOfferParams memory pd = _defaultSellOfferParams();
+        pd.salt = uint256(keccak256("bothOverloadsDirect"));
+        pd.units = 30;
+        vm.prank(seller);
+        dm.postOffer(pd);
+
+        // relayer path
+        PostOfferParams memory pr = _defaultSellOfferParams();
+        pr.salt = uint256(keccak256("bothOverloadsRelayer"));
+        pr.units = 30;
+        bytes memory sig = _postAuthSig(pr, seller, 2, sellerKey);
+        vm.prank(makeAddr("relayer"));
+        dm.postOffer(pr, seller, 2, sig);
+
+        // both offers cleared the same phase condition
+        assertEq(certPrinter.unitsReserved(sellerTokenId), 60);
     }
 }

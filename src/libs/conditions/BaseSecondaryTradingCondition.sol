@@ -11,7 +11,11 @@ import "../../interfaces/IDealManager.sol";
 /// IDealManager.getOffer / getSecondaryEscrow with compile-time-checked arguments.
 interface ISecondaryTradingCondition is IERC165 {
     /// @param dealManager       DealManager evaluating the condition; source of offer/escrow state
-    /// @param functionSignature msg.sig of the gated DealManager entrypoint (post/accept/finalize)
+    /// @param functionSignature msg.sig of the gated DealManager entrypoint (post/accept/finalize).
+    ///                          Note since most of DealManager's functions are from external libraries,
+    ///                          msg.sig will reflect external library's instead of DealManager's.
+    ///                          Moreover, the input argument struct's name will be used literally instead of the underlying tuples
+    ///                          for computing an external library's function (ex. bytes4(keccak256("postOffer(PostOfferParams)"))
     /// @param offerId           offer key under evaluation
     /// @param agreementId       settlement agreement id; bytes32(0) at postOffer (no settlement yet)
     function checkCondition(

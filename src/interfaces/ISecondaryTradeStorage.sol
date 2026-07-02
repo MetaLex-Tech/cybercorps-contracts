@@ -218,6 +218,10 @@ interface ISecondaryTradeStorage {
     error OfferAlreadyExists();
     /// @notice Caller is not the signer they claim to be (signer must equal msg.sender)
     error NotSigner();
+    /// @notice A relayer overload's EIP-712 authorization did not recover to `forAddr`
+    error InvalidSecondaryAuthSignature();
+    /// @notice A relayer overload's unordered authorization nonce was already consumed (replay)
+    error SecondaryAuthReplayed();
     error SecondaryEscrowNotFound();
     error SecondaryTradeAgreementAlreadyFinalized();
     error SecondaryTradeAgreementAlreadyVoided();
