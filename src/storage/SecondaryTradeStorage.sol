@@ -43,6 +43,7 @@ pragma solidity 0.8.28;
 
 import "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
+import {ECDSA} from "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/IDealManagerFactory.sol";
@@ -62,8 +63,35 @@ import {ISecondaryTradeStorage, OfferSide, OfferStatus, SecondaryEscrowStatus, E
 /// referenced as ISecondaryTradeStorage.X
 library SecondaryTradeStorage {
     using SafeERC20 for IERC20;
+    using ECDSA for bytes32;
 
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.secondary.trade.storage.v1");
+
+    // ── EIP-712 relayer-authorization constants (see the relayer overloads of post/cancel/acceptOffer) ──
+    // The signed message binds the full structured params (so a wallet renders each named field), the
+    // principal `forAddr`, and an unordered `nonce` that makes each authorization single-use independent
+    // of any downstream state.
+    bytes32 constant EIP712_DOMAIN_TYPEHASH =
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    // Nested-struct EIP-712: the AUTH typehash's encodeType appends the referenced params type (adjacent
+    // string literals concatenate at compile time); the PARAMS typehash (the struct's own type) hashStructs
+    // the params member. The duplicated params-type literals below must stay identical.
+    bytes32 constant POST_OFFER_PARAMS_TYPEHASH = keccak256(
+        "PostOfferParams(uint8 side,address certPrinter,uint256 tokenId,uint256 units,address paymentToken,uint256 consideration,uint8 exemptionPathway,uint256 validUntil,bytes counterpartyRestrictions,bytes additionalTerms,address integrator,bytes32 templateId,uint256 salt,string[] globalValues,string[] offerorPartyValues,bytes offerorAgreementSig,bytes openEndorsementSig,string buyerName,uint8 buyerHostingMode,address adminMultisig)"
+    );
+    bytes32 constant ACCEPT_OFFER_PARAMS_TYPEHASH = keccak256(
+        "AcceptOfferParams(bytes32 offerId,uint256 units,string buyerName,uint8 buyerHostingMode,address adminMultisig,uint256 sellerTokenId,string[] acceptorPartyValues,bytes acceptorAgreementSig,bytes openEndorsementSig)"
+    );
+    bytes32 constant POST_OFFER_AUTH_TYPEHASH = keccak256(
+        "PostOfferAuth(PostOfferParams params,address forAddr,uint256 nonce)"
+        "PostOfferParams(uint8 side,address certPrinter,uint256 tokenId,uint256 units,address paymentToken,uint256 consideration,uint8 exemptionPathway,uint256 validUntil,bytes counterpartyRestrictions,bytes additionalTerms,address integrator,bytes32 templateId,uint256 salt,string[] globalValues,string[] offerorPartyValues,bytes offerorAgreementSig,bytes openEndorsementSig,string buyerName,uint8 buyerHostingMode,address adminMultisig)"
+    );
+    bytes32 constant ACCEPT_OFFER_AUTH_TYPEHASH = keccak256(
+        "AcceptOfferAuth(AcceptOfferParams params,address forAddr,uint256 nonce)"
+        "AcceptOfferParams(bytes32 offerId,uint256 units,string buyerName,uint8 buyerHostingMode,address adminMultisig,uint256 sellerTokenId,string[] acceptorPartyValues,bytes acceptorAgreementSig,bytes openEndorsementSig)"
+    );
+    bytes32 constant CANCEL_OFFER_AUTH_TYPEHASH =
+        keccak256("CancelOfferAuth(bytes32 offerId,address forAddr,uint256 nonce)");
 
     // This library's events/errors are declared once in ISecondaryTradeStorage and referenced as
     // ISecondaryTradeStorage.X below.
@@ -80,6 +108,8 @@ library SecondaryTradeStorage {
         address[] spvThresholdConditions;                        // Layer 2 — fund-specific (§6); added at SPV onboarding; applies to every offer
         mapping(ExemptionPathway => address[]) pathwayThresholdConditions; // Layer 1 — exemption-specific (§5); selected by offer.exemptionPathway
         address[] closingConditions;                             // default closing set
+        // Consumed relayer-authorization nonces: usedAuthNonce[forAddr][nonce], order-independent single-use.
+        mapping(address => mapping(uint256 => bool)) usedAuthNonce;
     }
 
     function secondaryTradeStorage() internal pure returns (SecondaryTradeData storage ds) {
@@ -97,8 +127,20 @@ library SecondaryTradeStorage {
     // Secondary trade — offer lifecycle (linked logic; called via delegatecall)
     // ─────────────────────────────────────────────────────────────────────────
 
-    // TODO implement *For()
+    /// @notice Relayer variant of postOffer: a relayer submits on behalf of `forAddr`, who authorizes the
+    /// call with an EIP-712 signature over `params` + `forAddr` + `nonce`. Offer identity, custody and
+    /// reservations are all attributed to `forAddr`.
+    function postOffer(PostOfferParams calldata params, address forAddr, uint256 nonce, bytes memory sig) external returns (bytes32 offerId) {
+        bytes32 structHash = keccak256(abi.encode(POST_OFFER_AUTH_TYPEHASH, _hashPostOfferParams(params), forAddr, nonce));
+        _verifyForAuth(structHash, forAddr, nonce, sig);
+        return _postOffer(params, forAddr);
+    }
+
     function postOffer(PostOfferParams calldata params) external returns (bytes32 offerId) {
+        return _postOffer(params, msg.sender);
+    }
+
+    function _postOffer(PostOfferParams calldata params, address offeror) internal returns (bytes32 offerId) {
         SecondaryTradeData storage ds = secondaryTradeStorage();
 
         // validate parameters
@@ -121,7 +163,7 @@ library SecondaryTradeStorage {
         _checkMinTradeThreshold(params.units, params.consideration);
 
         // Generate offer ID deterministically — DealManager-internal key, not a registry record
-        offerId = keccak256(abi.encode(msg.sender, params.templateId, params.salt));
+        offerId = keccak256(abi.encode(offeror, params.templateId, params.salt));
         if (ds.offers[offerId].offeror != address(0)) revert ISecondaryTradeStorage.OfferAlreadyExists();
 
         // Resolve conditions from this DealManager's config (never from the caller): threshold = fund-specific
@@ -134,7 +176,7 @@ library SecondaryTradeStorage {
         // getOffer(offerId) see the populated record; a condition revert rolls this write back.
         ds.offers[offerId] = Offer({
             spvAddress: LexScrowStorage.getCorp(),
-            offeror: msg.sender,
+            offeror: offeror,
             side: params.side,
             certPrinter: params.certPrinter,
             tokenId: params.tokenId,
@@ -179,14 +221,14 @@ library SecondaryTradeStorage {
             DealManagerStorage.getIssuanceManager().increaseUnitsReserved(params.certPrinter, params.tokenId, params.units);
         } else {
             // BUY: pull consideration directly into contract custody
-            IERC20(params.paymentToken).safeTransferFrom(msg.sender, address(this), params.consideration);
+            IERC20(params.paymentToken).safeTransferFrom(offeror, address(this), params.consideration);
         }
 
         // Emit the full offer record (read back from storage so buy-side fields carry their normalized values)
         // so an off-chain indexer can rebuild the offer status from this single log.
         Offer storage posted = ds.offers[offerId];
         emit ISecondaryTradeStorage.OfferPosted(
-            offerId, msg.sender, params.certPrinter, posted.spvAddress, params.side,
+            offerId, offeror, params.certPrinter, posted.spvAddress, params.side,
             params.tokenId, params.units, params.paymentToken, params.consideration,
             params.exemptionPathway, params.validUntil, integrator,
             posted.templateId, posted.buyerName, posted.buyerHostingMode, posted.adminMultisig,
@@ -194,15 +236,26 @@ library SecondaryTradeStorage {
         );
     }
 
-    // TODO implement *For()
+    /// @notice Relayer variant of cancelOffer: a relayer cancels on behalf of `forAddr`, who authorizes the
+    /// call with an EIP-712 signature over `offerId` + `forAddr` + `nonce`.
+    function cancelOffer(bytes32 offerId, address forAddr, uint256 nonce, bytes memory sig) external {
+        bytes32 structHash = keccak256(abi.encode(CANCEL_OFFER_AUTH_TYPEHASH, offerId, forAddr, nonce));
+        _verifyForAuth(structHash, forAddr, nonce, sig);
+        _cancelOffer(offerId, forAddr);
+    }
+
     /// @notice Cancels a non-terminal offer and returns its uncommitted assets to the offeror
     /// @dev Only the free pool (uncommitted units / consideration) is refunded/released. Settlements already
     /// accepted stay ACCEPTED and resolve on their own — finalized normally, or voided via the two-party
     /// voidSecondaryTradeAgreement / expiry path; their assets stay in DealManager custody until then.
     /// @param offerId Offer to cancel
-    function cancelOffer(bytes32 offerId) external {
+    function cancelOffer(bytes32 offerId) public {
+        _cancelOffer(offerId, msg.sender);
+    }
+
+    function _cancelOffer(bytes32 offerId, address canceller) internal {
         Offer storage offer = secondaryTradeStorage().offers[offerId];
-        if (offer.offeror != msg.sender) revert ISecondaryTradeStorage.NotOfferor();
+        if (offer.offeror != canceller) revert ISecondaryTradeStorage.NotOfferor();
         if (_isOfferTerminal(offer.status)) revert ISecondaryTradeStorage.OfferNotAvailable();
 
         offer.status = OfferStatus.CANCELLED;
@@ -224,11 +277,24 @@ library SecondaryTradeStorage {
             }
         }
 
-        emit ISecondaryTradeStorage.OfferCancelled(offerId, msg.sender);
+        emit ISecondaryTradeStorage.OfferCancelled(offerId, canceller);
     }
 
-    // TODO implement *For()
-    function acceptOffer(AcceptOfferParams calldata params) external returns (bytes32 settlementAgreementId) {
+    /// @notice Relayer variant of acceptOffer: a relayer accepts on behalf of `forAddr`, who authorizes the
+    /// call with an EIP-712 signature over `params` + `forAddr` + `nonce`. The acceptor identity, custody
+    /// and reservations are all attributed to `forAddr` (whose params.acceptorAgreementSig the registry
+    /// still verifies).
+    function acceptOffer(AcceptOfferParams calldata params, address forAddr, uint256 nonce, bytes memory sig) external returns (bytes32 settlementAgreementId) {
+        bytes32 structHash = keccak256(abi.encode(ACCEPT_OFFER_AUTH_TYPEHASH, _hashAcceptOfferParams(params), forAddr, nonce));
+        _verifyForAuth(structHash, forAddr, nonce, sig);
+        return _acceptOffer(params, forAddr);
+    }
+
+    function acceptOffer(AcceptOfferParams calldata params) public returns (bytes32 settlementAgreementId) {
+        return _acceptOffer(params, msg.sender);
+    }
+
+    function _acceptOffer(AcceptOfferParams calldata params, address acceptor) internal returns (bytes32 settlementAgreementId) {
         Offer storage offer = secondaryTradeStorage().offers[params.offerId];
 
         if (offer.status != OfferStatus.LIVE && offer.status != OfferStatus.PARTIALLY_ACCEPTED) revert ISecondaryTradeStorage.OfferNotAvailable();
@@ -267,7 +333,7 @@ library SecondaryTradeStorage {
         bytes32 settlementSalt = keccak256(abi.encodePacked(offer.salt, offer.settlementAgreementIds.length));
         address[] memory settlementParties = new address[](2);
         settlementParties[0] = offer.offeror;
-        settlementParties[1] = msg.sender;
+        settlementParties[1] = acceptor;
         string[][] memory settlementPartyValues = new string[][](2);
         settlementPartyValues[0] = offer.offerorPartyValues;
         settlementPartyValues[1] = params.acceptorPartyValues;
@@ -290,7 +356,7 @@ library SecondaryTradeStorage {
         );
         // Acceptor: proper EIP-712 sig verified by the registry.
         ICyberAgreementRegistry(registry).signContractFor(
-            msg.sender, settlementAgreementId, params.acceptorPartyValues,
+            acceptor, settlementAgreementId, params.acceptorPartyValues,
             params.acceptorAgreementSig, false, ""
         );
 
@@ -305,7 +371,7 @@ library SecondaryTradeStorage {
         if (offer.side == OfferSide.SELL) {
             certPrinter = offer.certPrinter;
             tokenId = offer.tokenId;
-            buyer = msg.sender;
+            buyer = acceptor;
             endorsementSig = offer.openEndorsementSig;
         } else {
             certPrinter = offer.certPrinter;
@@ -338,7 +404,7 @@ library SecondaryTradeStorage {
             IERC20(offer.paymentToken).safeTransferFrom(buyer, address(this), partialConsideration);
         }
         secondaryTradeStorage().escrows[settlementAgreementId] = SecondaryEscrow({
-            counterparty: msg.sender,
+            counterparty: acceptor,
             paymentToken: offer.paymentToken,
             paymentAmount: partialConsideration,
             units: params.units,
@@ -373,7 +439,7 @@ library SecondaryTradeStorage {
 
         // Acceptance funds the escrow atomically, so this event carries the settlement's payment too.
         emit ISecondaryTradeStorage.OfferAccepted(
-            params.offerId, settlementAgreementId, msg.sender, params.units, offer.paymentToken, partialConsideration,
+            params.offerId, settlementAgreementId, acceptor, params.units, offer.paymentToken, partialConsideration,
             tokenId, offer.validUntil,
             buyerName, buyerHostingMode, adminMultisig, endorsementSig
         );
@@ -540,13 +606,101 @@ library SecondaryTradeStorage {
     /// `bytes32(0)` at posting (no settlement yet) and the settlement id at acceptance and at finalization,
     /// so a buyer-facing condition reads its acceptor directly instead of reaching into settlementAgreementIds.
     /// Re-run at finalization so eligibility lost between acceptance and settlement blocks the asset transfer.
-    function _checkThresholdConditions(bytes32 offerId, bytes32 agreementId) internal {
+    /// The selector handed to conditions is `msg.sig` — the gated entrypoint's own selector, so the relayer
+    /// overloads present their own selector (not the direct-call one); see ISecondaryTradingCondition.
+    function _checkThresholdConditions(bytes32 offerId, bytes32 agreementId) internal view {
         address[] storage conditions = secondaryTradeStorage().offers[offerId].thresholdConditions;
         for (uint256 i = 0; i < conditions.length; i++) {
             // note: always double check if `Offer` is properly updated because `checkCondition()` depends on it
             if (!ISecondaryTradingCondition(conditions[i]).checkCondition(IDealManager(address(this)), msg.sig, offerId, agreementId))
                 revert ISecondaryTradeStorage.SecondaryConditionsNotMet(conditions[i]);
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Relayer-authorization internals (EIP-712 + unordered nonce)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @dev EIP-712 domain separator, bound to this DealManager. Under delegatecall `address(this)` is the
+    /// DealManager proxy, so it is the correct verifyingContract; computed per-call (not cached) since the
+    /// linked library holds no immutables.
+    function _domainSeparator() internal view returns (bytes32) {
+        return keccak256(abi.encode(
+            EIP712_DOMAIN_TYPEHASH,
+            keccak256(bytes("DealManager")),
+            keccak256(bytes("1")),
+            block.chainid,
+            address(this)
+        ));
+    }
+
+    /// @dev EIP-712 hashStruct of PostOfferParams (dynamic members pre-hashed, enums as uint8).
+    function _hashPostOfferParams(PostOfferParams calldata p) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            POST_OFFER_PARAMS_TYPEHASH,
+            uint8(p.side),
+            p.certPrinter,
+            p.tokenId,
+            p.units,
+            p.paymentToken,
+            p.consideration,
+            uint8(p.exemptionPathway),
+            p.validUntil,
+            keccak256(p.counterpartyRestrictions),
+            keccak256(p.additionalTerms),
+            p.integrator,
+            p.templateId,
+            p.salt,
+            _hashStringArray(p.globalValues),
+            _hashStringArray(p.offerorPartyValues),
+            keccak256(p.offerorAgreementSig),
+            keccak256(p.openEndorsementSig),
+            keccak256(bytes(p.buyerName)),
+            uint8(p.buyerHostingMode),
+            p.adminMultisig
+        ));
+    }
+
+    /// @dev EIP-712 hashStruct of AcceptOfferParams (dynamic members pre-hashed, enums as uint8).
+    function _hashAcceptOfferParams(AcceptOfferParams calldata p) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            ACCEPT_OFFER_PARAMS_TYPEHASH,
+            p.offerId,
+            p.units,
+            keccak256(bytes(p.buyerName)),
+            uint8(p.buyerHostingMode),
+            p.adminMultisig,
+            p.sellerTokenId,
+            _hashStringArray(p.acceptorPartyValues),
+            keccak256(p.acceptorAgreementSig),
+            keccak256(p.openEndorsementSig)
+        ));
+    }
+
+    /// @dev EIP-712 array encoding: keccak256 over the concatenated per-element hashes.
+    function _hashStringArray(string[] calldata arr) internal pure returns (bytes32) {
+        bytes32[] memory hashes = new bytes32[](arr.length);
+        for (uint256 i = 0; i < arr.length; i++) {
+            hashes[i] = keccak256(bytes(arr[i]));
+        }
+        return keccak256(abi.encodePacked(hashes));
+    }
+
+    /// @dev Consumes an unordered nonce: reverts if already used, else marks it used. Order-independent,
+    /// single-use per (forAddr, nonce).
+    function _useUnorderedNonce(address from, uint256 nonce) internal {
+        SecondaryTradeData storage ds = secondaryTradeStorage();
+        if (ds.usedAuthNonce[from][nonce]) revert ISecondaryTradeStorage.SecondaryAuthReplayed();
+        ds.usedAuthNonce[from][nonce] = true;
+    }
+
+    /// @dev Verifies a relayer overload's EIP-712 authorization: `sig` must recover to `forAddr` over the
+    /// domain-separated `structHash`, then the nonce is consumed. Consumption only sticks if the whole call
+    /// succeeds (a later revert rolls the write back), so failed calls do not burn the authorization.
+    function _verifyForAuth(bytes32 structHash, address forAddr, uint256 nonce, bytes memory sig) internal {
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", _domainSeparator(), structHash));
+        if (digest.recover(sig) != forAddr) revert ISecondaryTradeStorage.InvalidSecondaryAuthSignature();
+        _useUnorderedNonce(forAddr, nonce);
     }
 
     /// @dev Builds an offer's threshold set from this DealManager's config per v3.53 §7.2: the fund-specific
