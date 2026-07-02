@@ -42,7 +42,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "./IIssuanceManager.sol";
-import "../storage/SecondaryTradeStorage.sol";
+import "./ISecondaryTradeStorage.sol";
 
 interface IDealManager {
     function proposeDeal(
