@@ -52,6 +52,7 @@ import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CertificateDetails, Endorsement, ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
+import {BaseSecondaryTradingCondition} from "../src/libs/conditions/BaseSecondaryTradingCondition.sol";
 import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import {ISecondaryTradeStorage} from "../src/interfaces/ISecondaryTradeStorage.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
@@ -87,14 +88,14 @@ contract SecERC20Mock is ERC20 {
     }
 }
 
-contract SecConditionMock {
+contract SecConditionMock is BaseSecondaryTradingCondition {
     bool private _pass;
 
     constructor(bool pass_) {
         _pass = pass_;
     }
 
-    function checkCondition(address, bytes4, bytes memory) external view returns (bool) {
+    function checkCondition(IDealManager, bytes4, bytes32, bytes32) external view override returns (bool) {
         return _pass;
     }
 }
@@ -102,7 +103,7 @@ contract SecConditionMock {
 // Stateful threshold-condition mock: returns `pass`, which the test flips between acceptance and
 // finalization. Used to prove the threshold set is re-checked at finalize — it passes through
 // posting/acceptance, is then flipped to fail, and must block the asset transfer.
-contract SecFlippableConditionMock {
+contract SecFlippableConditionMock is BaseSecondaryTradingCondition {
     bool public pass;
 
     constructor(bool pass_) {
@@ -113,7 +114,7 @@ contract SecFlippableConditionMock {
         pass = v;
     }
 
-    function checkCondition(address, bytes4, bytes memory) external view returns (bool) {
+    function checkCondition(IDealManager, bytes4, bytes32, bytes32) external view override returns (bool) {
         return pass;
     }
 }
@@ -121,10 +122,9 @@ contract SecFlippableConditionMock {
 // Mirrors a real seller-side threshold condition: Returns false if the
 // offer is unreadable — which is what the pre-fix ordering produced, since the condition loop ran
 // before the offer was stored.
-contract SecOfferReadingConditionMock {
-    function checkCondition(address _contract, bytes4, bytes memory data) external view returns (bool) {
-        (bytes32 offerId,) = abi.decode(data, (bytes32, bytes32));
-        Offer memory o = IDealManager(_contract).getOffer(offerId);
+contract SecOfferReadingConditionMock is BaseSecondaryTradingCondition {
+    function checkCondition(IDealManager dealManager, bytes4, bytes32 offerId, bytes32) external view override returns (bool) {
+        Offer memory o = dealManager.getOffer(offerId);
         return o.offeror != address(0) && o.certPrinter != address(0);
     }
 }
@@ -132,34 +132,35 @@ contract SecOfferReadingConditionMock {
 // Mirrors a real buyer-facing threshold condition (KYC/accreditation/holder-cap): it short-circuits
 // to `true` at posting when there is no settlement yet (agreementId == 0), and enforces once an acceptor
 // exists. Used to prove acceptOffer re-evaluates threshold conditions (post-fix); pre-fix it never ran here.
-contract SecBuyerFacingConditionMock {
+contract SecBuyerFacingConditionMock is BaseSecondaryTradingCondition {
     bool private _acceptorAllowed;
 
     constructor(bool acceptorAllowed_) {
         _acceptorAllowed = acceptorAllowed_;
     }
 
-    function checkCondition(address, bytes4, bytes memory data) external view returns (bool) {
-        (, bytes32 agreementId) = abi.decode(data, (bytes32, bytes32));
+    function checkCondition(IDealManager, bytes4, bytes32, bytes32 agreementId) external view override returns (bool) {
         if (agreementId == bytes32(0)) return true; // posting context: no buyer yet
         return _acceptorAllowed; // acceptance context: enforce
     }
 }
 
-contract SecCounterpartyRestrictionsConditionMock {
+contract SecCounterpartyRestrictionsConditionMock is BaseSecondaryTradingCondition {
     bytes private _expected;
 
     constructor(bytes memory expected_) {
         _expected = expected_;
     }
 
-    function checkCondition(address _contract, bytes4, bytes memory data) external view returns (bool) {
-        (bytes32 offerId, bytes32 agreementId) = abi.decode(data, (bytes32, bytes32));
+    function checkCondition(IDealManager dealManager, bytes4, bytes32 offerId, bytes32 agreementId) external view override returns (bool) {
         if (agreementId == bytes32(0)) return true; // short-circuit to pass if no acceptor yet
-        Offer memory o = IDealManager(_contract).getOffer(offerId);
+        Offer memory o = dealManager.getOffer(offerId);
         return keccak256(o.counterpartyRestrictions) == keccak256(_expected); // acceptance: enforce the blob
     }
 }
+
+// Does not implement ISecondaryTradingCondition (no ERC-165 support): the config setters must reject it.
+contract SecNonConditionMock {}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Test contract
@@ -1039,6 +1040,29 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(owner);
         vm.expectRevert(ISecondaryTradeStorage.InvalidSecondaryCondition.selector);
         dm.addClosingCondition(address(0));
+    }
+
+    // Interface rejection — a condition that doesn't advertise ISecondaryTradingCondition via ERC-165 is
+    // rejected at config time (shared _addCondition guard), per threshold layer and the closing set.
+    function test_RevertIf_Config_AddSpvUnsupportedInterfaceCondition() public {
+        address c = address(new SecNonConditionMock());
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionInterfaceUnsupported.selector, c));
+        dm.addSpvThresholdCondition(c);
+    }
+
+    function test_RevertIf_Config_AddPathwayUnsupportedInterfaceCondition() public {
+        address c = address(new SecNonConditionMock());
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionInterfaceUnsupported.selector, c));
+        dm.addPathwayThresholdCondition(ExemptionPathway.RULE_144, c);
+    }
+
+    function test_RevertIf_Config_AddClosingUnsupportedInterfaceCondition() public {
+        address c = address(new SecNonConditionMock());
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionInterfaceUnsupported.selector, c));
+        dm.addClosingCondition(c);
     }
 
     // Duplicate rejection — per threshold layer (fund-specific / exemption-specific).

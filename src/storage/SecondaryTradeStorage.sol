@@ -46,98 +46,13 @@ import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/IDealManagerFactory.sol";
-import "../interfaces/ICondition.sol";
+import "../interfaces/IDealManager.sol";
+import "openzeppelin-contracts/utils/introspection/ERC165Checker.sol";
 import "./DealManagerStorage.sol";
 import "./DealManagerFactoryStorage.sol";
 import {LexScrowStorage} from "./LexScrowStorage.sol";
-import {ISecondaryTradeStorage, OfferSide, OfferStatus, SecondaryEscrowStatus, ExemptionPathway, HostingMode} from "../interfaces/ISecondaryTradeStorage.sol";
-
-struct Offer {
-    address spvAddress;             // cyberCORP address this offer belongs to
-    address offeror;
-    OfferSide side;
-    address certPrinter;            // both sides: required; identifies the security class/series
-    uint256 tokenId;                // sell offer-only: seller's Ledger Entry Token id; zero for buy offers
-    uint256 units;                  // total units offered: immutable once offer is created
-    address paymentToken;
-    uint256 consideration;          // total payment for all offered units
-    ExemptionPathway exemptionPathway;
-    uint256 validUntil;
-    bytes counterpartyRestrictions; // spec §8.1 Counterparty restrictions
-    bytes additionalTerms;          // spec §8.1 Supplemental fields
-    address integrator;
-    OfferStatus status;
-    uint256 unitsAccepted;          // units committed to active and finalized settlements; decrements on void only
-    uint256 paymentAccepted;        // consideration committed to active and finalized settlements; decrements on void only
-    uint256 unitsFinalized;         // units consumed by finalized settlements; monotonic (finalized lots never void), but may lag behind `unitsAccepted`
-    bytes32 offerId;                // DealManager-generated offer key; NOT a CyberAgreementRegistry record
-    bytes32 templateId;             // agreement template id; stored for use at acceptOffer
-    uint256 salt;                   // offeror-supplied salt; used to derive unique settlementSalt per acceptance
-    string[] globalValues;          // agreement global values; stored for use at acceptOffer
-    string[] offerorPartyValues;    // offeror's party values; stored for use at acceptOffer
-    bytes offerorAgreementSig;      // offeror's EIP-712 sig over offerAgreementId+terms; verified at postOffer, passed to signContractWithEscrow at acceptOffer
-    bytes openEndorsementSig;       // sell offer-only: seller's pre-signed open endorsement (spec §7.3.1); in contrast, buy offer's open endorsement is acquired at acceptance and stored in SecondaryEscrow
-    string buyerName;               // buy offer-only: buyer's registered name for OwnerDetails; empty for sell offers
-    HostingMode buyerHostingMode;   // buy offer-only: Direct or Administered; defaults to Direct for sell offers
-    address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
-    bytes32[] settlementAgreementIds; // appended at each acceptOffer; length == 0 at postOffer (no buyer known yet)
-    address[] thresholdConditions;    // resolved from DealManager config at postOffer; re-evaluated at acceptOffer and at finalize
-    address[] closingConditions;      // snapshotted from DealManager config at postOffer; evaluated at finalize (gates asset transfer)
-}
-
-// Per-settlement escrow for secondary trades, keyed by settlementAgreementId.
-struct SecondaryEscrow {
-    // custody + lifecycle
-    address counterparty;           // acceptor (msg.sender of acceptOffer); buyer/seller derived from offer.side
-    address paymentToken;           // ERC20 payment token
-    uint256 paymentAmount;          // consideration for this settlement lot
-    uint256 units;                  // units in this settlement lot
-    uint256 expiry;                 // settlement deadline
-    SecondaryEscrowStatus status;   // ACCEPTED | FINALIZED | VOIDED
-    // secondary-specific routing
-    address feeDestination;         // integrator address for fee split; zero = all fees to MetaLeX
-    bytes32 offerId;                // back-link to Offer
-    uint256 tokenId;                // seller's Ledger Entry Token id; reservation target for decreaseUnitsReserved on void
-    string buyerName;               // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
-    HostingMode buyerHostingMode;   // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
-    address adminMultisig;          // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
-    bytes openEndorsementSig;       // redundant for sell offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
-}
-
-struct PostOfferParams {
-    OfferSide side;
-    address certPrinter;            // sell offers: seller's cert printer; buy offers: required security class/series filter
-    uint256 tokenId;                // sell offer-only: seller's Ledger Entry Token id; zero for buy offers
-    uint256 units;
-    address paymentToken;
-    uint256 consideration;
-    ExemptionPathway exemptionPathway;
-    uint256 validUntil;
-    bytes counterpartyRestrictions;
-    bytes additionalTerms;
-    address integrator;             // zero = use DealManager defaultIntegrator
-    bytes32 templateId;
-    uint256 salt;
-    string[] globalValues;
-    string[] offerorPartyValues;
-    bytes offerorAgreementSig;
-    bytes openEndorsementSig;       // sell offer-only
-    string buyerName;               // buy offer-only: buyer's registered name for OwnerDetails; empty for sell offers
-    HostingMode buyerHostingMode;   // buy offer-only: Direct or Administered; defaults to Direct for sell offers
-    address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
-}
-
-struct AcceptOfferParams {
-    bytes32 offerId;
-    uint256 units;
-    string buyerName;               // sell offer-only: ignored for buy offer acceptances (read from Offer instead)
-    HostingMode buyerHostingMode;   // sell offer-only: Direct or Administered; ignored for buy offer acceptances
-    address adminMultisig;          // sell offer-only: delivery address for Administered hosting; ignored for buy offer acceptances
-    uint256 sellerTokenId;          // buy offer-only: seller's token id for buy-offer acceptances; use offer.tokenId for sell offers
-    string[] acceptorPartyValues;
-    bytes acceptorAgreementSig;
-    bytes openEndorsementSig;       // buy offer-only: for buy-offer acceptances
-}
+import {ISecondaryTradingCondition} from "../libs/conditions/BaseSecondaryTradingCondition.sol";
+import {ISecondaryTradeStorage, OfferSide, OfferStatus, SecondaryEscrowStatus, ExemptionPathway, HostingMode, Offer, SecondaryEscrow, PostOfferParams, AcceptOfferParams} from "../interfaces/ISecondaryTradeStorage.sol";
 
 /// @title SecondaryTradeStorage
 /// @notice Diamond storage + secondary-trade business logic for DealManager.
@@ -507,11 +422,9 @@ library SecondaryTradeStorage {
         _checkThresholdConditions(secEscrow.offerId, agreementId);
 
         address[] storage conditions = offer.closingConditions;
-        // Same uniform secondary-trade payload as threshold conditions; at finalize both ids are known.
-        bytes memory conditionData = abi.encode(secEscrow.offerId, agreementId);
         for (uint256 i = 0; i < conditions.length; i++) {
             // note: always double check if `Offer` is properly updated because `checkCondition()` depends on it
-            if (!ICondition(conditions[i]).checkCondition(address(this), msg.sig, conditionData))
+            if (!ISecondaryTradingCondition(conditions[i]).checkCondition(IDealManager(address(this)), msg.sig, secEscrow.offerId, agreementId))
                 revert ISecondaryTradeStorage.SecondaryConditionsNotMet(conditions[i]);
         }
 
@@ -629,11 +542,9 @@ library SecondaryTradeStorage {
     /// Re-run at finalization so eligibility lost between acceptance and settlement blocks the asset transfer.
     function _checkThresholdConditions(bytes32 offerId, bytes32 agreementId) internal {
         address[] storage conditions = secondaryTradeStorage().offers[offerId].thresholdConditions;
-        bytes memory conditionData = abi.encode(offerId, agreementId);
         for (uint256 i = 0; i < conditions.length; i++) {
             // note: always double check if `Offer` is properly updated because `checkCondition()` depends on it
-            // TODO review needed: consider a dedicated function (ex. checkSecondaryTradeCondition()) so we could type-check the arguments
-            if (!ICondition(conditions[i]).checkCondition(address(this), msg.sig, conditionData))
+            if (!ISecondaryTradingCondition(conditions[i]).checkCondition(IDealManager(address(this)), msg.sig, offerId, agreementId))
                 revert ISecondaryTradeStorage.SecondaryConditionsNotMet(conditions[i]);
         }
     }
@@ -686,6 +597,12 @@ library SecondaryTradeStorage {
     /// list behaves as a set. Lists are small (admin-curated), so the linear dedupe scan is cheap.
     function _addCondition(address[] storage list, address condition) internal {
         if (condition == address(0)) revert ISecondaryTradeStorage.InvalidSecondaryCondition();
+        // Only strongly-typed secondary-trading conditions may be wired in: reject anything that doesn't
+        // advertise ISecondaryTradingCondition via ERC-165 at config time, so a mismatched checkCondition
+        // signature can never reach post/accept/finalize. ERC165Checker returns false (no revert) for
+        // non-ERC165 targets.
+        if (!ERC165Checker.supportsInterface(condition, type(ISecondaryTradingCondition).interfaceId))
+            revert ISecondaryTradeStorage.SecondaryConditionInterfaceUnsupported(condition);
         for (uint256 i = 0; i < list.length; i++) {
             if (list[i] == condition) revert ISecondaryTradeStorage.SecondaryConditionAlreadyExists();
         }
