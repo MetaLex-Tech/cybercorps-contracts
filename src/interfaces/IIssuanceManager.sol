@@ -405,6 +405,7 @@ interface IIssuanceManager {
     function cyberCertPrinterBeacon() external view returns (UpgradeableBeacon);
     function cyberScripBeacon() external view returns (UpgradeableBeacon);
     function printers(uint256 index) external view returns (address);
+    function isPrinter(address printer) external view returns (bool);
     function setUriBuilder(address _uriBuilder) external;
 
     /// @notice Single-source signal for the buyer's newly minted Ledger Entry Token at secondary settlement.

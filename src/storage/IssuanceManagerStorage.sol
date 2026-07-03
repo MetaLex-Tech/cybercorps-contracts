@@ -234,6 +234,16 @@ library IssuanceManagerStorage {
         return issuanceManagerStorage().printers;
     }
 
+    /// @dev Linear membership scan over the printer registry. The list is admin-curated and small, and it is
+    /// the only authoritative source of printers created by this IssuanceManager (mirrors removePrinter).
+    function isPrinter(address printer) internal view returns (bool) {
+        address[] storage printers = issuanceManagerStorage().printers;
+        for (uint256 i = 0; i < printers.length; i++) {
+            if (printers[i] == printer) return true;
+        }
+        return false;
+    }
+
     // Setters
     function setCORP(address _corp) internal {
         issuanceManagerStorage().CORP = _corp;

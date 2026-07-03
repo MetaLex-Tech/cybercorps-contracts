@@ -148,6 +148,8 @@ library SecondaryTradeStorage {
 
         // validate parameters
         if (params.certPrinter == address(0)) revert ISecondaryTradeStorage.MissingCertPrinter();
+        if (!DealManagerStorage.getIssuanceManager().isPrinter(params.certPrinter))
+            revert ISecondaryTradeStorage.UnknownCertPrinter();
 
         // Validate integrator
         address integrator = params.integrator != address(0)
