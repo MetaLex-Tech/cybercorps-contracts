@@ -92,6 +92,8 @@ library SecondaryTradeStorage {
     );
     bytes32 constant CANCEL_OFFER_AUTH_TYPEHASH =
         keccak256("CancelOfferAuth(bytes32 offerId,address forAddr,uint256 nonce)");
+    bytes32 constant VOID_SECONDARY_AUTH_TYPEHASH =
+        keccak256("VoidSecondaryTradeAuth(bytes32 agreementId,address signer,bytes32 signatureHash,uint256 nonce)");
 
     // This library's events/errors are declared once in ISecondaryTradeStorage and referenced as
     // ISecondaryTradeStorage.X below.
@@ -565,10 +567,23 @@ library SecondaryTradeStorage {
     /// @param signature Caller's EIP-712 void signature, forwarded to the agreement registry
     function voidSecondaryTradeAgreement(bytes32 agreementId, address signer, bytes memory signature) external {
         if (msg.sender != signer) revert ISecondaryTradeStorage.NotSigner();
+        _requestVoidSecondaryTradeAgreement(agreementId, signer, signature, msg.sender);
+    }
+
+    /// @notice Relayer variant: a relayer submits `signer`'s void request on their behalf. `signer` authorizes
+    /// with an EIP-712 signature over `agreementId` + `signer` + keccak256(void signature) + `nonce`; the void
+    /// `signature` itself is still verified against `signer` downstream by the registry.
+    function voidSecondaryTradeAgreement(bytes32 agreementId, address signer, bytes memory signature, uint256 nonce, bytes memory authSig) external {
+        bytes32 structHash = keccak256(abi.encode(VOID_SECONDARY_AUTH_TYPEHASH, agreementId, signer, keccak256(signature), nonce));
+        _verifyForAuth(structHash, signer, nonce, authSig);
+        _requestVoidSecondaryTradeAgreement(agreementId, signer, signature, signer);
+    }
+
+    function _requestVoidSecondaryTradeAgreement(bytes32 agreementId, address signer, bytes memory signature, address party) internal {
         SecondaryEscrow storage secEscrow = secondaryTradeStorage().escrows[agreementId];
         _requireUnconcludedSecondaryEscrow(secEscrow);
         Offer storage offer = secondaryTradeStorage().offers[secEscrow.offerId];
-        if (msg.sender != secEscrow.counterparty && msg.sender != offer.offeror) revert ISecondaryTradeStorage.NotPartyToAgreement();
+        if (party != secEscrow.counterparty && party != offer.offeror) revert ISecondaryTradeStorage.NotPartyToAgreement();
         address registry = LexScrowStorage.getDealRegistry();
         ICyberAgreementRegistry(registry).voidContractFor(agreementId, signer, signature);
         // A lone request only records intent; the registry voids once both parties have requested

@@ -632,6 +632,12 @@ contract DealManager is
         SecondaryTradeStorage.voidSecondaryTradeAgreement(agreementId, signer, signature);
     }
 
+    /// @notice Relayer variant of voidSecondaryTradeAgreement: a relayer submits `signer`'s void request on
+    /// their behalf, authorized by `signer`'s EIP-712 signature over the request plus an unordered `nonce`.
+    function voidSecondaryTradeAgreement(bytes32 agreementId, address signer, bytes memory signature, uint256 nonce, bytes memory authSig) external nonReentrant {
+        SecondaryTradeStorage.voidSecondaryTradeAgreement(agreementId, signer, signature, nonce, authSig);
+    }
+
     /// @notice Syncs a secondary settlement that was voided directly in the agreement registry
     /// @dev Callable by anyone; guards against double-void via the terminal-state checks
     /// @param agreementId Settlement agreement that was already voided in the registry
