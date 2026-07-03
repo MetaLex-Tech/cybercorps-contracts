@@ -15,9 +15,9 @@ import "forge-std/Test.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 // Reuse the minimal real-contract fixture mocks rather than redeclaring them.
 import {
-    MockCyberCorpForCertEvent,
-    MockUriBuilderForCertEvent
-} from "./IssuanceManagerCertificateCreatedEventTest.t.sol";
+    MockCyberCorpForIM,
+    MockUriBuilderForIM
+} from "./IssuanceManagerTest.t.sol";
 
 /// @title IssuanceManagerSecondaryTransferTest
 /// @notice Exercises the real IssuanceManager.secondaryTransfer against a real CyberCertPrinter (no mocks),
@@ -62,8 +62,8 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         issuanceManager = IssuanceManager(imFactory.deployIssuanceManager(SALT));
         issuanceManager.initialize(
             address(auth),
-            address(new MockCyberCorpForCertEvent()),
-            address(new MockUriBuilderForCertEvent()),
+            address(new MockCyberCorpForIM()),
+            address(new MockUriBuilderForIM()),
             address(imFactory)
         );
     }

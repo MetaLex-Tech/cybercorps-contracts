@@ -12,7 +12,7 @@ import "../src/libs/auth.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 
-contract MockCyberCorpForCertEvent {
+contract MockCyberCorpForIM {
     function cyberCORPName() external pure returns (string memory) { return "TestCorp"; }
     function cyberCORPType() external pure returns (string memory) { return "C-Corp"; }
     function cyberCORPJurisdiction() external pure returns (string memory) { return "DE"; }
@@ -21,7 +21,7 @@ contract MockCyberCorpForCertEvent {
     function roundManager() external pure returns (address) { return address(0); }
 }
 
-contract MockUriBuilderForCertEvent is IUriBuilder {
+contract MockUriBuilderForIM is IUriBuilder {
     function buildCertificateUri(
         string memory,
         string memory,
@@ -99,8 +99,8 @@ contract MockUriBuilderForCertEvent is IUriBuilder {
     ) external pure returns (string memory) { return "uri://mock"; }
 }
 
-contract IssuanceManagerCertificateCreatedEventTest is Test {
-    bytes32 constant SALT = bytes32(keccak256("IssuanceManagerCertificateCreatedEventTest"));
+contract IssuanceManagerTest is Test {
+    bytes32 constant SALT = bytes32(keccak256("IssuanceManagerTest"));
 
     IssuanceManager public issuanceManager;
     BorgAuth public auth;
@@ -130,8 +130,8 @@ contract IssuanceManagerCertificateCreatedEventTest is Test {
         issuanceManager = IssuanceManager(imFactory.deployIssuanceManager(SALT));
         issuanceManager.initialize(
             address(auth),
-            address(new MockCyberCorpForCertEvent()),
-            address(new MockUriBuilderForCertEvent()),
+            address(new MockCyberCorpForIM()),
+            address(new MockUriBuilderForIM()),
             address(imFactory)
         );
     }
@@ -190,6 +190,24 @@ contract IssuanceManagerCertificateCreatedEventTest is Test {
             bytes32(0),
             ""
         );
+    }
+
+    function test_isPrinter_TrueForCreatedPrinter() public {
+        ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
+        assertTrue(issuanceManager.isPrinter(address(certPrinter)), "created printer should be tracked");
+    }
+
+    function test_isPrinter_FalseForUnknownAddress() public {
+        _deployPrinter("Cert", "CERT");
+        assertFalse(issuanceManager.isPrinter(address(0xBEEF)), "foreign address is not a printer");
+        assertFalse(issuanceManager.isPrinter(address(0)), "zero address is not a printer");
+    }
+
+    function test_isPrinter_TracksMultiplePrinters() public {
+        ICyberCertPrinter a = _deployPrinter("CertA", "CERTA");
+        ICyberCertPrinter b = _deployPrinter("CertB", "CERTB");
+        assertTrue(issuanceManager.isPrinter(address(a)), "first printer tracked");
+        assertTrue(issuanceManager.isPrinter(address(b)), "second printer tracked");
     }
 
     function _deployPrinter(
