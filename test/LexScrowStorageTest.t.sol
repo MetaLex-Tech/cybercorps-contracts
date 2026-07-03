@@ -47,8 +47,8 @@ import {ERC721} from "openzeppelin-contracts/token/ERC721/ERC721.sol";
 import {ERC1155} from "openzeppelin-contracts/token/ERC1155/ERC1155.sol";
 import {ERC721Enumerable} from "openzeppelin-contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {LexScroWLite} from "../src/libs/LexScroWLite.sol";
-import {LexScrowStorage, Token, TokenType, EscrowStatus} from "../src/storage/LexScrowStorage.sol";
+import {LexScrowStorage} from "../src/storage/LexScrowStorage.sol";
+import {LexScrowStorage, Escrow, Token, TokenType, EscrowStatus} from "../src/storage/LexScrowStorage.sol";
 import {Endorsement} from "../src/storage/CyberCertPrinterStorage.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
 
@@ -106,38 +106,37 @@ contract ConditionMock is ICondition {
     }
 }
 
-contract LexScroWLiteMock is LexScroWLite {
-    /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
-        _disableInitializers();
-    }
-
-    function initialize(address _corp, address _dealRegistry) public initializer {
-        __LexScroWLite_init(_corp, _dealRegistry);
+// Harness exercising LexScrowStorage, now a linked library (was an abstract base contract).
+// Mirrors a real manager: thin wrappers over LexScrowStorage.* + the fee/receiver hooks the library
+// expects on the calling contract (ILexScrowStorage(address(this)) callback; ERC721/1155 receipt).
+contract LexScrowStorageMock {
+    function initialize(address _corp, address _dealRegistry) public {
+        LexScrowStorage.setCorp(_corp);
+        LexScrowStorage.setDealRegistry(_dealRegistry);
     }
 
     function createEscrow_(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets, uint256 expiry) public {
-        createEscrow(agreementId, counterParty, corpAssets, buyerAssets, expiry);
+        LexScrowStorage.createEscrow(agreementId, counterParty, corpAssets, buyerAssets, expiry);
     }
 
     function updateEscrow_(bytes32 agreementId, address counterParty, string memory buyerName) public {
-        updateEscrow(agreementId, counterParty, buyerName);
+        LexScrowStorage.updateEscrow(agreementId, counterParty, buyerName);
     }
 
     function handleCounterPartyPayment_(bytes32 agreementId) public {
-        handleCounterPartyPayment(agreementId);
+        LexScrowStorage.handleCounterPartyPayment(agreementId);
     }
 
     function finalizeEscrow_(bytes32 agreementId) public {
-        finalizeEscrow(agreementId);
+        LexScrowStorage.finalizeEscrow(agreementId);
     }
 
     function voidAndRefund_(bytes32 agreementId) public {
-        voidAndRefund(agreementId);
+        LexScrowStorage.voidAndRefund(agreementId);
     }
 
     function voidEscrow_(bytes32 agreementId) public {
-        voidEscrow(agreementId);
+        LexScrowStorage.voidEscrow(agreementId);
     }
 
     function addConditions(bytes32 agreementId, address[] calldata conditions) public {
@@ -146,12 +145,28 @@ contract LexScroWLiteMock is LexScroWLite {
         }
     }
 
-    function computeFee(uint256 size) public override view returns (uint256) {
+    function getEscrowDetails(bytes32 agreementId) public view returns (Escrow memory) {
+        return LexScrowStorage.getEscrow(agreementId);
+    }
+
+    function conditionCheck(bytes32 agreementId) public view returns (bool) {
+        return LexScrowStorage.conditionCheck(agreementId);
+    }
+
+    function computeFee(uint256) public pure returns (uint256) {
         return 0; // Not in use
     }
 
-    function getPlatformPayable() public override view returns (address) {
+    function getPlatformPayable() public pure returns (address) {
         return address(0); // Not in use
+    }
+
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return this.onERC721Received.selector;
+    }
+
+    function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
+        return this.onERC1155Received.selector;
     }
 }
 
@@ -171,9 +186,9 @@ contract CyberCorpMock {
     }
 }
 
-contract LexScroWLiteTest is Test {
+contract LexScrowStorageTest is Test {
 
-    bytes32 public salt = keccak256("LexScroWLiteTest");
+    bytes32 public salt = keccak256("LexScrowStorageTest");
 
     uint256 public ownerPrivateKey = uint256(salt) + 0;
     address public owner = vm.addr(ownerPrivateKey);
@@ -199,19 +214,19 @@ contract LexScroWLiteTest is Test {
 
     CyberAgreementRegistryMock public registry;
     CyberCorpMock public corp;
-    LexScroWLiteMock public lexScrow;
+    LexScrowStorageMock public lexScrow;
 
     function setUp() public {
         registry = new CyberAgreementRegistryMock{salt: salt}();
 
         corp = new CyberCorpMock{salt: salt}(companyPayable);
 
-        lexScrow = LexScroWLiteMock(
+        lexScrow = LexScrowStorageMock(
             address(
                 new ERC1967Proxy{salt: salt}(
-                    address(new LexScroWLiteMock{salt: salt}()),
+                    address(new LexScrowStorageMock{salt: salt}()),
                     abi.encodeWithSelector(
-                        LexScroWLiteMock.initialize.selector,
+                        LexScrowStorageMock.initialize.selector,
                         address(corp),
                         address(registry)
                     )
@@ -241,7 +256,7 @@ contract LexScroWLiteTest is Test {
 
         // Escrow configs
 
-        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        bytes32 agreementId = keccak256("LexScrowStorageTest.Agreement");
         Token[] memory corpAssets = _getCorpAssets();
         Token[] memory buyerAssets = _getBuyerAssets();
 
@@ -294,7 +309,7 @@ contract LexScroWLiteTest is Test {
 
         // Prepare Escrow
 
-        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        bytes32 agreementId = keccak256("LexScrowStorageTest.Agreement");
         Token[] memory corpAssets = _getCorpAssets();
         Token[] memory buyerAssets = _getBuyerAssets();
 
@@ -330,7 +345,7 @@ contract LexScroWLiteTest is Test {
 
         // Prepare Escrow
 
-        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        bytes32 agreementId = keccak256("LexScrowStorageTest.Agreement");
         Token[] memory corpAssets = _getCorpAssets();
         Token[] memory buyerAssets = _getBuyerAssets();
 
@@ -370,7 +385,7 @@ contract LexScroWLiteTest is Test {
 
         // Prepare Escrow
 
-        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        bytes32 agreementId = keccak256("LexScrowStorageTest.Agreement");
         Token[] memory corpAssets = _getCorpAssets();
         Token[] memory buyerAssets = _getBuyerAssets();
 
@@ -398,7 +413,7 @@ contract LexScroWLiteTest is Test {
         assertEq(buyerTokenErc721.ownerOf(buyerTokenErc721Id), alice, "Alice should have ERC712 token refund");
         assertEq(buyerTokenErc1155.balanceOf(alice, buyerTokenErc1155Id), 100 ether, "Alice should have ERC1155 token refund");
 
-        // Note LexScroWLite by default does not implement corp asset refunds, so they will be stuck in escrow
+        // Note LexScrowStorage by default does not implement corp asset refunds, so they will be stuck in escrow
 
         assertEq(corpTokenErc20.balanceOf(address(lexScrow)), 10 ether, "Corp's ERC20 token should still be in escrow");
         assertEq(corpTokenErc721.ownerOf(corpTokenErc721Id), address(lexScrow), "Corp's ERC712 token should still be in escrow");
@@ -413,7 +428,7 @@ contract LexScroWLiteTest is Test {
 
         // Prepare escrow
 
-        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        bytes32 agreementId = keccak256("LexScrowStorageTest.Agreement");
         Token[] memory corpAssets = _getCorpAssets();
         Token[] memory buyerAssets = _getBuyerAssets();
 
@@ -421,7 +436,7 @@ contract LexScroWLiteTest is Test {
         // Escrow is unpaid
 
         // Should fail since the escrow is unpaid
-        vm.expectRevert(LexScroWLite.EscrowNotPaid.selector);
+        vm.expectRevert(LexScrowStorage.EscrowNotPaid.selector);
         lexScrow.voidAndRefund_(agreementId);
     }
 
@@ -430,7 +445,7 @@ contract LexScroWLiteTest is Test {
 
         // Prepare Escrow
 
-        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        bytes32 agreementId = keccak256("LexScrowStorageTest.Agreement");
         Token[] memory corpAssets = _getCorpAssets();
         Token[] memory buyerAssets = _getBuyerAssets();
 
@@ -440,14 +455,14 @@ contract LexScroWLiteTest is Test {
         // Agreement is not voided yet
 
         // Should fail since agreement is not voided first
-        vm.expectRevert(LexScroWLite.DealNotVoided.selector);
+        vm.expectRevert(LexScrowStorage.DealNotVoided.selector);
         lexScrow.voidAndRefund_(agreementId);
     }
 
     function test_UpdateEscrowNonERC721() public {
         // Prepare Escrow
 
-        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        bytes32 agreementId = keccak256("LexScrowStorageTest.Agreement");
         Token[] memory corpAssets = new Token[](2);
         corpAssets[0] = Token({
             tokenType: TokenType.ERC20,
@@ -478,7 +493,7 @@ contract LexScroWLiteTest is Test {
         // updateEscrow should update the counter-party of the escrow, and if the token is ERC721,
         // it assumes the token implements ICyberCertPrinter and will add endorsement to it.
 
-        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        bytes32 agreementId = keccak256("LexScrowStorageTest.Agreement");
         Token[] memory corpAssets = new Token[](1);
         corpAssets[0] = Token({
             tokenType: TokenType.ERC721,
@@ -500,7 +515,7 @@ contract LexScroWLiteTest is Test {
         // updateEscrow assumes an ERC721 token implements ICyberCertPrinter and
         // will fail if it does not implement `addEndorsement()`
 
-        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        bytes32 agreementId = keccak256("LexScrowStorageTest.Agreement");
         Token[] memory corpAssets = _getCorpAssets();
         Token[] memory buyerAssets = _getBuyerAssets();
 
@@ -517,7 +532,7 @@ contract LexScroWLiteTest is Test {
 
         assertEq(uint8(lexScrow.getEscrowDetails(agreementId).status), uint8(EscrowStatus.PENDING));
         vm.expectEmit(true, true, true, true);
-        emit LexScroWLite.DealVoidedAt(agreementId, address(registry), block.timestamp);
+        emit LexScrowStorage.DealVoidedAt(agreementId, address(registry), block.timestamp);
         lexScrow.voidEscrow_(agreementId);
         assertEq(uint8(lexScrow.getEscrowDetails(agreementId).status), uint8(EscrowStatus.VOIDED));
     }
@@ -527,7 +542,7 @@ contract LexScroWLiteTest is Test {
 
         // Prepare Escrow
 
-        bytes32 agreementId = keccak256("LexScroWLiteTest.Agreement");
+        bytes32 agreementId = keccak256("LexScrowStorageTest.Agreement");
         Token[] memory corpAssets = _getCorpAssets();
         Token[] memory buyerAssets = _getBuyerAssets();
 
@@ -537,7 +552,7 @@ contract LexScroWLiteTest is Test {
 
         assertEq(uint8(lexScrow.getEscrowDetails(agreementId).status), uint8(EscrowStatus.PAID));
         vm.expectEmit(true, true, true, true);
-        emit LexScroWLite.DealVoidedAt(agreementId, address(registry), block.timestamp);
+        emit LexScrowStorage.DealVoidedAt(agreementId, address(registry), block.timestamp);
         lexScrow.voidEscrow_(agreementId);
         assertEq(uint8(lexScrow.getEscrowDetails(agreementId).status), uint8(EscrowStatus.VOIDED));
     }

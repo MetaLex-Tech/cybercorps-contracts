@@ -51,6 +51,12 @@ library DealManagerFactoryStorage {
 
     uint256 public constant BASIS_POINTS = 10000; // 100%
 
+    /// @notice A whitelisted integrator and its share of the protocol fee (spec §12B.4)
+    struct Integrator {
+        bool approved; // whitelist membership
+        uint256 feeShare; // share of the protocol fee (BASIS_POINTS = 100%)
+    }
+
     /// @notice Main storage layout struct that holds all persisted data
     /// @dev Uses unstructured storage pattern to avoid storage collisions
     struct DealManagerFactoryData {
@@ -58,6 +64,9 @@ library DealManagerFactoryStorage {
 
         address platformPayable; // Recipient of platform fees
         uint256 defaultFeeRatio; // total fee as % of ticket size (BASIS_POINTS = 100%)
+        // Per-integrator fee split (spec §12B.4): each whitelisted integrator earns its own share
+        // of the protocol fee, the rest going to the platform.
+        mapping(address => Integrator) integrators;
     }
 
     /// @notice Retrieves the storage reference for the DealManagerFactoryData struct
@@ -92,5 +101,13 @@ library DealManagerFactoryStorage {
 
     function setDefaultFeeRatio(uint256 feeRatio) internal {
         dealManagerFactoryStorage().defaultFeeRatio = feeRatio;
+    }
+
+    function getIntegrator(address integrator) internal view returns (Integrator memory) {
+        return dealManagerFactoryStorage().integrators[integrator];
+    }
+
+    function setIntegrator(address integrator, bool approved, uint256 feeShare) internal {
+        dealManagerFactoryStorage().integrators[integrator] = Integrator(approved, feeShare);
     }
 }

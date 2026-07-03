@@ -49,7 +49,9 @@ import "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICyberCorp.sol";
 import "../interfaces/ICyberScrip.sol";
 import "../interfaces/IIssuanceManager.sol";
+import "../interfaces/IIssuanceManagerFactory.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
+import {ExemptionPathway, HostingMode} from "../interfaces/ISecondaryTradeStorage.sol";
 import "./CyberCertPrinterStorage.sol";
 
 library IssuanceManagerStorage {
@@ -523,6 +525,40 @@ library IssuanceManagerStorage {
         return _assetsOfVaultPosition(certAddress, id);
     }
 
+    /// @notice Deploys the CyberCertPrinter and CyberScrip beacons and wires up core storage.
+    /// @dev Split out of IssuanceManager.initialize to keep that contract under the EIP-170 size
+    /// limit. Runs via delegatecall, so `address(this)` is the IssuanceManager and it owns the beacons.
+    function executeInitialize(
+        address upgradeFactory,
+        address corp,
+        address uriBuilder
+    ) external {
+        address cyberCertPrinterRefImpl = IIssuanceManagerFactory(
+            upgradeFactory
+        ).getCyberCertPrinterRefImplementation();
+        UpgradeableBeacon beaconCertPrinter = new UpgradeableBeacon(
+            cyberCertPrinterRefImpl,
+            address(this)
+        );
+        emit IIssuanceManager.CertPrinterBeaconImplementationUpgraded(
+            cyberCertPrinterRefImpl
+        );
+
+        address cyberScripRefImpl = IIssuanceManagerFactory(upgradeFactory)
+            .getCyberScripRefImplementation();
+        UpgradeableBeacon beaconScrip = new UpgradeableBeacon(
+            cyberScripRefImpl,
+            address(this)
+        );
+        emit IIssuanceManager.ScripBeaconImplementationUpgraded(cyberScripRefImpl);
+
+        setCORP(corp);
+        setUriBuilder(uriBuilder);
+        setCyberCertPrinterBeacon(beaconCertPrinter);
+        setUpgradeFactory(upgradeFactory);
+        setCyberScripBeacon(beaconScrip);
+    }
+
     function executeCreateCertPrinter(
         string[] memory ledger,
         string memory name,
@@ -590,6 +626,7 @@ library IssuanceManagerStorage {
         (cert, tokenId) = _mintAssignedCert(
             certAddress,
             investor,
+            investor, // primary issuance is always direct-hosted for now
             details,
             investorName
         );
@@ -630,6 +667,7 @@ library IssuanceManagerStorage {
         (cert, tokenId) = _mintAssignedCert(
             certAddress,
             investor,
+            investor, // primary issuance is always direct-hosted for now
             details,
             investorName
         );
@@ -683,6 +721,109 @@ library IssuanceManagerStorage {
             endorseeName: ""
         });
         ICyberCertPrinter(certAddress).addEndorsement(tokenId, newEndorsement);
+    }
+
+    /// @notice Executes the secondary-trade ownership change at finalization (spec §7.4A steps a–d).
+    /// @dev Mutate-and-mint: the seller's Ledger Entry Token never moves wallets; ownership transfers via
+    /// metadata. Core scope — acquisitionDate / Rule 144(d)(3) tacking / per-pathway certLegend updates are
+    /// deferred (need a FundInterest extensionData format that does not exist yet), so exemptionPathway is
+    /// decoded for the record but otherwise unused here.
+    function executeSecondaryTransfer(bytes calldata dealMetadata)
+        external
+        returns (uint256 buyerTokenId)
+    {
+        (
+            address certPrinter,
+            uint256 tokenId,
+            uint256 units,
+            address buyer,
+            string memory buyerName,
+            HostingMode buyerHostingMode,
+            address adminMultisig,
+            ,
+            bytes32 settlementAgreementId,
+            bytes memory openEndorsementSig
+        ) = abi.decode(
+            dealMetadata,
+            (address, uint256, uint256, address, string, HostingMode, address, ExemptionPathway, bytes32, bytes)
+        );
+
+        ICyberCertPrinter cert = ICyberCertPrinter(certPrinter);
+        // Registered owner of the seller's Ledger Entry Token, unchanged by hosting mode (the token never moves).
+        address seller = cert.legalOwnerOf(tokenId);
+
+        // (a) Materialize the seller's endorsement on the Ledger Entry Token. The seller signs in blank at
+        // posting/acceptance (spec §7.3.1) and that signature rides in dealMetadata; the endorsement is written
+        // here, at finalization, with the now-known buyer as endorsee (spec §7.4A step 1). Recorded while the
+        // token is still Assigned, before the void/decrement below. The seller is always the endorser of record
+        // (spec §3676-3680); the IssuanceManager is only the operational executor.
+        Endorsement memory sellerEndorsement = Endorsement({
+            endorser: seller,
+            timestamp: block.timestamp,
+            signatureHash: openEndorsementSig,
+            registry: address(0),
+            agreementId: settlementAgreementId,
+            endorsee: buyer,
+            endorseeName: buyerName
+        });
+        cert.addEndorsement(tokenId, sellerEndorsement);
+
+        // (b) Mutate the seller's Ledger Entry Token in place: decrement the sold units, then void if the
+        // token is fully sold (nothing left). Decrement-first so the struct carries no stale balance at void.
+        CertificateDetails memory sellerDetails = cert.getActiveCertificateDetails(tokenId);
+        if (units > sellerDetails.unitsRepresented) revert AmountExceedsAvailableUnits();
+        sellerDetails.unitsRepresented -= units;
+        cert.updateCertificateDetails(tokenId, sellerDetails);
+        bool sellerVoided = sellerDetails.unitsRepresented == 0;
+        if (sellerVoided) {
+            cert.voidCert(tokenId);
+        }
+        // (c) Deliver the buyer's units. By default we consolidate: if the buyer already holds an active
+        // (non-voided) Ledger Entry Token on this printer, fold the purchased units into it rather than
+        // fragmenting their position across one cert per fill; mint a fresh token only when they hold none.
+        // A printer is scoped to one security class/series, so consolidation never merges across security types
+        // (the folded units inherit the existing cert's terms). We look the buyer up by legal owner of record,
+        // so this is correct under both hosting modes — including Administered, where the multisig custodies the
+        // NFT but the buyer is the registered owner.
+        RecertSelection memory existing = _selectFirstLegalOwnedToken(certPrinter, buyer);
+        bool buyerTokenIsMinted = !existing.foundActive;
+        uint256 buyerUnitsAfter; // absolute post-mutation balance on the buyer token, reported in the event
+        if (existing.foundActive) {
+            // Fold the purchased units into the buyer's existing cert, leaving its basis fields
+            // (investmentAmountUSD / issuerUSDValuationAtTimeOfInvestment) unchanged: they stay a snapshot of
+            // that cert's primary issuance, regardless of how many secondary lots accumulate into it.
+            buyerTokenId = existing.activeTokenId;
+            CertificateDetails memory accDetails = cert.getActiveCertificateDetails(buyerTokenId);
+            accDetails.unitsRepresented += units;
+            cert.updateCertificateDetails(buyerTokenId, accDetails);
+            buyerUnitsAfter = accDetails.unitsRepresented;
+        } else {
+            // Mint a fresh token for the sold units. It inherits the seller's non-basis terms (signing officer,
+            // legalDetails, extensionData); cost basis stays blank since a secondary acquisition has no
+            // primary-issuance basis of its own. The custodian only decides where the NFT lands: the admin
+            // multisig under Administered hosting, otherwise the buyer (who is the legal owner either way).
+            address custodian = buyerHostingMode == HostingMode.ADMINISTERED ? adminMultisig : buyer;
+            CertificateDetails memory buyerDetails = CertificateDetails({
+                signingOfficerName: sellerDetails.signingOfficerName,
+                signingOfficerTitle: sellerDetails.signingOfficerTitle,
+                investmentAmountUSD: 0,
+                issuerUSDValuationAtTimeOfInvestment: 0,
+                unitsRepresented: units,
+                legalDetails: sellerDetails.legalDetails,
+                extensionData: sellerDetails.extensionData
+            });
+            (, buyerTokenId) = _mintAssignedCert(certPrinter, custodian, buyer, buyerDetails, buyerName);
+            buyerUnitsAfter = units;
+        }
+
+        // (d) Mirror the seller's endorsement onto the buyer's token: both tokens carry the identical
+        // chain-of-title record (endorser = seller, endorsee = buyer, this agreement), so reuse the (b) struct.
+        cert.addEndorsement(buyerTokenId, sellerEndorsement);
+
+        emit IIssuanceManager.SecondaryTransferExecuted(
+            settlementAgreementId, certPrinter, buyer, tokenId, buyerTokenId, seller, units,
+            sellerDetails.unitsRepresented, buyerUnitsAfter, sellerVoided, buyerTokenIsMinted
+        );
     }
 
     function executeVoidCertificate(address certAddress, uint256 tokenId) external {
@@ -1017,7 +1158,7 @@ library IssuanceManagerStorage {
         }
 
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
-        RecertSelection memory selection = _selectRecertToken(
+        RecertSelection memory selection = _selectFirstLegalOwnedToken(
             certAddress,
             account
         );
@@ -1235,16 +1376,18 @@ library IssuanceManagerStorage {
         emit RecertificationApprovalCleared(certAddress, investor);
     }
 
-    function _selectRecertToken(
+    /// @dev First active (non-voided) cert that `owner` is the legal owner of record for, via the printer's
+    /// per-legal-owner enumeration. Independent of ERC-721 custody, so it works under administered hosting
+    /// where a multisig custodies many holders' certs — no scan of the custodian's whole balance.
+    function _selectFirstLegalOwnedToken(
         address certAddress,
-        address account
+        address owner
     ) internal view returns (RecertSelection memory selection) {
         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
-        uint256 ownedBalance = certificate.balanceOf(account);
+        uint256 ownedBalance = certificate.balanceOfLegalOwner(owner);
 
         for (uint256 i = 0; i < ownedBalance; i++) {
-            uint256 tokenId = certificate.tokenOfOwnerByIndex(account, i);
-            if (certificate.legalOwnerOf(tokenId) != account) continue;
+            uint256 tokenId = certificate.tokenOfLegalOwnerByIndex(owner, i);
             if (certificate.isVoided(tokenId)) continue;
             selection.foundActive = true;
             selection.activeTokenId = tokenId;
@@ -1252,11 +1395,15 @@ library IssuanceManagerStorage {
         }
     }
 
+    /// @dev Mint a new cert: the NFT is custodied by `to` while `owner` is recorded as the legal owner of
+    /// record. Direct issuance passes to == owner; administered hosting custodies with a multisig (`to`) for
+    /// the buyer/holder of record (`owner`).
     function _mintAssignedCert(
         address certAddress,
-        address investor,
+        address to,
+        address owner,
         CertificateDetails memory details,
-        string memory investorName
+        string memory ownerName
     )
         internal
         returns (ICyberCertPrinter cert, uint256 tokenId)
@@ -1264,7 +1411,7 @@ library IssuanceManagerStorage {
         _requireCompanyDetailsSet();
         cert = ICyberCertPrinter(certAddress);
         tokenId = cert.totalSupply();
-        cert.safeMintAndAssign(investor, tokenId, details, investorName);
+        cert.safeMintAndAssign(to, owner, tokenId, details, ownerName);
         _emitCertificateCreated(tokenId, certAddress, details);
     }
 

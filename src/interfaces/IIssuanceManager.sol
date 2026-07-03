@@ -406,4 +406,25 @@ interface IIssuanceManager {
     function cyberScripBeacon() external view returns (UpgradeableBeacon);
     function printers(uint256 index) external view returns (address);
     function setUriBuilder(address _uriBuilder) external;
+
+    /// @notice Single-source signal for the buyer's newly minted Ledger Entry Token at secondary settlement.
+    /// @dev Emitted from the linked storage lib in the IssuanceManager's context; agreementId is the
+    /// settlementAgreementId (joins the DealManager's finalization event) and sellerVoided distinguishes a
+    /// full sale (seller token voided) from a partial (decremented in place).
+    event SecondaryTransferExecuted(
+        bytes32 indexed agreementId,
+        address indexed certPrinter,
+        address indexed buyer,
+        uint256 sellerTokenId,
+        uint256 buyerTokenId,
+        address seller,
+        uint256 units,
+        uint256 sellerUnitsAfter, // 0 when the seller token is voided (full sale)
+        uint256 buyerUnitsAfter, // == units on a fresh mint; existing balance + units on a fold
+        bool sellerVoided,
+        bool buyerTokenIsMinted // indicates whether it's a freshly minted token or folded into an existing one
+    );
+
+    // Secondary trade entry points (cyberTRADE; implementation pending)
+    function secondaryTransfer(bytes calldata dealMetadata) external;
 }

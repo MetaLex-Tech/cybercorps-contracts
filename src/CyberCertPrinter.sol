@@ -158,13 +158,27 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
 
     // Restricted minting with full agreement details
     function safeMintAndAssign(
-        address to, 
+        address to,
         uint256 tokenId,
         CertificateDetails memory details,
         string memory investorName
     ) external onlyIssuanceManager returns (uint256) {
         _safeMint(to, tokenId);
         CyberCertPrinterStorage.recordMintAndAssign(tokenId, to, details, investorName);
+        return tokenId;
+    }
+
+    // Overload: allowing separation of custodian `to` vs legal owner `owner`
+    // This way we can support administered hosting (to != owner) in addition to direct hosting (owner == to)
+    function safeMintAndAssign(
+        address to, // custodian
+        address owner, // legal owner
+        uint256 tokenId,
+        CertificateDetails memory details,
+        string memory ownerName
+    ) external onlyIssuanceManager returns (uint256) {
+        _safeMint(to, tokenId);
+        CyberCertPrinterStorage.recordMintAndAssign(tokenId, owner, details, ownerName);
         return tokenId;
     }
 

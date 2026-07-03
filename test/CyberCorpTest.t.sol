@@ -53,6 +53,8 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
+import {IDealManagerStorage} from "../src/interfaces/IDealManagerStorage.sol";
+import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
@@ -65,6 +67,7 @@ import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderCon
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {DealManager} from "../src/DealManager.sol";
+import {DealManagerStorage} from "../src/storage/DealManagerStorage.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {Escrow} from "../src/storage/LexScrowStorage.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
@@ -74,7 +77,7 @@ import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {SAFTEExtension, SAFTEData} from "../src/storage/extensions/SAFTEExtension.sol";
 import {LeXcheX} from "../src/creds/lexchex.sol";
 import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
-import {LexScroWLite} from "../src/libs/LexScroWLite.sol";
+import {LexScrowStorage} from "../src/storage/LexScrowStorage.sol";
 import {LexChexCondition} from "../src/libs/conditions/lexchexCondition.sol";
 import {LeXcheXUtils} from "./libs/LeXcheXUtils.sol";
 import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
@@ -1611,7 +1614,7 @@ contract CyberCorpForkTest is Test {
         vm.stopPrank();
 
         // Try to revoke after payment - should fail
-        vm.expectRevert(DealManager.CounterPartyValueMismatch.selector);
+        vm.expectRevert(IDealManagerStorage.CounterPartyValueMismatch.selector);
         IDealManager(dealManagerAddr).revokeDeal(id, testAddress, signature);
         vm.stopPrank();
     }
@@ -1917,8 +1920,9 @@ contract CyberCorpForkTest is Test {
             block.timestamp + 1000000
         );
 
-        // Try to finalize without payment - should fail
-        vm.expectRevert(LexScroWLite.DealNotPaid.selector);
+        // Try to finalize without payment - should fail. parties[1] is address(0) and never signs,
+        // so the all-parties-signed check fires before the unpaid-escrow check.
+        vm.expectRevert(LexScrowStorage.DealNotFullySigned.selector);
         IDealManager(dealManagerAddr).finalizeDeal(id);
         vm.stopPrank();
     }
@@ -2179,8 +2183,9 @@ contract CyberCorpForkTest is Test {
             ""
         );
 
-        // Try to finalize again - should fail
-        vm.expectRevert(LexScroWLite.DealNotPaid.selector);
+        // Try to finalize again - should fail. The deal is already finalized in the registry,
+        // so the already-finalized check fires before the unpaid-escrow check.
+        vm.expectRevert(LexScrowStorage.DealAlreadyFinalized.selector);
         IDealManager(dealManagerAddr).finalizeDeal(id);
         vm.stopPrank();
     }
@@ -2321,7 +2326,7 @@ contract CyberCorpForkTest is Test {
         );
 
         // Try to void after finalization - should fail
-        vm.expectRevert(DealManager.DealNotExpired.selector);
+        vm.expectRevert(IDealManagerStorage.DealNotExpired.selector);
         IDealManager(dealManagerAddr).voidExpiredDeal(
             id,
             testAddress,
@@ -2584,7 +2589,7 @@ contract CyberCorpForkTest is Test {
         );
 
         // Try to sign expired contract - should fail
-        vm.expectRevert(LexScroWLite.DealExpired.selector);
+        vm.expectRevert(LexScrowStorage.DealExpired.selector);
         IDealManager(dealManagerAddr).signDealAndPay(
             newPartyAddr,
             id,
@@ -4139,8 +4144,8 @@ contract CyberCorpForkTest is Test {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Test Legend";
 
-        DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](1);
-        certData[0] = DealManager.CyberCertData({
+        DealManagerStorage.CyberCertData[] memory certData = new DealManagerStorage.CyberCertData[](1);
+        certData[0] = DealManagerStorage.CyberCertData({
             name: "Test Certificate",
             symbol: "TEST",
             uri: "ipfs://test-uri",
@@ -4301,8 +4306,8 @@ contract CyberCorpForkTest is Test {
         string[] memory warrantLegend = new string[](1);
         warrantLegend[0] = "Token Warrant Legend";
 
-        DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](2);
-        certData[0] = DealManager.CyberCertData({
+        DealManagerStorage.CyberCertData[] memory certData = new DealManagerStorage.CyberCertData[](2);
+        certData[0] = DealManagerStorage.CyberCertData({
             name: "SAFE Certificate",
             symbol: "SAFE",
             uri: "ipfs://safe-uri",
@@ -4311,7 +4316,7 @@ contract CyberCorpForkTest is Test {
             extension: address(0),
             defaultLegend: safeLegend
         });
-        certData[1] = DealManager.CyberCertData({
+        certData[1] = DealManagerStorage.CyberCertData({
             name: "Token Warrant",
             symbol: "TWARRANT",
             uri: "ipfs://warrant-uri",
@@ -4497,8 +4502,8 @@ contract CyberCorpForkTest is Test {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Test Legend";
 
-        DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](1);
-        certData[0] = DealManager.CyberCertData({
+        DealManagerStorage.CyberCertData[] memory certData = new DealManagerStorage.CyberCertData[](1);
+        certData[0] = DealManagerStorage.CyberCertData({
             name: "Test Certificate",
             symbol: "TEST",
             uri: "ipfs://test-uri",
@@ -4880,7 +4885,7 @@ contract CyberCorpForkTest is Test {
         );
 
         // This should fail because the counterparty has an invalid (voided) LexChex token
-        vm.expectRevert(DealManager.AgreementConditionsNotMet.selector); // Expect revert due to condition not being met
+        vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector); // Expect revert due to condition not being met
         dealManager.signAndFinalizeDeal(
             newPartyAddr,
             contractId,
@@ -5024,7 +5029,7 @@ contract CyberCorpForkTest is Test {
         );
 
         // This should fail because the counterparty has no LexChex token
-        vm.expectRevert(DealManager.AgreementConditionsNotMet.selector); // Expect revert due to condition not being met
+        vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector); // Expect revert due to condition not being met
         dealManager.signAndFinalizeDeal(
             newPartyAddr,
             contractId,
