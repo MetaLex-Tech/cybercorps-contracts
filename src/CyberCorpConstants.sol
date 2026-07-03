@@ -120,6 +120,12 @@ struct CertificateSVGParams {
     string ownerName;
     uint256 tokenId;
     string certificateUri;
+    address issuerAddress;
+    address ownerAddress;
+    uint256 consideration;
+    uint256 blockNumber;
+    string[] transferRestrictions;
+    bool isVoided;
 }
 
 

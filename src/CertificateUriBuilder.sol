@@ -501,7 +501,13 @@ struct CertificateDetails {
             jurisdiction: cyberCORPJurisdiction,
             ownerName: owner.name,
             tokenId: tokenId,
-            certificateUri: certificateUri
+            certificateUri: certificateUri,
+            issuerAddress: contractAddress,
+            ownerAddress: owner.ownerAddress,
+            consideration: details.investmentAmountUSD,
+            blockNumber: block.number,
+            transferRestrictions: certLegend,
+            isVoided: _isCertVoided(contractAddress, tokenId)
         });
 
         string memory svg = ICertificateImageBuilder(imageBuilder).buildCertificateSVG(svgParams, certTimestamp);
@@ -565,6 +571,16 @@ struct CertificateDetails {
         // Close the main JSON object
         json = string.concat(json, '}');
         return json;
+    }
+
+    /// @notice Checks whether the certificate has been voided on the printer contract
+    function _isCertVoided(address certPrinter, uint256 tokenId) internal view returns (bool) {
+        if (certPrinter == address(0)) return false;
+        try ICyberCertPrinter(certPrinter).isVoided(tokenId) returns (bool voided) {
+            return voided;
+        } catch {
+            return false;
+        }
     }
 
     function _getPrinterExtensionData(address certPrinter) internal view returns (bytes memory) {
