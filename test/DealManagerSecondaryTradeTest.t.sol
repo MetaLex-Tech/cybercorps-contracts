@@ -805,6 +805,38 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.postOffer(p);
     }
 
+    // A non-owner cannot list someone else's Ledger Entry Token for sale: without the ownership guard the
+    // attacker would be paid at finalize while the real owner's cert is decremented (buyer does not own
+    // sellerTokenId, which belongs to `seller`).
+    function test_RevertIf_PostOffer_Sell_NotCertOwner() public {
+        PostOfferParams memory p = _defaultSellOfferParams();
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.NotCertOwner.selector);
+        dm.postOffer(p);
+    }
+
+    // BUY counterpart: a non-owner acceptor cannot sell someone else's Ledger Entry Token into a buy offer
+    // (attacker supplies sellerTokenId, owned by `seller`).
+    function test_RevertIf_AcceptBuyOffer_NotCertOwner() public {
+        (address attacker, uint256 attackerKey) = makeAddrAndKey("attacker");
+        bytes32 offerId = _postBuyOffer();
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: UNITS,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0),
+            sellerTokenId: sellerTokenId,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, attacker, attackerKey),
+            openEndorsementSig: OPEN_ENDORSEMENT_SIG
+        });
+        vm.prank(attacker);
+        vm.expectRevert(ISecondaryTradeStorage.NotCertOwner.selector);
+        dm.acceptOffer(p);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // threshold conditions in an Offer
     // ─────────────────────────────────────────────────────────────────────────

@@ -213,6 +213,7 @@ interface ISecondaryTradeStorage {
     error IntegratorNotWhitelisted();
     error UnitsExceedOffer();
     error NotOfferor();
+    error NotCertOwner();
     error MissingCertPrinter();
     error NotPartyToAgreement();
     error OfferAlreadyExists();
