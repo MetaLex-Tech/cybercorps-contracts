@@ -46,6 +46,7 @@ import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import {ECDSA} from "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/IIssuanceManager.sol";
+import {ICyberCertPrinter} from "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/IDealManagerFactory.sol";
 import "../interfaces/IDealManager.sol";
 import "openzeppelin-contracts/utils/introspection/ERC165Checker.sol";
@@ -219,6 +220,8 @@ library SecondaryTradeStorage {
         _checkThresholdConditions(offerId, bytes32(0));
 
         if (params.side == OfferSide.SELL) {
+            if (ICyberCertPrinter(params.certPrinter).legalOwnerOf(params.tokenId) != offeror)
+                revert ISecondaryTradeStorage.NotCertOwner();
             // Reserve units on the seller's cert (routed through IssuanceManager, the only caller the printer allows)
             DealManagerStorage.getIssuanceManager().increaseUnitsReserved(params.certPrinter, params.tokenId, params.units);
         } else {
@@ -380,6 +383,8 @@ library SecondaryTradeStorage {
             tokenId = params.sellerTokenId;
             buyer = offer.offeror;
             endorsementSig = params.openEndorsementSig;
+            if (ICyberCertPrinter(certPrinter).legalOwnerOf(tokenId) != acceptor)
+                revert ISecondaryTradeStorage.NotCertOwner();
             // Reserve units on the seller's cert at acceptance (bid flow, routed through IssuanceManager)
             DealManagerStorage.getIssuanceManager().increaseUnitsReserved(certPrinter, tokenId, params.units);
         }
