@@ -400,6 +400,9 @@ library SecondaryTradeStorage {
             tokenId = offer.tokenId;
             buyer = acceptor;
             endorsementSig = offer.openEndorsementSig;
+            // Re-check the seller still owns the cert
+            if (ICyberCertPrinter(certPrinter).legalOwnerOf(tokenId) != offer.offeror)
+                revert ISecondaryTradeStorage.SecondaryTradeSellerOwnershipChanged();
         } else {
             certPrinter = offer.certPrinter;
             tokenId = params.sellerTokenId;
@@ -532,6 +535,10 @@ library SecondaryTradeStorage {
             offer.status = OfferStatus.FINALIZED;
         }
         (address seller, address buyer) = _settlementParties(offer, secEscrow);
+        // Require seller ownership to remain unchanged; if it was a legitimately-moved
+        // position it'd still revert here and it could be resolved via the void/expiry path instead of mispaying.
+        if (ICyberCertPrinter(offer.certPrinter).legalOwnerOf(secEscrow.tokenId) != seller)
+            revert ISecondaryTradeStorage.SecondaryTradeSellerOwnershipChanged();
         // Fee math (mirrors DealManager.computeFee / getPlatformPayable) computed directly from the factory
         address upgradeFactory = DealManagerStorage.getUpgradeFactory();
         uint256 fee = secEscrow.paymentAmount * IDealManagerFactory(upgradeFactory).getDefaultFeeRatio() / DealManagerFactoryStorage.BASIS_POINTS;

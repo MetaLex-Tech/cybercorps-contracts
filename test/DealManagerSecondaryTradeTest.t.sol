@@ -855,6 +855,31 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.acceptOffer(p);
     }
 
+    // A SELL offer whose seller loses cert ownership between postOffer and acceptance is rejected at accept
+    // time (via the IssuanceManager-assignment vector), so no doomed settlement is ever created.
+    function test_RevertIf_AcceptSellOffer_SellerOwnershipChanged() public {
+        address newOwner = makeAddr("newLegalOwner");
+        bytes32 offerId = _postSellOffer();
+
+        vm.prank(owner);
+        im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS));
+
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: UNITS,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey),
+            openEndorsementSig: ""
+        });
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryTradeSellerOwnershipChanged.selector);
+        dm.acceptOffer(p);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // threshold conditions in an Offer
     // ─────────────────────────────────────────────────────────────────────────
@@ -2058,6 +2083,41 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(certPrinter.unitsReserved(sellerTokenId), 0, "no units reserved after last lot finalized");
         assertEq(paymentToken.balanceOf(address(dm)), 0, "custody fully drained");
         assertEq(paymentToken.balanceOf(company), companyBefore, "company payable untouched on secondary path");
+    }
+
+    // Ownership is snapshotted for payment (SELL: seller = offer.offeror) but secondaryTransfer consumes units
+    // from the cert's LIVE legalOwnerOf. Re-register the seller's Ledger Entry Token to a new legal owner after
+    // acceptance (the IssuanceManager-assignment divergence vector — assignCert moves legalOwnerOf without
+    // moving the NFT or the reservation) and finalize must revert instead of paying the stale seller for units
+    // now owned by someone else.
+    function test_RevertIf_FinalizeSecondaryTrade_Sell_SellerOwnershipChanged() public {
+        address newOwner = makeAddr("newLegalOwner");
+        bytes32 offerId = _postSellOffer();
+        bytes32 settlementId = _acceptSellOffer(offerId);
+
+        vm.prank(owner);
+        im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS));
+        assertEq(certPrinter.legalOwnerOf(sellerTokenId), newOwner, "legal owner moved off the seller");
+
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryTradeSellerOwnershipChanged.selector);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+    }
+
+    // BUY mirror: seller = the acceptor (secEscrow.counterparty), snapshotted at acceptance. Re-registering the
+    // acceptor's Ledger Entry Token before finalize must likewise revert.
+    function test_RevertIf_FinalizeSecondaryTrade_Buy_SellerOwnershipChanged() public {
+        address newOwner = makeAddr("newLegalOwner");
+        bytes32 offerId = _postBid();
+        bytes32 settlementId = _acceptBid(offerId);
+
+        vm.prank(owner);
+        im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS));
+        assertEq(certPrinter.legalOwnerOf(sellerTokenId), newOwner, "legal owner moved off the acceptor");
+
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryTradeSellerOwnershipChanged.selector);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
     }
 
     function test_FinalizeSecondaryTrade_Buy() public {

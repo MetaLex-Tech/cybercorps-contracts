@@ -230,6 +230,9 @@ interface ISecondaryTradeStorage {
     error SecondaryTradeAgreementExpired();
     error SecondaryTradeAgreementNotExpired();
     error SecondaryTradeAgreementNotVoided();
+    /// @notice At finalize, the cert's current legal owner no longer matches the settlement's seller of record
+    /// (ownership moved after listing/acceptance), so the payee and the party whose units are consumed diverge
+    error SecondaryTradeSellerOwnershipChanged();
     error SecondaryConditionsNotMet(address condition);
     /// @notice Condition address supplied to a config setter is the zero address
     error InvalidSecondaryCondition();
