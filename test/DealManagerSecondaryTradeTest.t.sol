@@ -3380,6 +3380,13 @@ contract DealManagerSecondaryTradeTest is Test {
         return _sign(keccak256(abi.encode(typeHash, offerId, forAddr, nonce)), key);
     }
 
+    function _voidAuthSig(bytes32 agreementId, address signer, bytes memory signature, uint256 nonce, uint256 key)
+        internal view returns (bytes memory)
+    {
+        bytes32 typeHash = keccak256("VoidSecondaryTradeAuth(bytes32 agreementId,address signer,bytes32 signatureHash,uint256 nonce)");
+        return _sign(keccak256(abi.encode(typeHash, agreementId, signer, keccak256(signature), nonce)), key);
+    }
+
     function _sellAcceptParams(bytes32 offerId) internal view returns (AcceptOfferParams memory) {
         return AcceptOfferParams({
             offerId: offerId,
@@ -3537,5 +3544,48 @@ contract DealManagerSecondaryTradeTest is Test {
 
         // both offers cleared the same phase condition
         assertEq(certPrinter.unitsReserved(sellerTokenId), 60);
+    }
+
+    // A relayer submits each party's void request on their behalf via the nonce'd overload; once both
+    // parties have requested, the settlement is voided (a subsequent void reverts AlreadyVoided).
+    function test_Relayer_VoidSecondaryTradeAgreement() public {
+        bytes32 offerId = _postSellOffer();
+        bytes32 settlementId = _acceptSellOffer(offerId);
+        address relayer = makeAddr("relayer");
+
+        bytes memory buyerAuth = _voidAuthSig(settlementId, buyer, "", 11, buyerKey);
+        vm.prank(relayer);
+        dm.voidSecondaryTradeAgreement(settlementId, buyer, "", 11, buyerAuth);
+
+        bytes memory sellerAuth = _voidAuthSig(settlementId, seller, "", 12, sellerKey);
+        vm.prank(relayer);
+        dm.voidSecondaryTradeAgreement(settlementId, seller, "", 12, sellerAuth);
+
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryTradeAgreementAlreadyVoided.selector);
+        vm.prank(buyer);
+        dm.voidSecondaryTradeAgreement(settlementId, buyer, "");
+    }
+
+    // The relayer void auth must recover to `signer`; a signature by anyone else is rejected.
+    function test_RevertIf_Relayer_VoidSecondaryTradeAgreement_WrongSigner() public {
+        bytes32 offerId = _postSellOffer();
+        bytes32 settlementId = _acceptSellOffer(offerId);
+
+        bytes memory badAuth = _voidAuthSig(settlementId, buyer, "", 1, sellerKey); // signed by seller, claims buyer
+        vm.expectRevert(ISecondaryTradeStorage.InvalidSecondaryAuthSignature.selector);
+        dm.voidSecondaryTradeAgreement(settlementId, buyer, "", 1, badAuth);
+    }
+
+    // Reusing a consumed nonce for the same signer is rejected as a replay.
+    function test_RevertIf_Relayer_VoidSecondaryTradeAgreement_ReplayNonce() public {
+        bytes32 offerId = _postSellOffer();
+        bytes32 settlementId = _acceptSellOffer(offerId);
+
+        bytes memory auth = _voidAuthSig(settlementId, buyer, "", 4, buyerKey);
+        dm.voidSecondaryTradeAgreement(settlementId, buyer, "", 4, auth);
+
+        bytes memory replay = _voidAuthSig(settlementId, buyer, "", 4, buyerKey);
+        vm.expectRevert(ISecondaryTradeStorage.SecondaryAuthReplayed.selector);
+        dm.voidSecondaryTradeAgreement(settlementId, buyer, "", 4, replay);
     }
 }
