@@ -69,11 +69,11 @@ import {
     SecondaryEscrowStatus
 } from "../src/storage/SecondaryTradeStorage.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
-// Minimal CyberCorp / uriBuilder fixtures for the real IssuanceManager, shared with the cert-event test.
+// Minimal CyberCorp / uriBuilder fixtures for the real IssuanceManager, shared from IssuanceManagerTest.
 import {
-    MockCyberCorpForCertEvent,
-    MockUriBuilderForCertEvent
-} from "./IssuanceManagerCertificateCreatedEventTest.t.sol";
+    MockCyberCorpForIM,
+    MockUriBuilderForIM
+} from "./IssuanceManagerTest.t.sol";
 import {Test, console2} from "forge-std/Test.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -201,7 +201,7 @@ contract DealManagerSecondaryTradeTest is Test {
     ICyberCertPrinter public certPrinter;
     IssuanceManager public im;
     CyberAgreementRegistry public registry;
-    MockCyberCorpForCertEvent public corp;
+    MockCyberCorpForIM public corp;
     DealManagerFactory public dmFactory;
     DealManager public dm;
     BorgAuth public auth;
@@ -237,7 +237,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         paymentToken = new SecERC20Mock();
         auth = new BorgAuth(owner);
-        corp = new MockCyberCorpForCertEvent();
+        corp = new MockCyberCorpForIM();
 
         // Real IssuanceManager + CyberCertPrinter, deployed through the IssuanceManagerFactory beacon stack.
         IssuanceManagerFactory imFactory = IssuanceManagerFactory(
@@ -255,7 +255,7 @@ contract DealManagerSecondaryTradeTest is Test {
             )
         );
         im = IssuanceManager(imFactory.deployIssuanceManager(imSalt));
-        im.initialize(address(auth), address(corp), address(new MockUriBuilderForCertEvent()), address(imFactory));
+        im.initialize(address(auth), address(corp), address(new MockUriBuilderForIM()), address(imFactory));
 
         // Real CyberAgreementRegistry behind a proxy, sharing the same BorgAuth.
         registry = CyberAgreementRegistry(
@@ -802,6 +802,24 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.prank(buyer);
         vm.expectRevert(ISecondaryTradeStorage.MissingCertPrinter.selector);
+        dm.postOffer(p);
+    }
+
+    // An offer cannot point at a printer this SPV's IssuanceManager did not create: without the check a buyer
+    // could pay real tokens for a cert minted on a fake/foreign printer (0xBEEF is not in the registry).
+    function test_RevertIf_PostOffer_Sell_UnknownCertPrinter() public {
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.certPrinter = address(0xBEEF);
+        vm.prank(seller);
+        vm.expectRevert(ISecondaryTradeStorage.UnknownCertPrinter.selector);
+        dm.postOffer(p);
+    }
+
+    function test_RevertIf_PostOffer_Buy_UnknownCertPrinter() public {
+        PostOfferParams memory p = _defaultBuyOfferParams();
+        p.certPrinter = address(0xBEEF);
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.UnknownCertPrinter.selector);
         dm.postOffer(p);
     }
 

@@ -553,6 +553,12 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         return IssuanceManagerStorage.getPrinters()[index];
     }
 
+    /// @notice Whether `printer` is a certificate printer this IssuanceManager created and still tracks
+    /// @dev Authoritative membership check against the registry; a self-reporting printer cannot forge it
+    function isPrinter(address printer) external view returns (bool) {
+        return IssuanceManagerStorage.isPrinter(printer);
+    }
+
     /// @notice Sets the URI builder contract address
     /// @dev Only callable by owner
     /// @param _uriBuilder New URI builder contract address

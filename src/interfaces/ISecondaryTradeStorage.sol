@@ -215,6 +215,7 @@ interface ISecondaryTradeStorage {
     error NotOfferor();
     error NotCertOwner();
     error MissingCertPrinter();
+    error UnknownCertPrinter();
     error NotPartyToAgreement();
     error OfferAlreadyExists();
     /// @notice Caller is not the signer they claim to be (signer must equal msg.sender)
