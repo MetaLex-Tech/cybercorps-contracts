@@ -59,6 +59,7 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
 
     event DealManagerDeployed(address dealManager, string version);
     event RefImplementationSet(address refImplementation, string version);
+    event IntegratorSet(address indexed integrator, bool indexed approved, uint256 feeShare);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -132,6 +133,26 @@ contract DealManagerFactory is UUPSUpgradeable, BorgAuthACL {
     /// @param platformPayable New payable address
     function setPlatformPayable(address platformPayable) external onlyOwner {
         DealManagerFactoryStorage.setPlatformPayable(platformPayable);
+    }
+
+    /// @notice Whether an integrator is whitelisted to receive a fee share (spec §12B.4)
+    function isIntegratorWhitelisted(address integrator) external view returns (bool) {
+        return DealManagerFactoryStorage.getIntegrator(integrator).approved;
+    }
+
+    /// @notice This integrator's share of the protocol fee (BASIS_POINTS = 100%)
+    function getIntegratorFeeShare(address integrator) external view returns (uint256) {
+        return DealManagerFactoryStorage.getIntegrator(integrator).feeShare;
+    }
+
+    /// @notice Set an integrator's whitelist status and its share of the protocol fee
+    /// @dev Only callable by addresses with the admin role. Pass approved=false to de-whitelist;
+    /// settlement then falls through to the unsplit platform-only flow (never reverts).
+    function setIntegrator(address integrator, bool approved, uint256 feeShare) external onlyOwner {
+        if (integrator == address(0)) revert ZeroAddress();
+        if (feeShare > DealManagerFactoryStorage.BASIS_POINTS) revert InvalidFeeRatio();
+        DealManagerFactoryStorage.setIntegrator(integrator, approved, feeShare);
+        emit IntegratorSet(integrator, approved, feeShare);
     }
 
     /// @notice Get the fee ratio

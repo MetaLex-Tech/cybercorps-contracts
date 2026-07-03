@@ -41,81 +41,54 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts/utils/ReentrancyGuard.sol";
+import "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import "./interfaces/IIssuanceManager.sol";
-import "./libs/LexScroWLite.sol";
 import "./libs/auth.sol";
 import "./storage/DealManagerStorage.sol";
 import "./storage/DealManagerFactoryStorage.sol";
 import "./storage/BorgAuthStorage.sol";
+import "./storage/SecondaryTradeStorage.sol";
 import "./interfaces/ICyberCorp.sol";
+import "./interfaces/IDealManager.sol";
+import "./interfaces/IDealManagerStorage.sol";
+import "./interfaces/ISecondaryTradeStorage.sol";
+import "./interfaces/ILexScrowStorage.sol";
 import "./interfaces/IDealManagerFactory.sol";
+import "./interfaces/ICyberCertPrinter.sol";
+import "./interfaces/ICyberAgreementRegistry.sol";
 
 /// @title DealManager
 /// @notice Manages the lifecycle of deals between parties, including creation, signing, payment, and finalization for a CyberCorp
 /// @dev Implements UUPS upgradeable pattern and integrates with BorgAuth for access control
-contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeable, ReentrancyGuard {
+contract DealManager is
+    Initializable,
+    BorgAuthACL,
+    UUPSUpgradeable,
+    ReentrancyGuard,
+    IDealManager,
+    IDealManagerStorage,
+    ISecondaryTradeStorage,
+    ILexScrowStorage
+{
     using DealManagerStorage for DealManagerStorage.DealManagerData;
+    using SafeERC20 for IERC20;
 
-    string public constant DEPLOY_VERSION = "4"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "4.0.1"; // For version-tracking on all deployment and future upgrades
 
-    /// @notice Certificate data structure for creating new certificates
-    struct CyberCertData {
-        string name;
-        string symbol;
-        string uri;
-        SecurityClass securityClass;
-        SecuritySeries securitySeries;
-        address extension;
-        string[] defaultLegend;
-    }
+    // Library-emitted events/errors are inherited from the per-library interfaces (IDealManagerStorage,
+    // ISecondaryTradeStorage and ILexScrowStorage) so their selectors/topics appear in DealManager's ABI.
 
+    // The errors/event below are owned and used directly by DealManager. (Shared
     error ZeroAddress();
-    error CounterPartyValueMismatch();
-    error AgreementConditionsNotMet();
-    error DealNotPending();
     error PartyValuesLengthMismatch();
     error ConditionAlreadyExists();
     error ConditionDoesNotExist();
-    error NotUpgradeFactory();
-    error DealNotExpired();
     error NotRefImplementation();
-
-    /// @notice Emitted when a new deal is proposed
-    /// @param agreementId Unique identifier for the agreement
-    /// @param certAddress Address of the certificate contract
-    /// @param certId ID of the certificate
-    /// @param paymentToken Address of the token used for payment
-    /// @param paymentAmount Amount to be paid
-    /// @param templateId ID of the template used for the agreement
-    /// @param corp Address of the CyberCorp
-    /// @param dealRegistry Address of the CyberAgreementRegistry
-    /// @param parties Array of party addresses involved in the deal
-    /// @param conditions Array of condition contract addresses
-    /// @param hasSecret Whether the deal requires a secret for finalization
-    event DealProposed(
-        bytes32 indexed agreementId,
-        address[] certAddress,
-        uint256[] certId,
-        address paymentToken,
-        uint256 paymentAmount,
-        bytes32 templateId,
-        address corp,
-        address dealRegistry,
-        address[] parties,
-        address[] conditions,
-        bool hasSecret
-    );
-
-    event DealFinalized(
-        bytes32 indexed agreementId,
-        address indexed signer,
-        address indexed corp,
-        address dealRegistry,
-        bool fillUnallocated
-    );
+    event MinTradeThresholdSet(uint256 minUnits, uint256 minConsideration, address setter);
 
     /// @notice Maps agreement IDs to arrays of counter party values for closed deals.
     mapping(bytes32 => string[]) public counterPartyValues;
@@ -141,8 +114,9 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
         // Set storage values
         DealManagerStorage.setIssuanceManager(_issuanceManager);
 
-        // Initialize LexScroWLite core addresses
-        __LexScroWLite_init(_corp, _dealRegistry);
+        // Initialize LexScrowStorage core addresses (LexScrowStorage is now a library — set storage directly)
+        LexScrowStorage.setCorp(_corp);
+        LexScrowStorage.setDealRegistry(_dealRegistry);
         DealManagerStorage.setUpgradeFactory(_upgradeFactory);
     }
 
@@ -176,47 +150,10 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
         bytes32 secretHash,
         uint256 expiry
     ) public onlyOwner returns (bytes32 agreementId, uint256[] memory certIds) {
-        agreementId = ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).createContract(_templateId, _salt, _globalValues, _parties, _partyValues, secretHash, address(this), expiry);
-       
-        Token[] memory corpAssets = new Token[](_certDetails.length);
-        certIds = new uint256[](_certDetails.length);
-        for(uint256 i = 0; i < _certDetails.length; i++) {
-            certIds[i] = DealManagerStorage.getIssuanceManager().createCert(_certPrinterAddress[i], address(this), _certDetails[i]);
-            corpAssets[i] = Token(TokenType.ERC721, _certPrinterAddress[i], certIds[i], 1, false);
-        }
-
-        Token[] memory buyerAssets = new Token[](1);
-        buyerAssets[0] = Token(TokenType.ERC20, _paymentToken, 0, _paymentAmount, true); // Will be used as fee token
-
-        Escrow memory newEscrow = Escrow({
-            agreementId: agreementId,
-            counterParty: _parties[1],
-            corpAssets: corpAssets,
-            buyerAssets: buyerAssets,
-            signature: "",
-            expiry: expiry,
-            status: EscrowStatus.PENDING
-        });
-        
-        LexScrowStorage.setEscrow(agreementId, newEscrow);
-
-        //set conditions
-        for(uint256 i = 0; i < conditions.length; i++) {
-            LexScrowStorage.addConditionToEscrow(agreementId, ICondition(conditions[i]));
-        }
-
-        emit DealProposed(
-            agreementId,
-            _certPrinterAddress,
-            certIds,
-            _paymentToken,
-            _paymentAmount,
-            _templateId,
-            LexScrowStorage.getCorp(),
-            LexScrowStorage.getDealRegistry(),
-            _parties,
-            conditions,
-            secretHash > 0
+        // Thin wrapper over the linked DealManagerStorage logic (delegatecall keeps storage/msg.sender)
+        return DealManagerStorage.proposeDeal(
+            _certPrinterAddress, _paymentToken, _paymentAmount, _templateId, _salt,
+            _globalValues, _parties, _certDetails, _partyValues, conditions, secretHash, expiry
         );
     }
 
@@ -253,14 +190,19 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
         address[] memory conditions,
         bytes32 secretHash,
         uint256 expiry
-    ) public returns (bytes32 agreementId, uint256[] memory certIds) {
+    ) public onlyOwner returns (bytes32 agreementId, uint256[] memory certIds) {
+        // Implemented here (not in DealManagerStorage) on purpose: keeping proposeAndSignDeal out of that
+        // library stops the via-ir Yul optimizer from inlining proposeDeal into it (which overflows the
+        // stack). proposeDeal is reached via a cross-contract delegatecall, so its heavy body stays in the
+        // linked library and is never inlined here.
         if(_partyValues.length > _parties.length) revert PartyValuesLengthMismatch();
-        
-        certIds = new uint256[](_certDetails.length);
 
-        (agreementId, certIds) = proposeDeal(_certPrinterAddress, _paymentToken, _paymentAmount, _templateId, _salt, _globalValues, _parties, _certDetails, _partyValues, conditions, secretHash, expiry);
+        (agreementId, certIds) = DealManagerStorage.proposeDeal(
+            _certPrinterAddress, _paymentToken, _paymentAmount, _templateId, _salt,
+            _globalValues, _parties, _certDetails, _partyValues, conditions, secretHash, expiry
+        );
         // NOTE: proposer is expected to be listed as a party in the parties array.
-        
+
         // Update the escrow signature
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
         escrow.signature = signature;
@@ -290,23 +232,8 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
         string memory name,
         string memory secret
     ) public {
-        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId)) revert DealVoided();
-        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isFinalized(agreementId)) revert DealAlreadyFinalized();
-        Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
-        if(escrow.status != EscrowStatus.PENDING) revert DealNotPending();
-        if(escrow.expiry < block.timestamp) revert DealExpired();
-
-        string[] storage counterPartyCheck = DealManagerStorage.getCounterPartyValues(agreementId);
-        if(counterPartyCheck.length > 0) {
-            if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert CounterPartyValueMismatch();
-        }
-        else {
-            DealManagerStorage.setCounterPartyValues(agreementId, partyValues);
-        }
-        
-        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
-        updateEscrow(agreementId, signer, name);
-        handleCounterPartyPayment(agreementId);
+        // Thin wrapper over the linked DealManagerStorage logic (delegatecall keeps storage/msg.sender)
+        DealManagerStorage.signDealAndPay(signer, agreementId, signature, partyValues, _fillUnallocated, name, secret);
     }
 
     /// @notice Signs and finalizes a deal in one transaction
@@ -326,56 +253,19 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
         bool _fillUnallocated,
         string memory name,
         string memory secret
-    ) public {
-        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId)) revert DealVoided();
-        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isFinalized(agreementId)) revert DealAlreadyFinalized();
-        if(LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PENDING) revert DealNotPending();
-
-        string[] storage counterPartyCheck = DealManagerStorage.getCounterPartyValues(agreementId);
-        if(counterPartyCheck.length > 0) {
-            if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert CounterPartyValueMismatch();
-        } else {
-            DealManagerStorage.setCounterPartyValues(agreementId, partyValues);
-        }
-
-		if (!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).hasSigned(agreementId, signer)) {
-            // Not signed in registry yet; enforce local consistency and then sign
-            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
-		} else {
-            // Already signed in registry; fetch values recorded in the registry and ensure consistency
-			string[] memory registryValues = ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).getSignerValues(agreementId, signer);
-			if (keccak256(abi.encode(registryValues)) != keccak256(abi.encode(partyValues))) revert CounterPartyValueMismatch();
-		}
-
-        updateEscrow(agreementId, signer, name);
-        if(!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
-        handleCounterPartyPayment(agreementId);
-        finalizeDeal(agreementId);
+    ) public nonReentrant {
+        // Thin wrapper over the linked DealManagerStorage logic. nonReentrant is required here because the
+        // moved logic invokes finalizeDeal as an internal library call that no longer passes through the
+        // guarded finalizeDeal wrapper below.
+        DealManagerStorage.signAndFinalizeDeal(signer, agreementId, partyValues, signature, _fillUnallocated, name, secret);
     }
 
     /// @notice Finalizes a deal
     /// @dev Checks signatures, conditions and finalizes the agreement
     /// @param agreementId Unique identifier for the agreement
     function finalizeDeal(bytes32 agreementId) public nonReentrant {
-        // Check: status
-        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId)) revert DealVoided();
-        if(LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PAID) revert DealNotPaid();
-        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isFinalized(agreementId)) revert DealAlreadyFinalized();
-        if(!ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).allPartiesSigned(agreementId)) revert DealNotFullySigned();
-        if(!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
-
-        // Effect: update status
-        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).finalizeContract(agreementId);
-
-        // Interaction: payments
-        finalizeEscrow(agreementId);
-        emit DealFinalized(
-            agreementId,
-            msg.sender,
-            LexScrowStorage.getCorp(),
-            LexScrowStorage.getDealRegistry(),
-            false
-        );
+        // Thin wrapper over the linked DealManagerStorage logic (delegatecall keeps storage/msg.sender)
+        DealManagerStorage.finalizeDeal(agreementId);
     }
 
     /// @notice Voids an expired deal
@@ -384,27 +274,8 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
     /// @param signer Address of the signer
     /// @param signature Signature of the signer
     function voidExpiredDeal(bytes32 agreementId, address signer, bytes memory signature) public nonReentrant {
-        // Check: status
-        Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
-        if (block.timestamp <= deal.expiry) revert DealNotExpired();
-
-        // Effect: update status
-        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
-        for(uint256 i = 0; i < deal.corpAssets.length; i++) {
-            if(deal.corpAssets[i].tokenType == TokenType.ERC721) {
-                DealManagerStorage.getIssuanceManager().voidCertificate(
-                    deal.corpAssets[i].tokenAddress, 
-                    deal.corpAssets[i].tokenId
-                );
-            }
-        }
-
-        if(deal.status == EscrowStatus.PAID)
-            // Interaction: payment
-            voidAndRefund(agreementId);
-        else if(deal.status == EscrowStatus.PENDING)
-            // Effect: update status
-            voidEscrow(agreementId);
+        // Thin wrapper over the linked DealManagerStorage logic (delegatecall keeps storage/msg.sender)
+        DealManagerStorage.voidExpiredDeal(agreementId, signer, signature);
     }
 
     /// @notice Revokes a pending deal
@@ -413,11 +284,8 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
     /// @param signer Address of the signer
     /// @param signature Signature of the signer
     function revokeDeal(bytes32 agreementId, address signer, bytes memory signature) public {
-        if(msg.sender != signer) revert CounterPartyValueMismatch();    
-        if(LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PENDING) 
-            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
-        else
-            revert DealNotPending();
+        // Thin wrapper over the linked DealManagerStorage logic (delegatecall keeps storage/msg.sender)
+        DealManagerStorage.revokeDeal(agreementId, signer, signature);
     }
 
     /// @notice Signs to void a deal
@@ -426,14 +294,8 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
     /// @param signer Address of the signer
     /// @param signature Signature of the signer
     function signToVoid(bytes32 agreementId, address signer, bytes memory signature) public nonReentrant {
-        // Check: status
-        if(msg.sender != signer) revert CounterPartyValueMismatch();
-
-        // Effect: update status
-        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
-        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId) && LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PAID)
-            // Interaction: payment
-            voidAndRefund(agreementId);
+        // Thin wrapper over the linked DealManagerStorage logic (delegatecall keeps storage/msg.sender)
+        DealManagerStorage.signToVoid(agreementId, signer, signature);
     }
 
     /// @notice Refund a voided deal
@@ -441,8 +303,8 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
     /// (e.g. directly to CyberAgreementRegistry without being processed by Deal Manager)
     /// @param agreementId Unique identifier for the agreement
     function refundVoidedDeal(bytes32 agreementId) public nonReentrant {
-        // Interaction: Re-sync Deal Manager internal escrow to VOIDED, then refund
-        voidAndRefund(agreementId);
+        // Thin wrapper over the linked DealManagerStorage logic (delegatecall keeps storage/msg.sender)
+        DealManagerStorage.refundVoidedDeal(agreementId);
     }
 
     /// @notice Adds a condition to a deal
@@ -529,7 +391,7 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
     /// @return certIds Array of certificate IDs created
     function proposeAndSignNewCertsDeal(
         uint256 salt,
-        CyberCertData[] memory _certData,
+        DealManagerStorage.CyberCertData[] memory _certData,
         bytes32 _templateId,
         string[] memory _globalValues,
         address[] memory _parties,
@@ -546,13 +408,16 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
         bytes32 id,
         uint256[] memory certIds
     )  {
-        // Get company name from the parent CyberCorp
-        string memory companyName = ICyberCorp(LexScrowStorage.getCorp()).cyberCORPName();
-        
+        // Lives here alongside proposeAndSignDeal (its only internal caller) so that function can stay out of
+        // DealManagerStorage — see the note on proposeAndSignDeal.
         certPrinterAddress = new address[](_certData.length);
-        for (uint256 i = 0; i < _certData.length; i++) {
-            ICyberCertPrinter certPrinter = ICyberCertPrinter(
-                DealManagerStorage.getIssuanceManager().createCertPrinter(
+        // Scope companyName + loop temporaries so they (and _certData) are freed before the heavy
+        // proposeAndSignDeal call below — keeps via-ir stack scheduling within budget.
+        {
+            // Get company name from the parent CyberCorp
+            string memory companyName = ICyberCorp(LexScrowStorage.getCorp()).cyberCORPName();
+            for (uint256 i = 0; i < _certData.length; i++) {
+                certPrinterAddress[i] = DealManagerStorage.getIssuanceManager().createCertPrinter(
                     _certData[i].defaultLegend,
                     string.concat(companyName, " ", _certData[i].name),
                     _certData[i].symbol,
@@ -560,13 +425,12 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
                     _certData[i].securityClass,
                     _certData[i].securitySeries,
                     _certData[i].extension
-                )
-            );
-            certPrinterAddress[i] = address(certPrinter);
+                );
+            }
         }
 
         // Create and sign deal
-        certIds = new uint256[](_certData.length);
+        certIds = new uint256[](certPrinterAddress.length);
         (id, certIds) = proposeAndSignDeal(
             certPrinterAddress,
             stableAddress,
@@ -589,15 +453,196 @@ contract DealManager is Initializable, BorgAuthACL, LexScroWLite, UUPSUpgradeabl
     /// @dev Currently the factory owner (MetaLeX) unilaterally set the fee ratio;
     /// in the future, it could be determined through a governance process.
     /// @return Fee amount
-    function computeFee(uint256 size) public override view returns (uint256) {
+    function computeFee(uint256 size) public view returns (uint256) {
         return size * IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).getDefaultFeeRatio() / DealManagerFactoryStorage.BASIS_POINTS;
     }
 
     /// @notice Gets the payable address for the fees
     /// @dev The factory owner (MetaLeX) unilaterally set the payable address
     /// @return Payable address for the fees
-    function getPlatformPayable() public override view returns (address) {
+    function getPlatformPayable() public view returns (address) {
         return IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).getPlatformPayable();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // LexScrowStorage surface — thin wrappers (LexScrowStorage is now a library) so the proxy keeps
+    // exposing these selectors for off-chain callers and condition contracts (ILexScrowStorage).
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice Get escrow details for a given agreement id
+    function getEscrowDetails(bytes32 agreementId) public view returns (Escrow memory) {
+        return LexScrowStorage.getEscrow(agreementId);
+    }
+
+    /// @notice Check all conditions attached to the escrow for the given agreement
+    function conditionCheck(bytes32 agreementId) public view returns (bool) {
+        return LexScrowStorage.conditionCheck(agreementId);
+    }
+
+    /// @notice ERC721 receiver hook for safe transfers into escrow (moved here from LexScrowStorage)
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return this.onERC721Received.selector;
+    }
+
+    /// @notice ERC1155 receiver hook for safe transfers into escrow (moved here from LexScrowStorage)
+    function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
+        return this.onERC1155Received.selector;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Secondary trade — threshold setters
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function setMinTradeThreshold(uint256 units, uint256 consideration) external onlyAdmin {
+        SecondaryTradeStorage.SecondaryTradeData storage ds = SecondaryTradeStorage.secondaryTradeStorage();
+        ds.minTradeUnits = units;
+        ds.minTradeConsideration = consideration;
+        emit MinTradeThresholdSet(units, consideration, msg.sender);
+    }
+
+    function setDefaultIntegrator(address integrator) external onlyAdmin {
+        if (integrator != address(0)) {
+            if (!IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).isIntegratorWhitelisted(integrator))
+                revert IntegratorNotWhitelisted();
+        }
+        SecondaryTradeStorage.secondaryTradeStorage().defaultIntegrator = integrator;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Secondary trade — condition config (owner-managed; snapshotted onto each offer at postOffer)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Layer 2 — fund-specific (§6) threshold conditions (apply to every offer)
+    function addSpvThresholdCondition(address condition) external onlyAdmin {
+        SecondaryTradeStorage.addSpvThresholdCondition(condition);
+    }
+
+    function removeSpvThresholdConditionAt(uint256 index) external onlyAdmin {
+        SecondaryTradeStorage.removeSpvThresholdConditionAt(index);
+    }
+
+    // Layer 1 — exemption-specific (§5) threshold conditions (selected by offer.exemptionPathway)
+    function addPathwayThresholdCondition(ExemptionPathway pathway, address condition) external onlyAdmin {
+        SecondaryTradeStorage.addPathwayThresholdCondition(pathway, condition);
+    }
+
+    function removePathwayThresholdConditionAt(ExemptionPathway pathway, uint256 index) external onlyAdmin {
+        SecondaryTradeStorage.removePathwayThresholdConditionAt(pathway, index);
+    }
+
+    // Closing conditions (apply to every offer; evaluated at finalize)
+    function addClosingCondition(address condition) external onlyAdmin {
+        SecondaryTradeStorage.addClosingCondition(condition);
+    }
+
+    function removeClosingConditionAt(uint256 index) external onlyAdmin {
+        SecondaryTradeStorage.removeClosingConditionAt(index);
+    }
+
+    function getSpvThresholdConditions() external view returns (address[] memory) {
+        return SecondaryTradeStorage.secondaryTradeStorage().spvThresholdConditions;
+    }
+
+    function getPathwayThresholdConditions(ExemptionPathway pathway) external view returns (address[] memory) {
+        return SecondaryTradeStorage.secondaryTradeStorage().pathwayThresholdConditions[pathway];
+    }
+
+    function getClosingConditions() external view returns (address[] memory) {
+        return SecondaryTradeStorage.secondaryTradeStorage().closingConditions;
+    }
+
+    function getMinTradeThreshold() external view returns (uint256 units, uint256 consideration) {
+        SecondaryTradeStorage.SecondaryTradeData storage ds = SecondaryTradeStorage.secondaryTradeStorage();
+        return (ds.minTradeUnits, ds.minTradeConsideration);
+    }
+
+    function getDefaultIntegrator() external view returns (address) {
+        return SecondaryTradeStorage.secondaryTradeStorage().defaultIntegrator;
+    }
+
+    function getOffer(bytes32 offerId) external view returns (Offer memory) {
+        return SecondaryTradeStorage.secondaryTradeStorage().offers[offerId];
+    }
+
+    function getSecondaryEscrow(bytes32 agreementId) external view returns (SecondaryEscrow memory) {
+        return SecondaryTradeStorage.secondaryTradeStorage().escrows[agreementId];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Secondary trade — offer lifecycle
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice Posts a secondary-trade offer on behalf of `forAddr` (relayer path). `sig` is `forAddr`'s
+    /// EIP-712 authorization over `params` + `forAddr` + `nonce`. Thin wrapper over the linked logic.
+    function postOffer(PostOfferParams calldata params, address forAddr, uint256 nonce, bytes memory sig) external nonReentrant returns (bytes32 offerId) {
+        return SecondaryTradeStorage.postOffer(params, forAddr, nonce, sig);
+    }
+
+    /// @notice Posts a secondary-trade offer. Thin wrapper over the linked SecondaryTradeStorage logic.
+    function postOffer(PostOfferParams calldata params) external nonReentrant returns (bytes32 offerId) {
+        return SecondaryTradeStorage.postOffer(params);
+    }
+
+    /// @notice Cancels a secondary-trade offer on behalf of `forAddr` (relayer path). `sig` is `forAddr`'s
+    /// EIP-712 authorization over `offerId` + `forAddr` + `nonce`. Thin wrapper over the linked logic.
+    function cancelOffer(bytes32 offerId, address forAddr, uint256 nonce, bytes memory sig) external nonReentrant {
+        return SecondaryTradeStorage.cancelOffer(offerId, forAddr, nonce, sig);
+    }
+
+    /// @notice Cancels a non-terminal offer and returns its uncommitted assets to the offeror
+    /// @dev Only the free pool (uncommitted units / consideration) is refunded/released. Settlements already
+    /// accepted stay ACCEPTED and resolve on their own — finalized normally, or voided via the two-party
+    /// voidSecondaryTradeAgreement / expiry path; their assets stay in DealManager custody until then.
+    /// @param offerId Offer to cancel
+    function cancelOffer(bytes32 offerId) external nonReentrant {
+        SecondaryTradeStorage.cancelOffer(offerId);
+    }
+
+    /// @notice Accepts a secondary-trade offer on behalf of `forAddr` (relayer path). `sig` is `forAddr`'s
+    /// EIP-712 authorization over `params` + `forAddr` + `nonce`. Thin wrapper over the linked logic.
+    function acceptOffer(AcceptOfferParams calldata params, address forAddr, uint256 nonce, bytes memory sig) external nonReentrant returns (bytes32 settlementAgreementId) {
+        return SecondaryTradeStorage.acceptOffer(params, forAddr, nonce, sig);
+    }
+
+    /// @notice Accepts (fully or partially) a secondary-trade offer. Thin wrapper over the linked logic.
+    function acceptOffer(AcceptOfferParams calldata params) external nonReentrant returns (bytes32 settlementAgreementId) {
+        return SecondaryTradeStorage.acceptOffer(params);
+    }
+
+    /// @notice Finalizes an accepted secondary-trade settlement. Thin wrapper over the linked logic.
+    /// @dev Secondary counterpart of finalizeDeal; the two paths are kept fully separate.
+    function finalizeSecondaryTradeAgreement(bytes32 agreementId) external nonReentrant {
+        SecondaryTradeStorage.finalizeSecondaryTradeAgreement(agreementId);
+    }
+
+    /// @notice Voids an expired secondary-trade settlement. Thin wrapper over the linked logic.
+    /// @dev Secondary counterpart of voidExpiredDeal; the two paths are kept fully separate.
+    function voidExpiredSecondaryTradeAgreement(bytes32 agreementId, address signer, bytes memory signature) external nonReentrant {
+        SecondaryTradeStorage.voidExpiredSecondaryTradeAgreement(agreementId, signer, signature);
+    }
+
+    /// @notice Records a party's request to void an ACCEPTED secondary settlement before it is finalized or expires
+    /// @dev Finalizer-vouched request channel: the registry voids the agreement only once BOTH parties have
+    /// requested (or it is past expiry). The local escrow is settled only when that actually happens, keeping
+    /// DealManager and the registry in sync; a lone request just records intent and the counterparty can still finalize.
+    /// @param agreementId Settlement agreement to void
+    /// @param signer Caller's address (must equal msg.sender)
+    /// @param signature Caller's EIP-712 void signature, forwarded to the agreement registry
+    function voidSecondaryTradeAgreement(bytes32 agreementId, address signer, bytes memory signature) external nonReentrant {
+        SecondaryTradeStorage.voidSecondaryTradeAgreement(agreementId, signer, signature);
+    }
+
+    /// @notice Relayer variant of voidSecondaryTradeAgreement: a relayer submits `signer`'s void request on
+    /// their behalf, authorized by `signer`'s EIP-712 signature over the request plus an unordered `nonce`.
+    function voidSecondaryTradeAgreement(bytes32 agreementId, address signer, bytes memory signature, uint256 nonce, bytes memory authSig) external nonReentrant {
+        SecondaryTradeStorage.voidSecondaryTradeAgreement(agreementId, signer, signature, nonce, authSig);
+    }
+
+    /// @notice Syncs a secondary settlement that was voided directly in the agreement registry
+    /// @dev Callable by anyone; guards against double-void via the terminal-state checks
+    /// @param agreementId Settlement agreement that was already voided in the registry
+    function syncVoidedSecondaryTradeAgreement(bytes32 agreementId) external nonReentrant {
+        SecondaryTradeStorage.syncVoidedSecondaryTradeAgreement(agreementId);
     }
 
     /// @notice UUPS upgrade authorization

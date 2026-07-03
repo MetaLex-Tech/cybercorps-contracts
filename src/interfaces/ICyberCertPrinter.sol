@@ -122,6 +122,13 @@ interface ICyberCertPrinter is IERC721 {
         CertificateDetails memory details,
         string memory investorName
     ) external returns (uint256);
+    function safeMintAndAssign(
+        address to, // custodian
+        address owner, // legal owner
+        uint256 tokenId,
+        CertificateDetails memory details,
+        string memory ownerName
+    ) external returns (uint256);
     function assignCert(
         address from,
         uint256 tokenId,
