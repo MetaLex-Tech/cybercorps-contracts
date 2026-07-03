@@ -89,6 +89,7 @@ contract DealManager is
     error ConditionDoesNotExist();
     error NotRefImplementation();
     event MinTradeThresholdSet(uint256 minUnits, uint256 minConsideration, address setter);
+    event SettlementWindowSet(uint256 window, address setter);
 
     /// @notice Maps agreement IDs to arrays of counter party values for closed deals.
     mapping(bytes32 => string[]) public counterPartyValues;
@@ -500,6 +501,11 @@ contract DealManager is
         emit MinTradeThresholdSet(units, consideration, msg.sender);
     }
 
+    function setSettlementWindow(uint256 window) external onlyAdmin {
+        SecondaryTradeStorage.secondaryTradeStorage().settlementWindow = window;
+        emit SettlementWindowSet(window, msg.sender);
+    }
+
     function setDefaultIntegrator(address integrator) external onlyAdmin {
         if (integrator != address(0)) {
             if (!IDealManagerFactory(DealManagerStorage.getUpgradeFactory()).isIntegratorWhitelisted(integrator))
@@ -558,6 +564,11 @@ contract DealManager is
 
     function getDefaultIntegrator() external view returns (address) {
         return SecondaryTradeStorage.secondaryTradeStorage().defaultIntegrator;
+    }
+
+    /// @notice Effective settlement window (applies the default when unset).
+    function getSettlementWindow() external view returns (uint256) {
+        return SecondaryTradeStorage.getSettlementWindow();
     }
 
     function getOffer(bytes32 offerId) external view returns (Offer memory) {

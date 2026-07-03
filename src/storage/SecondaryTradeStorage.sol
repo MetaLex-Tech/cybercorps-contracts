@@ -68,6 +68,12 @@ library SecondaryTradeStorage {
 
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.secondary.trade.storage.v1");
 
+    /// @dev Fallback settlement window used when settlementWindow is unset (0), so an accepted lot always
+    /// gets a finalize window measured from acceptance rather than inheriting the (possibly imminent) offer
+    /// expiry. Must exceed any configured TimeSettlementPeriodCondition minimum delay for the lot to be
+    /// finalizeable; owners with a longer minimum (e.g. QMS-mode) set a larger window via setSettlementWindow.
+    uint256 constant DEFAULT_SETTLEMENT_WINDOW = 7 days;
+
     // ── EIP-712 relayer-authorization constants (see the relayer overloads of post/cancel/acceptOffer) ──
     // The signed message binds the full structured params (so a wallet renders each named field), the
     // principal `forAddr`, and an unordered `nonce` that makes each authorization single-use independent
@@ -113,6 +119,15 @@ library SecondaryTradeStorage {
         address[] closingConditions;                             // default closing set
         // Consumed relayer-authorization nonces: usedAuthNonce[forAddr][nonce], order-independent single-use.
         mapping(address => mapping(uint256 => bool)) usedAuthNonce;
+        // Per-DealManager settlement window: how long after acceptance a lot has to finalize before it can be
+        // voided as expired. Decouples settlement expiry from offer expiry (0 = DEFAULT_SETTLEMENT_WINDOW).
+        uint256 settlementWindow;
+    }
+
+    /// @notice Effective settlement window, applying the default when unset (so legacy DealManager does not need migration)
+    function getSettlementWindow() internal view returns (uint256) {
+        uint256 window = secondaryTradeStorage().settlementWindow;
+        return window == 0 ? DEFAULT_SETTLEMENT_WINDOW : window;
     }
 
     function secondaryTradeStorage() internal pure returns (SecondaryTradeData storage ds) {
@@ -333,6 +348,11 @@ library SecondaryTradeStorage {
             _checkMinTradeThreshold(remainderUnits, remainderConsideration);
         }
 
+        // Settlement window runs from acceptance, not the offer's validUntil: a lot accepted moments before
+        // the offer expires still gets the full window to finalize (and clear any settlement-period minimum
+        // delay), instead of a truncated or already-expired one.
+        uint256 settlementExpiry = block.timestamp + getSettlementWindow();
+
         // Create fully-signed settlement agreement via registry.
         // settlementAgreementIds.length is a push-only monotonic nonce: unique per acceptance even if prior
         // settlements are later voided (which decrements unitsAccepted but never shrinks the array).
@@ -352,7 +372,7 @@ library SecondaryTradeStorage {
             settlementPartyValues,
             bytes32(0),
             address(this),
-            offer.validUntil
+            settlementExpiry
         );
         // Offeror: DealManager (finalizer) attests commitment via signContractWithEscrow.
         // The registry does not verify escrowSigner's EIP-712 sig here; the offeror's
@@ -417,7 +437,7 @@ library SecondaryTradeStorage {
             paymentToken: offer.paymentToken,
             paymentAmount: partialConsideration,
             units: params.units,
-            expiry: offer.validUntil,
+            expiry: settlementExpiry,
             status: SecondaryEscrowStatus.ACCEPTED,
             feeDestination: offer.integrator,
             offerId: params.offerId,
@@ -449,7 +469,7 @@ library SecondaryTradeStorage {
         // Acceptance funds the escrow atomically, so this event carries the settlement's payment too.
         emit ISecondaryTradeStorage.OfferAccepted(
             params.offerId, settlementAgreementId, acceptor, params.units, offer.paymentToken, partialConsideration,
-            tokenId, offer.validUntil,
+            tokenId, settlementExpiry,
             buyerName, buyerHostingMode, adminMultisig, endorsementSig
         );
     }

@@ -494,7 +494,7 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(se.paymentToken, address(paymentToken), "payment token");
         assertEq(se.paymentAmount, payment, "payment amount for this lot");
         assertEq(se.units, units, "units in this lot");
-        assertEq(se.expiry, block.timestamp + 1 days, "expiry mirrors offer validUntil");
+        assertEq(se.expiry, block.timestamp + 7 days, "expiry runs the settlement window from acceptance, not offer validUntil");
         assertEq(se.feeDestination, address(0), "no integrator set -> fees route to platform");
         assertEq(se.tokenId, sellerTokenId, "reservation target is the seller's tokenId");
 
@@ -1267,6 +1267,9 @@ contract DealManagerSecondaryTradeTest is Test {
 
         vm.expectRevert();
         dm.setMinTradeThreshold(1, 1);
+
+        vm.expectRevert();
+        dm.setSettlementWindow(7 days);
 
         vm.expectRevert();
         dm.setDefaultIntegrator(address(0));
@@ -3084,6 +3087,80 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.acceptOffer(p);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Settlement window — settlement expiry runs from acceptance, not offer expiry
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function test_GetSettlementWindow_DefaultsWhenUnset() public view {
+        assertEq(dm.getSettlementWindow(), 7 days, "unset window falls back to the 7-day default");
+    }
+
+    function test_SetSettlementWindow_UpdatesEffectiveWindow() public {
+        vm.expectEmit(false, false, false, true, address(dm));
+        emit DealManager.SettlementWindowSet(45 days, owner);
+        vm.prank(owner);
+        dm.setSettlementWindow(45 days);
+        assertEq(dm.getSettlementWindow(), 45 days, "configured window overrides the default");
+    }
+
+    // Core regression for the truncated-settlement-window finding: a lot accepted moments before the offer
+    // expires still gets the full settlement window measured from acceptance, not the offer's imminent validUntil.
+    function test_AcceptOffer_SettlementExpiry_RunsFromAcceptance_NotOfferExpiry() public {
+        bytes32 offerId = _postSellOffer(); // validUntil = block.timestamp + 1 days
+        uint256 offerValidUntil = dm.getOffer(offerId).validUntil;
+
+        // Accept one minute before the offer expires.
+        vm.warp(offerValidUntil - 1 minutes);
+        bytes32 settlementId = _acceptSellOffer(offerId);
+
+        assertEq(
+            dm.getSecondaryEscrow(settlementId).expiry,
+            block.timestamp + 7 days,
+            "settlement expiry is acceptance time + window, independent of the near offer expiry"
+        );
+        assertGt(
+            dm.getSecondaryEscrow(settlementId).expiry,
+            offerValidUntil,
+            "settlement outlives the offer it was accepted against"
+        );
+    }
+
+    function test_AcceptOffer_SettlementExpiry_UsesConfiguredWindow() public {
+        vm.prank(owner);
+        dm.setSettlementWindow(45 days);
+
+        bytes32 offerId = _postSellOffer();
+        bytes32 settlementId = _acceptSellOffer(offerId);
+        assertEq(
+            dm.getSecondaryEscrow(settlementId).expiry,
+            block.timestamp + 45 days,
+            "settlement expiry honors the configured window over the default"
+        );
+    }
+
+    // The compounding case from the finding: an acceptance late in the offer's life used to be
+    // unfinalizeable once block.timestamp passed offer.validUntil. With the window running from acceptance,
+    // the lot stays finalizeable well past the original offer expiry.
+    function test_FinalizeSecondaryTrade_LateAcceptance_StaysFinalizeable() public {
+        bytes32 offerId = _postSellOffer(); // validUntil = block.timestamp + 1 days
+        uint256 offerValidUntil = dm.getOffer(offerId).validUntil;
+
+        vm.warp(offerValidUntil - 1 minutes);
+        bytes32 settlementId = _acceptSellOffer(offerId);
+
+        // Advance past the original offer expiry (but within the settlement window).
+        vm.warp(offerValidUntil + 1 days);
+        assertLt(block.timestamp, dm.getSecondaryEscrow(settlementId).expiry, "still inside the settlement window");
+
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.FINALIZED),
+            "late-accepted lot finalizes past the original offer expiry"
+        );
+    }
+
     // Voiding one of several lots on a FULLY_ACCEPTED offer leaves unitsAccepted > 0, so the offer
     // reverts to PARTIALLY_ACCEPTED (not LIVE). The SELL lot returns to the offer's free pool and
     // stays reserved (offer not cancelled); only the voided lot's buyer payment is refunded.
@@ -3288,7 +3365,7 @@ contract DealManagerSecondaryTradeTest is Test {
     }
 
     // finalizeSecondaryTradeAgreement past the settlement's expiry reverts. The settlement agreement's
-    // registry expiry equals secEscrow.expiry (both = offer.validUntil), so the registry
+    // registry expiry equals secEscrow.expiry (both = acceptance time + settlement window), so the registry
     // finalizeContract call reverts ContractExpired before the escrow's own SecondaryTradeAgreementExpired guard is
     // reached — that guard is defensive/unreachable for secondary settlements in normal flow.
     function test_RevertIf_FinalizeSecondaryTrade_PastSettlementExpiry() public {
@@ -3335,7 +3412,7 @@ contract DealManagerSecondaryTradeTest is Test {
             address(paymentToken),
             CONSIDERATION,
             sellerTokenId,
-            block.timestamp + 1 days,
+            block.timestamp + 7 days,
             SELL_ACCEPT_BUYER_NAME,
             HostingMode.DIRECT,
             address(0),
