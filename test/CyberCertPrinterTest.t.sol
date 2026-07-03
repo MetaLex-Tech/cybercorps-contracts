@@ -325,6 +325,30 @@ contract CyberCertPrinterTest is Test {
         printer.decreaseUnitsReserved(999, 1);
     }
 
+    function test_ReservedCert_BlocksTransferUntilReleased() public {
+        _mintCert(1, investor, 100, bytes(""));
+
+        vm.prank(address(issuanceManager));
+        printer.setTokenTransferable(1, true);
+        vm.prank(investor);
+        printer.addEndorsement(1, _endorsement(investor, recipient));
+
+        // Reserving units escrows the cert; its legal ownership is frozen while any units are reserved.
+        vm.prank(address(issuanceManager));
+        printer.increaseUnitsReserved(1, 1);
+
+        vm.prank(investor);
+        vm.expectRevert(CyberCertPrinter.CertificateReserved.selector);
+        printer.transferFrom(investor, recipient, 1);
+
+        // Releasing the reservation (settlement/void) unfreezes the transfer.
+        vm.prank(address(issuanceManager));
+        printer.decreaseUnitsReserved(1, 1);
+        vm.prank(investor);
+        printer.transferFrom(investor, recipient, 1);
+        assertEq(printer.legalOwnerOf(1), recipient);
+    }
+
     function test_TokenTransferable_AllowsOneTokenWithoutEnablingGlobalTransfers() public {
         _mintCert(1, investor, 100, bytes(""));
         _mintCert(2, investor, 100, bytes(""));
