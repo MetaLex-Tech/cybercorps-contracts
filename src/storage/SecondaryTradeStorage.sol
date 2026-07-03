@@ -46,6 +46,7 @@ import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import {ECDSA} from "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/IIssuanceManager.sol";
+import {ICyberCertPrinter} from "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/IDealManagerFactory.sol";
 import "../interfaces/IDealManager.sol";
 import "openzeppelin-contracts/utils/introspection/ERC165Checker.sol";
@@ -66,6 +67,12 @@ library SecondaryTradeStorage {
     using ECDSA for bytes32;
 
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.secondary.trade.storage.v1");
+
+    /// @dev Fallback settlement window used when settlementWindow is unset (0), so an accepted lot always
+    /// gets a finalize window measured from acceptance rather than inheriting the (possibly imminent) offer
+    /// expiry. Must exceed any configured TimeSettlementPeriodCondition minimum delay for the lot to be
+    /// finalizeable; owners with a longer minimum (e.g. QMS-mode) set a larger window via setSettlementWindow.
+    uint256 constant DEFAULT_SETTLEMENT_WINDOW = 7 days;
 
     // ── EIP-712 relayer-authorization constants (see the relayer overloads of post/cancel/acceptOffer) ──
     // The signed message binds the full structured params (so a wallet renders each named field), the
@@ -112,6 +119,15 @@ library SecondaryTradeStorage {
         address[] closingConditions;                             // default closing set
         // Consumed relayer-authorization nonces: usedAuthNonce[forAddr][nonce], order-independent single-use.
         mapping(address => mapping(uint256 => bool)) usedAuthNonce;
+        // Per-DealManager settlement window: how long after acceptance a lot has to finalize before it can be
+        // voided as expired. Decouples settlement expiry from offer expiry (0 = DEFAULT_SETTLEMENT_WINDOW).
+        uint256 settlementWindow;
+    }
+
+    /// @notice Effective settlement window, applying the default when unset (so legacy DealManager does not need migration)
+    function getSettlementWindow() internal view returns (uint256) {
+        uint256 window = secondaryTradeStorage().settlementWindow;
+        return window == 0 ? DEFAULT_SETTLEMENT_WINDOW : window;
     }
 
     function secondaryTradeStorage() internal pure returns (SecondaryTradeData storage ds) {
@@ -147,6 +163,8 @@ library SecondaryTradeStorage {
 
         // validate parameters
         if (params.certPrinter == address(0)) revert ISecondaryTradeStorage.MissingCertPrinter();
+        if (!DealManagerStorage.getIssuanceManager().isPrinter(params.certPrinter))
+            revert ISecondaryTradeStorage.UnknownCertPrinter();
 
         // Validate integrator
         address integrator = params.integrator != address(0)
@@ -219,6 +237,8 @@ library SecondaryTradeStorage {
         _checkThresholdConditions(offerId, bytes32(0));
 
         if (params.side == OfferSide.SELL) {
+            if (ICyberCertPrinter(params.certPrinter).legalOwnerOf(params.tokenId) != offeror)
+                revert ISecondaryTradeStorage.NotCertOwner();
             // Reserve units on the seller's cert (routed through IssuanceManager, the only caller the printer allows)
             DealManagerStorage.getIssuanceManager().increaseUnitsReserved(params.certPrinter, params.tokenId, params.units);
         } else {
@@ -328,6 +348,11 @@ library SecondaryTradeStorage {
             _checkMinTradeThreshold(remainderUnits, remainderConsideration);
         }
 
+        // Settlement window runs from acceptance, not the offer's validUntil: a lot accepted moments before
+        // the offer expires still gets the full window to finalize (and clear any settlement-period minimum
+        // delay), instead of a truncated or already-expired one.
+        uint256 settlementExpiry = block.timestamp + getSettlementWindow();
+
         // Create fully-signed settlement agreement via registry.
         // settlementAgreementIds.length is a push-only monotonic nonce: unique per acceptance even if prior
         // settlements are later voided (which decrements unitsAccepted but never shrinks the array).
@@ -347,7 +372,7 @@ library SecondaryTradeStorage {
             settlementPartyValues,
             bytes32(0),
             address(this),
-            offer.validUntil
+            settlementExpiry
         );
         // Offeror: DealManager (finalizer) attests commitment via signContractWithEscrow.
         // The registry does not verify escrowSigner's EIP-712 sig here; the offeror's
@@ -375,11 +400,16 @@ library SecondaryTradeStorage {
             tokenId = offer.tokenId;
             buyer = acceptor;
             endorsementSig = offer.openEndorsementSig;
+            // Re-check the seller still owns the cert
+            if (ICyberCertPrinter(certPrinter).legalOwnerOf(tokenId) != offer.offeror)
+                revert ISecondaryTradeStorage.SecondaryTradeSellerOwnershipChanged();
         } else {
             certPrinter = offer.certPrinter;
             tokenId = params.sellerTokenId;
             buyer = offer.offeror;
             endorsementSig = params.openEndorsementSig;
+            if (ICyberCertPrinter(certPrinter).legalOwnerOf(tokenId) != acceptor)
+                revert ISecondaryTradeStorage.NotCertOwner();
             // Reserve units on the seller's cert at acceptance (buy-offer flow, routed through IssuanceManager)
             DealManagerStorage.getIssuanceManager().increaseUnitsReserved(certPrinter, tokenId, params.units);
         }
@@ -410,7 +440,7 @@ library SecondaryTradeStorage {
             paymentToken: offer.paymentToken,
             paymentAmount: partialConsideration,
             units: params.units,
-            expiry: offer.validUntil,
+            expiry: settlementExpiry,
             status: SecondaryEscrowStatus.ACCEPTED,
             feeDestination: offer.integrator,
             offerId: params.offerId,
@@ -442,7 +472,7 @@ library SecondaryTradeStorage {
         // Acceptance funds the escrow atomically, so this event carries the settlement's payment too.
         emit ISecondaryTradeStorage.OfferAccepted(
             params.offerId, settlementAgreementId, acceptor, params.units, offer.paymentToken, partialConsideration,
-            tokenId, offer.validUntil,
+            tokenId, settlementExpiry,
             buyerName, buyerHostingMode, adminMultisig, endorsementSig
         );
     }
@@ -505,6 +535,10 @@ library SecondaryTradeStorage {
             offer.status = OfferStatus.FINALIZED;
         }
         (address seller, address buyer) = _settlementParties(offer, secEscrow);
+        // Require seller ownership to remain unchanged; if it was a legitimately-moved
+        // position it'd still revert here and it could be resolved via the void/expiry path instead of mispaying.
+        if (ICyberCertPrinter(offer.certPrinter).legalOwnerOf(secEscrow.tokenId) != seller)
+            revert ISecondaryTradeStorage.SecondaryTradeSellerOwnershipChanged();
         // Fee math (mirrors DealManager.computeFee / getPlatformPayable) computed directly from the factory
         address upgradeFactory = DealManagerStorage.getUpgradeFactory();
         uint256 fee = secEscrow.paymentAmount * IDealManagerFactory(upgradeFactory).getDefaultFeeRatio() / DealManagerFactoryStorage.BASIS_POINTS;

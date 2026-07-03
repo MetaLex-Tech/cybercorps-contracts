@@ -134,6 +134,8 @@ interface IDealManager {
     function cancelOffer(bytes32 offerAgreementId) external;
     function acceptOffer(AcceptOfferParams calldata params) external returns (bytes32 settlementAgreementId);
     function setMinTradeThreshold(uint256 units, uint256 consideration) external;
+    function setSettlementWindow(uint256 window) external;
+    function getSettlementWindow() external view returns (uint256);
     function setDefaultIntegrator(address integrator) external;
     function getOffer(bytes32 offerAgreementId) external view returns (Offer memory);
     function getSecondaryEscrow(bytes32 agreementId) external view returns (SecondaryEscrow memory);

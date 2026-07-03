@@ -71,9 +71,9 @@ import {CertificateDetails, ICyberCertPrinter} from "../src/interfaces/ICyberCer
 // Reuse the payment-token mock and the minimal CyberCorp / uriBuilder fixtures from sibling test files.
 import {SecERC20Mock} from "./DealManagerSecondaryTradeTest.t.sol";
 import {
-    MockCyberCorpForCertEvent,
-    MockUriBuilderForCertEvent
-} from "./IssuanceManagerCertificateCreatedEventTest.t.sol";
+    MockCyberCorpForIM,
+    MockUriBuilderForIM
+} from "./IssuanceManagerTest.t.sol";
 
 /// @title DealManagerSecondaryTradeIndexerTest
 /// @notice Simulates an off-chain indexer (e.g. powering the Legion UI) and proves the secondary-trade
@@ -224,7 +224,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
     ICyberCertPrinter public certPrinter;
     IssuanceManager public im;
     CyberAgreementRegistry public registry;
-    MockCyberCorpForCertEvent public corp;
+    MockCyberCorpForIM public corp;
     DealManagerFactory public dmFactory;
     DealManager public dm;
     BorgAuth public auth;
@@ -244,7 +244,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
 
         paymentToken = new SecERC20Mock();
         auth = new BorgAuth(owner);
-        corp = new MockCyberCorpForCertEvent();
+        corp = new MockCyberCorpForIM();
 
         // Real IssuanceManager + CyberCertPrinter, deployed through the IssuanceManagerFactory beacon stack
         // (mirrors IssuanceManagerSecondaryTransferTest), so the secondary-transfer logs are the real ones.
@@ -263,7 +263,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
             )
         );
         im = IssuanceManager(imFactory.deployIssuanceManager(imSalt));
-        im.initialize(address(auth), address(corp), address(new MockUriBuilderForCertEvent()), address(imFactory));
+        im.initialize(address(auth), address(corp), address(new MockUriBuilderForIM()), address(imFactory));
 
         registry = CyberAgreementRegistry(
             address(
