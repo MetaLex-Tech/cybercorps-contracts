@@ -68,6 +68,8 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     error InvalidLegendIndex();
     error SignatureRequired();
     error LegalOwnerIndexOutOfBounds();
+    // Cert has units reserved (in escrow for a pending deal/loan); its legal ownership is frozen
+    error CertificateReserved();
     // Reverted from the storage library via delegatecall; declared here for the ABI
     error ExceedsAvailableUnits();
     error ExceedsReservedUnits();
@@ -189,6 +191,8 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         CertificateDetails memory details
     ) external onlyIssuanceManager returns (uint256) {
         if(ownerOf(tokenId) != from) revert InvalidTokenId();
+        // Reserved units are escrowed for a pending deal; legal ownership can't be reassigned while on escrow.
+        if (CyberCertPrinterStorage.getUnitsReserved(tokenId) > 0) revert CertificateReserved();
         CyberCertPrinterStorage.recordAssign(tokenId, to, details);
         return tokenId;
     }
@@ -244,6 +248,10 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         
         // Skip restriction checks for minting (from == address(0)) and burning (to == address(0))
         if (from != address(0) && to != address(0)) {
+            // A cert with reserved units is escrowed for a pending deal/loan: its legal ownership is frozen
+            // until the reservation is released at settlement or void. Blocks the transfer vector; assignCert
+            // guards the reassignment vector.
+            if (CyberCertPrinterStorage.getUnitsReserved(tokenId) > 0) revert CertificateReserved();
             // Restriction + endorsement logic lives in the external library (delegatecall)
             // to keep this contract under the bytecode size limit
             CyberCertPrinterStorage.processTransfer(from, to, tokenId);
