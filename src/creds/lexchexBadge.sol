@@ -25,11 +25,12 @@ mechanical, including photocopying, recording, or by any information storage and
 except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
-import "@openzeppelin/contracts/utils/Base64.sol";
+import "openzeppelin-contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts/utils/Strings.sol";
+import "openzeppelin-contracts/utils/Base64.sol";
+import "openzeppelin-contracts/token/ERC721/IERC721.sol";
 import "./storage/lexchexBadgeStorage.sol";
 import "../libs/auth.sol";
 import "../interfaces/IERC5484.sol";
@@ -357,6 +358,16 @@ contract LeXcheXBadge is
 
     function getCredential(uint256 tokenId) public view returns (Credential memory) {
         return LeXcheXBadgeStorage.getCredential(tokenId);
+    }
+
+    /// @dev Disambiguates balanceOf, declared by both ERC721Upgradeable and ILexChexBadge.
+    function balanceOf(address owner)
+        public
+        view
+        override(ERC721Upgradeable, IERC721, ILexChexBadge)
+        returns (uint256)
+    {
+        return super.balanceOf(owner);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
