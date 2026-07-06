@@ -3,40 +3,52 @@
 Coverage map for `test/DealManagerSecondaryTradeExemptionPathwayTest.t.sol`, an integration test
 that drives a **full secondary trade (`post → accept → finalize`) through each exemption pathway**
 with the *real* secondary-trading conditions and the *real* `LeXcheXBadge` credential layer wired in.
-Happy paths only.
 
 Pathway → condition mapping is grounded in `cyberTRADE Exemption Pathways v3.52.md`
 (§"Condition Contracts per Pathway"), verified against `cyberTRADE_spec_v3.55.dev0.md` §5 / §6.1–6.5
 and §4.1.4 — consistent, same five pathways and same per-pathway conditions.
 
-Not every condition the spec maps to a pathway is implemented yet. Conditions that exist in
-`src/libs/conditions/secondary/` are wired for real; the essential-but-unimplemented ones are stood
-in by in-file pass-through mocks so each pathway's canonical condition-set shape is represented.
+**Every condition in the map is now a real implementation from `src/libs/conditions/secondary/` —
+no in-file mocks remain.** The closing set (`GlobalKillCondition`, `TimeSettlementPeriodCondition`)
+is enforced for real on every pathway: each happy path warps past the 24h minimum settlement period
+between acceptance and finalization, and two dedicated tests exercise the closing conditions' own
+blocking behavior.
+
+**Latest run:** `forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15
+--match-contract DealManagerSecondaryTradeExemptionPathwayTest` →
+**7 passed / 0 failed** (5 pathway happy paths + 2 closing-condition tests).
 
 ## Legend
 
 - ✓ real condition, enforced and passing
 - ○ real condition attached but auto-silent for this pathway (short-circuits to pass)
-- Ⓜ in-file pass-through mock (condition not yet implemented)
 - — not attached for this pathway
 
 ## Scenario × condition
 
 All scenarios: SELL offer, full fill (100 units), expected terminal state **FINALIZED**. Distinct
 buyer per pathway. SPV-layer conditions apply to every pathway; pathway-layer conditions are keyed
-by `exemptionPathway`; closing conditions are evaluated at finalize.
+by `exemptionPathway`; closing conditions are evaluated at finalize (after a +24h warp to clear the
+settlement period).
 
-| Scenario (test fn)              | Pathway         | Buyer profile                            | Seller cert `acquisitionDate` | KYCAML | TaxInfo | HolderCap | ERISA | USState | Legion | HoldingPeriod | Accredited | QIB | NonUSPerson | RegSCompliance | Rule144Disc | §4a7Disc | LegalOpinion | AgreementSigned | GlobalKill | TimeSettlement |
-|---------------------------------|-----------------|------------------------------------------|-------------------------------|:------:|:-------:|:---------:|:-----:|:-------:|:------:|:-------------:|:----------:|:---:|:-----------:|:--------------:|:-----------:|:--------:|:------------:|:---------------:|:----------:|:--------------:|
-| `test_Rule144_HappyPath`        | RULE_144        | US individual, state CA                  | > 365 d ago                   |   ✓    |    ✓    |     ✓     |   ✓   |    ✓    |   ✓    |       ✓       |     —      |  —  |      —      |       —        |      Ⓜ      |    —     |      —       |        Ⓜ        |     Ⓜ      |       Ⓜ        |
-| `test_Section4a7_HappyPath`     | SECTION_4A7     | US **accredited**, CA                    | any                           |   ✓    |    ✓    |     ✓     |   ✓   |    ✓    |   ✓    |       —       |     ✓      |  —  |      —      |       —        |      —      |    Ⓜ     |      —       |        Ⓜ        |     Ⓜ      |       Ⓜ        |
-| `test_Section4a1Half_HappyPath` | SECTION_4A1HALF | US sophisticated (KYC only), CA          | any                           |   ✓    |    ✓    |     ✓     |   ✓   |    ✓    |   ✓    |       —       |     —      |  —  |      —      |       —        |      —      |    —     |      Ⓜ       |        Ⓜ        |     Ⓜ      |       Ⓜ        |
-| `test_Rule144A_HappyPath`       | RULE_144A       | US **QIB**, CA                           | any                           |   ✓    |    ✓    |     ✓     |   ✓   |    ✓    |   ✓    |       —       |     —      |  ✓  |      —      |       —        |      —      |    —     |      —       |        Ⓜ        |     Ⓜ      |       Ⓜ        |
-| `test_RegulationS_HappyPath`    | REGULATION_S    | **non-US person** (juris KY, no usState) | > compliance period ago       |   ✓    |    ✓    |     ✓     |   ○   |    ○    |   ✓    |       —       |     —      |  —  |      ✓      |       ✓        |      —      |    —     |      —       |        Ⓜ        |     Ⓜ      |       Ⓜ        |
+| Scenario (test fn)              | Pathway         | Buyer profile                            | Seller cert `acquisitionDate` | KYCAML | TaxInfo | HolderCap | ERISA | USState | Legion | AgreementSigned | HoldingPeriod | Accredited | QIB | NonUSPerson | RegSCompliance | Rule144Disc | §4a7Disc | LegalOpinion | GlobalKill | TimeSettlement |
+|---------------------------------|-----------------|------------------------------------------|-------------------------------|:------:|:-------:|:---------:|:-----:|:-------:|:------:|:---------------:|:-------------:|:----------:|:---:|:-----------:|:--------------:|:-----------:|:--------:|:------------:|:----------:|:--------------:|
+| `test_Rule144_HappyPath`        | RULE_144        | US individual, state CA                  | > 365 d ago                   |   ✓    |    ✓    |     ✓     |   ✓   |    ✓    |   ✓    |        ✓        |       ✓       |     —      |  —  |      —      |       —        |      ✓      |    —     |      —       |     ✓      |       ✓        |
+| `test_Section4a7_HappyPath`     | SECTION_4A7     | US **accredited**, CA                    | any                           |   ✓    |    ✓    |     ✓     |   ✓   |    ✓    |   ✓    |        ✓        |       —       |     ✓      |  —  |      —      |       —        |      —      |    ✓     |      —       |     ✓      |       ✓        |
+| `test_Section4a1Half_HappyPath` | SECTION_4A1HALF | US sophisticated (KYC only), CA          | any                           |   ✓    |    ✓    |     ✓     |   ✓   |    ✓    |   ✓    |        ✓        |       —       |     —      |  —  |      —      |       —        |      —      |    —     |      ✓       |     ✓      |       ✓        |
+| `test_Rule144A_HappyPath`       | RULE_144A       | US **QIB**, CA                           | any                           |   ✓    |    ✓    |     ✓     |   ✓   |    ✓    |   ✓    |        ✓        |       —       |     —      |  ✓  |      —      |       —        |      —      |    —     |      —       |     ✓      |       ✓        |
+| `test_RegulationS_HappyPath`    | REGULATION_S    | **non-US person** (juris KY, no usState) | > compliance period ago       |   ✓    |    ✓    |     ✓     |   ○   |    ○    |   ✓    |        ✓        |       —       |     —      |  —  |      ✓      |       ✓        |      —      |    —     |      —       |     ✓      |       ✓        |
 
-**SPV-layer (all pathways):** KYCAML, TaxInfo, HolderCap, ERISA, USState, Legion, AgreementSigned(Ⓜ).
-**Closing set (all):** GlobalKill(Ⓜ), TimeSettlement(Ⓜ).
-**Pathway-layer:** the columns to the right of Legion.
+**SPV-layer (all pathways):** KYCAML, TaxInfo, HolderCap, ERISA, USState, Legion, AgreementSigned.
+**Closing set (all):** GlobalKill, TimeSettlement.
+**Pathway-layer:** the columns between AgreementSigned and GlobalKill.
+
+## Closing-condition behavior tests
+
+| Test fn                                   | What it proves                                                                                                                                                                           |
+|-------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `test_GlobalKill_BlocksFinalize_UntilLowered` | Either admin raises unilaterally mid-deal → finalize reverts `SecondaryConditionsNotMet(globalKill)`; the proposer alone cannot confirm the lower (two-call, two-admin lowering); once the other admin confirms, finalize succeeds |
+| `test_TimeSettlement_BlocksEarlyFinalize`     | `finalizableAt == acceptance + 24h`; finalize before the window reverts `SecondaryConditionsNotMet(timeSettlement)`; after the warp it succeeds                                        |
 
 ## Condition → coverage
 
@@ -45,27 +57,40 @@ by `exemptionPathway`; closing conditions are evaluated at finalize.
 | KYCAMLCondition                       |   ✓   | all 5                          | both buyer & seller hold a valid KYC_AML badge                                                            |
 | TaxInfoCondition                      |   ✓   | all 5                          | admin records `setTaxForm(buyer, W9, …)`                                                                  |
 | HolderCapCondition                    |   ✓   | all 5                          | §3(c)(1), cap 100; buyer is a fresh holder (+1 ≤ 100)                                                     |
-| ERISACondition                        |   ✓   | 144, 4a7, 4a1½, 144A (○ Reg S) | buyer's `acceptorPartyValues=[attestation]` recorded on the settlement agreement                          |
+| ERISACondition                        |   ✓   | 144, 4a7, 4a1½, 144A (○ Reg S) | buyer's attestation recorded as a signer value on the settlement agreement                                |
 | USStateOfResidenceCondition           |   ✓   | 144, 4a7, 4a1½, 144A (○ Reg S) | buyer state CA (NY is default-blocked, unused); silent for the non-US Reg S buyer                         |
 | LegionSoulboundCondition              |   ✓   | all 5                          | buyer holds the Legion custom-category credential                                                         |
+| AgreementSignedCondition              |   ✓   | all 5 (SPV-layer)              | `registry.allPartiesSigned(settlementId)`; silent at posting, satisfied from acceptance onward            |
 | HoldingPeriodCondition                |   ✓   | 144                            | reads `FundInterestData.acquisitionDate` from the seller cert                                             |
 | LexChexBadgeKind(ACCREDITED_INVESTOR) |   ✓   | 4a7                            | buyer-only                                                                                                |
 | LexChexBadgeKind(QIB)                 |   ✓   | 144A                           | buyer-only                                                                                                |
 | LexChexBadgeKind(NON_US_PERSON)       |   ✓   | Reg S                          | buyer-only; approximates the spec's zkPassport `NonUSPersonCondition` (a generic `ICondition`, not typed) |
 | RegSDistributionComplianceCondition   |   ✓   | Reg S                          | `setRegSConfig(corp, 3, 365 d)`; reads acquisitionDate                                                    |
-| Rule144DisclosureCondition            |   Ⓜ   | 144                            | not implemented → in-file mock                                                                            |
-| Section4a7DisclosureCondition         |   Ⓜ   | 4a7                            | not implemented → in-file mock                                                                            |
-| LegalOpinionCondition                 |   Ⓜ   | 4a1½                           | not implemented → in-file mock                                                                            |
-| AgreementSignedCondition              |   Ⓜ   | all 5                          | not implemented → in-file mock (SPV-layer)                                                                |
-| GlobalKillCondition                   |   Ⓜ   | all 5                          | not implemented → in-file mock (closing)                                                                  |
-| TimeSettlementPeriodCondition         |   Ⓜ   | all 5                          | not implemented → in-file mock (closing); the real one would need a warp between accept & finalize        |
-| CFIUSCondition                        |   —   | none                           | optional per-SPV; out of scope for these happy paths                                                      |
-| GPLPApprovalCondition                 |   —   | none                           | optional per-SPV; out of scope                                                                            |
+| Rule144DisclosureCondition            |   ✓   | 144                            | SPV admin records `setDisclosurePackage(corp, uri, asOf)`; 16-month freshness policy                      |
+| Section4a7DisclosureCondition         |   ✓   | 4a7                            | package freshness (from posting) + buyer's acknowledgment-of-receipt signer value (from acceptance)       |
+| LegalOpinionCondition                 |   ✓   | 4a1½                           | GP records `recordGPSignOff(dm, offerId)` between post and accept, pre-approving the offer's settlements  |
+| GlobalKillCondition                   |   ✓   | all 5 (closing) + kill test    | plain singleton; two admin slots (MetaLeX + Legion), raise unilateral, lower two-call                     |
+| TimeSettlementPeriodCondition         |   ✓   | all 5 (closing) + timing test  | 24h default from acceptance (reconstructed as `escrow.expiry − settlementWindow`); happy paths warp past  |
+| CFIUSCondition                        |   ✓   | none                           | implemented; optional per-SPV, out of scope for these happy paths                                         |
+| GPLPApprovalCondition                 |   ✓   | none                           | implemented; optional per-SPV, out of scope                                                               |
+
+## Test-fixture notes
+
+- The agreement template carries **two party fields** (`erisaAttestation`, `section4a7Ack`); every
+  buyer submits both values at acceptance, and each condition scans signer values for its own marker,
+  so carrying the §4(a)(7) ack on non-4a7 pathways is harmless.
+- Per-SPV setters (`setRegSConfig`, `setDisclosurePackage`, `setStateBlocked`,
+  `recordGPSignOff`) are gated on the SPV's / DealManager's own BorgAuth via
+  `IBorgAuthProvider(target).AUTH()`; the test corp exposes `AUTH()` for this.
+- Closing conditions are plain (non-proxied) singletons; the threshold conditions are
+  ERC1967-proxied UUPS deployments, matching the intended production topology.
 
 ## Not yet covered (future work)
 
-- Negative / revert paths per condition (expired badge, unmet hold, blocked state, holder-cap breach,
-  missing tax form, missing ERISA attestation, U.S. buyer on Reg S, unconfigured Reg S SPV).
+- Negative / revert paths per threshold condition (expired badge, unmet hold, blocked state,
+  holder-cap breach, missing tax form, missing ERISA attestation, U.S. buyer on Reg S, unconfigured
+  Reg S SPV, stale disclosure package, missing GP sign-off).
 - BUY-side offers (bids) per pathway.
 - Partial fills across multiple settlements.
-- The real `TimeSettlementPeriodCondition` / `GlobalKillCondition` once implemented.
+- `TimeSettlementPeriodCondition` per-DealManager `setDelayOverride` (QMS-mode 45-day parameterization).
+- `GlobalKillCondition` admin rotation (`rotateAdmin`).

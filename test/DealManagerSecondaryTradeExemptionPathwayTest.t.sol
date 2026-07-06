@@ -14,7 +14,6 @@ import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CertificateDetails, ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC5484} from "../src/interfaces/IERC5484.sol";
-import {BaseSecondaryTradingCondition} from "../src/libs/conditions/BaseSecondaryTradingCondition.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {LeXcheXBadge} from "../src/creds/lexchexBadge.sol";
 import {CategoryKind, Credential, CredentialCategory} from "../src/creds/storage/lexchexBadgeStorage.sol";
@@ -23,6 +22,7 @@ import {
     AcceptOfferParams,
     ExemptionPathway,
     HostingMode,
+    ISecondaryTradeStorage,
     Offer,
     OfferSide,
     PostOfferParams,
@@ -39,6 +39,12 @@ import {LegionSoulboundCondition} from "../src/libs/conditions/secondary/LegionS
 import {HoldingPeriodCondition} from "../src/libs/conditions/secondary/HoldingPeriodCondition.sol";
 import {LexChexBadgeKindCondition} from "../src/libs/conditions/secondary/LexChexBadgeKindCondition.sol";
 import {RegSDistributionComplianceCondition} from "../src/libs/conditions/secondary/RegSDistributionComplianceCondition.sol";
+import {Rule144DisclosureCondition} from "../src/libs/conditions/secondary/Rule144DisclosureCondition.sol";
+import {Section4a7DisclosureCondition} from "../src/libs/conditions/secondary/Section4a7DisclosureCondition.sol";
+import {LegalOpinionCondition} from "../src/libs/conditions/secondary/LegalOpinionCondition.sol";
+import {AgreementSignedCondition} from "../src/libs/conditions/secondary/AgreementSignedCondition.sol";
+import {GlobalKillCondition} from "../src/libs/conditions/secondary/GlobalKillCondition.sol";
+import {TimeSettlementPeriodCondition} from "../src/libs/conditions/secondary/TimeSettlementPeriodCondition.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {MockUriBuilderForIM} from "./IssuanceManagerTest.t.sol";
 import {Test} from "forge-std/Test.sol";
@@ -73,15 +79,6 @@ contract MockCorpWithAuth {
     function roundManager() external pure returns (address) { return address(0); }
 }
 
-// Pass-through stand-in for a spec condition that is not implemented yet (Rule144Disclosure,
-// Section4a7Disclosure, LegalOpinion, AgreementSigned, GlobalKill, TimeSettlement). Always passes,
-// so it represents the pathway's canonical condition-set shape without gating the happy path.
-contract PassSecCondition is BaseSecondaryTradingCondition {
-    function checkCondition(IDealManager, bytes4, bytes32, bytes32) external pure override returns (bool) {
-        return true;
-    }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Test contract
 // ─────────────────────────────────────────────────────────────────────────────
@@ -90,11 +87,16 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     bytes32 constant corpSalt = keccak256("DealManagerSecondaryTradeExemptionPathwayTest.corp");
     bytes32 constant imSalt = keccak256("DealManagerSecondaryTradeExemptionPathwayTest.im");
 
-    // Single template carrying ONE party field, so the buyer's ERISA attestation can be recorded as a
-    // signer value on the settlement agreement (ERISACondition reads registry.getSignerValues).
+    // Single template carrying TWO party fields, so the buyer's ERISA attestation and §4(a)(7)
+    // acknowledgment-of-receipt can be recorded as signer values on the settlement agreement
+    // (ERISACondition / Section4a7DisclosureCondition read registry.getSignerValues).
     bytes32 public constant TEMPLATE_ID = bytes32(0);
     string public constant TEMPLATE_URI = "ipfs://exemption-template";
     string public constant ERISA_ATTESTATION = "ERISA:no-plan-assets";
+    string public constant SECTION4A7_ACK = "4a7:information-package-received";
+    string public constant DISCLOSURE_URI = "ipfs://disclosure-package";
+    // Freshness policy for both disclosure conditions (Rule 144(c)(2) practice: 16 months)
+    uint256 public constant DISCLOSURE_MAX_AGE = 480 days;
 
     // Category ids for the credential layer.
     bytes32 constant CAT_KYC = keccak256("cat.kyc");
@@ -137,6 +139,15 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     LexChexBadgeKindCondition public qib;
     LexChexBadgeKindCondition public nonUsPerson;
     RegSDistributionComplianceCondition public regS;
+    Rule144DisclosureCondition public rule144Disclosure;
+    Section4a7DisclosureCondition public section4a7Disclosure;
+    LegalOpinionCondition public legalOpinion;
+    AgreementSignedCondition public agreementSigned;
+    GlobalKillCondition public globalKill;
+    TimeSettlementPeriodCondition public timeSettlement;
+
+    address public metalexKillAdmin;
+    address public legionKillAdmin;
 
     uint256 public sellerTokenId;
 
@@ -206,6 +217,12 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         vm.prank(owner);
         regS.setRegSConfig(address(corp), 3, HOLD);
 
+        // Disclosure packages on record for the SPV (Rule 144(c)(2) and §4(a)(7)(d)(3)), fresh as of now.
+        vm.startPrank(owner);
+        rule144Disclosure.setDisclosurePackage(address(corp), DISCLOSURE_URI, uint64(block.timestamp));
+        section4a7Disclosure.setDisclosurePackage(address(corp), DISCLOSURE_URI, uint64(block.timestamp));
+        vm.stopPrank();
+
         // Seller: KYC badge + a Ledger Entry Token whose acquisitionDate is > HOLD in the past.
         _mintCred(seller, CAT_KYC, "US", CA);
         vm.startPrank(owner);
@@ -245,8 +262,14 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     function test_Section4a1Half_HappyPath() public {
         (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.4a1half");
         _commonBuyerSetup(buyer, "US", CA);
-        // Sophisticated-but-not-accredited: KYC + Legion only; the pathway gate is the GP sign-off mock.
-        _runHappyPath(ExemptionPathway.SECTION_4A1HALF, buyer, buyerKey, uint256(keccak256("4a1half")));
+        // Sophisticated-but-not-accredited: KYC + Legion only; the pathway gate is the GP's recorded
+        // compliance sign-off (LegalOpinionCondition, GP_SIGNOFF-or-opinion default mechanism).
+        // Sign-off is per-deal: silent at posting, then the GP pre-approves the offer (covering every
+        // settlement of it) before any acceptance.
+        bytes32 offerId = _postSellOffer(ExemptionPathway.SECTION_4A1HALF, uint256(keccak256("4a1half")));
+        vm.prank(owner);
+        legalOpinion.recordGPSignOff(address(dm), offerId);
+        _acceptAndFinalize(offerId, buyer, buyerKey);
     }
 
     function test_Rule144A_HappyPath() public {
@@ -265,14 +288,97 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Closing-condition behavior (the two platform-wide closing conditions)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice A raised kill flag suspends finalization of an in-flight settlement; the two-call
+    /// lower (one admin proposes, the other confirms) restores it.
+    function test_GlobalKill_BlocksFinalize_UntilLowered() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.kill");
+        _commonBuyerSetup(buyer, "US", CA);
+
+        bytes32 offerId = _postSellOffer(ExemptionPathway.RULE_144, uint256(keccak256("kill")));
+        bytes32 settlementId = _acceptSellOffer(offerId, buyer, buyerKey);
+        vm.warp(block.timestamp + timeSettlement.DEFAULT_DELAY() + 1);
+
+        // Either admin can raise unilaterally — after acceptance, mid-deal.
+        vm.prank(legionKillAdmin);
+        globalKill.raiseKill();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, address(globalKill))
+        );
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+
+        // Lowering takes both admins: the proposer alone cannot confirm.
+        vm.prank(legionKillAdmin);
+        globalKill.proposeLower();
+        vm.expectRevert(GlobalKillCondition.ProposerCannotConfirm.selector);
+        vm.prank(legionKillAdmin);
+        globalKill.confirmLower();
+        vm.prank(metalexKillAdmin);
+        globalKill.confirmLower();
+
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.FINALIZED),
+            "escrow FINALIZED after kill lowered"
+        );
+    }
+
+    /// @notice Finalization before the 24h minimum settlement period fails; after the window it passes.
+    function test_TimeSettlement_BlocksEarlyFinalize() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.timing");
+        _commonBuyerSetup(buyer, "US", CA);
+
+        bytes32 offerId = _postSellOffer(ExemptionPathway.RULE_144, uint256(keccak256("timing")));
+        bytes32 settlementId = _acceptSellOffer(offerId, buyer, buyerKey);
+
+        assertEq(
+            timeSettlement.finalizableAt(IDealManager(address(dm)), settlementId),
+            block.timestamp + timeSettlement.DEFAULT_DELAY(),
+            "finalizableAt = acceptance + 24h"
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, address(timeSettlement))
+        );
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+
+        vm.warp(block.timestamp + timeSettlement.DEFAULT_DELAY() + 1);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.FINALIZED),
+            "escrow FINALIZED after settlement period"
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Lifecycle helper
     // ─────────────────────────────────────────────────────────────────────────
 
     function _runHappyPath(ExemptionPathway pathway, address buyer, uint256 buyerKey, uint256 salt) internal {
+        bytes32 offerId = _postSellOffer(pathway, salt);
+        _acceptAndFinalize(offerId, buyer, buyerKey);
+    }
+
+    function _acceptAndFinalize(bytes32 offerId, address buyer, uint256 buyerKey)
+        internal
+        returns (bytes32 settlementId)
+    {
         uint256 sellerBalanceBefore = paymentToken.balanceOf(seller);
 
-        bytes32 offerId = _postSellOffer(pathway, salt);
-        bytes32 settlementId = _acceptSellOffer(offerId, buyer, buyerKey);
+        settlementId = _acceptSellOffer(offerId, buyer, buyerKey);
+
+        // TimeSettlementPeriodCondition (closing): the 24h minimum settlement period must elapse
+        // between acceptance and finalization before the keeper can finalize.
+        vm.warp(block.timestamp + timeSettlement.DEFAULT_DELAY() + 1);
 
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementId);
@@ -300,7 +406,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
             templateId: TEMPLATE_ID,
             salt: salt,
             globalValues: new string[](0),
-            offerorPartyValues: _one(""),
+            offerorPartyValues: _two("", ""),
             offerorAgreementSig: "",
             openEndorsementSig: "sellerEndorsement",
             buyerName: "",
@@ -315,7 +421,9 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         internal
         returns (bytes32 settlementId)
     {
-        string[] memory pv = _one(ERISA_ATTESTATION);
+        // The buyer records both attestations as signer values; each condition scans for its own marker,
+        // so carrying the §4(a)(7) ack on non-4a7 pathways is harmless.
+        string[] memory pv = _two(ERISA_ATTESTATION, SECTION4A7_ACK);
         AcceptOfferParams memory a = AcceptOfferParams({
             offerId: offerId,
             units: UNITS,
@@ -400,6 +508,38 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 abi.encodeCall(RegSDistributionComplianceCondition.initialize, (address(auth)))
             )
         );
+        rule144Disclosure = Rule144DisclosureCondition(
+            _proxy(
+                address(new Rule144DisclosureCondition()),
+                abi.encodeCall(Rule144DisclosureCondition.initialize, (address(auth), DISCLOSURE_MAX_AGE))
+            )
+        );
+        section4a7Disclosure = Section4a7DisclosureCondition(
+            _proxy(
+                address(new Section4a7DisclosureCondition()),
+                abi.encodeCall(
+                    Section4a7DisclosureCondition.initialize,
+                    (address(auth), address(registry), SECTION4A7_ACK, DISCLOSURE_MAX_AGE)
+                )
+            )
+        );
+        legalOpinion = LegalOpinionCondition(
+            _proxy(
+                address(new LegalOpinionCondition()),
+                abi.encodeCall(LegalOpinionCondition.initialize, (address(auth)))
+            )
+        );
+        agreementSigned = AgreementSignedCondition(
+            _proxy(
+                address(new AgreementSignedCondition()),
+                abi.encodeCall(AgreementSignedCondition.initialize, (address(auth), address(registry)))
+            )
+        );
+        // Closing conditions are plain (non-proxied) singletons.
+        metalexKillAdmin = makeAddr("metalexKillAdmin");
+        legionKillAdmin = makeAddr("legionKillAdmin");
+        globalKill = new GlobalKillCondition(metalexKillAdmin, legionKillAdmin);
+        timeSettlement = new TimeSettlementPeriodCondition();
     }
 
     function _deployKindCondition(CategoryKind kind) internal returns (LexChexBadgeKindCondition) {
@@ -419,22 +559,21 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         _addSpv(address(erisa));
         _addSpv(address(usState));
         _addSpv(address(legion));
-        _addSpv(address(new PassSecCondition())); // AgreementSignedCondition (mock)
+        _addSpv(address(agreementSigned));
 
         // Pathway-layer.
         _addPathway(ExemptionPathway.RULE_144, address(holdingPeriod));
-        _addPathway(ExemptionPathway.RULE_144, address(new PassSecCondition())); // Rule144Disclosure (mock)
+        _addPathway(ExemptionPathway.RULE_144, address(rule144Disclosure));
         _addPathway(ExemptionPathway.SECTION_4A7, address(accredited));
-        _addPathway(ExemptionPathway.SECTION_4A7, address(new PassSecCondition())); // Section4a7Disclosure (mock)
-        _addPathway(ExemptionPathway.SECTION_4A1HALF, address(new PassSecCondition())); // LegalOpinion/GP sign-off (mock)
+        _addPathway(ExemptionPathway.SECTION_4A7, address(section4a7Disclosure));
+        _addPathway(ExemptionPathway.SECTION_4A1HALF, address(legalOpinion));
         _addPathway(ExemptionPathway.RULE_144A, address(qib));
         _addPathway(ExemptionPathway.REGULATION_S, address(nonUsPerson));
         _addPathway(ExemptionPathway.REGULATION_S, address(regS));
 
-        // Closing set (all pathways). Deploy the mock BEFORE pranking: a `new` in the argument would
-        // otherwise consume the prank (CREATE runs first), so the add would execute as the test contract.
-        _addClosing(address(new PassSecCondition())); // GlobalKill (mock)
-        _addClosing(address(new PassSecCondition())); // TimeSettlement (mock)
+        // Closing set (all pathways).
+        _addClosing(address(globalKill));
+        _addClosing(address(timeSettlement));
     }
 
     function _addClosing(address condition) internal {
@@ -527,13 +666,15 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     }
 
     function _partyFields() internal pure returns (string[] memory f) {
-        f = new string[](1);
+        f = new string[](2);
         f[0] = "erisaAttestation";
+        f[1] = "section4a7Ack";
     }
 
-    function _one(string memory v) internal pure returns (string[] memory a) {
-        a = new string[](1);
-        a[0] = v;
+    function _two(string memory v0, string memory v1) internal pure returns (string[] memory a) {
+        a = new string[](2);
+        a[0] = v0;
+        a[1] = v1;
     }
 
     /// @dev Cumulative units consumed from the seller cert: a full sale voids it, a partial decrements.
