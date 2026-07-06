@@ -12,8 +12,8 @@ env:
   FOUNDRY_PROFILE: ci
 
 jobs:
-  unit:
-    name: Unit tests
+  size:
+    name: Build sizes
     runs-on: ubuntu-latest
     environment: test
     steps:
@@ -29,6 +29,21 @@ jobs:
 
       - name: Build
         run: forge build --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 --sizes
+
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Show Forge version
+        run: forge --version
 
       - name: Unit tests
         run: forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 -vvv --nmc '(ForkTest|AdhocTest)'
@@ -47,9 +62,6 @@ jobs:
 
       - name: Show Forge version
         run: forge --version
-
-      - name: Build
-        run: forge build --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15 --sizes
 
       - name: Fork tests
         env:
