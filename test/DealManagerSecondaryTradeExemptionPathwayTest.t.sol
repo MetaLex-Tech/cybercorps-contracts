@@ -1,0 +1,721 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+pragma solidity 0.8.28;
+
+import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ERC20} from "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
+import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
+import {CyberScrip} from "../src/CyberScrip.sol";
+import {DealManager} from "../src/DealManager.sol";
+import {DealManagerFactory} from "../src/DealManagerFactory.sol";
+import {IssuanceManager} from "../src/IssuanceManager.sol";
+import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {CertificateDetails, ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
+import {IDealManager} from "../src/interfaces/IDealManager.sol";
+import {IERC5484} from "../src/interfaces/IERC5484.sol";
+import {BorgAuth} from "../src/libs/auth.sol";
+import {LeXcheXBadge} from "../src/creds/lexchexBadge.sol";
+import {CategoryKind, Credential, CredentialCategory} from "../src/creds/storage/lexchexBadgeStorage.sol";
+import {FundInterestData} from "../src/storage/extensions/FundInterestExtension.sol";
+import {
+    AcceptOfferParams,
+    ExemptionPathway,
+    HostingMode,
+    ISecondaryTradeStorage,
+    Offer,
+    OfferSide,
+    PostOfferParams,
+    SecondaryEscrow,
+    SecondaryEscrowStatus
+} from "../src/storage/SecondaryTradeStorage.sol";
+// Real secondary-trading conditions under test.
+import {KYCAMLCondition} from "../src/libs/conditions/secondary/KYCAMLCondition.sol";
+import {TaxInfoCondition} from "../src/libs/conditions/secondary/TaxInfoCondition.sol";
+import {HolderCapCondition} from "../src/libs/conditions/secondary/HolderCapCondition.sol";
+import {ERISACondition} from "../src/libs/conditions/secondary/ERISACondition.sol";
+import {USStateOfResidenceCondition} from "../src/libs/conditions/secondary/USStateOfResidenceCondition.sol";
+import {LegionSoulboundCondition} from "../src/libs/conditions/secondary/LegionSoulboundCondition.sol";
+import {HoldingPeriodCondition} from "../src/libs/conditions/secondary/HoldingPeriodCondition.sol";
+import {LexChexBadgeKindCondition} from "../src/libs/conditions/secondary/LexChexBadgeKindCondition.sol";
+import {RegSDistributionComplianceCondition} from "../src/libs/conditions/secondary/RegSDistributionComplianceCondition.sol";
+import {Rule144DisclosureCondition} from "../src/libs/conditions/secondary/Rule144DisclosureCondition.sol";
+import {Section4a7DisclosureCondition} from "../src/libs/conditions/secondary/Section4a7DisclosureCondition.sol";
+import {LegalOpinionCondition} from "../src/libs/conditions/secondary/LegalOpinionCondition.sol";
+import {AgreementSignedCondition} from "../src/libs/conditions/secondary/AgreementSignedCondition.sol";
+import {GlobalKillCondition} from "../src/libs/conditions/secondary/GlobalKillCondition.sol";
+import {TimeSettlementPeriodCondition} from "../src/libs/conditions/secondary/TimeSettlementPeriodCondition.sol";
+import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
+import {MockUriBuilderForIM} from "./IssuanceManagerTest.t.sol";
+import {Test} from "forge-std/Test.sol";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mocks
+// ─────────────────────────────────────────────────────────────────────────────
+
+contract SecERC20Mock is ERC20 {
+    constructor() ERC20("Payment Token", "PAY") {}
+
+    function mint(address to, uint256 amount) public {
+        _mint(to, amount);
+    }
+}
+
+// cyberCORP fixture for the real IssuanceManager/DealManager that ALSO exposes AUTH(), which the
+// per-SPV condition setters (RegS.setRegSConfig, USState.setStateBlocked) resolve via
+// IBorgAuthProvider(spv).AUTH(). offer.spvAddress == this corp.
+contract MockCorpWithAuth {
+    address public AUTH;
+
+    constructor(address auth_) {
+        AUTH = auth_;
+    }
+
+    function cyberCORPName() external pure returns (string memory) { return "TestCorp"; }
+    function cyberCORPType() external pure returns (string memory) { return "C-Corp"; }
+    function cyberCORPJurisdiction() external pure returns (string memory) { return "DE"; }
+    function cyberCORPContactDetails() external pure returns (string memory) { return "test@corp.test"; }
+    function dealManager() external pure returns (address) { return address(0); }
+    function roundManager() external pure returns (address) { return address(0); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test contract
+// ─────────────────────────────────────────────────────────────────────────────
+
+contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
+    bytes32 constant corpSalt = keccak256("DealManagerSecondaryTradeExemptionPathwayTest.corp");
+    bytes32 constant imSalt = keccak256("DealManagerSecondaryTradeExemptionPathwayTest.im");
+
+    // Single template carrying TWO party fields, so the buyer's ERISA attestation and §4(a)(7)
+    // acknowledgment-of-receipt can be recorded as signer values on the settlement agreement
+    // (ERISACondition / Section4a7DisclosureCondition read registry.getSignerValues).
+    bytes32 public constant TEMPLATE_ID = bytes32(0);
+    string public constant TEMPLATE_URI = "ipfs://exemption-template";
+    string public constant ERISA_ATTESTATION = "ERISA:no-plan-assets";
+    string public constant SECTION4A7_ACK = "4a7:information-package-received";
+    string public constant DISCLOSURE_URI = "ipfs://disclosure-package";
+    // Freshness policy for both disclosure conditions (Rule 144(c)(2) practice: 16 months)
+    uint256 public constant DISCLOSURE_MAX_AGE = 480 days;
+
+    // Category ids for the credential layer.
+    bytes32 constant CAT_KYC = keccak256("cat.kyc");
+    bytes32 constant CAT_ACCREDITED = keccak256("cat.accredited");
+    bytes32 constant CAT_QIB = keccak256("cat.qib");
+    bytes32 constant CAT_NONUS = keccak256("cat.nonus");
+    bytes32 constant CAT_LEGION = keccak256("cat.legion");
+
+    bytes2 constant CA = "CA";
+
+    uint256 public constant UNITS = 100;
+    uint256 public constant CONSIDERATION = 10 ether;
+    uint64 public constant HOLD = 365 days;
+
+    address public owner;
+    uint256 public ownerKey;
+    address public seller;
+    uint256 public sellerKey;
+    address public keeper;
+
+    SecERC20Mock public paymentToken;
+    BorgAuth public auth;
+    MockCorpWithAuth public corp;
+    IssuanceManager public im;
+    ICyberCertPrinter public certPrinter;
+    CyberAgreementRegistry public registry;
+    DealManagerFactory public dmFactory;
+    DealManager public dm;
+    LeXcheXBadge public badge;
+
+    // Real conditions.
+    KYCAMLCondition public kyc;
+    TaxInfoCondition public taxInfo;
+    HolderCapCondition public holderCap;
+    ERISACondition public erisa;
+    USStateOfResidenceCondition public usState;
+    LegionSoulboundCondition public legion;
+    HoldingPeriodCondition public holdingPeriod;
+    LexChexBadgeKindCondition public accredited;
+    LexChexBadgeKindCondition public qib;
+    LexChexBadgeKindCondition public nonUsPerson;
+    RegSDistributionComplianceCondition public regS;
+    Rule144DisclosureCondition public rule144Disclosure;
+    Section4a7DisclosureCondition public section4a7Disclosure;
+    LegalOpinionCondition public legalOpinion;
+    AgreementSignedCondition public agreementSigned;
+    GlobalKillCondition public globalKill;
+    TimeSettlementPeriodCondition public timeSettlement;
+
+    address public metalexKillAdmin;
+    address public legionKillAdmin;
+
+    uint256 public sellerTokenId;
+
+    function setUp() public {
+        // Warp forward so the seller cert's acquisitionDate can sit comfortably in the past.
+        vm.warp(500 days);
+
+        (owner, ownerKey) = makeAddrAndKey("owner");
+        (seller, sellerKey) = makeAddrAndKey("seller");
+        keeper = makeAddr("keeper");
+
+        paymentToken = new SecERC20Mock();
+        auth = new BorgAuth(owner);
+        corp = new MockCorpWithAuth(address(auth));
+
+        // Real IssuanceManager + CyberCertPrinter via the factory beacon stack.
+        IssuanceManagerFactory imFactory = IssuanceManagerFactory(
+            address(
+                new ERC1967Proxy(
+                    address(new IssuanceManagerFactory()),
+                    abi.encodeWithSelector(
+                        IssuanceManagerFactory.initialize.selector,
+                        address(auth),
+                        new IssuanceManager(),
+                        new CyberCertPrinter(),
+                        new CyberScrip()
+                    )
+                )
+            )
+        );
+        im = IssuanceManager(imFactory.deployIssuanceManager(imSalt));
+        im.initialize(address(auth), address(corp), address(new MockUriBuilderForIM()), address(imFactory));
+
+        // Real CyberAgreementRegistry with a one-party-field template (for the ERISA attestation).
+        registry = CyberAgreementRegistry(
+            address(
+                new ERC1967Proxy(
+                    address(new CyberAgreementRegistry()),
+                    abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
+                )
+            )
+        );
+        string[] memory partyFields = _partyFields();
+        vm.prank(owner);
+        registry.createTemplate(TEMPLATE_ID, "Secondary", TEMPLATE_URI, new string[](0), partyFields);
+
+        dmFactory = DealManagerFactory(
+            address(
+                new ERC1967Proxy(
+                    address(new DealManagerFactory()),
+                    abi.encodeWithSelector(
+                        DealManagerFactory.initialize.selector, address(auth), address(new DealManager())
+                    )
+                )
+            )
+        );
+        dm = DealManager(dmFactory.deployDealManager(corpSalt));
+        dm.initialize(address(auth), address(corp), address(registry), address(im), address(dmFactory));
+        vm.prank(owner);
+        auth.updateRole(address(dm), 99);
+
+        _deployBadgeAndCategories();
+        _deployConditions();
+        _wireConditions();
+
+        // Reg S per-SPV config: Category 3, one-year distribution compliance period.
+        vm.prank(owner);
+        regS.setRegSConfig(address(corp), 3, HOLD);
+
+        // Disclosure packages on record for the SPV (Rule 144(c)(2) and §4(a)(7)(d)(3)), fresh as of now.
+        vm.startPrank(owner);
+        rule144Disclosure.setDisclosurePackage(address(corp), DISCLOSURE_URI, uint64(block.timestamp));
+        section4a7Disclosure.setDisclosurePackage(address(corp), DISCLOSURE_URI, uint64(block.timestamp));
+        vm.stopPrank();
+
+        // Seller: KYC badge + a Ledger Entry Token whose acquisitionDate is > HOLD in the past.
+        _mintCred(seller, CAT_KYC, "US", CA);
+        vm.startPrank(owner);
+        certPrinter = ICyberCertPrinter(
+            im.createCertPrinter(
+                new string[](0),
+                "Secondary Cert",
+                "SCERT",
+                "uri://cert",
+                SecurityClass.CommonStock,
+                SecuritySeries.SeriesA,
+                address(0)
+            )
+        );
+        sellerTokenId = im.createCertAndAssign(address(certPrinter), seller, _sellerCertDetails());
+        vm.stopPrank();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Happy-path tests — one full trade per exemption pathway
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function test_Rule144_HappyPath() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.rule144");
+        _commonBuyerSetup(buyer, "US", CA);
+        // No buyer-side pathway credential: Rule 144 gates on the seller's elapsed holding period.
+        _runHappyPath(ExemptionPathway.RULE_144, buyer, buyerKey, uint256(keccak256("rule144")));
+    }
+
+    function test_Section4a7_HappyPath() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.4a7");
+        _commonBuyerSetup(buyer, "US", CA);
+        _mintCred(buyer, CAT_ACCREDITED, "US", bytes2(0));
+        _runHappyPath(ExemptionPathway.SECTION_4A7, buyer, buyerKey, uint256(keccak256("4a7")));
+    }
+
+    function test_Section4a1Half_HappyPath() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.4a1half");
+        _commonBuyerSetup(buyer, "US", CA);
+        // Sophisticated-but-not-accredited: KYC + Legion only; the pathway gate is the GP's recorded
+        // compliance sign-off (LegalOpinionCondition, GP_SIGNOFF-or-opinion default mechanism).
+        // Sign-off is per-deal: silent at posting, then the GP pre-approves the offer (covering every
+        // settlement of it) before any acceptance.
+        bytes32 offerId = _postSellOffer(ExemptionPathway.SECTION_4A1HALF, uint256(keccak256("4a1half")));
+        vm.prank(owner);
+        legalOpinion.recordGPSignOff(address(dm), offerId);
+        _acceptAndFinalize(offerId, buyer, buyerKey);
+    }
+
+    function test_Rule144A_HappyPath() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.144a");
+        _commonBuyerSetup(buyer, "US", CA);
+        _mintCred(buyer, CAT_QIB, "US", bytes2(0));
+        _runHappyPath(ExemptionPathway.RULE_144A, buyer, buyerKey, uint256(keccak256("144a")));
+    }
+
+    function test_RegulationS_HappyPath() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.regs");
+        // Non-U.S. person: jurisdiction KY, no usState (badge forbids usState for non-US holders).
+        _commonBuyerSetup(buyer, "KY", bytes2(0));
+        _mintCred(buyer, CAT_NONUS, "KY", bytes2(0));
+        _runHappyPath(ExemptionPathway.REGULATION_S, buyer, buyerKey, uint256(keccak256("regs")));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Closing-condition behavior (the two platform-wide closing conditions)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice A raised kill flag suspends finalization of an in-flight settlement; the two-call
+    /// lower (one admin proposes, the other confirms) restores it.
+    function test_GlobalKill_BlocksFinalize_UntilLowered() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.kill");
+        _commonBuyerSetup(buyer, "US", CA);
+
+        bytes32 offerId = _postSellOffer(ExemptionPathway.RULE_144, uint256(keccak256("kill")));
+        bytes32 settlementId = _acceptSellOffer(offerId, buyer, buyerKey);
+        vm.warp(block.timestamp + timeSettlement.DEFAULT_DELAY() + 1);
+
+        // Either admin can raise unilaterally — after acceptance, mid-deal.
+        vm.prank(legionKillAdmin);
+        globalKill.raiseKill();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, address(globalKill))
+        );
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+
+        // Lowering takes both admins: the proposer alone cannot confirm.
+        vm.prank(legionKillAdmin);
+        globalKill.proposeLower();
+        vm.expectRevert(GlobalKillCondition.ProposerCannotConfirm.selector);
+        vm.prank(legionKillAdmin);
+        globalKill.confirmLower();
+        vm.prank(metalexKillAdmin);
+        globalKill.confirmLower();
+
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.FINALIZED),
+            "escrow FINALIZED after kill lowered"
+        );
+    }
+
+    /// @notice Finalization before the 24h minimum settlement period fails; after the window it passes.
+    function test_TimeSettlement_BlocksEarlyFinalize() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.timing");
+        _commonBuyerSetup(buyer, "US", CA);
+
+        bytes32 offerId = _postSellOffer(ExemptionPathway.RULE_144, uint256(keccak256("timing")));
+        bytes32 settlementId = _acceptSellOffer(offerId, buyer, buyerKey);
+
+        assertEq(
+            timeSettlement.finalizableAt(IDealManager(address(dm)), settlementId),
+            block.timestamp + timeSettlement.DEFAULT_DELAY(),
+            "finalizableAt = acceptance + 24h"
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, address(timeSettlement))
+        );
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+
+        vm.warp(block.timestamp + timeSettlement.DEFAULT_DELAY() + 1);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.FINALIZED),
+            "escrow FINALIZED after settlement period"
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Lifecycle helper
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function _runHappyPath(ExemptionPathway pathway, address buyer, uint256 buyerKey, uint256 salt) internal {
+        bytes32 offerId = _postSellOffer(pathway, salt);
+        _acceptAndFinalize(offerId, buyer, buyerKey);
+    }
+
+    function _acceptAndFinalize(bytes32 offerId, address buyer, uint256 buyerKey)
+        internal
+        returns (bytes32 settlementId)
+    {
+        uint256 sellerBalanceBefore = paymentToken.balanceOf(seller);
+
+        settlementId = _acceptSellOffer(offerId, buyer, buyerKey);
+
+        // TimeSettlementPeriodCondition (closing): the 24h minimum settlement period must elapse
+        // between acceptance and finalization before the keeper can finalize.
+        vm.warp(block.timestamp + timeSettlement.DEFAULT_DELAY() + 1);
+
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+
+        SecondaryEscrow memory se = dm.getSecondaryEscrow(settlementId);
+        assertEq(uint8(se.status), uint8(SecondaryEscrowStatus.FINALIZED), "escrow FINALIZED");
+        assertGt(paymentToken.balanceOf(seller) - sellerBalanceBefore, 0, "seller received payment");
+        assertGt(certPrinter.balanceOfLegalOwner(buyer), 0, "buyer holds a new Ledger Entry Token");
+        assertEq(_consumed(sellerTokenId), UNITS, "seller units fully consumed");
+    }
+
+    function _postSellOffer(ExemptionPathway pathway, uint256 salt) internal returns (bytes32 offerId) {
+        PostOfferParams memory p = PostOfferParams({
+            side: OfferSide.SELL,
+            certPrinter: address(certPrinter),
+            tokenId: sellerTokenId,
+            units: UNITS,
+            paymentToken: address(paymentToken),
+            consideration: CONSIDERATION,
+            exemptionPathway: pathway,
+            validUntil: block.timestamp + 1 days,
+            counterpartyRestrictions: "",
+            additionalTerms: "",
+            integrator: address(0),
+            templateId: TEMPLATE_ID,
+            salt: salt,
+            globalValues: new string[](0),
+            offerorPartyValues: _two("", ""),
+            offerorAgreementSig: "",
+            openEndorsementSig: "sellerEndorsement",
+            buyerName: "",
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0)
+        });
+        vm.prank(seller);
+        offerId = dm.postOffer(p);
+    }
+
+    function _acceptSellOffer(bytes32 offerId, address buyer, uint256 buyerKey)
+        internal
+        returns (bytes32 settlementId)
+    {
+        // The buyer records both attestations as signer values; each condition scans for its own marker,
+        // so carrying the §4(a)(7) ack on non-4a7 pathways is harmless.
+        string[] memory pv = _two(ERISA_ATTESTATION, SECTION4A7_ACK);
+        AcceptOfferParams memory a = AcceptOfferParams({
+            offerId: offerId,
+            units: UNITS,
+            buyerName: "Bob",
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: pv,
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey, pv),
+            openEndorsementSig: ""
+        });
+        vm.prank(buyer);
+        settlementId = dm.acceptOffer(a);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Setup helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function _deployBadgeAndCategories() internal {
+        badge = LeXcheXBadge(
+            address(
+                new ERC1967Proxy(
+                    address(new LeXcheXBadge()),
+                    abi.encodeCall(LeXcheXBadge.initialize, (address(auth)))
+                )
+            )
+        );
+        _createCategory(CAT_KYC, CategoryKind.KYC_AML);
+        _createCategory(CAT_ACCREDITED, CategoryKind.ACCREDITED_INVESTOR);
+        _createCategory(CAT_QIB, CategoryKind.QIB);
+        _createCategory(CAT_NONUS, CategoryKind.NON_US_PERSON);
+        _createCategory(CAT_LEGION, CategoryKind.CUSTOM);
+    }
+
+    function _deployConditions() internal {
+        kyc = KYCAMLCondition(
+            _proxy(address(new KYCAMLCondition()), abi.encodeCall(KYCAMLCondition.initialize, (address(auth), address(badge))))
+        );
+        taxInfo = TaxInfoCondition(
+            _proxy(address(new TaxInfoCondition()), abi.encodeCall(TaxInfoCondition.initialize, (address(auth))))
+        );
+        holderCap = HolderCapCondition(
+            _proxy(
+                address(new HolderCapCondition()),
+                abi.encodeCall(
+                    HolderCapCondition.initialize,
+                    (address(auth), address(badge), HolderCapCondition.IcaException.SECTION_3C1, uint256(100), false, false)
+                )
+            )
+        );
+        erisa = ERISACondition(
+            _proxy(
+                address(new ERISACondition()),
+                abi.encodeCall(ERISACondition.initialize, (address(auth), address(registry), ERISA_ATTESTATION))
+            )
+        );
+        usState = USStateOfResidenceCondition(
+            _proxy(
+                address(new USStateOfResidenceCondition()),
+                abi.encodeCall(USStateOfResidenceCondition.initialize, (address(auth), address(badge)))
+            )
+        );
+        legion = LegionSoulboundCondition(
+            _proxy(
+                address(new LegionSoulboundCondition()),
+                abi.encodeCall(LegionSoulboundCondition.initialize, (address(auth), address(badge), CAT_LEGION, false))
+            )
+        );
+        holdingPeriod = HoldingPeriodCondition(
+            _proxy(
+                address(new HoldingPeriodCondition()),
+                abi.encodeCall(HoldingPeriodCondition.initialize, (address(auth), uint256(HOLD)))
+            )
+        );
+        accredited = _deployKindCondition(CategoryKind.ACCREDITED_INVESTOR);
+        qib = _deployKindCondition(CategoryKind.QIB);
+        nonUsPerson = _deployKindCondition(CategoryKind.NON_US_PERSON);
+        regS = RegSDistributionComplianceCondition(
+            _proxy(
+                address(new RegSDistributionComplianceCondition()),
+                abi.encodeCall(RegSDistributionComplianceCondition.initialize, (address(auth)))
+            )
+        );
+        rule144Disclosure = Rule144DisclosureCondition(
+            _proxy(
+                address(new Rule144DisclosureCondition()),
+                abi.encodeCall(Rule144DisclosureCondition.initialize, (address(auth), DISCLOSURE_MAX_AGE))
+            )
+        );
+        section4a7Disclosure = Section4a7DisclosureCondition(
+            _proxy(
+                address(new Section4a7DisclosureCondition()),
+                abi.encodeCall(
+                    Section4a7DisclosureCondition.initialize,
+                    (address(auth), address(registry), SECTION4A7_ACK, DISCLOSURE_MAX_AGE)
+                )
+            )
+        );
+        legalOpinion = LegalOpinionCondition(
+            _proxy(
+                address(new LegalOpinionCondition()),
+                abi.encodeCall(LegalOpinionCondition.initialize, (address(auth)))
+            )
+        );
+        agreementSigned = AgreementSignedCondition(
+            _proxy(
+                address(new AgreementSignedCondition()),
+                abi.encodeCall(AgreementSignedCondition.initialize, (address(auth), address(registry)))
+            )
+        );
+        // Closing conditions are plain (non-proxied) singletons.
+        metalexKillAdmin = makeAddr("metalexKillAdmin");
+        legionKillAdmin = makeAddr("legionKillAdmin");
+        globalKill = new GlobalKillCondition(metalexKillAdmin, legionKillAdmin);
+        timeSettlement = new TimeSettlementPeriodCondition();
+    }
+
+    function _deployKindCondition(CategoryKind kind) internal returns (LexChexBadgeKindCondition) {
+        return LexChexBadgeKindCondition(
+            _proxy(
+                address(new LexChexBadgeKindCondition()),
+                abi.encodeCall(LexChexBadgeKindCondition.initialize, (address(auth), address(badge), kind, "", false))
+            )
+        );
+    }
+
+    function _wireConditions() internal {
+        // SPV-layer (every pathway).
+        _addSpv(address(kyc));
+        _addSpv(address(taxInfo));
+        _addSpv(address(holderCap));
+        _addSpv(address(erisa));
+        _addSpv(address(usState));
+        _addSpv(address(legion));
+        _addSpv(address(agreementSigned));
+
+        // Pathway-layer.
+        _addPathway(ExemptionPathway.RULE_144, address(holdingPeriod));
+        _addPathway(ExemptionPathway.RULE_144, address(rule144Disclosure));
+        _addPathway(ExemptionPathway.SECTION_4A7, address(accredited));
+        _addPathway(ExemptionPathway.SECTION_4A7, address(section4a7Disclosure));
+        _addPathway(ExemptionPathway.SECTION_4A1HALF, address(legalOpinion));
+        _addPathway(ExemptionPathway.RULE_144A, address(qib));
+        _addPathway(ExemptionPathway.REGULATION_S, address(nonUsPerson));
+        _addPathway(ExemptionPathway.REGULATION_S, address(regS));
+
+        // Closing set (all pathways).
+        _addClosing(address(globalKill));
+        _addClosing(address(timeSettlement));
+    }
+
+    function _addClosing(address condition) internal {
+        vm.prank(owner);
+        dm.addClosingCondition(condition);
+    }
+
+    function _commonBuyerSetup(address buyer, string memory jurisdiction, bytes2 state) internal {
+        _mintCred(buyer, CAT_KYC, jurisdiction, state);
+        _mintCred(buyer, CAT_LEGION, jurisdiction, state);
+        vm.prank(owner);
+        taxInfo.setTaxForm(buyer, TaxInfoCondition.TaxFormType.W9, keccak256("form"));
+
+        paymentToken.mint(buyer, CONSIDERATION * 10);
+        vm.prank(buyer);
+        paymentToken.approve(address(dm), type(uint256).max);
+    }
+
+    function _createCategory(bytes32 id, CategoryKind kind) internal {
+        CredentialCategory memory c = CredentialCategory({
+            name: "cat",
+            description: "",
+            kind: kind,
+            defaultValidityDuration: 3650 days,
+            requiresUsState: false,
+            requiresBeneficialOwnerCount: false,
+            requiresEvidenceHash: false,
+            burnAuth: IERC5484.BurnAuth.OwnerOnly,
+            scope: address(0),
+            active: true,
+            exists: true
+        });
+        vm.prank(owner);
+        badge.createCategory(id, c);
+    }
+
+    function _mintCred(address to, bytes32 categoryId, string memory jurisdiction, bytes2 state) internal {
+        Credential memory cred = Credential({
+            categoryId: categoryId,
+            investorName: "Inv",
+            investorType: "Individual",
+            investorJurisdiction: jurisdiction,
+            usState: state,
+            beneficialOwnerCount: 0,
+            issuanceDate: 0,
+            expiryDate: 0,
+            voided: "",
+            agreementId: bytes32(0),
+            evidenceHash: bytes32(0),
+            extensionData: ""
+        });
+        vm.prank(owner);
+        badge.mint(to, categoryId, cred);
+    }
+
+    function _sellerCertDetails() internal view returns (CertificateDetails memory) {
+        return CertificateDetails({
+            signingOfficerName: "Officer",
+            signingOfficerTitle: "Title",
+            investmentAmountUSD: 1000,
+            issuerUSDValuationAtTimeOfInvestment: 10000,
+            unitsRepresented: UNITS,
+            legalDetails: "",
+            extensionData: abi.encode(
+                FundInterestData({
+                    acquisitionDate: uint64(block.timestamp - 400 days),
+                    tackedFromAcquisitionDate: 0,
+                    customProvisions: ""
+                })
+            )
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Small utilities
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function _proxy(address impl, bytes memory initData) internal returns (address) {
+        return address(new ERC1967Proxy(impl, initData));
+    }
+
+    function _addSpv(address condition) internal {
+        vm.prank(owner);
+        dm.addSpvThresholdCondition(condition);
+    }
+
+    function _addPathway(ExemptionPathway pathway, address condition) internal {
+        vm.prank(owner);
+        dm.addPathwayThresholdCondition(pathway, condition);
+    }
+
+    function _partyFields() internal pure returns (string[] memory f) {
+        f = new string[](2);
+        f[0] = "erisaAttestation";
+        f[1] = "section4a7Ack";
+    }
+
+    function _two(string memory v0, string memory v1) internal pure returns (string[] memory a) {
+        a = new string[](2);
+        a[0] = v0;
+        a[1] = v1;
+    }
+
+    /// @dev Cumulative units consumed from the seller cert: a full sale voids it, a partial decrements.
+    function _consumed(uint256 tokenId) internal view returns (uint256) {
+        if (certPrinter.isVoided(tokenId)) return UNITS;
+        return UNITS - certPrinter.getCertificateDetails(tokenId).unitsRepresented;
+    }
+
+    /// @dev Recomputes the next settlement agreement id for an offer and returns the acceptor's EIP-712
+    /// signature over it. partyValues must match what acceptOffer submits (the ERISA attestation).
+    function _acceptorSig(bytes32 offerId, address acceptor, uint256 key, string[] memory partyValues)
+        internal
+        view
+        returns (bytes memory)
+    {
+        Offer memory o = dm.getOffer(offerId);
+        bytes32 settlementSalt = keccak256(abi.encodePacked(o.salt, o.settlementAgreementIds.length));
+        address[] memory parties = new address[](2);
+        parties[0] = o.offeror;
+        parties[1] = acceptor;
+        bytes32 settlementId = keccak256(abi.encode(o.templateId, uint256(settlementSalt), o.globalValues, parties));
+        return _agreementSig(settlementId, partyValues, key);
+    }
+
+    /// @dev EIP-712 agreement signature over a settlement id, using the template's party fields.
+    function _agreementSig(bytes32 settlementId, string[] memory partyValues, uint256 key)
+        internal
+        view
+        returns (bytes memory)
+    {
+        return CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            settlementId,
+            TEMPLATE_URI,
+            new string[](0), // globalFields (template has none)
+            _partyFields(), // partyFields (must match the template)
+            new string[](0), // globalValues
+            partyValues,
+            key
+        );
+    }
+}
