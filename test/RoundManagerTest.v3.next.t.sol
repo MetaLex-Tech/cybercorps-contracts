@@ -57,7 +57,8 @@ library CyberCorpHelperV3 {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
-            defaultLegend: defaultLegend
+            defaultLegend: defaultLegend,
+            printerExtensionData: bytes("")
         });
 
         string[] memory roundPartyValues = new string[](2);
@@ -333,7 +334,8 @@ contract RoundManagerV3NextForkTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
-            defaultLegend: defaultLegend
+            defaultLegend: defaultLegend,
+            printerExtensionData: bytes("")
         });
 
         uint256 maxEndTime = type(uint256).max;
@@ -441,7 +443,8 @@ contract RoundManagerV3NextForkTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
-            defaultLegend: defaultLegend
+            defaultLegend: defaultLegend,
+            printerExtensionData: bytes("")
         });
 
         (bytes memory sig, ) = CyberCorpHelper.computeEscrowSignature(

@@ -576,7 +576,8 @@ library IssuanceManagerStorage {
         string memory certificateUri,
         SecurityClass securityType,
         SecuritySeries securitySeries,
-        address extension
+        address extension,
+        bytes memory printerExtensionData
     ) external returns (address newCert) {
         bytes32 salt = keccak256(abi.encodePacked(getPrinters().length, address(this)));
         newCert = Create2.deploy(0, salt, _getBytecodeCertPrinter());
@@ -589,7 +590,8 @@ library IssuanceManagerStorage {
             address(this),
             securityType,
             securitySeries,
-            extension
+            extension,
+            printerExtensionData
         );
         emit CertPrinterCreated(
             newCert,

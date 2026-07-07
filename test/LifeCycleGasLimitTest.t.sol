@@ -398,7 +398,8 @@ contract LifeCycleGasLimitTest is Test {
             securityClass: SecurityClass.PreferredStock,
             securitySeries: SecuritySeries.SeriesSeed,
             extension: address(shareExtension),
-            defaultLegend: legend
+            defaultLegend: legend,
+            printerExtensionData: hex""
         });
     }
 

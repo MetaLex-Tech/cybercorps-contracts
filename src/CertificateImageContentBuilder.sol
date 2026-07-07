@@ -44,32 +44,146 @@ pragma solidity ^0.8.28;
 import "./CyberCorpConstants.sol";
 
 /// @title CertificateImageContentBuilder
-/// @notice Helper library for generating SVG content
+/// @notice Helper library generating the gradient defs and dynamic text content
+///         of the "Ledger Entry Token" certificate SVG
 library CertificateImageContentBuilder {
     function buildSVGContent(
         CertificateSVGParams memory params,
         uint256 timestamp
     ) internal pure returns (string memory) {
-        string memory securityType = _securityClassToString(params.securityType);
-        string memory unitType = _buildUnitType(params.securityType, params.securitySeries);
-        (string memory day, string memory month, string memory year) = _getDateComponents(timestamp);
+        string memory dateStr = _formatDate(timestamp);
 
         return string(abi.encodePacked(
-            '<defs>',
-            '<radialGradient id="paint0_radial_23552_60894" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(512 512) rotate(90) scale(512)">',
-            '<stop stop-color="#DAFF00"/><stop offset="1" stop-color="#191A18"/></radialGradient>',
-            '<radialGradient id="paint1_radial_23552_60894" cx="0" cy="0" r="1" gradientTransform="matrix(-0.0961874 -88.2743 380.979 -0.400474 534.169 323.929)" gradientUnits="userSpaceOnUse">',
-            '<stop stop-color="#DAFF00"/><stop offset="1" stop-color="#DAFF00" stop-opacity="0"/></radialGradient>',
-            '<linearGradient id="paint2_linear_23552_60894" x1="80" y1="284.5" x2="944" y2="284.5" gradientUnits="userSpaceOnUse">',
-            '<stop stop-color="#DAFF00" stop-opacity="0"/><stop offset="0.524038" stop-color="#DAFF00"/><stop offset="1" stop-color="#DAFF00" stop-opacity="0"/></linearGradient>',
-            '<radialGradient id="paint3_radial_23552_60894" cx="0" cy="0" r="1" gradientTransform="matrix(0.0961936 71.6814 -380.979 0.32523 489.831 835.982)" gradientUnits="userSpaceOnUse">',
-            '<stop stop-color="#DAFF00"/><stop offset="1" stop-color="#DAFF00" stop-opacity="0"/></radialGradient>',
-            '<linearGradient id="paint4_linear_23552_60894" x1="944" y1="868" x2="80" y2="868" gradientUnits="userSpaceOnUse">',
-            '<stop stop-color="#DAFF00" stop-opacity="0"/><stop offset="0.524038" stop-color="#DAFF00"/><stop offset="1" stop-color="#DAFF00" stop-opacity="0"/></linearGradient>',
-            '<clipPath id="clip0_23552_60894"><rect width="1024" height="1024" fill="white"/></clipPath></defs>',
-            _buildTextContent(params, securityType, unitType, day, month, year)
+            _buildDefs(),
+            '<rect width="1" height="31" transform="translate(511 391)" fill="url(#paint0_linear_62908_10123)"/>',
+            '<g font-family="system-ui">',
+            _buildHeaderText(params),
+            _buildPartiesText(params),
+            _buildStatsText(params, dateStr),
+            _buildOfficerText(params, dateStr),
+            _buildRestrictionsText(params.transferRestrictions),
+            unicode'<text x="512" y="885" font-size="14" fill="#9A9A98" text-anchor="middle">Recorded on the MetaLeX Labs, Inc. Tokenized Stock Ledger pursuant to DGCL §§219, 224.</text>',
+            '</g>',
+            _buildVoidedStamp(params.isVoided)
         ));
     }
+
+    /// @notice Rotated "VOIDED" stamp overlaid on the certificate when it has been voided
+    function _buildVoidedStamp(bool voided) private pure returns (string memory) {
+        if (!voided) return "";
+        return string(abi.encodePacked(
+            '<g transform="rotate(-12 312 160)">',
+            '<rect x="350" y="705" width="505" height="110" fill="none" stroke="#f19a8e" stroke-width="4"/>',
+            '<text x="605" y="760" fill="#f19a8e" font-family="Arial, sans-serif" font-size="90" font-weight="bold" text-anchor="middle" dominant-baseline="central">VOIDED</text>',
+            '</g>'
+        ));
+    }
+
+    function _buildDefs() private pure returns (string memory) {
+        return string(abi.encodePacked(
+            '<defs>',
+            '<radialGradient id="paint0_radial_63528_2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(512 512) rotate(90) scale(512)">',
+            '<stop stop-color="#DAFF00"/><stop offset="1" stop-color="#191A18"/></radialGradient>',
+            '<radialGradient id="paint1_radial_63528_2" cx="0" cy="0" r="1" gradientTransform="matrix(-0.0961874 -69.0265 380.979 -0.313153 534.169 226.832)" gradientUnits="userSpaceOnUse">',
+            '<stop stop-color="#DAFF00"/><stop offset="1" stop-color="#DAFF00" stop-opacity="0"/></radialGradient>',
+            '<linearGradient id="paint2_linear_63528_2" x1="80" y1="196" x2="944" y2="196" gradientUnits="userSpaceOnUse">',
+            '<stop stop-color="#DAFF00" stop-opacity="0"/><stop offset="0.524038" stop-color="#DAFF00"/><stop offset="1" stop-color="#DAFF00" stop-opacity="0"/></linearGradient>',
+            '<linearGradient id="paint4_linear_63528_2" x1="872" y1="212.5" x2="872" y2="228.5" gradientUnits="userSpaceOnUse">',
+            '<stop stop-color="#DAFF00"/><stop offset="1" stop-color="#F2F8CB"/></linearGradient>',
+            '<linearGradient id="paint5_linear_63528_2" x1="832" y1="220.5" x2="912" y2="220.5" gradientUnits="userSpaceOnUse">',
+            '<stop stop-color="#DAFF00"/><stop offset="1" stop-color="#DAFF00" stop-opacity="0"/></linearGradient>',
+            '<linearGradient id="paint4_linear_void" x1="872" y1="212.5" x2="872" y2="228.5" gradientUnits="userSpaceOnUse">',
+            '<stop stop-color="#FF2E2E"/><stop offset="1" stop-color="#F8CBCB"/></linearGradient>',
+            '<linearGradient id="paint5_linear_void" x1="832" y1="220.5" x2="912" y2="220.5" gradientUnits="userSpaceOnUse">',
+            '<stop stop-color="#FF2E2E"/><stop offset="1" stop-color="#FF2E2E" stop-opacity="0"/></linearGradient>',
+            _buildDefsPart2()
+        ));
+    }
+
+    function _buildDefsPart2() private pure returns (string memory) {
+        return string(abi.encodePacked(
+            '<linearGradient id="vg" x1="0" y1="0" x2="0" y2="1">',
+            '<stop stop-color="#D9D9D9" stop-opacity="0"/><stop offset="0.514423" stop-color="white" stop-opacity="0.2"/><stop offset="1" stop-color="#F2F2F2" stop-opacity="0"/></linearGradient>',
+            '<radialGradient id="paint11_radial_63528_2" cx="0" cy="0" r="1" gradientTransform="matrix(0.0961947 83.6284 -380.979 0.37943 489.831 880.646)" gradientUnits="userSpaceOnUse">',
+            '<stop stop-color="#DAFF00"/><stop offset="1" stop-color="#DAFF00" stop-opacity="0"/></radialGradient>',
+            '<linearGradient id="paint12_linear_63528_2" x1="944" y1="918" x2="80" y2="918" gradientUnits="userSpaceOnUse">',
+            '<stop stop-color="#DAFF00" stop-opacity="0"/><stop offset="0.524038" stop-color="#DAFF00"/><stop offset="1" stop-color="#DAFF00" stop-opacity="0"/></linearGradient>',
+            '<clipPath id="clip0_63528_2"><rect width="1024" height="1024" fill="white"/></clipPath>',
+            '<linearGradient id="paint0_linear_62908_10123" x1="0.5" y1="0" x2="0.5" y2="61" gradientUnits="userSpaceOnUse">',
+            '<stop stop-color="#D9D9D9" stop-opacity="0"/><stop offset="0.514423" stop-color="white" stop-opacity="0.2"/><stop offset="1" stop-color="#F2F2F2" stop-opacity="0"/></linearGradient>',
+            '<linearGradient id="paint0_linear_62908_10150" x1="600" y1="500" x2="600" y2="620" gradientUnits="userSpaceOnUse">',
+            '<stop stop-color="#DAFF00"/><stop offset=".39" stop-color="#F2F8CB"/></linearGradient>',
+            '</defs>'
+        ));
+    }
+
+    function _buildHeaderText(CertificateSVGParams memory params) private pure returns (string memory) {
+        return string(abi.encodePacked(
+            '<text x="512" y="190" font-size="53" fill="#f2f2f2" text-anchor="middle">', params.corpName, '</text>',
+            '<text x="152" y="85" font-size="11" fill="#f2f2f2" text-anchor="middle">Token ID</text>',
+            '<text x="152" y="124" font-size="35" fill="#f2f2f2" text-anchor="middle">#', _uintToString(params.tokenId), '</text>',
+            '<text x="835" y="85" font-size="11" fill="#f2f2f2" text-anchor="middle">', _getBaseUnit(params.securityType), '</text>',
+            '<text x="838" y="124" font-size="35" fill="#f2f2f2" text-anchor="middle">', _formatUnits(params), '</text>',
+            params.isVoided
+                ? '<text x="805" y="225" font-size="11" fill="#FF2E2E" text-anchor="middle">voided</text>'
+                : '<text x="805" y="225" font-size="11" fill="#DAFF00" text-anchor="middle">active</text>',
+            '<text x="110" y="229" font-size="18" fill="#9A9A98">Ledger Entry Token</text>'
+        ));
+    }
+
+    function _buildPartiesText(CertificateSVGParams memory params) private pure returns (string memory) {
+        return string(abi.encodePacked(
+            '<text x="230" y="318" font-size="14" fill="#9A9A98">Issuer </text>',
+            '<text x="230" y="344" font-size="16" fill="#f2f2f2">', params.corpName, ' </text>',
+            '<text x="230" y="364" font-size="11" fill="#9A9A98">', _truncatedAddress(params.issuerAddress), '</text>',
+            '<text x="630" y="318" font-size="14" fill="#9A9A98">Registered Owner </text>',
+            '<text x="630" y="344" font-size="16" fill="#f2f2f2">', params.ownerName, ' </text>',
+            '<text x="630" y="364" font-size="11" fill="#9A9A98">', _truncatedAddress(params.ownerAddress), '</text>',
+            '<text x="470" y="418" font-size="14" fill="#9A9A98">Class</text>',
+            '<text x="519" y="418" font-size="14" fill="#9A9A98">Series</text>',
+            '<text x="512" y="438" font-size="14" fill="#f2f2f2" text-anchor="middle">', _securityClassToString(params.securityType), ' ', _securitySeriesToString(params.securitySeries), '</text>'
+        ));
+    }
+
+    function _buildStatsText(
+        CertificateSVGParams memory params,
+        string memory dateStr
+    ) private pure returns (string memory) {
+        return string(abi.encodePacked(
+            '<text x="140" y="500" font-size="14" fill="#9A9A98">Units</text>',
+            '<text x="150" y="540" font-size="34" font-weight="700" fill="url(#paint0_linear_62908_10150)">', _formatUnits(params), '</text>',
+            '<text x="385" y="500" font-size="14" fill="#9A9A98">Consideration</text>',
+            '<text x="390" y="540" font-size="34" font-weight="700" fill="url(#paint0_linear_62908_10150)">', _formatConsideration(params), '</text>',
+            '<text x="645" y="500" font-size="14" fill="#9A9A98">Issue Date</text>',
+            '<text x="660" y="540" font-size="34" font-weight="700" fill="url(#paint0_linear_62908_10150)">', dateStr, '</text>'
+        ));
+    }
+
+    function _buildOfficerText(
+        CertificateSVGParams memory params,
+        string memory dateStr
+    ) private pure returns (string memory) {
+        return string(abi.encodePacked(
+            '<text x="512" y="590" font-size="14" fill="#9A9A98" text-anchor="middle">Authorizing Officer</text>',
+            '<text x="512" y="620" font-size="18" fill="#f2f2f2" text-anchor="middle">', params.officerName, '</text>',
+            '<text x="512" y="645" font-size="16" fill="#9A9A98" text-anchor="middle">block ', _uintToString(params.blockNumber), ' | ', dateStr, '</text>'
+        ));
+    }
+
+    function _buildRestrictionsText(string[] memory restrictions) private pure returns (string memory) {
+        string memory result = '<text x="131" y="670" font-size="14" fill="#9A9A98">Transfer Restrictions:</text>';
+        for (uint256 i = 0; i < restrictions.length; i++) {
+            result = string(abi.encodePacked(
+                result,
+                '<text x="131" y="', _uintToString(690 + i * 20), '" font-size="11" fill="#9A9A98">[', _uintToString(i + 1), '] ', restrictions[i], ' </text>'
+            ));
+        }
+        return result;
+    }
+
+    // ------------------------------------------------------------------
+    // Formatting helpers
+    // ------------------------------------------------------------------
 
     function _securityClassToString(SecurityClass _class) private pure returns (string memory) {
         if (_class == SecurityClass.SAFE) return "SAFE";
@@ -88,17 +202,18 @@ library CertificateImageContentBuilder {
         return "Unknown";
     }
 
-    function _buildUnitType(SecurityClass _class, SecuritySeries _series) private pure returns (string memory) {
-        string memory baseUnit = _getBaseUnit(_class);
-        
-        // For dollar-based securities, add series and class info
-        if (_class == SecurityClass.SAFE || _class == SecurityClass.SAFT || _class == SecurityClass.SAFTE) {
-            string memory seriesStr = _securitySeriesToString(_series);
-            string memory classStr = _securityClassToString(_class);
-            return string(abi.encodePacked("Dollars of the ", seriesStr, " ", classStr));
-        }
-        
-        return baseUnit;
+    function _securitySeriesToString(SecuritySeries _series) private pure returns (string memory) {
+        if (_series == SecuritySeries.SeriesPreSeed) return "Pre-Seed";
+        if (_series == SecuritySeries.SeriesSeed) return "Series Seed";
+        if (_series == SecuritySeries.SeriesA) return "Series A";
+        if (_series == SecuritySeries.SeriesB) return "Series B";
+        if (_series == SecuritySeries.SeriesC) return "Series C";
+        if (_series == SecuritySeries.SeriesD) return "Series D";
+        if (_series == SecuritySeries.SeriesE) return "Series E";
+        if (_series == SecuritySeries.SeriesF) return "Series F";
+        if (_series == SecuritySeries.NA) return "";
+        if (_series == SecuritySeries.ACE) return "ACE";
+        return "";
     }
 
     function _getBaseUnit(SecurityClass _class) private pure returns (string memory) {
@@ -118,215 +233,146 @@ library CertificateImageContentBuilder {
         return "Unknown";
     }
 
-    function _securitySeriesToString(SecuritySeries _series) private pure returns (string memory) {
-        if (_series == SecuritySeries.SeriesPreSeed) return "Pre-Seed";
-        if (_series == SecuritySeries.SeriesSeed) return "Series Seed";
-        if (_series == SecuritySeries.SeriesA) return "Series A";
-        if (_series == SecuritySeries.SeriesB) return "Series B";
-        if (_series == SecuritySeries.SeriesC) return "Series C";
-        if (_series == SecuritySeries.SeriesD) return "Series D";
-        if (_series == SecuritySeries.SeriesE) return "Series E";
-        if (_series == SecuritySeries.SeriesF) return "Series F";
-        if (_series == SecuritySeries.NA) return "";
-        if (_series == SecuritySeries.ACE) return "ACE";
-        return "";
-    }
-
-    function _isDollarBased(SecurityClass _class) private pure returns (bool) {
-        return _class == SecurityClass.SAFE || _class == SecurityClass.SAFT || _class == SecurityClass.SAFTE;
-    }
-
+    /// @notice Convertible securities (SAFEs/SAFTs/SAFTEs etc.) represent a single instrument
     function _isConvertible(SecurityClass _class) private pure returns (bool) {
-        return _class == SecurityClass.SAFE || 
-               _class == SecurityClass.SAFT || 
-               _class == SecurityClass.SAFTE || 
+        return _class == SecurityClass.SAFE ||
+               _class == SecurityClass.SAFT ||
+               _class == SecurityClass.SAFTE ||
                _class == SecurityClass.ConvertibleNote ||
                _class == SecurityClass.TokenWarrant ||
                _class == SecurityClass.TokenPurchaseAgreement;
     }
 
-    function _getSecurityFullName(SecurityClass _class) private pure returns (string memory) {
-        if (_class == SecurityClass.SAFE) return "Simple Agreement for Future Equity";
-        if (_class == SecurityClass.SAFT) return "Simple Agreement for Future Tokens";
-        if (_class == SecurityClass.SAFTE) return "Simple Agreement for Future Tokens or Equity";
-        if (_class == SecurityClass.TokenPurchaseAgreement) return "Token Purchase Agreement";
-        if (_class == SecurityClass.TokenWarrant) return "Token Warrant";
-        if (_class == SecurityClass.ConvertibleNote) return "Convertible Note";
-        if (_class == SecurityClass.CommonStock) return "Common Stock";
-        if (_class == SecurityClass.StockOption) return "Stock Option";
-        if (_class == SecurityClass.PreferredStock) return "Preferred Stock";
-        if (_class == SecurityClass.RestrictedStockPurchaseAgreement) return "Restricted Stock Purchase Agreement";
-        if (_class == SecurityClass.RestrictedStockUnit) return "Restricted Stock Unit";
-        if (_class == SecurityClass.RestrictedTokenPurchaseAgreement) return "Restricted Token Purchase Agreement";
-        if (_class == SecurityClass.RestrictedTokenUnit) return "Restricted Token Unit";
-        return "Unknown";
+    /// @notice Units displayed: unitsRepresented for shares/units, always 1 for convertibles
+    function _formatUnits(CertificateSVGParams memory params) private pure returns (string memory) {
+        if (_isConvertible(params.securityType)) {
+            return "1";
+        }
+        return _formatNumberWithCommas(params.units / 1e18);
     }
 
-    function _getDateComponents(uint256 timestamp) private pure returns (string memory day, string memory month, string memory year) {
-        // Convert timestamp to days since epoch
+    /// @notice Consideration displayed: price per share for shares/units (e.g. "0.0000001/sh"),
+    ///         total dollar amount for convertibles (e.g. "$100,000")
+    function _formatConsideration(CertificateSVGParams memory params) private pure returns (string memory) {
+        if (_isConvertible(params.securityType)) {
+            return string(abi.encodePacked("$", _formatDecimal18(params.consideration)));
+        }
+        if (params.units == 0) {
+            return string(abi.encodePacked(_formatDecimal18(params.consideration), "/sh"));
+        }
+        uint256 perUnit = (params.consideration * 1e18) / params.units;
+        return string(abi.encodePacked(_formatDecimal18(perUnit), "/sh"));
+    }
+
+    /// @notice Formats an 18-decimal value trimming trailing fractional zeros (max 9 decimals shown)
+    function _formatDecimal18(uint256 value) private pure returns (string memory) {
+        uint256 wholePart = value / 1e18;
+        // Keep at most 9 fractional digits
+        uint256 frac = (value % 1e18) / 1e9;
+        if (frac == 0) {
+            return _formatNumberWithCommas(wholePart);
+        }
+
+        bytes memory fracDigits = new bytes(9);
+        uint256 f = frac;
+        for (uint256 i = 9; i > 0; i--) {
+            fracDigits[i - 1] = bytes1(uint8(48 + (f % 10)));
+            f /= 10;
+        }
+        uint256 len = 9;
+        while (len > 0 && fracDigits[len - 1] == "0") {
+            len--;
+        }
+        bytes memory trimmed = new bytes(len);
+        for (uint256 i = 0; i < len; i++) {
+            trimmed[i] = fracDigits[i];
+        }
+        return string(abi.encodePacked(_formatNumberWithCommas(wholePart), ".", trimmed));
+    }
+
+    /// @notice Formats a timestamp as "M-D-YYYY" (e.g. "7-1-2026")
+    function _formatDate(uint256 timestamp) private pure returns (string memory) {
         uint256 totalDays = timestamp / 86400;
-        
-        // Calculate year
+
         uint256 y = 1970;
         uint256 daysRemaining = totalDays;
-        
         while (daysRemaining >= (_isLeapYear(y) ? 366 : 365)) {
             daysRemaining -= _isLeapYear(y) ? 366 : 365;
             y++;
         }
-        
-        // Days in each month (non-leap year)
+
         uint8[12] memory daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
         if (_isLeapYear(y)) {
-            daysInMonth[1] = 29; // February has 29 days in leap year
+            daysInMonth[1] = 29;
         }
-        
-        // Calculate month
+
         uint256 m = 0;
         while (m < 12 && daysRemaining >= daysInMonth[m]) {
             daysRemaining -= daysInMonth[m];
             m++;
         }
-        
-        day = _uintToString(daysRemaining + 1);
-        month = _getMonthName(m + 1);
-        year = _uintToString(y);
+
+        return string(abi.encodePacked(
+            _uintToString(m + 1), "-", _uintToString(daysRemaining + 1), "-", _uintToString(y)
+        ));
     }
 
     function _isLeapYear(uint256 y) private pure returns (bool) {
         return (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
     }
 
-    function _getMonthName(uint256 month) private pure returns (string memory) {
-        if (month == 1) return "January";
-        if (month == 2) return "February";
-        if (month == 3) return "March";
-        if (month == 4) return "April";
-        if (month == 5) return "May";
-        if (month == 6) return "June";
-        if (month == 7) return "July";
-        if (month == 8) return "August";
-        if (month == 9) return "September";
-        if (month == 10) return "October";
-        if (month == 11) return "November";
-        if (month == 12) return "December";
-        return "Unknown";
+    /// @notice Truncates an address to "0x12345678...1234567890" form
+    function _truncatedAddress(address addr) private pure returns (string memory) {
+        bytes memory hexChars = "0123456789abcdef";
+        bytes memory full = new bytes(40);
+        uint160 value = uint160(addr);
+        for (uint256 i = 0; i < 20; i++) {
+            uint8 b = uint8(value >> (8 * (19 - i)));
+            full[i * 2] = hexChars[b >> 4];
+            full[i * 2 + 1] = hexChars[b & 0x0f];
+        }
+        bytes memory head = new bytes(8);
+        for (uint256 i = 0; i < 8; i++) {
+            head[i] = full[i];
+        }
+        bytes memory tail = new bytes(10);
+        for (uint256 i = 0; i < 10; i++) {
+            tail[i] = full[30 + i];
+        }
+        return string(abi.encodePacked("0x", head, "...", tail));
     }
 
-    function _buildTextContent(
-        CertificateSVGParams memory params,
-        string memory securityType,
-        string memory unitType,
-        string memory day,
-        string memory month,
-        string memory year
-    ) private pure returns (string memory) {
-        string memory formattedUnits = _uintToString(params.units);
-        // Add $ prefix for dollar-based securities (SAFE, SAFT, SAFTE)
-        if (_isDollarBased(params.securityType)) {
-            formattedUnits = string(abi.encodePacked("$", formattedUnits));
+    /// @notice Formats a number with commas as thousand separators (e.g. 2,500,000)
+    function _formatNumberWithCommas(uint256 _i) private pure returns (string memory) {
+        if (_i == 0) return "0";
+
+        uint256 j = _i;
+        uint256 digitCount;
+        while (j != 0) {
+            digitCount++;
+            j /= 10;
         }
 
-        string memory middleSection;
-        if (_isConvertible(params.securityType)) {
-            middleSection = _buildMiddleConvertible(params, formattedUnits);
-        } else {
-            middleSection = _buildMiddleShares(params, unitType, formattedUnits);
+        uint256 commaCount = (digitCount - 1) / 3;
+        uint256 totalLength = digitCount + commaCount;
+
+        bytes memory result = new bytes(totalLength);
+        uint256 pos = totalLength;
+        uint256 digitsSinceComma = 0;
+
+        while (_i != 0) {
+            if (digitsSinceComma == 3) {
+                pos--;
+                result[pos] = ",";
+                digitsSinceComma = 0;
+            }
+            pos--;
+            result[pos] = bytes1(uint8(48 + (_i % 10)));
+            _i /= 10;
+            digitsSinceComma++;
         }
 
-        return string(abi.encodePacked(
-            _buildHeader(params, securityType, formattedUnits),
-            middleSection,
-            _buildFooter(params, day, month, year)
-        ));
-    }
-
-    function _buildHeader(
-        CertificateSVGParams memory params,
-        string memory securityType,
-        string memory formattedUnits
-    ) private pure returns (string memory) {
-        return string(abi.encodePacked(
-            '<text x="512" y="250" font-size="53" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">', params.corpName, '</text>',
-            '<text x="152" y="159" font-size="11" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">Token ID</text>',
-            '<text x="152" y="198" font-size="35" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">#', _uintToString(params.tokenId), '</text>',
-            '<text x="872" y="158" font-size="11" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">', _getBaseUnit(params.securityType), '</text>',
-            '<text x="872" y="198" font-size="35" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">', formattedUnits, '</text>',
-            '<text x="512" y="308" font-size="25" font-family="system-ui" text-anchor="middle" fill="#DAFF00">', _securitySeriesToString(params.securitySeries), ' ', securityType, '</text>'
-        ));
-    }
-
-    function _buildMiddleConvertible(
-        CertificateSVGParams memory params,
-        string memory formattedUnits
-    ) private pure returns (string memory) {
-        string memory securityFullName = _getSecurityFullName(params.securityType);
-        return string(abi.encodePacked(
-            '<text x="150" y="418" font-weight="600" font-size="18" font-family="system-ui" fill="#f2f2f2">This Certifies that </text>',
-            '<text x="420" y="418" font-size="18" font-family="system-ui" text-anchor="middle" fill="#DAFF00">', params.ownerName, '</text>',
-            '<line x1="310" x2="520" y1="423" y2="423" stroke-width="2" stroke="#333423"/>',
-            '<line x1="760" x2="870" y1="418" y2="418" stroke-width="2" stroke="#333423"/>',
-            '<text x="540" y="418" font-size="18" font-family="system-ui" fill="#9A9A98">is the registered holder of</text>',
-            '<text x="810" y="414" font-size="18" font-family="system-ui" text-anchor="middle" fill="#DAFF00">1</text>',
-            '<text x="330" y="450" font-size="18" font-family="system-ui" text-anchor="middle" fill="#DAFF00">', securityFullName, '</text>',
-            '<line x1="150" x2="510" y1="455" y2="455" stroke-width="2" stroke="#333423"/>',
-            '<text x="520" y="450" font-size="18" font-family="system-ui" fill="#9A9A98">of</text>',
-            '<text x="630" y="450" font-size="18" font-family="system-ui" fill="#DAFF00">', params.corpName, '</text>',
-            '<line x1="550" x2="870" y1="455" y2="455" stroke-width="2" stroke="#333423"/>',
-            '<text x="150" y="482" font-size="18" font-family="system-ui" fill="#9A9A98">purchased from the said Entity for</text>',
-            '<text x="490" y="482" font-size="18" font-family="system-ui" fill="#DAFF00">', formattedUnits, '</text>',
-            '<line x1="450" x2="600" y1="487" y2="487" stroke-width="2" stroke="#333423"/>',
-            '<text x="610" y="482" font-size="18" font-family="system-ui" fill="#9A9A98">and transferable only in </text>',
-            '<text x="150" y="514" font-size="18" font-family="system-ui" fill="#9A9A98">accordance with the terms and conditions thereof and any other applicable agreements</text>',
-            '<text x="150" y="546" font-size="18" font-family="system-ui" fill="#9A9A98"> between or involving or applicable to the said Entity and the said registered Holder.</text>'
-        ));
-    }
-
-    function _buildMiddleShares(
-        CertificateSVGParams memory params,
-        string memory unitType,
-        string memory formattedUnits
-    ) private pure returns (string memory) {
-        return string(abi.encodePacked(
-            '<text x="235" y="418" font-weight="600" font-size="20" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">This Certifies That</text>',
-            '<line x1="330" x2="635" y1="425" y2="425" stroke-width="2" stroke="#333423"/>',
-            '<text x="482.5" y="418" font-size="20" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', params.ownerName, '</text>',
-            '<text x="760" y="418" font-size="20" font-family="system-ui" fill="#9A9A98" text-anchor="middle">is the registered holder of</text>',
-            '<text x="222.5" y="463" font-size="20" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', formattedUnits, '</text>',
-            '<line x1="150" x2="295" y1="468" y2="468" stroke-width="2" stroke="#333423"/>',
-            '<text x="437.5" y="463" font-size="20" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', unitType, '</text>',
-            '<line x1="320" x2="555" y1="468" y2="468" stroke-width="2" stroke="#333423"/>',
-            '<text x="747.5" y="463" font-size="20" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', params.corpName, '</text>',
-            '<line x1="620" x2="875" y1="468" y2="468" stroke-width="2" stroke="#333423"/>',
-            '<text x="580" y="463" font-size="20" font-family="system-ui" fill="#9A9A98">of</text>',
-            '<text x="150" y="518" font-size="20" font-family="system-ui" fill="#9A9A98">transferable only on the books of the Corporation by the holder hereof in person or by</text>',
-            '<text x="150" y="545" font-size="20" font-family="system-ui" fill="#9A9A98">Attorney upon surrender of this Certificate properly endorsed.</text>'
-        ));
-    }
-
-    function _buildFooter(
-        CertificateSVGParams memory params,
-        string memory day,
-        string memory month,
-        string memory year
-    ) private pure returns (string memory) {
-        return string(abi.encodePacked(
-            '<text x="150" y="590" font-weight="600" font-size="18" font-family="system-ui" fill="#f2f2f2">In Witness Whereof</text>',
-            '<text x="310" y="590" font-size="18" font-family="system-ui" fill="#9A9A98">, the said Entity has caused this Certificate to be signed by its duly</text>',
-            '<text x="150" y="620" font-size="18" font-family="system-ui" fill="#9A9A98">authorized officer(s)</text>',
-            '<text x="175" y="675" font-size="18" font-family="system-ui" fill="#9A9A98" text-anchor="middle">This</text>',
-            '<text x="285" y="675" font-size="18" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', day, '</text>',
-            '<line x1="200" x2="370" y1="680" y2="680" stroke-width="2" stroke="#333423"/>',
-            '<text x="417.5" y="675" font-size="18" font-family="system-ui" fill="#9A9A98" text-anchor="middle">day of</text>',
-            '<text x="565" y="675" font-size="18" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', month, '</text>',
-            '<line x1="465" x2="675" y1="680" y2="680" stroke-width="2" stroke="#333423"/>',
-            '<text x="705" y="675" font-size="18" font-family="system-ui" fill="#9A9A98" text-anchor="middle">A.D.</text>',
-            '<text x="820" y="675" font-size="18" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', year, '</text>',
-            '<line x1="745" x2="895" y1="680" y2="680" stroke-width="2" stroke="#333423"/>',
-            '<text x="285" y="736" font-size="18" font-family="system-ui" fill="#DAFF00" text-anchor="middle">', params.officerName, '</text>',
-            '<text x="283" y="753" font-size="11" font-family="system-ui" fill="#f2f2f2" text-anchor="middle">', params.officerTitle, '</text>',
-            '<text x="512" y="850" font-size="11" font-family="system-ui" fill="#9A9A98" text-anchor="middle">Link to full certificate: ', params.certificateUri, '</text>'
-        ));
+        return string(result);
     }
 
     function _uintToString(uint256 _i) private pure returns (string memory) {

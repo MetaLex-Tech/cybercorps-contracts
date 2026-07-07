@@ -137,7 +137,8 @@ contract CyberCorpForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
-            defaultLegend: _dataDefaultString
+            defaultLegend: _dataDefaultString,
+            printerExtensionData: hex""
         });
         certData = new CyberCorpFactory.CyberCertData[](1);
         certData[0] = _certData;
@@ -654,7 +655,8 @@ contract CyberCorpForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
-            defaultLegend: defaultLegends[0]
+            defaultLegend: defaultLegends[0],
+            printerExtensionData: hex""
         });
 
         certData[1] = CyberCorpFactory.CyberCertData({
@@ -664,7 +666,8 @@ contract CyberCorpForkTest is Test {
             securityClass: SecurityClass.TokenWarrant,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
-            defaultLegend: defaultLegends[1]
+            defaultLegend: defaultLegends[1],
+            printerExtensionData: hex""
         });
 
         vm.startPrank(testAddress);
@@ -2695,7 +2698,8 @@ contract CyberCorpForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
-            defaultLegend: defaultLegend
+            defaultLegend: defaultLegend,
+            printerExtensionData: hex""
         });
 
         (
@@ -3629,7 +3633,8 @@ contract CyberCorpForkTest is Test {
                 "ipfs://test",
                 SecurityClass.SAFE,
                 SecuritySeries.SeriesPreSeed,
-                address(0)
+                address(0),
+                hex""
             );
 
         // Deploy new implementation
@@ -3760,7 +3765,8 @@ contract CyberCorpForkTest is Test {
                 "ipfs://test",
                 SecurityClass.SAFE,
                 SecuritySeries.SeriesPreSeed,
-                address(0)
+                address(0),
+                hex""
             );
 
         // Deploy new implementation
@@ -4152,7 +4158,8 @@ contract CyberCorpForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
-            defaultLegend: defaultLegend
+            defaultLegend: defaultLegend,
+            printerExtensionData: hex""
         });
 
         // Prepare deal parameters
@@ -4314,7 +4321,8 @@ contract CyberCorpForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
-            defaultLegend: safeLegend
+            defaultLegend: safeLegend,
+            printerExtensionData: hex""
         });
         certData[1] = DealManagerStorage.CyberCertData({
             name: "Token Warrant",
@@ -4323,7 +4331,8 @@ contract CyberCorpForkTest is Test {
             securityClass: SecurityClass.TokenWarrant,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
-            defaultLegend: warrantLegend
+            defaultLegend: warrantLegend,
+            printerExtensionData: hex""
         });
 
         // Prepare deal parameters
@@ -4510,7 +4519,8 @@ contract CyberCorpForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
-            defaultLegend: defaultLegend
+            defaultLegend: defaultLegend,
+            printerExtensionData: hex""
         });
 
         bytes32 templateId = bytes32(uint256(1));
@@ -5687,7 +5697,8 @@ contract CyberCorpForkTest is Test {
             "ipfs://test",
             SecurityClass.SAFE,
             SecuritySeries.SeriesPreSeed,
-            address(0)
+            address(0),
+            hex""
         );
 
         // Deploy and initialize the toggle hook with the corp's AUTH used by issuanceManager
@@ -5816,7 +5827,8 @@ contract CyberCorpForkTest is Test {
             "ipfs://test",
             SecurityClass.SAFE,
             SecuritySeries.SeriesSeed,
-            address(0)
+            address(0),
+            hex""
         );
 
         CertificateDetails memory cd = CertificateDetails({
@@ -5955,7 +5967,8 @@ contract CyberCorpForkTest is Test {
             "ipfs://uri",
             SecurityClass.SAFE,
             SecuritySeries.SeriesSeed,
-            address(0)
+            address(0),
+            hex""
         );
         CertificateDetails memory cd = CertificateDetails({
             signingOfficerName: "",
@@ -6064,7 +6077,8 @@ contract CyberCorpForkTest is Test {
             "ipfs://uri",
             SecurityClass.SAFE,
             SecuritySeries.SeriesSeed,
-            address(0)
+            address(0),
+            hex""
         );
         CertificateDetails memory cd = CertificateDetails({
             signingOfficerName: "",
@@ -6146,7 +6160,8 @@ contract CyberCorpForkTest is Test {
             "ipfs://uri",
             SecurityClass.SAFE,
             SecuritySeries.SeriesSeed,
-            address(0)
+            address(0),
+            hex""
         );
         CertificateDetails memory cd = CertificateDetails({
             signingOfficerName: "",

@@ -76,6 +76,7 @@ struct CyberCertData {
     SecuritySeries securitySeries;
     address extension;
     string[] defaultLegend;
+    bytes printerExtensionData;
 }
 
 struct EOI {
@@ -174,7 +175,8 @@ library RoundManagerStorage {
                     certData[i].uri,
                     certData[i].securityClass,
                     certData[i].securitySeries,
-                    certData[i].extension
+                    certData[i].extension,
+                    certData[i].printerExtensionData
                 )
             );
             certPrinterAddresses[i] = address(certPrinter);

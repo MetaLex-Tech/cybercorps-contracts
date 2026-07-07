@@ -150,7 +150,8 @@ contract UpgradePublicRoundsForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesA,
             extension: address(0),
-            defaultLegend: new string[](0)
+            defaultLegend: new string[](0),
+            printerExtensionData: hex""
         });
 
         string[] memory roundPartyValues = new string[](5);
@@ -540,7 +541,8 @@ contract UpgradePublicRoundsForkTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
-            defaultLegend: defaultLegend
+            defaultLegend: defaultLegend,
+            printerExtensionData: hex""
         });
 
         address[] memory conditions = new address[](1);

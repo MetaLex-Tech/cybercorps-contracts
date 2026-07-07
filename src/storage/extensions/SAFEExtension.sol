@@ -49,7 +49,7 @@ struct SAFEData {
     string customProvisions;
 }
 
-contract SAFEExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
+contract SAFEExtension is UUPSUpgradeable, ILegacyCertificateExtension, BorgAuthACL {
     bytes32 public constant EXTENSION_TYPE = keccak256("SAFE");
 
     //ofset to leave for future upgrades

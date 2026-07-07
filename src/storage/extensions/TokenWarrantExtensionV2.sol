@@ -62,7 +62,7 @@ struct TokenWarrantDataV2 {
     string customProvisions;
 }
 
-contract TokenWarrantExtensionV2 is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
+contract TokenWarrantExtensionV2 is UUPSUpgradeable, ILegacyCertificateExtension, BorgAuthACL {
     bytes32 public constant EXTENSION_TYPE = keccak256("TOKEN_WARRANT_V2");
     uint256 public constant PERCENTAGE_PRECISION = 10 ** 4;
 

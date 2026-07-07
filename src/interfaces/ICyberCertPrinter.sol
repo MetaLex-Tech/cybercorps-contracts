@@ -100,7 +100,8 @@ interface ICyberCertPrinter is IERC721 {
         address _issuanceManager,
         SecurityClass _securityType,
         SecuritySeries _securitySeries,
-        address _extension
+        address _extension,
+        bytes memory _printerExtensionData
     ) external;
     function name() external view returns (string memory);
     function symbol() external view returns (string memory);
@@ -193,6 +194,7 @@ interface ICyberCertPrinter is IERC721 {
             address endorsee
         );
     function tokenURI(uint256 tokenId) external view returns (string memory);
+    function getPrinterExtensionData() external view returns (bytes memory);
     function certificateUri() external view returns (string memory);
     function holderCount() external view returns (uint256);
     function totalSupply() external view returns (uint256);

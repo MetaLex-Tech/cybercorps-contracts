@@ -41,7 +41,16 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-interface ICertificateExtension {
+interface ILegacyCertificateExtension {
     function supportsExtensionType(bytes32 extensionType) external pure returns (bool);
     function getExtensionURI(bytes memory data) external view returns (string memory);
+}
+
+interface ICertificateExtension {
+    function supportsExtensionType(bytes32 extensionType) external pure returns (bool);
+
+    function getExtensionURI(
+        bytes memory printerExtensionData,
+        bytes memory certificateExtensionData
+    ) external view returns (string memory);
 }

@@ -298,7 +298,8 @@ contract DealManagerSecondaryTradeTest is Test {
                 "uri://cert",
                 SecurityClass.CommonStock,
                 SecuritySeries.SeriesA,
-                address(0)
+                address(0),
+                hex""
             )
         );
         sellerTokenId = im.createCertAndAssign(address(certPrinter), seller, _sellerCertDetails(UNITS));

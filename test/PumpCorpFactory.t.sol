@@ -154,7 +154,8 @@ contract PumpCorpFactoryForkTest is Test {
             securityClass:  SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesSeed,
             extension:      address(0),
-            defaultLegend:  legend
+            defaultLegend:  legend,
+            printerExtensionData: bytes("")
         }));
 
         legalDetails    = new string[](1);
@@ -1352,7 +1353,8 @@ contract PumpCorpFactoryForkTest is Test {
             securityClass:  SecurityClass.CommonStock,  // ← different from signed
             securitySeries: SecuritySeries.SeriesA,     // ← different from signed
             extension:      address(0),
-            defaultLegend:  legend
+            defaultLegend:  legend,
+            printerExtensionData: bytes("")
         });
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
@@ -1416,7 +1418,8 @@ contract PumpCorpFactoryForkTest is Test {
             securityClass:  SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesSeed,
             extension:      address(0),
-            defaultLegend:  legend
+            defaultLegend:  legend,
+            printerExtensionData: bytes("")
         });
 
         // Attacker forges meta sig with their own key → signer != officer.eoa → revert.

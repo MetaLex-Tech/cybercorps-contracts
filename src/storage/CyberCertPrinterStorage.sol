@@ -107,6 +107,7 @@ library CyberCertPrinterStorage {
         // New variables must be appended below to preserve storage layout for upgrades
         mapping(uint256 => bool) tokenTransferable;
         mapping(uint256 => bytes[]) issuerSignatures;
+        bytes printerExtensionData;
         // Units locked in a pending deal/loan; always <= certificateDetails[tokenId].unitsRepresented
         mapping(uint256 => uint256) unitsReserved;
         mapping(uint256 => RestrictiveLegend[]) certLegendsV2;
@@ -134,9 +135,7 @@ library CyberCertPrinterStorage {
         CyberCertPrinterStorage.CyberCertStorage storage s = cyberCertStorage();
         RestrictiveLegend[] memory certLegend = getEffectiveRestrictiveLegends(tokenId);
         ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
-        CertificateDetails memory effectiveDetails = getCertificateDetails(
-            tokenId
-        );
+        CertificateDetails memory effectiveDetails = getCertificateDetails(tokenId);
 
         // Get registry and agreementId from first endorsement if it exists
         address registry = address(0);
@@ -590,6 +589,14 @@ library CyberCertPrinterStorage {
 
     function _getExtensionData(uint256 tokenId) internal view returns (bytes memory) {
         return cyberCertStorage().certificateDetails[tokenId].extensionData;
+    }
+
+    function setPrinterExtensionData(bytes memory data) internal {
+        cyberCertStorage().printerExtensionData = data;
+    }
+
+    function getPrinterExtensionData() internal view returns (bytes memory) {
+        return cyberCertStorage().printerExtensionData;
     }
 
 } 

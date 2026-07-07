@@ -110,6 +110,8 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         uint256 indexed id,
         bool isWhitelisted
     );
+    event CertPrinterExtensionDataSet(address indexed certPrinter);
+
     event CyberScripDeployed(
         address indexed certPrinterAddress,
         address indexed cyberScripAddress,
@@ -216,7 +218,8 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         string memory _certificateUri,
         SecurityClass _securityType,
         SecuritySeries _securitySeries,
-        address _extension
+        address _extension,
+        bytes memory _printerExtensionData
     ) public onlyOwner returns (address) {
         return
             IssuanceManagerStorage.executeCreateCertPrinter(
@@ -226,7 +229,8 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             _certificateUri,
             _securityType,
             _securitySeries,
-            _extension
+            _extension,
+            _printerExtensionData
         );
     }
 

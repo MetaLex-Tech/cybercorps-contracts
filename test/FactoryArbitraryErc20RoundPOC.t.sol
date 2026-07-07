@@ -99,7 +99,8 @@ contract FactoryArbitraryErc20RoundPOCTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesSeed,
             extension: address(0),
-            defaultLegend: defaultLegend
+            defaultLegend: defaultLegend,
+            printerExtensionData: hex""
         });
 
         string[] memory roundPartyValues = new string[](2);

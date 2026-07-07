@@ -247,7 +247,8 @@ contract CyberCorpUpgradeabilityForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
-            defaultLegend: new string[](0)
+            defaultLegend: new string[](0),
+            printerExtensionData: hex""
         });
 
         CertificateDetails[] memory certDetails = new CertificateDetails[](1);

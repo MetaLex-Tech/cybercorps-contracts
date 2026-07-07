@@ -130,7 +130,7 @@ contract ShareExtensionForkTest is Test {
         assertEq(details.unitsRepresented, (OFFER_AMOUNT * 1e18) / PRICE_PER_SHARE);
         assertEq(details.legalDetails, "Series A Preferred Stock Certificate");
 
-        string memory shareJson = _toJson(shareExtension.getExtensionURI(details.extensionData));
+        string memory shareJson = _toJson(shareExtension.getExtensionURI(hex"", details.extensionData));
         assertEq(vm.parseJsonString(shareJson, ".shareDetails.terms.seriesName"), "Series A Preferred");
         assertEq(vm.parseJsonString(shareJson, ".shareDetails.conversionRatio"), "1.00");
         assertEq(vm.parseJsonString(shareJson, ".shareDetails.terms.hasPayToPlay"), "true");
@@ -167,7 +167,7 @@ contract ShareExtensionForkTest is Test {
         assertEq(decoded.terms.conversionPrice, 8e18);
         assertEq(ratio, (decoded.terms.originalIssuePrice * 1e18) / 8e18);
 
-        string memory json = _toJson(shareExtension.getExtensionURI(updatedData));
+        string memory json = _toJson(shareExtension.getExtensionURI(hex"", updatedData));
         assertEq(vm.parseJsonString(json, ".shareDetails.terms.conversionPrice"), "8.00");
     }
 
@@ -243,7 +243,7 @@ contract ShareExtensionForkTest is Test {
 
     function testJson_GetExtensionURIIsValidAndParseable() public {
         bytes memory data = certPrinter.getExtensionData(tokenId);
-        string memory json = _toJson(shareExtension.getExtensionURI(data));
+        string memory json = _toJson(shareExtension.getExtensionURI(hex"", data));
 
         // Structural validity: reverts on malformed JSON
         vm.parseJson(json);
@@ -484,7 +484,8 @@ contract ShareExtensionForkTest is Test {
             securityClass: SecurityClass.PreferredStock,
             securitySeries: SecuritySeries.SeriesA,
             extension: address(shareExtension),
-            defaultLegend: legend
+            defaultLegend: legend,
+            printerExtensionData: hex""
         });
 
         string[] memory legalDetails = new string[](1);
