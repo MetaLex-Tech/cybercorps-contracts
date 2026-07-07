@@ -11,10 +11,13 @@ import {IUriBuilder} from "../src/interfaces/IUriBuilder.sol";
 import {
     CertificateDetails,
     Endorsement,
+    ICyberCertPrinter,
     OwnerDetails,
     RestrictionType,
     RestrictiveLegend
 } from "../src/interfaces/ICyberCertPrinter.sol";
+import {ICertificateExtension} from "../src/storage/extensions/ICertificateExtension.sol";
+import {FundInterestData} from "../src/storage/extensions/FundInterestExtension.sol";
 
 contract MockCyberCorp {
     address public dealManager;
@@ -185,6 +188,23 @@ contract CyberCertPrinterEnhanced is CyberCertPrinter {
         }
         s.legalOwnerTokenCount[owner] = 0;
     }
+
+    /// @dev Zero a token's base acquisitionTimestamp, mimicking a cert minted before it became a base field.
+    function debugClearAcquisitionTimestamp(uint256 tokenId) external {
+        CyberCertPrinterStorage.cyberCertStorage().acquisitionTimestamp[tokenId] = 0;
+    }
+}
+
+contract MockFundInterestExtension is ICertificateExtension {
+    function supportsExtensionType(bytes32 extensionType) external pure returns (bool) {
+        return extensionType == keccak256("FUND_INTEREST");
+    }
+    function getExtensionURI(bytes memory) external pure returns (string memory) { return ""; }
+}
+
+contract MockNonFundExtension is ICertificateExtension {
+    function supportsExtensionType(bytes32) external pure returns (bool) { return false; }
+    function getExtensionURI(bytes memory) external pure returns (string memory) { return ""; }
 }
 
 contract CyberCertPrinterTest is Test {
@@ -243,13 +263,13 @@ contract CyberCertPrinterTest is Test {
         _mintCert(1, investor, 100, bytes(""));
 
         vm.prank(address(issuanceManager));
-        vm.expectRevert(CyberCertPrinter.SignatureRequired.selector);
+        vm.expectRevert(ICyberCertPrinter.SignatureRequired.selector);
         printer.addIssuerSignature(1, "");
     }
 
     function test_AddIssuerSignature_RevertsForNonexistentToken() public {
         vm.prank(address(issuanceManager));
-        vm.expectRevert(CyberCertPrinter.TokenDoesNotExist.selector);
+        vm.expectRevert(ICyberCertPrinter.TokenDoesNotExist.selector);
         printer.addIssuerSignature(999, hex"123456");
     }
 
@@ -257,7 +277,7 @@ contract CyberCertPrinterTest is Test {
         _mintCert(1, investor, 100, bytes(""));
 
         vm.prank(investor);
-        vm.expectRevert(CyberCertPrinter.NotIssuanceManager.selector);
+        vm.expectRevert(ICyberCertPrinter.NotIssuanceManager.selector);
         printer.addIssuerSignature(1, hex"123456");
     }
 
@@ -280,7 +300,7 @@ contract CyberCertPrinterTest is Test {
 
     function test_SetExtension_RevertsWhenCallerIsNotIssuanceManager() public {
         vm.prank(investor);
-        vm.expectRevert(CyberCertPrinter.NotIssuanceManager.selector);
+        vm.expectRevert(ICyberCertPrinter.NotIssuanceManager.selector);
         printer.setExtension(1, updatedExtension);
     }
 
@@ -300,7 +320,7 @@ contract CyberCertPrinterTest is Test {
         _mintCert(1, investor, 100, bytes(""));
 
         vm.prank(address(issuanceManager));
-        vm.expectRevert(CyberCertPrinter.ExceedsAvailableUnits.selector);
+        vm.expectRevert(ICyberCertPrinter.ExceedsAvailableUnits.selector);
         printer.increaseUnitsReserved(1, 101);
     }
 
@@ -311,17 +331,17 @@ contract CyberCertPrinterTest is Test {
         printer.increaseUnitsReserved(1, 40);
 
         vm.prank(address(issuanceManager));
-        vm.expectRevert(CyberCertPrinter.ExceedsReservedUnits.selector);
+        vm.expectRevert(ICyberCertPrinter.ExceedsReservedUnits.selector);
         printer.decreaseUnitsReserved(1, 41);
     }
 
     function test_UnitsReserved_RevertsForNonexistentTokens() public {
         vm.prank(address(issuanceManager));
-        vm.expectRevert(CyberCertPrinter.TokenDoesNotExist.selector);
+        vm.expectRevert(ICyberCertPrinter.TokenDoesNotExist.selector);
         printer.increaseUnitsReserved(999, 1);
 
         vm.prank(address(issuanceManager));
-        vm.expectRevert(CyberCertPrinter.TokenDoesNotExist.selector);
+        vm.expectRevert(ICyberCertPrinter.TokenDoesNotExist.selector);
         printer.decreaseUnitsReserved(999, 1);
     }
 
@@ -338,7 +358,7 @@ contract CyberCertPrinterTest is Test {
         printer.increaseUnitsReserved(1, 1);
 
         vm.prank(investor);
-        vm.expectRevert(CyberCertPrinter.CertificateReserved.selector);
+        vm.expectRevert(ICyberCertPrinter.CertificateReserved.selector);
         printer.transferFrom(investor, recipient, 1);
 
         // Releasing the reservation (settlement/void) unfreezes the transfer.
@@ -368,13 +388,13 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.legalOwnerOf(1), recipient);
 
         vm.prank(investor);
-        vm.expectRevert(CyberCertPrinter.TokenNotTransferable.selector);
+        vm.expectRevert(ICyberCertPrinter.TokenNotTransferable.selector);
         printer.transferFrom(investor, recipient, 2);
     }
 
     function test_TokenTransferable_RevertsWhenCallerIsNotIssuanceManager() public {
         vm.prank(investor);
-        vm.expectRevert(CyberCertPrinter.NotIssuanceManager.selector);
+        vm.expectRevert(ICyberCertPrinter.NotIssuanceManager.selector);
         printer.setTokenTransferable(1, true);
     }
 
@@ -456,6 +476,38 @@ contract CyberCertPrinterTest is Test {
         printer.transferFrom(investor, investor, 1);
 
         assertEq(printer.holderCount(), 1);
+    }
+
+    // A same-owner write that changes the holder-of-record name emits LegalOwnerChanged (from == to) and leaves
+    // the acquisition clock untouched.
+    function test_SetLegalOwner_SameOwnerNameChange_EmitsWithoutRestamp() public {
+        vm.prank(address(issuanceManager));
+        printer.safeMintAndAssign(investor, 1, _details(100, bytes("")), "Alice");
+        uint64 acquiredAt = printer.acquisitionTimestamp(1);
+        CertificateDetails memory d = _details(100, bytes(""));
+
+        vm.expectEmit(true, true, true, true, address(printer));
+        emit ICyberCertPrinter.LegalOwnerChanged(1, investor, investor, "", acquiredAt);
+        vm.prank(address(issuanceManager));
+        printer.assignCert(investor, 1, investor, d); // recordAssign resets the name to "" for the same owner
+
+        assertEq(printer.acquisitionTimestamp(1), acquiredAt, "same-owner name change must not reset the clock");
+    }
+
+    // Clearing the legal owner to address(0) is a "negative" change: it emits LegalOwnerChanged and clears the
+    // acquisition clock (acquisitionTimestamp != 0 iff there is an owner of record).
+    function test_SetLegalOwner_ClearToZero_EmitsNegativeEvent() public {
+        vm.prank(address(issuanceManager));
+        printer.safeMintAndAssign(investor, 1, _details(100, bytes("")), "Alice");
+        CertificateDetails memory d = _details(100, bytes(""));
+
+        vm.expectEmit(true, true, true, true, address(printer));
+        emit ICyberCertPrinter.LegalOwnerChanged(1, investor, address(0), "", 0);
+        vm.prank(address(issuanceManager));
+        printer.assignCert(investor, 1, address(0), d);
+
+        assertEq(printer.legalOwnerOf(1), address(0), "legal owner cleared");
+        assertEq(printer.acquisitionTimestamp(1), 0, "clock cleared with the owner");
     }
 
     function test_HolderCount_TracksUniqueHoldersOnBurn() public {
@@ -559,6 +611,46 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.balanceOfLegalOwner(investor), 3);
         assertEq(printer.tokenOfLegalOwnerByIndex(investor, 0), 1);
         assertEq(printer.tokenOfLegalOwnerByIndex(investor, 2), 3);
+    }
+
+    // Backfill copies a legacy token's acquisitionDate (from FundInterestExtension data) into the base
+    // acquisitionTimestamp mapping, is idempotent, and never overwrites a token whose base value is already set.
+    function test_BackfillAcquisitionTimestamp_CopiesLegacyFromExtension() public {
+        MockFundInterestExtension ext = new MockFundInterestExtension();
+        vm.prank(address(issuanceManager));
+        printer.setExtension(0, address(ext));
+
+        uint64 legacyAcq = 12345;
+        bytes memory fid =
+            abi.encode(FundInterestData({acquisitionDate: legacyAcq, tackedFromAcquisitionDate: 0, customProvisions: ""}));
+        _mintCert(1, investor, 100, fid); // token 1: legacy (base timestamp cleared below)
+        _mintCert(2, investor, 100, fid); // token 2: keeps its mint-time stamp
+        uint64 mintStamp = printer.acquisitionTimestamp(2);
+
+        CyberCertPrinterEnhanced(address(printer)).debugClearAcquisitionTimestamp(1);
+        assertEq(printer.acquisitionTimestamp(1), 0, "precondition: token 1 base timestamp cleared");
+
+        printer.backfillAcquisitionTimestamps(0, 10);
+        assertEq(printer.acquisitionTimestamp(1), legacyAcq, "legacy token backfilled from extensionData");
+        assertEq(printer.acquisitionTimestamp(2), mintStamp, "already-set token is not overwritten");
+
+        printer.backfillAcquisitionTimestamps(0, 10); // idempotent re-run
+        assertEq(printer.acquisitionTimestamp(1), legacyAcq, "backfill is idempotent");
+    }
+
+    // Backfill is a no-op on a printer whose extension is not FUND_INTEREST.
+    function test_BackfillAcquisitionTimestamp_NoOpOnNonFundInterestPrinter() public {
+        MockNonFundExtension ext = new MockNonFundExtension();
+        vm.prank(address(issuanceManager));
+        printer.setExtension(0, address(ext));
+
+        bytes memory fid =
+            abi.encode(FundInterestData({acquisitionDate: 12345, tackedFromAcquisitionDate: 0, customProvisions: ""}));
+        _mintCert(1, investor, 100, fid);
+        CyberCertPrinterEnhanced(address(printer)).debugClearAcquisitionTimestamp(1);
+
+        printer.backfillAcquisitionTimestamps(0, 10);
+        assertEq(printer.acquisitionTimestamp(1), 0, "non-FUND_INTEREST printer: backfill is a no-op");
     }
 
     function test_AddDefaultRestrictiveLegend_StoresAndCopiesOnMint() public {
@@ -668,7 +760,7 @@ contract CyberCertPrinterTest is Test {
 
         CertificateDetails memory updated = _details(39, bytes(""));
         vm.prank(address(issuanceManager));
-        vm.expectRevert(CyberCertPrinter.ExceedsAvailableUnits.selector);
+        vm.expectRevert(ICyberCertPrinter.ExceedsAvailableUnits.selector);
         printer.updateCertificateDetails(1, updated);
     }
 
@@ -709,12 +801,12 @@ contract CyberCertPrinterTest is Test {
     }
 
     function test_GetIssuerSignatureCount_RevertsForNonexistentToken() public {
-        vm.expectRevert(CyberCertPrinter.TokenDoesNotExist.selector);
+        vm.expectRevert(ICyberCertPrinter.TokenDoesNotExist.selector);
         printer.getIssuerSignatureCount(999);
     }
 
     function test_GetIssuerSignatureAt_RevertsForNonexistentToken() public {
-        vm.expectRevert(CyberCertPrinter.TokenDoesNotExist.selector);
+        vm.expectRevert(ICyberCertPrinter.TokenDoesNotExist.selector);
         printer.getIssuerSignatureAt(999, 0);
     }
 

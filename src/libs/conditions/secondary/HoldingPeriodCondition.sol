@@ -58,17 +58,17 @@ contract HoldingPeriodCondition is SecondaryTradingConditionBase, UUPSUpgradeabl
 
         (,, uint256 sellerTokenId) = _resolveParties(dealManager, offer, agreementId);
 
-        bytes memory extensionData =
-            ICyberCertPrinter(offer.certPrinter).getCertificateDetails(sellerTokenId).extensionData;
-        // No fund-interest record = the holding period cannot be verified: fail closed
-        if (extensionData.length == 0) return false;
-
-        FundInterestData memory data = abi.decode(extensionData, (FundInterestData));
-        uint64 anchor = data.acquisitionDate;
-        if (data.tackedFromAcquisitionDate != 0 && data.tackedFromAcquisitionDate < anchor) {
-            anchor = data.tackedFromAcquisitionDate;
-        }
+        ICyberCertPrinter cert = ICyberCertPrinter(offer.certPrinter);
+        // Base acquisitionTimestamp; no record = fail closed.
+        uint64 anchor = cert.acquisitionTimestamp(sellerTokenId);
         if (anchor == 0) return false;
+
+        // Rule 144(d)(3) tacking anchor (extension) governs where present and earlier.
+        bytes memory extensionData = cert.getCertificateDetails(sellerTokenId).extensionData;
+        if (extensionData.length != 0) {
+            uint64 tackedFrom = abi.decode(extensionData, (FundInterestData)).tackedFromAcquisitionDate;
+            if (tackedFrom != 0 && tackedFrom < anchor) anchor = tackedFrom;
+        }
 
         return block.timestamp >= uint256(anchor) + holdingPeriod;
     }

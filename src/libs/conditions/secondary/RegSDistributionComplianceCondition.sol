@@ -5,7 +5,6 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
-import {FundInterestData} from "../../../storage/extensions/FundInterestExtension.sol";
 import {ICyberCertPrinter} from "../../../interfaces/ICyberCertPrinter.sol";
 import {Offer, OfferSide} from "../../../interfaces/ISecondaryTradeStorage.sol";
 
@@ -72,14 +71,11 @@ contract RegSDistributionComplianceCondition is SecondaryTradingConditionBase, U
 
         (,, uint256 sellerTokenId) = _resolveParties(dealManager, offer, agreementId);
 
-        bytes memory extensionData =
-            ICyberCertPrinter(offer.certPrinter).getCertificateDetails(sellerTokenId).extensionData;
-        if (extensionData.length == 0) return false;
+        // Base acquisitionTimestamp; no record = fail closed.
+        uint64 acquisition = ICyberCertPrinter(offer.certPrinter).acquisitionTimestamp(sellerTokenId);
+        if (acquisition == 0) return false;
 
-        FundInterestData memory data = abi.decode(extensionData, (FundInterestData));
-        if (data.acquisitionDate == 0) return false;
-
-        return block.timestamp >= uint256(data.acquisitionDate) + config.compliancePeriod;
+        return block.timestamp >= uint256(acquisition) + config.compliancePeriod;
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}

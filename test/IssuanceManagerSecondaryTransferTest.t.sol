@@ -196,9 +196,9 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         _assertMirrorEndorsement(cert, 1, "Bob");
     }
 
-    // A buyer's repeat purchase consolidates by default: a second secondary transfer folds its units into the
-    // buyer's existing active cert rather than minting a new one (mirrors the scrip-to-cert recert behavior).
-    function test_SecondaryTransfer_RepeatPurchase_AccumulatesIntoExistingCert() public {
+    // Fresh-mint-per-lot: a buyer's repeat purchase mints a NEW cert each time (its own acquisitionTimestamp
+    // clock) rather than folding into an existing one — the per-lot holding-period model (§7.5).
+    function test_SecondaryTransfer_RepeatPurchase_MintsDistinctLots() public {
         ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
 
         // First purchase: 40 units mints the buyer a fresh cert (id 1).
@@ -206,19 +206,20 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         assertEq(cert.balanceOf(buyer), 1, "buyer holds one cert after the first purchase");
         assertEq(cert.getCertificateDetails(1).unitsRepresented, 40, "first cert holds 40");
 
-        // Second purchase: another 40 units reuses cert 1 (the event reports the existing token, not a new mint).
+        // Second purchase: another 40 units mints a distinct new cert (id 2), reported as a fresh mint.
         vm.expectEmit(true, true, true, true, address(issuanceManager));
-        emit IIssuanceManager.SecondaryTransferExecuted(SETTLEMENT_ID, address(cert), buyer, 0, 1, seller, 40, 20, 80, false, false);
+        emit IIssuanceManager.SecondaryTransferExecuted(SETTLEMENT_ID, address(cert), buyer, 0, 2, seller, 40, 20, 40, false, true);
         issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 40, "Bob", HostingMode.DIRECT, address(0)));
 
-        assertEq(cert.totalSupply(), 2, "no new cert minted (seller 0 + buyer 1)");
-        assertEq(cert.balanceOf(buyer), 1, "buyer still holds a single consolidated cert");
-        assertEq(cert.getCertificateDetails(1).unitsRepresented, 80, "units accumulated into the existing cert");
+        assertEq(cert.totalSupply(), 3, "a new cert minted per lot (seller 0 + buyer 1 + buyer 2)");
+        assertEq(cert.balanceOf(buyer), 2, "buyer holds one cert per lot");
+        assertEq(cert.getCertificateDetails(1).unitsRepresented, 40, "first lot unchanged");
+        assertEq(cert.getCertificateDetails(2).unitsRepresented, 40, "second lot is its own cert");
     }
 
-    // Merging a secondary purchase into a cert the buyer already holds from PRIMARY issuance must leave that
-    // cert's cost-basis snapshot untouched — only units accumulate (spec: snapshot at primary issuance).
-    function test_SecondaryTransfer_MergeIntoPrimaryCert_PreservesBasisSnapshot() public {
+    // Fresh-mint-per-lot: a secondary purchase never folds into a cert the buyer already holds from PRIMARY
+    // issuance — a distinct lot is minted, and the primary cert (units and cost-basis snapshot) is untouched.
+    function test_SecondaryTransfer_DoesNotMergeIntoPrimaryCert() public {
         ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
 
         // The buyer already holds a primary-issued cert (id 1) with its own cost basis.
@@ -233,21 +234,26 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         });
         issuanceManager.createCertAndAssign(address(cert), buyer, primaryDetails);
 
-        // A secondary purchase of 30 units folds into the buyer's existing primary cert (id 1).
+        // A secondary purchase of 30 units mints a fresh lot (id 2), leaving the primary cert untouched.
         issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 30, "Bob", HostingMode.DIRECT, address(0)));
 
-        CertificateDetails memory merged = cert.getCertificateDetails(1);
-        assertEq(merged.unitsRepresented, 80, "secondary units folded into the primary cert");
-        assertEq(merged.investmentAmountUSD, 2000, "primary cost-basis snapshot unchanged");
-        assertEq(merged.issuerUSDValuationAtTimeOfInvestment, 20000, "primary valuation snapshot unchanged");
+        CertificateDetails memory primary = cert.getCertificateDetails(1);
+        assertEq(primary.unitsRepresented, 50, "primary cert units untouched");
+        assertEq(primary.investmentAmountUSD, 2000, "primary cost-basis snapshot unchanged");
+        assertEq(primary.issuerUSDValuationAtTimeOfInvestment, 20000, "primary valuation snapshot unchanged");
+
+        CertificateDetails memory secondaryLot = cert.getCertificateDetails(2);
+        assertEq(secondaryLot.unitsRepresented, 30, "secondary purchase is its own lot");
+        assertEq(secondaryLot.investmentAmountUSD, 0, "secondary lot carries no primary-issuance basis");
+        assertEq(cert.balanceOf(buyer), 2, "buyer holds the primary cert and the new secondary lot");
     }
 
     // TODO should test administered hosted as well
 
-    // Administered hosting where ONE multisig custodies certs for two different legal owners. Consolidation must
-    // target the buyer's OWN cert by legal owner of record — never another holder's cert that happens to share
-    // the custodian. This is the case a custody (balanceOf) scan could not get right.
-    function test_SecondaryTransfer_AdministeredHosting_AccumulatesByLegalOwnerNotCustodian() public {
+    // Administered hosting where ONE multisig custodies certs for two different legal owners. Fresh-mint-per-lot
+    // means each fill mints its own cert to the multisig, owned of record by the respective buyer — the legal
+    // owner of record (not the shared custodian) is what distinguishes lots.
+    function test_SecondaryTransfer_AdministeredHosting_MintsLotPerFillByLegalOwner() public {
         ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
         address adminMultisig = makeAddr("adminMultisig");
         (address buyer2,) = makeAddrAndKey("buyer2");
@@ -256,14 +262,38 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         issuanceManager.secondaryTransfer(_dealMetadataFor(buyer, address(cert), 0, 30, "Bob", HostingMode.ADMINISTERED, adminMultisig));
         issuanceManager.secondaryTransfer(_dealMetadataFor(buyer2, address(cert), 0, 40, "Carol", HostingMode.ADMINISTERED, adminMultisig));
 
-        // Bob buys again: must accumulate into Bob's cert (id 1), not Carol's (id 2).
+        // Bob buys again: a distinct new lot (id 3) is minted to the multisig, owned of record by Bob.
         issuanceManager.secondaryTransfer(_dealMetadataFor(buyer, address(cert), 0, 30, "Bob", HostingMode.ADMINISTERED, adminMultisig));
 
-        assertEq(cert.balanceOf(adminMultisig), 2, "multisig custodies one cert per legal owner");
-        assertEq(cert.legalOwnerOf(1), buyer, "cert 1 owned of record by Bob");
-        assertEq(cert.legalOwnerOf(2), buyer2, "cert 2 owned of record by Carol");
-        assertEq(cert.getCertificateDetails(1).unitsRepresented, 60, "Bob's cert accumulated both his fills");
-        assertEq(cert.getCertificateDetails(2).unitsRepresented, 40, "Carol's cert untouched");
+        assertEq(cert.balanceOf(adminMultisig), 3, "multisig custodies one cert per lot");
+        assertEq(cert.balanceOfLegalOwner(buyer), 2, "Bob owns of record two lots");
+        assertEq(cert.balanceOfLegalOwner(buyer2), 1, "Carol owns of record one lot");
+        assertEq(cert.legalOwnerOf(1), buyer, "lot 1 owned of record by Bob");
+        assertEq(cert.legalOwnerOf(2), buyer2, "lot 2 owned of record by Carol");
+        assertEq(cert.legalOwnerOf(3), buyer, "Bob's second lot owned of record by Bob");
+        assertEq(cert.getCertificateDetails(1).unitsRepresented, 30, "Bob's first lot");
+        assertEq(cert.getCertificateDetails(3).unitsRepresented, 30, "Bob's second lot is distinct");
+        assertEq(cert.getCertificateDetails(2).unitsRepresented, 40, "Carol's lot untouched");
+    }
+
+    // The admin can correct a cert's issue timestamp for a position issued off-chain before being recorded
+    // on-chain (overrides the mint-stamped value); non-admins cannot.
+    function test_SetIssueTimestamp_AdminOverridesMintStamp() public {
+        vm.warp(200 days);
+        ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
+        assertEq(cert.issueTimestamp(0), uint64(block.timestamp), "mint stamps the on-chain issue time");
+
+        uint64 historical = uint64(110 days); // truly issued off-chain, earlier than the on-chain record
+        vm.expectEmit(true, false, false, true, address(cert));
+        emit ICyberCertPrinter.IssueTimestampSet(0, historical);
+        issuanceManager.setIssueTimestamp(address(cert), 0, historical);
+        assertEq(cert.issueTimestamp(0), historical, "admin override applied");
+
+        address notAdmin = makeAddr("notAdmin");
+        uint256 adminRole = auth.ADMIN_ROLE();
+        vm.prank(notAdmin);
+        vm.expectRevert(abi.encodeWithSignature("BorgAuth_NotAuthorized(uint256,address)", adminRole, notAdmin));
+        issuanceManager.setIssueTimestamp(address(cert), 0, historical);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

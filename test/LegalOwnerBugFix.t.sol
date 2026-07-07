@@ -241,6 +241,15 @@ contract LegalOwnerBugPOCTest is Test {
         );
     }
 
+    // The bare-mint path (createCert) sets the legal owner but historically emitted no ownership event;
+    // _setLegalOwner now emits LegalOwnerChanged from the chokepoint, so this path is observable too.
+    function test_CreateCert_EmitsLegalOwnerChanged() public {
+        uint256 nextId = certPrinter.totalSupply();
+        vm.expectEmit(true, true, true, true, address(certPrinter));
+        emit ICyberCertPrinter.LegalOwnerChanged(nextId, address(0), investor, "", uint64(block.timestamp));
+        issuanceManager.createCert(address(certPrinter), investor, _details(10));
+    }
+
     function _details(uint256 units) internal pure returns (CertificateDetails memory) {
         return CertificateDetails({
             signingOfficerName: "Officer",
