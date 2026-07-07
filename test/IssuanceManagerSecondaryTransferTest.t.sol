@@ -296,6 +296,26 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         issuanceManager.setIssueTimestamp(address(cert), 0, historical);
     }
 
+    // The admin can override a cert's acquisition timestamp (e.g. to seed a seasoned migrated position);
+    // non-admins cannot.
+    function test_SetAcquisitionTimestamp_AdminOverridesMintStamp() public {
+        vm.warp(200 days);
+        ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
+        assertEq(cert.acquisitionTimestamp(0), uint64(block.timestamp), "mint stamps the acquisition time");
+
+        uint64 seasoned = uint64(110 days); // acquired off-chain earlier than the on-chain record
+        vm.expectEmit(true, false, false, true, address(cert));
+        emit ICyberCertPrinter.AcquisitionTimestampSet(0, seasoned);
+        issuanceManager.setAcquisitionTimestamp(address(cert), 0, seasoned);
+        assertEq(cert.acquisitionTimestamp(0), seasoned, "admin override applied");
+
+        address notAdmin = makeAddr("notAdmin");
+        uint256 adminRole = auth.ADMIN_ROLE();
+        vm.prank(notAdmin);
+        vm.expectRevert(abi.encodeWithSignature("BorgAuth_NotAuthorized(uint256,address)", adminRole, notAdmin));
+        issuanceManager.setAcquisitionTimestamp(address(cert), 0, seasoned);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────

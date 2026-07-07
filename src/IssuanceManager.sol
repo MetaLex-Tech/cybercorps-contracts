@@ -429,6 +429,18 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         IssuanceManagerStorage.executeSetIssueTimestamp(certAddress, tokenId, ts);
     }
 
+    /// @notice Overrides a certificate's acquisition timestamp, e.g. to seed a seasoned migrated position (admin only)
+    /// @param certAddress Address of the certificate printer contract
+    /// @param tokenId ID of the certificate
+    /// @param ts Acquisition timestamp to set
+    function setAcquisitionTimestamp(
+        address certAddress,
+        uint256 tokenId,
+        uint64 ts
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeSetAcquisitionTimestamp(certAddress, tokenId, ts);
+    }
+
     /// @notice Voids a certificate
     /// @dev Only callable by admin
     /// @param certAddress Address of the certificate printer contract

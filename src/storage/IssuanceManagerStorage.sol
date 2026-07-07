@@ -820,6 +820,10 @@ library IssuanceManagerStorage {
         ICyberCertPrinter(certAddress).setIssueTimestamp(tokenId, ts);
     }
 
+    function executeSetAcquisitionTimestamp(address certAddress, uint256 tokenId, uint64 ts) external {
+        ICyberCertPrinter(certAddress).setAcquisitionTimestamp(tokenId, ts);
+    }
+
     function executeVoidCertificate(address certAddress, uint256 tokenId) external {
         ICyberCertPrinter(certAddress).voidCert(tokenId);
     }
