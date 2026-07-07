@@ -42,46 +42,53 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "../CyberCorpConstants.sol";
+import {
+    CertificateDetails,
+    Endorsement,
+    ICyberCertPrinter,
+    OwnerDetails,
+    RestrictiveLegend,
+    RestrictionType
+} from "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICyberCorp.sol";
 import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/IUriBuilder.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import "./extensions/ICertificateExtension.sol";
 
-struct CertificateDetails {
-    string signingOfficerName;
-    string signingOfficerTitle;
-    uint256 investmentAmountUSD;
-    uint256 issuerUSDValuationAtTimeOfInvestment;
-    uint256 unitsRepresented;
-    string legalDetails;
-    bytes extensionData;
-}
-
-struct Endorsement {
-    address endorser;
-    uint256 timestamp;
-    bytes signatureHash;
-    address registry;  //optional
-    bytes32 agreementId; //optional
-    address endorsee;
-    string endorseeName;
-}
-
-struct OwnerDetails {
-    string name;
-    address ownerAddress;
-}
-
 library CyberCertPrinterStorage {
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.cert.printer.storage.v1");
+
+    // Mirrors of the printer's error/event signatures; identical selectors/topics,
+    // so reverts and logs surface exactly as if they came from the printer (delegatecall).
+    error TokenNotTransferable();
+    error TransferRestricted(string reason);
+    error EndorsementNotSignedOrInvalid();
+    error InvalidLegendIndex();
+    error ExceedsAvailableUnits();
+    error ExceedsReservedUnits();
+
+    event CertificateAssigned(uint256 indexed tokenId, address indexed newOwner, string newOwnerName, string issuerName);
+    event CyberCertPrinter_CertificateCreated(uint256 indexed tokenId);
+    event UnitsReservedUpdated(uint256 indexed tokenId, uint256 unitsReserved);
+    event CertificateEndorsed(
+        uint256 indexed tokenId,
+        address indexed endorser,
+        address indexed endorsee,
+        string endorseeName,
+        address registry,
+        bytes32 agreementId,
+        uint256 index,
+        uint256 timestamp
+    );
 
     // Main storage layout struct
     struct CyberCertStorage {
         // Token data
         mapping(uint256 => CertificateDetails) certificateDetails;
         mapping(uint256 => Endorsement[]) endorsements;
+        // use `_setLegalOwner()` to set. DO NOT set `owners[tokenId]` directly or otherwise its indexes would break
         mapping(uint256 => OwnerDetails) owners;
         mapping(uint256 => SecurityStatus) securityStatus;
         mapping(uint256 => string[]) certLegend;
@@ -100,14 +107,24 @@ library CyberCertPrinterStorage {
         // New variables must be appended below to preserve storage layout for upgrades
         mapping(uint256 => bool) tokenTransferable;
         mapping(uint256 => bytes[]) issuerSignatures;
-        bytes printerExtensionData;
-        
+        // Units locked in a pending deal/loan; always <= certificateDetails[tokenId].unitsRepresented
+        mapping(uint256 => uint256) unitsReserved;
+        mapping(uint256 => RestrictiveLegend[]) certLegendsV2;
+        RestrictiveLegend[] defaultLegendsV2;
+        mapping(address => uint256) holderTokenCount;
+        uint256 uniqueHolderCount;
+
+        // ERC721Enumerable-like implementation for legal owners
+        mapping(address => mapping(uint256 => uint256)) legalOwnedTokens; // owner => index => tokenId
+        mapping(uint256 => uint256) legalOwnedTokensIndex; // tokenId => index within its owner's list
+        mapping(address => uint256) legalOwnerTokenCount; // owner => number of certs held of record
+        mapping(uint256 => bool) legalOwnedTokenTracked; // token is present in its legal owner's enumeration
     }
 
     // Returns the storage layout
     function cyberCertStorage() internal pure returns (CyberCertStorage storage s) {
         bytes32 position = STORAGE_POSITION;
-        assembly {
+        assembly ("memory-safe") {
             s.slot := position
         }
     }
@@ -115,6 +132,7 @@ library CyberCertPrinterStorage {
     // URI storage functionality
     function tokenURI(uint256 tokenId) external view returns (string memory) {
         CyberCertPrinterStorage.CyberCertStorage storage s = cyberCertStorage();
+        RestrictiveLegend[] memory certLegend = getEffectiveRestrictiveLegends(tokenId);
         ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
         // Get registry and agreementId from first endorsement if it exists
         address registry = address(0);
@@ -147,6 +165,320 @@ library CyberCertPrinterStorage {
             address(this),
             address(s.extension)
         );
+    }
+
+    /// @dev Transfer-time restriction and endorsement logic, extracted from
+    /// CyberCertPrinter._update to reduce the printer's bytecode size.
+    /// External so it runs via delegatecall against this deployed library.
+    /// Only called for true transfers (from != 0 && to != 0).
+    function processTransfer(address from, address to, uint256 tokenId) external {
+        CyberCertStorage storage s = cyberCertStorage();
+
+        // Check built-in transferability flag and per-token override
+        if (!s.transferable && !s.tokenTransferable[tokenId]) {
+            ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
+            if (from != corp.dealManager() && from != corp.roundManager()) revert TokenNotTransferable();
+        }
+
+        // Check global hook if it exists
+        if (address(s.globalRestrictionHook) != address(0)) {
+            (bool allowed, string memory reason) = s.globalRestrictionHook.checkTransferRestriction(
+                from, to, tokenId, ""
+            );
+            if (!allowed) revert TransferRestricted(reason);
+        }
+
+        ITransferRestrictionHook typeHook = CyberCertPrinterStorage.cyberCertStorage().restrictionHooksById[tokenId];
+            
+        if (address(typeHook) != address(0)) {
+            (bool allowed, string memory reason) = typeHook.checkTransferRestriction(
+                from, to, tokenId, ""
+            );
+            if (!allowed) revert TransferRestricted(reason);
+        }
+
+        address ownerAddress = s.owners[tokenId].ownerAddress;
+        uint256 endorsementCount = s.endorsements[tokenId].length;
+        //check endorsement and update owners
+        if (from == ownerAddress) {
+            if (!s.endorsementRequired) {
+                emit CertificateAssigned(tokenId, to, "", IIssuanceManager(s.issuanceManager).companyName());
+                _setLegalOwner(s, tokenId, to, "");
+            }
+            else if (endorsementCount > 0) {
+                Endorsement memory endorsement = s.endorsements[tokenId][endorsementCount - 1];
+                if (endorsement.endorsee == to) {
+                    // Endorsement exists; ownership will be updated
+                    emit CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(s.issuanceManager).companyName());
+                    _setLegalOwner(s, tokenId, endorsement.endorsee, endorsement.endorseeName);
+                }
+            }
+        // NOTE: we don't revert in this block: Owner is able to transfer to another address without an endorsement, but it does not update the owner
+        }
+        else if (endorsementCount > 0) {
+            // Token is not being transferred from the current owner. It can only be transferrred to the latest endorsee, or the current owner
+            Endorsement memory endorsement = s.endorsements[tokenId][endorsementCount - 1];
+            if (endorsement.endorsee != to && ownerAddress != to) revert EndorsementNotSignedOrInvalid();
+
+            emit CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(s.issuanceManager).companyName());
+            _setLegalOwner(s, tokenId, endorsement.endorsee, endorsement.endorseeName);
+        }
+        else revert EndorsementNotSignedOrInvalid();
+    }
+
+    /// @dev Post-mint bookkeeping for CyberCertPrinter.safeMint (the _safeMint itself stays in the printer).
+    function recordMint(uint256 tokenId, address to, CertificateDetails memory details) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        s.certLegend[tokenId] = s.defaultLegend;
+        copyDefaultRestrictiveLegendsToCert(s, tokenId);
+        s.certificateDetails[tokenId] = details;
+        _setLegalOwner(s, tokenId, to, "");
+        emit CyberCertPrinter_CertificateCreated(tokenId);
+    }
+
+    /// @dev Post-mint bookkeeping for CyberCertPrinter.safeMintAndAssign.
+    function recordMintAndAssign(
+        uint256 tokenId,
+        address to,
+        CertificateDetails memory details,
+        string memory investorName
+    ) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        s.certLegend[tokenId] = s.defaultLegend;
+        copyDefaultRestrictiveLegendsToCert(s, tokenId);
+        s.certificateDetails[tokenId] = details;
+        _setLegalOwner(s, tokenId, to, investorName);
+        emit CertificateAssigned(tokenId, to, investorName, IIssuanceManager(s.issuanceManager).companyName());
+        emit CyberCertPrinter_CertificateCreated(tokenId);
+    }
+
+    /// @dev Bookkeeping for CyberCertPrinter.assignCert (the ownerOf check stays in the printer).
+    function recordAssign(uint256 tokenId, address to, CertificateDetails memory details) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        s.certificateDetails[tokenId] = details;
+        _setLegalOwner(s, tokenId, to, "");
+        emit CertificateAssigned(tokenId, to, "", IIssuanceManager(s.issuanceManager).companyName());
+    }
+
+    /// @dev Endorsement push + event for CyberCertPrinter.addEndorsement (the auth check stays in the printer).
+    function recordEndorsement(uint256 tokenId, Endorsement memory newEndorsement) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        s.endorsements[tokenId].push(newEndorsement);
+        emit CertificateEndorsed(
+            tokenId,
+            newEndorsement.endorser,
+            newEndorsement.endorsee,
+            newEndorsement.endorseeName,
+            newEndorsement.registry,
+            newEndorsement.agreementId,
+            s.endorsements[tokenId].length - 1,
+            block.timestamp
+        );
+    }
+
+    /// @dev Single chokepoint for every owners[] write: reassign tokenId's legal owner to `newOwner`
+    /// (holder-of-record name `name`) while keeping the per-legal-owner enumeration in sync.
+    function _setLegalOwner(CyberCertStorage storage s, uint256 tokenId, address newOwner, string memory name) private {
+        address current = s.owners[tokenId].ownerAddress;
+        // Always end with tokenId tracked under newOwner. The add is idempotent and the remove is a no-op for
+        // un-tracked tokens, so this both maintains live state and lazily backfills a legacy token (one minted
+        // before this enumeration existed) the moment any owner-write touches it.
+        if (current != newOwner && current != address(0)) {
+            _removeFromLegalOwnerEnumeration(s, current, tokenId);
+        }
+        if (newOwner != address(0)) {
+            _addToLegalOwnerEnumeration(s, newOwner, tokenId);
+        }
+        s.owners[tokenId] = OwnerDetails(name, newOwner);
+    }
+
+    /// @dev Idempotent: a token already in an owner's enumeration is left alone (so backfilling a tracked token
+    /// is a no-op and we never double-count).
+    function _addToLegalOwnerEnumeration(CyberCertStorage storage s, address owner, uint256 tokenId) private {
+        if (s.legalOwnedTokenTracked[tokenId]) return;
+        uint256 index = s.legalOwnerTokenCount[owner];
+        s.legalOwnedTokens[owner][index] = tokenId;
+        s.legalOwnedTokensIndex[tokenId] = index;
+        s.legalOwnerTokenCount[owner] = index + 1;
+        s.legalOwnedTokenTracked[tokenId] = true;
+    }
+
+    /// @dev Swap-and-pop removal, mirroring OZ ERC721Enumerable's _removeTokenFromOwnerEnumeration. No-op for an
+    /// un-tracked token — this is what keeps a legacy printer's first owner-change/burn from underflowing
+    /// `legalOwnerTokenCount` (which is 0 until the token is backfilled).
+    function _removeFromLegalOwnerEnumeration(CyberCertStorage storage s, address owner, uint256 tokenId) private {
+        if (!s.legalOwnedTokenTracked[tokenId]) return;
+        uint256 lastIndex = s.legalOwnerTokenCount[owner] - 1;
+        uint256 tokenIndex = s.legalOwnedTokensIndex[tokenId];
+        if (tokenIndex != lastIndex) {
+            uint256 lastTokenId = s.legalOwnedTokens[owner][lastIndex];
+            s.legalOwnedTokens[owner][tokenIndex] = lastTokenId;
+            s.legalOwnedTokensIndex[lastTokenId] = tokenIndex;
+        }
+        delete s.legalOwnedTokensIndex[tokenId];
+        delete s.legalOwnedTokens[owner][lastIndex];
+        s.legalOwnerTokenCount[owner] = lastIndex;
+        s.legalOwnedTokenTracked[tokenId] = false;
+    }
+
+    /// @dev Drop tokenId from its legal owner's enumeration on burn — no transfer hook fires for to==0,
+    /// so the printer calls this explicitly.
+    function recordBurnLegalOwner(uint256 tokenId) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        address owner = s.owners[tokenId].ownerAddress;
+        if (owner != address(0)) _removeFromLegalOwnerEnumeration(s, owner, tokenId);
+        delete s.owners[tokenId];
+    }
+
+    /// @dev One-time/idempotent migration for printers deployed before the legal-owner enumeration existed:
+    /// adds each live token in [startIndex, startIndex+count) to its legal owner's enumeration. Permissionless
+    /// and safe to re-run — already-tracked tokens are skipped. Call in batches over [0, totalSupply()).
+    function backfillLegalOwnerEnumeration(uint256 startIndex, uint256 count) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        ICyberCertPrinter self = ICyberCertPrinter(address(this)); // delegatecalled: address(this) is the printer
+        uint256 supply = self.totalSupply();
+        uint256 end = startIndex + count;
+        if (end > supply) end = supply;
+        for (uint256 i = startIndex; i < end; i++) {
+            uint256 tokenId = self.tokenByIndex(i); // enumerates live tokens only (burned are excluded)
+            address owner = s.owners[tokenId].ownerAddress;
+            if (owner != address(0)) _addToLegalOwnerEnumeration(s, owner, tokenId);
+        }
+    }
+
+    /// @dev Reserve units against a pending deal/loan. Reverts if the total reserved
+    /// would exceed the certificate's units.
+    function increaseUnitsReserved(uint256 tokenId, uint256 amount) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        uint256 newReserved = s.unitsReserved[tokenId] + amount;
+        if (newReserved > s.certificateDetails[tokenId].unitsRepresented) revert ExceedsAvailableUnits();
+        s.unitsReserved[tokenId] = newReserved;
+        emit UnitsReservedUpdated(tokenId, newReserved);
+    }
+
+    /// @dev Release previously reserved units. Reverts if releasing more than is reserved.
+    function decreaseUnitsReserved(uint256 tokenId, uint256 amount) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        uint256 reserved = s.unitsReserved[tokenId];
+        if (amount > reserved) revert ExceedsReservedUnits();
+        uint256 newReserved;
+        unchecked { newReserved = reserved - amount; }
+        s.unitsReserved[tokenId] = newReserved;
+        emit UnitsReservedUpdated(tokenId, newReserved);
+    }
+
+    function getUnitsReserved(uint256 tokenId) internal view returns (uint256) {
+        return cyberCertStorage().unitsReserved[tokenId];
+    }
+
+    function recordHolderChange(address from, address to) internal {
+        CyberCertStorage storage s = cyberCertStorage();
+
+        if (from == to) return;
+
+        if (from != address(0)) {
+            uint256 fromBalance = s.holderTokenCount[from] - 1;
+            s.holderTokenCount[from] = fromBalance;
+            if (fromBalance == 0) {
+                s.uniqueHolderCount--;
+            }
+        }
+
+        if (to != address(0)) {
+            uint256 toBalance = s.holderTokenCount[to];
+            if (toBalance == 0) {
+                s.uniqueHolderCount++;
+            }
+            s.holderTokenCount[to] = toBalance + 1;
+        }
+    }
+
+    function getHolderCount() internal view returns (uint256) {
+        return cyberCertStorage().uniqueHolderCount;
+    }
+
+    // Legend management; isDefault selects the defaultLegend array (tokenId ignored) vs a cert's legend
+    function _legendArray(uint256 tokenId, bool isDefault) private view returns (string[] storage) {
+        CyberCertStorage storage s = cyberCertStorage();
+        if (isDefault) return s.defaultLegend;
+        return s.certLegend[tokenId];
+    }
+
+    function addLegend(uint256 tokenId, bool isDefault, string memory newLegend) external {
+        _legendArray(tokenId, isDefault).push(newLegend);
+    }
+
+    function removeLegendAt(uint256 tokenId, bool isDefault, uint256 index) external {
+        string[] storage arr = _legendArray(tokenId, isDefault);
+        uint256 len = arr.length;
+        if (index >= len) revert InvalidLegendIndex();
+
+        // Move the last element to the index being removed (if it's not the last element)
+        // and then pop the last element
+        uint256 lastIndex = len - 1;
+        if (index != lastIndex) {
+            string memory lastLegend = arr[lastIndex];
+            arr[index] = lastLegend;
+        }
+        arr.pop();
+    }
+
+    function _restrictiveLegendArray(uint256 tokenId, bool isDefault) private view returns (RestrictiveLegend[] storage) {
+        CyberCertStorage storage s = cyberCertStorage();
+        if (isDefault) return s.defaultLegendsV2;
+        return s.certLegendsV2[tokenId];
+    }
+
+    function copyDefaultRestrictiveLegendsToCert(CyberCertStorage storage s, uint256 tokenId) private {
+        delete s.certLegendsV2[tokenId];
+        RestrictiveLegend[] storage certLegends = s.certLegendsV2[tokenId];
+        for (uint256 i = 0; i < s.defaultLegendsV2.length; i++) {
+            RestrictiveLegend memory legend = s.defaultLegendsV2[i];
+            certLegends.push(legend);
+        }
+    }
+
+    function addRestrictiveLegend(uint256 tokenId, bool isDefault, RestrictiveLegend memory newLegend) external {
+        _restrictiveLegendArray(tokenId, isDefault).push(newLegend);
+    }
+
+    function removeRestrictiveLegendAt(uint256 tokenId, bool isDefault, uint256 index) external {
+        RestrictiveLegend[] storage arr = _restrictiveLegendArray(tokenId, isDefault);
+        uint256 len = arr.length;
+        if (index >= len) revert InvalidLegendIndex();
+
+        uint256 lastIndex = len - 1;
+        if (index != lastIndex) {
+            arr[index] = arr[lastIndex];
+        }
+        arr.pop();
+    }
+
+    function getEffectiveRestrictiveLegends(uint256 tokenId) internal view returns (RestrictiveLegend[] memory legends) {
+        CyberCertStorage storage s = cyberCertStorage();
+        if (s.certLegendsV2[tokenId].length > 0) {
+            RestrictiveLegend[] storage storedLegends = s.certLegendsV2[tokenId];
+            legends = new RestrictiveLegend[](storedLegends.length);
+            for (uint256 i = 0; i < storedLegends.length; i++) {
+                legends[i] = storedLegends[i];
+            }
+        } else {
+            string[] storage legacyLegends = s.certLegend[tokenId];
+            legends = new RestrictiveLegend[](legacyLegends.length);
+            for (uint256 i = 0; i < legacyLegends.length; i++) {
+                legends[i] = RestrictiveLegend({
+                    restrictionType: RestrictionType.Custom,
+                    title: "",
+                    text: legacyLegends[i],
+                    jurisdiction: "",
+                    referenceId: bytes32(0),
+                    effectiveTimestamp: 0,
+                    expirationTimestamp: 0,
+                    active: true,
+                    data: ""
+                });
+            }
+        }
     }
 
     // Internal getters for complex types
@@ -202,7 +534,7 @@ library CyberCertPrinterStorage {
     }
 
     function setOwnerDetails(uint256 tokenId, OwnerDetails memory details) internal {
-        cyberCertStorage().owners[tokenId] = details;
+        _setLegalOwner(cyberCertStorage(), tokenId, details.ownerAddress, details.name);
     }
 
     function setSecurityStatus(uint256 tokenId, SecurityStatus status) internal {

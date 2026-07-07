@@ -12,10 +12,10 @@ fs_permissions = [
 ]
 
 [rpc_endpoints]
-ethereum = { endpoint = "https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 10, retry_backoff = 3000, compute_units_per_second = 100 }
-base = { endpoint = "https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 10, retry_backoff = 3000, compute_units_per_second = 100 }
-sepolia = { endpoint = "https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 10, retry_backoff = 3000, compute_units_per_second = 100 }
-base_sepolia = { endpoint = "https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 10, retry_backoff = 3000, compute_units_per_second = 100 }
+ethereum        = { endpoint = "https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+base            = { endpoint = "https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+sepolia         = { endpoint = "https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
+base_sepolia    = { endpoint = "https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 20, retry_backoff = 6000, compute_units_per_second = 100 }
 
 [profile.ci]
 # inherits [profile.default]

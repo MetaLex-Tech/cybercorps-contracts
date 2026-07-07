@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 import "../src/RoundManager.sol";
+import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import "../src/IssuanceManager.sol";
 import "../src/CyberCertPrinter.sol";
 import "../src/storage/RoundManagerStorage.sol";
@@ -152,7 +153,7 @@ contract RoundManagerFCFSForkTest is Test {
             privKey
         );
 
-        vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
+        vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector);
         rm.submitEOI(
             roundId,
             eoi,
@@ -529,7 +530,7 @@ contract RoundManagerFCFSForkTest is Test {
         //make sure lexchex is not valid
         assert(!ILexChex(0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62).hasValidLexCheX(investor));
 
-        vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
+        vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector);
         rm.submitEOI(
             roundId,
             eoi,
@@ -681,7 +682,7 @@ contract RoundManagerFCFSForkTest is Test {
         );
 
         // SUBMIT EOI - Should succeed but NOT mint LexChex because token is not whitelisted
-        vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
+        vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector);
         rmPub.submitEOI(
             pubRoundId,
             eoi,

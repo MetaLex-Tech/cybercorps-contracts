@@ -7,6 +7,7 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 import {DeployPumpCorpFactoryScript} from "../script/deploy-pump-factory.s.sol";
 import {PumpCorpFactory, PumpCorpFactoryLib} from "../src/PumpCorpFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
+import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {FeeOverride} from "../src/interfaces/IRoundManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
@@ -599,7 +600,7 @@ contract PumpCorpFactoryForkTest is Test {
             lexchexDetails: _emptyLex()
         });
 
-        vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
+        vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector);
         RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,
@@ -1877,7 +1878,7 @@ contract PumpCorpFactoryForkTest is Test {
         });
 
         bytes memory eoiSig = _eoiSig(1, globalValues, investorPv);
-        vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
+        vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector);
         RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,

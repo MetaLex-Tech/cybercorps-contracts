@@ -73,6 +73,13 @@ interface ICyberCorp {
     function setEscrowedOfficerSignature(uint256 index, bytes calldata signature) external;
     function getEscrowedOfficerSignature(uint256 index) external view returns (bytes memory);
     function getEscrowedOfficerSignatureCount() external view returns (uint256);
+    function extension() external view returns (address);
+    function extensionType() external view returns (bytes32);
+    function extensionData() external view returns (bytes memory);
+    function setExtension(address _extension, bytes32 _extensionType) external;
+    function setExtensionData(bytes calldata _extensionData) external;
+    function clearExtension() external;
+    function getExtensionURI() external view returns (string memory);
 
 }
 
