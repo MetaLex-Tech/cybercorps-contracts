@@ -9,7 +9,6 @@ import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {UpgradePublicRoundsScript} from "../script/upgrade-public-rounds.s.sol";
 import {UpgradeLegacyCyberCorpsScript} from "../script/upgrade-legacy-cybercorps.s.sol";
 import {UpgradeLegacyDealManagersScript} from "../script/upgrade-legacy-deal-managers.s.sol";
-import {UpgradeLegacyIssuanceManagersScript} from "../script/upgrade-legacy-issuance-managers.s.sol";
 import {ILegacyFactory} from "../script/interfaces/ILegacyFactory.sol";
 import {ILegacyIssuanceManagerFactory} from "../script/interfaces/ILegacyIssuanceManagerFactory.sol";
 import {GnosisTransaction} from "../script/libs/safe.sol";
@@ -27,7 +26,8 @@ import {RoundManager} from "../src/RoundManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
-import {IssuanceManagerWithMigration} from "../src/IssuanceManagerWithMigration.sol";
+import {IssuanceManager} from "../src/IssuanceManager.sol";
+import {IssuanceManagerWithMigration} from "./helpers/IssuanceManagerWithMigration.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
@@ -718,8 +718,8 @@ contract UpgradeLegacyCyberCorpsTest is Test {
         // Run scripts to upgrade all legacy DealManagers
         (new UpgradeLegacyDealManagersScript()).runWithArgs(legacyAddressesCount);
 
-        // Run scripts to upgrade all legacy IssuanceManagers
-        (new UpgradeLegacyIssuanceManagersScript()).runWithArgs(legacyAddressesCount);
+        // Upgrade legacy IssuanceManagers (script commented out in src/ due to contract size; inlined here for tests)
+        _upgradeLegacyIssuanceManagers();
 
         // Simulate all legacy corp owners accept the new CyberCorpPrinter
         for (uint256 i = 0; i < knownCyberCorps.length; i++) {
@@ -732,6 +732,51 @@ contract UpgradeLegacyCyberCorpsTest is Test {
             vm.stopPrank();
             console2.log("CyberCertPrinter beacon implementation was accepted by IssuanceManager: %s", imAddr);
         }
+    }
+
+    function _upgradeLegacyIssuanceManagers() internal {
+        IssuanceManagerWithMigration imWithMigrationImpl = new IssuanceManagerWithMigration();
+
+        assertEq(
+            cyberCorpFactory.issuanceManagerFactory(),
+            imWithMigrationImpl.NEW_UPGRADE_FACTORY(),
+            "new issuanceManagerFactory address has changed, update it in IssuanceManagerWithMigration"
+        );
+
+        legacyIssuanceManagerFactory.upgradeImplementation(address(imWithMigrationImpl));
+        assertEq(
+            legacyIssuanceManagerFactory.getBeaconImplementation(),
+            address(imWithMigrationImpl),
+            "beacon implementation should be upgraded with migration features by now"
+        );
+
+        for (uint256 i = 0; i < knownCyberCorps.length; i++) {
+            address imAddr = CyberCorp(knownCyberCorps[i]).issuanceManager();
+            IssuanceManagerWithMigration(imAddr).migrateUpgradeFactory();
+            assertNotEq(
+                IssuanceManagerFactory(IssuanceManager(imAddr).getUpgradeFactory()).getRefImplementation(),
+                address(0),
+                "should be able to lookup reference implementation now"
+            );
+            assertEq(
+                IssuanceManager(imAddr).getCertPrinterBeaconImplementation(),
+                newImFactory.getCyberCertPrinterRefImplementation(),
+                "should point CyberCertPrinter implementation to reference now"
+            );
+            assertEq(
+                IssuanceManager(imAddr).getScripBeaconImplementation(),
+                newImFactory.getCyberScripRefImplementation(),
+                "should point CyberScrip implementation to reference now"
+            );
+        }
+
+        address refImplementation = newImFactory.getRefImplementation();
+        legacyIssuanceManagerFactory.upgradeImplementation(refImplementation);
+        assertEq(
+            legacyIssuanceManagerFactory.getBeaconImplementation(),
+            refImplementation,
+            "beacon implementation should be upgraded without migration features by now"
+        );
     }
 
     function _assertIssuanceManagerBeacons(address imAddr) internal {

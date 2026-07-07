@@ -107,6 +107,7 @@ library CyberCertPrinterStorage {
         // New variables must be appended below to preserve storage layout for upgrades
         mapping(uint256 => bool) tokenTransferable;
         mapping(uint256 => bytes[]) issuerSignatures;
+        bytes printerExtensionData;
         // Units locked in a pending deal/loan; always <= certificateDetails[tokenId].unitsRepresented
         mapping(uint256 => uint256) unitsReserved;
         mapping(uint256 => RestrictiveLegend[]) certLegendsV2;
@@ -134,6 +135,8 @@ library CyberCertPrinterStorage {
         CyberCertPrinterStorage.CyberCertStorage storage s = cyberCertStorage();
         RestrictiveLegend[] memory certLegend = getEffectiveRestrictiveLegends(tokenId);
         ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
+        CertificateDetails memory effectiveDetails = getCertificateDetails(tokenId);
+
         // Get registry and agreementId from first endorsement if it exists
         address registry = address(0);
         bytes32 agreementId = bytes32(0);
@@ -143,11 +146,7 @@ library CyberCertPrinterStorage {
             agreementId = firstEndorsement.agreementId;
         }
 
-        IUriBuilder builder = IUriBuilder(IIssuanceManager(s.issuanceManager).uriBuilder());
-        string[] memory certLegend = s.certLegend[tokenId];
-        Endorsement[] memory endorsements = s.endorsements[tokenId];
-        OwnerDetails memory owner = s.owners[tokenId];
-        return builder.buildCertificateUri(
+        return IUriBuilder(IIssuanceManager(s.issuanceManager).uriBuilder()).buildCertificateUri(
             corp.cyberCORPName(),
             corp.cyberCORPType(),
             corp.cyberCORPJurisdiction(),
@@ -156,9 +155,9 @@ library CyberCertPrinterStorage {
             s.securitySeries,
             s.certificateUri,
             certLegend,
-            getCertificateDetails(tokenId),
-            endorsements,
-            owner,
+            effectiveDetails,
+            s.endorsements[tokenId],
+            s.owners[tokenId],
             registry,
             agreementId,
             tokenId,

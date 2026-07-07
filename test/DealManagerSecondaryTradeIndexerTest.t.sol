@@ -307,7 +307,8 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
                 "uri://cert",
                 SecurityClass.CommonStock,
                 SecuritySeries.SeriesA,
-                address(0)
+                address(0),
+                hex""
             )
         );
         sellerTokenId =

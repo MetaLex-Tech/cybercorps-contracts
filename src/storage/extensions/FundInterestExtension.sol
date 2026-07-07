@@ -64,8 +64,11 @@ contract FundInterestExtension is UUPSUpgradeable, ICertificateExtension, BorgAu
         return extensionType == EXTENSION_TYPE;
     }
 
-    function getExtensionURI(bytes memory data) external view override returns (string memory) {
-        FundInterestData memory decoded = abi.decode(data, (FundInterestData));
+    function getExtensionURI(
+        bytes memory /* printerExtensionData */,
+        bytes memory certificateExtensionData
+    ) external view override returns (string memory) {
+        FundInterestData memory decoded = abi.decode(certificateExtensionData, (FundInterestData));
 
         return string(
             abi.encodePacked(

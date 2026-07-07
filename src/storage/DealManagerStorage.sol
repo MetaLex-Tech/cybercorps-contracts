@@ -80,6 +80,7 @@ library DealManagerStorage {
         SecuritySeries securitySeries;
         address extension;
         string[] defaultLegend;
+        bytes printerExtensionData;
     }
 
     /// @notice Main storage layout struct that holds all deal manager data

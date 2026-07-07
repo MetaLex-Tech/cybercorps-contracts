@@ -146,7 +146,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         ICyberCertPrinter cert = ICyberCertPrinter(
             issuanceManager.createCertPrinter(
                 new string[](0), "Cert", "CERT", "uri://cert",
-                SecurityClass.CommonStock, SecuritySeries.SeriesA, address(0)
+                SecurityClass.CommonStock, SecuritySeries.SeriesA, address(0), hex""
             )
         );
         CertificateDetails memory details = CertificateDetails({
@@ -280,7 +280,8 @@ contract IssuanceManagerSecondaryTransferTest is Test {
                 "uri://cert",
                 SecurityClass.CommonStock,
                 SecuritySeries.SeriesA,
-                address(0)
+                address(0),
+                hex""
             )
         );
         CertificateDetails memory details = CertificateDetails({

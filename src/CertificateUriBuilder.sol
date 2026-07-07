@@ -158,6 +158,18 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
         }
     }
 
+    function restrictiveLegendsToStringArray(
+        RestrictiveLegend[] memory legends
+    ) public pure returns (string[] memory texts) {
+        texts = new string[](legends.length);
+        for (uint256 i = 0; i < legends.length; i++) {
+            texts[i] = legends[i].text;
+            if (bytes(texts[i]).length == 0) {
+                texts[i] = legends[i].title;
+            }
+        }
+    }
+
     function restrictiveLegendsToJson(RestrictiveLegend[] memory arr) public pure returns (string memory) {
         string memory json = "[";
         for (uint256 i = 0; i < arr.length; i++) {
@@ -619,7 +631,7 @@ struct CertificateDetails {
             ownerAddress: owner.ownerAddress,
             consideration: details.investmentAmountUSD,
             blockNumber: block.number,
-            transferRestrictions: certLegend,
+            transferRestrictions: restrictiveLegendsToStringArray(certLegend),
             isVoided: _isCertVoided(contractAddress, tokenId)
         });
 

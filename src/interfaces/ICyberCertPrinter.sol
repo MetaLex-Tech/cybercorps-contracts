@@ -194,6 +194,7 @@ interface ICyberCertPrinter is IERC721 {
             address endorsee
         );
     function tokenURI(uint256 tokenId) external view returns (string memory);
+    function getPrinterExtensionData() external view returns (bytes memory);
     function certificateUri() external view returns (string memory);
     function holderCount() external view returns (uint256);
     function totalSupply() external view returns (uint256);

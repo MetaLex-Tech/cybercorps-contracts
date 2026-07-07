@@ -218,7 +218,8 @@ contract CyberCertPrinterTest is Test {
                 address(issuanceManager),
                 SecurityClass.PreferredStock,
                 SecuritySeries.SeriesA,
-                initialExtension
+                initialExtension,
+                hex""
             )
         );
         printer = CyberCertPrinter(address(new ERC1967Proxy(address(implementation), initData)));
