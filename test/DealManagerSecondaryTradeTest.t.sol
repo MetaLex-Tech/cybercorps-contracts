@@ -862,7 +862,7 @@ contract DealManagerSecondaryTradeTest is Test {
         _postSellOffer();
 
         vm.prank(owner);
-        vm.expectRevert(CyberCertPrinter.CertificateReserved.selector);
+        vm.expectRevert(ICyberCertPrinter.CertificateReserved.selector);
         im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS));
 
         // Below verifies DealManager does double-check the legal ownership at every step, but we will never reach there if
@@ -2097,7 +2097,7 @@ contract DealManagerSecondaryTradeTest is Test {
         _acceptSellOffer(offerId);
 
         vm.prank(owner);
-        vm.expectRevert(CyberCertPrinter.CertificateReserved.selector);
+        vm.expectRevert(ICyberCertPrinter.CertificateReserved.selector);
         im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS));
 
         // Below verifies DealManager does double-check the legal ownership at every step, but we will never reach there if
@@ -2117,7 +2117,7 @@ contract DealManagerSecondaryTradeTest is Test {
         _acceptBuyOffer(offerId);
 
         vm.prank(owner);
-        vm.expectRevert(CyberCertPrinter.CertificateReserved.selector);
+        vm.expectRevert(ICyberCertPrinter.CertificateReserved.selector);
         im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS));
 
         // Below verifies DealManager does double-check the legal ownership at every step, but we will never reach there if

@@ -92,6 +92,60 @@ struct RestrictiveLegend {
 }
 
 interface ICyberCertPrinter is IERC721 {
+    // Shared errors — declared once here so CyberCertPrinter and its storage library (via delegatecall) revert
+    // with identical selectors.
+    error NotIssuanceManager();
+    error TokenNotTransferable();
+    error TokenDoesNotExist();
+    error InvalidTokenId();
+    error URIQueryForNonexistentToken();
+    error URISetForNonexistentToken();
+    error ConversionNotImplemented();
+    error TransferRestricted(string reason);
+    error EndorsementNotSignedOrInvalid();
+    error InvalidEndorsement();
+    error InvalidLegendIndex();
+    error SignatureRequired();
+    error LegalOwnerIndexOutOfBounds();
+    error CertificateReserved();
+    error ExceedsAvailableUnits();
+    error ExceedsReservedUnits();
+
+    // Shared events — declared once here so CyberCertPrinter and its storage library (via delegatecall) emit
+    // with identical topics.
+    event CertificateCreated(uint256 indexed tokenId, address indexed investor, uint256 amount, uint256 cap);
+    event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
+    event CertificateSigned(uint256 indexed tokenId, bytes signature);
+    event CertificateEndorsed(
+        uint256 indexed tokenId,
+        address indexed endorser,
+        address indexed endorsee,
+        string endorseeName,
+        address registry,
+        bytes32 agreementId,
+        uint256 index,
+        uint256 timestamp
+    );
+    event HookStatusChanged(bool enabled);
+    event WhitelistUpdated(address indexed account, bool whitelisted);
+    event CyberCertPrinter_CertificateCreated(uint256 indexed tokenId);
+    event CyberCertTransfer(address indexed from, address indexed to, uint256 indexed tokenId);
+    event CertificateAssigned(uint256 indexed tokenId, address indexed newOwner, string newOwnerName, string issuerName);
+    event CertificateVoided(uint256 indexed tokenId, uint256 timestamp);
+    event CertificateUnvoided(uint256 indexed tokenId, uint256 timestamp);
+    event RestrictionHookSet(uint256 indexed id, address indexed hookAddress);
+    event GlobalRestrictionHookSet(address indexed hookAddress);
+    event GlobalTransferableSet(bool indexed transferable);
+    event UnitsReservedUpdated(uint256 indexed tokenId, uint256 unitsReserved);
+    event IssueTimestampSet(uint256 indexed tokenId, uint64 issueTimestamp);
+    event LegalOwnerChanged(
+        uint256 indexed tokenId,
+        address indexed previousOwner,
+        address indexed newOwner,
+        string newOwnerName,
+        uint64 acquisitionTimestamp
+    );
+
     function initialize(
         string[] memory defaultLegend,
         string memory name,
@@ -208,4 +262,8 @@ interface ICyberCertPrinter is IERC721 {
     function increaseUnitsReserved(uint256 tokenId, uint256 amount) external;
     function decreaseUnitsReserved(uint256 tokenId, uint256 amount) external;
     function unitsReserved(uint256 tokenId) external view returns (uint256);
+    function issueTimestamp(uint256 tokenId) external view returns (uint64);
+    function setIssueTimestamp(uint256 tokenId, uint64 ts) external;
+    function acquisitionTimestamp(uint256 tokenId) external view returns (uint64);
+    function backfillAcquisitionTimestamps(uint256 startIndex, uint256 count) external;
 }

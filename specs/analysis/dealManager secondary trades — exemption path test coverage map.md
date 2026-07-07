@@ -45,34 +45,34 @@ settlement period).
 
 ## Closing-condition behavior tests
 
-| Test fn                                   | What it proves                                                                                                                                                                           |
-|-------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Test fn                                       | What it proves                                                                                                                                                                                                                     |
+|-----------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `test_GlobalKill_BlocksFinalize_UntilLowered` | Either admin raises unilaterally mid-deal → finalize reverts `SecondaryConditionsNotMet(globalKill)`; the proposer alone cannot confirm the lower (two-call, two-admin lowering); once the other admin confirms, finalize succeeds |
-| `test_TimeSettlement_BlocksEarlyFinalize`     | `finalizableAt == acceptance + 24h`; finalize before the window reverts `SecondaryConditionsNotMet(timeSettlement)`; after the warp it succeeds                                        |
+| `test_TimeSettlement_BlocksEarlyFinalize`     | `finalizableAt == acceptance + 24h`; finalize before the window reverts `SecondaryConditionsNotMet(timeSettlement)`; after the warp it succeeds                                                                                    |
 
 ## Condition → coverage
 
-| Condition                             | Real? | Covered by                     | Notes                                                                                                     |
-|---------------------------------------|:-----:|--------------------------------|-----------------------------------------------------------------------------------------------------------|
-| KYCAMLCondition                       |   ✓   | all 5                          | both buyer & seller hold a valid KYC_AML badge                                                            |
-| TaxInfoCondition                      |   ✓   | all 5                          | admin records `setTaxForm(buyer, W9, …)`                                                                  |
-| HolderCapCondition                    |   ✓   | all 5                          | §3(c)(1), cap 100; buyer is a fresh holder (+1 ≤ 100)                                                     |
-| ERISACondition                        |   ✓   | 144, 4a7, 4a1½, 144A (○ Reg S) | buyer's attestation recorded as a signer value on the settlement agreement                                |
-| USStateOfResidenceCondition           |   ✓   | 144, 4a7, 4a1½, 144A (○ Reg S) | buyer state CA (NY is default-blocked, unused); silent for the non-US Reg S buyer                         |
-| LegionSoulboundCondition              |   ✓   | all 5                          | buyer holds the Legion custom-category credential                                                         |
-| AgreementSignedCondition              |   ✓   | all 5 (SPV-layer)              | `registry.allPartiesSigned(settlementId)`; silent at posting, satisfied from acceptance onward            |
-| HoldingPeriodCondition                |   ✓   | 144                            | reads `FundInterestData.acquisitionDate` from the seller cert                                             |
-| LexChexBadgeKind(ACCREDITED_INVESTOR) |   ✓   | 4a7                            | buyer-only                                                                                                |
-| LexChexBadgeKind(QIB)                 |   ✓   | 144A                           | buyer-only                                                                                                |
-| LexChexBadgeKind(NON_US_PERSON)       |   ✓   | Reg S                          | buyer-only; approximates the spec's zkPassport `NonUSPersonCondition` (a generic `ICondition`, not typed) |
-| RegSDistributionComplianceCondition   |   ✓   | Reg S                          | `setRegSConfig(corp, 3, 365 d)`; reads acquisitionDate                                                    |
-| Rule144DisclosureCondition            |   ✓   | 144                            | SPV admin records `setDisclosurePackage(corp, uri, asOf)`; 16-month freshness policy                      |
-| Section4a7DisclosureCondition         |   ✓   | 4a7                            | package freshness (from posting) + buyer's acknowledgment-of-receipt signer value (from acceptance)       |
-| LegalOpinionCondition                 |   ✓   | 4a1½                           | GP records `recordGPSignOff(dm, offerId)` between post and accept, pre-approving the offer's settlements  |
-| GlobalKillCondition                   |   ✓   | all 5 (closing) + kill test    | plain singleton; two admin slots (MetaLeX + Legion), raise unilateral, lower two-call                     |
-| TimeSettlementPeriodCondition         |   ✓   | all 5 (closing) + timing test  | 24h default from acceptance (reconstructed as `escrow.expiry − settlementWindow`); happy paths warp past  |
-| CFIUSCondition                        |   ✓   | none                           | implemented; optional per-SPV, out of scope for these happy paths                                         |
-| GPLPApprovalCondition                 |   ✓   | none                           | implemented; optional per-SPV, out of scope                                                               |
+| Condition                             | Real? | Covered by                     | Notes                                                                                                                                            |
+|---------------------------------------|:-----:|--------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| KYCAMLCondition                       |   ✓   | all 5                          | both buyer & seller hold a valid KYC_AML badge                                                                                                   |
+| TaxInfoCondition                      |   ✓   | all 5                          | admin records `setTaxForm(buyer, W9, …)`                                                                                                         |
+| HolderCapCondition                    |   ✓   | all 5                          | §3(c)(1), cap 100; buyer is a fresh holder (+1 ≤ 100)                                                                                            |
+| ERISACondition                        |   ✓   | 144, 4a7, 4a1½, 144A (○ Reg S) | buyer's attestation recorded as a signer value on the settlement agreement                                                                       |
+| USStateOfResidenceCondition           |   ✓   | 144, 4a7, 4a1½, 144A (○ Reg S) | buyer state CA (NY is default-blocked, unused); silent for the non-US Reg S buyer                                                                |
+| LegionSoulboundCondition              |   ✓   | all 5                          | buyer holds the Legion custom-category credential                                                                                                |
+| AgreementSignedCondition              |   ✓   | all 5 (SPV-layer)              | `registry.allPartiesSigned(settlementId)`; silent at posting, satisfied from acceptance onward                                                   |
+| HoldingPeriodCondition                |   ✓   | 144                            | reads the seller cert's base `acquisitionTimestamp` (tacking anchor still from the extension); seller lot aged past HOLD by minting then warping |
+| LexChexBadgeKind(ACCREDITED_INVESTOR) |   ✓   | 4a7                            | buyer-only                                                                                                                                       |
+| LexChexBadgeKind(QIB)                 |   ✓   | 144A                           | buyer-only                                                                                                                                       |
+| LexChexBadgeKind(NON_US_PERSON)       |   ✓   | Reg S                          | buyer-only; approximates the spec's zkPassport `NonUSPersonCondition` (a generic `ICondition`, not typed)                                        |
+| RegSDistributionComplianceCondition   |   ✓   | Reg S                          | `setRegSConfig(corp, 3, 365 d)`; reads the seller cert's base `acquisitionTimestamp`                                                             |
+| Rule144DisclosureCondition            |   ✓   | 144                            | SPV admin records `setDisclosurePackage(corp, uri, asOf)`; 16-month freshness policy                                                             |
+| Section4a7DisclosureCondition         |   ✓   | 4a7                            | package freshness (from posting) + buyer's acknowledgment-of-receipt signer value (from acceptance)                                              |
+| LegalOpinionCondition                 |   ✓   | 4a1½                           | GP records `recordGPSignOff(dm, offerId)` between post and accept, pre-approving the offer's settlements                                         |
+| GlobalKillCondition                   |   ✓   | all 5 (closing) + kill test    | plain singleton; two admin slots (MetaLeX + Legion), raise unilateral, lower two-call                                                            |
+| TimeSettlementPeriodCondition         |   ✓   | all 5 (closing) + timing test  | 24h default from acceptance (reconstructed as `escrow.expiry − settlementWindow`); happy paths warp past                                         |
+| CFIUSCondition                        |   ✓   | none                           | implemented; optional per-SPV, out of scope for these happy paths                                                                                |
+| GPLPApprovalCondition                 |   ✓   | none                           | implemented; optional per-SPV, out of scope                                                                                                      |
 
 ## Test-fixture notes
 

@@ -417,6 +417,18 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         certificate.updateCertificateDetails(tokenId, _details);
     }*/
 
+    /// @notice Overrides a certificate's issue timestamp for a position issued off-chain (admin only)
+    /// @param certAddress Address of the certificate printer contract
+    /// @param tokenId ID of the certificate
+    /// @param ts True (historical) issuance timestamp
+    function setIssueTimestamp(
+        address certAddress,
+        uint256 tokenId,
+        uint64 ts
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeSetIssueTimestamp(certAddress, tokenId, ts);
+    }
+
     /// @notice Voids a certificate
     /// @dev Only callable by admin
     /// @param certAddress Address of the certificate printer contract
