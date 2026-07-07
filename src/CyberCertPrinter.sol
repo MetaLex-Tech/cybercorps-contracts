@@ -480,6 +480,12 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         return CyberCertPrinterStorage.getAcquisitionTimestamp(tokenId);
     }
 
+    /// @notice Admin override of a cert's acquisition timestamp (e.g. to seed a seasoned migrated position).
+    function setAcquisitionTimestamp(uint256 tokenId, uint64 ts) external onlyIssuanceManager {
+        if (!_exists(tokenId)) revert ICyberCertPrinter.TokenDoesNotExist();
+        CyberCertPrinterStorage.setAcquisitionTimestamp(tokenId, ts);
+    }
+
     function isTokenTransferable(uint256 tokenId) external view returns (bool) {
         return CyberCertPrinterStorage.cyberCertStorage().tokenTransferable[tokenId];
     }

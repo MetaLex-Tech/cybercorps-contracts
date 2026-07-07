@@ -138,6 +138,7 @@ interface ICyberCertPrinter is IERC721 {
     event GlobalTransferableSet(bool indexed transferable);
     event UnitsReservedUpdated(uint256 indexed tokenId, uint256 unitsReserved);
     event IssueTimestampSet(uint256 indexed tokenId, uint64 issueTimestamp);
+    event AcquisitionTimestampSet(uint256 indexed tokenId, uint64 acquisitionTimestamp);
     event LegalOwnerChanged(
         uint256 indexed tokenId,
         address indexed previousOwner,
@@ -265,5 +266,6 @@ interface ICyberCertPrinter is IERC721 {
     function issueTimestamp(uint256 tokenId) external view returns (uint64);
     function setIssueTimestamp(uint256 tokenId, uint64 ts) external;
     function acquisitionTimestamp(uint256 tokenId) external view returns (uint64);
+    function setAcquisitionTimestamp(uint256 tokenId, uint64 ts) external;
     function backfillAcquisitionTimestamps(uint256 startIndex, uint256 count) external;
 }

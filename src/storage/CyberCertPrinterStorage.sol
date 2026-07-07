@@ -395,6 +395,12 @@ library CyberCertPrinterStorage {
         return cyberCertStorage().acquisitionTimestamp[tokenId];
     }
 
+    /// @dev Admin override of acquisitionTimestamp, e.g. to seed a seasoned position migrated on-chain.
+    function setAcquisitionTimestamp(uint256 tokenId, uint64 ts) external {
+        cyberCertStorage().acquisitionTimestamp[tokenId] = ts;
+        emit ICyberCertPrinter.AcquisitionTimestampSet(tokenId, ts);
+    }
+
     /// @dev Idempotent migration for tokens minted before acquisitionTimestamp became a base field: copies each
     /// live token's FundInterestExtension acquisitionDate into the base mapping over [startIndex, +count).
     /// Permissionless; already-set tokens skipped; no-op on non-FUND_INTEREST printers. Batch over the supply.
