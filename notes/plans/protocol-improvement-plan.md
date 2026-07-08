@@ -137,10 +137,19 @@ this) in its `notes/plans/mainframe-changes-plan.md`.
 
 ---
 
-## P3 — Issuer-defined award templates (grants) — `PROPOSED`
+## P3 — Issuer-defined award templates (grants) — `INTERIM SHIPPED` (2026-07-08)
 
 **Full evaluation:** `notes/plans/issuer-award-templates-plan.md` (three options, recommendation,
 per-option contract + app changes). Summary below.
+
+**Status update.** An **interim** variant is live: commit `7edb89d` removed `onlyOwner` from
+the caller-chosen-id `createTemplate` and the registry proxy was upgraded (verified live on
+Base + Ethereum mainnet, 2026-07-08). This is deliberately **temporary** — it is the
+squattable caller-chosen-id variant the full doc warns against, accepted for now to unblock
+issuer self-serve; the webapp compensates with content-addressed ids + DB-side provenance.
+Drawbacks, required app-layer mitigations, and the recommended optimal end-state (re-gate
+`createTemplate` + add content-addressed `createTemplatePublic`, i.e. Option A) are recorded
+in the full doc's §0.
 
 **Problem.** cyberCORPs grants register the award agreement in the **global, MetaLeX-owned**
 `CyberAgreementRegistry`, and the MetaVesT controller's `proposeAndSignDeal(templateId, …)`

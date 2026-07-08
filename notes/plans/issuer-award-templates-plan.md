@@ -1,8 +1,59 @@
 # Issuer-defined award templates — design evaluation & recommendation
 
-**Status:** `PROPOSED` (design-level). Companion to the webapp grants feature
+**Status:** `INTERIM SHIPPED` (2026-07-08) — a **temporary** variant is live on-chain; see §0.
+The recommendation in §6 remains the target end-state. Companion to the webapp grants feature
 (`metalex-webapp` PR #771 + `notes/plans/cybercorps-grants-build-spec.md`). This doc is
 referenced by **P3** in `protocol-improvement-plan.md`.
+
+---
+
+## 0. Status update (2026-07-08) — interim solution shipped
+
+**What shipped.** Commit `7edb89d` ("Opening up template creation") dropped the `onlyOwner`
+modifier from the **caller-chosen-id** `createTemplate` (`src/CyberAgreementRegistry.sol`),
+and a new implementation was deployed (`script/deploy-cyber-agreement-registry.s.sol`, salt
+`MetaLex.CyberAgreementRegistry.UpgradeV3.2.0`). The proxy upgrade is **live**: verified
+2026-07-08 by `eth_call` simulation from an unprivileged EOA on **Base (8453)** and
+**Ethereum mainnet (1)** — a bare `createTemplate` call now succeeds where it previously
+reverted on the owner gate.
+
+**This is a deliberate temporary solution** (product decision, 2026-07-08): it unblocks
+issuer self-serve template registration immediately with a one-line contract change. It is
+*not* the §6-recommended configuration — it is the "naive permissionless caller-chosen-id"
+variant §4 warns about. Accepted drawbacks while interim:
+
+1. **Squatting / front-running.** Template ids are caller-chosen `bytes32`, so a guessable
+   id (e.g. the keccak of a published label) can be pre-registered by anyone, pointed at a
+   bogus document; a pending registration can also be front-run in the mempool. Creation is
+   create-only (`TemplateAlreadyExists`), so *existing* templates cannot be overwritten —
+   the exposure is claiming an id before its intended owner does.
+2. **No curated namespace.** The owner-gated entry point no longer exists, so there is no
+   on-chain distinction between a MetaLeX-canonical template and an arbitrary one, and
+   `TemplateCreated` carries no creator — **registry presence must not be treated as
+   MetaLeX approval** anywhere downstream.
+3. **Ungated storage spam.** Anyone may write templates (bounded: gas-priced, create-only,
+   no integrity impact).
+
+Unchanged: templates remain **inert** — only a corp's funding authority can turn one into a
+real grant (§4 "capability ≠ funds"), so none of the above moves value.
+
+**Required app-layer mitigations while this interim configuration is live** (webapp):
+- Derive template ids **content-addressed** client-side —
+  `keccak256(abi.encode(title, legalContractUri, globalFields, partyFields))` — never from
+  a human label. This makes squatting moot for app-originated templates (an id can only
+  resolve to its own content) and is forward-compatible with the §6 end-state.
+- Keep template **provenance/trust in the app DB** (per-corp and staff-approved rows); never
+  enumerate or trust the registry as a source of approved templates.
+- **Verify content on-chain before use**: read the template back and check the document URI
+  + field schema against expectations before binding a deal to the id.
+
+**Recommended optimal configuration (target end-state — unchanged from §6):** restore
+`onlyOwner` on the caller-chosen-id `createTemplate` (reinstating a curated MetaLeX
+namespace) **and** add the content-addressed, idempotent `createTemplatePublic` (Option A)
+for permissionless issuer registration; optionally add creator provenance to
+`TemplateCreated`. Because the app-layer mitigations above already use content-addressed
+ids, migrating to the end-state later requires **no app-flow change** — issuer
+registrations simply switch to calling `createTemplatePublic` with identical ids.
 
 ---
 
