@@ -52,6 +52,8 @@ import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/IIssuanceManagerFactory.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import {ExemptionPathway, HostingMode} from "../interfaces/ISecondaryTradeStorage.sol";
+import {FundInterestData, FUND_INTEREST_EXTENSION_TYPE} from "./extensions/FundInterestExtension.sol";
+import "./extensions/ICertificateExtension.sol";
 import "./CyberCertPrinterStorage.sol";
 
 library IssuanceManagerStorage {
@@ -822,6 +824,24 @@ library IssuanceManagerStorage {
 
     function executeSetAcquisitionTimestamp(address certAddress, uint256 tokenId, uint64 ts) external {
         ICyberCertPrinter(certAddress).setAcquisitionTimestamp(tokenId, ts);
+    }
+
+    /// @dev Rewrites only the Rule 144(d)(3) tacking anchor in the cert's FundInterestData, leaving every other
+    /// field (including acquisitionDate) untouched, then writes the re-encoded blob back through the printer's
+    /// updateCertificateDetails chokepoint.
+    function executeSetTackedFromAcquisitionDate(address certAddress, uint256 tokenId, uint64 ts) external {
+        ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
+        // Only FUND_INTEREST certs carry a FundInterestData blob; guard before decoding so we never misread or
+        // clobber another extension's extensionData (mirrors CyberCertPrinterStorage.backfillAcquisitionTimestamp).
+        address ext = cert.getExtension(tokenId);
+        if (ext == address(0) || !ICertificateExtension(ext).supportsExtensionType(FUND_INTEREST_EXTENSION_TYPE)) {
+            revert ICyberCertPrinter.ExtensionTypeNotSupported();
+        }
+        CertificateDetails memory details = cert.getActiveCertificateDetails(tokenId);
+        FundInterestData memory fid = abi.decode(details.extensionData, (FundInterestData));
+        fid.tackedFromAcquisitionDate = ts;
+        details.extensionData = abi.encode(fid);
+        cert.updateCertificateDetails(tokenId, details);
     }
 
     function executeVoidCertificate(address certAddress, uint256 tokenId) external {
