@@ -192,11 +192,16 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         _;
     }
 
-    /// @dev Restricts execution to contract itself or AUTH.OWNER_ROLE callers
-    modifier onlyOwnerOrSelf() {
+    /// @dev Restricts execution to contract itself or AUTH.OWNER_ROLE callers. Body in a shared private helper
+    /// (not inlined per call site) to keep this contract under the EIP-170 size limit.
+    function _requireOwnerOrSelf() private view {
         if (msg.sender != address(this)) {
             AUTH.onlyRole(AUTH.OWNER_ROLE(), msg.sender);
         }
+    }
+
+    modifier onlyOwnerOrSelf() {
+        _requireOwnerOrSelf();
         _;
     }
 
@@ -439,6 +444,19 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         uint64 ts
     ) external onlyAdmin {
         IssuanceManagerStorage.executeSetAcquisitionTimestamp(certAddress, tokenId, ts);
+    }
+
+    /// @notice Overrides a certificate's Rule 144(d)(3) tacking anchor (admin only)
+    /// @dev Rewrites only tackedFromAcquisitionDate in the cert's FundInterestData; other fields are preserved.
+    /// @param certAddress Address of the certificate printer contract
+    /// @param tokenId ID of the certificate
+    /// @param ts Tacking anchor to set (0 = no tacking asserted)
+    function updateCertificateTackedFromAcquisitionDate(
+        address certAddress,
+        uint256 tokenId,
+        uint64 ts
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeSetTackedFromAcquisitionDate(certAddress, tokenId, ts);
     }
 
     /// @notice Voids a certificate

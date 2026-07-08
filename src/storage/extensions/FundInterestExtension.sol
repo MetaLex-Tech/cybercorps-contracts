@@ -39,10 +39,14 @@ struct FundInterestData {
     string customProvisions;
 }
 
+/// @dev Canonical FUND_INTEREST extension-type key. File-level so guards elsewhere reference it by name
+/// instead of re-hashing the literal (the contract's EXTENSION_TYPE and every supportsExtensionType check).
+bytes32 constant FUND_INTEREST_EXTENSION_TYPE = keccak256("FUND_INTEREST");
+
 /// @title FundInterestExtension - certificate extension for SPV fund interests
 /// @author MetaLeX Labs, Inc.
 contract FundInterestExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
-    bytes32 public constant EXTENSION_TYPE = keccak256("FUND_INTEREST");
+    bytes32 public constant EXTENSION_TYPE = FUND_INTEREST_EXTENSION_TYPE;
 
     //offset to leave for future upgrades
     uint256[30] private __gap;

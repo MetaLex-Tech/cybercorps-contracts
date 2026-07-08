@@ -10,6 +10,7 @@ import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
 import {ExemptionPathway, HostingMode} from "../src/interfaces/ISecondaryTradeStorage.sol";
+import {FundInterestData, FundInterestExtension} from "../src/storage/extensions/FundInterestExtension.sol";
 import "../src/libs/auth.sol";
 import "forge-std/Test.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -316,9 +317,63 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         issuanceManager.setAcquisitionTimestamp(address(cert), 0, seasoned);
     }
 
+    // The admin can override a cert's Rule 144(d)(3) tacking anchor (tackedFromAcquisitionDate) inside the
+    // FundInterestData blob, leaving acquisitionDate and the other fields intact; non-admins cannot.
+    function test_UpdateCertificateTackedFromAcquisitionDate_AdminOverrides() public {
+        vm.warp(200 days);
+        ICyberCertPrinter cert = _deployPrinterWithFundInterestCert(UNITS, uint64(111 days), 0, "keep");
+
+        uint64 tacked = uint64(90 days);
+        issuanceManager.updateCertificateTackedFromAcquisitionDate(address(cert), 0, tacked);
+
+        FundInterestData memory fid = abi.decode(cert.getCertificateDetails(0).extensionData, (FundInterestData));
+        assertEq(fid.tackedFromAcquisitionDate, tacked, "tacking anchor updated");
+        assertEq(fid.acquisitionDate, uint64(111 days), "acquisitionDate preserved");
+        assertEq(fid.customProvisions, "keep", "other FundInterestData fields preserved");
+
+        address notAdmin = makeAddr("notAdmin");
+        uint256 adminRole = auth.ADMIN_ROLE();
+        vm.prank(notAdmin);
+        vm.expectRevert(abi.encodeWithSignature("BorgAuth_NotAuthorized(uint256,address)", adminRole, notAdmin));
+        issuanceManager.updateCertificateTackedFromAcquisitionDate(address(cert), 0, tacked);
+    }
+
+    // Guarding a non-FUND_INTEREST cert: the setter reverts before touching extensionData, so it can never
+    // misread or clobber another extension's blob (mirrors backfillAcquisitionTimestamp's extension-type gate).
+    function test_UpdateCertificateTackedFromAcquisitionDate_RevertsOnNonFundInterestCert() public {
+        ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS); // printer has no extension (address(0))
+        vm.expectRevert(ICyberCertPrinter.ExtensionTypeNotSupported.selector);
+        issuanceManager.updateCertificateTackedFromAcquisitionDate(address(cert), 0, uint64(90 days));
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
+
+    /// @dev Deploys a printer and mints the seller's Ledger Entry Token (id 0) carrying a FundInterestData blob.
+    function _deployPrinterWithFundInterestCert(
+        uint256 units,
+        uint64 acquisitionDate,
+        uint64 tackedFromAcquisitionDate,
+        string memory customProvisions
+    ) internal returns (ICyberCertPrinter cert) {
+        cert = ICyberCertPrinter(
+            issuanceManager.createCertPrinter(
+                new string[](0), "Cert", "CERT", "uri://cert",
+                SecurityClass.CommonStock, SecuritySeries.SeriesA, address(new FundInterestExtension())
+            )
+        );
+        CertificateDetails memory details = CertificateDetails({
+            signingOfficerName: "Officer",
+            signingOfficerTitle: "Title",
+            investmentAmountUSD: 1000,
+            issuerUSDValuationAtTimeOfInvestment: 10000,
+            unitsRepresented: units,
+            legalDetails: "",
+            extensionData: abi.encode(FundInterestData(acquisitionDate, tackedFromAcquisitionDate, customProvisions))
+        });
+        issuanceManager.createCertAndAssign(address(cert), seller, details);
+    }
 
     /// @dev Deploys a printer and mints the seller's Ledger Entry Token (id 0, `units` units)
     function _deployPrinterWithSellerCert(uint256 units) internal returns (ICyberCertPrinter cert) {

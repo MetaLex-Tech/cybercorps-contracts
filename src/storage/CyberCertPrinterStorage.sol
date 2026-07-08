@@ -55,7 +55,7 @@ import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/IUriBuilder.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import "./extensions/ICertificateExtension.sol";
-import {FundInterestData} from "./extensions/FundInterestExtension.sol";
+import {FundInterestData, FUND_INTEREST_EXTENSION_TYPE} from "./extensions/FundInterestExtension.sol";
 
 library CyberCertPrinterStorage {
     // Storage slot for our struct
@@ -407,7 +407,7 @@ library CyberCertPrinterStorage {
     function backfillAcquisitionTimestamp(uint256 startIndex, uint256 count) external {
         CyberCertStorage storage s = cyberCertStorage();
         address ext = s.extension;
-        if (ext == address(0) || !ICertificateExtension(ext).supportsExtensionType(keccak256("FUND_INTEREST"))) return;
+        if (ext == address(0) || !ICertificateExtension(ext).supportsExtensionType(FUND_INTEREST_EXTENSION_TYPE)) return;
         ICyberCertPrinter self = ICyberCertPrinter(address(this)); // delegatecalled: address(this) is the printer
         uint256 supply = self.totalSupply();
         uint256 end = startIndex + count;

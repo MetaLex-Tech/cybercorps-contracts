@@ -17,7 +17,7 @@ import {
     RestrictiveLegend
 } from "../src/interfaces/ICyberCertPrinter.sol";
 import {ICertificateExtension} from "../src/storage/extensions/ICertificateExtension.sol";
-import {FundInterestData} from "../src/storage/extensions/FundInterestExtension.sol";
+import {FundInterestData, FUND_INTEREST_EXTENSION_TYPE} from "../src/storage/extensions/FundInterestExtension.sol";
 
 contract MockCyberCorp {
     address public dealManager;
@@ -197,7 +197,7 @@ contract CyberCertPrinterEnhanced is CyberCertPrinter {
 
 contract MockFundInterestExtension is ICertificateExtension {
     function supportsExtensionType(bytes32 extensionType) external pure returns (bool) {
-        return extensionType == keccak256("FUND_INTEREST");
+        return extensionType == FUND_INTEREST_EXTENSION_TYPE;
     }
     function getExtensionURI(bytes memory) external pure returns (string memory) { return ""; }
 }
@@ -508,6 +508,28 @@ contract CyberCertPrinterTest is Test {
 
         assertEq(printer.legalOwnerOf(1), address(0), "legal owner cleared");
         assertEq(printer.acquisitionTimestamp(1), 0, "clock cleared with the owner");
+    }
+
+    // A genuine in-place legal-owner change (current != newOwner, both non-zero) restamps the acquisition clock
+    // to now while leaving the immutable issue timestamp untouched.
+    function test_SetLegalOwner_GenuineChange_RestampsAcquisitionKeepsIssue() public {
+        vm.prank(address(issuanceManager));
+        printer.safeMintAndAssign(investor, 1, _details(100, bytes("")), "Alice");
+        uint64 issuedAt = printer.issueTimestamp(1);
+        uint64 acquiredAt = printer.acquisitionTimestamp(1);
+
+        vm.warp(block.timestamp + 30 days);
+        CertificateDetails memory d = _details(100, bytes(""));
+
+        vm.expectEmit(true, true, true, true, address(printer));
+        emit ICyberCertPrinter.LegalOwnerChanged(1, investor, recipient, "", uint64(block.timestamp));
+        vm.prank(address(issuanceManager));
+        printer.assignCert(investor, 1, recipient, d);
+
+        assertEq(printer.legalOwnerOf(1), recipient, "legal owner reassigned");
+        assertEq(printer.acquisitionTimestamp(1), uint64(block.timestamp), "acquisition clock restamped to now");
+        assertGt(uint64(block.timestamp), acquiredAt, "precondition: time advanced past original acquisition");
+        assertEq(printer.issueTimestamp(1), issuedAt, "issue timestamp is immutable across owner changes");
     }
 
     function test_HolderCount_TracksUniqueHoldersOnBurn() public {
