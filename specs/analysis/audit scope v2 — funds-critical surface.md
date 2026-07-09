@@ -4,18 +4,6 @@ Expanded from the previous audit scope (RoundManager / DealManager / LexScroWLit
 
 **Total scope: ~7,750 SLOC** (comment- and license-header-stripped). All SLOC figures below are measured, not estimated. Scripification / CyberScrip / recertification are deferred to a later audit (see "Deferred" section).
 
-## What changed since the previous audit
-
-The previous scope no longer maps 1:1 onto the code:
-
-1. **LexScroWLite was converted into `LexScrowStorage`**, a delegatecall-linked library (`src/storage/LexScrowStorage.sol`). Same escrow responsibilities, but it now executes in the manager's storage context, and fee resolution calls back into the manager via `ILexScrowStorage(address(this))`.
-2. **Manager business logic moved into linked libraries.** `DealManager.sol` and `RoundManager.sol` are now mostly thin wrappers; the fund-moving bodies live in `DealManagerStorage.sol` and `RoundManagerStorage.sol` (EIP-170 size management). Auditing the wrapper without the library misses the actual logic.
-3. **Secondary trading is entirely new** (PR #109): `SecondaryTradeStorage.sol` custodies ERC20 consideration for offers/bids, creates fully-signed settlement agreements, pays sellers, splits fees between platform and whitelisted integrators, and drives cert ownership changes. Includes EIP-712 relayer authorization (post/accept/cancel/void on behalf of a signer) with unordered nonces.
-4. **A condition framework now gates secondary transfers** (PR #114): ~20 strongly-typed threshold/closing conditions (KYC/AML, holder caps, Reg S, Rule 144, CFIUS, global kill switch, etc.) evaluated at post, accept, and finalize. A faulty condition can block or wrongly permit fund movement.
-5. **Fees were added to both managers** (#52 and later): platform fee ratio and payable are read from the factories; secondary trades add a per-integrator fee split.
-6. **Certificate legal ownership and unit reservation were reworked** (PRs #111, #112, #113 and internal-audit fixes): `legalOwnerOf` indexing, escrow-aware transfers ("cert should not transfer legal ownership amid escrow"), reserved-units accounting shared by scripify and secondary trades.
-7. **Scripify vault flows**: certs can be fractionalized into `CyberScrip` ERC20s and converted back (`scripifyCert` / `convertScripToCert`), with force-transfer/burn/freeze powers. Not live at launch — deferred to a later audit (see "Deferred" section), though the shared reserved-units accounting stays in scope.
-
 ## Contracts in scope
 
 ### 1. Primary deal & round escrow (direct token custody) — 2,014 SLOC
