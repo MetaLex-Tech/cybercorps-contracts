@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
 import "../../../interfaces/ICyberAgreementRegistry.sol";
@@ -112,6 +112,7 @@ contract Section4a7DisclosureCondition is SecondaryTradingConditionBase, UUPSUpg
         // Part 1 — SPV-wide, enforced from posting onward: the package must exist and be fresh
         if (!isDisclosureCurrent(offer.spvAddress)) return false;
 
+        // TODO review: do we want to check it as CyberAgreement strings?
         // Part 2 — buyer acknowledgment, which lives on the settlement agreement (acceptance onward)
         (, address buyer,) = _resolveParties(dealManager, offer, agreementId);
         if (agreementId == bytes32(0) || buyer == address(0)) return true;

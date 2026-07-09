@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
 import "../../../interfaces/ILexChexBadge.sol";
@@ -119,7 +119,7 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
 
         uint256 currentCount = usResidentOnlyCount
             ? _usResidentHolderCount(printer)
-            : printer.holderCount();
+            : printer.holderCount(); // TODO review: does it report look-through holder count?
 
         // §3(c)(1)(A) look-through: a credentialed entity BO count flows through instead of 1
         uint32 boCount = badge.getBeneficialOwnerCount(buyer);
@@ -130,6 +130,7 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
 
     /// @dev Counts unique legal owners whose credential marks them U.S.-resident. O(n²) over the token
     /// set, acceptable at holder-cap scale (n ≤ 250 by construction).
+    // TODO review: could be too expensive
     function _usResidentHolderCount(ICyberCertPrinter printer) internal view returns (uint256 count) {
         uint256 supply = printer.totalSupply();
         address[] memory seen = new address[](supply);
