@@ -859,6 +859,13 @@ library IssuanceManagerStorage {
         ICyberCertPrinter(certAddress).setGlobalTransferable(transferable);
     }
 
+    function executeSetLookThroughBadge(
+        address certAddress,
+        address badge
+    ) external {
+        ICyberCertPrinter(certAddress).setLookThroughBadge(badge);
+    }
+
     function executeSetRestrictionHook(
         address certAddress,
         uint256 id,

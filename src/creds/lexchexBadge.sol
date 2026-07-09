@@ -312,6 +312,13 @@ contract LeXcheXBadge is
         return found ? LeXcheXBadgeStorage.getCredential(tokenId).investorJurisdiction : "";
     }
 
+    /// @notice True when the owner's credentialed jurisdiction marks them a U.S. investor. Single source
+    /// of truth for the rule (previously inlined in HolderCapCondition).
+    function isUSInvestor(address owner) public view returns (bool) {
+        bytes32 h = keccak256(bytes(getInvestorJurisdiction(owner)));
+        return h == keccak256("US") || h == keccak256("USA") || h == keccak256("United States");
+    }
+
     /// @notice Seasoning reference for the UI (§11.1B): earliest valid issuance of the given kind.
     /// The seasoning policy (30 vs 45 days) stays at the UI layer; this only supplies the timestamp.
     function earliestValidIssuance(address owner, CategoryKind kind) public view returns (uint64) {

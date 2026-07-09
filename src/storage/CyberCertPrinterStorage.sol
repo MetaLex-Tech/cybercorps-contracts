@@ -52,6 +52,7 @@ import {
 } from "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICyberCorp.sol";
 import "../interfaces/IIssuanceManager.sol";
+import {ILexChexBadge} from "../interfaces/ILexChexBadge.sol";
 import "../interfaces/IUriBuilder.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import "./extensions/ICertificateExtension.sol";
@@ -63,6 +64,14 @@ library CyberCertPrinterStorage {
 
     // Errors and events are shared: declared once on ICyberCertPrinter and referenced as ICyberCertPrinter.X
     // (below), so library reverts/logs carry the same selectors/topics as the printer's under delegatecall.
+
+    /// @dev Per-legal-owner account for the §3(c)(1)(A) look-through holder tally. Packs into one slot.
+    /// `weight`/`isUS` are critical snapshots of LeXcheXBadge so we could do incremental updates on resyncs
+    struct HolderAcct {
+        uint32 liveLots; // live (non-void) lots held of record; holder is live iff > 0
+        uint32 weight;   // look-through weight currently accumulated into the totals (max(boCount,1))
+        bool isUS;       // whether this holder's weight is currently accumulated into the US subtotal
+    }
 
     // Main storage layout struct
     struct CyberCertStorage {
@@ -96,6 +105,8 @@ library CyberCertPrinterStorage {
         uint256 uniqueHolderCount;
 
         // ERC721Enumerable-like implementation for legal owners
+        // Note it includes voided-but-not-burnt certs. Technically one could transfer a voided cert to another,
+        // and its legal owner change would still be tracked
         mapping(address => mapping(uint256 => uint256)) legalOwnedTokens; // owner => index => tokenId
         mapping(uint256 => uint256) legalOwnedTokensIndex; // tokenId => index within its owner's list
         mapping(address => uint256) legalOwnerTokenCount; // owner => number of certs held of record
@@ -105,6 +116,16 @@ library CyberCertPrinterStorage {
         // (re)stamped on each legal-owner change and drives the Rule 144 / Reg S holding-period conditions.
         mapping(uint256 => uint64) issueTimestamp;
         mapping(uint256 => uint64) acquisitionTimestamp;
+
+        // §3(c)(1)(A) look-through holder tally (read O(1) by HolderCapCondition). Maintained incrementally
+        // at every legal-owner change / void / unvoid / burn. Parallel to the enumeration above; the
+        // enumeration's `legalOwnerTokenCount` (which includes voided lots) is left untouched for other
+        // consumers. See _countLot / _uncountLot / _resyncHolder.
+        mapping(address => HolderAcct) holderAcct;
+        mapping(uint256 => bool) liveCounted;  // token currently contributes to its owner's liveLots
+        uint256 lookThroughHolderCount;        // Σ holderAcct.weight over all live holders
+        uint256 usLookThroughHolderCount;      // Σ holderAcct.weight over US-resident live holders (subset)
+        address lookThroughBadge;              // ILexChexBadge sampled for look-through weight + US residency
     }
 
     // Returns the storage layout
@@ -294,12 +315,18 @@ library CyberCertPrinterStorage {
         }
         emit ICyberCertPrinter.LegalOwnerChanged(tokenId, current, newOwner, name, ts);
 
+        // Look-through tally: this lot leaves `current` and joins `newOwner` (both no-ops when the address
+        // is 0 or the token is void/untracked).
+        _uncountLot(s, tokenId, current);
+
         // The remove is a no-op for an un-tracked token and the add is idempotent, so this keeps live state and
         // lazily backfills a legacy token (minted before the enumeration existed).
         if (current != address(0)) _removeFromLegalOwnerEnumeration(s, current, tokenId);
         if (newOwner != address(0)) _addToLegalOwnerEnumeration(s, newOwner, tokenId);
         record.ownerAddress = newOwner;
         record.name = name;
+
+        _countLot(s, tokenId, newOwner);
     }
 
     /// @dev Idempotent: a token already in an owner's enumeration is left alone (so backfilling a tracked token
@@ -336,6 +363,8 @@ library CyberCertPrinterStorage {
     function recordBurnLegalOwner(uint256 tokenId) external {
         CyberCertStorage storage s = cyberCertStorage();
         address owner = s.owners[tokenId].ownerAddress;
+        // Drop the lot from the look-through tally (no-op if already uncounted, e.g. the token was voided).
+        _uncountLot(s, tokenId, owner);
         if (owner != address(0)) _removeFromLegalOwnerEnumeration(s, owner, tokenId);
         delete s.owners[tokenId];
     }
@@ -354,6 +383,132 @@ library CyberCertPrinterStorage {
             address owner = s.owners[tokenId].ownerAddress;
             if (owner != address(0)) _addToLegalOwnerEnumeration(s, owner, tokenId);
         }
+    }
+
+    // ── §3(c)(1)(A) look-through holder tally ────────────────────────────────────────────────────────
+
+    /// @dev A lot counts toward its owner's holder weight iff it is not voided (freshly-minted lots are
+    /// Unassigned, which is live). Burned tokens never reach here — they are uncounted at burn.
+    function _isLive(CyberCertStorage storage s, uint256 tokenId) private view returns (bool) {
+        return s.securityStatus[tokenId] != SecurityStatus.Void;
+    }
+
+    /// @dev Sample the look-through weight and US flag from the configured badge; if no badge is wired the
+    /// tally degrades to address-level (weight 1, non-US).
+    function _sample(CyberCertStorage storage s, address owner) private view returns (uint32 weight, bool isUS) {
+        address badge = s.lookThroughBadge;
+        if (badge == address(0)) return (1, false);
+        uint32 bo = ILexChexBadge(badge).getBeneficialOwnerCount(owner);
+        weight = bo > 0 ? bo : 1;
+        isUS = ILexChexBadge(badge).isUSInvestor(owner);
+    }
+
+    /// @dev Re-read the badge for a live holder and reconcile the totals by the delta, so
+    /// `total == Σ holderAcct.weight` stays exact across BO-count or jurisdiction changes. No-op otherwise.
+    function _resyncHolder(CyberCertStorage storage s, address owner) private {
+        HolderAcct storage a = s.holderAcct[owner];
+        if (a.liveLots == 0) return;
+        (uint32 newWeight, bool newIsUS) = _sample(s, owner);
+        s.lookThroughHolderCount = s.lookThroughHolderCount - a.weight + newWeight;
+        uint256 usCount = s.usLookThroughHolderCount;
+        if (a.isUS) usCount -= a.weight;
+        if (newIsUS) usCount += newWeight;
+        s.usLookThroughHolderCount = usCount;
+        a.weight = newWeight;
+        a.isUS = newIsUS;
+    }
+
+    /// @dev Mark tokenId as a live lot for `owner`. On the owner's 0→1 transition, sample and add their
+    /// weight to the totals; a further acquisition resyncs their (possibly re-credentialed) weight.
+    /// Idempotent via `liveCounted`; no-op for the zero address or a voided token.
+    function _countLot(CyberCertStorage storage s, uint256 tokenId, address owner) private {
+        if (owner == address(0) || s.liveCounted[tokenId] || !_isLive(s, tokenId)) return;
+        s.liveCounted[tokenId] = true;
+        HolderAcct storage a = s.holderAcct[owner];
+        if (a.liveLots == 0) {
+            (uint32 weight, bool isUS) = _sample(s, owner);
+            a.liveLots = 1;
+            a.weight = weight;
+            a.isUS = isUS;
+            s.lookThroughHolderCount += weight;
+            if (isUS) s.usLookThroughHolderCount += weight;
+        } else {
+            a.liveLots += 1;
+            _resyncHolder(s, owner);
+        }
+    }
+
+    /// @dev Un-mark tokenId as a live lot for `owner`. On the owner's 1→0 transition, subtract their stored
+    /// weight and clear the account. Idempotent via `liveCounted`.
+    function _uncountLot(CyberCertStorage storage s, uint256 tokenId, address owner) private {
+        if (!s.liveCounted[tokenId]) return;
+        s.liveCounted[tokenId] = false;
+        HolderAcct storage a = s.holderAcct[owner];
+        if (a.liveLots == 0) return; // defensive
+        a.liveLots -= 1;
+        if (a.liveLots == 0) {
+            s.lookThroughHolderCount -= a.weight;
+            if (a.isUS) s.usLookThroughHolderCount -= a.weight;
+            delete s.holderAcct[owner];
+        }
+    }
+
+    /// @dev Tally maintenance for voidCert — drop the lot's live contribution. Call after status is set Void.
+    function recordVoidLegalOwner(uint256 tokenId) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        _uncountLot(s, tokenId, s.owners[tokenId].ownerAddress);
+    }
+
+    /// @dev Tally maintenance for unvoidCert — restore the lot's live contribution. Call after status is
+    /// set back to Assigned (so `_isLive` is true).
+    function recordUnvoidLegalOwner(uint256 tokenId) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        _countLot(s, tokenId, s.owners[tokenId].ownerAddress);
+    }
+
+    /// @dev Keeper/admin refresh after a re-credential: reconcile a live holder's contribution to the badge.
+    function resyncHolder(address owner) external {
+        _resyncHolder(cyberCertStorage(), owner);
+    }
+
+    function resyncHolders(address[] calldata owners) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        for (uint256 i = 0; i < owners.length; i++) _resyncHolder(s, owners[i]);
+    }
+
+    /// @dev One-time/idempotent backfill for printers upgraded to add the look-through tally: count each
+    /// live token in [startIndex, startIndex+count). Set the badge first. Permissionless, safe to re-run
+    /// (already-counted tokens are skipped). Call in batches over [0, totalSupply()).
+    function backfillLookThroughTally(uint256 startIndex, uint256 count) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        ICyberCertPrinter self = ICyberCertPrinter(address(this)); // delegatecalled: address(this) is the printer
+        uint256 supply = self.totalSupply();
+        uint256 end = startIndex + count;
+        if (end > supply) end = supply;
+        for (uint256 i = startIndex; i < end; i++) {
+            uint256 tokenId = self.tokenByIndex(i);
+            _countLot(s, tokenId, s.owners[tokenId].ownerAddress);
+        }
+    }
+
+    function setLookThroughBadge(address badge) internal {
+        cyberCertStorage().lookThroughBadge = badge;
+    }
+
+    function getLookThroughBadge() internal view returns (address) {
+        return cyberCertStorage().lookThroughBadge;
+    }
+
+    function getLookThroughHolderCount() internal view returns (uint256) {
+        return cyberCertStorage().lookThroughHolderCount;
+    }
+
+    function getUsLookThroughHolderCount() internal view returns (uint256) {
+        return cyberCertStorage().usLookThroughHolderCount;
+    }
+
+    function isLegalHolder(address owner) internal view returns (bool) {
+        return cyberCertStorage().holderAcct[owner].liveLots > 0;
     }
 
     /// @dev Reserve units against a pending deal/loan. Reverts if the total reserved

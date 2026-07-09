@@ -254,14 +254,22 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         return CyberCertPrinterStorage.cyberCertStorage().issuerSignatures[tokenId][index];
     }
 
+    // Note voiding a cert does not impact legal owner accounting (the legal-owner enumeration keeps the
+    // voided lot; that is why `_removeFromLegalOwnerEnumeration()` is not called here). It DOES impact the
+    // look-through holder tally: a fully-voided lot no longer counts its owner as a live holder, so the
+    // tally is decremented via `recordVoidLegalOwner` (after the status flip).
     function voidCert(uint256 tokenId) external onlyIssuanceManager {
         CyberCertPrinterStorage.setSecurityStatus(tokenId, SecurityStatus.Void);
+        CyberCertPrinterStorage.recordVoidLegalOwner(tokenId);
         emit ICyberCertPrinter.CertificateVoided(tokenId, block.timestamp);
     }
 
+    // As explained in `voidCert()`. Un-voiding restores the lot's contribution to the look-through tally,
+    // so `recordUnvoidLegalOwner` runs after the status is set back to Assigned.
     function unvoidCert(uint256 tokenId) external onlyIssuanceManager {
         if (!_exists(tokenId)) revert ICyberCertPrinter.TokenDoesNotExist();
         CyberCertPrinterStorage.setSecurityStatus(tokenId, SecurityStatus.Assigned);
+        CyberCertPrinterStorage.recordUnvoidLegalOwner(tokenId);
         emit ICyberCertPrinter.CertificateUnvoided(tokenId, block.timestamp);
     }
 
@@ -347,7 +355,27 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     function holderCount() external view returns (uint256) {
         return CyberCertPrinterStorage.getHolderCount();
     }
-    
+
+    /// @notice §3(c)(1)(A) look-through holder count: Σ over live holders of max(beneficialOwnerCount, 1).
+    function lookThroughHolderCount() external view returns (uint256) {
+        return CyberCertPrinterStorage.getLookThroughHolderCount();
+    }
+
+    /// @notice The U.S.-resident subset of `lookThroughHolderCount` (Touche Remnant counting).
+    function usLookThroughHolderCount() external view returns (uint256) {
+        return CyberCertPrinterStorage.getUsLookThroughHolderCount();
+    }
+
+    /// @notice True when `owner` currently holds at least one live (non-void) lot of record.
+    function isLegalHolder(address owner) external view returns (bool) {
+        return CyberCertPrinterStorage.isLegalHolder(owner);
+    }
+
+    /// @notice The LeXcheXBadge the look-through tally samples for beneficial-owner counts and US residency.
+    function lookThroughBadge() external view returns (address) {
+        return CyberCertPrinterStorage.getLookThroughBadge();
+    }
+
     function _exists(uint256 tokenId) internal view virtual returns (bool) {
         return _ownerOf(tokenId) != address(0);
     }
@@ -520,6 +548,29 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     /// idempotent; batch over the supply. See CyberCertPrinterStorage.backfillAcquisitionTimestamp.
     function backfillAcquisitionTimestamps(uint256 startIndex, uint256 count) external {
         CyberCertPrinterStorage.backfillAcquisitionTimestamp(startIndex, count);
+    }
+
+    /// @notice Wire the LeXcheXBadge the look-through tally samples. Set before the first mint on a new
+    /// printer (and before `backfillLookThroughTally` on an upgraded one).
+    function setLookThroughBadge(address badge) external onlyIssuanceManager {
+        CyberCertPrinterStorage.setLookThroughBadge(badge);
+        emit ICyberCertPrinter.LookThroughBadgeSet(badge);
+    }
+
+    /// @notice Re-read the badge and reconcile a live holder's look-through contribution (e.g. after a
+    /// re-credential). Permissionless: it can only pull the tally toward authoritative badge state.
+    function resyncHolder(address owner) external {
+        CyberCertPrinterStorage.resyncHolder(owner);
+    }
+
+    function resyncHolders(address[] calldata owners) external {
+        CyberCertPrinterStorage.resyncHolders(owners);
+    }
+
+    /// @notice Backfill the look-through tally for tokens in [startIndex, startIndex+count) after a beacon
+    /// upgrade. Set the badge first; permissionless and idempotent. Batch over [0, totalSupply()).
+    function backfillLookThroughTally(uint256 startIndex, uint256 count) external {
+        CyberCertPrinterStorage.backfillLookThroughTally(startIndex, count);
     }
 
 }

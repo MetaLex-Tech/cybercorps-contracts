@@ -21,7 +21,7 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // |  1 | posting (no acquirer)                           |  pass  | cap evaluated later                   |
 // |  2 | fresh U.S. buyer, count 99 (+1 = 100)           |  pass  | lands exactly on the cap              |
 // |  3 | fresh U.S. buyer, count 100 (+1 = 101)          |  fail  | would breach the cap                  |
-// |  4 | existing holder (balance > 0), count 100        |  pass  | position increase, not a new holder   |
+// |  4 | existing holder (isLegalHolder), count 100      |  pass  | position increase, not a new holder   |
 // |  5 | entity look-through boCount 5, count 95 (=100)  |  pass  | 5 BOs flow through, lands on cap      |
 // |  6 | entity look-through boCount 5, count 96 (=101)  |  fail  | look-through breaches the cap         |
 // |  7 | §3(c)(7) (cap 0), fresh buyer, count 500        |  pass  | no numeric cap                        |
@@ -68,33 +68,33 @@ contract HolderCapConditionTest is SecondaryConditionTestBase {
 
     // 2
     function test_FreshUsBuyer_LandsOnCap_Passes() public {
-        cert.setHolderCount(99);
+        cert.setLookThroughHolderCount(99);
         assertTrue(_check());
     }
 
     // 3
     function test_FreshUsBuyer_BreachesCap_Fails() public {
-        cert.setHolderCount(100);
+        cert.setLookThroughHolderCount(100);
         assertFalse(_check());
     }
 
     // 4
     function test_ExistingHolder_PositionIncrease_Passes() public {
-        cert.setHolderCount(100);
-        cert.setBalanceOfLegalOwner(buyer, 5);
+        cert.setLookThroughHolderCount(100);
+        cert.setIsLegalHolder(buyer, true);
         assertTrue(_check());
     }
 
     // 5
     function test_EntityLookThrough_LandsOnCap_Passes() public {
-        cert.setHolderCount(95);
+        cert.setLookThroughHolderCount(95);
         badge.setBeneficialOwnerCount(buyer, 5);
         assertTrue(_check());
     }
 
     // 6
     function test_EntityLookThrough_BreachesCap_Fails() public {
-        cert.setHolderCount(96);
+        cert.setLookThroughHolderCount(96);
         badge.setBeneficialOwnerCount(buyer, 5);
         assertFalse(_check());
     }
@@ -102,14 +102,14 @@ contract HolderCapConditionTest is SecondaryConditionTestBase {
     // 7
     function test_Section3c7_NoNumericCap_Passes() public {
         holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C7, 0, false, false);
-        cert.setHolderCount(500);
+        cert.setLookThroughHolderCount(500);
         assertTrue(_check());
     }
 
     // 8
     function test_BlockUsInvestors_UsBuyer_Fails() public {
         holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C1, 100, false, true);
-        cert.setHolderCount(0);
+        cert.setLookThroughHolderCount(0);
         assertFalse(_check());
     }
 
@@ -117,7 +117,7 @@ contract HolderCapConditionTest is SecondaryConditionTestBase {
     function test_BlockUsInvestors_NonUsBuyer_Passes() public {
         holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C1, 100, false, true);
         badge.setInvestorJurisdiction(buyer, "KY");
-        cert.setHolderCount(0);
+        cert.setLookThroughHolderCount(0);
         assertTrue(_check());
     }
 
@@ -125,23 +125,18 @@ contract HolderCapConditionTest is SecondaryConditionTestBase {
     function test_UsResidentOnlyCount_NonUsBuyer_NotCounted_Passes() public {
         holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C1, 1, true, false);
         badge.setInvestorJurisdiction(buyer, "KY");
-        // Even with a "full" ledger, a non-U.S. acquirer does not add to the U.S.-resident count.
-        cert.setHolderCount(1);
+        // Even with a "full" U.S. tally, a non-U.S. acquirer does not add to the U.S.-resident count.
+        cert.setUsLookThroughHolderCount(1);
         assertTrue(_check());
     }
 
     // 11
     function test_UsResidentOnlyCount_UsBuyerBreaches_Fails() public {
         holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C1, 1, true, false);
-        // Ledger: one U.S. resident and one non-U.S. holder; only the U.S. one counts (= 1). A fresh
-        // U.S. buyer would make 2 > cap 1.
-        address usHolder = makeAddr("usHolder");
-        address nonUsHolder = makeAddr("nonUsHolder");
-        badge.setInvestorJurisdiction(usHolder, "US");
-        badge.setInvestorJurisdiction(nonUsHolder, "KY");
-        cert.setTotalSupply(2);
-        cert.setTokenAt(0, 10, usHolder);
-        cert.setTokenAt(1, 11, nonUsHolder);
+        // The printer's U.S.-resident look-through tally already stands at the cap (= 1). A fresh U.S.
+        // buyer would make 2 > cap 1. (The base is the printer's maintained count; the base-side
+        // look-through math itself is covered in CyberCertPrinterTest.)
+        cert.setUsLookThroughHolderCount(1);
         assertFalse(_check());
     }
 

@@ -192,6 +192,11 @@ interface IIssuanceManager {
         bool transferable
     ) external;
 
+    function setCertLookThroughBadge(
+        address certAddress,
+        address badge
+    ) external;
+
     function getUpgradeFactory() external view returns (address);
 
     function upgradeCertPrinterBeaconImplementation(

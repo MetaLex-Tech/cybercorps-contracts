@@ -137,6 +137,7 @@ interface ICyberCertPrinter is IERC721 {
     event RestrictionHookSet(uint256 indexed id, address indexed hookAddress);
     event GlobalRestrictionHookSet(address indexed hookAddress);
     event GlobalTransferableSet(bool indexed transferable);
+    event LookThroughBadgeSet(address indexed badge);
     event UnitsReservedUpdated(uint256 indexed tokenId, uint256 unitsReserved);
     event IssueTimestampSet(uint256 indexed tokenId, uint64 issueTimestamp);
     event AcquisitionTimestampSet(uint256 indexed tokenId, uint64 acquisitionTimestamp);
@@ -260,6 +261,16 @@ interface ICyberCertPrinter is IERC721 {
     function legalOwnerOf(uint256 tokenId) external view returns (address);
     function balanceOfLegalOwner(address owner) external view returns (uint256);
     function tokenOfLegalOwnerByIndex(address owner, uint256 index) external view returns (uint256);
+
+    // §3(c)(1)(A) look-through holder tally (maintained incrementally; read O(1))
+    function lookThroughHolderCount() external view returns (uint256);
+    function usLookThroughHolderCount() external view returns (uint256);
+    function isLegalHolder(address owner) external view returns (bool); // note the distinction vs legal owner: a legal holder must have live lots
+    function lookThroughBadge() external view returns (address);
+    function setLookThroughBadge(address badge) external;
+    function resyncHolder(address owner) external;
+    function resyncHolders(address[] calldata owners) external;
+    function backfillLookThroughTally(uint256 startIndex, uint256 count) external;
 
     function setTokenTransferable(uint256 tokenId, bool value) external;
     function increaseUnitsReserved(uint256 tokenId, uint256 amount) external;
