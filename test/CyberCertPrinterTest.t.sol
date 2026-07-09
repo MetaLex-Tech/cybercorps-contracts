@@ -207,6 +207,18 @@ contract MockNonFundExtension is ICertificateExtension {
     function getExtensionURI(bytes memory) external pure returns (string memory) { return ""; }
 }
 
+/// @notice Minimal LeXcheXBadge surface the look-through tally samples: beneficial-owner count + US flag.
+contract MockLookThroughBadge {
+    mapping(address => uint32) internal bo;
+    mapping(address => bool) internal us;
+
+    function setBo(address a, uint32 c) external { bo[a] = c; }
+    function setUs(address a, bool v) external { us[a] = v; }
+
+    function getBeneficialOwnerCount(address a) external view returns (uint32) { return bo[a]; }
+    function isUSInvestor(address a) external view returns (bool) { return us[a]; }
+}
+
 contract CyberCertPrinterTest is Test {
     CyberCertPrinter private printer;
     MockIssuanceManager private issuanceManager;
@@ -856,6 +868,157 @@ contract CyberCertPrinterTest is Test {
 
         assertEq(printer.ownerOf(1), recipient);
         assertEq(printer.legalOwnerOf(1), recipient);
+    }
+
+    // ───────────────── §3(c)(1)(A) look-through holder tally ─────────────────
+
+    function _setBadge(MockLookThroughBadge b) private {
+        vm.prank(address(issuanceManager));
+        printer.setLookThroughBadge(address(b));
+    }
+
+    function _void(uint256 tokenId) private {
+        vm.prank(address(issuanceManager));
+        printer.voidCert(tokenId);
+    }
+
+    function _unvoid(uint256 tokenId) private {
+        vm.prank(address(issuanceManager));
+        printer.unvoidCert(tokenId);
+    }
+
+    function _burnCert(uint256 tokenId) private {
+        vm.prank(address(issuanceManager));
+        printer.burn(tokenId);
+    }
+
+    function test_LookThrough_IndividualCountsAsOne() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 1);
+        assertEq(printer.usLookThroughHolderCount(), 0);
+        assertTrue(printer.isLegalHolder(investor));
+    }
+
+    function test_LookThrough_NoBadgeDegradesToOne() public {
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 1);
+        assertEq(printer.usLookThroughHolderCount(), 0);
+    }
+
+    function test_LookThrough_UsEntityFlowsThroughBothTotals() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 5);
+        b.setUs(investor, true);
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 5);
+        assertEq(printer.usLookThroughHolderCount(), 5);
+    }
+
+    function test_LookThrough_ForeignEntityOnlyTotal() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 3);
+        assertEq(printer.usLookThroughHolderCount(), 0);
+    }
+
+    function test_LookThrough_SecondLotResamplesWeight() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 5);
+        b.setUs(investor, true);
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 5);
+        // Re-credentialed before the next acquisition; the second lot resamples the weight.
+        b.setBo(investor, 7);
+        _mintCert(2, investor, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 7);
+        assertEq(printer.usLookThroughHolderCount(), 7);
+    }
+
+    function test_LookThrough_VoidAndUnvoidAdjustTally() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 4);
+        b.setUs(investor, true);
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, investor, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 4); // one holder, weight 4, two live lots
+
+        _void(1); // still a holder via the other lot
+        assertEq(printer.lookThroughHolderCount(), 4);
+        assertTrue(printer.isLegalHolder(investor));
+
+        _void(2); // last live lot gone: holder drops out
+        assertEq(printer.lookThroughHolderCount(), 0);
+        assertEq(printer.usLookThroughHolderCount(), 0);
+        assertFalse(printer.isLegalHolder(investor));
+
+        _unvoid(2); // restored
+        assertEq(printer.lookThroughHolderCount(), 4);
+        assertEq(printer.usLookThroughHolderCount(), 4);
+        assertTrue(printer.isLegalHolder(investor));
+    }
+
+    function test_LookThrough_BurnDropsHolderAndReentryCountsFresh() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 2);
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 2);
+
+        _burnCert(1);
+        assertEq(printer.lookThroughHolderCount(), 0);
+        assertFalse(printer.isLegalHolder(investor));
+
+        _mintCert(2, investor, 100, bytes("")); // re-enter
+        assertEq(printer.lookThroughHolderCount(), 2);
+        assertTrue(printer.isLegalHolder(investor));
+    }
+
+    function test_LookThrough_ResyncReconcilesBoAndJurisdiction() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setUs(investor, true);
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 3);
+        assertEq(printer.usLookThroughHolderCount(), 3);
+
+        // BO count rises and jurisdiction flips to foreign: weight moves out of the US subtotal.
+        b.setBo(investor, 6);
+        b.setUs(investor, false);
+        printer.resyncHolder(investor);
+        assertEq(printer.lookThroughHolderCount(), 6);
+        assertEq(printer.usLookThroughHolderCount(), 0);
+    }
+
+    function test_LookThrough_ResyncNonHolderIsNoop() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(recipient, 9);
+        _setBadge(b);
+        printer.resyncHolder(recipient); // not a holder
+        assertEq(printer.lookThroughHolderCount(), 0);
+    }
+
+    function test_LookThrough_BackfillIsIdempotent() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 5);
+        b.setUs(investor, true);
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, recipient, 100, bytes("")); // individual, weight 1
+        uint256 total = printer.lookThroughHolderCount(); // 5 + 1
+
+        // Re-running backfill over the live set must not double-count (liveCounted guards it).
+        printer.backfillLookThroughTally(0, 10);
+        printer.backfillLookThroughTally(0, 10);
+        assertEq(printer.lookThroughHolderCount(), total);
+        assertEq(printer.usLookThroughHolderCount(), 5);
     }
 
     function _mintCert(

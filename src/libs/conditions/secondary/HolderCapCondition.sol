@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
-import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
 import "../../../interfaces/ILexChexBadge.sol";
@@ -11,13 +11,14 @@ import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
 
 /// @title  HolderCapCondition - ICA §3(c)(1) / §3(c)(1)(C) / §3(c)(7) holder limits at transfer time
 /// @author MetaLeX Labs, Inc.
-/// @notice Per-SPV deployment. Reads the onchain holder count from the SPV's ownership ledger (the
-/// offer's cert printer) at acceptance/finalization — not offer time — to avoid stale-count races, and
-/// the acquirer's entity-beneficial-owner-count credential attribute from LeXcheXBadge (§4.1.3A).
-/// If the acquirer is an entity that triggers §3(c)(1)(A) look-through (determined offchain during
-/// credentialing; reflected by a non-zero credentialed beneficial-owner count), the entity's credentialed
-/// count is added instead of counting it as one holder. A buyer who already holds interests in the SPV
-/// (position increase, not new holder) does not implicate the cap.
+/// @notice Per-SPV deployment. Reads the cert printer's maintained O(1) §3(c)(1)(A) look-through holder
+/// tally at acceptance/finalization — not offer time — to avoid stale-count races, plus the acquirer's
+/// entity-beneficial-owner-count credential attribute from LeXcheXBadge (§4.1.3A). Look-through applies to
+/// both sides on one basis: each existing holder already contributes its credentialed beneficial-owner
+/// count in the printer's tally, and the incoming acquirer's credentialed count (non-zero for a
+/// look-through entity, determined offchain during credentialing) is added on top instead of counting it
+/// as one holder. A buyer who already holds live interests in the SPV (position increase, not new holder)
+/// does not implicate the cap.
 contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgAuthACL {
     /// @notice The ICA exception the SPV relies on (informational for the indexer/UI; the cap value and
     /// counting mode below drive the enforcement)
@@ -104,56 +105,34 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
         // No acquirer yet (posting context) — the cap is evaluated at acceptance and finalization
         if (buyer == address(0)) return true;
 
-        bool buyerIsUS = _isUSBuyer(buyer);
+        bool buyerIsUS = badge.isUSInvestor(buyer);
         if (blockUsInvestors && buyerIsUS) return false;
 
         if (cap == 0) return true;
 
         ICyberCertPrinter printer = ICyberCertPrinter(offer.certPrinter);
 
-        // Position increase, not a new holder: the cap is not implicated
-        if (printer.balanceOfLegalOwner(buyer) > 0) return true;
+        // Note threshold conditions are checked BEFORE the transaction happens, so we need to consider the fact
+        // that the holder counts we get from `CyberCertPrinter` are BEFORE the buyer bought it
 
-        // Touche Remnant: a non-U.S. acquirer does not add to the U.S.-resident-only count
+        // Early termination: Position increase, not a new holder: the cap is not implicated. Uses the live-holder tally, so a
+        // holder who fully sold out (and re-enters) is correctly treated as new rather than bypassing the cap.
+        if (printer.isLegalHolder(buyer)) return true;
+
+        // Early termination: Touche Remnant: a non-U.S. acquirer does not add to the U.S.-resident-only count
         if (usResidentOnlyCount && !buyerIsUS) return true;
 
+        // Base is the printer's maintained O(1) look-through tally (both counts share the look-through basis).
         uint256 currentCount = usResidentOnlyCount
-            ? _usResidentHolderCount(printer)
-            : printer.holderCount(); // TODO review: does it report look-through holder count?
+            ? printer.usLookThroughHolderCount()
+            : printer.lookThroughHolderCount();
 
-        // §3(c)(1)(A) look-through: a credentialed entity BO count flows through instead of 1
+        // §3(c)(1)(A) look-through for the incoming buyer (not yet a holder at check time): a credentialed
+        // entity BO count flows through instead of 1
         uint32 boCount = badge.getBeneficialOwnerCount(buyer);
         uint256 addition = boCount > 0 ? boCount : 1;
 
         return currentCount + addition <= cap;
-    }
-
-    /// @dev Counts unique legal owners whose credential marks them U.S.-resident. O(n²) over the token
-    /// set, acceptable at holder-cap scale (n ≤ 250 by construction).
-    // TODO review: could be too expensive
-    function _usResidentHolderCount(ICyberCertPrinter printer) internal view returns (uint256 count) {
-        uint256 supply = printer.totalSupply();
-        address[] memory seen = new address[](supply);
-        uint256 seenLen;
-        for (uint256 i = 0; i < supply; i++) {
-            address holder = printer.legalOwnerOf(printer.tokenByIndex(i));
-            if (holder == address(0)) continue;
-            bool duplicate = false;
-            for (uint256 j = 0; j < seenLen; j++) {
-                if (seen[j] == holder) {
-                    duplicate = true;
-                    break;
-                }
-            }
-            if (duplicate) continue;
-            seen[seenLen++] = holder;
-            if (_isUSBuyer(holder)) count++;
-        }
-    }
-
-    function _isUSBuyer(address account) internal view returns (bool) {
-        bytes32 h = keccak256(bytes(badge.getInvestorJurisdiction(account)));
-        return h == keccak256("US") || h == keccak256("USA") || h == keccak256("United States");
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}

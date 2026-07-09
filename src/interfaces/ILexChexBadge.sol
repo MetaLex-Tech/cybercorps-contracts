@@ -33,6 +33,9 @@ interface ILexChexBadge is IERC5484 {
     function getUsState(address owner) external view returns (bytes2);
     function getBeneficialOwnerCount(address owner) external view returns (uint32);
     function getInvestorJurisdiction(address owner) external view returns (string memory);
+    /// @notice True when the owner's most recent valid credential marks them a U.S. investor. Sole home
+    /// for the jurisdiction rule so consumers don't reimplement it.
+    function isUSInvestor(address owner) external view returns (bool);
 
     /// @notice Seasoning reference (§11.1B): earliest valid issuance of the given kind; 0 when none.
     function earliestValidIssuance(address owner, CategoryKind kind) external view returns (uint64);

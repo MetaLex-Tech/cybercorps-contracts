@@ -495,6 +495,18 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         );
     }
 
+    /// @notice Wires the LeXcheXBadge the printer samples for its §3(c)(1)(A) look-through holder tally
+    /// @dev Only callable by admin. Set before the first mint on a new printer, and before
+    ///      backfillLookThroughTally on an upgraded one.
+    /// @param certAddress Address of the certificate printer contract
+    /// @param badge Address of the LeXcheXBadge credential contract
+    function setCertLookThroughBadge(
+        address certAddress,
+        address badge
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeSetLookThroughBadge(certAddress, badge);
+    }
+
     /// @notice Upgrades the implementation of the certificate printer
     /// @dev Only callable by company owner, only upgradeable to the current reference implementation
     /// @param _newImplementation Address of the new implementation

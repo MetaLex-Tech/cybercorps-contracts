@@ -116,6 +116,11 @@ contract MockBadge {
     function getInvestorJurisdiction(address owner) external view returns (string memory) {
         return jurisdiction[owner];
     }
+
+    function isUSInvestor(address owner) external view returns (bool) {
+        bytes32 h = keccak256(bytes(jurisdiction[owner]));
+        return h == keccak256("US") || h == keccak256("USA") || h == keccak256("United States");
+    }
 }
 
 /// @notice Configurable CyberAgreementRegistry surface (signatures + per-signer party values).
@@ -149,6 +154,9 @@ contract MockCertPrinter {
     mapping(uint256 => uint256) internal tokenAtIndex;
     uint256 internal holders;
     uint256 internal supply;
+    uint256 internal lookThroughHolders;
+    uint256 internal usLookThroughHolders;
+    mapping(address => bool) internal legalHolder;
 
     function setAcquisitionTimestamp(uint256 tokenId, uint64 ts) external {
         acqTs[tokenId] = ts;
@@ -164,6 +172,18 @@ contract MockCertPrinter {
 
     function setHolderCount(uint256 c) external {
         holders = c;
+    }
+
+    function setLookThroughHolderCount(uint256 c) external {
+        lookThroughHolders = c;
+    }
+
+    function setUsLookThroughHolderCount(uint256 c) external {
+        usLookThroughHolders = c;
+    }
+
+    function setIsLegalHolder(address owner, bool v) external {
+        legalHolder[owner] = v;
     }
 
     function setTotalSupply(uint256 s) external {
@@ -189,6 +209,18 @@ contract MockCertPrinter {
 
     function holderCount() external view returns (uint256) {
         return holders;
+    }
+
+    function lookThroughHolderCount() external view returns (uint256) {
+        return lookThroughHolders;
+    }
+
+    function usLookThroughHolderCount() external view returns (uint256) {
+        return usLookThroughHolders;
+    }
+
+    function isLegalHolder(address owner) external view returns (bool) {
+        return legalHolder[owner];
     }
 
     function totalSupply() external view returns (uint256) {
