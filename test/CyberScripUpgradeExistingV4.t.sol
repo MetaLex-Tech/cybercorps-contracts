@@ -209,7 +209,7 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
         );
 
         vm.prank(companyOwner);
-        issuanceManager.setGlobalTransferable(address(certPrinter), true);
+        certPrinter.setGlobalTransferable(true);
 
         address scrip = _deployDefaultScrip(
             issuanceManager,
@@ -320,7 +320,7 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
         assertEq(ICyberScrip(scrip).balanceOf(investor), 20);
 
         vm.prank(companyOwner);
-        issuanceManager.voidCertificate(address(certPrinter), certId);
+        certPrinter.voidCert(certId);
         assertTrue(certPrinter.isVoided(certId));
 
         _approveRecertification(
@@ -742,11 +742,11 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
         vm.prank(to);
         certPrinter.addEndorsement(tokenId, selfEndorsement);
         vm.prank(companyOwner);
-        issuanceManager.setTokenTransferable(address(certPrinter), tokenId, true);
+        certPrinter.setTokenTransferable(tokenId, true);
         vm.prank(to);
         certPrinter.safeTransferFrom(to, to, tokenId);
         vm.prank(companyOwner);
-        issuanceManager.setTokenTransferable(address(certPrinter), tokenId, false);
+        certPrinter.setTokenTransferable(tokenId, false);
     }
 
     function _approveRecertification(

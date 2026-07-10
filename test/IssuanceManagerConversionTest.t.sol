@@ -1060,7 +1060,7 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(certPrinter.lookThroughBadge(), address(0));
 
         address badge = makeAddr("lookThroughBadge");
-        issuanceManager.setCertLookThroughBadge(address(certPrinter), badge);
+        certPrinter.setLookThroughBadge(badge);
         assertEq(certPrinter.lookThroughBadge(), badge);
     }
 
@@ -1070,7 +1070,7 @@ contract IssuanceManagerConversionTest is Test {
 
         vm.prank(investor);
         vm.expectRevert();
-        issuanceManager.setCertLookThroughBadge(address(certPrinter), badge);
+        certPrinter.setLookThroughBadge(badge);
     }
 
     function test_convertScripToCert_ignoresVoidedCertAndMintsNewCertificate()
@@ -1095,7 +1095,7 @@ contract IssuanceManagerConversionTest is Test {
         );
 
         // Mark existing cert as voided while investor still owns it.
-        issuanceManager.voidCertificate(address(certPrinter), 0);
+        certPrinter.voidCert(0);
         assertTrue(certPrinter.isVoided(0));
         assertEq(certPrinter.ownerOf(0), investor);
 

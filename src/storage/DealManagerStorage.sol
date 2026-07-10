@@ -315,8 +315,7 @@ library DealManagerStorage {
         ICyberAgreementRegistry(registry).voidContractFor(agreementId, signer, signature);
         for (uint256 i = 0; i < deal.corpAssets.length; i++) {
             if (deal.corpAssets[i].tokenType == TokenType.ERC721) {
-                getIssuanceManager().voidCertificate(
-                    deal.corpAssets[i].tokenAddress,
+                ICyberCertPrinter(deal.corpAssets[i].tokenAddress).voidCert(
                     deal.corpAssets[i].tokenId
                 );
             }

@@ -52,6 +52,7 @@ import {
 } from "../interfaces/ICyberCertPrinter.sol";
 import "../interfaces/ICyberCorp.sol";
 import "../interfaces/IIssuanceManager.sol";
+import {BorgAuth} from "../libs/auth.sol";
 import {ILexChexBadge} from "../interfaces/ILexChexBadge.sol";
 import "../interfaces/IUriBuilder.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
@@ -269,6 +270,32 @@ library CyberCertPrinterStorage {
 
     /// @dev Endorsement push + event for CyberCertPrinter.addEndorsement (the auth check stays in the printer).
     function recordEndorsement(uint256 tokenId, Endorsement memory newEndorsement) external {
+        _recordEndorsement(tokenId, newEndorsement);
+    }
+
+    /// @dev Builds a secondary-market endorsement (endorsee/name left blank; registry cleared) and records it.
+    /// Mirrors the tuple the IssuanceManager used to assemble before proxying to addEndorsement.
+    function endorseCertificate(
+        uint256 tokenId,
+        address endorser,
+        bytes memory signature,
+        bytes32 agreementId
+    ) external {
+        _recordEndorsement(
+            tokenId,
+            Endorsement({
+                endorser: endorser,
+                timestamp: block.timestamp,
+                signatureHash: signature,
+                registry: address(0),
+                agreementId: agreementId,
+                endorsee: address(0),
+                endorseeName: ""
+            })
+        );
+    }
+
+    function _recordEndorsement(uint256 tokenId, Endorsement memory newEndorsement) private {
         CyberCertStorage storage s = cyberCertStorage();
         s.endorsements[tokenId].push(newEndorsement);
         emit ICyberCertPrinter.CertificateEndorsed(
@@ -489,6 +516,36 @@ library CyberCertPrinterStorage {
             uint256 tokenId = self.tokenByIndex(i);
             _countLot(s, tokenId, s.owners[tokenId].ownerAddress);
         }
+    }
+
+    /// @dev In the past, we relied on IssuanceManager to be the proxy for all admin-gated cert functions,
+    /// but it took too much unnecessary space. Now we do admin-gate locally. It still utilizes
+    /// IssuanceManager's AUTH, but the logic lives here instead.
+    /// Offchain clients will need to interact with this contract directly instead of through IssuanceManager, but
+    /// other than that, all behaviors stay the same as before.
+    function requireManagerOrAdmin() external view {
+        CyberCertStorage storage s = cyberCertStorage();
+        if (msg.sender == s.issuanceManager) return;
+        BorgAuth auth = BorgAuth(IIssuanceManager(s.issuanceManager).AUTH());
+        auth.onlyRole(auth.ADMIN_ROLE(), msg.sender);
+    }
+
+    /// @dev Rewrites only the Rule 144(d)(3) tacking anchor in the cert's FundInterestData, leaving every other
+    /// field (including acquisitionDate) untouched, then writes the re-encoded blob back through the same
+    /// reserved-units invariant updateCertificateDetails enforces. Guards on the FUND_INTEREST extension type
+    /// before decoding so it never misreads or clobbers another extension's extensionData.
+    function updateTackedFromAcquisitionDate(uint256 tokenId, uint64 ts) external {
+        CyberCertStorage storage s = cyberCertStorage();
+        address ext = s.extension;
+        if (ext == address(0) || !ICertificateExtension(ext).supportsExtensionType(FUND_INTEREST_EXTENSION_TYPE)) {
+            revert ICyberCertPrinter.ExtensionTypeNotSupported();
+        }
+        CertificateDetails memory details = getActiveCertificateDetails(tokenId);
+        FundInterestData memory fid = abi.decode(details.extensionData, (FundInterestData));
+        fid.tackedFromAcquisitionDate = ts;
+        details.extensionData = abi.encode(fid);
+        if (details.unitsRepresented < s.unitsReserved[tokenId]) revert ICyberCertPrinter.ExceedsAvailableUnits();
+        s.certificateDetails[tokenId] = details;
     }
 
     function setLookThroughBadge(address badge) internal {
