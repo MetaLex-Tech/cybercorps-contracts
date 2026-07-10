@@ -5698,7 +5698,7 @@ contract CyberCorpForkTest is Test {
 
         // Attach the global hook via IssuanceManager (admin)
         vm.prank(testAddress);
-        IssuanceManager(issuanceManager).setGlobalRestrictionHook(certPrinter, address(hook));
+        CyberCertPrinter(certPrinter).setGlobalRestrictionHook(address(hook));
 
         // Enable global transferable on the printer (so hook decides allow/deny)
         vm.prank(issuanceManager);
@@ -6088,7 +6088,7 @@ contract CyberCorpForkTest is Test {
         BorgAuth corpAuth = IssuanceManager(issuanceManager).AUTH();
         hook.initialize(address(corpAuth));
         vm.prank(testAddress);
-        IssuanceManager(issuanceManager).setGlobalRestrictionHook(certPrinter, address(hook));
+        CyberCertPrinter(certPrinter).setGlobalRestrictionHook(address(hook));
         vm.prank(testAddress);
         hook.setDefaultTransferable(false);
 

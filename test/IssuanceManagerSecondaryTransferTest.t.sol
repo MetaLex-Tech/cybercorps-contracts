@@ -287,14 +287,14 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         uint64 historical = uint64(110 days); // truly issued off-chain, earlier than the on-chain record
         vm.expectEmit(true, false, false, true, address(cert));
         emit ICyberCertPrinter.IssueTimestampSet(0, historical);
-        issuanceManager.setIssueTimestamp(address(cert), 0, historical);
+        cert.setIssueTimestamp(0, historical);
         assertEq(cert.issueTimestamp(0), historical, "admin override applied");
 
         address notAdmin = makeAddr("notAdmin");
         uint256 adminRole = auth.ADMIN_ROLE();
         vm.prank(notAdmin);
         vm.expectRevert(abi.encodeWithSignature("BorgAuth_NotAuthorized(uint256,address)", adminRole, notAdmin));
-        issuanceManager.setIssueTimestamp(address(cert), 0, historical);
+        cert.setIssueTimestamp(0, historical);
     }
 
     // The admin can override a cert's acquisition timestamp (e.g. to seed a seasoned migrated position);
@@ -307,14 +307,14 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         uint64 seasoned = uint64(110 days); // acquired off-chain earlier than the on-chain record
         vm.expectEmit(true, false, false, true, address(cert));
         emit ICyberCertPrinter.AcquisitionTimestampSet(0, seasoned);
-        issuanceManager.setAcquisitionTimestamp(address(cert), 0, seasoned);
+        cert.setAcquisitionTimestamp(0, seasoned);
         assertEq(cert.acquisitionTimestamp(0), seasoned, "admin override applied");
 
         address notAdmin = makeAddr("notAdmin");
         uint256 adminRole = auth.ADMIN_ROLE();
         vm.prank(notAdmin);
         vm.expectRevert(abi.encodeWithSignature("BorgAuth_NotAuthorized(uint256,address)", adminRole, notAdmin));
-        issuanceManager.setAcquisitionTimestamp(address(cert), 0, seasoned);
+        cert.setAcquisitionTimestamp(0, seasoned);
     }
 
     // The admin can override a cert's Rule 144(d)(3) tacking anchor (tackedFromAcquisitionDate) inside the
@@ -324,7 +324,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         ICyberCertPrinter cert = _deployPrinterWithFundInterestCert(UNITS, uint64(111 days), 0, "keep");
 
         uint64 tacked = uint64(90 days);
-        issuanceManager.updateCertificateTackedFromAcquisitionDate(address(cert), 0, tacked);
+        cert.updateCertificateTackedFromAcquisitionDate(0, tacked);
 
         FundInterestData memory fid = abi.decode(cert.getCertificateDetails(0).extensionData, (FundInterestData));
         assertEq(fid.tackedFromAcquisitionDate, tacked, "tacking anchor updated");
@@ -335,7 +335,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         uint256 adminRole = auth.ADMIN_ROLE();
         vm.prank(notAdmin);
         vm.expectRevert(abi.encodeWithSignature("BorgAuth_NotAuthorized(uint256,address)", adminRole, notAdmin));
-        issuanceManager.updateCertificateTackedFromAcquisitionDate(address(cert), 0, tacked);
+        cert.updateCertificateTackedFromAcquisitionDate(0, tacked);
     }
 
     // Guarding a non-FUND_INTEREST cert: the setter reverts before touching extensionData, so it can never
@@ -343,7 +343,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     function test_UpdateCertificateTackedFromAcquisitionDate_RevertsOnNonFundInterestCert() public {
         ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS); // printer has no extension (address(0))
         vm.expectRevert(ICyberCertPrinter.ExtensionTypeNotSupported.selector);
-        issuanceManager.updateCertificateTackedFromAcquisitionDate(address(cert), 0, uint64(90 days));
+        cert.updateCertificateTackedFromAcquisitionDate(0, uint64(90 days));
     }
 
     // ─────────────────────────────────────────────────────────────────────────

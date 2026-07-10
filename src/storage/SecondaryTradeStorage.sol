@@ -239,8 +239,8 @@ library SecondaryTradeStorage {
         if (params.side == OfferSide.SELL) {
             if (ICyberCertPrinter(params.certPrinter).legalOwnerOf(params.tokenId) != offeror)
                 revert ISecondaryTradeStorage.NotCertOwner();
-            // Reserve units on the seller's cert (routed through IssuanceManager, the only caller the printer allows)
-            DealManagerStorage.getIssuanceManager().increaseUnitsReserved(params.certPrinter, params.tokenId, params.units);
+            // Reserve units on the seller's cert (the printer authorizes this DealManager as an admin)
+            ICyberCertPrinter(params.certPrinter).increaseUnitsReserved(params.tokenId, params.units);
         } else {
             // BID: pull consideration directly into contract custody
             IERC20(params.paymentToken).safeTransferFrom(offeror, address(this), params.consideration);
@@ -288,7 +288,7 @@ library SecondaryTradeStorage {
             // Release only the uncommitted units; in-flight settlement lots are consumed at finalize or released at void
             uint256 freeUnits = offer.units - offer.unitsAccepted;
             if (freeUnits > 0) {
-                DealManagerStorage.getIssuanceManager().decreaseUnitsReserved(offer.certPrinter, offer.tokenId, freeUnits);
+                ICyberCertPrinter(offer.certPrinter).decreaseUnitsReserved(offer.tokenId, freeUnits);
             }
         } else {
             // BUY: refund only the uncommitted portion; paymentAccepted tracks what's committed to
@@ -411,7 +411,7 @@ library SecondaryTradeStorage {
             if (ICyberCertPrinter(certPrinter).legalOwnerOf(tokenId) != acceptor)
                 revert ISecondaryTradeStorage.NotCertOwner();
             // Reserve units on the seller's cert at acceptance (bid flow, routed through IssuanceManager)
-            DealManagerStorage.getIssuanceManager().increaseUnitsReserved(certPrinter, tokenId, params.units);
+            ICyberCertPrinter(certPrinter).increaseUnitsReserved(tokenId, params.units);
         }
 
         // Resolve the buyer info per side: bids carry it on the offer (the offeror is the buyer),
@@ -568,7 +568,7 @@ library SecondaryTradeStorage {
         }
 
         // Ready to transfer units, release this lot's reservation first
-        DealManagerStorage.getIssuanceManager().decreaseUnitsReserved(offer.certPrinter, secEscrow.tokenId, secEscrow.units);
+        ICyberCertPrinter(offer.certPrinter).decreaseUnitsReserved(secEscrow.tokenId, secEscrow.units);
 
         // Execute ownership change: void/decrement seller cert + mint buyer cert.
         DealManagerStorage.getIssuanceManager().secondaryTransfer(
@@ -863,7 +863,7 @@ library SecondaryTradeStorage {
         // (the lot can never be re-accepted); otherwise the lot returns to the offer's free pool
         // and stays reserved.
         if (offer.side == OfferSide.BUY || offer.status == OfferStatus.CANCELLED) {
-            DealManagerStorage.getIssuanceManager().decreaseUnitsReserved(offer.certPrinter, secEscrow.tokenId, secEscrow.units);
+            ICyberCertPrinter(offer.certPrinter).decreaseUnitsReserved(secEscrow.tokenId, secEscrow.units);
         }
 
         // Restore offer status (keep terminal offers closed)

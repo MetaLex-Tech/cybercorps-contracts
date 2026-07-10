@@ -200,6 +200,16 @@ interface ICyberCertPrinter is IERC721 {
         uint256 tokenId,
         Endorsement memory newEndorsement
     ) external;
+    function endorseCertificate(
+        uint256 tokenId,
+        address endorser,
+        bytes memory signature,
+        bytes32 agreementId
+    ) external;
+    function updateCertificateTackedFromAcquisitionDate(
+        uint256 tokenId,
+        uint64 ts
+    ) external;
     function endorseAndTransfer(
         uint256 tokenId,
         Endorsement memory newEndorsement,

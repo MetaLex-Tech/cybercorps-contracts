@@ -52,8 +52,6 @@ import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/IIssuanceManagerFactory.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import {ExemptionPathway, HostingMode} from "../interfaces/ISecondaryTradeStorage.sol";
-import {FundInterestData, FUND_INTEREST_EXTENSION_TYPE} from "./extensions/FundInterestExtension.sol";
-import "./extensions/ICertificateExtension.sol";
 import "./CyberCertPrinterStorage.sol";
 
 library IssuanceManagerStorage {
@@ -707,34 +705,6 @@ library IssuanceManagerStorage {
         _emitCertificateCreated(tokenId, certAddress, details);
     }
 
-    function executeAddIssuerSignature(
-        address certAddress,
-        uint256 tokenId,
-        bytes memory signature
-    ) external {
-        if (signature.length == 0) revert SignatureRequired();
-        ICyberCertPrinter(certAddress).addIssuerSignature(tokenId, signature);
-    }
-
-    function executeEndorseCertificate(
-        address certAddress,
-        uint256 tokenId,
-        address endorser,
-        bytes memory signature,
-        bytes32 agreementId
-    ) external {
-        Endorsement memory newEndorsement = Endorsement({
-            endorser: endorser,
-            timestamp: block.timestamp,
-            signatureHash: signature,
-            registry: address(0),
-            agreementId: agreementId,
-            endorsee: address(0),
-            endorseeName: ""
-        });
-        ICyberCertPrinter(certAddress).addEndorsement(tokenId, newEndorsement);
-    }
-
     /// @notice Executes the secondary-trade ownership change at finalization (spec §7.4A steps a–d).
     /// @dev Mutate-and-mint: the seller's Ledger Entry Token never moves wallets; ownership transfers via
     /// metadata. Core scope — acquisitionDate / Rule 144(d)(3) tacking / per-pathway certLegend updates are
@@ -818,93 +788,6 @@ library IssuanceManagerStorage {
         );
     }
 
-    function executeSetIssueTimestamp(address certAddress, uint256 tokenId, uint64 ts) external {
-        ICyberCertPrinter(certAddress).setIssueTimestamp(tokenId, ts);
-    }
-
-    function executeSetAcquisitionTimestamp(address certAddress, uint256 tokenId, uint64 ts) external {
-        ICyberCertPrinter(certAddress).setAcquisitionTimestamp(tokenId, ts);
-    }
-
-    /// @dev Rewrites only the Rule 144(d)(3) tacking anchor in the cert's FundInterestData, leaving every other
-    /// field (including acquisitionDate) untouched, then writes the re-encoded blob back through the printer's
-    /// updateCertificateDetails chokepoint.
-    function executeSetTackedFromAcquisitionDate(address certAddress, uint256 tokenId, uint64 ts) external {
-        ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
-        // Only FUND_INTEREST certs carry a FundInterestData blob; guard before decoding so we never misread or
-        // clobber another extension's extensionData (mirrors CyberCertPrinterStorage.backfillAcquisitionTimestamp).
-        address ext = cert.getExtension(tokenId);
-        if (ext == address(0) || !ICertificateExtension(ext).supportsExtensionType(FUND_INTEREST_EXTENSION_TYPE)) {
-            revert ICyberCertPrinter.ExtensionTypeNotSupported();
-        }
-        CertificateDetails memory details = cert.getActiveCertificateDetails(tokenId);
-        FundInterestData memory fid = abi.decode(details.extensionData, (FundInterestData));
-        fid.tackedFromAcquisitionDate = ts;
-        details.extensionData = abi.encode(fid);
-        cert.updateCertificateDetails(tokenId, details);
-    }
-
-    function executeVoidCertificate(address certAddress, uint256 tokenId) external {
-        ICyberCertPrinter(certAddress).voidCert(tokenId);
-    }
-
-    function executeUnvoidCertificate(address certAddress, uint256 tokenId) external {
-        ICyberCertPrinter(certAddress).unvoidCert(tokenId);
-    }
-
-    function executeSetGlobalTransferable(
-        address certAddress,
-        bool transferable
-    ) external {
-        ICyberCertPrinter(certAddress).setGlobalTransferable(transferable);
-    }
-
-    function executeSetLookThroughBadge(
-        address certAddress,
-        address badge
-    ) external {
-        ICyberCertPrinter(certAddress).setLookThroughBadge(badge);
-    }
-
-    function executeSetRestrictionHook(
-        address certAddress,
-        uint256 id,
-        address hookAddress
-    ) external {
-        ICyberCertPrinter(certAddress).setRestrictionHook(id, hookAddress);
-    }
-
-    function executeSetGlobalRestrictionHook(
-        address certAddress,
-        address hookAddress
-    ) external {
-        ICyberCertPrinter(certAddress).setGlobalRestrictionHook(hookAddress);
-    }
-
-    function executeSetTokenTransferable(
-        address certAddress,
-        uint256 tokenId,
-        bool value
-    ) external {
-        ICyberCertPrinter(certAddress).setTokenTransferable(tokenId, value);
-    }
-
-    function executeIncreaseUnitsReserved(
-        address certAddress,
-        uint256 tokenId,
-        uint256 amount
-    ) external {
-        ICyberCertPrinter(certAddress).increaseUnitsReserved(tokenId, amount);
-    }
-
-    function executeDecreaseUnitsReserved(
-        address certAddress,
-        uint256 tokenId,
-        uint256 amount
-    ) external {
-        ICyberCertPrinter(certAddress).decreaseUnitsReserved(tokenId, amount);
-    }
-
     function executeSetScripRatio(
         address certAddress,
         uint256 numerator,
@@ -939,66 +822,6 @@ library IssuanceManagerStorage {
             setScripifyWhitelisted(certAddress, ids[i], isWhitelisted);
             emit ScripifyWhitelistUpdated(certAddress, ids[i], isWhitelisted);
         }
-    }
-
-    function executeAddDefaultLegend(
-        address certAddress,
-        string memory newLegend
-    ) external {
-        ICyberCertPrinter(certAddress).addDefaultLegend(newLegend);
-    }
-
-    function executeRemoveDefaultLegendAt(
-        address certAddress,
-        uint256 index
-    ) external {
-        ICyberCertPrinter(certAddress).removeDefaultLegendAt(index);
-    }
-
-    function executeAddCertLegend(
-        address certAddress,
-        uint256 tokenId,
-        string memory newLegend
-    ) external {
-        ICyberCertPrinter(certAddress).addCertLegend(tokenId, newLegend);
-    }
-
-    function executeRemoveCertLegendAt(
-        address certAddress,
-        uint256 tokenId,
-        uint256 index
-    ) external {
-        ICyberCertPrinter(certAddress).removeCertLegendAt(tokenId, index);
-    }
-
-    function executeAddDefaultRestrictiveLegend(
-        address certAddress,
-        RestrictiveLegend memory newLegend
-    ) external {
-        ICyberCertPrinter(certAddress).addDefaultRestrictiveLegend(newLegend);
-    }
-
-    function executeRemoveDefaultRestrictiveLegendAt(
-        address certAddress,
-        uint256 index
-    ) external {
-        ICyberCertPrinter(certAddress).removeDefaultRestrictiveLegendAt(index);
-    }
-
-    function executeAddCertRestrictiveLegend(
-        address certAddress,
-        uint256 tokenId,
-        RestrictiveLegend memory newLegend
-    ) external {
-        ICyberCertPrinter(certAddress).addCertRestrictiveLegend(tokenId, newLegend);
-    }
-
-    function executeRemoveCertRestrictiveLegendAt(
-        address certAddress,
-        uint256 tokenId,
-        uint256 index
-    ) external {
-        ICyberCertPrinter(certAddress).removeCertRestrictiveLegendAt(tokenId, index);
     }
 
     function executeDeployCyberScrip(
