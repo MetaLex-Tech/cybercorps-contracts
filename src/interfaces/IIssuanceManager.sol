@@ -157,46 +157,6 @@ interface IIssuanceManager {
         string calldata investorName
     ) external returns (uint256 tokenId);
 
-    function signCertificate(
-        address certAddress,
-        uint256 tokenId,
-        bytes calldata signature
-    ) external;
-
-    function addOfficerSignature(
-        address certAddress,
-        uint256 tokenId,
-        bytes calldata signature
-    ) external;
-
-    function endorseCertificate(
-        address certAddress,
-        uint256 tokenId,
-        address endorser,
-        bytes calldata signature,
-        bytes32 agreementId
-    ) external;
-
-    function voidCertificate(
-        address certAddress,
-        uint256 tokenId
-    ) external;
-
-    function unvoidCertificate(
-        address certAddress,
-        uint256 tokenId
-    ) external;
-
-    function setGlobalTransferable(
-        address certAddress,
-        bool transferable
-    ) external;
-
-    function setCertLookThroughBadge(
-        address certAddress,
-        address badge
-    ) external;
-
     function getUpgradeFactory() external view returns (address);
 
     function upgradeCertPrinterBeaconImplementation(
@@ -210,80 +170,6 @@ interface IIssuanceManager {
     ) external;
 
     function getScripBeaconImplementation() external view returns (address);
-
-    // Transfer Hook Functions
-    function setRestrictionHook(
-        address certAddress,
-        uint256 _id,
-        address _hookAddress
-    ) external;
-
-    function setGlobalRestrictionHook(
-        address certAddress,
-        address hookAddress
-    ) external;
-
-    function setTokenTransferable(
-        address certAddress,
-        uint256 tokenId,
-        bool value
-    ) external;
-
-    function increaseUnitsReserved(
-        address certAddress,
-        uint256 tokenId,
-        uint256 amount
-    ) external;
-
-    function decreaseUnitsReserved(
-        address certAddress,
-        uint256 tokenId,
-        uint256 amount
-    ) external;
-
-    function addDefaultLegend(
-        address certAddress,
-        string memory newLegend
-    ) external;
-
-    function removeDefaultLegendAt(
-        address certAddress,
-        uint256 index
-    ) external;
-
-    function addCertLegend(
-        address certAddress,
-        uint256 tokenId,
-        string memory newLegend
-    ) external;
-
-    function removeCertLegendAt(
-        address certAddress,
-        uint256 tokenId,
-        uint256 index
-    ) external;
-
-    function addDefaultRestrictiveLegend(
-        address certAddress,
-        RestrictiveLegend memory newLegend
-    ) external;
-
-    function removeDefaultRestrictiveLegendAt(
-        address certAddress,
-        uint256 index
-    ) external;
-
-    function addCertRestrictiveLegend(
-        address certAddress,
-        uint256 tokenId,
-        RestrictiveLegend memory newLegend
-    ) external;
-
-    function removeCertRestrictiveLegendAt(
-        address certAddress,
-        uint256 tokenId,
-        uint256 index
-    ) external;
 
     function deployCyberScrip(
         address certAddress,

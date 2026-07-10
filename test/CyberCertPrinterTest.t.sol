@@ -6,6 +6,7 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {CyberCertPrinterStorage} from "../src/storage/CyberCertPrinterStorage.sol";
+import {BorgAuth} from "../src/libs/auth.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {IUriBuilder} from "../src/interfaces/IUriBuilder.sol";
 import {
@@ -48,10 +49,17 @@ contract MockCyberCorp {
 contract MockIssuanceManager {
     address public immutable CORP;
     address public immutable uriBuilder;
+    BorgAuth public immutable auth;
 
     constructor(address corp, address builder) {
         CORP = corp;
         uriBuilder = builder;
+        // Owner is the deployer (the test contract), so arbitrary EOAs are neither admin nor manager.
+        auth = new BorgAuth(msg.sender);
+    }
+
+    function AUTH() external view returns (address) {
+        return address(auth);
     }
 
     function companyName() external pure returns (string memory) {
@@ -285,11 +293,14 @@ contract CyberCertPrinterTest is Test {
         printer.addIssuerSignature(999, hex"123456");
     }
 
-    function test_AddIssuerSignature_RevertsWhenCallerIsNotIssuanceManager() public {
+    function test_AddIssuerSignature_RevertsWhenCallerNotAuthorized() public {
         _mintCert(1, investor, 100, bytes(""));
 
+        uint256 adminRole = issuanceManager.auth().ADMIN_ROLE();
         vm.prank(investor);
-        vm.expectRevert(ICyberCertPrinter.NotIssuanceManager.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, adminRole, investor)
+        );
         printer.addIssuerSignature(1, hex"123456");
     }
 
@@ -404,9 +415,12 @@ contract CyberCertPrinterTest is Test {
         printer.transferFrom(investor, recipient, 2);
     }
 
-    function test_TokenTransferable_RevertsWhenCallerIsNotIssuanceManager() public {
+    function test_TokenTransferable_RevertsWhenCallerNotAuthorized() public {
+        uint256 adminRole = issuanceManager.auth().ADMIN_ROLE();
         vm.prank(investor);
-        vm.expectRevert(ICyberCertPrinter.NotIssuanceManager.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, adminRole, investor)
+        );
         printer.setTokenTransferable(1, true);
     }
 

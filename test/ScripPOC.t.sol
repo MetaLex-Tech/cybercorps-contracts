@@ -278,7 +278,7 @@ contract ScripPOCTest is Test {
 
         vm.prank(owner);
         bytes memory signature = abi.encodePacked("signed-hash");
-        issuanceManager.signCertificate(address(certPrinter), certId, signature);
+        certPrinter.addIssuerSignature(certId, signature);
         assertEq(certPrinter.getIssuerSignatureCount(certId), 1, "signature should be added");
         assertEq(certPrinter.getIssuerSignatureAt(certId, 0), signature, "stored signature mismatch");
     }
@@ -556,7 +556,7 @@ contract ScripPOCTest is Test {
         denyHook.setAllowTransfers(false);
 
         vm.prank(owner);
-        issuanceManager.setRestrictionHook(address(certPrinter), 0, address(denyHook));
+        certPrinter.setRestrictionHook(0, address(denyHook));
 
         // Hook is stored
         assertEq(certPrinter.getRestrictionHook(0), address(denyHook), "hook stored");

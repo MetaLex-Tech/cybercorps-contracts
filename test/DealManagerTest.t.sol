@@ -99,6 +99,11 @@ contract CyberCertPrinterMock is ERC721Enumerable {
     function burn(uint256 tokenId) external {
         _burn(tokenId);
     }
+
+    // DealManager now voids the seller cert directly on the printer (was routed via IssuanceManager).
+    function voidCert(uint256 tokenId) external {
+        _burn(tokenId);
+    }
 }
 
 contract CyberAgreementRegistryMock {

@@ -400,8 +400,7 @@ library RoundManagerStorage {
             );
 
             //add officer signature from round escrowed signature
-            issuanceManager.addOfficerSignature(
-                round.certPrinter[i],
+            ICyberCertPrinter(round.certPrinter[i]).addIssuerSignature(
                 certIds[i],
                 round.escrowedSignature
             );
@@ -420,8 +419,7 @@ library RoundManagerStorage {
 
             if (secondEscrowedSignature.length > 0) {
                 for (uint256 i = 0; i < round.certPrinter.length; i++) {
-                    issuanceManager.addOfficerSignature(
-                        round.certPrinter[i],
+                    ICyberCertPrinter(round.certPrinter[i]).addIssuerSignature(
                         certIds[i],
                         secondEscrowedSignature
                     );
