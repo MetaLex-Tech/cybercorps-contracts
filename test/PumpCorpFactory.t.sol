@@ -23,7 +23,7 @@ import {LeXcheX} from "../src/creds/lexchex.sol";
 import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
-import {EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
+import {RoundManagerStorage, EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {MockERC20} from "./mock/MockERC20.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
@@ -334,7 +334,7 @@ contract PumpCorpFactoryForkTest is Test {
             block.chainid, rm_
         ));
         bytes32 structHash = keccak256(abi.encode(
-            EIP712Lib.ESCROWEDSIGNATUREDATA_TYPEHASH,
+            RoundManagerStorage.ESCROWEDSIGNATUREDATA_TYPEHASH,
             roundId_,
             uint8(SecuritySeries.SeriesSeed),
             RAISE_CAP, minTicket_, maxTicket_,

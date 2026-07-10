@@ -42,91 +42,48 @@
 pragma solidity ^0.8.28;
 
 import {ECDSA} from "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 
+/// @title EIP712Lib
+/// @notice Shared EIP-712 signature verification. A single helper builds the domain separator, wraps the
+/// caller's `structHash` into the typed-data digest (via OZ MessageHashUtils), recovers the signer and
+/// compares it. Each consumer only computes its own `structHash` and picks its domain name/version. The
+/// domain separator is built here (not via OZ's `EIP712`) because OZ's builder is private and bound to
+/// constructor immutables — unusable from the delegatecalled linked libraries (with per-consumer domain
+/// name and proxy verifyingContract) that verify signatures in this codebase.
 library EIP712Lib {
     using ECDSA for bytes32;
 
-    // EIP-712 domain constants
-    string constant EIP712_NAME = "RoundManager";
-    string constant EIP712_VERSION = "1";
     bytes32 constant EIP712_DOMAIN_TYPEHASH = keccak256(
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
     );
-    bytes32 constant ESCROWEDSIGNATUREDATA_TYPEHASH = keccak256(
-        "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation,address companyAddress)"
-    );
 
-    struct EscrowedSignatureData {
-        bytes32 roundId;
-        uint8 seriesType;
-        uint256 raiseCap;
-        uint256 minTicket;
-        uint256 maxTicket;
-        uint8 roundType;
-        uint256 startTime;
-        uint256 endTime;
-        bytes32 templateId;
-        address paymentToken;
-        uint256 pricePerUnit;
-        uint256 valuation;
-        address companyAddress;
-    }
-
-    /// @notice Computes the EIP-712 typed data hash for escrowed round parameters
-    /// @param data Escrowed round parameters to be hashed
-    /// @return digest EIP-712 typed data digest used for signature verification
-    function hashEscrowedTypedDataV4(
-        address _this,
-        EscrowedSignatureData memory data
-    ) internal view returns (bytes32) {
+    /// @notice Verifies `signature` over the EIP-712 typed data for the given domain and `structHash`.
+    /// @param name Domain name (per consumer, e.g. "RoundManager" / "DealManager")
+    /// @param version Domain version
+    /// @param verifyingContract Domain verifyingContract (pass `address(this)` from a delegatecalled lib)
+    /// @param signer Expected signer address
+    /// @param structHash EIP-712 hashStruct of the message the consumer built
+    /// @param signature Signature bytes to recover
+    /// @return success True if the recovered signer matches `signer`
+    function verifySignature(
+        string memory name,
+        string memory version,
+        address verifyingContract,
+        address signer,
+        bytes32 structHash,
+        bytes memory signature
+    ) internal view returns (bool success) {
         bytes32 domainSeparator = keccak256(
             abi.encode(
                 EIP712_DOMAIN_TYPEHASH,
-                keccak256(bytes(EIP712_NAME)),
-                keccak256(bytes(EIP712_VERSION)),
+                keccak256(bytes(name)),
+                keccak256(bytes(version)),
                 block.chainid,
-                _this
+                verifyingContract
             )
         );
-        return keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                domainSeparator,
-                keccak256(
-                    abi.encode(
-                        ESCROWEDSIGNATUREDATA_TYPEHASH,
-                        data.roundId,
-                        data.seriesType,
-                        data.raiseCap,
-                        data.minTicket,
-                        data.maxTicket,
-                        data.roundType,
-                        data.startTime,
-                        data.endTime,
-                        data.templateId,
-                        data.paymentToken,
-                        data.pricePerUnit,
-                        data.valuation,
-                        data.companyAddress
-                    )
-                )
-            )
-        );
-    }
-
-    /// @notice Verifies an escrowed signature against expected signer using EIP-712
-    /// @param signer Expected signer address (e.g., authority officer EOA)
-    /// @param data Escrowed round parameters used to build the typed data
-    /// @param signature Signature bytes produced over the typed data
-    /// @return isValid True if the recovered signer matches the expected signer
-    function verifyEscrowedSignature(
-        address _this,
-        address signer,
-        EscrowedSignatureData memory data,
-        bytes memory signature
-    ) external view returns (bool) {
-        bytes32 digest = hashEscrowedTypedDataV4(_this, data);
-        address recoveredSigner = digest.recover(signature);
-        return recoveredSigner == signer;
+        bytes32 digest = MessageHashUtils.toTypedDataHash(domainSeparator, structHash);
+        return digest.recover(signature) == signer;
     }
 }

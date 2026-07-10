@@ -41,21 +41,20 @@
 
 pragma solidity ^0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "openzeppelin-contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./interfaces/ILexScrowStorage.sol";
 import "./libs/auth.sol";
-import "./libs/EIP712Lib.sol";
 import "./storage/RoundManagerStorage.sol";
 import "./storage/RoundManagerFactoryStorage.sol";
 import "./storage/BorgAuthStorage.sol";
 import "./interfaces/ICyberCorp.sol";
 import "./interfaces/ICyberCertPrinter.sol";
 import "./interfaces/IRoundManagerFactory.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
 import "./interfaces/ILexChex.sol";
 
 /// @title RoundManager
@@ -228,10 +227,9 @@ contract RoundManager is
 
         if (RoundManagerStorage.getRound(roundDraft.id).id != bytes32(0)) revert RoundAlreadyExists();
 
-        if(!EIP712Lib.verifyEscrowedSignature(
-            address(this),
+        if(!RoundManagerStorage.verifyEscrowedSignature(
             roundDraft.authorityOfficer,
-            EIP712Lib.EscrowedSignatureData({
+            RoundManagerStorage.EscrowedSignatureData({
                 roundId: roundDraft.id,
                 seriesType: uint8(roundDraft.seriesType),
                 raiseCap: roundDraft.raiseCap,

@@ -43,7 +43,7 @@ pragma solidity 0.8.28;
 
 import "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
-import {ECDSA} from "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
+import {EIP712Lib} from "../libs/EIP712Lib.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/IIssuanceManager.sol";
 import {ICyberCertPrinter} from "../interfaces/ICyberCertPrinter.sol";
@@ -64,7 +64,6 @@ import {ISecondaryTradeStorage, OfferSide, OfferStatus, SecondaryEscrowStatus, E
 /// referenced as ISecondaryTradeStorage.X
 library SecondaryTradeStorage {
     using SafeERC20 for IERC20;
-    using ECDSA for bytes32;
 
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.secondary.trade.storage.v1");
 
@@ -77,9 +76,10 @@ library SecondaryTradeStorage {
     // ── EIP-712 relayer-authorization constants (see the relayer overloads of post/cancel/acceptOffer) ──
     // The signed message binds the full structured params (so a wallet renders each named field), the
     // principal `forAddr`, and an unordered `nonce` that makes each authorization single-use independent
-    // of any downstream state.
-    bytes32 constant EIP712_DOMAIN_TYPEHASH =
-        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    // of any downstream state. Domain/digest construction and recovery are delegated to
+    // EIP712Lib.verifySignature (see _verifyForAuth); only the trade-specific typehashes live here.
+    string constant EIP712_NAME = "DealManager";
+    string constant EIP712_VERSION = "1";
     // Nested-struct EIP-712: the AUTH typehash's encodeType appends the referenced params type (adjacent
     // string literals concatenate at compile time); the PARAMS typehash (the struct's own type) hashStructs
     // the params member. The duplicated params-type literals below must stay identical.
@@ -670,19 +670,6 @@ library SecondaryTradeStorage {
     // Relayer-authorization internals (EIP-712 + unordered nonce)
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// @dev EIP-712 domain separator, bound to this DealManager. Under delegatecall `address(this)` is the
-    /// DealManager proxy, so it is the correct verifyingContract; computed per-call (not cached) since the
-    /// linked library holds no immutables.
-    function _domainSeparator() internal view returns (bytes32) {
-        return keccak256(abi.encode(
-            EIP712_DOMAIN_TYPEHASH,
-            keccak256(bytes("DealManager")),
-            keccak256(bytes("1")),
-            block.chainid,
-            address(this)
-        ));
-    }
-
     /// @dev EIP-712 hashStruct of PostOfferParams (dynamic members pre-hashed, enums as uint8).
     function _hashPostOfferParams(PostOfferParams calldata p) internal pure returns (bytes32) {
         return keccak256(abi.encode(
@@ -746,9 +733,11 @@ library SecondaryTradeStorage {
     /// @dev Verifies a relayer overload's EIP-712 authorization: `sig` must recover to `forAddr` over the
     /// domain-separated `structHash`, then the nonce is consumed. Consumption only sticks if the whole call
     /// succeeds (a later revert rolls the write back), so failed calls do not burn the authorization.
+    /// The domain is bound to this DealManager: under delegatecall `address(this)` is the DealManager proxy,
+    /// the correct verifyingContract.
     function _verifyForAuth(bytes32 structHash, address forAddr, uint256 nonce, bytes memory sig) internal {
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", _domainSeparator(), structHash));
-        if (digest.recover(sig) != forAddr) revert ISecondaryTradeStorage.InvalidSecondaryAuthSignature();
+        if (!EIP712Lib.verifySignature(EIP712_NAME, EIP712_VERSION, address(this), forAddr, structHash, sig))
+            revert ISecondaryTradeStorage.InvalidSecondaryAuthSignature();
         _useUnorderedNonce(forAddr, nonce);
     }
 

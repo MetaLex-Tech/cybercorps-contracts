@@ -21,7 +21,7 @@ import {CyberScrip} from "../src/CyberScrip.sol";
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {CompanyOfficer, SecuritySeries, SecurityClass} from "../src/CyberCorpConstants.sol";
 import {RoundType} from "../src/libs/RoundLib.sol";
-import {CyberCertData, EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
+import {RoundManagerStorage, CyberCertData, EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {MockERC20} from "../test/mock/MockERC20.sol";
 
 contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
@@ -462,7 +462,7 @@ contract DeployPumpCorpFactoryFullLifeCycleScript is Script {
         );
         bytes32 structHash = keccak256(
             abi.encode(
-                EIP712Lib.ESCROWEDSIGNATUREDATA_TYPEHASH,
+                RoundManagerStorage.ESCROWEDSIGNATUREDATA_TYPEHASH,
                 roundId,
                 uint8(seriesType),
                 raiseCap,
