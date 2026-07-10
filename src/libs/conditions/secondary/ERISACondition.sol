@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
 import "../../../interfaces/ICyberAgreementRegistry.sol";
@@ -71,6 +71,7 @@ contract ERISACondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgA
         // The attestation lives on the settlement agreement, which only exists from acceptance onward
         if (agreementId == bytes32(0) || buyer == address(0)) return true;
 
+        // TODO review: do we want to check it as CyberAgreement strings?
         string[] memory values = registry.getSignerValues(agreementId, buyer);
         bytes32 expected = keccak256(bytes(attestationValue));
         for (uint256 i = 0; i < values.length; i++) {

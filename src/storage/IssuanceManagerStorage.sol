@@ -52,6 +52,8 @@ import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/IIssuanceManagerFactory.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import {ExemptionPathway, HostingMode} from "../interfaces/ISecondaryTradeStorage.sol";
+import {FundInterestData, FUND_INTEREST_EXTENSION_TYPE} from "./extensions/FundInterestExtension.sol";
+import "./extensions/ICertificateExtension.sol";
 import "./CyberCertPrinterStorage.sol";
 
 library IssuanceManagerStorage {
@@ -788,43 +790,23 @@ library IssuanceManagerStorage {
         if (sellerVoided) {
             cert.voidCert(tokenId);
         }
-        // (c) Deliver the buyer's units. By default we consolidate: if the buyer already holds an active
-        // (non-voided) Ledger Entry Token on this printer, fold the purchased units into it rather than
-        // fragmenting their position across one cert per fill; mint a fresh token only when they hold none.
-        // A printer is scoped to one security class/series, so consolidation never merges across security types
-        // (the folded units inherit the existing cert's terms). We look the buyer up by legal owner of record,
-        // so this is correct under both hosting modes — including Administered, where the multisig custodies the
-        // NFT but the buyer is the registered owner.
-        RecertSelection memory existing = _selectFirstLegalOwnedToken(certPrinter, buyer);
-        bool buyerTokenIsMinted = !existing.foundActive;
-        uint256 buyerUnitsAfter; // absolute post-mutation balance on the buyer token, reported in the event
-        if (existing.foundActive) {
-            // Fold the purchased units into the buyer's existing cert, leaving its basis fields
-            // (investmentAmountUSD / issuerUSDValuationAtTimeOfInvestment) unchanged: they stay a snapshot of
-            // that cert's primary issuance, regardless of how many secondary lots accumulate into it.
-            buyerTokenId = existing.activeTokenId;
-            CertificateDetails memory accDetails = cert.getActiveCertificateDetails(buyerTokenId);
-            accDetails.unitsRepresented += units;
-            cert.updateCertificateDetails(buyerTokenId, accDetails);
-            buyerUnitsAfter = accDetails.unitsRepresented;
-        } else {
-            // Mint a fresh token for the sold units. It inherits the seller's non-basis terms (signing officer,
-            // legalDetails, extensionData); cost basis stays blank since a secondary acquisition has no
-            // primary-issuance basis of its own. The custodian only decides where the NFT lands: the admin
-            // multisig under Administered hosting, otherwise the buyer (who is the legal owner either way).
-            address custodian = buyerHostingMode == HostingMode.ADMINISTERED ? adminMultisig : buyer;
-            CertificateDetails memory buyerDetails = CertificateDetails({
-                signingOfficerName: sellerDetails.signingOfficerName,
-                signingOfficerTitle: sellerDetails.signingOfficerTitle,
-                investmentAmountUSD: 0,
-                issuerUSDValuationAtTimeOfInvestment: 0,
-                unitsRepresented: units,
-                legalDetails: sellerDetails.legalDetails,
-                extensionData: sellerDetails.extensionData
-            });
-            (, buyerTokenId) = _mintAssignedCert(certPrinter, custodian, buyer, buyerDetails, buyerName);
-            buyerUnitsAfter = units;
-        }
+        // (c) Deliver the buyer's units as a fresh lot (fresh-mint-per-lot): each acquisition mints its own
+        // Ledger Entry Token carrying its own acquisitionTimestamp (per-lot holding-period clock, stamped at
+        // mint). The lot inherits the seller's non-basis terms; cost basis stays blank (no primary-issuance
+        // basis). Custodian is the admin multisig under Administered hosting, otherwise the buyer.
+        bool buyerTokenIsMinted = true;
+        address custodian = buyerHostingMode == HostingMode.ADMINISTERED ? adminMultisig : buyer;
+        CertificateDetails memory buyerDetails = CertificateDetails({
+            signingOfficerName: sellerDetails.signingOfficerName,
+            signingOfficerTitle: sellerDetails.signingOfficerTitle,
+            investmentAmountUSD: 0,
+            issuerUSDValuationAtTimeOfInvestment: 0,
+            unitsRepresented: units,
+            legalDetails: sellerDetails.legalDetails,
+            extensionData: sellerDetails.extensionData
+        });
+        (, buyerTokenId) = _mintAssignedCert(certPrinter, custodian, buyer, buyerDetails, buyerName);
+        uint256 buyerUnitsAfter = units; // absolute post-mutation balance on the buyer token, reported in the event
 
         // (d) Mirror the seller's endorsement onto the buyer's token: both tokens carry the identical
         // chain-of-title record (endorser = seller, endorsee = buyer, this agreement), so reuse the (b) struct.
@@ -834,6 +816,32 @@ library IssuanceManagerStorage {
             settlementAgreementId, certPrinter, buyer, tokenId, buyerTokenId, seller, units,
             sellerDetails.unitsRepresented, buyerUnitsAfter, sellerVoided, buyerTokenIsMinted
         );
+    }
+
+    function executeSetIssueTimestamp(address certAddress, uint256 tokenId, uint64 ts) external {
+        ICyberCertPrinter(certAddress).setIssueTimestamp(tokenId, ts);
+    }
+
+    function executeSetAcquisitionTimestamp(address certAddress, uint256 tokenId, uint64 ts) external {
+        ICyberCertPrinter(certAddress).setAcquisitionTimestamp(tokenId, ts);
+    }
+
+    /// @dev Rewrites only the Rule 144(d)(3) tacking anchor in the cert's FundInterestData, leaving every other
+    /// field (including acquisitionDate) untouched, then writes the re-encoded blob back through the printer's
+    /// updateCertificateDetails chokepoint.
+    function executeSetTackedFromAcquisitionDate(address certAddress, uint256 tokenId, uint64 ts) external {
+        ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
+        // Only FUND_INTEREST certs carry a FundInterestData blob; guard before decoding so we never misread or
+        // clobber another extension's extensionData (mirrors CyberCertPrinterStorage.backfillAcquisitionTimestamp).
+        address ext = cert.getExtension(tokenId);
+        if (ext == address(0) || !ICertificateExtension(ext).supportsExtensionType(FUND_INTEREST_EXTENSION_TYPE)) {
+            revert ICyberCertPrinter.ExtensionTypeNotSupported();
+        }
+        CertificateDetails memory details = cert.getActiveCertificateDetails(tokenId);
+        FundInterestData memory fid = abi.decode(details.extensionData, (FundInterestData));
+        fid.tackedFromAcquisitionDate = ts;
+        details.extensionData = abi.encode(fid);
+        cert.updateCertificateDetails(tokenId, details);
     }
 
     function executeVoidCertificate(address certAddress, uint256 tokenId) external {
@@ -849,6 +857,13 @@ library IssuanceManagerStorage {
         bool transferable
     ) external {
         ICyberCertPrinter(certAddress).setGlobalTransferable(transferable);
+    }
+
+    function executeSetLookThroughBadge(
+        address certAddress,
+        address badge
+    ) external {
+        ICyberCertPrinter(certAddress).setLookThroughBadge(badge);
     }
 
     function executeSetRestrictionHook(
