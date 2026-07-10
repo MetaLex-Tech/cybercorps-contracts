@@ -78,6 +78,7 @@ contract TaxInfoCondition is SecondaryTradingConditionBase, UUPSUpgradeable, Bor
         // No buyer yet (posting context) — nothing to gate
         if (buyer == address(0)) return true;
 
+        // TODO do we need to gate tax form types by buyer status?
         return hasTaxFormOnFile(buyer);
     }
 

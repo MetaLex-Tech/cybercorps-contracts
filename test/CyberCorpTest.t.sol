@@ -44,6 +44,7 @@ pragma solidity ^0.8.18;
 import {Test, console} from "forge-std/Test.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCertPrinter, Endorsement} from "../src/CyberCertPrinter.sol";
+import {ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory, IssuanceManager} from "../src/IssuanceManagerFactory.sol";
@@ -5736,7 +5737,7 @@ contract CyberCorpForkTest is Test {
 
         // Token 0 should be blocked by hook
         vm.startPrank(certOwner);
-        vm.expectRevert(abi.encodeWithSelector(CyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
+        vm.expectRevert(abi.encodeWithSelector(ICyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
         CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 0);
         vm.stopPrank();
 
@@ -5759,7 +5760,7 @@ contract CyberCorpForkTest is Test {
 
         // Token 2 should be blocked
         vm.startPrank(certOwner);
-        vm.expectRevert(abi.encodeWithSelector(CyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
+        vm.expectRevert(abi.encodeWithSelector(ICyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
         CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 2);
         vm.stopPrank();
     }
@@ -6105,7 +6106,7 @@ contract CyberCorpForkTest is Test {
         vm.prank(certOwner);
         CyberCertPrinter(certPrinter).addEndorsement(0, e);
         vm.startPrank(certOwner);
-        vm.expectRevert(abi.encodeWithSelector(CyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
+        vm.expectRevert(abi.encodeWithSelector(ICyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
         CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 0);
         vm.stopPrank();
     }

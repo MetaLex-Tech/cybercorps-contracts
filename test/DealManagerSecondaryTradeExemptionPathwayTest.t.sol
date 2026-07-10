@@ -152,9 +152,6 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     uint256 public sellerTokenId;
 
     function setUp() public {
-        // Warp forward so the seller cert's acquisitionDate can sit comfortably in the past.
-        vm.warp(500 days);
-
         (owner, ownerKey) = makeAddrAndKey("owner");
         (seller, sellerKey) = makeAddrAndKey("seller");
         keeper = makeAddr("keeper");
@@ -217,14 +214,9 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         vm.prank(owner);
         regS.setRegSConfig(address(corp), 3, HOLD);
 
-        // Disclosure packages on record for the SPV (Rule 144(c)(2) and §4(a)(7)(d)(3)), fresh as of now.
-        vm.startPrank(owner);
-        rule144Disclosure.setDisclosurePackage(address(corp), DISCLOSURE_URI, uint64(block.timestamp));
-        section4a7Disclosure.setDisclosurePackage(address(corp), DISCLOSURE_URI, uint64(block.timestamp));
-        vm.stopPrank();
-
-        // Seller: KYC badge + a Ledger Entry Token whose acquisitionDate is > HOLD in the past.
-        _mintCred(seller, CAT_KYC, "US", CA);
+        // Seller Ledger Entry Token, minted now: its base acquisitionTimestamp is stamped at mint (§12B.3),
+        // so we mint first and then warp forward to age the lot past the holding / Reg S compliance period —
+        // the on-chain-faithful way to represent a seasoned position (no fakeable historical date).
         vm.startPrank(owner);
         certPrinter = ICyberCertPrinter(
             im.createCertPrinter(
@@ -238,6 +230,15 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
             )
         );
         sellerTokenId = im.createCertAndAssign(address(certPrinter), seller, _sellerCertDetails());
+        vm.stopPrank();
+
+        // Age the seller lot past HOLD, then issue "now" state (seller KYC badge, disclosure packages) so
+        // those are current as of trade time.
+        vm.warp(500 days);
+        _mintCred(seller, CAT_KYC, "US", CA);
+        vm.startPrank(owner);
+        rule144Disclosure.setDisclosurePackage(address(corp), DISCLOSURE_URI, uint64(block.timestamp));
+        section4a7Disclosure.setDisclosurePackage(address(corp), DISCLOSURE_URI, uint64(block.timestamp));
         vm.stopPrank();
     }
 
@@ -637,12 +638,10 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
             issuerUSDValuationAtTimeOfInvestment: 10000,
             unitsRepresented: UNITS,
             legalDetails: "",
+            // acquisitionDate left 0: the base per-lot acquisitionTimestamp (stamped at mint) is now the
+            // authoritative hold anchor; extensionData carries only the tacking anchor (unused here).
             extensionData: abi.encode(
-                FundInterestData({
-                    acquisitionDate: uint64(block.timestamp - 400 days),
-                    tackedFromAcquisitionDate: 0,
-                    customProvisions: ""
-                })
+                FundInterestData({acquisitionDate: 0, tackedFromAcquisitionDate: 0, customProvisions: ""})
             )
         });
     }

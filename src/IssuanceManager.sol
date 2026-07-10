@@ -192,11 +192,16 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         _;
     }
 
-    /// @dev Restricts execution to contract itself or AUTH.OWNER_ROLE callers
-    modifier onlyOwnerOrSelf() {
+    /// @dev Restricts execution to contract itself or AUTH.OWNER_ROLE callers. Body in a shared private helper
+    /// (not inlined per call site) to keep this contract under the EIP-170 size limit.
+    function _requireOwnerOrSelf() private view {
         if (msg.sender != address(this)) {
             AUTH.onlyRole(AUTH.OWNER_ROLE(), msg.sender);
         }
+    }
+
+    modifier onlyOwnerOrSelf() {
+        _requireOwnerOrSelf();
         _;
     }
 
@@ -417,6 +422,43 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         certificate.updateCertificateDetails(tokenId, _details);
     }*/
 
+    /// @notice Overrides a certificate's issue timestamp for a position issued off-chain (admin only)
+    /// @param certAddress Address of the certificate printer contract
+    /// @param tokenId ID of the certificate
+    /// @param ts True (historical) issuance timestamp
+    function setIssueTimestamp(
+        address certAddress,
+        uint256 tokenId,
+        uint64 ts
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeSetIssueTimestamp(certAddress, tokenId, ts);
+    }
+
+    /// @notice Overrides a certificate's acquisition timestamp, e.g. to seed a seasoned migrated position (admin only)
+    /// @param certAddress Address of the certificate printer contract
+    /// @param tokenId ID of the certificate
+    /// @param ts Acquisition timestamp to set
+    function setAcquisitionTimestamp(
+        address certAddress,
+        uint256 tokenId,
+        uint64 ts
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeSetAcquisitionTimestamp(certAddress, tokenId, ts);
+    }
+
+    /// @notice Overrides a certificate's Rule 144(d)(3) tacking anchor (admin only)
+    /// @dev Rewrites only tackedFromAcquisitionDate in the cert's FundInterestData; other fields are preserved.
+    /// @param certAddress Address of the certificate printer contract
+    /// @param tokenId ID of the certificate
+    /// @param ts Tacking anchor to set (0 = no tacking asserted)
+    function updateCertificateTackedFromAcquisitionDate(
+        address certAddress,
+        uint256 tokenId,
+        uint64 ts
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeSetTackedFromAcquisitionDate(certAddress, tokenId, ts);
+    }
+
     /// @notice Voids a certificate
     /// @dev Only callable by admin
     /// @param certAddress Address of the certificate printer contract
@@ -451,6 +493,18 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             certAddress,
             transferable
         );
+    }
+
+    /// @notice Wires the LeXcheXBadge the printer samples for its §3(c)(1)(A) look-through holder tally
+    /// @dev Only callable by admin. Set before the first mint on a new printer, and before
+    ///      backfillLookThroughTally on an upgraded one.
+    /// @param certAddress Address of the certificate printer contract
+    /// @param badge Address of the LeXcheXBadge credential contract
+    function setCertLookThroughBadge(
+        address certAddress,
+        address badge
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeSetLookThroughBadge(certAddress, badge);
     }
 
     /// @notice Upgrades the implementation of the certificate printer

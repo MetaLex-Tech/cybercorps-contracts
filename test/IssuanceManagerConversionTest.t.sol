@@ -1055,6 +1055,24 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(newCert.unitsRepresented, 100 * 1e18); // 150 * 2 / 3
     }
 
+    function test_setCertLookThroughBadge_AdminWiresBadgeOnPrinter() public {
+        ICyberCertPrinter certPrinter = _deployPrinter("Badge Wire", "BW");
+        assertEq(certPrinter.lookThroughBadge(), address(0));
+
+        address badge = makeAddr("lookThroughBadge");
+        issuanceManager.setCertLookThroughBadge(address(certPrinter), badge);
+        assertEq(certPrinter.lookThroughBadge(), badge);
+    }
+
+    function test_setCertLookThroughBadge_NonAdminReverts() public {
+        ICyberCertPrinter certPrinter = _deployPrinter("Badge Wire 2", "BW2");
+        address badge = makeAddr("lookThroughBadge");
+
+        vm.prank(investor);
+        vm.expectRevert();
+        issuanceManager.setCertLookThroughBadge(address(certPrinter), badge);
+    }
+
     function test_convertScripToCert_ignoresVoidedCertAndMintsNewCertificate()
         public
     {
