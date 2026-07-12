@@ -1,9 +1,14 @@
 # Issuer-defined award templates — design evaluation & recommendation
 
 **Status:** `INTERIM SHIPPED` (2026-07-08) — a **temporary** variant is live on-chain; see §0.
-The recommendation in §6 remains the target end-state. Companion to the webapp grants feature
-(`metalex-webapp` PR #771 + `notes/plans/cybercorps-grants-build-spec.md`). This doc is
-referenced by **P3** in `protocol-improvement-plan.md`.
+The recommendation in §6 (contract-side `createTemplatePublic`) remains the **unbuilt** target
+end-state. **Cross-repo update (2026-07-12):** the §0 app-layer mitigations are now fully
+**SHIPPED** in `metalex-webapp` — PR **#801** (self-serve per-corp award templates,
+content-addressed registration + DB-backed provenance, merged 2026-07-08), PR **#803**
+(bespoke per-recipient agreements, zero protocol change, merged 2026-07-08), PR **#805**
+(Ethereum mainnet controller factory configured, merged 2026-07-08). Companion to the webapp
+grants feature (`metalex-webapp` PR #771 + `notes/plans/cybercorps-grants-build-spec.md`).
+This doc is referenced by **P3** in `protocol-improvement-plan.md`.
 
 ---
 
@@ -37,7 +42,8 @@ variant §4 warns about. Accepted drawbacks while interim:
 Unchanged: templates remain **inert** — only a corp's funding authority can turn one into a
 real grant (§4 "capability ≠ funds"), so none of the above moves value.
 
-**Required app-layer mitigations while this interim configuration is live** (webapp):
+**Required app-layer mitigations while this interim configuration is live** (webapp) —
+✅ **ALL SHIPPED** via `metalex-webapp` PR **#801** (merged 2026-07-08):
 - Derive template ids **content-addressed** client-side —
   `keccak256(abi.encode(title, legalContractUri, globalFields, partyFields))` — never from
   a human label. This makes squatting moot for app-originated templates (an id can only
@@ -46,6 +52,14 @@ real grant (§4 "capability ≠ funds"), so none of the above moves value.
   enumerate or trust the registry as a source of approved templates.
 - **Verify content on-chain before use**: read the template back and check the document URI
   + field schema against expectations before binding a deal to the id.
+
+*Shipped as specified (webapp #801, merged 2026-07-08): content-addressed ids
+(`keccak256(abi.encode(title, uri, globalFields, partyFields))`), a `cybercorps.corpTemplates`
+provenance table (migration 0032) written only by an authenticated corp officer, and a server
+that re-verifies the claimed content against the chain before trusting the row. Webapp #803
+(merged 2026-07-08) extends the same pattern to bespoke per-recipient documents — a single-use
+content-addressed template pinned at `vesting.bespokeTemplateId`, with the server re-deriving
+the content hash from on-chain content to defeat caller-chosen-id front-running.*
 
 **Recommended optimal configuration (target end-state — unchanged from §6):** restore
 `onlyOwner` on the caller-chosen-id `createTemplate` (reinstating a curated MetaLeX
@@ -92,7 +106,8 @@ MetaLeX's BorgAuth — **not** any corp's BorgAuth. So today **every cyberCORP s
 award template that only MetaLeX can register**; a founder cannot register their own custom
 award agreement. This is the last setup blocker for self-serve grants (the webapp already
 ships an admin "Register award template" page, but it can only be driven by the registry
-owner — see PR #771).
+owner — see PR #771). *(Since resolved: the interim ship (§0) plus webapp #801, merged
+2026-07-08, made template registration officer self-serve.)*
 
 **Goal:** let an **issuer** (corp officer) define and register their **own** award-agreement
 template, without MetaLeX in the loop per corp, without weakening the registry's integrity.
@@ -180,13 +195,20 @@ function createTemplatePublic(
 - Keep the existing owner-only, caller-chosen-id `createTemplate` for MetaLeX canonical/vanity
   ids — unchanged, so no regression and MetaLeX retains a curated namespace.
 
-**Contract changes (cybercorps-contracts):**
+**Contract changes (cybercorps-contracts):** — *NOT YET BUILT; the interim ship (§0, commit
+`7edb89d`) de-gated the existing caller-chosen-id `createTemplate` instead. This block remains
+the target end-state.*
 - Add `createTemplatePublic(...)` (≈6 lines, reuses `_createTemplate`). Make it idempotent
   (return existing id rather than revert `TemplateAlreadyExists`) so re-running is safe.
 - (Optional) emit a distinct event or include `msg.sender` in `TemplateCreated`'s provenance
   for off-chain attribution; not required for correctness.
 
-**App changes (metalex-webapp, `apps/cybercorps-web`):**
+**App changes (metalex-webapp, `apps/cybercorps-web`):** — ✅ **SHIPPED** via webapp PR
+**#801** (merged 2026-07-08), calling the interim permissionless `createTemplate` with
+content-derived ids (identical ids to a future `createTemplatePublic`, so the end-state
+migration needs no app-flow change); per-corp templateId is DB-backed
+(`cybercorps.corpTemplates`, migration 0032) with the chain-level id kept only as the
+MetaLeX-default fallback.
 - Repoint the existing admin page (`features/grants/useRegisterAwardTemplate.ts` +
   `grants/_components/RegisterAwardTemplateForm.tsx`, PR #771) from the owner-gated,
   label-hashed `createTemplate` to `createTemplatePublic`, deriving `templateId` from
@@ -243,6 +265,13 @@ product needs per-corp template listings or attributable creation.
 ---
 
 ### Option B — route grants through `createStandaloneContractAndSignFor` (per-grant doc, no pre-registered template)
+
+> **Status (2026-07-12):** NOT BUILT, and its motivating use case is now largely served
+> without it — webapp **#803** (merged 2026-07-08) ships bespoke per-recipient agreements with
+> **zero protocol change** by registering each bespoke document as a single-use
+> content-addressed template through the interim permissionless `createTemplate` and pinning
+> the grant to it (resolution precedence: bespoke > corp template > chain default). B remains
+> in reserve only if a no-pre-registration flow is ever specifically required.
 
 Use the registry's existing permissionless standalone path so each grant carries its **own**
 inline document with **no pre-registration step at all**.
@@ -359,7 +388,9 @@ self-serve one).
 - **Option B:** changes the **propose** leg (new controller variant calling the standalone
   path); the **sign/fund/finalize** legs are unchanged (finalize verified compatible with the
   zero finalizer, §3-B). Requires a controller redeploy on Base/mainnet (the controller is
-  already deployed on Base at `0xCD71…` from PR #771 — a B redeploy would supersede it).
+  already deployed on Base at `0xCD71…` from PR #771 — a B redeploy would supersede it;
+  Ethereum mainnet grants have since been enabled via the controller factory, webapp #805,
+  merged 2026-07-08).
 - **Option C:** no change to the deal flow itself; only to who may pre-register the template.
 
 ---
@@ -371,9 +402,13 @@ self-serve one).
    make the grants template id per-corp. This unblocks issuer-defined award templates with a
    ~6-line registry change, **no** MetaVesT/controller change, and **no** new trust
    assumptions (content-addressing supplies the anti-squat property).
+   *(Status 2026-07-12: app half ✅ SHIPPED — webapp #801, merged 2026-07-08; contract half
+   — `createTemplatePublic` — still unbuilt, interim-superseded by the §0 permissionless
+   `createTemplate`.)*
 2. **Keep Option B in reserve** as a complementary path for genuinely bespoke per-grant
    agreements: add a `proposeAndSignDealStandalone` variant on the controller when that need
-   appears. Note it is **not** zero-registry-change as first appears — the standalone path's
+   appears. *(Status 2026-07-12: bespoke need since served app-side with zero protocol
+   change — webapp #803, merged 2026-07-08; see §3-B status note.)* Note it is **not** zero-registry-change as first appears — the standalone path's
    zero finalizer auto-finalizes on the grantee's signature, so B needs either a registry
    `finalizer` param (b-i) or a conditional controller finalize (b-ii) (§3-B). Controller
    redeploy required either way.
@@ -398,11 +433,17 @@ self-serve one).
 
 1. **Idempotent vs revert** for `createTemplatePublic` when the content already exists — return
    the existing id (recommended, re-run-safe) or revert `TemplateAlreadyExists` (matches the
-   current internal guard)? Recommend idempotent.
+   current internal guard)? Recommend idempotent. *(App-side, #801/#803 already implement
+   adopt-on-duplicate — identical content adopts the existing id; the contract-side choice
+   stays open for `createTemplatePublic`.)*
 2. **Provenance:** do we need on-chain attribution of *who* registered a template (an event
    field or A2 namespacing), or is content-addressing + off-chain indexing enough?
+   *(Interim answer shipped in #801: provenance lives off-chain in the `corpTemplates` DB
+   table; on-chain attribution remains open for the end-state.)*
 3. **Per-corp config storage (webapp):** store the registered `templateId` on the corp/grant
    row in `cybercorps-db`, or re-derive it client-side from the corp's award document each time?
+   ✅ **RESOLVED** — stored in `cybercorps-db` (`corpTemplates` table, migration 0032, webapp
+   #801); bespoke per-grant pins live at `vesting.bespokeTemplateId` (webapp #803).
 4. **B finalize handling:** because the zero-finalizer standalone path **auto-finalizes** on
    the grantee's signature (`:550-554`), a B variant must either add a `finalizer` param to the
    standalone path so the controller stays sole finalizer (b-i, registry + controller change) or

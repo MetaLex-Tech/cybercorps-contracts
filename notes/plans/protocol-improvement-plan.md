@@ -9,9 +9,19 @@ up front. Companion to the webapp-side plan (`notes/plans/mainframe-changes-plan
 **Status.** Active log. Each item: **problem → desired model → design direction → open questions**.
 Items are `PROPOSED` until specced/scheduled.
 
+**Last audited:** 2026-07-12 against `develop`. P1 `PROPOSED` (no code shipped — officer fns still
+`onlyOwner`, no Board role). P2 `PROPOSED` (no code shipped — terms still per-cert; PR #107 reshaped
+the struct but not the storage model, see P2 status note). P3 `INTERIM SHIPPED` on-chain (commit
+`7edb89d`, live 2026-07-08); webapp self-serve shipped (`metalex-webapp` #801 + #803, merged
+2026-07-08); recommended end-state (Option A) not built.
+
 ---
 
 ## P1 — Board role: governance-correct appointment & removal of officers — `PROPOSED`
+
+_Status check 2026-07-12: still accurate on `develop` — `addOfficer`/`removeOfficer`/`removeOfficerAt`
+remain `onlyOwner`-gated with no last-officer guard (`src/CyberCorp.sol:191/200/215`), and no Board
+role exists in `src/libs/auth.sol`. Nothing shipped._
 
 **Problem (current on-chain behavior).** Every company officer holds BorgAuth role **200**, and the
 officer-management functions on `CyberCorp` — `addOfficer` (`src/CyberCorp.sol:191`), `removeOfficer`
@@ -83,6 +93,15 @@ PR #745 (Mainframe ownership UI) and the auth findings in its `notes/plans/mainf
 
 ## P2 — Class-level security terms have no on-chain home (stored per-certificate) — `PROPOSED`
 
+_Status check 2026-07-12: still accurate on `develop`; nothing from the desired model has shipped.
+Note PR #107 (`feat/shares-extension-logic`, merged 2026-06-02 — predates this section) reshaped the
+per-cert struct — the old flat `ShareData` became `ShareCertData` with a dedicated `SeriesTerms` terms
+struct (`ShareExtension.sol:142-183`, expanded with dividend/redemption/pro-rata/information-rights
+fields) — but the **storage model is unchanged**: `ShareExtension` is a stateless encoder,
+`SeriesTerms` is still ABI-encoded into each cert's `extensionData` (now
+`CyberCertPrinterStorage.sol:58`), `CyberCertPrinter.initialize` still stores identity only, and
+`authorizedShares` remains unenforced. #107 does not address this item._
+
 **Problem.** A `CyberCertPrinter` is the per-security-class contract, but it stores only class
 **identity** — `initialize(... name, ticker, certificateUri, SecurityClass, SecuritySeries, extension)`
 (`src/CyberCertPrinter.sol:107`); there is no slot for the class's economic terms. The actual
@@ -151,6 +170,12 @@ Drawbacks, required app-layer mitigations, and the recommended optimal end-state
 `createTemplate` + add content-addressed `createTemplatePublic`, i.e. Option A) are recorded
 in the full doc's §0.
 
+**Webapp side (update 2026-07-12):** the compensating app layer has shipped — self-serve
+per-corp award templates with content-addressed registration against the now-permissionless
+`createTemplate` (`metalex-webapp` PR #801, merged 2026-07-08) and bespoke per-recipient
+agreements (`metalex-webapp` PR #803, merged 2026-07-08). The recommended on-chain end-state
+(Option A: re-gate `createTemplate`, add `createTemplatePublic`) remains **unbuilt**.
+
 **Problem.** cyberCORPs grants register the award agreement in the **global, MetaLeX-owned**
 `CyberAgreementRegistry`, and the MetaVesT controller's `proposeAndSignDeal(templateId, …)`
 calls `registry.createContract`, which reverts `TemplateDoesNotExist` unless the template is
@@ -160,7 +185,9 @@ The only registration entry point, `createTemplate`, is **`onlyOwner`** (`:230-2
 award template that only MetaLeX can register** — a founder cannot register their own custom
 award agreement. This is the last setup blocker for self-serve grants (the webapp already ships
 an admin "Register award template" page, but it can only be driven by the registry owner —
-`metalex-webapp` PR #771).
+`metalex-webapp` PR #771). _[Stale as of the interim ship: `createTemplate` is now permissionless
+(commit `7edb89d`) and the admin page is open to issuer self-serve via `metalex-webapp` PR #801 —
+see Status update above. Kept as the record of the pre-2026-07-07 state that motivated this item.]_
 
 **Desired model.** An **issuer (corp officer)** registers their **own** award template
 permissionlessly, without MetaLeX per corp, without weakening registry integrity.
