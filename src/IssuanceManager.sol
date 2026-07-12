@@ -170,29 +170,12 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         // beacon proxies because they are managed by the same company owner and are expected to
         // share the same implementation or upgraded to a new version all at the same time.
         // Maintenance-wise, since IssuanceManager itself is upgradeable, we don't need to worry about beacon ownership transfers
-
-        address cyberCertPrinterRefImpl = IIssuanceManagerFactory(
-            _upgradeFactory
-        ).getCyberCertPrinterRefImplementation();
-        UpgradeableBeacon beaconCertPrinter = new UpgradeableBeacon(
-            cyberCertPrinterRefImpl,
-            address(this)
+        // Delegated to IssuanceManagerStorage to keep this contract under the EIP-170 size limit.
+        IssuanceManagerStorage.executeInitialize(
+            _upgradeFactory,
+            _CORP,
+            _uriBuilder
         );
-        emit CertPrinterBeaconImplementationUpgraded(cyberCertPrinterRefImpl);
-
-        address cyberScripRefImpl = IIssuanceManagerFactory(_upgradeFactory)
-            .getCyberScripRefImplementation();
-        UpgradeableBeacon beaconScrip = new UpgradeableBeacon(
-            cyberScripRefImpl,
-            address(this)
-        );
-        emit ScripBeaconImplementationUpgraded(cyberScripRefImpl);
-
-        IssuanceManagerStorage.setCORP(_CORP);
-        IssuanceManagerStorage.setUriBuilder(_uriBuilder);
-        IssuanceManagerStorage.setCyberCertPrinterBeacon(beaconCertPrinter);
-        IssuanceManagerStorage.setUpgradeFactory(_upgradeFactory);
-        IssuanceManagerStorage.setCyberScripBeacon(beaconScrip);
     }
 
     modifier onlyUpgradeFactory() {
@@ -413,6 +396,13 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         );
     }
 
+    /// @notice Effectuates the secondary-trade ownership change at finalization (spec §7.4A / §7.5)
+    /// @dev Gated on OWNER_ROLE, which the SPV's DealManager holds. dealMetadata is the abi-encoded tuple
+    /// produced by DealManager.finalizeSecondaryTradeAgreement; see IssuanceManagerStorage.executeSecondaryTransfer.
+    function secondaryTransfer(bytes calldata dealMetadata) external onlyOwner {
+        IssuanceManagerStorage.executeSecondaryTransfer(dealMetadata);
+    }
+
    /* /// @notice Updates the details of an existing certificate
     /// @dev Only callable by admin
     /// @param certAddress Address of the certificate printer contract
@@ -563,6 +553,12 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         return IssuanceManagerStorage.getPrinters()[index];
     }
 
+    /// @notice Whether `printer` is a certificate printer this IssuanceManager created and still tracks
+    /// @dev Authoritative membership check against the registry; a self-reporting printer cannot forge it
+    function isPrinter(address printer) external view returns (bool) {
+        return IssuanceManagerStorage.isPrinter(printer);
+    }
+
     /// @notice Sets the URI builder contract address
     /// @dev Only callable by owner
     /// @param _uriBuilder New URI builder contract address
@@ -634,6 +630,34 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             certAddress,
             tokenId,
             value
+        );
+    }
+
+    /// @notice Reserve units of a certificate against a pending deal/loan
+    /// @dev Reverts in the printer if the total reserved would exceed the cert's units
+    function increaseUnitsReserved(
+        address certAddress,
+        uint256 tokenId,
+        uint256 amount
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeIncreaseUnitsReserved(
+            certAddress,
+            tokenId,
+            amount
+        );
+    }
+
+    /// @notice Release previously reserved units of a certificate
+    /// @dev Reverts in the printer if releasing more than is currently reserved
+    function decreaseUnitsReserved(
+        address certAddress,
+        uint256 tokenId,
+        uint256 amount
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeDecreaseUnitsReserved(
+            certAddress,
+            tokenId,
+            amount
         );
     }
 
@@ -737,6 +761,44 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             tokenId,
             index
         );
+    }
+
+    /// @notice Adds a structured default restrictive legend to a certificate contract
+    /// @dev Only callable by admin
+    function addDefaultRestrictiveLegend(
+        address certAddress,
+        RestrictiveLegend memory newLegend
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeAddDefaultRestrictiveLegend(certAddress, newLegend);
+    }
+
+    /// @notice Removes a structured default restrictive legend from a certificate contract
+    /// @dev Only callable by admin
+    function removeDefaultRestrictiveLegendAt(
+        address certAddress,
+        uint256 index
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeRemoveDefaultRestrictiveLegendAt(certAddress, index);
+    }
+
+    /// @notice Adds a structured restrictive legend to a specific certificate
+    /// @dev Only callable by admin
+    function addCertRestrictiveLegend(
+        address certAddress,
+        uint256 tokenId,
+        RestrictiveLegend memory newLegend
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeAddCertRestrictiveLegend(certAddress, tokenId, newLegend);
+    }
+
+    /// @notice Removes a structured restrictive legend from a specific certificate
+    /// @dev Only callable by admin
+    function removeCertRestrictiveLegendAt(
+        address certAddress,
+        uint256 tokenId,
+        uint256 index
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeRemoveCertRestrictiveLegendAt(certAddress, tokenId, index);
     }
 
     //deploy matching erc20 contract for a cert

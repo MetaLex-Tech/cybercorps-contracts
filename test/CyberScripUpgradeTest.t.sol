@@ -19,6 +19,7 @@ import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
+import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {Round, RoundLib} from "../src/libs/RoundLib.sol";
@@ -973,6 +974,7 @@ contract CyberScripUpgradeForkTest is Test {
         address newRoundManagerImpl = address(new RoundManager());
         address newCertPrinterImpl = address(new CyberCertPrinter());
         address newScripImpl = address(new CyberScrip());
+        address newUriBuilderImpl = address(new CertificateUriBuilder());
 
         vm.startPrank(METALEX_SAFE);
         corpSingleFactory.setRefImplementation(newCyberCorpImpl);
@@ -981,6 +983,7 @@ contract CyberScripUpgradeForkTest is Test {
         rmFactory.setRefImplementation(newRoundManagerImpl);
         imFactory.setCyberCertPrinterRefImplementation(newCertPrinterImpl);
         imFactory.setCyberScripRefImplementation(newScripImpl);
+        IUUPS(deployment.uriBuilder).upgradeToAndCall(newUriBuilderImpl, "");
         vm.stopPrank();
 
         assertEq(

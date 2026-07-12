@@ -48,7 +48,9 @@ import {ERC721Enumerable} from "../dependencies/openzeppelin-contracts/contracts
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC1967} from "../dependencies/openzeppelin-contracts/contracts/interfaces/IERC1967.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
-import {DealManager, LexScroWLite} from "../src/DealManager.sol";
+import {DealManager, LexScrowStorage} from "../src/DealManager.sol";
+import {IDealManager} from "../src/interfaces/IDealManager.sol";
+import {IDealManagerStorage} from "../src/interfaces/IDealManagerStorage.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CertificateDetails, Endorsement} from "../src/storage/CyberCertPrinterStorage.sol";
@@ -69,6 +71,10 @@ contract IssuanceManagerMock {
     ) external returns (uint256) {
         return CyberCertPrinterMock(certAddress).mint(to);
     }
+
+    function voidCertificate(address certAddress, uint256 tokenId) external {
+        CyberCertPrinterMock(certAddress).burn(tokenId);
+    }
 }
 
 contract CyberCertPrinterMock is ERC721Enumerable {
@@ -88,6 +94,10 @@ contract CyberCertPrinterMock is ERC721Enumerable {
 
     function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (Endorsement memory) {
         return endorsements[tokenId][index];
+    }
+
+    function burn(uint256 tokenId) external {
+        _burn(tokenId);
     }
 }
 
@@ -364,7 +374,7 @@ contract DealManagerTest is Test {
 
     function test_PaymentFlow_ProposeDeal() public {
         // proposeDeal() is one of the two methods that'll pull certificates from the issuing company (first party)
-        // Unlike the more generic LexScroWLite, DealManager assumes the company's assets are certificates-only
+        // Unlike the more generic LexScrowStorage, DealManager assumes the company's assets are certificates-only
         // After the transaction, the company's certificates should be in escrow.
 
         // Deal configs
@@ -398,7 +408,7 @@ contract DealManagerTest is Test {
 
     function test_PaymentFlow_ProposeAndSignDeal() public {
         // proposeAndSignDeal() is one of the two methods that'll pull certificates from the issuing company (first party)
-        // Unlike the more generic LexScroWLite, DealManager assumes the company's assets are certificates-only
+        // Unlike the more generic LexScrowStorage, DealManager assumes the company's assets are certificates-only
         // The signature must be valid.
         // After the transaction, the company's certificates should be in escrow.
 
@@ -538,7 +548,7 @@ contract DealManagerTest is Test {
         );
 
         vm.expectEmit(true, true, true, true);
-        emit DealManager.DealFinalized(
+        emit IDealManagerStorage.DealFinalized(
             agreementId,
             alice,
             address(corp),
@@ -571,7 +581,7 @@ contract DealManagerTest is Test {
         );
 
         vm.expectEmit(true, true, true, true);
-        emit DealManager.DealFinalized(
+        emit IDealManagerStorage.DealFinalized(
             agreementId,
             bob,
             address(corp),
@@ -786,8 +796,79 @@ contract DealManagerTest is Test {
         );
 
         // Refund should fail because the deal is not voided
-        vm.expectRevert(LexScroWLite.DealNotVoided.selector);
+        vm.expectRevert(LexScrowStorage.DealNotVoided.selector);
         dm.refundVoidedDeal(agreementId);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Id-space validation: primary entrypoints require a primary escrow. An id with no primary escrow
+    // (an unknown id, or a secondary-trade settlement — which never creates a LexScrow escrow) reverts
+    // DealDoesNotExist. The guard runs first, so caller/state checks are not reached.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function test_RevertIf_FinalizeDeal_UnknownDeal() public {
+        vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);
+        dm.finalizeDeal(keccak256("unknown-deal"));
+    }
+
+    function test_RevertIf_VoidExpiredDeal_UnknownDeal() public {
+        vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);
+        dm.voidExpiredDeal(keccak256("unknown-deal"), alice, "");
+    }
+
+    function test_VoidExpiredDeal_VoidsCert() public {
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        uint256 expiry = block.timestamp + 1 days;
+
+        vm.prank(owner);
+        (bytes32 agreementId, uint256[] memory certIds) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            uint256(keccak256("DealManagerTest.Deal")),
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // TODO conditions
+            bytes32(0), // secretHash
+            expiry
+        );
+
+        // Cert is now in escrow (owned by DealManager)
+        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), address(dm));
+
+        vm.warp(expiry + 1);
+
+        // signer must be a party to the agreement (companyOwner); DealManager is the finalizer so no void sig is needed
+        dm.voidExpiredDeal(agreementId, companyOwner, "");
+
+        // Cert should be burned (voided) via IssuanceManager.voidCertificate
+        vm.expectRevert();
+        CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]); // burned token should revert on ownerOf
+    }
+
+    function test_RevertIf_RevokeDeal_UnknownDeal() public {
+        vm.prank(alice);
+        vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);
+        dm.revokeDeal(keccak256("unknown-deal"), alice, "");
+    }
+
+    function test_RevertIf_SignToVoid_UnknownDeal() public {
+        vm.prank(alice);
+        vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);
+        dm.signToVoid(keccak256("unknown-deal"), alice, "");
+    }
+
+    function test_RevertIf_RefundVoidedDeal_UnknownDeal() public {
+        vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);
+        dm.refundVoidedDeal(keccak256("unknown-deal"));
     }
 
     function test_UpgradeNextDealManager() public {

@@ -41,14 +41,46 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
+import "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
+import "openzeppelin-contracts/token/ERC721/IERC721.sol";
+import "openzeppelin-contracts/token/ERC1155/IERC1155.sol";
 import "../interfaces/IIssuanceManager.sol";
+import "../interfaces/ICyberAgreementRegistry.sol";
+import "../interfaces/ICyberCorp.sol";
+import "../interfaces/ICyberCertPrinter.sol";
+import "../interfaces/IDealManagerFactory.sol";
+import "../interfaces/ICondition.sol";
+import "../CyberCorpConstants.sol";
+import "./DealManagerFactoryStorage.sol";
+import {LexScrowStorage, Escrow, Token, TokenType, EscrowStatus} from "./LexScrowStorage.sol";
+import {IDealManagerStorage} from "../interfaces/IDealManagerStorage.sol";
+import {ILexScrowStorage} from "../interfaces/ILexScrowStorage.sol";
 
 /// @title DealManagerStorage
-/// @notice Storage library for the DealManager contract that handles persistent data storage
-/// @dev Uses the unstructured storage pattern to manage deal-related data
+/// @notice Storage library + legacy deal lifecycle logic (propose / sign / finalize / void) for DealManager.
+/// @dev Uses the unstructured storage pattern to manage deal-related data. The logic functions are `public`
+/// so the library is deployed separately and linked; DealManager calls them via DELEGATECALL (msg.sender /
+/// storage context preserved), keeping that logic out of DealManager's bytecode (EIP-170).
+/// `proposeAndSignDeal` / `proposeAndSignNewCertsDeal` deliberately live in DealManager (not here):
+/// keeping `proposeAndSignDeal` out of this library stops the via-ir Yul optimizer from inlining `proposeDeal`
+/// into it and cause stack overflow.
 library DealManagerStorage {
+    using SafeERC20 for IERC20;
+
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.deal.manager.storage.v1");
+
+    /// @notice Certificate data structure for creating new certificates
+    struct CyberCertData {
+        string name;
+        string symbol;
+        string uri;
+        SecurityClass securityClass;
+        SecuritySeries securitySeries;
+        address extension;
+        string[] defaultLegend;
+    }
 
     /// @notice Main storage layout struct that holds all deal manager data
     /// @dev Uses unstructured storage pattern to avoid storage collisions
@@ -108,4 +140,226 @@ library DealManagerStorage {
     function getUpgradeFactory() internal view returns (address) {
         return dealManagerStorage().upgradeFactory;
     }
-} 
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Legacy deal proposal (linked logic; called via delegatecall)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice Proposes a new deal: creates the agreement + certificates and sets up the escrow
+    /// @dev Access control (onlyOwner) is enforced by the DealManager wrapper that delegatecalls here.
+    function proposeDeal(
+        address[] memory _certPrinterAddress,
+        address _paymentToken,
+        uint256 _paymentAmount,
+        bytes32 _templateId,
+        uint256 _salt,
+        string[] memory _globalValues,
+        address[] memory _parties,
+        CertificateDetails[] memory _certDetails,
+        string[][] memory _partyValues,
+        address[] memory conditions,
+        bytes32 secretHash,
+        uint256 expiry
+    ) public returns (bytes32 agreementId, uint256[] memory certIds) {
+        agreementId = ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).createContract(_templateId, _salt, _globalValues, _parties, _partyValues, secretHash, address(this), expiry);
+
+        Token[] memory corpAssets = new Token[](_certDetails.length);
+        certIds = new uint256[](_certDetails.length);
+        for(uint256 i = 0; i < _certDetails.length; i++) {
+            certIds[i] = getIssuanceManager().createCert(_certPrinterAddress[i], address(this), _certDetails[i]);
+            corpAssets[i] = Token(TokenType.ERC721, _certPrinterAddress[i], certIds[i], 1, false);
+        }
+
+        Token[] memory buyerAssets = new Token[](1);
+        buyerAssets[0] = Token(TokenType.ERC20, _paymentToken, 0, _paymentAmount, true); // Will be used as fee token
+
+        Escrow memory newEscrow = Escrow({
+            agreementId: agreementId,
+            counterParty: _parties[1],
+            corpAssets: corpAssets,
+            buyerAssets: buyerAssets,
+            signature: "",
+            expiry: expiry,
+            status: EscrowStatus.PENDING
+        });
+
+        LexScrowStorage.setEscrow(agreementId, newEscrow);
+
+        //set conditions
+        for(uint256 i = 0; i < conditions.length; i++) {
+            LexScrowStorage.addConditionToEscrow(agreementId, ICondition(conditions[i]));
+        }
+
+        emit IDealManagerStorage.DealProposed(
+            agreementId,
+            _certPrinterAddress,
+            certIds,
+            _paymentToken,
+            _paymentAmount,
+            _templateId,
+            LexScrowStorage.getCorp(),
+            LexScrowStorage.getDealRegistry(),
+            _parties,
+            conditions,
+            secretHash > 0
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Deal lifecycle (linked logic; called via delegatecall)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice Signs a deal and processes payment
+    /// @dev Access modifiers (if any) are carried by the DealManager wrapper that delegatecalls here.
+    function signDealAndPay(
+        address signer,
+        bytes32 agreementId,
+        bytes memory signature,
+        string[] memory partyValues,
+        bool _fillUnallocated,
+        string memory name,
+        string memory secret
+    ) public {
+        if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
+        address registry = LexScrowStorage.getDealRegistry();
+        if(ICyberAgreementRegistry(registry).isVoided(agreementId)) revert LexScrowStorage.DealVoided();
+        if(ICyberAgreementRegistry(registry).isFinalized(agreementId)) revert LexScrowStorage.DealAlreadyFinalized();
+        Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
+        if(escrow.status != EscrowStatus.PENDING) revert IDealManagerStorage.DealNotPending();
+        if(escrow.expiry < block.timestamp) revert LexScrowStorage.DealExpired();
+
+        string[] storage counterPartyCheck = getCounterPartyValues(agreementId);
+        if(counterPartyCheck.length > 0) {
+            if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert IDealManagerStorage.CounterPartyValueMismatch();
+        }
+        else {
+            setCounterPartyValues(agreementId, partyValues);
+        }
+
+        ICyberAgreementRegistry(registry).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
+        LexScrowStorage.updateEscrow(agreementId, signer, name);
+        LexScrowStorage.handleCounterPartyPayment(agreementId);
+    }
+
+    /// @notice Signs and finalizes a deal in one call
+    /// @dev Access modifiers (if any) are carried by the DealManager wrapper that delegatecalls here.
+    function signAndFinalizeDeal(
+        address signer,
+        bytes32 agreementId,
+        string[] memory partyValues,
+        bytes memory signature,
+        bool _fillUnallocated,
+        string memory name,
+        string memory secret
+    ) public {
+        if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
+        address registry = LexScrowStorage.getDealRegistry();
+        if(ICyberAgreementRegistry(registry).isVoided(agreementId)) revert LexScrowStorage.DealVoided();
+        if(ICyberAgreementRegistry(registry).isFinalized(agreementId)) revert LexScrowStorage.DealAlreadyFinalized();
+        if(LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PENDING) revert IDealManagerStorage.DealNotPending();
+
+        string[] storage counterPartyCheck = getCounterPartyValues(agreementId);
+        if(counterPartyCheck.length > 0) {
+            if (keccak256(abi.encode(counterPartyCheck)) != keccak256(abi.encode(partyValues))) revert IDealManagerStorage.CounterPartyValueMismatch();
+        } else {
+            setCounterPartyValues(agreementId, partyValues);
+        }
+
+        if (!ICyberAgreementRegistry(registry).hasSigned(agreementId, signer)) {
+            // Not signed in registry yet; enforce local consistency and then sign
+            ICyberAgreementRegistry(registry).signContractFor(signer, agreementId, partyValues, signature, _fillUnallocated, secret);
+        } else {
+            // Already signed in registry; fetch values recorded in the registry and ensure consistency
+            string[] memory registryValues = ICyberAgreementRegistry(registry).getSignerValues(agreementId, signer);
+            if (keccak256(abi.encode(registryValues)) != keccak256(abi.encode(partyValues))) revert IDealManagerStorage.CounterPartyValueMismatch();
+        }
+
+        LexScrowStorage.updateEscrow(agreementId, signer, name);
+        if(!LexScrowStorage.conditionCheck(agreementId)) revert ILexScrowStorage.AgreementConditionsNotMet();
+        LexScrowStorage.handleCounterPartyPayment(agreementId);
+        finalizeDeal(agreementId);
+    }
+
+    /// @notice Finalizes a primary deal (checks signatures/conditions, settles escrow)
+    /// @dev nonReentrant is carried by the DealManager wrapper that delegatecalls here.
+    function finalizeDeal(bytes32 agreementId) public {
+        if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
+
+        address registry = LexScrowStorage.getDealRegistry();
+        if (ICyberAgreementRegistry(registry).isVoided(agreementId)) revert LexScrowStorage.DealVoided();
+        if (ICyberAgreementRegistry(registry).isFinalized(agreementId)) revert LexScrowStorage.DealAlreadyFinalized();
+        if (!ICyberAgreementRegistry(registry).allPartiesSigned(agreementId)) revert LexScrowStorage.DealNotFullySigned();
+
+        if (LexScrowStorage.getEscrow(agreementId).status != EscrowStatus.PAID) revert LexScrowStorage.DealNotPaid();
+        if (!LexScrowStorage.conditionCheck(agreementId)) revert ILexScrowStorage.AgreementConditionsNotMet();
+        ICyberAgreementRegistry(registry).finalizeContract(agreementId);
+        LexScrowStorage.finalizeEscrow(agreementId);
+
+        emit IDealManagerStorage.DealFinalized(
+            agreementId,
+            msg.sender,
+            LexScrowStorage.getCorp(),
+            registry,
+            false
+        );
+    }
+
+    /// @notice Voids an expired primary deal
+    /// @dev nonReentrant is carried by the DealManager wrapper that delegatecalls here.
+    function voidExpiredDeal(bytes32 agreementId, address signer, bytes memory signature) public {
+        if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
+
+        address registry = LexScrowStorage.getDealRegistry();
+        Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
+        if (block.timestamp <= deal.expiry) revert IDealManagerStorage.DealNotExpired();
+        ICyberAgreementRegistry(registry).voidContractFor(agreementId, signer, signature);
+        for (uint256 i = 0; i < deal.corpAssets.length; i++) {
+            if (deal.corpAssets[i].tokenType == TokenType.ERC721) {
+                getIssuanceManager().voidCertificate(
+                    deal.corpAssets[i].tokenAddress,
+                    deal.corpAssets[i].tokenId
+                );
+            }
+        }
+        if (deal.status == EscrowStatus.PAID)
+            // Interaction: payment
+            LexScrowStorage.voidAndRefund(agreementId);
+        else if (deal.status == EscrowStatus.PENDING)
+            // Effect: update status
+            LexScrowStorage.voidEscrow(agreementId);
+    }
+
+    /// @notice Revokes a pending deal
+    /// @dev Access modifiers (if any) are carried by the DealManager wrapper that delegatecalls here.
+    function revokeDeal(bytes32 agreementId, address signer, bytes memory signature) public {
+        if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
+        if(msg.sender != signer) revert IDealManagerStorage.CounterPartyValueMismatch();
+        if(LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PENDING)
+            ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
+        else
+            revert IDealManagerStorage.DealNotPending();
+    }
+
+    /// @notice Signs to void a deal; refunds if the deal was paid
+    /// @dev nonReentrant is carried by the DealManager wrapper that delegatecalls here.
+    function signToVoid(bytes32 agreementId, address signer, bytes memory signature) public {
+        // Check: status
+        if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
+        if(msg.sender != signer) revert IDealManagerStorage.CounterPartyValueMismatch();
+
+        // Effect: update status
+        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
+        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId) && LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PAID)
+            // Interaction: payment
+            LexScrowStorage.voidAndRefund(agreementId);
+    }
+
+    /// @notice Refund a voided deal
+    /// @dev nonReentrant is carried by the DealManager wrapper that delegatecalls here.
+    function refundVoidedDeal(bytes32 agreementId) public {
+        if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
+        // Interaction: Re-sync Deal Manager internal escrow to VOIDED, then refund
+        LexScrowStorage.voidAndRefund(agreementId);
+    }
+
+}

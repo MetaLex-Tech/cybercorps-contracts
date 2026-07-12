@@ -41,9 +41,55 @@ except with the express prior written permission of the copyright holder.*/
 
 pragma solidity 0.8.28;
 
-import "./IIssuanceManager.sol";
 import "../CyberCorpConstants.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "openzeppelin-contracts/token/ERC721/IERC721.sol";
+
+struct CertificateDetails {
+    string signingOfficerName;
+    string signingOfficerTitle;
+    uint256 investmentAmountUSD;
+    uint256 issuerUSDValuationAtTimeOfInvestment;
+    uint256 unitsRepresented;
+    string legalDetails;
+    bytes extensionData;
+}
+
+struct Endorsement {
+    address endorser;
+    uint256 timestamp;
+    bytes signatureHash;
+    address registry;  //optional
+    bytes32 agreementId; //optional
+    address endorsee;
+    string endorseeName;
+}
+
+struct OwnerDetails {
+    string name;
+    address ownerAddress;
+}
+
+enum RestrictionType {
+    Unspecified,
+    TransferConsentRequired,
+    RestrictedSecurityRule144,
+    UnregisteredSecurities,
+    RegulationS,
+    ContentiousHardfork,
+    Custom
+}
+
+struct RestrictiveLegend {
+    RestrictionType restrictionType;
+    string title;
+    string text;
+    string jurisdiction;
+    bytes32 referenceId;
+    uint64 effectiveTimestamp;
+    uint64 expirationTimestamp;
+    bool active;
+    bytes data;
+}
 
 interface ICyberCertPrinter is IERC721 {
     function initialize(
@@ -61,6 +107,7 @@ interface ICyberCertPrinter is IERC721 {
     function updateIssuanceManager(address _issuanceManager) external;
     function updateDefaultLegend(string[] memory _ledger) external;
     function defaultLegend() external view returns (string[] memory);
+    function defaultRestrictiveLegends() external view returns (RestrictiveLegend[] memory);
     function setRestrictionHook(uint256 _id, address _hookAddress) external;
     function setGlobalRestrictionHook(address hookAddress) external;
     function safeMint(
@@ -74,6 +121,13 @@ interface ICyberCertPrinter is IERC721 {
         uint256 tokenId,
         CertificateDetails memory details,
         string memory investorName
+    ) external returns (uint256);
+    function safeMintAndAssign(
+        address to, // custodian
+        address owner, // legal owner
+        uint256 tokenId,
+        CertificateDetails memory details,
+        string memory ownerName
     ) external returns (uint256);
     function assignCert(
         address from,
@@ -115,6 +169,14 @@ interface ICyberCertPrinter is IERC721 {
     function removeCertLegendAt(uint256 tokenId, uint256 index) external;
     function addDefaultLegend(string memory newLegend) external;
     function removeDefaultLegendAt(uint256 index) external;
+    function addDefaultRestrictiveLegend(RestrictiveLegend memory newLegend) external;
+    function removeDefaultRestrictiveLegendAt(uint256 index) external;
+    function getDefaultRestrictiveLegendAt(uint256 index) external view returns (RestrictiveLegend memory);
+    function getDefaultRestrictiveLegendCount() external view returns (uint256);
+    function addCertRestrictiveLegend(uint256 tokenId, RestrictiveLegend memory newLegend) external;
+    function removeCertRestrictiveLegendAt(uint256 tokenId, uint256 index) external;
+    function getCertRestrictiveLegendAt(uint256 tokenId, uint256 index) external view returns (RestrictiveLegend memory);
+    function getCertRestrictiveLegendCount(uint256 tokenId) external view returns (uint256);
     function getEndorsementHistory(
         uint256 tokenId,
         uint256 index
@@ -132,9 +194,18 @@ interface ICyberCertPrinter is IERC721 {
         );
     function tokenURI(uint256 tokenId) external view returns (string memory);
     function certificateUri() external view returns (string memory);
+    function holderCount() external view returns (uint256);
     function totalSupply() external view returns (uint256);
     function tokenByIndex(uint256 index) external view returns (uint256);
     function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256);
+
+    // ERC721-like APIs for legal owner
     function legalOwnerOf(uint256 tokenId) external view returns (address);
+    function balanceOfLegalOwner(address owner) external view returns (uint256);
+    function tokenOfLegalOwnerByIndex(address owner, uint256 index) external view returns (uint256);
+
     function setTokenTransferable(uint256 tokenId, bool value) external;
+    function increaseUnitsReserved(uint256 tokenId, uint256 amount) external;
+    function decreaseUnitsReserved(uint256 tokenId, uint256 amount) external;
+    function unitsReserved(uint256 tokenId) external view returns (uint256);
 }

@@ -7,6 +7,7 @@ import {
     CertificateDetails,
     Endorsement,
     OwnerDetails,
+    RestrictiveLegend,
     SecurityClass,
     SecuritySeries
 } from "../src/storage/CyberCertPrinterStorage.sol";
@@ -44,6 +45,32 @@ contract UriBuilderWithUnits is IUriBuilder {
             );
     }
 
+    function buildCertificateUri(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        RestrictiveLegend[] memory,
+        CertificateDetails memory details,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) {
+        return
+            string.concat(
+                '{"unitsRepresented":"',
+                Strings.toString(details.unitsRepresented / 1e18),
+                '"}'
+            );
+    }
+
     function buildCertificateUriNotEncoded(
         string memory,
         string memory,
@@ -53,6 +80,32 @@ contract UriBuilderWithUnits is IUriBuilder {
         SecuritySeries,
         string memory,
         string[] memory,
+        CertificateDetails memory details,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) {
+        return
+            string.concat(
+                '{"unitsRepresented":"',
+                Strings.toString(details.unitsRepresented / 1e18),
+                '"}'
+            );
+    }
+
+    function buildCertificateUriNotEncoded(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        RestrictiveLegend[] memory,
         CertificateDetails memory details,
         Endorsement[] memory,
         OwnerDetails memory,
