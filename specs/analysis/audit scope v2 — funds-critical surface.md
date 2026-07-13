@@ -1,20 +1,20 @@
 # Audit Scope v2 — Funds-Critical Surface
 
-Expanded from the previous audit scope (RoundManager / DealManager / LexScroWLite / factories, ~1k SLOC) to cover every path that can move, custody, or release user funds and the securities delivered against them, as of `b4e7014` (2026-07-07).
+Expanded from the previous audit scope (RoundManager / DealManager / LexScroWLite / factories, ~1k SLOC) to cover every path that can move, custody, or release user funds and the securities delivered against them, as of `d0f0ae9` (2026-07-10, includes PR #117 issuance/acquisition timestamps and PR #118 CyberCertPrinter auth refactor).
 
-**Total scope: ~7,750 SLOC** (comment- and license-header-stripped). All SLOC figures below are measured, not estimated. Scripification / CyberScrip / recertification are deferred to a later audit (see "Deferred" section).
+**Total scope: ~9,100 SLOC** (comment- and license-header-stripped). All SLOC figures below are measured, not estimated. Includes scripification / CyberScrip / recertification.
 
 ## Contracts in scope
 
-### 1. Primary deal & round escrow (direct token custody) — 2,014 SLOC
+### 1. Primary deal & round escrow (direct token custody) — 2,011 SLOC
 
 | File | SLOC | Why |
 | --- | --- | --- |
 | src/DealManager.sol | 339 | Entry points, reentrancy guards, escrow receiver hooks, fee resolution, UUPS upgrade gate |
-| src/storage/DealManagerStorage.sol | 222 | Actual deal logic (delegatecall-linked): propose/sign/pay/finalize/void/refund |
+| src/storage/DealManagerStorage.sol | 221 | Actual deal logic (delegatecall-linked): propose/sign/pay/finalize/void/refund |
 | src/storage/LexScrowStorage.sol | 244 | Escrow engine (formerly LexScroWLite): pulls, holds, refunds, and pays out ERC20/721/1155; fee split |
 | src/RoundManager.sol | 400 | Round entry points: EOI submit/allocate/reject/recall, fee resolution |
-| src/storage/RoundManagerStorage.sol | 382 | Actual round logic (delegatecall-linked): createRound, submitEOI (pulls ERC20, optional LexChex mint payment), allocate (partial refund + finalize) |
+| src/storage/RoundManagerStorage.sol | 380 | Actual round logic (delegatecall-linked): createRound, submitEOI (pulls ERC20, optional LexChex mint payment), allocate (partial refund + finalize) |
 | src/libs/RoundLib.sol | 99 | Round struct + pricing/validation helpers used by allocation math |
 | src/DealManagerFactory.sol | 77 | Fee ratio, platform payable, integrator whitelist + fee shares, reference implementation (upgrade gate) |
 | src/storage/DealManagerFactoryStorage.sol | 45 | Storage for the above (BASIS_POINTS, fee params) |
@@ -35,22 +35,31 @@ Expanded from the previous audit scope (RoundManager / DealManager / LexScroWLit
 | --- | --- | --- |
 | src/CyberAgreementRegistry.sol | 922 | EIP-712 signature verification, delegation, signContractFor / signContractWithEscrow, finalizeContract, voidContractFor — finalize/void here directly triggers payouts and refunds in the managers |
 
-### 4. Securities layer (the assets escrow delivers) — 1,889 SLOC
+### 4. Securities layer (the assets escrow delivers; incl. scripification & recertification) — 3,194 SLOC
+
+Note: PR #118 moved most cert-admin logic (legends, void/unvoid, transferability, units reserved, timestamps) from IssuanceManager into CyberCertPrinter/CyberCertPrinterStorage behind a new `onlyIssuanceManagerOrAdmin` auth flow — the logic shifted between rows below but stays fully in scope. PR #117 added issuance/acquisition timestamps (Rule 144 holding-period inputs) and the look-through holder tally.
 
 | File | SLOC | Why |
 | --- | --- | --- |
-| src/IssuanceManager.sol | 486 | Only authorized caller of printers: cert creation/assignment, secondaryTransfer, unit reservation. (Excludes ~262 SLOC of scripify/scrip-admin/recertification entry points — deferred) |
-| src/storage/IssuanceManagerStorage.sol | 634 | The execute* bodies: executeSecondaryTransfer, cert creation/assignment, reserved-units enforcement. (Excludes ~698 SLOC of scrip vault/exec logic and recert approvals — deferred) |
-| src/CyberCertPrinter.sol | 338 | Certificate ERC721: escrow-aware `_update`, legal-owner tracking/indexes, unitsReserved, endorsements, void/unvoid/burn |
-| src/storage/CyberCertPrinterStorage.sol | 431 | Cert details, legal owner index maintenance/backfill, restrictive legends, transfer restriction plumbing |
+| src/IssuanceManager.sol | 580 | Only authorized caller of printers/scrips: cert creation/assignment, secondaryTransfer, beacon upgrades, scripify entry points (deployCyberScrip, scripifyCert, convertScripToCert), force transfer/burn/freeze, scrip ratio/minimum/whitelist admin, recertification approvals |
+| src/storage/IssuanceManagerStorage.sol | 1,198 | The execute* bodies: executeSecondaryTransfer, cert creation/assignment, executeDeployCyberScrip, executeScripifyCert, executeConvertScripToCert, scrip unit-vault accounting (deposit/redeem/withdraw), recert approval storage |
+| src/CyberCertPrinter.sol | 361 | Certificate ERC721: escrow-aware `_update`, legal-owner tracking/indexes, endorsements, new `onlyIssuanceManagerOrAdmin` auth surface |
+| src/storage/CyberCertPrinterStorage.sol | 610 | Cert details, legal owner index maintenance/backfill, unitsReserved enforcement, issue/acquisition timestamps (+ backfill), look-through holder tally, restrictive legends, `requireManagerOrAdmin` auth check |
+| src/CyberScrip.sol | 257 | Fractionalized security ERC20: restriction hooks, holder caps, freeze, forceTransfer/forceBurn |
+| src/storage/CyberScripStorage.sol | 22 | Storage for the above |
+| src/storage/extensions/FundInterestExtension.sol | 61 | FUND_INTEREST cert extension: encodes/decodes `FundInterestData` (acquisitionDate / tackedFromAcquisitionDate) that HoldingPeriodCondition reads to enforce Rule 144 holding periods on secondary settlements |
+| src/hooks/transfer/BaseTransferHook.sol | 32 | Transfer-restriction hook base consulted by CyberScrip `_update` / `canTransfer` |
+| src/hooks/transfer/ToggleTransferHook.sol | 43 | Global on/off transfer gate for scrip transfers |
+| src/hooks/transfer/WhitelistTransferHook.sol | 30 | Whitelist gating of scrip transfers |
 
-### 5. Conditions gating fund movement — 1,351 SLOC
+### 5. Conditions gating fund movement — 1,398 SLOC
 
 | File | SLOC | Why |
 | --- | --- | --- |
-| src/libs/conditions/secondary/* (18 files) | 1,120 | Threshold + closing conditions evaluated at postOffer / acceptOffer / finalize; includes GlobalKillCondition (kill switch), HolderCapCondition, TimeSettlementPeriodCondition, KYC/AML, Reg S, Rule 144, CFIUS, ERISA, etc. |
+| src/libs/conditions/secondary/* (18 files) | 1,092 | Threshold + closing conditions evaluated at postOffer / acceptOffer / finalize; includes GlobalKillCondition (kill switch), HolderCapCondition (reworked in PR #117 to use the new look-through tally), HoldingPeriodCondition (now reads acquisition timestamps), TimeSettlementPeriodCondition, KYC/AML, Reg S, Rule 144, CFIUS, ERISA, etc. |
 | src/libs/conditions/BaseSecondaryTradingCondition.sol | 23 | ISecondaryTradingCondition interface (ERC-165-checked at config time) |
 | src/libs/conditions/NonUSNationalityCondition.sol | 144 | ZK-passport-based primary-escrow condition |
+| src/libs/conditions/IssuerApprovalRecertificationCondition.sol | 75 | Issuer-approval gate on recertification (scrip → cert conversion) |
 | src/libs/conditions/lexchexCondition.sol | 30 | LexChex credential gate on primary escrow |
 | src/libs/conditions/OrCondition.sol | 24 | Condition combinator |
 | src/libs/conditions/baseCondition.sol | 10 | Base condition |
@@ -71,25 +80,12 @@ Expanded from the previous audit scope (RoundManager / DealManager / LexScroWLit
 | src/IssuanceManagerFactory.sol | 74 | Reference implementations for IssuanceManager, CyberCertPrinter, and CyberScrip — the upgrade gate for the entire securities layer (same trust role as the manager factories) |
 | src/storage/IssuanceManagerFactoryStorage.sol | 15 | Storage for the above |
 
-### Deferred to a later audit (scripification / recertification) — 1,314 SLOC saved
-
-Not live at launch. Note the reserved-units accounting itself stays in scope (it is shared with secondary trading), as does `_selectFirstLegalOwnedToken` (shared by recert and secondary transfers).
-
-| Item | SLOC |
-| --- | --- |
-| src/CyberScrip.sol (entire file) | 257 |
-| src/storage/CyberScripStorage.sol (entire file) | 22 |
-| src/IssuanceManager.sol — scrip/recert entry points (deployCyberScrip, scripifyCert, convertScripToCert, forceScripTransfer/Burn, freeze, scrip ratio/minimum/whitelist admin, recertification approvals) | 262 |
-| src/storage/IssuanceManagerStorage.sol — scrip/recert bodies (executeDeployCyberScrip, executeScripifyCert, executeConvertScripToCert, scrip unit-vault helpers, scrip state getters, recert approval storage) | 698 |
-| src/libs/conditions/IssuerApprovalRecertificationCondition.sol | 75 |
-
 ### Deliberately out of scope
 
 - `MetalexIssuerFeeHook.sol` (325 SLOC) — Uniswap v4 fee hook on CyberScrip pools; not currently used.
-- `src/hooks/transfer/*` — BaseTransferHook, ToggleTransferHook, WhitelistTransferHook (105 SLOC).
 - `lexchexMinter.sol` (327 SLOC) and the lexchex/lexchexBadge credential NFTs — credential mint-fee payments; not currently used.
 - `CyberShares.sol` / `CyberSharesStorage.sol` (490 SLOC) — not referenced by any other src contract; appears unwired.
-- Variant factories that only deploy/wire alternative stacks (PumpCorpFactory, ParentCoFactory, MetaDAOFactory, CyberCorpSingleFactory), URI/image builders, certificate extensions (metadata only), and interfaces other than ISecondaryTradeStorage.
+- Variant factories that only deploy/wire alternative stacks (PumpCorpFactory, ParentCoFactory, MetaDAOFactory, CyberCorpSingleFactory), URI/image builders, certificate extensions (metadata only — except FundInterestExtension, in scope in group 4), and interfaces other than ISecondaryTradeStorage.
 
 ## Core scope — fund-moving functions
 
@@ -118,8 +114,13 @@ Not live at launch. Note the reserved-units accounting itself stays in scope (it
 | src/CyberAgreementRegistry.sol | signContractFor / signContractWithEscrow | EIP-712 signature verification that authorizes escrow payment |
 | src/CyberAgreementRegistry.sol | finalizeContract / voidContractFor / isVoided | The gates managers rely on before paying out or refunding |
 | src/IssuanceManager.sol + IssuanceManagerStorage.sol | secondaryTransfer / executeSecondaryTransfer | Void/decrement seller cert, mint buyer cert against settlement metadata |
-| src/IssuanceManager.sol + IssuanceManagerStorage.sol | increaseUnitsReserved / decreaseUnitsReserved | Reservation accounting shared by secondary trades and scripify |
-| src/CyberCertPrinter.sol | _update / legalOwnerOf / endorseAndTransfer / increase-decreaseUnitsReserved / burn / voidCert | Legal-vs-token ownership, escrow-aware transfer, reservation enforcement |
+| src/IssuanceManager.sol + IssuanceManagerStorage.sol | scripifyCert / convertScripToCert (+ execute*) | Cert ↔ scrip vault: deposits, redemptions, unit-vault accounting, scripify whitelist/minimum gates, recert approvals |
+| src/IssuanceManager.sol | forceScripTransfer / forceScripBurn / setScripFrozen | Privileged movement of user securities |
+| src/CyberScrip.sol | _update / mint / burnFrom / forceTransfer / forceBurn / canTransfer | Scrip transfer restrictions, holder caps, freeze |
+| src/CyberCertPrinter.sol + CyberCertPrinterStorage.sol | increaseUnitsReserved / decreaseUnitsReserved (now direct, `onlyIssuanceManagerOrAdmin`) | Reservation accounting shared by secondary trades and scripify |
+| src/CyberCertPrinter.sol | _update / legalOwnerOf / endorseAndTransfer / burn / voidCert | Legal-vs-token ownership, escrow-aware transfer, reservation enforcement |
+| src/storage/CyberCertPrinterStorage.sol | setIssue/AcquisitionTimestamp / updateTackedFromAcquisitionDate / backfillAcquisitionTimestamp | Holding-period inputs consumed by Rule 144 / HoldingPeriod conditions that gate secondary settlements |
+| src/storage/CyberCertPrinterStorage.sol | requireManagerOrAdmin / _countLot / _uncountLot / resyncHolder(s) / backfillLookThroughTally | New auth gate for all cert-admin calls; look-through holder tally consumed by HolderCapCondition |
 | src/DealManagerFactory.sol | setDefaultFeeRatio / setPlatformPayable / setIntegrator / setRefImplementation | Fee parameters and upgrade gate trusted by every DealManager |
 | src/CyberCorpFactory.sol | deployCyberCorp / deployCyberCorpAndCreateOffer / deployCyberCorpAndCreateRound / deployAndInitializeRoundManager | Wires companyPayable, manager addresses, and auth grants that every subsequent fund flow trusts |
 
@@ -127,14 +128,13 @@ Not live at launch. Note the reserved-units accounting itself stays in scope (it
 
 | Group | SLOC |
 | --- | --- |
-| 1. Primary deal & round escrow | 2,014 |
+| 1. Primary deal & round escrow | 2,011 |
 | 2. Secondary trading | 699 |
 | 3. Agreement registry | 922 |
-| 4. Securities layer | 1,889 |
-| 5. Conditions | 1,351 |
+| 4. Securities layer (incl. scripification & recertification) | 3,194 |
+| 5. Conditions | 1,398 |
 | 6. Payment-adjacent periphery | 322 |
 | 7. Deployment & wiring trust root | 551 |
-| **Core total** | **7,748** |
-| Deferred: scripification / recertification | −1,314 |
+| **Core total** | **9,097** |
 
-If the budget needs further trimming toward 7k, the best remaining cuts are the long tail of secondary conditions beyond GlobalKill / HolderCap / TimeSettlementPeriod / AgreementSigned (−~900) or group 7 if deployment wiring is considered operationally verified (−551). We recommend keeping groups 1–4 intact — they are a single connected custody system and the delegatecall-linked library structure means vulnerabilities compose across file boundaries.
+If the budget needs trimming, the best cuts (in order) are: scripification / recertification if it will not be live at launch (−1,314: CyberScrip + CyberScripStorage, the scrip/recert portions of IssuanceManager and IssuanceManagerStorage, and IssuerApprovalRecertificationCondition), the long tail of secondary conditions beyond GlobalKill / HolderCap / TimeSettlementPeriod / AgreementSigned (−~900), or group 7 if deployment wiring is considered operationally verified (−551). We recommend keeping the escrow/custody core (groups 1–3 plus the cert layer) intact — it is a single connected custody system and the delegatecall-linked library structure means vulnerabilities compose across file boundaries.
