@@ -68,6 +68,15 @@ library LeXcheXBadgeRender {
                             '{"trait_type": "Jurisdiction", "value": "',
                             cred.investorJurisdiction,
                             '"},',
+                            bytes(cred.regulatoryJurisdiction).length > 0
+                                ? string(
+                                    abi.encodePacked(
+                                        '{"trait_type": "Regulatory Jurisdiction", "value": "',
+                                        cred.regulatoryJurisdiction,
+                                        '"},'
+                                    )
+                                )
+                                : "",
                             '{"trait_type": "Status", "value": "',
                             valid ? "Valid" : "Invalid",
                             '"},',
@@ -122,6 +131,16 @@ library LeXcheXBadgeRender {
                 cred.investorJurisdiction,
                 "</text>",
                 '<rect x="380" y="363" width="470px" height="5px" fill="#f2f2f2" opacity=".24"></rect>',
+                bytes(cred.regulatoryJurisdiction).length > 0
+                    ? string(
+                        abi.encodePacked(
+                            '<text x="150" y="405" font-family="Georgia" font-size="26" fill="#f2f2f2" opacity=".6">REGULATORY</text>',
+                            '<text x="495" y="405" font-family="Georgia" font-size="30" fill="url(#textGrad)">',
+                            cred.regulatoryJurisdiction,
+                            "</text>"
+                        )
+                    )
+                    : "",
                 '<text x="150" y="450" font-family="Georgia" font-size="30" fill="#f2f2f2" opacity=".6">GOOD UNTIL</text>',
                 '<text x="495" y="440" font-family="Georgia" font-size="30" fill="url(#textGrad)">',
                 timestampToDate(cred.expiryDate),

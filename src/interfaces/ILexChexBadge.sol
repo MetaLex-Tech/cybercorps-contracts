@@ -13,6 +13,7 @@ interface ILexChexBadge is IERC5484 {
     function mint(address to, bytes32 categoryId, Credential memory cred) external returns (uint256 tokenId);
     function recertify(uint256 tokenId, Credential memory cred) external;
     function updateAttributes(uint256 tokenId, bytes2 usState, uint32 beneficialOwnerCount) external;
+    function setRegulatoryJurisdiction(uint256 tokenId, string calldata jurisdiction) external;
     function void(uint256 tokenId, string memory reason) external;
     function burn(uint256 tokenId) external;
 
@@ -33,8 +34,10 @@ interface ILexChexBadge is IERC5484 {
     function getUsState(address owner) external view returns (bytes2);
     function getBeneficialOwnerCount(address owner) external view returns (uint32);
     function getInvestorJurisdiction(address owner) external view returns (string memory);
-    /// @notice True when the owner's most recent valid credential marks them a U.S. investor. Sole home
-    /// for the jurisdiction rule so consumers don't reimplement it.
+    /// @notice §3(c)(1)(A) look-through classification (empty when unset); decoupled from investorJurisdiction.
+    function getRegulatoryJurisdiction(address owner) external view returns (string memory);
+    /// @notice True when the owner counts as a U.S. investor for the ICA look-through. Conservative: U.S. if
+    /// either the regulatory classification or the physical investorJurisdiction is U.S. Sole home for the rule.
     function isUSInvestor(address owner) external view returns (bool);
 
     /// @notice Seasoning reference (§11.1B): earliest valid issuance of the given kind; 0 when none.

@@ -1035,6 +1035,155 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.usLookThroughHolderCount(), 5);
     }
 
+    function test_LookThrough_ResyncHoldersBatchReconcilesEach() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setUs(investor, true);
+        b.setBo(recipient, 2);
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, recipient, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 5); // 3 (US) + 2
+        assertEq(printer.usLookThroughHolderCount(), 3);
+
+        // Both re-credentialed: investor's weight falls and leaves the US subtotal; recipient's weight rises.
+        b.setBo(investor, 1);
+        b.setUs(investor, false);
+        b.setBo(recipient, 4);
+        address[] memory owners = new address[](2);
+        owners[0] = investor;
+        owners[1] = recipient;
+        printer.resyncHolders(owners);
+        assertEq(printer.lookThroughHolderCount(), 5); // 1 + 4
+        assertEq(printer.usLookThroughHolderCount(), 0);
+    }
+
+    function test_LookThrough_ResyncNonUsToUsMovesIntoSubtotal() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 2); // foreign at mint
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 2);
+        assertEq(printer.usLookThroughHolderCount(), 0);
+
+        b.setUs(investor, true); // re-credentialed as US-resident
+        printer.resyncHolder(investor);
+        assertEq(printer.lookThroughHolderCount(), 2);
+        assertEq(printer.usLookThroughHolderCount(), 2);
+    }
+
+    // A voided lot contributes to neither owner's tally, so transferring it moves the legal-owner enumeration
+    // while the look-through totals stay put — the one place the two accounting systems diverge.
+    function test_LookThrough_VoidedCertTransferMovesOwnerNotTally() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setUs(investor, true);
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 3);
+
+        _void(1);
+        assertEq(printer.lookThroughHolderCount(), 0);
+        assertFalse(printer.isLegalHolder(investor));
+
+        vm.prank(address(issuanceManager));
+        printer.setGlobalTransferable(true);
+        vm.prank(investor);
+        printer.addEndorsement(1, _endorsement(investor, recipient));
+        vm.prank(investor);
+        printer.transferFrom(investor, recipient, 1);
+
+        // Enumeration follows the move …
+        assertEq(printer.legalOwnerOf(1), recipient);
+        assertEq(printer.balanceOfLegalOwner(investor), 0);
+        assertEq(printer.balanceOfLegalOwner(recipient), 1);
+        // … the tally does not, and neither party is a live holder via this lot.
+        assertEq(printer.lookThroughHolderCount(), 0);
+        assertEq(printer.usLookThroughHolderCount(), 0);
+        assertFalse(printer.isLegalHolder(recipient));
+    }
+
+    function test_LookThrough_BurnVoidedCertIsSafe() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 2);
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 2);
+
+        _void(1); // already uncounts the lot
+        assertEq(printer.lookThroughHolderCount(), 0);
+
+        _burnCert(1); // burn must not double-drop or underflow the already-uncounted lot
+        assertEq(printer.lookThroughHolderCount(), 0);
+        assertFalse(printer.isLegalHolder(investor));
+        assertEq(printer.balanceOfLegalOwner(investor), 0);
+    }
+
+    // Live burn (no void first) of a US holder: burning a non-last lot leaves the tally untouched; burning
+    // the last lot drops the holder and their US subtotal contribution.
+    function test_LookThrough_LiveBurnUsHolderNonLastThenLastLot() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 4);
+        b.setUs(investor, true);
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, investor, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 4); // one holder, weight 4, two live lots
+        assertEq(printer.usLookThroughHolderCount(), 4);
+
+        _burnCert(1); // non-last lot: holder stays, tally unchanged
+        assertEq(printer.lookThroughHolderCount(), 4);
+        assertEq(printer.usLookThroughHolderCount(), 4);
+        assertTrue(printer.isLegalHolder(investor));
+
+        _burnCert(2); // last live lot: holder drops out of both totals
+        assertEq(printer.lookThroughHolderCount(), 0);
+        assertEq(printer.usLookThroughHolderCount(), 0);
+        assertFalse(printer.isLegalHolder(investor));
+    }
+
+    // A single transfer drops the source below its last live lot and gives the destination its first,
+    // reassigning weight (and the US subtotal) between two holders in one call.
+    function test_LookThrough_TransferReassignsWeightBetweenHolders() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 5);
+        b.setUs(investor, true);
+        b.setBo(recipient, 3); // foreign
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 5);
+        assertEq(printer.usLookThroughHolderCount(), 5);
+
+        vm.prank(address(issuanceManager));
+        printer.setGlobalTransferable(true);
+        vm.prank(investor);
+        printer.addEndorsement(1, _endorsement(investor, recipient));
+        vm.prank(investor);
+        printer.transferFrom(investor, recipient, 1);
+
+        assertEq(printer.lookThroughHolderCount(), 3); // −5 investor, +3 recipient
+        assertEq(printer.usLookThroughHolderCount(), 0);
+        assertFalse(printer.isLegalHolder(investor));
+        assertTrue(printer.isLegalHolder(recipient));
+        assertEq(printer.legalOwnerOf(1), recipient);
+    }
+
+    // Feeder-classification policy: a feeder with any US beneficial owner is classified regulatory-US and all
+    // its BOs count as US-resident; a wholly-non-US feeder contributes to the total only. No mixed feeders,
+    // so the all-or-nothing US tally is exact.
+    function test_LookThrough_ClassifiedFeedersCountWholesale() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 10);
+        b.setUs(investor, true); // regulatory-US feeder (>=1 US beneficial owner)
+        b.setBo(recipient, 6);
+        b.setUs(recipient, false); // wholly-non-US feeder
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, recipient, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 16); // 10 + 6
+        assertEq(printer.usLookThroughHolderCount(), 10); // only the US-classified feeder's BOs
+    }
+
     function _mintCert(
         uint256 tokenId,
         address to,

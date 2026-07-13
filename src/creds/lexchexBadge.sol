@@ -82,6 +82,7 @@ contract LeXcheXBadge is
     event CredentialIssued(address indexed owner, uint256 indexed tokenId, bytes32 indexed categoryId, Credential cred);
     event CredentialRecertified(address indexed owner, uint256 indexed tokenId, Credential cred);
     event CredentialAttributesUpdated(uint256 indexed tokenId, bytes2 usState, uint32 beneficialOwnerCount);
+    event CredentialRegulatoryJurisdictionUpdated(uint256 indexed tokenId, string regulatoryJurisdiction);
     event CredentialVoided(address indexed owner, uint256 indexed tokenId, string reason);
     event CredentialBurned(address indexed owner, uint256 indexed tokenId);
 
@@ -195,6 +196,16 @@ contract LeXcheXBadge is
         cred.usState = usState;
         cred.beneficialOwnerCount = beneficialOwnerCount;
         emit CredentialAttributesUpdated(tokenId, usState, beneficialOwnerCount);
+    }
+
+    /// @notice Reclassify a credential's §3(c)(1)(A) look-through jurisdiction in place (e.g. a wholly-non-U.S.
+    /// feeder that admits its first U.S. beneficial owner flips to "US" without re-attesting the whole record).
+    /// @dev Pair with updateAttributes to refresh beneficialOwnerCount when the classification changes.
+    function setRegulatoryJurisdiction(uint256 tokenId, string calldata jurisdiction) external onlyAdmin {
+        Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
+        if (cred.issuanceDate == 0) revert LexChexBadge_TokenDoesNotExist();
+        cred.regulatoryJurisdiction = jurisdiction;
+        emit CredentialRegulatoryJurisdictionUpdated(tokenId, jurisdiction);
     }
 
     /// @notice Revocation: failed re-KYC, discovered bad-actor status, relocation without recertification,
@@ -312,11 +323,22 @@ contract LeXcheXBadge is
         return found ? LeXcheXBadgeStorage.getCredential(tokenId).investorJurisdiction : "";
     }
 
-    /// @notice True when the owner's credentialed jurisdiction marks them a U.S. investor. Single source
-    /// of truth for the rule (previously inlined in HolderCapCondition).
+    /// @notice §3(c)(1)(A) look-through classification from the owner's most recent valid credential; empty
+    /// when none. Decoupled from the physical investorJurisdiction (which CFIUS/blue-sky consume).
+    function getRegulatoryJurisdiction(address owner) public view returns (string memory) {
+        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, _ANY);
+        return found ? LeXcheXBadgeStorage.getCredential(tokenId).regulatoryJurisdiction : "";
+    }
+
+    /// @notice True when the owner is a U.S. investor for the ICA look-through count. Conservative: U.S. if
+    /// either the regulatory classification (so an entity with any U.S. beneficial owner counts as U.S.) or
+    /// the physical investorJurisdiction is U.S. — a U.S.-domiciled party can never be declassified out of the
+    /// count. Single source of truth for the rule.
     function isUSInvestor(address owner) public view returns (bool) {
-        bytes32 h = keccak256(bytes(getInvestorJurisdiction(owner)));
-        return h == keccak256("US") || h == keccak256("USA") || h == keccak256("United States");
+        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, _ANY);
+        if (!found) return false;
+        Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
+        return _isUSJurisdiction(cred.regulatoryJurisdiction) || _isUSJurisdiction(cred.investorJurisdiction);
     }
 
     /// @notice Seasoning reference for the UI (§11.1B): earliest valid issuance of the given kind.

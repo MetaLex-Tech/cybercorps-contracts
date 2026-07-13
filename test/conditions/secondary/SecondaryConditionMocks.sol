@@ -68,6 +68,7 @@ contract MockBadge {
     mapping(address => bytes2) internal usState;
     mapping(address => uint32) internal boCount;
     mapping(address => string) internal jurisdiction;
+    mapping(address => string) internal regulatoryJurisdiction;
 
     function _kindKey(address owner, CategoryKind kind, string memory filter) internal pure returns (bytes32) {
         return keccak256(abi.encode(owner, kind, filter));
@@ -91,6 +92,10 @@ contract MockBadge {
 
     function setInvestorJurisdiction(address owner, string memory j) external {
         jurisdiction[owner] = j;
+    }
+
+    function setRegulatoryJurisdiction(address owner, string memory j) external {
+        regulatoryJurisdiction[owner] = j;
     }
 
     function hasValidCredential(address owner, bytes32 categoryId) external view returns (bool) {
@@ -117,8 +122,16 @@ contract MockBadge {
         return jurisdiction[owner];
     }
 
+    function getRegulatoryJurisdiction(address owner) external view returns (string memory) {
+        return regulatoryJurisdiction[owner];
+    }
+
     function isUSInvestor(address owner) external view returns (bool) {
-        bytes32 h = keccak256(bytes(jurisdiction[owner]));
+        return _isUS(regulatoryJurisdiction[owner]) || _isUS(jurisdiction[owner]);
+    }
+
+    function _isUS(string memory j) private pure returns (bool) {
+        bytes32 h = keccak256(bytes(j));
         return h == keccak256("US") || h == keccak256("USA") || h == keccak256("United States");
     }
 }
