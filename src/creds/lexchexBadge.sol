@@ -152,6 +152,7 @@ contract LeXcheXBadge is
 
         cred.categoryId = categoryId;
         cred.issuanceDate = uint64(block.timestamp);
+        cred.lastUpdated = uint64(block.timestamp);
         if (cred.expiryDate == 0) {
             if (category.defaultValidityDuration == 0) revert LexChexBadge_InvalidValidityConfig();
             cred.expiryDate = uint64(block.timestamp) + category.defaultValidityDuration;
@@ -174,9 +175,10 @@ contract LeXcheXBadge is
         if (existing.issuanceDate == 0) revert LexChexBadge_TokenDoesNotExist();
         CredentialCategory storage category = LeXcheXBadgeStorage.getCategory(existing.categoryId);
 
-        // Preserve the seasoning anchor and category link
+        // Preserve the seasoning anchor and category link; bump the recency key
         cred.categoryId = existing.categoryId;
         cred.issuanceDate = existing.issuanceDate;
+        cred.lastUpdated = uint64(block.timestamp);
         if (cred.expiryDate == 0) {
             if (category.defaultValidityDuration == 0) revert LexChexBadge_InvalidValidityConfig();
             cred.expiryDate = uint64(block.timestamp) + category.defaultValidityDuration;
@@ -195,6 +197,7 @@ contract LeXcheXBadge is
         if (cred.issuanceDate == 0) revert LexChexBadge_TokenDoesNotExist();
         cred.usState = usState;
         cred.beneficialOwnerCount = beneficialOwnerCount;
+        cred.lastUpdated = uint64(block.timestamp);
         emit CredentialAttributesUpdated(tokenId, usState, beneficialOwnerCount);
     }
 
@@ -205,6 +208,7 @@ contract LeXcheXBadge is
         Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
         if (cred.issuanceDate == 0) revert LexChexBadge_TokenDoesNotExist();
         cred.regulatoryJurisdiction = jurisdiction;
+        cred.lastUpdated = uint64(block.timestamp);
         emit CredentialRegulatoryJurisdictionUpdated(tokenId, jurisdiction);
     }
 
@@ -214,6 +218,7 @@ contract LeXcheXBadge is
         Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
         if (cred.issuanceDate == 0) revert LexChexBadge_TokenDoesNotExist();
         cred.voided = reason;
+        cred.lastUpdated = uint64(block.timestamp);
         emit CredentialVoided(_requireOwned(tokenId), tokenId, reason);
     }
 
@@ -433,7 +438,9 @@ contract LeXcheXBadge is
     uint8 private constant _HAS_US_STATE = 1;
     uint8 private constant _HAS_BO_COUNT = 2;
 
-    /// @dev Most recent (highest issuanceDate) valid credential of `owner` carrying the requested attribute
+    /// @dev Most recently attested (highest lastUpdated) valid credential of `owner` carrying the requested
+    /// attribute; ties broken on the higher tokenId so the result is deterministic and burn-order independent.
+    /// Ranks on lastUpdated, not issuanceDate, so an in-place correction or recertification wins selection.
     function _mostRecentValidWith(address owner, uint8 attribute) internal view returns (uint256 tokenId, bool found) {
         uint64 latest = 0;
         uint256 balance = balanceOf(owner);
@@ -443,8 +450,8 @@ contract LeXcheXBadge is
             Credential storage cred = LeXcheXBadgeStorage.getCredential(candidate);
             if (attribute == _HAS_US_STATE && cred.usState == bytes2(0)) continue;
             if (attribute == _HAS_BO_COUNT && cred.beneficialOwnerCount == 0) continue;
-            if (!found || cred.issuanceDate >= latest) {
-                latest = cred.issuanceDate;
+            if (!found || cred.lastUpdated > latest || (cred.lastUpdated == latest && candidate > tokenId)) {
+                latest = cred.lastUpdated;
                 tokenId = candidate;
                 found = true;
             }

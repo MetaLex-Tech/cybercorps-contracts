@@ -67,6 +67,7 @@ struct Credential {
     bytes32 evidenceHash;               // hash of the offchain diligence record (audit anchor)
     bytes extensionData;                // forward-compatible blob for future attributes
     string regulatoryJurisdiction;      // §3(c)(1)(A) look-through classification, decoupled from physical investorJurisdiction (an entity with any U.S. beneficial owner is classified "US"); empty => falls back to investorJurisdiction
+    uint64 lastUpdated;                 // last record mutation (mint/recertify/attribute edit/void); recency key for _mostRecentValidWith, distinct from the issuanceDate seasoning anchor
 }
 
 /// @title LeXcheXBadgeStorage - namespaced storage for the LeXcheXBadge credential registry
