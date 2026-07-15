@@ -16,7 +16,13 @@ import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC5484} from "../src/interfaces/IERC5484.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {LeXcheXBadge} from "../src/creds/lexchexBadge.sol";
-import {CategoryKind, Credential, CredentialCategory} from "../src/creds/storage/lexchexBadgeStorage.sol";
+import {
+    CategoryKind,
+    Credential,
+    CredentialCategory,
+    ATTR_INVESTOR_JURISDICTION,
+    ATTR_US_STATE
+} from "../src/creds/storage/lexchexBadgeStorage.sol";
 import {FundInterestData} from "../src/storage/extensions/FundInterestExtension.sol";
 import {
     AcceptOfferParams,
@@ -594,6 +600,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     }
 
     function _createCategory(bytes32 id, CategoryKind kind) internal {
+        bool isAnchor = kind == CategoryKind.KYC_AML; // KYC is the residence/identity anchor for these tests
         CredentialCategory memory c = CredentialCategory({
             name: "cat",
             description: "",
@@ -605,7 +612,8 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
             burnAuth: IERC5484.BurnAuth.OwnerOnly,
             scope: address(0),
             active: true,
-            exists: true
+            exists: true,
+            governedAttributes: isAnchor ? (ATTR_INVESTOR_JURISDICTION | ATTR_US_STATE) : 0
         });
         vm.prank(owner);
         badge.createCategory(id, c);

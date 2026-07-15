@@ -4,13 +4,43 @@ pragma solidity 0.8.28;
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {LeXcheXBadge} from "../src/creds/lexchexBadge.sol";
-import {CategoryKind, Credential, CredentialCategory} from "../src/creds/storage/lexchexBadgeStorage.sol";
+import {
+    CategoryKind,
+    Credential,
+    CredentialCategory,
+    ATTR_INVESTOR_JURISDICTION,
+    ATTR_REGULATORY_JURISDICTION,
+    ATTR_US_STATE,
+    ATTR_BO_COUNT
+} from "../src/creds/storage/lexchexBadgeStorage.sol";
 import {IERC5484} from "../src/interfaces/IERC5484.sol";
 import {Test} from "forge-std/Test.sol";
 
-/// @notice Unit tests for the LeXcheXBadge credential reads, focused on the `_mostRecentValidWith` selection
-/// behind getUsState / getBeneficialOwnerCount / getInvestorJurisdiction / getRegulatoryJurisdiction /
-/// isUSInvestor
+/// @notice Unit tests for the LeXcheXBadge credential reads — the credentialing layer every cyberTRADE
+/// compliance condition and the offer-visibility UI read from.
+///
+/// Key invariants / assumptions this suite guards (legal / economic intent, not mechanics):
+///  1. Validity is the master gate: a wallet is eligible only while it holds a credential that is issued,
+///     unexpired, and not voided. Expiry forces re-attestation; a void (sanctions hit, failed re-KYC,
+///     discovered bad actor) locks the holder out at once, regardless of how recent it is.
+///  2. Current standing governs, per attribute: each attribute read reflects the holder's most-recent valid
+///     credential from a credential type authoritative for that attribute, so corrections and recertifications
+///     take effect immediately and stale facts never override fresher ones.
+///  3. Eligibility filters on what is attested, not which credential: any valid credential of the required
+///     kind (and investor type, where relevant) admits — the specific instance is interchangeable.
+///  4. Whitelist and syndicate entitlements are scoped to a single SPV; membership never leaks to another SPV.
+///  5. U.S. status is conservative: a holder is U.S. if either its §3(c)(1)(A) look-through classification or
+///     its physical domicile is U.S., and a U.S.-domiciled party can never be declassified out of the count.
+///  6. Look-through classification is decoupled from physical domicile: a non-U.S. feeder with any U.S.
+///     beneficial owner counts as U.S. for the ICA look-through while its domicile stays foreign for
+///     CFIUS / blue-sky.
+///  7. Recertification preserves the seasoning anchor (original issuance date), so a routine refresh does not
+///     reset time-based eligibility.
+///  8. Credentials are soulbound to the verified wallet: non-transferable, no delegation.
+///  9. Attribute authority is per credential type: only a type the issuer designates as a source of truth for
+///     an attribute can answer it, so an unrelated credential (e.g. a whitelist) neither answers it nor shadows
+///     one that does. The newest authoritative credential is taken verbatim, so a blank field is a deliberate
+///     clear (an entity leaving the U.S. clears its state), never a silent gap.
 contract LeXcheXBadgeTest is Test {
     bytes32 constant CAT_KYC = keccak256("cat.kyc");
     bytes32 constant CAT_ACCREDITED = keccak256("cat.accredited");
@@ -30,6 +60,28 @@ contract LeXcheXBadgeTest is Test {
         );
         _createCategory(CAT_KYC, CategoryKind.KYC_AML);
         _createCategory(CAT_ACCREDITED, CategoryKind.ACCREDITED_INVESTOR);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Single live credential — baseline: every read resolves to the one record
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // A holder with one live credential: every read resolves to that credential's facts, across every attribute
+    // (jurisdiction, regulatory, U.S. state, beneficial-owner count).
+    function test_SingleLiveCredential_AllSelectorsResolveToIt() public {
+        address holder = address(0xB0B5);
+        Credential memory c = _baseCred("US", bytes2("CA"));
+        c.investorName = "Domestic Fund LP";
+        c.investorType = "Fund";
+        c.beneficialOwnerCount = 4;
+        c.regulatoryJurisdiction = "US";
+        _mint(holder, CAT_ACCREDITED, c);
+
+        assertEq(badge.getUsState(holder), bytes2("CA"));
+        assertEq(uint256(badge.getBeneficialOwnerCount(holder)), 4);
+        assertEq(badge.getInvestorJurisdiction(holder), "US");
+        assertEq(badge.getRegulatoryJurisdiction(holder), "US");
+        assertTrue(badge.isUSInvestor(holder));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -117,6 +169,28 @@ contract LeXcheXBadgeTest is Test {
         assertEq(badge.getRegulatoryJurisdiction(feeder), "US");
     }
 
+    // recertify bumps the recency key (lastUpdated) while preserving issuanceDate: a refreshed OLDER-issuance
+    // credential wins selection over an untouched newer one, and its seasoning anchor is not reset.
+    function test_Recertify_RefreshesRecencyForSelection() public {
+        address feeder = address(0xFEED04);
+        uint256 older = _mintCred(feeder, CAT_ACCREDITED, "KY", bytes2(0)); // credential A
+        uint64 seasonedAt = badge.getCredential(older).issuanceDate;
+
+        vm.warp(block.timestamp + 30 days);
+        _mintCred(feeder, CAT_ACCREDITED, "KY", bytes2(0)); // credential B: later issuance, untouched
+        assertFalse(badge.isUSInvestor(feeder));
+
+        vm.warp(block.timestamp + 1 days);
+        Credential memory refreshed = _baseCred("KY", bytes2(0));
+        refreshed.regulatoryJurisdiction = "US";
+        vm.prank(owner);
+        badge.recertify(older, refreshed); // bumps A's lastUpdated past B, preserves issuanceDate
+
+        assertTrue(badge.isUSInvestor(feeder));
+        assertEq(badge.getRegulatoryJurisdiction(feeder), "US");
+        assertEq(uint256(badge.getCredential(older).issuanceDate), uint256(seasonedAt));
+    }
+
     // Ties on lastUpdated (two credentials attested in the same block) resolve deterministically to the higher
     // tokenId, independent of enumeration order — the read cannot flip based on unrelated burns.
     function test_UsState_TieBreaksOnHigherTokenId() public {
@@ -127,6 +201,38 @@ contract LeXcheXBadgeTest is Test {
         uint256[] memory ids = badge.getTokenIdsByOwner(holder);
         assertGt(ids[1], ids[0]);
         assertEq(badge.getUsState(holder), bytes2("TX"));
+    }
+
+    // A newer credential of a category that does NOT govern regulatory (here KYC) cannot shadow the look-through
+    // classification a governing credential attests — the resolution of #14.
+    function test_RegulatoryJurisdiction_UnrelatedCategoryDoesNotShadow() public {
+        address feeder = address(0xFEED05);
+        Credential memory c = _baseCred("KY", bytes2(0));
+        c.regulatoryJurisdiction = "US";
+        _mint(feeder, CAT_ACCREDITED, c); // accredited governs regulatory
+        assertTrue(badge.isUSInvestor(feeder));
+
+        vm.warp(block.timestamp + 1 days);
+        _mintCred(feeder, CAT_KYC, "KY", bytes2(0)); // newer, but KYC does not govern regulatory
+
+        assertEq(badge.getRegulatoryJurisdiction(feeder), "US"); // preserved
+        assertTrue(badge.isUSInvestor(feeder));
+    }
+
+    // Within a governing category, the newest credential is authoritative verbatim: a later governing credential
+    // that omits the classification clears it (a deliberate reclassification, not a silent gap).
+    function test_RegulatoryJurisdiction_ClearedByNewerGoverningCredential() public {
+        address feeder = address(0xFEED06);
+        Credential memory c = _baseCred("KY", bytes2(0));
+        c.regulatoryJurisdiction = "US";
+        _mint(feeder, CAT_ACCREDITED, c);
+        assertTrue(badge.isUSInvestor(feeder));
+
+        vm.warp(block.timestamp + 1 days);
+        _mintCred(feeder, CAT_ACCREDITED, "KY", bytes2(0)); // newer governing credential, regulatory empty
+
+        assertEq(badge.getRegulatoryJurisdiction(feeder), ""); // cleared
+        assertFalse(badge.isUSInvestor(feeder));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -143,31 +249,30 @@ contract LeXcheXBadgeTest is Test {
         assertFalse(badge.isUSInvestor(nobody));
     }
 
-    // _HAS_US_STATE skips stateless credentials: a non-US holder reports no state, and a more-recent stateless
-    // credential does not shadow an older stateful one.
-    function test_GetUsState_SkipsStatelessCredential() public {
-        address nonUs = address(0xA1);
-        _mintCred(nonUs, CAT_KYC, "KY", bytes2(0));
-        assertEq(badge.getUsState(nonUs), bytes2(0));
-
-        address mixed = address(0xA2);
-        _mintCred(mixed, CAT_KYC, "US", bytes2("NY")); // older, carries state
+    // A holder that relocates out of the U.S. clears its usState: the newest state-governing credential is
+    // non-U.S. and carries no state, so getUsState reports none rather than resurfacing the stale U.S. state.
+    function test_GetUsState_ClearedByNewerNonUsCredential() public {
+        address holder = address(0xA2);
+        _mintCred(holder, CAT_KYC, "US", bytes2("NY")); // older: U.S. resident, state NY
         vm.warp(block.timestamp + 1 days);
-        _mintCred(mixed, CAT_ACCREDITED, "KY", bytes2(0)); // newer, no state → skipped
-        assertEq(badge.getUsState(mixed), bytes2("NY"));
+        _mintCred(holder, CAT_KYC, "KY", bytes2(0));     // newer: relocated to KY, no state
+
+        assertEq(badge.getUsState(holder), bytes2(0));
+        assertEq(badge.getInvestorJurisdiction(holder), "KY");
+        assertFalse(badge.isUSInvestor(holder));
     }
 
-    // _HAS_BO_COUNT skips zero-count credentials: a more-recent count-0 credential does not shadow an older
-    // credential that actually carries the §3(c)(1)(A) look-through count.
-    function test_GetBeneficialOwnerCount_SkipsZeroCount() public {
+    // A newer credential of a category that does NOT govern the look-through count (here KYC) cannot shadow the
+    // §3(c)(1)(A) count a governing (accredited entity) credential attests.
+    function test_GetBeneficialOwnerCount_NotShadowedByNonGoverningCategory() public {
         address entity = address(0xB1);
         Credential memory withCount = _baseCred("US", bytes2("CA"));
         withCount.investorType = "Fund";
         withCount.beneficialOwnerCount = 5;
-        _mint(entity, CAT_ACCREDITED, withCount); // older, count 5
+        _mint(entity, CAT_ACCREDITED, withCount); // older, count 5, governs BO count
 
         vm.warp(block.timestamp + 1 days);
-        _mintCred(entity, CAT_KYC, "US", bytes2("CA")); // newer, count 0 → skipped
+        _mintCred(entity, CAT_KYC, "US", bytes2("CA")); // newer, but KYC does not govern BO count
 
         assertEq(uint256(badge.getBeneficialOwnerCount(entity)), 5);
     }
@@ -308,6 +413,13 @@ contract LeXcheXBadgeTest is Test {
         c.defaultValidityDuration = 3650 days;
         c.burnAuth = IERC5484.BurnAuth.OwnerOnly;
         c.scope = scope;
+        // Governance map for these tests: KYC_AML is the identity/residence anchor (jurisdiction + usState);
+        // ACCREDITED_INVESTOR carries the full entity profile; whitelist/syndicate/custom govern nothing.
+        if (kind == CategoryKind.KYC_AML) {
+            c.governedAttributes = ATTR_INVESTOR_JURISDICTION | ATTR_US_STATE;
+        } else if (kind == CategoryKind.ACCREDITED_INVESTOR) {
+            c.governedAttributes = ATTR_INVESTOR_JURISDICTION | ATTR_REGULATORY_JURISDICTION | ATTR_US_STATE | ATTR_BO_COUNT;
+        }
         vm.prank(owner);
         badge.createCategory(id, c);
     }
