@@ -22,3 +22,5 @@ docs/
 /.idea/
 /.vscode/
 /.claude/
+
+/tmp/

@@ -10,7 +10,7 @@ import {Test} from "forge-std/Test.sol";
 
 /// @notice Unit tests for the LeXcheXBadge credential reads, focused on the `_mostRecentValidWith` selection
 /// behind getUsState / getBeneficialOwnerCount / getInvestorJurisdiction / getRegulatoryJurisdiction /
-/// isUSInvestor. Coverage tracked in `specs/analysis/LeXcheXBadge — _mostRecentValidWith coverage map.md`.
+/// isUSInvestor
 contract LeXcheXBadgeTest is Test {
     bytes32 constant CAT_KYC = keccak256("cat.kyc");
     bytes32 constant CAT_ACCREDITED = keccak256("cat.accredited");
@@ -202,15 +202,112 @@ contract LeXcheXBadgeTest is Test {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Category-gating reads (Matrix A)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // hasValidCredential resolves an EXACT category: the right id admits, a valid credential of a different
+    // category does not, and an uncredentialed wallet is rejected.
+    function test_HasValidCredential_ExactCategoryMatch() public {
+        address holder = address(0xE1);
+        _mintCred(holder, CAT_KYC, "US", bytes2("CA"));
+        assertTrue(badge.hasValidCredential(holder, CAT_KYC));
+        assertFalse(badge.hasValidCredential(holder, CAT_ACCREDITED));
+        assertFalse(badge.hasValidCredential(address(0xDEAD), CAT_KYC));
+    }
+
+    // The gate closes when the credential lapses: expiry and void both deny admission (the isValid mechanism
+    // is category-agnostic, so this stands in for every kind's deny path).
+    function test_HasValidCredential_DeniedWhenExpiredOrVoided() public {
+        address expired = address(0xE2);
+        Credential memory shortLived = _baseCred("US", bytes2("CA"));
+        shortLived.expiryDate = uint64(block.timestamp + 1 days);
+        _mint(expired, CAT_KYC, shortLived);
+        vm.warp(block.timestamp + 2 days);
+        assertFalse(badge.hasValidCredential(expired, CAT_KYC));
+
+        address voided = address(0xE3);
+        uint256 id = _mintCred(voided, CAT_KYC, "US", bytes2("CA"));
+        vm.prank(owner);
+        badge.void(id, "revoked");
+        assertFalse(badge.hasValidCredential(voided, CAT_KYC));
+    }
+
+    // hasValidCredentialOfKind matches ANY category of the kind — the whole point of kind vs categoryId: a
+    // second, differently-identified accredited category still satisfies an accredited gate, while a
+    // different kind (qualified purchaser) the holder lacks is rejected.
+    function test_HasValidCredentialOfKind_MatchesKindAcrossCategories() public {
+        bytes32 catAccreditedAlt = keccak256("cat.accredited.alt");
+        _createCategory(catAccreditedAlt, CategoryKind.ACCREDITED_INVESTOR);
+
+        address holder = address(0xE4);
+        _mintCred(holder, catAccreditedAlt, "US", bytes2("CA"));
+        assertTrue(badge.hasValidCredentialOfKind(holder, CategoryKind.ACCREDITED_INVESTOR, ""));
+        assertFalse(badge.hasValidCredentialOfKind(holder, CategoryKind.QUALIFIED_PURCHASER, ""));
+    }
+
+    // The investorType filter separates parameterizations that share a kind (e.g. accredited entity vs
+    // individual): an empty filter matches any type, a matching type admits, a non-matching type is rejected.
+    function test_HasValidCredentialOfKind_InvestorTypeFilter() public {
+        address fund = address(0xE5);
+        Credential memory c = _baseCred("US", bytes2("CA"));
+        c.investorType = "Fund";
+        _mint(fund, CAT_ACCREDITED, c);
+
+        assertTrue(badge.hasValidCredentialOfKind(fund, CategoryKind.ACCREDITED_INVESTOR, ""));
+        assertTrue(badge.hasValidCredentialOfKind(fund, CategoryKind.ACCREDITED_INVESTOR, "Fund"));
+        assertFalse(badge.hasValidCredentialOfKind(fund, CategoryKind.ACCREDITED_INVESTOR, "Individual"));
+    }
+
+    // hasValidWhitelistFor is scoped to a specific SPV: a whitelist minted for one SPV admits only that SPV's
+    // offers and never another's, and a SYNDICATE credential resolves the same scoped way.
+    function test_HasValidWhitelistFor_ScopedToSPV() public {
+        address spvA = address(0x5A);
+        address spvB = address(0x5B);
+
+        bytes32 whitelistA = keccak256("cat.wl.spvA");
+        _createScopedCategory(whitelistA, CategoryKind.SPV_WHITELIST, spvA);
+        address holder = address(0xE6);
+        _mintCred(holder, whitelistA, "KY", bytes2(0));
+        assertTrue(badge.hasValidWhitelistFor(holder, spvA));
+        assertFalse(badge.hasValidWhitelistFor(holder, spvB));
+
+        bytes32 syndicateB = keccak256("cat.syn.spvB");
+        _createScopedCategory(syndicateB, CategoryKind.SYNDICATE, spvB);
+        address member = address(0xE7);
+        _mintCred(member, syndicateB, "KY", bytes2(0));
+        assertTrue(badge.hasValidWhitelistFor(member, spvB));
+    }
+
+    // A non-whitelist credential (KYC) never grants SPV whitelist entitlement, even when valid.
+    function test_HasValidWhitelistFor_IgnoresNonWhitelistKinds() public {
+        address holder = address(0xE8);
+        _mintCred(holder, CAT_KYC, "US", bytes2("CA"));
+        assertFalse(badge.hasValidWhitelistFor(holder, address(0x5A)));
+    }
+
+    // hasValidLexCheX (v1-compatible) is true for any valid credential and false for an uncredentialed wallet.
+    function test_HasValidLexCheX_AnyValidCredential() public {
+        address holder = address(0xE9);
+        assertFalse(badge.hasValidLexCheX(holder));
+        _mintCred(holder, CAT_KYC, "US", bytes2("CA"));
+        assertTrue(badge.hasValidLexCheX(holder));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
 
     function _createCategory(bytes32 id, CategoryKind kind) internal {
+        _createScopedCategory(id, kind, address(0));
+    }
+
+    function _createScopedCategory(bytes32 id, CategoryKind kind, address scope) internal {
         CredentialCategory memory c;
         c.name = "cat";
         c.kind = kind;
         c.defaultValidityDuration = 3650 days;
         c.burnAuth = IERC5484.BurnAuth.OwnerOnly;
+        c.scope = scope;
         vm.prank(owner);
         badge.createCategory(id, c);
     }
