@@ -188,7 +188,7 @@ library SecondaryTradeStorage {
 
         // Resolve conditions from this DealManager's config (never from the caller): threshold = fund-specific
         // (§6) ++ exemption-specific (§5), closing = the default set. Both are snapshotted onto the offer so it is governed by the rules in
-        // effect at posting; the kill switch still bites later since GlobalKill reads live state internally.
+        // effect at posting; the kill switch still bites later since KillSwitchCondition reads live state internally.
         address[] memory resolvedThreshold = _resolveThresholdConditions(ds, params.exemptionPathway);
         address[] memory resolvedClosing = ds.closingConditions;
 

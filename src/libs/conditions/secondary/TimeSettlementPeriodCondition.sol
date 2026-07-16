@@ -9,7 +9,7 @@ import {SecondaryEscrow} from "../../../interfaces/ISecondaryTradeStorage.sol";
 /// @notice Deployed once, platform-wide; attached by default to every DealManager, with per-DealManager
 /// delay overrides. Structural defense against key-theft dumps: the enforced window between acceptance
 /// and finalization is the intervention window for the Compromised Credential Transfer voidness
-/// provision and the Global Kill. It is also the trigger the keeper waits on before auto-finalizing.
+/// provision and the kill switch. It is also the trigger the keeper waits on before auto-finalizing.
 /// Default delay is 86,400 seconds (24h) measured from acceptance (the unified pathway's start trigger —
 /// under this architecture the buyer's deposit is atomic with acceptance, so acceptance and deposit
 /// triggers coincide). Future QMS parameterization (Addendum E): a 45-day delay measured from the

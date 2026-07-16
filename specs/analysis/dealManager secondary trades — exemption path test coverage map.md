@@ -9,7 +9,7 @@ Pathway → condition mapping is grounded in `cyberTRADE Exemption Pathways v3.5
 and §4.1.4 — consistent, same five pathways and same per-pathway conditions.
 
 **Every condition in the map is now a real implementation from `src/libs/conditions/secondary/` —
-no in-file mocks remain.** The closing set (`GlobalKillCondition`, `TimeSettlementPeriodCondition`)
+no in-file mocks remain.** The closing set (`KillSwitchCondition`, `TimeSettlementPeriodCondition`)
 is enforced for real on every pathway: each happy path warps past the 24h minimum settlement period
 between acceptance and finalization, and two dedicated tests exercise the closing conditions' own
 blocking behavior.
@@ -31,7 +31,7 @@ buyer per pathway. SPV-layer conditions apply to every pathway; pathway-layer co
 by `exemptionPathway`; closing conditions are evaluated at finalize (after a +24h warp to clear the
 settlement period).
 
-| Scenario (test fn)              | Pathway         | Buyer profile                            | Seller cert `acquisitionDate` | KYCAML | TaxInfo | HolderCap | ERISA | USState | Legion | AgreementSigned | HoldingPeriod | Accredited | QIB | NonUSPerson | RegSCompliance | Rule144Disc | §4a7Disc | LegalOpinion | GlobalKill | TimeSettlement |
+| Scenario (test fn)              | Pathway         | Buyer profile                            | Seller cert `acquisitionDate` | KYCAML | TaxInfo | HolderCap | ERISA | USState | Legion | AgreementSigned | HoldingPeriod | Accredited | QIB | NonUSPerson | RegSCompliance | Rule144Disc | §4a7Disc | LegalOpinion | KillSwitch | TimeSettlement |
 |---------------------------------|-----------------|------------------------------------------|-------------------------------|:------:|:-------:|:---------:|:-----:|:-------:|:------:|:---------------:|:-------------:|:----------:|:---:|:-----------:|:--------------:|:-----------:|:--------:|:------------:|:----------:|:--------------:|
 | `test_Rule144_HappyPath`        | RULE_144        | US individual, state CA                  | > 365 d ago                   |   ✓    |    ✓    |     ✓     |   ✓   |    ✓    |   ✓    |        ✓        |       ✓       |     —      |  —  |      —      |       —        |      ✓      |    —     |      —       |     ✓      |       ✓        |
 | `test_Section4a7_HappyPath`     | SECTION_4A7     | US **accredited**, CA                    | any                           |   ✓    |    ✓    |     ✓     |   ✓   |    ✓    |   ✓    |        ✓        |       —       |     ✓      |  —  |      —      |       —        |      —      |    ✓     |      —       |     ✓      |       ✓        |
@@ -40,15 +40,16 @@ settlement period).
 | `test_RegulationS_HappyPath`    | REGULATION_S    | **non-US person** (juris KY, no usState) | > compliance period ago       |   ✓    |    ✓    |     ✓     |   ○   |    ○    |   ✓    |        ✓        |       —       |     —      |  —  |      ✓      |       ✓        |      —      |    —     |      —       |     ✓      |       ✓        |
 
 **SPV-layer (all pathways):** KYCAML, TaxInfo, HolderCap, ERISA, USState, Legion, AgreementSigned.
-**Closing set (all):** GlobalKill, TimeSettlement.
-**Pathway-layer:** the columns between AgreementSigned and GlobalKill.
+**Closing set (all):** KillSwitch, TimeSettlement.
+**Pathway-layer:** the columns between AgreementSigned and KillSwitch.
 
 ## Closing-condition behavior tests
 
-| Test fn                                       | What it proves                                                                                                                                                                                                                     |
-|-----------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `test_GlobalKill_BlocksFinalize_UntilLowered` | Either admin raises unilaterally mid-deal → finalize reverts `SecondaryConditionsNotMet(globalKill)`; the proposer alone cannot confirm the lower (two-call, two-admin lowering); once the other admin confirms, finalize succeeds |
-| `test_TimeSettlement_BlocksEarlyFinalize`     | `finalizableAt == acceptance + 24h`; finalize before the window reverts `SecondaryConditionsNotMet(timeSettlement)`; after the warp it succeeds                                                                                    |
+| Test fn                                           | What it proves                                                                                                                                                                                                                                         |
+|---------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `test_KillSwitch_BlocksFinalize_UntilLowered`     | Platform-wide flag: either admin raises unilaterally mid-deal → finalize reverts `SecondaryConditionsNotMet(killSwitch)`; the proposer alone cannot confirm the lower (two-call, two-admin lowering); once the other admin confirms, finalize succeeds |
+| `test_SettlementKill_BlocksFinalize_UntilLowered` | Per-settlement flag: raising it blocks that agreement's finalize end-to-end; two-admin lower then clears it (cross-settlement isolation covered by the `KillSwitchCondition` unit suite)                                                               |
+| `test_TimeSettlement_BlocksEarlyFinalize`         | `finalizableAt == acceptance + 24h`; finalize before the window reverts `SecondaryConditionsNotMet(timeSettlement)`; after the warp it succeeds                                                                                                        |
 
 ## Condition → coverage
 
@@ -69,7 +70,7 @@ settlement period).
 | Rule144DisclosureCondition            |   ✓   | 144                            | SPV admin records `setDisclosurePackage(corp, uri, asOf)`; 16-month freshness policy                                                             |
 | Section4a7DisclosureCondition         |   ✓   | 4a7                            | package freshness (from posting) + buyer's acknowledgment-of-receipt signer value (from acceptance)                                              |
 | LegalOpinionCondition                 |   ✓   | 4a1½                           | GP records `recordGPSignOff(dm, offerId)` between post and accept, pre-approving the offer's settlements                                         |
-| GlobalKillCondition                   |   ✓   | all 5 (closing) + kill test    | plain singleton; two admin slots (MetaLeX + Legion), raise unilateral, lower two-call                                                            |
+| KillSwitchCondition                   |   ✓   | all 5 (closing) + kill tests   | plain singleton; two admin slots (MetaLeX + Legion), raise unilateral / lower two-call, at both platform-wide and per-settlement scope           |
 | TimeSettlementPeriodCondition         |   ✓   | all 5 (closing) + timing test  | 24h default from acceptance (reconstructed as `escrow.expiry − settlementWindow`); happy paths warp past                                         |
 | CFIUSCondition                        |   ✓   | none                           | implemented; optional per-SPV, out of scope for these happy paths                                                                                |
 | GPLPApprovalCondition                 |   ✓   | none                           | implemented; optional per-SPV, out of scope                                                                                                      |
@@ -93,4 +94,4 @@ settlement period).
 - BUY-side offers (bids) per pathway.
 - Partial fills across multiple settlements.
 - `TimeSettlementPeriodCondition` per-DealManager `setDelayOverride` (QMS-mode 45-day parameterization).
-- `GlobalKillCondition` admin rotation (`rotateAdmin`).
+- `KillSwitchCondition` admin rotation (`rotateAdmin`).

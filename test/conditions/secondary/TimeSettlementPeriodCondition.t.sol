@@ -10,7 +10,7 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // TimeSettlementPeriodCondition — minimum delay between acceptance and finalization (closing).
 //
 // Legal/economic intent: a structural cooling-off window between acceptance and finalization — the
-// intervention window for the Compromised Credential voidness provision and the Global Kill, and the
+// intervention window for the Compromised Credential voidness provision and the kill switch, and the
 // timer the keeper waits on. Default 24h from acceptance; per-DealManager overrides. Acceptance time
 // is reconstructed as escrow.expiry - settlementWindow.
 //

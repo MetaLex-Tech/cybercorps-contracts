@@ -43,7 +43,7 @@ import {Rule144DisclosureCondition} from "../src/libs/conditions/secondary/Rule1
 import {Section4a7DisclosureCondition} from "../src/libs/conditions/secondary/Section4a7DisclosureCondition.sol";
 import {LegalOpinionCondition} from "../src/libs/conditions/secondary/LegalOpinionCondition.sol";
 import {AgreementSignedCondition} from "../src/libs/conditions/secondary/AgreementSignedCondition.sol";
-import {GlobalKillCondition} from "../src/libs/conditions/secondary/GlobalKillCondition.sol";
+import {KillSwitchCondition} from "../src/libs/conditions/secondary/KillSwitchCondition.sol";
 import {TimeSettlementPeriodCondition} from "../src/libs/conditions/secondary/TimeSettlementPeriodCondition.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {MockUriBuilderForIM} from "./IssuanceManagerTest.t.sol";
@@ -143,7 +143,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     Section4a7DisclosureCondition public section4a7Disclosure;
     LegalOpinionCondition public legalOpinion;
     AgreementSignedCondition public agreementSigned;
-    GlobalKillCondition public globalKill;
+    KillSwitchCondition public killSwitch;
     TimeSettlementPeriodCondition public timeSettlement;
 
     address public metalexKillAdmin;
@@ -294,7 +294,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
 
     /// @notice A raised kill flag suspends finalization of an in-flight settlement; the two-call
     /// lower (one admin proposes, the other confirms) restores it.
-    function test_GlobalKill_BlocksFinalize_UntilLowered() public {
+    function test_KillSwitch_BlocksFinalize_UntilLowered() public {
         (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.kill");
         _commonBuyerSetup(buyer, "US", CA);
 
@@ -304,22 +304,22 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
 
         // Either admin can raise unilaterally — after acceptance, mid-deal.
         vm.prank(legionKillAdmin);
-        globalKill.raiseKill();
+        killSwitch.raiseKill();
 
         vm.expectRevert(
-            abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, address(globalKill))
+            abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, address(killSwitch))
         );
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementId);
 
         // Lowering takes both admins: the proposer alone cannot confirm.
         vm.prank(legionKillAdmin);
-        globalKill.proposeLower();
-        vm.expectRevert(GlobalKillCondition.ProposerCannotConfirm.selector);
+        killSwitch.proposeLower();
+        vm.expectRevert(KillSwitchCondition.ProposerCannotConfirm.selector);
         vm.prank(legionKillAdmin);
-        globalKill.confirmLower();
+        killSwitch.confirmLower();
         vm.prank(metalexKillAdmin);
-        globalKill.confirmLower();
+        killSwitch.confirmLower();
 
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementId);
@@ -327,6 +327,44 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
             uint8(dm.getSecondaryEscrow(settlementId).status),
             uint8(SecondaryEscrowStatus.FINALIZED),
             "escrow FINALIZED after kill lowered"
+        );
+    }
+
+    /// @notice A per-settlement kill blocks that single agreement's finalize end-to-end, and the
+    /// two-admin lower clears it. (Targeted isolation across settlements is covered by the unit suite.)
+    function test_SettlementKill_BlocksFinalize_UntilLowered() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.settkill");
+        _commonBuyerSetup(buyer, "US", CA);
+
+        bytes32 offerId = _postSellOffer(ExemptionPathway.RULE_144, uint256(keccak256("settkill")));
+        bytes32 settlementId = _acceptSellOffer(offerId, buyer, buyerKey);
+        vm.warp(block.timestamp + timeSettlement.DEFAULT_DELAY() + 1);
+
+        // Either admin can raise a single settlement's kill unilaterally, mid-deal.
+        vm.prank(legionKillAdmin);
+        killSwitch.raiseSettlementKill(settlementId);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, address(killSwitch))
+        );
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+
+        // Lowering takes both admins: the proposer alone cannot confirm.
+        vm.prank(legionKillAdmin);
+        killSwitch.proposeSettlementLower(settlementId);
+        vm.expectRevert(KillSwitchCondition.ProposerCannotConfirm.selector);
+        vm.prank(legionKillAdmin);
+        killSwitch.confirmSettlementLower(settlementId);
+        vm.prank(metalexKillAdmin);
+        killSwitch.confirmSettlementLower(settlementId);
+
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.FINALIZED),
+            "killed settlement finalizes after its kill lowered"
         );
     }
 
@@ -539,7 +577,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         // Closing conditions are plain (non-proxied) singletons.
         metalexKillAdmin = makeAddr("metalexKillAdmin");
         legionKillAdmin = makeAddr("legionKillAdmin");
-        globalKill = new GlobalKillCondition(metalexKillAdmin, legionKillAdmin);
+        killSwitch = new KillSwitchCondition(metalexKillAdmin, legionKillAdmin);
         timeSettlement = new TimeSettlementPeriodCondition();
     }
 
@@ -573,7 +611,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         _addPathway(ExemptionPathway.REGULATION_S, address(regS));
 
         // Closing set (all pathways).
-        _addClosing(address(globalKill));
+        _addClosing(address(killSwitch));
         _addClosing(address(timeSettlement));
     }
 

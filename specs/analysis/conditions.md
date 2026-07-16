@@ -37,7 +37,7 @@ offer; closing conditions receive `abi.encode(settlementAgreementId)` and refer 
 | `GPConsentCondition`                   | threshold     | —                  | `spvAddress`                                                                                                                   |
 | `QMSModeCondition`                     | threshold     | —                  | `spvAddress`                                                                                                                   |
 | `ERISACondition`                       | threshold     | buyer              | buyer via `settlementAgreementIds`                                                                                             |
-| `GlobalKillCondition`                  | closing       | —                  | _(no Offer lookup; checks kill-switch state)_                                                                                  |
+| `KillSwitchCondition`                  | closing       | —                  | _(no Offer lookup; checks kill-switch state)_                                                                                  |
 | `TimeSettlementPeriodCondition`        | closing       | —                  | _(no Offer lookup; checks settlement timestamp)_                                                                               |
 
 ---
@@ -71,13 +71,13 @@ and **snapshotted onto the offer** — so an offer is governed by the rules in e
 and stored on the secondary-trade record itself (self-contained; no dependency on the primary-deal escrow
 library's `conditionsByEscrow`):
 
-| Array                       | Evaluated at                       | Entry points                                                     |
-|-----------------------------|------------------------------------|------------------------------------------------------------------|
-| `offer.thresholdConditions` | Offer posted, accepted, finalized  | `postOffer`, `acceptOffer`, `finalizeSecondaryTradeAgreement`    |
-| `offer.closingConditions`   | Finalization                       | `finalizeSecondaryTradeAgreement`                                |
+| Array                       | Evaluated at                      | Entry points                                                  |
+|-----------------------------|-----------------------------------|---------------------------------------------------------------|
+| `offer.thresholdConditions` | Offer posted, accepted, finalized | `postOffer`, `acceptOffer`, `finalizeSecondaryTradeAgreement` |
+| `offer.closingConditions`   | Finalization                      | `finalizeSecondaryTradeAgreement`                             |
 
 Every condition in the array is walked in sequence at each entry point. Any failure reverts immediately.
-Snapshotting the addresses does not blunt the kill switch: `GlobalKillCondition` reads its live state
+Snapshotting the addresses does not blunt the kill switch: `KillSwitchCondition` reads its live state
 internally, so a switch raised after posting still halts an in-flight settlement at finalize. Likewise,
 re-running the threshold set at finalize means eligibility lost after acceptance (revoked credential,
 breached holder cap, blocked-state move, withdrawn approval) blocks the asset transfer.
@@ -106,22 +106,23 @@ DealManager holds two distinct condition sets, both owner-managed and snapshotte
 
 | Set                     | Scope                         | Snapshotted onto offer? | Default contents                                       |
 |-------------------------|-------------------------------|-------------------------|--------------------------------------------------------|
-| Closing-condition set   | Every offer                   | Yes — at `postOffer`    | `GlobalKillCondition`, `TimeSettlementPeriodCondition` |
+| Closing-condition set   | Every offer                   | Yes — at `postOffer`    | `KillSwitchCondition`, `TimeSettlementPeriodCondition` |
 | Threshold-condition set | Every offer (two §7.2 layers) | Yes — at `postOffer`    | See below                                              |
 
 The closing-condition set is copied onto the offer at `postOffer` and evaluated at finalization (gating asset
 transfer). The threshold-condition set is resolved (fund-specific (§6) ++ exemption-specific (§5)) and copied onto the
 offer at `postOffer`, then evaluated at `postOffer` and re-evaluated at `acceptOffer` (gating contract formation)
-and again at finalization (gating asset transfer). Offerors supply only the exemption pathway, never condition addresses.
+and again at finalization (gating asset transfer). Offerors supply only the exemption pathway, never condition
+addresses.
 
 ### Default closing set
 
-Every DealManager gets `GlobalKillCondition` and `TimeSettlementPeriodCondition` as closing conditions:
+Every DealManager gets `KillSwitchCondition` and `TimeSettlementPeriodCondition` as closing conditions:
 
-| Condition                       | Deployment                                                                      | Admin                                                                                                       |
-|---------------------------------|---------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------|
-| `GlobalKillCondition`           | Deployed once at protocol initialization; shared across all Legion DealManagers | MetaLeX + Legion each hold one admin key; either can raise unilaterally; both required to lower             |
-| `TimeSettlementPeriodCondition` | Deployed once; configured per-DealManager                                       | Default delay: 24h from acceptance; reparameterized to 45-day gate from listing timestamp for QMS-mode SPVs |
+| Condition                       | Deployment                                                                      | Admin                                                                                                                                                                                 |
+|---------------------------------|---------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `KillSwitchCondition`           | Deployed once at protocol initialization; shared across all Legion DealManagers | MetaLeX + Legion each hold one admin key; either can raise unilaterally; both required to lower. Two scopes: platform-wide, and per-settlement (blocks a single agreement's finalize) |
+| `TimeSettlementPeriodCondition` | Deployed once; configured per-DealManager                                       | Default delay: 24h from acceptance; reparameterized to 45-day gate from listing timestamp for QMS-mode SPVs                                                                           |
 
 ### Threshold set: two layers (§7.2)
 
@@ -177,5 +178,5 @@ threshold-condition array for that offer's `agreementId`. The same condition ins
 | Scope                                                             | Who                                     | When                                                                     |
 |-------------------------------------------------------------------|-----------------------------------------|--------------------------------------------------------------------------|
 | Layer 1 (exemption-specific) condition addresses                  | MetaLeX                                 | Protocol initialization                                                  |
-| `GlobalKillCondition` + `TimeSettlementPeriodCondition` (closing) | MetaLeX                                 | Protocol initialization; MetaLeX + Legion admin roles assigned at deploy |
+| `KillSwitchCondition` + `TimeSettlementPeriodCondition` (closing) | MetaLeX                                 | Protocol initialization; MetaLeX + Legion admin roles assigned at deploy |
 | Layer 2 (fund-specific) conditions                                | MetaLeX or Legion via factory contracts | SPV onboarding                                                           |
