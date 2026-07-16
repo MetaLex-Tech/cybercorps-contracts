@@ -9,9 +9,19 @@ up front. Companion to the webapp-side plan (`notes/plans/mainframe-changes-plan
 **Status.** Active log. Each item: **problem → desired model → design direction → open questions**.
 Items are `PROPOSED` until specced/scheduled.
 
+**Last audited:** 2026-07-12 against `develop`. P1 `PROPOSED` (no code shipped — officer fns still
+`onlyOwner`, no Board role). P2 `PROPOSED` (no code shipped — terms still per-cert; PR #107 reshaped
+the struct but not the storage model, see P2 status note). P3 `INTERIM SHIPPED` on-chain (commit
+`7edb89d`, live 2026-07-08); webapp self-serve shipped (`metalex-webapp` #801 + #803, merged
+2026-07-08); recommended end-state (Option A) not built.
+
 ---
 
 ## P1 — Board role: governance-correct appointment & removal of officers — `PROPOSED`
+
+_Status check 2026-07-12: still accurate on `develop` — `addOfficer`/`removeOfficer`/`removeOfficerAt`
+remain `onlyOwner`-gated with no last-officer guard (`src/CyberCorp.sol:191/200/215`), and no Board
+role exists in `src/libs/auth.sol`. Nothing shipped._
 
 **Problem (current on-chain behavior).** Every company officer holds BorgAuth role **200**, and the
 officer-management functions on `CyberCorp` — `addOfficer` (`src/CyberCorp.sol:191`), `removeOfficer`
@@ -83,6 +93,15 @@ PR #745 (Mainframe ownership UI) and the auth findings in its `notes/plans/mainf
 
 ## P2 — Class-level security terms have no on-chain home (stored per-certificate) — `PROPOSED`
 
+_Status check 2026-07-12: still accurate on `develop`; nothing from the desired model has shipped.
+Note PR #107 (`feat/shares-extension-logic`, merged 2026-06-02 — predates this section) reshaped the
+per-cert struct — the old flat `ShareData` became `ShareCertData` with a dedicated `SeriesTerms` terms
+struct (`ShareExtension.sol:142-183`, expanded with dividend/redemption/pro-rata/information-rights
+fields) — but the **storage model is unchanged**: `ShareExtension` is a stateless encoder,
+`SeriesTerms` is still ABI-encoded into each cert's `extensionData` (now
+`CyberCertPrinterStorage.sol:58`), `CyberCertPrinter.initialize` still stores identity only, and
+`authorizedShares` remains unenforced. #107 does not address this item._
+
 **Problem.** A `CyberCertPrinter` is the per-security-class contract, but it stores only class
 **identity** — `initialize(... name, ticker, certificateUri, SecurityClass, SecuritySeries, extension)`
 (`src/CyberCertPrinter.sol:107`); there is no slot for the class's economic terms. The actual
@@ -134,6 +153,80 @@ per-certificate fields (units represented, investment amount, holder, issuance d
 (rendered per-cert into tokenURI); `src/storage/CyberCertPrinterStorage.sol:51` (`CertificateDetails.extensionData`);
 `src/IssuanceManager.sol:229` (`createCertPrinter`). Webapp side: `metalex-webapp` **M1** (pre-fill blocked by
 this) in its `notes/plans/mainframe-changes-plan.md`.
+
+---
+
+## P3 — Issuer-defined award templates (grants) — `INTERIM SHIPPED` (2026-07-08)
+
+**Full evaluation:** `notes/plans/issuer-award-templates-plan.md` (three options, recommendation,
+per-option contract + app changes). Summary below.
+
+**Status update.** An **interim** variant is live: commit `7edb89d` removed `onlyOwner` from
+the caller-chosen-id `createTemplate` and the registry proxy was upgraded (verified live on
+Base + Ethereum mainnet, 2026-07-08). This is deliberately **temporary** — it is the
+squattable caller-chosen-id variant the full doc warns against, accepted for now to unblock
+issuer self-serve; the webapp compensates with content-addressed ids + DB-side provenance.
+Drawbacks, required app-layer mitigations, and the recommended optimal end-state (re-gate
+`createTemplate` + add content-addressed `createTemplatePublic`, i.e. Option A) are recorded
+in the full doc's §0.
+
+**Webapp side (update 2026-07-12):** the compensating app layer has shipped — self-serve
+per-corp award templates with content-addressed registration against the now-permissionless
+`createTemplate` (`metalex-webapp` PR #801, merged 2026-07-08) and bespoke per-recipient
+agreements (`metalex-webapp` PR #803, merged 2026-07-08). The recommended on-chain end-state
+(Option A: re-gate `createTemplate`, add `createTemplatePublic`) remains **unbuilt**.
+
+**Problem.** cyberCORPs grants register the award agreement in the **global, MetaLeX-owned**
+`CyberAgreementRegistry`, and the MetaVesT controller's `proposeAndSignDeal(templateId, …)`
+calls `registry.createContract`, which reverts `TemplateDoesNotExist` unless the template is
+pre-registered (`src/CyberAgreementRegistry.sol:263-266`; `MetaVesTControllerStorage.sol:220`).
+The only registration entry point, `createTemplate`, is **`onlyOwner`** (`:230-244`;
+`onlyOwner` = registry BorgAuth role ≥ 99, `src/libs/auth.sol:190`). So **every corp shares one
+award template that only MetaLeX can register** — a founder cannot register their own custom
+award agreement. This is the last setup blocker for self-serve grants (the webapp already ships
+an admin "Register award template" page, but it can only be driven by the registry owner —
+`metalex-webapp` PR #771). _[Stale as of the interim ship: `createTemplate` is now permissionless
+(commit `7edb89d`) and the admin page is open to issuer self-serve via `metalex-webapp` PR #801 —
+see Status update above. Kept as the record of the pre-2026-07-07 state that motivated this item.]_
+
+**Desired model.** An **issuer (corp officer)** registers their **own** award template
+permissionlessly, without MetaLeX per corp, without weakening registry integrity.
+
+**Design direction.** The registry **already** creates templates permissionlessly + **content-
+addressed** in `createStandaloneContractAndSignFor` (`:341-399`, `public`): `templateId =
+keccak256(title, uri, globalFields, partyFields)`, `_createTemplate` just-in-time. Content-
+addressing is the key security property — a content hash id **cannot be squatted** (the
+caller-chosen-id `createTemplate` could be, which is exactly why it's owner-gated). Options:
+- **(A, recommended)** add a thin permissionless **content-addressed** `createTemplatePublic`
+  (the template-half of the standalone path, idempotent). Squat-proof, **no** controller change,
+  **no** corp-identity verification; app makes the grants templateId per-corp and opens the
+  admin page to officers. ~6-line registry change.
+- **(B, reserve)** route grants through the existing permissionless `createStandaloneContract
+  AndSignFor` (bespoke per-grant doc). Needs a new controller propose variant; **caveat:** the
+  zero finalizer auto-finalizes on the grantee's signature (`:550-554`), so it also needs either
+  a registry `finalizer` param or a conditional controller finalize. Best for per-grant custom
+  docs; complementary to A.
+- **(A2, defer)** per-corp-namespaced `createCorpTemplate` with on-chain officer verification —
+  needs a new `CyberCorpFactory.isCyberCorp` oracle (no corp registry exists today) + a
+  registry→factory dependency. Adds provenance/listing; content-addressing already gives the
+  security guarantee, so defer.
+- **(C, reject)** owner-delegated `TEMPLATE_CREATOR` role / `setRoleAdapter` — most centralized,
+  wrong granularity (an `OWNER_ROLE` adapter grants full owner powers); the existing
+  `delegations` mapping is signing-only. Only if MetaLeX wants to curate templates.
+
+**Recommendation:** ship **A**; keep **B** for bespoke per-grant docs; defer **A2**; reject **C**.
+
+**Open questions.** Idempotent vs revert on duplicate content; on-chain creator provenance
+(event field / A2) vs off-chain indexing; per-corp templateId storage in the webapp; B's
+finalize trade-off (registry `finalizer` param vs conditional controller finalize); whether to
+keep the curated owner-only `createTemplate` (recommended yes). See the full doc.
+
+**References.** `src/CyberAgreementRegistry.sol` (`createTemplate` `:230`, `createContract`
+`:246`, standalone path `:341-399`, auto-finalize `:550-554`, `finalizeContract`/
+`onlyFinalizerIfSet` `:677`/`:209`); `src/libs/auth.sol` (roles, `setRoleAdapter` `:117`);
+`src/CyberCorp.sol:184` (`isCyberCORPOfficer`); `src/CyberCorpFactory.sol` (no corp registry);
+MetaVesT `feat/re-enable-options` `MetaVesTControllerStorage.sol:220/331`. Webapp:
+`metalex-webapp` PR #771 + `notes/plans/cybercorps-grants-build-spec.md`.
 
 ---
 

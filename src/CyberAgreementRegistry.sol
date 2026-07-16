@@ -233,7 +233,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         string memory legalContractUri,
         string[] memory globalFields,
         string[] memory partyFields
-    ) external onlyOwner {
+    ) external {
         _createTemplate(
             templateId,
             title,
