@@ -41,21 +41,20 @@
 
 pragma solidity ^0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "openzeppelin-contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/IIssuanceManager.sol";
-import "./libs/LexScroWLite.sol";
+import "./interfaces/ILexScrowStorage.sol";
 import "./libs/auth.sol";
-import "./libs/EIP712Lib.sol";
 import "./storage/RoundManagerStorage.sol";
 import "./storage/RoundManagerFactoryStorage.sol";
 import "./storage/BorgAuthStorage.sol";
 import "./interfaces/ICyberCorp.sol";
 import "./interfaces/ICyberCertPrinter.sol";
 import "./interfaces/IRoundManagerFactory.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
 import "./interfaces/ILexChex.sol";
 
 /// @title RoundManager
@@ -64,9 +63,9 @@ import "./interfaces/ILexChex.sol";
 contract RoundManager is
     Initializable,
     BorgAuthACL,
-    LexScroWLite,
     UUPSUpgradeable,
-    ReentrancyGuard
+    ReentrancyGuard,
+    ILexScrowStorage
 {
     using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
     using LexScrowStorage for LexScrowStorage.LexScrowData;
@@ -82,7 +81,6 @@ contract RoundManager is
     error InvalidParties();
     error InvalidCertPrinter();
     error InvalidCert();
-    error AgreementConditionsNotMet();
     error ZeroAddress();
     error InvalidIssuanceManager();
     error InvalidEscrowedSignature();
@@ -165,7 +163,9 @@ contract RoundManager is
     ) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
-        __LexScroWLite_init(_corp, _dealRegistry);
+        // LexScrowStorage is now a library — set escrow core addresses in storage directly
+        LexScrowStorage.setCorp(_corp);
+        LexScrowStorage.setDealRegistry(_dealRegistry);
 
         if (_corp == address(0)) revert ZeroAddress();
         if (_dealRegistry == address(0)) revert ZeroAddress();
@@ -227,10 +227,9 @@ contract RoundManager is
 
         if (RoundManagerStorage.getRound(roundDraft.id).id != bytes32(0)) revert RoundAlreadyExists();
 
-        if(!EIP712Lib.verifyEscrowedSignature(
-            address(this),
+        if(!RoundManagerStorage.verifyEscrowedSignature(
             roundDraft.authorityOfficer,
-            EIP712Lib.EscrowedSignatureData({
+            RoundManagerStorage.EscrowedSignatureData({
                 roundId: roundDraft.id,
                 seriesType: uint8(roundDraft.seriesType),
                 raiseCap: roundDraft.raiseCap,
@@ -394,7 +393,7 @@ contract RoundManager is
         );
 
         // Interaction: payments
-        handleCounterPartyPayment(agreementId);
+        LexScrowStorage.handleCounterPartyPayment(agreementId);
 
         emit EOISubmitted(agreementId, roundId, msg.sender, LexScrowStorage.getCorp(), eoi.minAmount, eoi.maxAmount, eoi.expiry);
 
@@ -444,7 +443,7 @@ contract RoundManager is
         allocatedAmount = candidate;
 
         // Check: status
-        if (escrow.status != EscrowStatus.PAID) revert DealNotPaid();
+        if (escrow.status != EscrowStatus.PAID) revert LexScrowStorage.DealNotPaid();
         if (escrow.corpAssets.length > 0) revert AlreadyAllocated();
 
         (uint256 tokenId, uint256[] memory certIds, uint256 usedAmount, uint256 refund) = RoundManagerStorage.allocate(
@@ -454,7 +453,7 @@ contract RoundManager is
         );
 
         // Check: Check conditions
-        if (!conditionCheck(agreementId)) revert AgreementConditionsNotMet();
+        if (!LexScrowStorage.conditionCheck(agreementId)) revert ILexScrowStorage.AgreementConditionsNotMet();
 
         // Effect: Finalize agreement
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry())
@@ -473,7 +472,7 @@ contract RoundManager is
         }
 
         // Interaction: Finalize escrow and payments
-        finalizeEscrow(agreementId);
+        LexScrowStorage.finalizeEscrow(agreementId);
 
         emit AllocationMade(agreementId, roundId, escrow.counterParty, usedAmount, round.raised, certIds);
 
@@ -499,11 +498,11 @@ contract RoundManager is
 
         // Check: check status
         if (round.id == bytes32(0)) revert InvalidRound();
-        if (escrow.status != EscrowStatus.PAID) revert DealNotPaid();
+        if (escrow.status != EscrowStatus.PAID) revert LexScrowStorage.DealNotPaid();
         if (escrow.corpAssets.length > 0) revert AlreadyAllocated();
 
         // Effect: update status
-        voidEscrow(agreementId);
+        LexScrowStorage.voidEscrow(agreementId);
 
         if (isVoidAgreement) {
             ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, escrow.counterParty, escrow.signature);
@@ -536,12 +535,12 @@ contract RoundManager is
         // Check: check status
         if (round.id == bytes32(0)) revert InvalidRound();
         if (msg.sender != escrow.counterParty) revert NotEOISubmitter();
-        if (escrow.status != EscrowStatus.PAID) revert DealNotPaid();
+        if (escrow.status != EscrowStatus.PAID) revert LexScrowStorage.DealNotPaid();
         if (escrow.corpAssets.length > 0) revert AlreadyAllocated();
         if (block.timestamp < escrow.expiry && round.endTime > block.timestamp) revert EOINotExpired();
 
         // Effect: update status
-        voidEscrow(agreementId);
+        LexScrowStorage.voidEscrow(agreementId);
 
         // void agreement
         if (isVoidAgreement) {
@@ -567,15 +566,40 @@ contract RoundManager is
     /// @dev Currently the factory owner (MetaLeX) unilaterally set the fee ratio;
     /// in the future, it could be determined through a governance process.
     /// @return Fee amount
-    function computeFee(uint256 size) public override view returns (uint256) {
+    function computeFee(uint256 size) public view returns (uint256) {
         return size * IRoundManagerFactory(RoundManagerStorage.getUpgradeFactory()).getDefaultFeeRatio() / RoundManagerFactoryStorage.BASIS_POINTS;
     }
 
     /// @notice Gets the payable address for the fees
     /// @dev The factory owner (MetaLeX) unilaterally set the payable address
     /// @return Payable address for the fees
-    function getPlatformPayable() public override view returns (address) {
+    function getPlatformPayable() public view returns (address) {
         return IRoundManagerFactory(RoundManagerStorage.getUpgradeFactory()).getPlatformPayable();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // LexScrowStorage surface — thin wrappers (LexScrowStorage is now a library) so the proxy keeps
+    // exposing these selectors for off-chain callers and condition contracts (ILexScrowStorage).
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice Get escrow details for a given agreement id
+    function getEscrowDetails(bytes32 agreementId) public view returns (Escrow memory) {
+        return LexScrowStorage.getEscrow(agreementId);
+    }
+
+    /// @notice Check all conditions attached to the escrow for the given agreement
+    function conditionCheck(bytes32 agreementId) public view returns (bool) {
+        return LexScrowStorage.conditionCheck(agreementId);
+    }
+
+    /// @notice ERC721 receiver hook for safe transfers into escrow (moved here from LexScrowStorage)
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return this.onERC721Received.selector;
+    }
+
+    /// @notice ERC1155 receiver hook for safe transfers into escrow (moved here from LexScrowStorage)
+    function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
+        return this.onERC1155Received.selector;
     }
 
     /// @notice UUPS upgrade authorization

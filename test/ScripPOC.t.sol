@@ -72,6 +72,15 @@ contract POCMockCertPrinter {
         return _ownedTokens[owner_][index];
     }
 
+    // In this mock custody owner == legal owner, so the per-legal-owner enumeration is the same backing data.
+    function balanceOfLegalOwner(address owner_) external view returns (uint256) {
+        return _balances[owner_];
+    }
+
+    function tokenOfLegalOwnerByIndex(address owner_, uint256 index) external view returns (uint256) {
+        return _ownedTokens[owner_][index];
+    }
+
     function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory) {
         return _details[tokenId];
     }
@@ -94,6 +103,7 @@ contract POCMockCertPrinter {
 
     function voidCert(uint256 tokenId) external { _voided[tokenId] = true; }
     function isVoided(uint256 tokenId) external view returns (bool) { return _voided[tokenId]; }
+    function unitsReserved(uint256) external pure returns (uint256) { return 0; }
     function legalOwnerOf(uint256 tokenId) external view returns (address) { return _owners[tokenId]; }
 
     /// @dev Mock safeTransferFrom -- no IERC721Receiver check, no endorsement check.
@@ -268,7 +278,7 @@ contract ScripPOCTest is Test {
 
         vm.prank(owner);
         bytes memory signature = abi.encodePacked("signed-hash");
-        issuanceManager.signCertificate(address(certPrinter), certId, signature);
+        certPrinter.addIssuerSignature(certId, signature);
         assertEq(certPrinter.getIssuerSignatureCount(certId), 1, "signature should be added");
         assertEq(certPrinter.getIssuerSignatureAt(certId, 0), signature, "stored signature mismatch");
     }
@@ -546,7 +556,7 @@ contract ScripPOCTest is Test {
         denyHook.setAllowTransfers(false);
 
         vm.prank(owner);
-        issuanceManager.setRestrictionHook(address(certPrinter), 0, address(denyHook));
+        certPrinter.setRestrictionHook(0, address(denyHook));
 
         // Hook is stored
         assertEq(certPrinter.getRestrictionHook(0), address(denyHook), "hook stored");

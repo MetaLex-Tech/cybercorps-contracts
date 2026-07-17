@@ -14,6 +14,7 @@ import "../src/libs/auth.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
+import {RestrictiveLegend} from "../src/storage/CyberCertPrinterStorage.sol";
 
 contract MockRoundManagerForConversion {
     bool public exists;
@@ -220,6 +221,27 @@ contract MockUriBuilder is IUriBuilder {
         return "uri://mock";
     }
 
+    function buildCertificateUri(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        RestrictiveLegend[] memory,
+        CertificateDetails memory,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) {
+        return "uri://mock";
+    }
+
     function buildCertificateUriNotEncoded(
         string memory,
         string memory,
@@ -229,6 +251,27 @@ contract MockUriBuilder is IUriBuilder {
         SecuritySeries,
         string memory,
         string[] memory,
+        CertificateDetails memory,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) {
+        return "uri://mock";
+    }
+
+    function buildCertificateUriNotEncoded(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        RestrictiveLegend[] memory,
         CertificateDetails memory,
         Endorsement[] memory,
         OwnerDetails memory,
@@ -1012,6 +1055,24 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(newCert.unitsRepresented, 100 * 1e18); // 150 * 2 / 3
     }
 
+    function test_setCertLookThroughBadge_AdminWiresBadgeOnPrinter() public {
+        ICyberCertPrinter certPrinter = _deployPrinter("Badge Wire", "BW");
+        assertEq(certPrinter.lookThroughBadge(), address(0));
+
+        address badge = makeAddr("lookThroughBadge");
+        certPrinter.setLookThroughBadge(badge);
+        assertEq(certPrinter.lookThroughBadge(), badge);
+    }
+
+    function test_setCertLookThroughBadge_NonAdminReverts() public {
+        ICyberCertPrinter certPrinter = _deployPrinter("Badge Wire 2", "BW2");
+        address badge = makeAddr("lookThroughBadge");
+
+        vm.prank(investor);
+        vm.expectRevert();
+        certPrinter.setLookThroughBadge(badge);
+    }
+
     function test_convertScripToCert_ignoresVoidedCertAndMintsNewCertificate()
         public
     {
@@ -1034,7 +1095,7 @@ contract IssuanceManagerConversionTest is Test {
         );
 
         // Mark existing cert as voided while investor still owns it.
-        issuanceManager.voidCertificate(address(certPrinter), 0);
+        certPrinter.voidCert(0);
         assertTrue(certPrinter.isVoided(0));
         assertEq(certPrinter.ownerOf(0), investor);
 

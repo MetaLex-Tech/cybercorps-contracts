@@ -14,6 +14,7 @@ import "../src/interfaces/ITransferRestrictionHook.sol";
 import "../src/interfaces/ICondition.sol";
 import "../src/interfaces/IUriBuilder.sol";
 import "../src/libs/auth.sol";
+import {RestrictiveLegend} from "../src/storage/CyberCertPrinterStorage.sol";
 
 contract LegalOwnerMockCyberCorp {
     function cyberCORPName() external pure returns (string memory) {
@@ -63,6 +64,27 @@ contract LegalOwnerMockUriBuilder is IUriBuilder {
         return "uri://mock";
     }
 
+    function buildCertificateUri(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        RestrictiveLegend[] memory,
+        CertificateDetails memory,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) {
+        return "uri://mock";
+    }
+
     function buildCertificateUriNotEncoded(
         string memory,
         string memory,
@@ -72,6 +94,27 @@ contract LegalOwnerMockUriBuilder is IUriBuilder {
         SecuritySeries,
         string memory,
         string[] memory,
+        CertificateDetails memory,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) {
+        return "uri://mock";
+    }
+
+    function buildCertificateUriNotEncoded(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        RestrictiveLegend[] memory,
         CertificateDetails memory,
         Endorsement[] memory,
         OwnerDetails memory,
@@ -196,6 +239,15 @@ contract LegalOwnerBugPOCTest is Test {
             investor,
             "legal owner should be set to investor on createCertAndAssign"
         );
+    }
+
+    // The bare-mint path (createCert) sets the legal owner but historically emitted no ownership event;
+    // _setLegalOwner now emits LegalOwnerChanged from the chokepoint, so this path is observable too.
+    function test_CreateCert_EmitsLegalOwnerChanged() public {
+        uint256 nextId = certPrinter.totalSupply();
+        vm.expectEmit(true, true, true, true, address(certPrinter));
+        emit ICyberCertPrinter.LegalOwnerChanged(nextId, address(0), investor, "", uint64(block.timestamp));
+        issuanceManager.createCert(address(certPrinter), investor, _details(10));
     }
 
     function _details(uint256 units) internal pure returns (CertificateDetails memory) {

@@ -157,41 +157,6 @@ interface IIssuanceManager {
         string calldata investorName
     ) external returns (uint256 tokenId);
 
-    function signCertificate(
-        address certAddress,
-        uint256 tokenId,
-        bytes calldata signature
-    ) external;
-
-    function addOfficerSignature(
-        address certAddress,
-        uint256 tokenId,
-        bytes calldata signature
-    ) external;
-
-    function endorseCertificate(
-        address certAddress,
-        uint256 tokenId,
-        address endorser,
-        bytes calldata signature,
-        bytes32 agreementId
-    ) external;
-
-    function voidCertificate(
-        address certAddress,
-        uint256 tokenId
-    ) external;
-
-    function unvoidCertificate(
-        address certAddress,
-        uint256 tokenId
-    ) external;
-
-    function setGlobalTransferable(
-        address certAddress,
-        bool transferable
-    ) external;
-
     function getUpgradeFactory() external view returns (address);
 
     function upgradeCertPrinterBeaconImplementation(
@@ -205,46 +170,6 @@ interface IIssuanceManager {
     ) external;
 
     function getScripBeaconImplementation() external view returns (address);
-
-    // Transfer Hook Functions
-    function setRestrictionHook(
-        address certAddress,
-        uint256 _id,
-        address _hookAddress
-    ) external;
-
-    function setGlobalRestrictionHook(
-        address certAddress,
-        address hookAddress
-    ) external;
-
-    function setTokenTransferable(
-        address certAddress,
-        uint256 tokenId,
-        bool value
-    ) external;
-
-    function addDefaultLegend(
-        address certAddress,
-        string memory newLegend
-    ) external;
-
-    function removeDefaultLegendAt(
-        address certAddress,
-        uint256 index
-    ) external;
-
-    function addCertLegend(
-        address certAddress,
-        uint256 tokenId,
-        string memory newLegend
-    ) external;
-
-    function removeCertLegendAt(
-        address certAddress,
-        uint256 tokenId,
-        uint256 index
-    ) external;
 
     function deployCyberScrip(
         address certAddress,
@@ -371,5 +296,27 @@ interface IIssuanceManager {
     function cyberCertPrinterBeacon() external view returns (UpgradeableBeacon);
     function cyberScripBeacon() external view returns (UpgradeableBeacon);
     function printers(uint256 index) external view returns (address);
+    function isPrinter(address printer) external view returns (bool);
     function setUriBuilder(address _uriBuilder) external;
+
+    /// @notice Single-source signal for the buyer's newly minted Ledger Entry Token at secondary settlement.
+    /// @dev Emitted from the linked storage lib in the IssuanceManager's context; agreementId is the
+    /// settlementAgreementId (joins the DealManager's finalization event) and sellerVoided distinguishes a
+    /// full sale (seller token voided) from a partial (decremented in place).
+    event SecondaryTransferExecuted(
+        bytes32 indexed agreementId,
+        address indexed certPrinter,
+        address indexed buyer,
+        uint256 sellerTokenId,
+        uint256 buyerTokenId,
+        address seller,
+        uint256 units,
+        uint256 sellerUnitsAfter, // 0 when the seller token is voided (full sale)
+        uint256 buyerUnitsAfter, // == units on a fresh mint; existing balance + units on a fold (no-op atm because every secondary transfer is a new mint)
+        bool sellerVoided,
+        bool buyerTokenIsMinted // indicates whether it's a freshly minted token or folded into an existing one
+    );
+
+    // Secondary trade entry points (cyberTRADE; implementation pending)
+    function secondaryTransfer(bytes calldata dealMetadata) external;
 }

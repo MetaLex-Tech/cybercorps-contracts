@@ -19,6 +19,7 @@ import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
+import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {Round, RoundLib} from "../src/libs/RoundLib.sol";
@@ -530,7 +531,7 @@ contract CyberScripUpgradeForkTest is Test {
         );
 
         vm.prank(companyOwner);
-        issuanceManager.setGlobalTransferable(address(certPrinter), true);
+        certPrinter.setGlobalTransferable(true);
 
         vm.prank(companyOwner);
         address scrip = issuanceManager.deployCyberScrip(
@@ -664,7 +665,7 @@ contract CyberScripUpgradeForkTest is Test {
         assertEq(ICyberScrip(scrip).balanceOf(investor), 20);
 
         vm.prank(companyOwner);
-        issuanceManager.voidCertificate(address(certPrinter), certId);
+        certPrinter.voidCert(certId);
         assertTrue(certPrinter.isVoided(certId));
 
         _approveRecertification(issuanceManager, address(certPrinter), investor);
@@ -973,6 +974,7 @@ contract CyberScripUpgradeForkTest is Test {
         address newRoundManagerImpl = address(new RoundManager());
         address newCertPrinterImpl = address(new CyberCertPrinter());
         address newScripImpl = address(new CyberScrip());
+        address newUriBuilderImpl = address(new CertificateUriBuilder());
 
         vm.startPrank(METALEX_SAFE);
         corpSingleFactory.setRefImplementation(newCyberCorpImpl);
@@ -981,6 +983,7 @@ contract CyberScripUpgradeForkTest is Test {
         rmFactory.setRefImplementation(newRoundManagerImpl);
         imFactory.setCyberCertPrinterRefImplementation(newCertPrinterImpl);
         imFactory.setCyberScripRefImplementation(newScripImpl);
+        IUUPS(deployment.uriBuilder).upgradeToAndCall(newUriBuilderImpl, "");
         vm.stopPrank();
 
         assertEq(
@@ -1536,10 +1539,10 @@ contract CyberScripUpgradeForkTest is Test {
         vm.prank(to);
         certPrinter.addEndorsement(tokenId, selfEndorsement);
         vm.prank(companyOwner);
-        issuanceManager.setTokenTransferable(address(certPrinter), tokenId, true);
+        certPrinter.setTokenTransferable(tokenId, true);
         vm.prank(to);
         certPrinter.safeTransferFrom(to, to, tokenId);
         vm.prank(companyOwner);
-        issuanceManager.setTokenTransferable(address(certPrinter), tokenId, false);
+        certPrinter.setTokenTransferable(tokenId, false);
     }
 }

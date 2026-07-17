@@ -7,6 +7,7 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 import {DeployPumpCorpFactoryScript} from "../script/deploy-pump-factory.s.sol";
 import {PumpCorpFactory, PumpCorpFactoryLib} from "../src/PumpCorpFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
+import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {FeeOverride} from "../src/interfaces/IRoundManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
@@ -22,7 +23,7 @@ import {LeXcheX} from "../src/creds/lexchex.sol";
 import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
-import {EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
+import {RoundManagerStorage, EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {MockERC20} from "./mock/MockERC20.sol";
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
@@ -333,7 +334,7 @@ contract PumpCorpFactoryForkTest is Test {
             block.chainid, rm_
         ));
         bytes32 structHash = keccak256(abi.encode(
-            EIP712Lib.ESCROWEDSIGNATUREDATA_TYPEHASH,
+            RoundManagerStorage.ESCROWEDSIGNATUREDATA_TYPEHASH,
             roundId_,
             uint8(SecuritySeries.SeriesSeed),
             RAISE_CAP, minTicket_, maxTicket_,
@@ -598,7 +599,7 @@ contract PumpCorpFactoryForkTest is Test {
             lexchexDetails: _emptyLex()
         });
 
-        vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
+        vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector);
         RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,
@@ -1874,7 +1875,7 @@ contract PumpCorpFactoryForkTest is Test {
         });
 
         bytes memory eoiSig = _eoiSig(1, globalValues, investorPv);
-        vm.expectRevert(RoundManager.AgreementConditionsNotMet.selector);
+        vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector);
         RoundManager(rm).submitEOI(
             roundId, eoi,
             globalValues, investorPv,
