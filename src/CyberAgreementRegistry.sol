@@ -822,16 +822,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                 return true;
             }
         }
-        
-        // Check if user is a delegate for any party
-        for (uint256 i = 0; i < parties.length; i++) {
-            Delegation storage delegation = delegations[parties[i]];
-            if (delegation.delegate == user && 
-                (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
-                return true;
-            }
-        }
-        
+
         return false;
     }
 
