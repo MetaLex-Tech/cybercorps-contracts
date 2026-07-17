@@ -152,6 +152,7 @@ contract LeXcheXBadge is
 
         cred.categoryId = categoryId;
         cred.issuanceDate = uint64(block.timestamp);
+        cred.lastUpdated = uint64(block.timestamp);
         if (cred.expiryDate == 0) {
             if (category.defaultValidityDuration == 0) revert LexChexBadge_InvalidValidityConfig();
             cred.expiryDate = uint64(block.timestamp) + category.defaultValidityDuration;
@@ -174,9 +175,10 @@ contract LeXcheXBadge is
         if (existing.issuanceDate == 0) revert LexChexBadge_TokenDoesNotExist();
         CredentialCategory storage category = LeXcheXBadgeStorage.getCategory(existing.categoryId);
 
-        // Preserve the seasoning anchor and category link
+        // Preserve the seasoning anchor and category link; bump the recency key
         cred.categoryId = existing.categoryId;
         cred.issuanceDate = existing.issuanceDate;
+        cred.lastUpdated = uint64(block.timestamp);
         if (cred.expiryDate == 0) {
             if (category.defaultValidityDuration == 0) revert LexChexBadge_InvalidValidityConfig();
             cred.expiryDate = uint64(block.timestamp) + category.defaultValidityDuration;
@@ -195,6 +197,7 @@ contract LeXcheXBadge is
         if (cred.issuanceDate == 0) revert LexChexBadge_TokenDoesNotExist();
         cred.usState = usState;
         cred.beneficialOwnerCount = beneficialOwnerCount;
+        cred.lastUpdated = uint64(block.timestamp);
         emit CredentialAttributesUpdated(tokenId, usState, beneficialOwnerCount);
     }
 
@@ -205,6 +208,7 @@ contract LeXcheXBadge is
         Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
         if (cred.issuanceDate == 0) revert LexChexBadge_TokenDoesNotExist();
         cred.regulatoryJurisdiction = jurisdiction;
+        cred.lastUpdated = uint64(block.timestamp);
         emit CredentialRegulatoryJurisdictionUpdated(tokenId, jurisdiction);
     }
 
@@ -214,6 +218,7 @@ contract LeXcheXBadge is
         Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
         if (cred.issuanceDate == 0) revert LexChexBadge_TokenDoesNotExist();
         cred.voided = reason;
+        cred.lastUpdated = uint64(block.timestamp);
         emit CredentialVoided(_requireOwned(tokenId), tokenId, reason);
     }
 
@@ -304,41 +309,36 @@ contract LeXcheXBadge is
         return false;
     }
 
-    /// @notice U.S. state attribute for USStateOfResidenceCondition; zero for non-U.S. holders.
-    /// Sourced from the owner's most recent valid credential carrying the attribute.
+    /// @notice U.S. state of residence/organization for USStateOfResidenceCondition; zero for non-U.S. holders.
     function getUsState(address owner) public view returns (bytes2) {
-        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, _HAS_US_STATE);
+        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, ATTR_US_STATE);
         return found ? LeXcheXBadgeStorage.getCredential(tokenId).usState : bytes2(0);
     }
 
     /// @notice Entity beneficial-owner count for HolderCapCondition's §3(c)(1)(A) look-through; 0 when absent.
     function getBeneficialOwnerCount(address owner) public view returns (uint32) {
-        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, _HAS_BO_COUNT);
+        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, ATTR_BO_COUNT);
         return found ? LeXcheXBadgeStorage.getCredential(tokenId).beneficialOwnerCount : 0;
     }
 
-    /// @notice Country jurisdiction from the owner's most recent valid credential; empty string when none.
+    /// @notice Physical country jurisdiction from the owner's authoritative credential; empty when none.
     function getInvestorJurisdiction(address owner) public view returns (string memory) {
-        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, _ANY);
+        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, ATTR_INVESTOR_JURISDICTION);
         return found ? LeXcheXBadgeStorage.getCredential(tokenId).investorJurisdiction : "";
     }
 
-    /// @notice §3(c)(1)(A) look-through classification from the owner's most recent valid credential; empty
-    /// when none. Decoupled from the physical investorJurisdiction (which CFIUS/blue-sky consume).
+    /// @notice §3(c)(1)(A) look-through classification from the owner's authoritative credential; empty when
+    /// none. Decoupled from the physical investorJurisdiction (which CFIUS/blue-sky consume).
     function getRegulatoryJurisdiction(address owner) public view returns (string memory) {
-        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, _ANY);
+        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, ATTR_REGULATORY_JURISDICTION);
         return found ? LeXcheXBadgeStorage.getCredential(tokenId).regulatoryJurisdiction : "";
     }
 
-    /// @notice True when the owner is a U.S. investor for the ICA look-through count. Conservative: U.S. if
-    /// either the regulatory classification (so an entity with any U.S. beneficial owner counts as U.S.) or
-    /// the physical investorJurisdiction is U.S. — a U.S.-domiciled party can never be declassified out of the
-    /// count. Single source of truth for the rule.
+    /// @notice True when the owner is a U.S. investor for the ICA look-through. Conservative: U.S. if either the
+    /// regulatory look-through or the physical domicile is U.S., so a U.S.-domiciled party can never be
+    /// declassified out of the count.
     function isUSInvestor(address owner) public view returns (bool) {
-        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, _ANY);
-        if (!found) return false;
-        Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
-        return _isUSJurisdiction(cred.regulatoryJurisdiction) || _isUSJurisdiction(cred.investorJurisdiction);
+        return _isUSJurisdiction(getRegulatoryJurisdiction(owner)) || _isUSJurisdiction(getInvestorJurisdiction(owner));
     }
 
     /// @notice Seasoning reference for the UI (§11.1B): earliest valid issuance of the given kind.
@@ -429,22 +429,20 @@ contract LeXcheXBadge is
     // Internals
     // ─────────────────────────────────────────────────────────────────────────
 
-    uint8 private constant _ANY = 0;
-    uint8 private constant _HAS_US_STATE = 1;
-    uint8 private constant _HAS_BO_COUNT = 2;
-
-    /// @dev Most recent (highest issuanceDate) valid credential of `owner` carrying the requested attribute
-    function _mostRecentValidWith(address owner, uint8 attribute) internal view returns (uint256 tokenId, bool found) {
+    /// @dev The owner's authoritative credential for `attributeMask`: the most recent (by lastUpdated — a
+    /// correction or recertification wins; ties → higher tokenId) valid credential whose category governs every
+    /// requested attribute, so an unrelated credential can neither answer the attribute nor shadow one that does.
+    function _mostRecentValidWith(address owner, uint256 attributeMask) internal view returns (uint256 tokenId, bool found) {
         uint64 latest = 0;
         uint256 balance = balanceOf(owner);
         for (uint256 i = 0; i < balance; i++) {
             uint256 candidate = tokenOfOwnerByIndex(owner, i);
             if (!isValid(candidate)) continue;
             Credential storage cred = LeXcheXBadgeStorage.getCredential(candidate);
-            if (attribute == _HAS_US_STATE && cred.usState == bytes2(0)) continue;
-            if (attribute == _HAS_BO_COUNT && cred.beneficialOwnerCount == 0) continue;
-            if (!found || cred.issuanceDate >= latest) {
-                latest = cred.issuanceDate;
+            // filter only categories governing ALL attributes selected by attributeMask
+            if ((LeXcheXBadgeStorage.getCategory(cred.categoryId).governedAttributes & attributeMask) != attributeMask) continue;
+            if (!found || cred.lastUpdated > latest || (cred.lastUpdated == latest && candidate > tokenId)) {
+                latest = cred.lastUpdated;
                 tokenId = candidate;
                 found = true;
             }

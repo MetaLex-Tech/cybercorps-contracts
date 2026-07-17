@@ -37,19 +37,32 @@ enum CategoryKind {
     CUSTOM
 }
 
+// Attribute bitmask flags, shared by CredentialCategory.governedAttributes and the badge's attribute reads.
+// Masks compose (AND): ATTR_US_STATE | ATTR_BO_COUNT selects a credential authoritative for both.
+uint256 constant ATTR_INVESTOR_JURISDICTION = 1 << 0;   // physical investorJurisdiction
+uint256 constant ATTR_REGULATORY_JURISDICTION = 1 << 1; // §3(c)(1)(A) look-through classification
+uint256 constant ATTR_US_STATE = 1 << 2;                // U.S. state of residence/organization
+uint256 constant ATTR_BO_COUNT = 1 << 3;                // entity §3(c)(1)(A) look-through count
+
 /// @notice Issuer-defined credential category (schema) keyed by a bytes32 categoryId.
 struct CredentialCategory {
     string name;                        // human-readable category name (rendered as certificate title)
     string description;                 // rendered in tokenURI metadata
     CategoryKind kind;
     uint64 defaultValidityDuration;     // seconds; drives expiryDate at mint when the credential's own is unset
+
+    // §4.1.3A pre-mint enforcement
     bool requiresUsState;               // credential must carry usState when the holder is US-jurisdiction
     bool requiresBeneficialOwnerCount;  // entity credentials must carry the §3(c)(1)(A) look-through count
     bool requiresEvidenceHash;          // credential must anchor an offchain diligence record
+
     IERC5484.BurnAuth burnAuth;         // per-category ERC-5484 burn auth (OwnerOnly default, IssuerOnly for whitelists)
     address scope;                      // SPV cyberCORP address for SPV_WHITELIST / SYNDICATE; zero otherwise
     bool active;                        // false = retired: no new issuance, outstanding credentials unaffected
     bool exists;
+    // Which attributes this category is authoritative for (ATTR_* bitmask); an entitlement-only category
+    // (whitelist/syndicate) governs nothing and never moves the attribute reads.
+    uint256 governedAttributes;
 }
 
 /// @notice Per-token credential record; superset of the legacy LeXcheX Accreditation so v1 semantics carry over.
@@ -67,6 +80,7 @@ struct Credential {
     bytes32 evidenceHash;               // hash of the offchain diligence record (audit anchor)
     bytes extensionData;                // forward-compatible blob for future attributes
     string regulatoryJurisdiction;      // §3(c)(1)(A) look-through classification, decoupled from physical investorJurisdiction (an entity with any U.S. beneficial owner is classified "US"); empty => falls back to investorJurisdiction
+    uint64 lastUpdated;                 // last record mutation (mint/recertify/attribute edit/void); recency key for _mostRecentValidWith, distinct from the issuanceDate seasoning anchor
 }
 
 /// @title LeXcheXBadgeStorage - namespaced storage for the LeXcheXBadge credential registry

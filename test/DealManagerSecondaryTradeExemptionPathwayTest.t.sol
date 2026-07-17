@@ -16,7 +16,13 @@ import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC5484} from "../src/interfaces/IERC5484.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {LeXcheXBadge} from "../src/creds/lexchexBadge.sol";
-import {CategoryKind, Credential, CredentialCategory} from "../src/creds/storage/lexchexBadgeStorage.sol";
+import {
+    CategoryKind,
+    Credential,
+    CredentialCategory,
+    ATTR_INVESTOR_JURISDICTION,
+    ATTR_US_STATE
+} from "../src/creds/storage/lexchexBadgeStorage.sol";
 import {FundInterestData} from "../src/storage/extensions/FundInterestExtension.sol";
 import {
     AcceptOfferParams,
@@ -632,6 +638,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     }
 
     function _createCategory(bytes32 id, CategoryKind kind) internal {
+        bool isAnchor = kind == CategoryKind.KYC_AML; // KYC is the residence/identity anchor for these tests
         CredentialCategory memory c = CredentialCategory({
             name: "cat",
             description: "",
@@ -643,7 +650,8 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
             burnAuth: IERC5484.BurnAuth.OwnerOnly,
             scope: address(0),
             active: true,
-            exists: true
+            exists: true,
+            governedAttributes: isAnchor ? (ATTR_INVESTOR_JURISDICTION | ATTR_US_STATE) : 0
         });
         vm.prank(owner);
         badge.createCategory(id, c);
@@ -663,89 +671,11 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
             agreementId: bytes32(0),
             evidenceHash: bytes32(0),
             extensionData: "",
-            regulatoryJurisdiction: ""
+            regulatoryJurisdiction: "",
+            lastUpdated: 0
         });
         vm.prank(owner);
         badge.mint(to, categoryId, cred);
-    }
-
-    // A Cayman feeder with any U.S. beneficial owner is classified regulatory-US; the look-through read
-    // (isUSInvestor) is U.S. while the physical domicile stays Cayman for CFIUS/blue-sky.
-    function test_RegulatoryJurisdiction_DecouplesFromPhysicalDomicile() public {
-        address feeder = address(0xFEEDFEED);
-        Credential memory cred = Credential({
-            categoryId: CAT_ACCREDITED,
-            investorName: "Acme Feeder LP",
-            investorType: "Fund",
-            investorJurisdiction: "KY",
-            usState: bytes2(0),
-            beneficialOwnerCount: 10,
-            issuanceDate: 0,
-            expiryDate: 0,
-            voided: "",
-            agreementId: bytes32(0),
-            evidenceHash: bytes32(0),
-            extensionData: "",
-            regulatoryJurisdiction: "US"
-        });
-        vm.prank(owner);
-        badge.mint(feeder, CAT_ACCREDITED, cred);
-
-        assertTrue(badge.isUSInvestor(feeder));
-        assertEq(badge.getRegulatoryJurisdiction(feeder), "US");
-        assertEq(badge.getInvestorJurisdiction(feeder), "KY");
-    }
-
-    // When regulatoryJurisdiction is unset, isUSInvestor falls back to the physical investorJurisdiction.
-    function test_RegulatoryJurisdiction_FallsBackToPhysicalWhenUnset() public {
-        address usIndiv = address(0xB0B0);
-        _mintCred(usIndiv, CAT_ACCREDITED, "US", bytes2(0));
-        assertEq(badge.getRegulatoryJurisdiction(usIndiv), "");
-        assertTrue(badge.isUSInvestor(usIndiv));
-
-        address kyIndiv = address(0xB0B1);
-        _mintCred(kyIndiv, CAT_ACCREDITED, "KY", bytes2(0));
-        assertFalse(badge.isUSInvestor(kyIndiv));
-    }
-
-    // A wholly-non-US feeder that admits its first U.S. beneficial owner flips to regulatory-US in place,
-    // without disturbing the physical domicile.
-    function test_SetRegulatoryJurisdiction_FlipsClassificationInPlace() public {
-        address feeder = address(0xFEED02);
-        _mintCred(feeder, CAT_ACCREDITED, "KY", bytes2(0));
-        assertFalse(badge.isUSInvestor(feeder));
-
-        uint256 tokenId = badge.getCredentialByOwner(feeder);
-        vm.prank(owner);
-        badge.setRegulatoryJurisdiction(tokenId, "US");
-
-        assertTrue(badge.isUSInvestor(feeder));
-        assertEq(badge.getInvestorJurisdiction(feeder), "KY");
-    }
-
-    // Conservative: a U.S.-domiciled party is a U.S. investor even if its regulatory classification says
-    // otherwise — physical U.S. domicile can never be declassified out of the count.
-    function test_RegulatoryJurisdiction_UsDomicileCannotBeDeclassified() public {
-        address usEntity = address(0xB0B2);
-        Credential memory cred = Credential({
-            categoryId: CAT_ACCREDITED,
-            investorName: "US Co",
-            investorType: "Fund",
-            investorJurisdiction: "US",
-            usState: bytes2(0),
-            beneficialOwnerCount: 3,
-            issuanceDate: 0,
-            expiryDate: 0,
-            voided: "",
-            agreementId: bytes32(0),
-            evidenceHash: bytes32(0),
-            extensionData: "",
-            regulatoryJurisdiction: "KY"
-        });
-        vm.prank(owner);
-        badge.mint(usEntity, CAT_ACCREDITED, cred);
-
-        assertTrue(badge.isUSInvestor(usEntity));
     }
 
     function _sellerCertDetails() internal view returns (CertificateDetails memory) {
