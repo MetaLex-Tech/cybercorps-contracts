@@ -204,8 +204,10 @@ contract CyberScripUpgradeForkTest is Test {
             offerGlobalValues,
             offerPartyValues[0],
             offerParties,
-            issuerAPk
-        );
+            issuerAPk,
+            dmFactory.computeDealManagerAddress(keccak256(abi.encodePacked(userSalt))),
+            block.timestamp + 7 days,
+            bytes32(0));
 
         CertificateDetails[] memory offerDetails = new CertificateDetails[](1);
         offerDetails[0] = CertificateDetails({
@@ -354,8 +356,10 @@ contract CyberScripUpgradeForkTest is Test {
             globalValues,
             investorPartyValues,
             issuerA,
-            investorPk
-        );
+            investorPk,
+            roundManagerAddr,
+            eoi.expiry,
+            bytes32(0));
 
         vm.prank(investor);
         RoundManager(roundManagerAddr).submitEOI(
@@ -1230,7 +1234,10 @@ contract CyberScripUpgradeForkTest is Test {
         string[] memory globalValues,
         string[] memory partyValues,
         address authorityOfficer,
-        uint256 signerPrivKey
+        uint256 signerPrivKey,
+        address finalizer,
+        uint256 expiry,
+        bytes32 secretHash
     ) internal view returns (bytes memory) {
         (
             string memory legalUri,
@@ -1243,7 +1250,7 @@ contract CyberScripUpgradeForkTest is Test {
         parties[0] = authorityOfficer;
         parties[1] = signer;
         bytes32 contractId = keccak256(
-            abi.encode(templateId, salt, globalValues, parties)
+            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer, expiry)
         );
         return
             CyberAgreementUtils.signAgreementTypedData(
@@ -1267,7 +1274,10 @@ contract CyberScripUpgradeForkTest is Test {
         string[] memory globalValues,
         string[] memory partyValues,
         address[] memory parties,
-        uint256 signerPrivKey
+        uint256 signerPrivKey,
+        address finalizer,
+        uint256 expiry,
+        bytes32 secretHash
     ) internal view returns (bytes memory) {
         (
             string memory legalUri,
@@ -1276,7 +1286,7 @@ contract CyberScripUpgradeForkTest is Test {
             string[] memory partyFields
         ) = registry.getTemplateDetails(templateId);
         bytes32 contractId = keccak256(
-            abi.encode(templateId, salt, globalValues, parties)
+            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer, expiry)
         );
         return
             CyberAgreementUtils.signAgreementTypedData(

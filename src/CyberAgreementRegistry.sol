@@ -253,8 +253,14 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         address finalizer,
         uint256 expiry
     ) public returns (bytes32 contractId) {
+        // It is critical to bind `secretHash`, `finalizer`, and `expiry` into the id:
+        // the finalizer controls settlement and the expiry/secretHash gate who may sign,
+        // so omitting them would let a front-runner seize the same id with hostile terms
+        // and bind signers to an agreement they never authorized.
+        // TODO: an off-chain indexer that derives contractId (rather than reading the
+        // ContractCreated event) must include these three fields.
         contractId = keccak256(
-            abi.encode(templateId, salt, globalValues, parties)
+            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer, expiry)
         );
         if (agreements[contractId].parties.length > 0) {
             revert ContractAlreadyExists();

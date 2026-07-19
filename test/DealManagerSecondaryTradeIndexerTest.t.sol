@@ -491,7 +491,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         address[] memory parties = new address[](2);
         parties[0] = o.offeror;
         parties[1] = acceptor;
-        bytes32 settlementId = keccak256(abi.encode(o.templateId, uint256(settlementSalt), o.globalValues, parties));
+        bytes32 settlementId = keccak256(abi.encode(o.templateId, uint256(settlementSalt), o.globalValues, parties, bytes32(0), address(dm), block.timestamp + dm.getSettlementWindow()));
         return _agreementSig(settlementId, new string[](0), key);
     }
 
