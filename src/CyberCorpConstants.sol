@@ -83,6 +83,12 @@ struct CompanyOfficer {
     string title;
 }
 
+struct CompanyDirector {
+    address eoa;
+    string name;
+    string contact;
+}
+
 enum ExercisePriceMethod {
     perToken,
     perWarrant

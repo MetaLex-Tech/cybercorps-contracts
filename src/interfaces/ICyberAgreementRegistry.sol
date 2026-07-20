@@ -87,6 +87,13 @@ interface ICyberAgreementRegistry {
         string[] memory partyFields
     ) external;
 
+    function createTemplatePublic(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields
+    ) external returns (bytes32 templateId);
+
     function createContract(
         bytes32 templateId,
         uint256 salt,

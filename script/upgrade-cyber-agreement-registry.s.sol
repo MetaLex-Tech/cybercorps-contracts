@@ -8,10 +8,13 @@ import {BorgAuth} from "../src/libs/auth.sol";
 contract UpgradeCyberAgreementRegistryScript is Script {
     function run() public {
         bytes32 salt = bytes32(
-            keccak256("MetaLex.CyberAgreementRegistry.UpgradeV3.2.0")
+            keccak256("MetaLex.CyberAgreementRegistry.UpgradeV3.3.0")
         );
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_MAIN");
-        address registryProxy = 0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134;
+        address registryProxy = vm.envOr(
+            "CYBER_AGREEMENT_REGISTRY",
+            0xa9E808B8eCBB60Bb19abF026B5b863215BC4c134
+        );
 
         address deployer = vm.addr(deployerPrivateKey);
         console2.log("deployer: %s", deployer);
@@ -37,11 +40,11 @@ contract UpgradeCyberAgreementRegistryScript is Script {
             newRegistryImpl
         );
 
-       /* registry.upgradeToAndCall(newRegistryImpl, "");
+        registry.upgradeToAndCall(newRegistryImpl, "");
         console2.log(
             "CyberAgreementRegistry upgraded (proxy): %s",
             registryProxy
-        );*/
+        );
 
         vm.stopBroadcast();
     }

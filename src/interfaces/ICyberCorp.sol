@@ -39,7 +39,7 @@ distributed, transmitted, sublicensed, sold, or otherwise used in any form or by
 mechanical, including photocopying, recording, or by any information storage and retrieval system, 
 except with the express prior written permission of the copyright holder.*/
 
-import {CompanyOfficer} from "../CyberCorpConstants.sol";
+import {CompanyDirector, CompanyOfficer} from "../CyberCorpConstants.sol";
 
 pragma solidity 0.8.28;
 
@@ -62,13 +62,35 @@ interface ICyberCorp {
     function cyberCORPContactDetails() external view returns (string memory);
     function defaultDisputeResolution() external view returns (string memory);
     function companyPayable() external view returns (address);
-    function companyOfficers() external view returns (address[] memory);
+    function companyOfficers(
+        uint256 index
+    ) external view returns (
+        address eoa,
+        string memory name,
+        string memory contact,
+        string memory title
+    );
+    function companyDirectors(
+        uint256 index
+    ) external view returns (
+        address eoa,
+        string memory name,
+        string memory contact
+    );
+    function getCompanyOfficerCount() external view returns (uint256);
+    function getCompanyDirectorCount() external view returns (uint256);
     function cyberCORPType() external view returns (string memory);
     function dealManager() external view returns (address);
     function setDealManager(address _dealManager) external;
     function setRoundManager(address _roundManager) external;   
     function roundManager() external view returns (address);
     function addOfficer(CompanyOfficer memory _officer) external;
+    function activateBoardGovernance() external;
+    function boardGovernanceEnforced() external view returns (bool);
+    function isCyberCORPDirector(address account) external view returns (bool);
+    function addDirector(CompanyDirector calldata director) external;
+    function removeDirector(address director) external;
+    function setBoardAuthorityAdapter(address adapter) external;
     function addEscrowedOfficerSignature(bytes calldata signature) external;
     function setEscrowedOfficerSignature(uint256 index, bytes calldata signature) external;
     function getEscrowedOfficerSignature(uint256 index) external view returns (bytes memory);

@@ -52,19 +52,29 @@ contract BorgAuth is Initializable {
     uint256 public constant OWNER_ROLE = 99;
     uint256 public constant ADMIN_ROLE = 98;
     uint256 public constant PRIVILEGED_ROLE = 97;
+    uint256 public constant OFFICER_ROLE = 200;
+    uint256 public constant BOARD_ROLE = 300;
     address public pendingOwner;
 
     //mappings and events
     mapping(address => uint256) public userRoles;
     mapping(uint256 => address) public roleAdapters;
+    /// @notice Optional one-time role-management lock for newly deployed corps.
+    /// @dev Existing auth deployments keep the legacy owner-managed behavior
+    ///      because their bytecode is immutable and this slot/function does not
+    ///      exist there.
+    address public roleManager;
 
     event RoleUpdated(address indexed user, uint256 role);
     event AdapterUpdated(uint256 indexed role, address adapter);
+    event RoleManagerSet(address indexed roleManager);
 
     /// @dev user not authorized with given role
     error BorgAuth_NotAuthorized(uint256 role, address user);
     error BorgAuth_SetAnotherOwner();
     error BorgAuth_ZeroAddress();
+    error BorgAuth_RoleManagerAlreadySet();
+    error BorgAuth_NotRoleManager(address caller);
 
     /// @notice Empty constructor for implementation contract
     constructor(address owner) {
@@ -84,15 +94,28 @@ contract BorgAuth is Initializable {
         address user,
         uint256 role
     ) external {
-         onlyRole(OWNER_ROLE, msg.sender);
+        _authorizeRoleManagement();
         _updateRole(user, role);
+    }
+
+    /// @notice Permanently delegates role mutations to a governance contract.
+    /// @dev One-way by design: allowing replacement would recreate the direct
+    ///      officer bypass this lock is meant to close.
+    function setRoleManager(address manager) external {
+        if (manager == address(0)) revert BorgAuth_ZeroAddress();
+        if (roleManager != address(0)) {
+            revert BorgAuth_RoleManagerAlreadySet();
+        }
+        onlyRole(OWNER_ROLE, msg.sender);
+        roleManager = manager;
+        emit RoleManagerSet(manager);
     }
     
     /// @notice initialize ownership transfer
     /// @param newOwner address of new owner
     function initTransferOwnership(address newOwner) external {
         if (newOwner == address(0) || newOwner == msg.sender) revert BorgAuth_ZeroAddress();
-        onlyRole(OWNER_ROLE, msg.sender);
+        _authorizeRoleManagement();
         pendingOwner = newOwner;
     }
 
@@ -107,7 +130,7 @@ contract BorgAuth is Initializable {
     /// @notice function to purposefully revoke all roles from owner, rendering subsequent role updates impossible
     /// @dev this function is intended for use to remove admin controls from subsequent contracts using this auth
     function zeroOwner() external {
-        onlyRole(OWNER_ROLE, msg.sender);
+        _authorizeRoleManagement();
         _updateRole(msg.sender, 0);
     }
 
@@ -115,7 +138,7 @@ contract BorgAuth is Initializable {
     /// @param _role role to set adapter for
     /// @param _adapter address of adapter
     function setRoleAdapter(uint256 _role, address _adapter) external {
-        onlyRole(OWNER_ROLE, msg.sender);
+        _authorizeRoleManagement();
         roleAdapters[_role] = _adapter;
         emit AdapterUpdated(_role, _adapter);
     }
@@ -159,6 +182,17 @@ contract BorgAuth is Initializable {
     ) internal {
         userRoles[user] = role;
         emit RoleUpdated(user, role);
+    }
+
+    function _authorizeRoleManagement() internal view {
+        address manager = roleManager;
+        if (manager != address(0)) {
+            if (msg.sender != manager) {
+                revert BorgAuth_NotRoleManager(msg.sender);
+            }
+            return;
+        }
+        onlyRole(OWNER_ROLE, msg.sender);
     }
 }
 

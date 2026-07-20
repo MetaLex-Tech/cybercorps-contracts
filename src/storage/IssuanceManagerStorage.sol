@@ -50,11 +50,14 @@ import "../interfaces/ICyberCorp.sol";
 import "../interfaces/ICyberScrip.sol";
 import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/IIssuanceManagerFactory.sol";
+import "../interfaces/IShareClassTermsController.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import {ExemptionPathway, HostingMode} from "../interfaces/ISecondaryTradeStorage.sol";
 import "./CyberCertPrinterStorage.sol";
+import "./extensions/ICertificateExtension.sol";
 
 library IssuanceManagerStorage {
+    bytes32 private constant SHARE_EXTENSION_TYPE = keccak256("SHARE");
     error ConditionCheckFailed();
     error ScripifiedCertNotAllowed();
     error ScripToCertMinimumNotMet();
@@ -74,6 +77,8 @@ library IssuanceManagerStorage {
     error EmptyVault();
     error VaultRedemptionExceedsClaim();
     error VaultWithdrawalExceedsAssets();
+    error ClassTermsControllerAlreadyInstalled();
+    error ClassTermsMigrationLengthMismatch();
 
     /// @dev Ray precision for vault price-per-share (assets per 1 nominal share, 1e27 = 1.0).
     uint256 internal constant VAULT_RAY = 1e27;
@@ -148,6 +153,48 @@ library IssuanceManagerStorage {
         uint256 newUnitsRepresented,
         uint256 newUnitsScripified
     );
+
+    function executeMigrateClassTermsControllers(
+        address[] calldata certAddresses,
+        address controller,
+        bytes[] calldata extensionData
+    ) external {
+        if (certAddresses.length != extensionData.length) {
+            revert ClassTermsMigrationLengthMismatch();
+        }
+        for (uint256 i = 0; i < certAddresses.length; ++i) {
+            address certAddress = certAddresses[i];
+            ICyberCertPrinter printer = ICyberCertPrinter(certAddress);
+            address currentExtension = printer.getExtension(0);
+            if (currentExtension != controller) {
+                (bool isController,) = currentExtension.staticcall(
+                    abi.encodeCall(
+                        IShareClassTermsController.getClassTerms,
+                        (certAddress)
+                    )
+                );
+                if (currentExtension.code.length != 0 && isController) {
+                    revert ClassTermsControllerAlreadyInstalled();
+                }
+                printer.setExtension(0, controller);
+            }
+            IShareClassTermsController(controller).configureClassTerms(
+                certAddress,
+                extensionData[i]
+            );
+        }
+    }
+
+    function executeAmendClassTerms(
+        address certAddress,
+        bytes calldata extensionData
+    ) external {
+        address controller = ICyberCertPrinter(certAddress).getExtension(0);
+        IShareClassTermsController(controller).amendClassTerms(
+            certAddress,
+            extensionData
+        );
+    }
 
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.issuancemanager.storage.v1");
@@ -609,6 +656,7 @@ library IssuanceManagerStorage {
         CertificateDetails memory details
     ) external returns (uint256 id) {
         ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
+        _accountNewIssuance(certAddress, details, true);
         uint256 tokenId = cert.totalSupply();
         id = cert.safeMint(tokenId, to, details);
         _emitCertificateCreated(tokenId, certAddress, details);
@@ -621,6 +669,7 @@ library IssuanceManagerStorage {
         address investor,
         CertificateDetails memory details
     ) external {
+        _accountCertificateUpdate(certAddress, tokenId, details, true);
         ICyberCertPrinter(certAddress).assignCert(from, tokenId, investor, details);
     }
 
@@ -755,6 +804,12 @@ library IssuanceManagerStorage {
         CertificateDetails memory sellerDetails = cert.getActiveCertificateDetails(tokenId);
         if (units > sellerDetails.unitsRepresented) revert AmountExceedsAvailableUnits();
         sellerDetails.unitsRepresented -= units;
+        _accountCertificateUpdate(
+            certPrinter,
+            tokenId,
+            sellerDetails,
+            true
+        );
         cert.updateCertificateDetails(tokenId, sellerDetails);
         bool sellerVoided = sellerDetails.unitsRepresented == 0;
         if (sellerVoided) {
@@ -957,6 +1012,7 @@ library IssuanceManagerStorage {
 
         _depositCertScripUnits(certAddress, id, amount);
         details.unitsRepresented = details.unitsRepresented - amount;
+        _accountCertificateUpdate(certAddress, id, details, false);
         certificate.updateCertificateDetails(id, details);
         ICyberScrip(scripifiedCert).mint(toSend, scripAmount);
         (uint256 newTotalAssetsWad, uint256 newTotalNominalShares) = getCertScripUnitVault(
@@ -1061,6 +1117,12 @@ library IssuanceManagerStorage {
             activeDetails.unitsRepresented =
                 activeDetails.unitsRepresented +
                 units;
+            _accountCertificateUpdate(
+                certAddress,
+                selection.activeTokenId,
+                activeDetails,
+                false
+            );
             certificate.updateCertificateDetails(
                 selection.activeTokenId,
                 activeDetails
@@ -1099,15 +1161,38 @@ library IssuanceManagerStorage {
         } else {
             CertificateDetails memory details = approval.details;
             details.unitsRepresented = units;
-            uint256 createdTokenId = IIssuanceManager(address(this))
-                .createCertAndAssignWithName(
-                    certAddress,
-                    account,
-                    details,
-                    approval.investorName,
-                    approval.officerSignature,
-                    approval.endorsementTimestamp
+            (, uint256 createdTokenId) = _mintAssignedCertFromScrip(
+                certAddress,
+                account,
+                account,
+                details,
+                approval.investorName
+            );
+            Endorsement memory recertificationEndorsement = Endorsement({
+                endorser: address(this),
+                timestamp: approval.endorsementTimestamp,
+                signatureHash: approval.officerSignature,
+                registry: address(0),
+                agreementId: 0,
+                endorsee: account,
+                endorseeName: approval.investorName
+            });
+            certificate.addEndorsement(
+                createdTokenId,
+                recertificationEndorsement
+            );
+            certificate.addIssuerSignature(
+                createdTokenId,
+                approval.officerSignature
+            );
+            bytes memory escrowedOfficerSignature =
+                _getEscrowedOfficerSignature();
+            if (escrowedOfficerSignature.length > 0) {
+                certificate.addIssuerSignature(
+                    createdTokenId,
+                    escrowedOfficerSignature
                 );
+            }
             clearRecertificationApproval(certAddress, account);
             _setCertMaxFromCurrent(
                 certAddress,
@@ -1258,9 +1343,82 @@ library IssuanceManagerStorage {
     {
         _requireCompanyDetailsSet();
         cert = ICyberCertPrinter(certAddress);
+        _accountNewIssuance(certAddress, details, true);
         tokenId = cert.totalSupply();
         cert.safeMintAndAssign(to, owner, tokenId, details, ownerName);
         _emitCertificateCreated(tokenId, certAddress, details);
+    }
+
+    function _mintAssignedCertFromScrip(
+        address certAddress,
+        address to,
+        address owner,
+        CertificateDetails memory details,
+        string memory ownerName
+    )
+        internal
+        returns (ICyberCertPrinter cert, uint256 tokenId)
+    {
+        _requireCompanyDetailsSet();
+        cert = ICyberCertPrinter(certAddress);
+        _accountNewIssuance(certAddress, details, false);
+        tokenId = cert.totalSupply();
+        cert.safeMintAndAssign(to, owner, tokenId, details, ownerName);
+        _emitCertificateCreated(tokenId, certAddress, details);
+    }
+
+    function _accountNewIssuance(
+        address certAddress,
+        CertificateDetails memory details,
+        bool increasesIssuedUnits
+    ) private {
+        address controller = _shareClassTermsController(certAddress);
+        if (controller != address(0)) {
+            IShareClassTermsController(controller).accountNewIssuance(
+                certAddress,
+                details.extensionData,
+                details.unitsRepresented,
+                increasesIssuedUnits
+            );
+        }
+    }
+
+    function _accountCertificateUpdate(
+        address certAddress,
+        uint256 tokenId,
+        CertificateDetails memory details,
+        bool changesIssuedUnits
+    ) private {
+        address controller = _shareClassTermsController(certAddress);
+        if (controller != address(0)) {
+            IShareClassTermsController(controller).accountCertificateUpdate(
+                certAddress,
+                tokenId,
+                details.extensionData,
+                details.unitsRepresented,
+                changesIssuedUnits
+            );
+        }
+    }
+
+    function _shareClassTermsController(
+        address certAddress
+    ) private view returns (address extension) {
+        try ICyberCertPrinter(certAddress).getExtension(0) returns (
+            address foundExtension
+        ) {
+            extension = foundExtension;
+        } catch {
+            return address(0);
+        }
+        if (extension == address(0)) return address(0);
+        try ICertificateExtension(extension).supportsExtensionType(
+            SHARE_EXTENSION_TYPE
+        ) returns (bool supported) {
+            return supported ? extension : address(0);
+        } catch {
+            return address(0);
+        }
     }
 
     function _requireCompanyDetailsSet() internal view {

@@ -1,19 +1,19 @@
 # cyberCORPs Protocol — Control-Agreement Liens & Permissionless Foreclosure (CAL) — `PROPOSED`
 
-> **Status (2026-07-12): `PROPOSED` — nothing implemented on develop.** Spec added 2026-06-27
+> **Status (2026-07-19): `PROPOSED` — nothing implemented on develop.** Spec added 2026-06-27
 > (commit `93faa94`). Verified against develop: no lien/encumbrance/foreclosure code exists in
 > `src/` — none of the §18 files have been touched for this feature, and `src/libs/conditions/`
 > still contains only the pre-existing conditions (no `MaturityDefaultCondition` /
 > `ArbiterDefaultCondition` / `OracleNonPaymentCondition` / `RepaidCondition`). The §15 roadmap
-> deliverable — a stub in `notes/plans/protocol-improvement-plan.md` — was never added, and that
+> deliverable — a stub in `notes/plans/protocol-improvement-plan.md` — is now present as **P4**. The
 > plan's **P3** slot has since been taken by "Issuer-defined award templates" (commit `3923b4b`,
-> interim-shipped 2026-07-08 via `7edb89d`), so this spec needs a new item number when queued.
+> interim-shipped 2026-07-08 via `7edb89d`); this spec is therefore canonical protocol item **P4**.
 
 **Scope.** A full design spec for tying **UCC Article 8 / 9 / 12 control agreements** to cyberCORPs
 share-NFTs (`CyberCertPrinter` tokens) so the underlying registered shares become **encumbered by a
 lender's security interest** — perfected *by control* — and can be **permissionlessly foreclosed**
 on default. This is a protocol-side feature (`src/`); a companion webapp/indexer surface is sketched
-at the end. Promote to implementation as protocol item **P3**.
+at the end. Promote to implementation as protocol item **P4**.
 
 **Legal anchor.** Permanent Editorial Board for the UCC, *Report on the "Tokenization" of Securities
 Transfers Under the Uniform Commercial Code* (Draft for Public Comment, Apr 24 2026), **Case Study 2
@@ -654,10 +654,9 @@ listed here so the implementer sees the reasoning and the test that proves the f
   the standard `script/libs/` + `ERC1967Proxy`/deterministic-salt scripts (`deploy-*.s.sol`).
   Solidity 0.8.28, optimizer runs per repo config, MetaLeX proprietary header on all new files;
   condition files follow the existing `conditions/` SPDX style.
-- **Roadmap.** Add a **P3** stub to `notes/plans/protocol-improvement-plan.md` (house format:
-  problem → desired model → design direction → open questions) pointing at this spec.
-  *(Status 2026-07-12: not yet done — and the P3 slot in that plan is now "Issuer-defined award
-  templates" (`3923b4b`), so this spec will take the next free item number when the stub is added.)*
+- **Roadmap.** **P4 entry added** to `notes/plans/protocol-improvement-plan.md`
+  (house format: problem → desired model → design direction → open questions), pointing
+  at this spec. Implementation itself remains unstarted.
 
 ---
 
@@ -741,7 +740,7 @@ For `metalex-webapp` / `apps/cybercorps-web` and the shared cap-table features (
 | `src/libs/conditions/RepaidCondition.sol` | new (permissionless release predicate) |
 | `src/storage/extensions/ControlAgreementExtension.sol` | optional, read-only `tokenURI` surfacing |
 | `script/deploy-*.s.sol` | deploy conditions + extension; beacon/UUPS upgrade scripts |
-| `notes/plans/protocol-improvement-plan.md` | add **P3** stub pointing here *(not yet added; P3 since taken by issuer award templates — needs a new number, see Status)* |
+| `notes/plans/protocol-improvement-plan.md` | **P4 entry added** pointing here; implementation remains unstarted |
 
 ---
 

@@ -49,13 +49,14 @@ import "./interfaces/ITransferRestrictionHook.sol";
 
 import "./interfaces/ICertificateConverter.sol";
 import "./interfaces/IIssuanceManagerFactory.sol";
+import "./interfaces/IShareClassTermsController.sol";
 import "./storage/IssuanceManagerStorage.sol";
 
 /// @title IssuanceManager
 /// @notice Manages the issuance and lifecycle of digital certificates representing securities and more
 /// @dev Implements UUPS upgradeable pattern and BorgAuth access control
 contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
-    string public constant DEPLOY_VERSION = "4.1"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "4.2"; // For version-tracking on all deployment and future upgrades
 
     // IssuanceManager errors
     error CompanyDetailsNotSet();
@@ -72,6 +73,8 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     error RecertificationApprovalRequired();
     error InvalidInvestor();
     error InvalidInvestorName();
+    error ClassTermsControllerAlreadyInstalled();
+    error ClassTermsMigrationLengthMismatch();
     event ScripifiedCert(
         address indexed certAddress,
         uint256 indexed id,
@@ -232,6 +235,57 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
             _securityType,
             _securitySeries,
             _extension
+        );
+    }
+
+    /// @notice Creates a share printer and establishes its canonical terms in
+    ///         the same transaction.
+    function createCertPrinterWithClassTerms(
+        string[] memory _ledger,
+        string memory _name,
+        string memory _ticker,
+        string memory _certificateUri,
+        SecurityClass _securityType,
+        SecuritySeries _securitySeries,
+        address _extension,
+        bytes calldata _extensionData
+    ) external onlyOwner returns (address certAddress) {
+        certAddress = IssuanceManagerStorage.executeCreateCertPrinter(
+            _ledger,
+            _name,
+            _ticker,
+            _certificateUri,
+            _securityType,
+            _securitySeries,
+            _extension
+        );
+        IShareClassTermsController(_extension).configureClassTerms(
+            certAddress,
+            _extensionData
+        );
+    }
+
+    /// @notice Atomically moves supplied legacy share printers to the
+    ///         externalized class-terms controller.
+    function migrateClassTermsControllers(
+        address[] calldata certAddresses,
+        address controller,
+        bytes[] calldata extensionData
+    ) external onlyOwner {
+        IssuanceManagerStorage.executeMigrateClassTermsControllers(
+            certAddresses,
+            controller,
+            extensionData
+        );
+    }
+
+    function amendClassTerms(
+        address certAddress,
+        bytes calldata extensionData
+    ) external onlyOwner {
+        IssuanceManagerStorage.executeAmendClassTerms(
+            certAddress,
+            extensionData
         );
     }
 

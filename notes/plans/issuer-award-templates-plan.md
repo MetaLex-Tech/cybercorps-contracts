@@ -1,8 +1,9 @@
 # Issuer-defined award templates — design evaluation & recommendation
 
-**Status:** `INTERIM SHIPPED` (2026-07-08) — a **temporary** variant is live on-chain; see §0.
-The recommendation in §6 (contract-side `createTemplatePublic`) remains the **unbuilt** target
-end-state. **Cross-repo update (2026-07-12):** the §0 app-layer mitigations are now fully
+**Status:** `TARGET IMPLEMENTED LOCALLY / UNRELEASED` (2026-07-19). The **temporary**
+variant remains live on-chain; see §0. The §6 recommendation is implemented in the current
+worktrees and awaits coordinated contract/webapp rollout. The §0 app-layer mitigations are
+already
 **SHIPPED** in `metalex-webapp` — PR **#801** (self-serve per-corp award templates,
 content-addressed registration + DB-backed provenance, merged 2026-07-08), PR **#803**
 (bespoke per-recipient agreements, zero protocol change, merged 2026-07-08), PR **#805**
@@ -13,6 +14,22 @@ This doc is referenced by **P3** in `protocol-improvement-plan.md`.
 ---
 
 ## 0. Status update (2026-07-08) — interim solution shipped
+
+**Local hardening update (2026-07-19).** The target end state is implemented but not
+deployed:
+
+- `createTemplate` is owner-only again, restoring the curated caller-chosen namespace;
+- `createTemplatePublic(title, uri, globalFields, partyFields)` is permissionless,
+  derives the content hash on-chain, returns the ID, and is idempotent;
+- empty legal-contract URIs are rejected, eliminating the registry's ambiguous
+  “nonexistent” sentinel state;
+- the deployment salt is bumped to `UpgradeV3.3.0`;
+- five focused security/upgrade tests were added and the 18-test registry suite passes via IR; and
+- the webapp ABI and issuer-template hook now call `createTemplatePublic` and still
+  re-derive stored content before use to protect against legacy pre-upgrade records.
+
+Deployment is intentionally not implied by this code status. Upgrade simulation, coordinated
+proxy/webapp rollout, live owner/public-path calls, and post-upgrade content read-back remain.
 
 **What shipped.** Commit `7edb89d` ("Opening up template creation") dropped the `onlyOwner`
 modifier from the **caller-chosen-id** `createTemplate` (`src/CyberAgreementRegistry.sol`),
@@ -402,9 +419,10 @@ self-serve one).
    make the grants template id per-corp. This unblocks issuer-defined award templates with a
    ~6-line registry change, **no** MetaVesT/controller change, and **no** new trust
    assumptions (content-addressing supplies the anti-squat property).
-   *(Status 2026-07-12: app half ✅ SHIPPED — webapp #801, merged 2026-07-08; contract half
-   — `createTemplatePublic` — still unbuilt, interim-superseded by the §0 permissionless
-   `createTemplate`.)*
+   *(Status 2026-07-19: app half ✅ SHIPPED in webapp #801; the contract half and
+   matching ABI/call-site cutover are implemented locally/unreleased. The live
+   proxies still run the §0 interim permissionless caller-chosen path until the
+   coordinated upgrade.)*
 2. **Keep Option B in reserve** as a complementary path for genuinely bespoke per-grant
    agreements: add a `proposeAndSignDealStandalone` variant on the controller when that need
    appears. *(Status 2026-07-12: bespoke need since served app-side with zero protocol
