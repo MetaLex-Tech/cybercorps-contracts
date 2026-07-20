@@ -201,6 +201,12 @@ contract CyberCertPrinterEnhanced is CyberCertPrinter {
     function debugClearAcquisitionTimestamp(uint256 tokenId) external {
         CyberCertPrinterStorage.cyberCertStorage().acquisitionTimestamp[tokenId] = 0;
     }
+
+    /// @dev Flip endorsementRequired to exercise the bearer (unrestricted) mode; production certs are always
+    /// registered (endorsementRequired == true, set at initialize with no setter).
+    function debugSetEndorsementRequired(bool required) external {
+        CyberCertPrinterStorage.cyberCertStorage().endorsementRequired = required;
+    }
 }
 
 contract MockFundInterestExtension is ICertificateExtension {
@@ -233,6 +239,8 @@ contract CyberCertPrinterTest is Test {
 
     address private investor = address(0xA11CE);
     address private recipient = address(0xB0B);
+    address private custodian = address(0xC0DE);
+    address private custodian2 = address(0xC0DE2);
     address private initialExtension = address(0xE100);
     address private updatedExtension = address(0xE200);
 
@@ -413,6 +421,192 @@ contract CyberCertPrinterTest is Test {
         vm.prank(investor);
         vm.expectRevert(ICyberCertPrinter.TokenNotTransferable.selector);
         printer.transferFrom(investor, recipient, 2);
+    }
+
+    // ───────────────── Legal ownership vs. possession: scenario matrix ─────────────────
+    //
+    // Two independent layers: possession = ERC-721 ownerOf; legal title = legalOwnerOf. Legal title follows the
+    // token only when it is DELIVERED to the party named in the token's latest endorsement — the delivery-vs-
+    // payment (DvP) primitive that primary issuance uses to hand escrowed certs to investors on settlement.
+    // Every other move is possession-only and leaves legal title untouched. The registrar (assignCert /
+    // IssuanceManager void-and-reissue) can also move title directly, as a book-entry change with no token move.
+    //
+    //   Registered cert (endorsementRequired == true — the production default): the rules above apply.
+    //
+    //   Bearer cert (endorsementRequired == false): no endorsement gating; legal title simply tracks possession
+    //   and follows the token on every transfer.
+    //
+    //  Legend: Alice = legal owner · Bob = buyer / endorsee · Cust, Cust2 = custodians · endorsee = latest endorsement.
+    //  "before tx" / "after tx" bracket the operative transaction; ownerOf and legalOwnerOf appear under both so the
+    //  change is visible. (Tests: Alice=investor, Bob=recipient, Cust=custodian, Cust2=custodian2.) A transfer promotes
+    //  legal title only when `to == latest endorsee` (else possession-only); assignCert moves title book-entry (no token
+    //  move); a secondary sale settles by void-and-reissue (#7).
+    //
+    //                                                   |──────────── before tx ────────────|─────── after tx ───────|
+    //  # | Scenario                        | mode       | endorsee | ownerOf | legalOwnerOf | ownerOf | legalOwnerOf | fixed behavior
+    // ---|---------------------------------|------------|----------|---------|--------------|---------|--------------|---------------------------
+    //  1 | Custodial deposit               | registered | Alice    | Alice   | Alice        | Cust    | Alice        | to≠endorsee → no change
+    //  2 | Custodial return (endorsed)     | registered | Alice    | Cust    | Alice        | Alice   | Alice        | to==endorsee → self-no-op
+    //  3 | Custodian-to-custodian          | registered | Alice    | Cust    | Alice        | Cust2   | Alice        | to≠endorsee → no change
+    //  4 | Administered delivery-out       | registered | Bob      | Cust    | Bob          | Bob     | Bob          | to==endorsee → self-no-op
+    //  5 | Return, stale endorsement       | registered | Bob      | Cust    | Alice        | Alice   | Alice        | to≠endorsee → no change  (Claim #2)
+    //  6 | Endorsed delivery (DvP)         | registered | Bob      | Alice   | Alice        | Bob     | Bob          | to==endorsee → promote
+    //  7 | Custodial secondary sale        | registered | n/a      | Cust    | Alice        | Cust    | Bob          | void + reissue (new tokenId) †
+    //  8 | Registrar reassignment (held)   | registered | n/a      | Alice   | Alice        | Alice   | Bob          | assignCert, no token move
+    //  9 | Bearer transfer                 | bearer     | n/a      | Alice   | Alice        | Bob     | Bob          | title tracks possession
+    // ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    //  † #7 is void-and-reissue (secondaryTransfer, administered): "before" is the seller's lot (then voided) and
+    //    "after" is the freshly minted buyer lot under a NEW tokenId — not one token changing owner. #8 (assignCert)
+    //    is the admin in-place reassignment it contrasts with. The full sale flow lives in the secondary-transfer / fork suites.
+
+    // (1) Depositing with a custodian moves possession only; legal ownership stays with the depositor. The cert
+    // is endorsed to its own owner (Alice) — the state Deal/Round issuance leaves — which the deposit doesn't match.
+    function test_Matrix_Registered_CustodialDeposit() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _enableTransfers();
+        vm.prank(investor);
+        printer.addEndorsement(1, _endorsement(investor, investor)); // endorsee == Alice
+
+        vm.prank(investor);
+        printer.transferFrom(investor, custodian, 1);
+
+        assertEq(printer.ownerOf(1), custodian);
+        assertEq(printer.legalOwnerOf(1), investor);
+    }
+
+    // (2) Canonical custodial return: the cert is endorsed to its own legal owner (Alice), so the return from the
+    // custodian hits the `to == endorsee` branch — which re-asserts Alice as owner, i.e. a self-no-op.
+    function test_Matrix_Registered_CustodialReturnToEndorsedOwner() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _enableTransfers();
+        vm.prank(investor);
+        printer.addEndorsement(1, _endorsement(investor, investor)); // endorsee == Alice
+
+        vm.prank(investor);
+        printer.transferFrom(investor, custodian, 1);  // deposit
+        vm.prank(custodian);
+        printer.transferFrom(custodian, investor, 1);   // return: to == endorsee == Alice
+
+        assertEq(printer.ownerOf(1), investor);
+        assertEq(printer.legalOwnerOf(1), investor);
+    }
+
+    // (3) Re-delivery between custodians (ACATS-style) keeps legal ownership put; the endorsement to Alice does
+    // not match the destination custodian, so no title change.
+    function test_Matrix_Registered_CustodianToCustodian() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _enableTransfers();
+        vm.prank(investor);
+        printer.addEndorsement(1, _endorsement(investor, investor)); // endorsee == Alice
+
+        vm.prank(investor);
+        printer.transferFrom(investor, custodian, 1);
+        vm.prank(custodian);
+        printer.transferFrom(custodian, custodian2, 1);
+
+        assertEq(printer.ownerOf(1), custodian2);
+        assertEq(printer.legalOwnerOf(1), investor);
+    }
+
+    // (4) Administered hosting: cert is minted to a custodian while legal title rests with the buyer (Bob), and
+    // the mirrored endorsement names Bob. The custodian later delivers it out to Bob — to == endorsee, so the
+    // promote is a self-no-op (Bob is already the legal owner) and possession catches up.
+    function test_Matrix_Registered_AdministeredDeliveryOut() public {
+        vm.prank(address(issuanceManager));
+        printer.safeMintAndAssign(custodian, recipient, 1, _details(100, bytes("")), "Buyer");
+        _enableTransfers();
+        vm.prank(custodian);
+        printer.addEndorsement(1, _endorsement(custodian, recipient)); // endorsee == Bob
+
+        vm.prank(custodian);
+        printer.transferFrom(custodian, recipient, 1);
+
+        assertEq(printer.ownerOf(1), recipient);
+        assertEq(printer.legalOwnerOf(1), recipient);
+    }
+
+    // (5) A stale endorsement pointing at a third party (Bob) must not hijack a custodial return to Alice: the
+    // return's `to` (Alice) ≠ the latest endorsee (Bob), so title is left with Alice, not misassigned to Bob (Claim #2).
+    function test_Matrix_Registered_ReturnWithStaleEndorsementKeepsTitle() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _enableTransfers();
+
+        // Stale endorsement lingers on the token (endorsee is Bob, a third party — not Alice, the owner).
+        vm.prank(investor);
+        printer.addEndorsement(1, _endorsement(investor, recipient));
+
+        vm.prank(investor);
+        printer.transferFrom(investor, custodian, 1);
+        vm.prank(custodian);
+        printer.transferFrom(custodian, investor, 1);
+
+        assertEq(printer.ownerOf(1), investor);
+        assertEq(printer.legalOwnerOf(1), investor); // NOT reassigned to Bob, the stale endorsee
+    }
+
+    // (6) Delivering the token to the party named in the latest endorsement promotes legal title along with
+    // possession — the delivery-vs-payment path primary issuance relies on (escrow → investor at settlement).
+    function test_Matrix_Registered_EndorsedDeliveryMovesTitle() public {
+        _mintCert(1, investor, 100, bytes(""));
+        _enableTransfers();
+
+        vm.prank(investor);
+        printer.addEndorsement(1, _endorsement(investor, recipient));
+        vm.prank(investor);
+        printer.transferFrom(investor, recipient, 1);
+
+        assertEq(printer.ownerOf(1), recipient);
+        assertEq(printer.legalOwnerOf(1), recipient);
+    }
+
+    // (7) Custodial secondary sale: a market sale settled by void-and-reissue (IssuanceManager.secondaryTransfer,
+    // administered hosting) — NOT an in-place reassignment. The seller's lot is voided and a fresh lot is minted
+    // to the same custodian with the buyer as legal owner, so possession stays with the custodian while legal
+    // ownership moves Alice → Bob across a NEW tokenId. (secondaryTransfer needs the full stack; this reproduces
+    // its token-level effect — the flow is exercised end-to-end in the secondary-transfer / fork suites.)
+    function test_Matrix_Registered_CustodialSecondarySale() public {
+        // Seller's lot: held by the custodian, owned by Alice.
+        vm.prank(address(issuanceManager));
+        printer.safeMintAndAssign(custodian, investor, 1, _details(100, bytes("")), "Alice");
+
+        // Settlement: void the seller's lot, reissue a fresh lot to the same custodian for the buyer (Bob).
+        _void(1);
+        vm.prank(address(issuanceManager));
+        printer.safeMintAndAssign(custodian, recipient, 2, _details(100, bytes("")), "Bob");
+
+        assertTrue(printer.isVoided(1));              // seller lot retired
+        assertEq(printer.ownerOf(2), custodian);      // buyer lot: possession stays with the custodian
+        assertEq(printer.legalOwnerOf(2), recipient); // legal ownership is now Bob
+    }
+
+    // (8) Registrar reassignment, self-held: the owner holds their own cert and legal title is reassigned
+    // Alice → Bob as an in-place book-entry change by an admin (e.g. gift/inheritance/reorg, NOT a sale);
+    // possession stays with Alice. This is the admin path the custodial secondary sale (#7) is contrasted with.
+    function test_Matrix_Registered_RegistrarReassignmentMovesTitleOnly() public {
+        _mintCert(1, investor, 100, bytes(""));
+
+        _reassignLegalOwner(1, investor, recipient);
+
+        assertEq(printer.ownerOf(1), investor);       // possession unchanged
+        assertEq(printer.legalOwnerOf(1), recipient); // title moved
+    }
+
+    // (9) Bearer (unrestricted) certs have no registrar title: legal ownership tracks possession and follows
+    // the token down the transfer chain.
+    function test_Matrix_Bearer_TitleTracksPossession() public {
+        _mintCert(1, investor, 100, bytes(""));
+        CyberCertPrinterEnhanced(address(printer)).debugSetEndorsementRequired(false);
+        _enableTransfers();
+
+        vm.prank(investor);
+        printer.transferFrom(investor, recipient, 1);
+        assertEq(printer.ownerOf(1), recipient);
+        assertEq(printer.legalOwnerOf(1), recipient);
+
+        vm.prank(recipient);
+        printer.transferFrom(recipient, custodian, 1);
+        assertEq(printer.ownerOf(1), custodian);
+        assertEq(printer.legalOwnerOf(1), custodian);
     }
 
     function test_TokenTransferable_RevertsWhenCallerNotAuthorized() public {
@@ -1228,6 +1422,18 @@ contract CyberCertPrinterTest is Test {
             active: active,
             data: ""
         });
+    }
+
+    function _enableTransfers() private {
+        vm.prank(address(issuanceManager));
+        printer.setGlobalTransferable(true);
+    }
+
+    // Registrar path for a registered legal-owner change (sale/gift/inheritance/reorg): assignCert moves legal
+    // title without moving the token, mirroring what IssuanceManager does at settlement.
+    function _reassignLegalOwner(uint256 tokenId, address from, address to) private {
+        vm.prank(address(issuanceManager));
+        printer.assignCert(from, tokenId, to, _details(100, bytes("")));
     }
 
     function _endorsement(
