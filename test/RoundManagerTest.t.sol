@@ -2683,7 +2683,7 @@ contract RoundManagerFCFSTest is Test {
 
         // Deploy upgraded corp and round manager
         (address corp, , , , address roundManager) = CyberCorpHelper.deployCorp(corpFactory, "Upgraded Corp", me, me);
-        vm.prank(address(corpFactory));
+        vm.prank(me);
         CyberCorp(corp).setDealManager(address(roundManager));
 
         RoundManager rm = RoundManager(payable(roundManager));
@@ -2831,7 +2831,7 @@ contract RoundManagerFCFSTest is Test {
         RoundManager rm = RoundManager(rmAddr);
 
         // Allow RoundManager to transfer certs by setting it as the corp's dealManager
-        vm.prank(address(corpFactory));
+        vm.prank(me);
         CyberCorp(corp).setDealManager(address(rm));
 
         MockPaymentToken usdc = new MockPaymentToken();
@@ -2930,7 +2930,7 @@ contract RoundManagerFCFSTest is Test {
         );
         RoundManager rm = RoundManager(rmAddr);
 
-        vm.prank(address(corpFactory));
+        vm.prank(me);
         CyberCorp(corp).setDealManager(address(rm));
 
         // Simulate a round where `maxTicket` > `raiseCap` so an investor could deposit more than remaining
@@ -3078,7 +3078,7 @@ contract RoundManagerFCFSTest is Test {
             me
         );
         RoundManager rm = RoundManager(rmAddr);
-        vm.prank(address(corpFactory));
+        vm.prank(me);
         CyberCorp(corp).setDealManager(address(rm));
         MockPaymentToken usdc = new MockPaymentToken();
 

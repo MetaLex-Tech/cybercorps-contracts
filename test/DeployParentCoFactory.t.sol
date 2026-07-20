@@ -9,6 +9,7 @@ import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {ParentCoFactory} from "../src/ParentCoFactory.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
+import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {CompanyOfficer} from "../src/CyberCorpConstants.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 
@@ -50,6 +51,13 @@ contract DeployParentCoFactoryForkTest is Test {
         vm.createSelectFork("base_sepolia", 40732512); // pinned to an old block before ParentCoFactory is deployed
         coreDeployment = DeploymentConstants.coreV2(block.chainid);
         deps = DeploymentConstants.deps(block.chainid);
+
+        // Model the production forward-path rollout: the shared factory must
+        // point at CyberCorp v5 before a P1-aware top-level factory is used.
+        CyberCorp cyberCorpV5 = new CyberCorp();
+        vm.prank(coreDeployment.metalexSafe);
+        CyberCorpSingleFactory(coreDeployment.cyberCorpSingleFactory)
+            .setRefImplementation(address(cyberCorpV5));
 
         registry = CyberAgreementRegistry(coreDeployment.cyberAgreementRegistry);
 
@@ -258,11 +266,14 @@ contract DeployParentCoFactoryForkTest is Test {
         assertGe(parentCoFactory.userRoles(parentCoOfficer2), ownerRole);
     }
 
-    function test_parentCoOfficersAreOwnersOfParentCyberCorp() public {
+    function test_parentCorpGovernanceActivatesAfterOfficerBootstrap() public {
         CyberCorp corp = CyberCorp(parentCoFactory.parentCorp());
-        uint256 ownerRole = corp.AUTH().OWNER_ROLE();
-        assertGe(corp.userRoles(parentCoOfficer1), ownerRole);
-        assertGe(corp.userRoles(parentCoOfficer2), ownerRole);
+        BorgAuth corpAuth = corp.AUTH();
+
+        assertTrue(corp.boardGovernanceEnforced());
+        assertEq(corpAuth.roleManager(), address(corp));
+        assertEq(corpAuth.userRoles(parentCoOfficer1), corpAuth.BOARD_ROLE());
+        assertEq(corpAuth.userRoles(parentCoOfficer2), corpAuth.OFFICER_ROLE());
     }
 
     function test_deploySubCorp_revertIfEscrowSignerNotOfficer() public {

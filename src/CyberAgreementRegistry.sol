@@ -175,6 +175,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     error InvalidSecret();
     error MismatchedPartyValuesLength();
     error FinalizerNotDefined();
+    error LegalContractUriEmpty();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {}
@@ -225,15 +226,16 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         _;
     }
 
-    /// @notice Create a new agreement template. Only the owner can do it externally; however, the registry itself can
-    /// do it as well for just-in-time operations.
+    /// @notice Create a curated agreement template with a caller-chosen ID.
+    /// @dev Caller-chosen IDs are owner-gated because making this path public
+    ///      allows namespace squatting and front-running.
     function createTemplate(
         bytes32 templateId,
         string memory title,
         string memory legalContractUri,
         string[] memory globalFields,
         string[] memory partyFields
-    ) external {
+    ) external onlyOwner {
         _createTemplate(
             templateId,
             title,
@@ -241,6 +243,31 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
             globalFields,
             partyFields
         );
+    }
+
+    /// @notice Permissionlessly register a content-addressed agreement template.
+    /// @dev The ID is the hash of the complete template content, so another
+    ///      caller cannot squat or front-run an ID with different content.
+    ///      Re-registering identical content is intentionally idempotent.
+    function createTemplatePublic(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields
+    ) external returns (bytes32 templateId) {
+        templateId = keccak256(
+            abi.encode(title, legalContractUri, globalFields, partyFields)
+        );
+
+        if (bytes(templates[templateId].legalContractUri).length == 0) {
+            _createTemplate(
+                templateId,
+                title,
+                legalContractUri,
+                globalFields,
+                partyFields
+            );
+        }
     }
 
     function createContract(
@@ -995,6 +1022,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         if (bytes(title).length == 0) {
             revert TitleEmpty();
+        }
+        if (bytes(legalContractUri).length == 0) {
+            revert LegalContractUriEmpty();
         }
 
         templates[templateId] = Template({

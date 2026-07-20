@@ -10,6 +10,7 @@ import {RoundManager} from "../src/RoundManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {FeeOverride} from "../src/interfaces/IRoundManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
+import {CyberCorp} from "../src/CyberCorp.sol";
 import {EIP712Lib} from "../src/libs/EIP712Lib.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {Round, RoundType} from "../src/libs/RoundLib.sol";
@@ -120,6 +121,13 @@ contract PumpCorpFactoryForkTest is Test {
         (officer, officerPk) = makeAddrAndKey("officer");
         (attacker, attackerPk) = makeAddrAndKey("attacker");
         (investor, investorPk) = makeAddrAndKey("investor");
+
+        // Model the production forward-path rollout: the shared factory must
+        // point at CyberCorp v5 before a P1-aware top-level factory is used.
+        CyberCorp cyberCorpV5 = new CyberCorp();
+        vm.prank(metalexSafe);
+        CyberCorpSingleFactory(CYBERCORP_SINGLE_FACTORY)
+            .setRefImplementation(address(cyberCorpV5));
 
         // Deploy mock zkPassport condition
         zkpassportCondition = new MockZkPassportCondition();
@@ -466,6 +474,17 @@ contract PumpCorpFactoryForkTest is Test {
         FeeOverride memory fo = rmFactory.getInstanceFeeOverride(rm);
         assertFalse(fo.enabled, "there should be no fee overrides");
         assertEq(RoundManager(rm).computeFee(1 ether), 0.003 ether, "expect fee ratio of 0.3%");
+    }
+
+    function test_DeployActivatesBoardGovernance() public {
+        (address corpAddress,,) =
+            _deployLifecycle(299998, RoundType.FCFS, new address[](0));
+        CyberCorp corp = CyberCorp(corpAddress);
+        BorgAuth corpAuth = corp.AUTH();
+
+        assertTrue(corp.boardGovernanceEnforced());
+        assertEq(corpAuth.roleManager(), corpAddress);
+        assertEq(corpAuth.userRoles(officer), corpAuth.BOARD_ROLE());
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

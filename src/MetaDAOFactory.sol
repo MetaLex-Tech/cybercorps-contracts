@@ -321,6 +321,8 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
 
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
+        BorgAuth(authAddress).setRoleManager(cyberCorpAddress);
+        ICyberCorp(cyberCorpAddress).activateBoardGovernance();
 
         emit MetaCorpDeployed(cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress, roundManagerAddress, address(0), 0, _officer.eoa);
     }
