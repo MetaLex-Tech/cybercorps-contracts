@@ -231,6 +231,8 @@ interface ICyberCertPrinter is IERC721 {
         uint256 tokenId
     ) external view returns (CertificateDetails memory);
     function getExtension(uint256 tokenId) external view returns (address);
+    function setExtension(uint256 tokenId, address extension) external;
+    function issuanceManager() external view returns (address);
     function getIssuerSignatureCount(uint256 tokenId) external view returns (uint256);
     function getIssuerSignatureAt(uint256 tokenId, uint256 index) external view returns (bytes memory);
     function addCertLegend(uint256 tokenId, string memory newLegend) external;

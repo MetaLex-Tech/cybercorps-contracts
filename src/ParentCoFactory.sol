@@ -286,6 +286,39 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             address roundManagerAddress
         )
     {
+        return _deployCorp(
+            salt,
+            companyName,
+            companyType,
+            companyJurisdiction,
+            companyContactDetails,
+            defaultDisputeResolution,
+            _companyPayable,
+            _officer,
+            true
+        );
+    }
+
+    function _deployCorp(
+        bytes32 salt,
+        string memory companyName,
+        string memory companyType,
+        string memory companyJurisdiction,
+        string memory companyContactDetails,
+        string memory defaultDisputeResolution,
+        address _companyPayable,
+        CompanyOfficer memory _officer,
+        bool activateGovernance
+    )
+        internal
+        returns (
+            address cyberCorpAddress,
+            address authAddress,
+            address issuanceManagerAddress,
+            address dealManagerAddress,
+            address roundManagerAddress
+        )
+    {
         if (salt == bytes32(0)) revert InvalidSalt();
 
         // Deploy BorgAuth with CREATE2 with new param address owner
@@ -365,6 +398,10 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
         BorgAuth(authAddress).updateRole(roundManagerAddress, 99);
+        if (activateGovernance) {
+            BorgAuth(authAddress).setRoleManager(cyberCorpAddress);
+            ICyberCorp(cyberCorpAddress).activateBoardGovernance();
+        }
 
         emit CorpDeployed(cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress, roundManagerAddress, address(0), 0, _officer.eoa);
     }
@@ -395,7 +432,7 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             issuance,
             dealMgr,
             roundMgr
-        ) = deployCorp(
+        ) = _deployCorp(
             salt,
             companyName,
             companyType,
@@ -403,13 +440,16 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
             companyContactDetails,
             defaultDisputeResolution,
             _companyPayable,
-            officer
+            officer,
+            false
         );
 
         // Add the remaining officers
         for (uint256 i = 1; i < parentCoOfficers.length; i++) {
             ICyberCorp(corp).addOfficer(parentCoOfficers[i]);
         }
+        BorgAuth(auth).setRoleManager(corp);
+        ICyberCorp(corp).activateBoardGovernance();
 
         parentCorp = corp;
         parentAuth = auth;

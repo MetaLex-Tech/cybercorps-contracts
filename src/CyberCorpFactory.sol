@@ -277,6 +277,11 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
         BorgAuth(authAddress).updateRole(roundManagerAddress, 99);
 
+        // Lock direct role mutation to the CyberCorp, then activate the
+        // governance-correct Board -> officer authority path.
+        BorgAuth(authAddress).setRoleManager(cyberCorpAddress);
+        ICyberCorp(cyberCorpAddress).activateBoardGovernance();
+
         emit CyberCorpDeployed(
             cyberCorpAddress,
             authAddress,

@@ -9,26 +9,43 @@ up front. Companion to the webapp-side plan (`notes/plans/mainframe-changes-plan
 **Status.** Active log. Each item: **problem → desired model → design direction → open questions**.
 Items are `PROPOSED` until specced/scheduled.
 
-**Last audited:** 2026-07-12 against `develop`. P1 `PROPOSED` (no code shipped — officer fns still
-`onlyOwner`, no Board role). P2 `PROPOSED` (no code shipped — terms still per-cert; PR #107 reshaped
-the struct but not the storage model, see P2 status note). P3 `INTERIM SHIPPED` on-chain (commit
-`7edb89d`, live 2026-07-08); webapp self-serve shipped (`metalex-webapp` #801 + #803, merged
-2026-07-08); recommended end-state (Option A) not built.
+**Last audited:** 2026-07-20 against the current worktree. P1 is **implemented locally for new
+corps / unreleased**: Board and officer roles are distinct, direct ACL mutation is locked behind
+the `CyberCorp`, Board membership is stored on-chain, officer and Board last-member guards are
+enforced, and a Board-role adapter provides the stockholder-governance execution hook. P2 is
+**implemented locally / unreleased** through an externalized `ShareClassTermsController`: the
+controller stores and hashes canonical `SeriesTerms`, enforces the authorized-share cap, maintains
+issued-unit accounting across update/void/unvoid/burn and scrip representation changes, and
+exposes governed configuration/amendment paths. `IssuanceManager` supplies the enforcement hooks
+and an atomic, one-way legacy-printer migration; the webapp resolves the controller through the
+printer and locks its canonical terms. This replaced an earlier in-printer prototype that exceeded
+EIP-170. The focused P2 suite passes 10/10, including atomic `upgradeToAndCall`, batch rollback,
+length validation, and migration replacement prevention, and all
+production contracts fit the runtime-size limit. P3's interim implementation remains
+live on-chain (commit `7edb89d`, 2026-07-08), while the recommended Option A hardening is
+**implemented locally / unreleased**: arbitrary caller-chosen IDs are owner-only again,
+`createTemplatePublic` is content-addressed and idempotent, empty legal URIs are rejected,
+the focused registry suite passes 18/18 including proxy state preservation, and the webapp
+ABI/call site is updated locally.
+All 50 current non-fork Foundry test files pass individually on the final local tree. The monolithic
+whole-suite command was not used as release evidence because unrelated legacy external-fork
+tests can spend an unbounded period retrying remote RPCs; the release-critical pinned fork
+suites are recorded under P1 below.
+Coordinated proxy upgrade plus webapp rollout/runtime verification remain. P4
+control-agreement liens / permissionless foreclosure is `PROPOSED`; no lien code exists.
 
 ---
 
-## P1 — Board role: governance-correct appointment & removal of officers — `PROPOSED`
+## P1 — Board role: governance-correct appointment & removal of officers — `TARGET LOCAL / UNRELEASED`
 
-_Status check 2026-07-12: still accurate on `develop` — `addOfficer`/`removeOfficer`/`removeOfficerAt`
-remain `onlyOwner`-gated with no last-officer guard (`src/CyberCorp.sol:191/200/215`), and no Board
-role exists in `src/libs/auth.sol`. Nothing shipped._
+**Status update (2026-07-19).** The forward-deployment target is implemented locally and its
+available fork suites pass. It has not been deployed. The matching webapp v5
+roster/mutation/consent integration is implemented locally but has not received
+authenticated hosted-runtime acceptance.
 
-**Problem (current on-chain behavior).** Every company officer holds BorgAuth role **200**, and the
-officer-management functions on `CyberCorp` — `addOfficer` (`src/CyberCorp.sol:191`), `removeOfficer`
-(`:200`), `removeOfficerAt` (`:215`) — are gated only by **`onlyOwner()`**, which is a *threshold*
-check `userRoles[caller] >= OWNER_ROLE (99)` (`src/libs/auth.sol`; cf. `isCyberCORPOfficer` =
-`role >= OWNER_ROLE`, `CyberCorp.sol:185`). Because every officer sits at 200 (≥ 99),
-**any officer can appoint or remove any other officer — or themselves.** Consequences:
+The historical/live behavior was a flat ACL: every company officer held BorgAuth role **200**, and
+the officer-management functions were gated by the numeric `onlyOwner()` threshold. Any officer
+could therefore appoint or remove any other officer, including the last officer. That caused:
 
 - **Flat, mutual eviction.** Officers are a flat peer set with no hierarchy; any co-owner can
   unilaterally remove the others, and in a dispute whoever signs `removeOfficer` first wins.
@@ -38,69 +55,138 @@ check `userRoles[caller] >= OWNER_ROLE (99)` (`src/libs/auth.sol`; cf. `isCyberC
   zero (no address `>= 99` → `onlyOwner` can never pass again → the corp is permanently frozen).
   (The webapp `metalex-webapp` PR #745 adds a *UI-only* guard; nothing enforces it on-chain.)
 
-This mismatches real corporate governance, where **stockholders elect the board, and the board
-appoints/removes officers** — officers do not appoint or fire themselves or each other.
+This mismatched real corporate governance, where **stockholders elect the board, and the board
+appoints/removes officers**.
 
-**Desired model.** Introduce a distinct **Board** (director) authority above officers:
+**Implemented target.**
 
 - **Officers are appointed/removed by the Board**, not by other officers. Re-gate
   `addOfficer` / `removeOfficer` / `removeOfficerAt` to require **Board** authority rather than
   `onlyOwner`/officer-200.
-- **The Board can only be changed in two ways:** (a) **by the Board itself** (board members
-  appoint/remove board members), or (b) **by the tokenized stockholders** (the on-chain equity
-  holders can replace the board).
+- **The Board can be changed by the Board itself** through explicit director add/remove functions,
+  or by an executor authorized through the Board role's `IAuthAdapter` hook. The actual
+  class-aware stockholder voting adapter/Governor is still a separate implementation item.
 - This encodes the real hierarchy on-chain — **tokenized stockholders → Board → officers →
   managers** — consistent with the constitutive-register thesis (the stockholders, the board, and
   their votes are all on-chain rather than pointers to an off-chain cap table).
 
-**Design direction (high-level — details TBD).**
+Implementation details:
 
-- A new **Board role** in BorgAuth (a distinct level/role above officer-200, or a separate Board
-  module); officer-management functions check Board authority instead of `onlyOwner`.
-- **Board self-management:** board-gated add/remove of board members.
-- **Stockholder override:** the protocol already has the hook — BorgAuth's **`IAuthAdapter` /
-  `setRoleAdapter`** lets a role's authority be delegated to an external contract. The Board role
-  could use an adapter that defers to a **stockholder-governance contract** (a vote/snapshot of the
-  cert/scrip holders representing equity, or a Governor/timelock), so "stockholders can replace the
-  board" without hard-coding a voting mechanism into `auth.sol`.
-- **Migration / backward-compat:** existing corps have officers at flat-200 with self-referential
-  power. A migration seats an initial Board (e.g. the founder becomes the first board member +
-  officer) and re-points officer management at the Board — likely via the existing `*WithMigration`
-  pattern.
-- **On-chain last-member guards:** prevent the Board (and officers) from reaching zero and bricking
-  the corp — the guard the webapp currently only enforces in the UI.
+- `BorgAuth` defines `OFFICER_ROLE = 200` and `BOARD_ROLE = 300`, and supports an irreversible,
+  one-time `roleManager`. Once the factory hands role management to the new `CyberCorp`, officers
+  cannot bypass Board policy by calling `updateRole` or `setRoleAdapter` directly.
+- `CyberCorp` v5 stores separate director/officer rosters and membership mappings. It exposes
+  Board activation, director add/remove, membership/count reads, and Board adapter configuration.
+- New deployments seed the founder as both the first director and first officer. All four corp
+  factories complete the ACL handoff and activate Board governance only after their manager roles
+  are configured. ParentCo additionally completes its configured multi-officer bootstrap before
+  the one-way handoff, so it does not lose authority midway through initialization.
+- The forward rollout deploys a separate v5 `CyberCorpSingleFactory` and atomically pairs each
+  upgraded top-level factory implementation with that pointer via `upgradeToAndCall`. The legacy
+  single factory/reference stays unchanged, preventing an omitted legacy factory from silently
+  deploying an unactivated v5 corp.
+- Officer appointment/removal is Board-gated once governance is enforced. Removing the last
+  officer or director reverts, and removing one capacity preserves the other for dual-role people.
+- Legacy upgraded proxies remain explicitly in compatibility mode until governance activation;
+  the app/plans must not label that mode as Board-enforced.
 
-**Open questions.**
+**Verification.** `CyberCorpBoardAuthorityTest` passes 7/7, covering the one-way role-manager lock,
+officer bypass prevention, Board-controlled officers, Board self-management, last-member guards,
+dual-role preservation, and adapter-authorized Board replacement. `CyberCorpSingleFactoryTest`
+passes. The pinned fork suites now model the required rollout order by updating the shared
+`CyberCorpSingleFactory` reference to v5 before using a P1-aware top-level factory:
+`CyberCorpForkTest` passes 47/47, `PumpCorpFactoryForkTest` passes 36/36, and
+`DeployParentCoFactoryForkTest` passes 25/25. Pump and ParentCo include explicit assertions for
+the role-manager lock, Board activation, and exact founder/additional-officer roles. The rollout
+scripts compile, and `ParentCoFactory` remains 3,423 bytes below EIP-170. No transaction has been
+broadcast.
 
-1. **Role encoding:** a new numeric BorgAuth level (where, relative to 200 / 99?) vs a separate
-   Board contract/module? Threshold (`>=`) semantics mean a higher Board level would also satisfy
-   officer/owner gates — intended or not?
-2. **What counts as "tokenized stockholders"** for the governance path — cyberSHARES / cyberSCRIP
-   holders, registered cert holders, or a per-class voting weight? Quorum / threshold / timelock?
-3. **Mechanism for the stockholder → board path:** an `IAuthAdapter` deferring to a Governor
-   contract, a direct stockholder-vote function on a Board module, snapshot-based, …?
-4. **Interaction with `OWNER_ROLE = 99` (the manager contracts) and the upgrade co-approval model**
-   — does Board subsume "owner," or coexist alongside it?
-5. **Legal mapping:** confirm the board / officer / stockholder split maps cleanly across the entity
-   types the protocol supports (DE C-corp directors & officers; LLC managers & members; SPC; etc.).
+**What remains before the first real pilot.**
 
-**References.** `src/CyberCorp.sol:185-222` (officer fns + `isCyberCORPOfficer`); `src/libs/auth.sol`
-(BorgAuth roles, `onlyRole` threshold, `updateRole`, `setRoleAdapter` / `IAuthAdapter`);
-`src/CyberCorpFactory.sol:220` (founder granted 200 at deploy). Webapp side: `metalex-webapp` M34 /
-PR #745 (Mainframe ownership UI) and the auth findings in its `notes/plans/mainframe-changes-plan.md`.
+1. Runtime-test and release the locally implemented webapp branch that uses v5
+   director reads and `addDirector`/`removeDirector`, gates officer controls on
+   Board authority, routes consent signers from the protocol roster, labels
+   legacy mode, and suppresses the legacy transfer flow for v5.
+2. The root action matrix is now implemented locally: legal identity, manager
+   pointers, treasury payable address, and corp upgrades are Board-gated when
+   enforcement is active; reusable escrowed signatures remain an officer
+   operation. Confirm this policy in legal/product review and extend it to
+   manager-contract actions only where a concrete corporate-approval rule
+   requires Board consent.
+3. Because existing `BorgAuth` deployments are immutable, inventory the small set of corps with
+   real records and choose per-corp migration/redeployment. Given current usage, do not attempt a
+   blanket migration of hundreds of test corps.
+4. Fork acceptance is complete. Dry-run the rollout script against the intended target block,
+   deploy a fresh test corp through every enabled route, and complete the authenticated
+   boardroom/consent/issuance acceptance checklist before any production cutover.
+5. Limit the pilot to a corporation whose founder-seeded initial Board policy has been explicitly
+   accepted. Confirm the legal mapping for LLCs, partnerships, SPCs, and funds before presenting
+   director/officer vocabulary to those entity types.
+
+The concrete class-aware stockholder voting/Governor adapter is a later or
+pilot-conditional item, not a blocker for a deliberately scoped founder-Board
+pilot that makes no claim of on-chain stockholder elections. Do not build it over
+current spot certificate balances. It first needs historical voting checkpoints
+at a record-date block, aggregation by registered/legal owner (which can differ
+from NFT `ownerOf`), and canonical per-class voting terms; then class voting,
+quorum, thresholds, proposal execution, replay protection, and timelocks. Until
+those prerequisites exist, the adapter hook is only an execution boundary and the
+UI must describe the founder-seeded Board as bootstrap policy, not stockholder
+governance.
+
+The forward rollout and selective legacy disposition are specified in
+[p1-board-authority-rollout-runbook.md](p1-board-authority-rollout-runbook.md).
+
+**References.** `src/CyberCorp.sol`; `src/libs/auth.sol`; the four factory handoff sites;
+`test/CyberCorpBoardAuthorityTest.t.sol`. Webapp side:
+`metalex-webapp/notes/plans/cybercorps-boardroom-plan.md`.
 
 ---
 
-## P2 — Class-level security terms have no on-chain home (stored per-certificate) — `PROPOSED`
+## P2 — Canonical class terms and authorized-share enforcement — `TARGET LOCAL / UNRELEASED`
 
-_Status check 2026-07-12: still accurate on `develop`; nothing from the desired model has shipped.
-Note PR #107 (`feat/shares-extension-logic`, merged 2026-06-02 — predates this section) reshaped the
+_Historical baseline: PR #107 (`feat/shares-extension-logic`, merged 2026-06-02) reshaped the
 per-cert struct — the old flat `ShareData` became `ShareCertData` with a dedicated `SeriesTerms` terms
 struct (`ShareExtension.sol:142-183`, expanded with dividend/redemption/pro-rata/information-rights
-fields) — but the **storage model is unchanged**: `ShareExtension` is a stateless encoder,
-`SeriesTerms` is still ABI-encoded into each cert's `extensionData` (now
-`CyberCertPrinterStorage.sol:58`), `CyberCertPrinter.initialize` still stores identity only, and
-`authorizedShares` remains unenforced. #107 does not address this item._
+fields), but left the storage model per-certificate and `authorizedShares` unenforced._
+
+**Status update (2026-07-19).** The deployable target is implemented locally but not deployed:
+
+- `ShareClassTermsController`, a UUPS extension facade, stores each printer's canonical
+  `SeriesTerms` bytes/hash, authorized shares, issued units, and configured flag. It delegates
+  rendering/parsing to the existing `ShareExtension`, so `CyberCertPrinter` remains at deploy
+  version 4 with no storage or beacon upgrade.
+- `ShareExtension.getSeriesTermsData` extracts exactly `SeriesTerms`. The controller validates
+  every later share mint/update against the canonical hash; `CertificateData`, restrictions,
+  triggers, and split history remain certificate-specific.
+- `IssuanceManager` calls the controller on every share lifecycle path. Issuance rejects
+  `issuedUnits + newUnits > authorizedShares`; normal unit updates apply deltas; void/burn release
+  units; unvoid restores them. Scripification and recertification are representation-only, so
+  scripified units count exactly once.
+- New printers use `createCertPrinterWithClassTerms` to create and configure atomically. Existing
+  printers use owner-gated `migrateClassTermsControllers`. The complete batch is valid
+  `upgradeToAndCall` payload, so upgrading a corp's manager and migrating all of its supplied
+  printers occurs in one transaction. It derives outstanding active plus scrip units on-chain and
+  rolls back the implementation upgrade plus every prior printer change if any migration fails.
+  After any controller is installed, the migration entry point refuses to replace it; later changes
+  use the controller's governed UUPS/amendment paths.
+- The upgraded manager deliberately fails closed for an unmigrated legacy share renderer:
+  lifecycle operations cannot silently bypass cap enforcement. Upgrade and per-printer migration
+  therefore belong in one owner-controlled batch for every in-scope corp.
+- `amendClassTerms` supports authorized corporate amendments but refuses to reduce authorization
+  below issued units.
+- The first in-printer implementation was rejected after size verification: it made
+  `CyberCertPrinter` 28,979 bytes, 4,403 bytes over EIP-170. On the current `develop` baseline,
+  the external controller is 7,531 bytes; the final `CyberCertPrinter` is 23,644 bytes
+  (932-byte margin), and `IssuanceManager` is 18,662 bytes (5,914-byte margin). The disabled
+  legacy `IssuanceManagerWithMigration` prototype is not part of the deployable artifact set.
+- Focused verification: `CyberCertPrinterClassTermsTest` **10/10**, including atomic manager
+  upgrade plus multi-printer migration, full-batch rollback, length validation, and
+  controller-replacement rejection; `IssuanceManagerScripComplianceTest` **7/7**; and
+  `ScripPOCTest` **15/15**. The full production size build passes.
+- Remaining rollout: upgrade the renderer, deploy the controller, set the IssuanceManager 4.2
+  reference, batch-upgrade/migrate only the named demo and real-pilot printers, then release the
+  matching webapp ABI/read path and verify live read-back. Test-corp migration is not a release gate.
 
 **Problem.** A `CyberCertPrinter` is the per-security-class contract, but it stores only class
 **identity** — `initialize(... name, ticker, certificateUri, SecurityClass, SecuritySeries, extension)`
@@ -126,29 +212,24 @@ on-chain home for its **class-level terms**, set once at class creation, so issu
 against the class** (the source of truth) and `authorizedShares` can be enforced as a cap. Genuinely
 per-certificate fields (units represented, investment amount, holder, issuance date) stay per-cert.
 
-**Design direction (high-level — details TBD).**
+**Implemented design.**
 
-- Add a class-terms struct to `CyberCertPrinter` storage, populated at `initialize` / `createCertPrinter`
-  (`src/IssuanceManager.sol:229`); split the `ShareExtension` terms into **class-level** (seriesName, par
-  value, original issue price, effective date, authorized shares, liquidation preference) vs **per-cert**.
-- On issuance, default per-cert extension data from the class terms and **validate**: reject mismatched
-  class terms and enforce `Σ unitsRepresented ≤ authorizedShares` at the class.
-- **Migration / back-compat:** existing printers have no class terms; backfill from the most-recent prior
-  cert (the only current source) or via a one-shot migration (cf. the `*WithMigration` pattern). Until
-  then the webapp M1 pre-fill can only seed from a prior cert.
+- The complete `SeriesTerms` struct is class-level. `CertificateData` and the variable-length
+  per-certificate arrays remain per-certificate.
+- Canonical data is stored by the external controller as ABI-encoded terms plus a hash, avoiding
+  a duplicate giant Solidity struct and keeping the already-near-limit printer deployable.
+- The cap is on-chain and uses the protocol's 18-decimal unit representation.
+- Terms may be amended only through an explicit owner-gated operation with the issued-unit floor.
 
-**Open questions.**
+**Remaining decisions / follow-up.**
 
-1. Which terms are truly class-level vs allowed to vary per cert (e.g. can `originalIssuePrice` differ by
-   round / tranche, or is it fixed per class)?
-2. On-chain class storage vs a canonical off-chain class row — and how that interacts with the
-   constitutive-register thesis (the class terms are arguably part of the authoritative record).
-3. Enforce the `authorizedShares` cap **on-chain** at issuance, or track/report it off-chain only?
-4. Interaction with scrip / unit accounting (scripified units still count against authorized) and with
-   non-share instruments (SAFE/SAFT/etc., which have different "class terms").
-5. OCF / cap-table mapping for the class-level fields.
+1. Define the evidence and approval record required before a production `amendClassTerms`.
+2. Add indexer/OCF class-level fields if direct RPC reads prove insufficient for reporting scale.
+3. Decide whether non-share instruments need analogous canonical records; P2 intentionally applies
+   only to extensions that advertise `EXTENSION_TYPE == keccak256("SHARE")`.
 
-**References.** `src/CyberCertPrinter.sol:107` (initialize — identity only, no terms);
+**References.** `src/storage/extensions/ShareClassTermsController.sol`;
+`src/storage/IssuanceManagerStorage.sol`; `src/CyberCertPrinter.sol:107` (initialize — identity only, no terms);
 `src/storage/extensions/ShareExtension.sol:143-150` (the terms struct, encoded per-cert) + `:286-305`
 (rendered per-cert into tokenURI); `src/storage/CyberCertPrinterStorage.sol:51` (`CertificateDetails.extensionData`);
 `src/IssuanceManager.sol:229` (`createCertPrinter`). Webapp side: `metalex-webapp` **M1** (pre-fill blocked by
@@ -156,12 +237,25 @@ this) in its `notes/plans/mainframe-changes-plan.md`.
 
 ---
 
-## P3 — Issuer-defined award templates (grants) — `INTERIM SHIPPED` (2026-07-08)
+## P3 — Issuer-defined award templates (grants) — `TARGET LOCAL / UNRELEASED`
 
 **Full evaluation:** `notes/plans/issuer-award-templates-plan.md` (three options, recommendation,
 per-option contract + app changes). Summary below.
 
-**Status update.** An **interim** variant is live: commit `7edb89d` removed `onlyOwner` from
+**Status update (2026-07-19).** The recommended Option A target is now implemented
+locally. `createTemplate` is restored to `onlyOwner` for curated caller-chosen IDs;
+permissionless issuers use the new `createTemplatePublic`, which derives
+`keccak256(abi.encode(title, legalContractUri, globalFields, partyFields))` on-chain
+and treats identical content idempotently. `_createTemplate` now rejects an empty legal
+URI so existence cannot remain ambiguous. Five focused security/upgrade tests cover the
+owner gate, permissionless content addressing, idempotency, empty-URI rejection, and proxy
+state preservation; the focused registry suite passes 18/18 with `forge test --via-ir`. The deployment script
+uses the new `UpgradeV3.3.0` salt. The companion webapp ABI and issuer registration call
+now target `createTemplatePublic`, while retaining read-back hash verification for
+pre-upgrade registry state.
+
+This code is **not live yet**. The currently deployed **interim** variant remains:
+commit `7edb89d` removed `onlyOwner` from
 the caller-chosen-id `createTemplate` and the registry proxy was upgraded (verified live on
 Base + Ethereum mainnet, 2026-07-08). This is deliberately **temporary** — it is the
 squattable caller-chosen-id variant the full doc warns against, accepted for now to unblock
@@ -170,11 +264,14 @@ Drawbacks, required app-layer mitigations, and the recommended optimal end-state
 `createTemplate` + add content-addressed `createTemplatePublic`, i.e. Option A) are recorded
 in the full doc's §0.
 
-**Webapp side (update 2026-07-12):** the compensating app layer has shipped — self-serve
+**Webapp side:** the compensating app layer shipped in 2026-07, and the current local
+worktree additionally switches registration to `createTemplatePublic`. The shipped layer is
+self-serve
 per-corp award templates with content-addressed registration against the now-permissionless
 `createTemplate` (`metalex-webapp` PR #801, merged 2026-07-08) and bespoke per-recipient
-agreements (`metalex-webapp` PR #803, merged 2026-07-08). The recommended on-chain end-state
-(Option A: re-gate `createTemplate`, add `createTemplatePublic`) remains **unbuilt**.
+agreements (`metalex-webapp` PR #803, merged 2026-07-08). The target contract and app changes
+must be released together after proxy-upgrade simulation; until then the live webapp continues
+to use the interim entry point.
 
 **Problem.** cyberCORPs grants register the award agreement in the **global, MetaLeX-owned**
 `CyberAgreementRegistry`, and the MetaVesT controller's `proposeAndSignDeal(templateId, …)`
@@ -230,6 +327,22 @@ MetaVesT `feat/re-enable-options` `MetaVesTControllerStorage.sol:220/331`. Webap
 
 ---
 
+## P4 — Control-agreement liens & permissionless foreclosure — `PROPOSED`
+
+**Full spec:** `notes/plans/control-agreement-encumbrance-spec.md`.
+
+Model a UCC Article 8/9/12 control-agreement lien over a cyberCERT without moving
+custody to the lender: the borrower remains registered/ERC-721 owner until a
+condition-verified foreclosure re-registers and transfers the shares. The full spec
+pins the lien state machine, collateral escape guards, agreement-party verification,
+conditions, upgrade/storage constraints, web/indexer surface, and Foundry test plan.
+
+_Status check 2026-07-19:_ no `Lien`/encumbrance/foreclosure state, entry points,
+conditions, extension, or tests exist in `src/`/`test/`. This item was originally
+described as P3 before issuer templates took that slot; P4 is now canonical.
+
+---
+
 ## Backlog (unprioritized)
 
-_(none yet — add future protocol improvements here)_
+_(none beyond P1–P4 yet)_

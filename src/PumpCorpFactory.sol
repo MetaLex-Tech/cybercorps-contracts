@@ -333,6 +333,8 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
         BorgAuth(authAddress).updateRole(roundManagerAddress, 99);
+        BorgAuth(authAddress).setRoleManager(cyberCorpAddress);
+        ICyberCorp(cyberCorpAddress).activateBoardGovernance();
 
         emit CyberCorpDeployed(
             cyberCorpAddress,

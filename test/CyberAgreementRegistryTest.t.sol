@@ -97,6 +97,108 @@ contract CyberAgreementRegistryTest is Test {
         vm.stopPrank();
     }
 
+    function test_createTemplateCallerChosenIdIsOwnerOnly() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BorgAuth.BorgAuth_NotAuthorized.selector,
+                coreAuth.OWNER_ROLE(),
+                alice
+            )
+        );
+        vm.prank(alice);
+        registry.createTemplate(
+            keccak256("squattable-id"),
+            "Untrusted",
+            "ipfs://untrusted",
+            testGlobalFields,
+            testPartyFields
+        );
+    }
+
+    function test_createTemplatePublicIsContentAddressedAndPermissionless()
+        public
+    {
+        vm.prank(alice);
+        bytes32 templateId = registry.createTemplatePublic(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields
+        );
+
+        assertEq(templateId, expectedStandaloneTemplateId);
+        (
+            string memory legalContractUri,
+            string memory title,
+            string[] memory globalFields,
+            string[] memory partyFields
+        ) = registry.getTemplateDetails(templateId);
+        assertEq(legalContractUri, testLegalContractUri);
+        assertEq(title, testTitle);
+        assertEq(globalFields, testGlobalFields);
+        assertEq(partyFields, testPartyFields);
+    }
+
+    function test_createTemplatePublicIsIdempotent() public {
+        vm.prank(alice);
+        bytes32 first = registry.createTemplatePublic(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields
+        );
+
+        vm.prank(bob);
+        bytes32 second = registry.createTemplatePublic(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields
+        );
+
+        assertEq(first, second);
+    }
+
+    function test_createTemplatePublicRejectsEmptyLegalContractUri() public {
+        vm.prank(alice);
+        vm.expectRevert(CyberAgreementRegistry.LegalContractUriEmpty.selector);
+        registry.createTemplatePublic(
+            testTitle,
+            "",
+            testGlobalFields,
+            testPartyFields
+        );
+    }
+
+    function test_upgradePreservesExistingTemplatesAndPublicRegistration()
+        public
+    {
+        address implementation = address(new CyberAgreementRegistry());
+
+        vm.prank(deployer);
+        registry.upgradeToAndCall(implementation, "");
+
+        (
+            string memory legalContractUri,
+            string memory title,
+            string[] memory globalFields,
+            string[] memory partyFields
+        ) = registry.getTemplateDetails(testTemplateId);
+        assertEq(legalContractUri, testLegalContractUri);
+        assertEq(title, "Test");
+        assertEq(globalFields, testGlobalFields);
+        assertEq(partyFields, testPartyFields);
+
+        vm.prank(alice);
+        bytes32 publicTemplateId = registry.createTemplatePublic(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields
+        );
+        assertEq(publicTemplateId, expectedStandaloneTemplateId);
+    }
+
     /// @notice Contract should automatically finalize if (1) all parties are signed, and (2) finalizer is undefined
     function test_signContractAndFinalize() public {
         uint256 salt = uint256(keccak256("test_signContractAndFinalize"));

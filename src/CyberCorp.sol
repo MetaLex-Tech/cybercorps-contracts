@@ -51,7 +51,7 @@ import "./storage/extensions/ICyberCorpExtension.sol";
 /// @notice Main contract representing a corporation's on-chain presence and management
 /// @dev Implements UUPS upgradeable pattern and BorgAuth access control
 contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
-    string public constant DEPLOY_VERSION = "4"; // For version-tracking on all deployment and future upgrades
+    string public constant DEPLOY_VERSION = "5"; // For version-tracking on all deployment and future upgrades
 
     // cyberCORP details
     /// @notice Legal name of the entity, including designation (e.g., "Inc." or "LLC")
@@ -87,6 +87,11 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     bytes32 public extensionType;
     /// @notice Raw extension payload interpreted by the active extension contract
     bytes public extensionData;
+    /// @notice Board state is appended for proxy storage compatibility.
+    CompanyDirector[] public companyDirectors;
+    mapping(address => bool) public boardMembers;
+    mapping(address => bool) public officerMembers;
+    bool public boardGovernanceEnforced;
 
     event CyberCORPDetailsUpdated(string cyberCORPName, string cyberCORPType, string cyberCORPJurisdiction, string cyberCORPContactDetails, string defaultDisputeResolution);
     event OfficerAdded(address indexed officer, uint256 index);
@@ -96,6 +101,10 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     event EscrowedOfficerSignatureUpdated(uint256 indexed index, address indexed officer);
     event CyberCORPExtensionSet(address indexed extension, bytes32 indexed extensionType);
     event CyberCORPExtensionDataUpdated(bytes32 indexed extensionType, bytes extensionData);
+    event DirectorAdded(address indexed director, uint256 index);
+    event DirectorRemoved(address indexed director, uint256 index);
+    event BoardGovernanceActivated(address indexed initialDirector);
+    event BoardAuthorityAdapterUpdated(address indexed adapter);
 
     error NotRefImplementation();
     error SignatureRequired();
@@ -103,6 +112,32 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     error InvalidExtension();
     error ExtensionTypeNotSupported();
     error ExtensionNotConfigured();
+    error BoardGovernanceNotEnforced();
+    error BoardGovernanceAlreadyEnforced();
+    error RoleManagerNotCyberCorp();
+    error InvalidOfficer();
+    error InvalidDirector();
+    error DuplicateOfficer();
+    error DuplicateDirector();
+    error LastOfficer();
+    error LastDirector();
+
+    modifier onlyBoardAuthority() {
+        if (boardGovernanceEnforced) {
+            AUTH.onlyRole(AUTH.BOARD_ROLE(), msg.sender);
+        } else {
+            // Explicit legacy compatibility. The app and plans do not label
+            // this compatibility path as Board enforcement.
+            AUTH.onlyRole(AUTH.OWNER_ROLE(), msg.sender);
+        }
+        _;
+    }
+
+    modifier onlyEnforcedBoard() {
+        if (!boardGovernanceEnforced) revert BoardGovernanceNotEnforced();
+        AUTH.onlyRole(AUTH.BOARD_ROLE(), msg.sender);
+        _;
+    }
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -142,8 +177,30 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         issuanceManager = _issuanceManager;
         companyPayable = _companyPayable;
         companyOfficers.push(_officer);
+        officerMembers[_officer.eoa] = true;
+        companyDirectors.push(
+            CompanyDirector({
+                eoa: _officer.eoa,
+                name: _officer.name,
+                contact: _officer.contact
+            })
+        );
+        boardMembers[_officer.eoa] = true;
         upgradeFactory = _upgradeFactory;
         roundManager = _roundManager;
+    }
+
+    /// @notice Finalizes the one-way BorgAuth role-manager handoff for a newly
+    ///         deployed corp and promotes the founder to the Board role.
+    function activateBoardGovernance() external {
+        if (boardGovernanceEnforced) revert BoardGovernanceAlreadyEnforced();
+        if (AUTH.roleManager() != address(this)) revert RoleManagerNotCyberCorp();
+        if (companyDirectors.length == 0) revert LastDirector();
+
+        address initialDirector = companyDirectors[0].eoa;
+        AUTH.updateRole(initialDirector, AUTH.BOARD_ROLE());
+        boardGovernanceEnforced = true;
+        emit BoardGovernanceActivated(initialDirector);
     }
 
     /// @notice Updates the corporation's basic details
@@ -159,7 +216,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         string memory _cyberCORPJurisdiction,
         string memory _cyberCORPContactDetails,
         string memory _defaultDisputeResolution
-    ) external onlyOwner() {
+    ) external onlyBoardAuthority {
         cyberCORPName = _cyberCORPName;
         cyberCORPType = _cyberCORPType;
         cyberCORPJurisdiction = _cyberCORPJurisdiction;
@@ -172,21 +229,21 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     /// @notice Updates the issuance manager address
     /// @dev Only callable by owner
     /// @param _issuanceManager New issuance manager contract address
-    function setIssuanceManager(address _issuanceManager) external onlyOwner() {
+    function setIssuanceManager(address _issuanceManager) external onlyBoardAuthority {
         issuanceManager = _issuanceManager;
     }
 
     /// @notice Updates the deal manager address
     /// @dev Only callable by owner
     /// @param _dealManager New deal manager contract address
-    function setDealManager(address _dealManager) external onlyOwner() {
+    function setDealManager(address _dealManager) external onlyBoardAuthority {
         dealManager = _dealManager;
     }
 
     /// @notice Updates the round manager address
     /// @dev Only callable by owner
     /// @param _roundManager New round manager contract address
-    function setRoundManager(address _roundManager) external onlyOwner() {
+    function setRoundManager(address _roundManager) external onlyBoardAuthority {
         roundManager = _roundManager;
     }
 
@@ -194,46 +251,135 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     /// @param _address Address to check
     /// @return bool True if the address belongs to an officer
     function isCyberCORPOfficer(address _address) external view returns (bool) {
+        if (boardGovernanceEnforced) return officerMembers[_address];
         return (AUTH.userRoles(_address) >= AUTH.OWNER_ROLE());
+    }
+
+    function isCyberCORPDirector(address account) external view returns (bool) {
+        return boardMembers[account];
+    }
+
+    function getCompanyOfficerCount() external view returns (uint256) {
+        return companyOfficers.length;
+    }
+
+    function getCompanyDirectorCount() external view returns (uint256) {
+        return companyDirectors.length;
     }
 
     /// @notice Adds a new officer to the company
     /// @dev Only callable by owner, sets officer role to 200
     /// @param _officer Officer details including address and role
-    function addOfficer(CompanyOfficer memory _officer) external onlyOwner() {
+    function addOfficer(CompanyOfficer memory _officer) external onlyBoardAuthority {
+        if (_officer.eoa == address(0)) revert InvalidOfficer();
+        if (officerMembers[_officer.eoa]) revert DuplicateOfficer();
         companyOfficers.push(_officer);
-        AUTH.updateRole(_officer.eoa, 200);
+        officerMembers[_officer.eoa] = true;
+        if (!boardMembers[_officer.eoa]) {
+            AUTH.updateRole(_officer.eoa, AUTH.OFFICER_ROLE());
+        }
         emit OfficerAdded(_officer.eoa, companyOfficers.length - 1);
     }
 
     /// @notice Removes an officer by their address
     /// @dev Only callable by owner, revokes officer role
     /// @param _address Address of the officer to remove
-    function removeOfficer(address _address) external onlyOwner() {
-        AUTH.updateRole(_address, 0);
+    function removeOfficer(address _address) external onlyBoardAuthority {
+        if (!officerMembers[_address]) revert InvalidOfficer();
+        if (companyOfficers.length == 1) revert LastOfficer();
         for (uint256 i = 0; i < companyOfficers.length; i++) {
             if (companyOfficers[i].eoa == _address) {
                 companyOfficers[i] = companyOfficers[companyOfficers.length - 1];
                 companyOfficers.pop();
+                officerMembers[_address] = false;
+                AUTH.updateRole(
+                    _address,
+                    boardMembers[_address] ? AUTH.BOARD_ROLE() : 0
+                );
                 emit OfficerRemoved(_address, i);
-                break;
+                return;
             }
         }
+        revert InvalidOfficer();
     }
 
     /// @notice Removes an officer by their index in the officers array
     /// @dev Only callable by owner, revokes officer role
     /// @param _index Index of the officer to remove
-    function removeOfficerAt(uint256 _index) external onlyOwner() {
-        require(_index < companyOfficers.length, "Index out of bounds");
+    function removeOfficerAt(uint256 _index) external onlyBoardAuthority {
+        if (_index >= companyOfficers.length) revert InvalidOfficer();
+        if (companyOfficers.length == 1) revert LastOfficer();
         address officerEOA = companyOfficers[_index].eoa;
-        AUTH.updateRole(officerEOA, 0);
         companyOfficers[_index] = companyOfficers[companyOfficers.length - 1];
         companyOfficers.pop();
+        officerMembers[officerEOA] = false;
+        AUTH.updateRole(
+            officerEOA,
+            boardMembers[officerEOA] ? AUTH.BOARD_ROLE() : 0
+        );
         emit OfficerRemoved(officerEOA, _index);
     }
 
-    function setCompanyPayable(address _companyPayable) external onlyOwner() {
+    function addDirector(
+        CompanyDirector calldata director
+    ) external onlyEnforcedBoard {
+        if (director.eoa == address(0)) revert InvalidDirector();
+        if (boardMembers[director.eoa]) revert DuplicateDirector();
+        companyDirectors.push(director);
+        boardMembers[director.eoa] = true;
+        AUTH.updateRole(director.eoa, AUTH.BOARD_ROLE());
+        emit DirectorAdded(director.eoa, companyDirectors.length - 1);
+    }
+
+    function removeDirector(address director) external onlyEnforcedBoard {
+        if (!boardMembers[director]) revert InvalidDirector();
+        if (companyDirectors.length == 1) revert LastDirector();
+        for (uint256 i = 0; i < companyDirectors.length; i++) {
+            if (companyDirectors[i].eoa == director) {
+                companyDirectors[i] =
+                    companyDirectors[companyDirectors.length - 1];
+                companyDirectors.pop();
+                boardMembers[director] = false;
+                AUTH.updateRole(
+                    director,
+                    officerMembers[director] ? AUTH.OFFICER_ROLE() : 0
+                );
+                emit DirectorRemoved(director, i);
+                return;
+            }
+        }
+        revert InvalidDirector();
+    }
+
+    function removeDirectorAt(uint256 index) external onlyEnforcedBoard {
+        if (index >= companyDirectors.length) revert InvalidDirector();
+        if (companyDirectors.length == 1) revert LastDirector();
+        address director = companyDirectors[index].eoa;
+        companyDirectors[index] =
+            companyDirectors[companyDirectors.length - 1];
+        companyDirectors.pop();
+        boardMembers[director] = false;
+        AUTH.updateRole(
+            director,
+            officerMembers[director] ? AUTH.OFFICER_ROLE() : 0
+        );
+        emit DirectorRemoved(director, index);
+    }
+
+    function setBoardAuthorityAdapter(
+        address adapter
+    ) external onlyEnforcedBoard {
+        AUTH.setRoleAdapter(AUTH.BOARD_ROLE(), adapter);
+        emit BoardAuthorityAdapterUpdated(adapter);
+    }
+
+    function initTransferAuthOwnership(
+        address newOwner
+    ) external onlyEnforcedBoard {
+        AUTH.initTransferOwnership(newOwner);
+    }
+
+    function setCompanyPayable(address _companyPayable) external onlyBoardAuthority {
         address oldCompanyPayable = companyPayable;
         companyPayable = _companyPayable;
         emit CompanyPayableUpdated(companyPayable, oldCompanyPayable);
@@ -280,7 +426,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     function setExtension(
         address _extension,
         bytes32 _extensionType
-    ) external onlyOwner {
+    ) external onlyBoardAuthority {
         if (_extension == address(0)) {
             if (_extensionType != bytes32(0)) revert InvalidExtension();
             extension = address(0);
@@ -304,14 +450,14 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     }
 
     /// @notice Update the raw extension payload for the active CyberCorp extension
-    function setExtensionData(bytes calldata _extensionData) external onlyOwner {
+    function setExtensionData(bytes calldata _extensionData) external onlyBoardAuthority {
         if (extension == address(0)) revert ExtensionNotConfigured();
         extensionData = _extensionData;
         emit CyberCORPExtensionDataUpdated(extensionType, _extensionData);
     }
 
     /// @notice Clear the active CyberCorp extension and any stored extension data
-    function clearExtension() external onlyOwner {
+    function clearExtension() external onlyBoardAuthority {
         extension = address(0);
         extensionType = bytes32(0);
         delete extensionData;
@@ -334,7 +480,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     /// and the CyberCorp owner can decide if or when he wants to perform the upgrade
     function _authorizeUpgrade(
         address newImplementation
-    ) internal override onlyOwner {
+    ) internal override onlyBoardAuthority {
         if(
             ICyberCorpSingleFactory(upgradeFactory).getRefImplementation() != newImplementation) {
             revert NotRefImplementation();

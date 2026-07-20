@@ -118,6 +118,28 @@ interface IIssuanceManager {
         address _extension
     ) external returns (address);
 
+    function createCertPrinterWithClassTerms(
+        string[] memory _ledger,
+        string memory _name,
+        string memory _ticker,
+        string memory _certificateUri,
+        SecurityClass _securityType,
+        SecuritySeries _securitySeries,
+        address _extension,
+        bytes calldata _extensionData
+    ) external returns (address);
+
+    function migrateClassTermsControllers(
+        address[] calldata certAddresses,
+        address controller,
+        bytes[] calldata extensionData
+    ) external;
+
+    function amendClassTerms(
+        address certAddress,
+        bytes calldata extensionData
+    ) external;
+
     function createCert(
         address certAddress,
         address to,
