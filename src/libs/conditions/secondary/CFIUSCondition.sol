@@ -70,6 +70,10 @@ contract CFIUSCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgA
         emit TidUsBusinessUpdated(_tidUsBusiness);
     }
 
+    // TODO:
+    // - legion will add the regions
+    // - potentially zkpassport
+    // - ideally handle/aggregated by LexChexBadge
     function setBlockedJurisdictions(string[] memory _blockedJurisdictions) external onlyAdmin {
         blockedJurisdictions = _blockedJurisdictions;
         emit BlockedJurisdictionsUpdated(_blockedJurisdictions);
