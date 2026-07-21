@@ -66,25 +66,40 @@ acceptors (partial fills). Buyer-facing conditions instead check `offer.settleme
 
 ### Two-array lifecycle
 
-Both sets are owner-managed DealManager config (never offeror-supplied). At `postOffer` they are resolved
-and **snapshotted onto the offer** — so an offer is governed by the rules in effect when it was posted —
-and stored on the secondary-trade record itself (self-contained; no dependency on the primary-deal escrow
-library's `conditionsByEscrow`):
+Both sets are owner-managed DealManager config (never offeror-supplied). Each stage resolves the set from
+live config, so a trade is judged by the SPV's rules as they stand at that moment.
 
-| Array                                 | Evaluated at                      | Entry points                                                  |
-|---------------------------------------|-----------------------------------|---------------------------------------------------------------|
-| `offer.expectedThresholdConditions`   | Offer posted                      | `postOffer`                                                   |
-| `escrow.thresholdConditions`          | Accepted, finalized               | `acceptOffer`, `finalizeSecondaryTradeAgreement`              |
-| `offer.closingConditions`             | Finalization                      | `finalizeSecondaryTradeAgreement`                             |
+| Set                                          | Resolved from                                                     | Evaluated at                                                  |
+|----------------------------------------------|-------------------------------------------------------------------|---------------------------------------------------------------|
+| Threshold (§6 fund-specific ++ §5 exemption) | `spvThresholdConditions` ++ `pathwayThresholdConditions[pathway]` | `postOffer`, `acceptOffer`, `finalizeSecondaryTradeAgreement` |
+| Closing                                      | `closingConditions`                                               | `finalizeSecondaryTradeAgreement`                             |
 
-The offer's array is named `expected` because the buyer elects the exemption at `acceptOffer`; only the
-per-settlement escrow records the set a trade is actually judged against.
+At `postOffer` the pathway is the offeror's pin (`NONE` on an unpinned sell offer resolves the §6 layer
+alone); from `acceptOffer` onward it is the buyer's election, recorded per lot on
+`SecondaryEscrow.exemptionPathway`.
 
-Every condition in the array is walked in sequence at each entry point. Any failure reverts immediately.
-Snapshotting the addresses does not blunt the kill switch: `KillSwitchCondition` reads its live state
-internally, so a switch raised after posting still halts an in-flight settlement at finalize. Likewise,
-re-running the threshold set at finalize means eligibility lost after acceptance (revoked credential,
-breached holder cap, blocked-state move, withdrawn approval) blocks the asset transfer.
+Every condition in the set is walked in sequence at each entry point. Any failure reverts immediately.
+Live resolution also means a pathway withdrawn or a condition added after posting takes effect on the next
+stage, and re-running the threshold set at finalize means eligibility lost after acceptance (revoked
+credential, breached holder cap, blocked-state move, withdrawn approval) blocks the asset transfer.
+
+Off-chain reconstruction works two ways, which must agree:
+
+- `SecondaryTradeAgreementFinalized` carries the threshold and closing sets the settlement was judged
+  against, read directly — no replay, no knowledge of how the layers compose.
+- The config setters emit `SpvThresholdConditionsSet` / `PathwayThresholdConditionsSet` /
+  `ClosingConditionsSet`, each carrying the whole replacement list. Replaying those against a settlement's
+  elected pathway covers the stages the finalize event does not: posting and acceptance.
+
+Replay carries assumptions the logs do not state, so an indexer relying on it must: compose the threshold
+set as SPV layer ++ pathway layer in that order (`NONE` omits the pathway layer); order events by
+`(blockNumber, logIndex)`, since a config change and a finalize can share a block; partition config by
+`log.emitter`, as each DealManager has its own; and bootstrap from the getters at a pinned block, because
+an absent `PathwayThresholdConditionsSet` is indistinguishable from one emitted before the start block
+(and `pathwayEnabled` defaults to false).
+
+Either route reports which conditions were *consulted*, not which ones bound: conditions that self-silence
+(e.g. `ERISACondition` on Reg S) appear in the set having returned `true` unconditionally.
 
 ### Within threshold: posting vs. acceptance
 

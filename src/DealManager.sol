@@ -515,7 +515,7 @@ contract DealManager is
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Secondary trade — condition config (owner-managed; snapshotted onto each offer at postOffer)
+    // Secondary trade — condition config (owner-managed; read live at every post/accept/finalize)
     // ─────────────────────────────────────────────────────────────────────────
 
     // Each layer is set as a whole list, so one entry point per layer covers add, remove and reorder.

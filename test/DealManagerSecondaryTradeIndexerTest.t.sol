@@ -69,7 +69,7 @@ import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CertificateDetails, ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
 // Reuse the payment-token mock and the minimal CyberCorp / uriBuilder fixtures from sibling test files.
-import {SecERC20Mock} from "./DealManagerSecondaryTradeTest.t.sol";
+import {SecConditionMock, SecERC20Mock} from "./DealManagerSecondaryTradeTest.t.sol";
 import {
     MockCyberCorpForIM,
     MockUriBuilderForIM
@@ -110,8 +110,6 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         uint8 buyerHostingMode;
         address adminMultisig;
         bytes counterpartyRestrictions;
-        address[] expectedThresholdConditions;
-        address[] closingConditions;
         // additionalTerms is intentionally not indexed (human/legal-read only, not emitted).
     }
 
@@ -129,7 +127,8 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         address adminMultisig;
         bytes openEndorsementSig; // per-settlement endorsement used (from OfferAccepted)
         uint8 exemptionPathway; // pathway elected for this settlement (from OfferAccepted)
-        address[] pathwayThresholdConditions; // Layer 1 set the elected pathway pulled in (from OfferAccepted)
+        address[] thresholdConditions; // sets this lot was judged against at finalize (from Finalized)
+        address[] closingConditions;
         uint8 status; // SecondaryEscrowStatus
         address feeDestination; // escrow routing: snapshotted from the offer's integrator
         address seller; // from Finalized
@@ -192,6 +191,13 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
     // linkage. Reads address the ledger by row index directly.
     mapping(uint256 => uint256) internal idxLedgerRowByToken;
 
+    // Live condition config, rebuilt from the config events. Each event carries the whole replacement list,
+    // so the latest one wins and the indexer holds the same set the contract would resolve.
+    address[] internal idxSpvConditions;
+    address[] internal idxClosingConditions;
+    mapping(uint8 => address[]) internal idxPathwayConditions;
+    mapping(uint8 => bool) internal idxPathwayEnabled;
+
     // Event topic0 hashes taken straight from the declarations, so they can't drift from the emitted signatures.
     bytes32 immutable TOPIC_OFFER_POSTED = ISecondaryTradeStorage.OfferPosted.selector;
     bytes32 immutable TOPIC_OFFER_CANCELLED = ISecondaryTradeStorage.OfferCancelled.selector;
@@ -199,6 +205,9 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
     bytes32 immutable TOPIC_FINALIZED = ISecondaryTradeStorage.SecondaryTradeAgreementFinalized.selector;
     bytes32 immutable TOPIC_VOIDED = ISecondaryTradeStorage.SecondaryTradeAgreementVoided.selector;
     bytes32 immutable TOPIC_FEE = ISecondaryTradeStorage.SecondaryFeeDistributed.selector;
+    bytes32 immutable TOPIC_SPV_CONDITIONS = ISecondaryTradeStorage.SpvThresholdConditionsSet.selector;
+    bytes32 immutable TOPIC_PATHWAY_CONDITIONS = ISecondaryTradeStorage.PathwayThresholdConditionsSet.selector;
+    bytes32 immutable TOPIC_CLOSING_CONDITIONS = ISecondaryTradeStorage.ClosingConditionsSet.selector;
     // Emitted by the IssuanceManager (not the DealManager), so the indexer also watches that emitter.
     bytes32 immutable TOPIC_SECONDARY_TRANSFER = IIssuanceManager.SecondaryTransferExecuted.selector;
     // Primary/secondary mint events that seed the issuance rows + shares-held balance. CertificateCreated
@@ -528,7 +537,29 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
             else if (topic == TOPIC_SECONDARY_TRANSFER) _handleSecondaryTransfer(log);
             else if (topic == TOPIC_CERT_ASSIGNED) _handleCertificateAssigned(log);
             else if (topic == TOPIC_CERT_CREATED) _handleCertificateCreated(log);
+            else if (topic == TOPIC_SPV_CONDITIONS) (idxSpvConditions,) = abi.decode(log.data, (address[], address));
+            else if (topic == TOPIC_CLOSING_CONDITIONS) {
+                (idxClosingConditions,) = abi.decode(log.data, (address[], address));
+            } else if (topic == TOPIC_PATHWAY_CONDITIONS) _handlePathwayConditions(log);
         }
+    }
+
+    function _conds(address a) internal pure returns (address[] memory arr) {
+        arr = new address[](1);
+        arr[0] = a;
+    }
+
+    function _conds(address a, address b) internal pure returns (address[] memory arr) {
+        arr = new address[](2);
+        arr[0] = a;
+        arr[1] = b;
+    }
+
+    function _handlePathwayConditions(Vm.Log memory log) private {
+        uint8 pathway = uint8(uint256(log.topics[1]));
+        (address[] memory conditions, bool enabled,) = abi.decode(log.data, (address[], bool, address));
+        idxPathwayConditions[pathway] = conditions;
+        idxPathwayEnabled[pathway] = enabled;
     }
 
     function _addr(bytes32 topic) private pure returns (address) {
@@ -555,9 +586,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
             o.buyerName,
             o.buyerHostingMode,
             o.adminMultisig,
-            o.counterpartyRestrictions,
-            o.expectedThresholdConditions,
-            o.closingConditions
+            o.counterpartyRestrictions
         ) =
             abi.decode(
                 log.data,
@@ -575,9 +604,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
                     string,
                     uint8,
                     address,
-                    bytes,
-                    address[],
-                    address[]
+                    bytes
                 )
             );
 
@@ -603,10 +630,9 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
             uint8 buyerHostingMode,
             address adminMultisig,
             bytes memory openEndorsementSig,
-            uint8 exemptionPathway,
-            address[] memory pathwayThresholdConditions
+            uint8 exemptionPathway
         ) = abi.decode(
-            log.data, (uint256, address, uint256, uint256, uint256, string, uint8, address, bytes, uint8, address[])
+            log.data, (uint256, address, uint256, uint256, uint256, string, uint8, address, bytes, uint8)
         );
 
         IdxSettlement storage s = idxSettlements[settlementId];
@@ -624,7 +650,6 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         s.adminMultisig = adminMultisig;
         s.openEndorsementSig = openEndorsementSig;
         s.exemptionPathway = exemptionPathway;
-        s.pathwayThresholdConditions = pathwayThresholdConditions;
         s.status = uint8(SecondaryEscrowStatus.ACCEPTED);
         idxSettlementIds.push(settlementId);
 
@@ -644,13 +669,21 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
 
     function _handleFinalized(Vm.Log memory log) private {
         bytes32 agreementId = log.topics[1];
-        (address sellerAddr, address buyerAddr, uint256 units, uint256 consideration) =
-            abi.decode(log.data, (address, address, uint256, uint256));
+        (
+            address sellerAddr,
+            address buyerAddr,
+            uint256 units,
+            uint256 consideration,
+            address[] memory thresholdConditions,
+            address[] memory closingConditions
+        ) = abi.decode(log.data, (address, address, uint256, uint256, address[], address[]));
 
         IdxSettlement storage s = idxSettlements[agreementId];
         s.status = uint8(SecondaryEscrowStatus.FINALIZED);
         s.seller = sellerAddr;
         s.buyer = buyerAddr;
+        s.thresholdConditions = thresholdConditions;
+        s.closingConditions = closingConditions;
         // Cross-event consistency: the finalized units/consideration must equal the funded settlement.
         require(units == s.units, "indexer: finalized units mismatch");
         require(consideration == s.paymentAmount, "indexer: finalized consideration mismatch");
@@ -825,14 +858,28 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         assertEq(o.buyerHostingMode, uint8(c.buyerHostingMode), "buyerHostingMode");
         assertEq(o.adminMultisig, c.adminMultisig, "adminMultisig");
         assertEq(o.counterpartyRestrictions, c.counterpartyRestrictions, "counterpartyRestrictions");
-        assertEq(o.expectedThresholdConditions.length, c.expectedThresholdConditions.length, "thresholdConditions length");
-        for (uint256 i = 0; i < o.expectedThresholdConditions.length; i++) {
-            assertEq(o.expectedThresholdConditions[i], c.expectedThresholdConditions[i], "thresholdCondition");
+    }
+
+    /// @dev The condition config the indexer rebuilt from the config events must equal what the contract
+    /// would resolve today.
+    function _assertConditionConfigReconstructed(ExemptionPathway pathway) internal view {
+        address[] memory spv = dm.getSpvThresholdConditions();
+        assertEq(idxSpvConditions.length, spv.length, "indexed SPV layer length");
+        for (uint256 i = 0; i < spv.length; i++) {
+            assertEq(idxSpvConditions[i], spv[i], "indexed SPV condition");
         }
-        assertEq(o.closingConditions.length, c.closingConditions.length, "closingConditions length");
-        for (uint256 i = 0; i < o.closingConditions.length; i++) {
-            assertEq(o.closingConditions[i], c.closingConditions[i], "closingCondition");
+        address[] memory closing = dm.getClosingConditions();
+        assertEq(idxClosingConditions.length, closing.length, "indexed closing set length");
+        for (uint256 i = 0; i < closing.length; i++) {
+            assertEq(idxClosingConditions[i], closing[i], "indexed closing condition");
         }
+        address[] memory configured = dm.getPathwayThresholdConditions(pathway);
+        address[] storage indexedPathway = idxPathwayConditions[uint8(pathway)];
+        assertEq(indexedPathway.length, configured.length, "indexed pathway layer length");
+        for (uint256 i = 0; i < configured.length; i++) {
+            assertEq(indexedPathway[i], configured[i], "indexed pathway condition");
+        }
+        assertEq(idxPathwayEnabled[uint8(pathway)], dm.isPathwayEnabled(pathway), "indexed pathway enablement");
     }
 
     function _assertSettlementReconstructed(bytes32 settlementId) internal view {
@@ -853,15 +900,6 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         assertEq(s.status, uint8(c.status), "settlement status");
         assertEq(s.feeDestination, c.feeDestination, "settlement feeDestination");
         assertEq(s.exemptionPathway, uint8(c.exemptionPathway), "settlement exemptionPathway");
-        // The Layer 1 set has no on-chain counterpart (conditions resolve live), so the indexed value is
-        // checked against the config the settlement's pathway points at.
-        address[] memory configured = dm.getPathwayThresholdConditions(c.exemptionPathway);
-        assertEq(
-            s.pathwayThresholdConditions.length, configured.length, "settlement pathwayThresholdConditions length"
-        );
-        for (uint256 i = 0; i < configured.length; i++) {
-            assertEq(s.pathwayThresholdConditions[i], configured[i], "settlement pathwayThresholdCondition");
-        }
     }
 
     /// @dev Asserts the settlement's Finalized/Fee-derived fields (no on-chain counterpart) match expected
@@ -923,6 +961,70 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         assertEq(idxOffers[offerId].unitsFinalized, unitsA, "one lot finalized");
         assertEq(idxSettlements[lotA].status, uint8(SecondaryEscrowStatus.FINALIZED), "lot A FINALIZED");
         assertEq(idxSettlements[lotB].status, uint8(SecondaryEscrowStatus.VOIDED), "lot B VOIDED");
+    }
+
+    // Config moves mid-flight (between acceptance and finalize) and the reconstruction from the config
+    // events still matches chain truth.
+    function test_Indexer_ConditionConfig_FromEventsAlone() public {
+        address spvA = address(new SecConditionMock(true));
+        address spvB = address(new SecConditionMock(true));
+        address pathwayCond = address(new SecConditionMock(true));
+        address closingCond = address(new SecConditionMock(true));
+
+        vm.recordLogs();
+        vm.startPrank(owner);
+        dm.setSpvThresholdConditions(_conds(spvA));
+        dm.setPathwayThresholdConditions(ExemptionPathway.SECTION_4A7, _conds(pathwayCond), true);
+        dm.setClosingConditions(_conds(closingCond));
+        vm.stopPrank();
+
+        bytes32 offerId = _postSellOffer();
+        bytes32 lot = _acceptSellOfferPartial(offerId, 40);
+
+        // SPV layer grows after acceptance: the finalize is judged by this list, not the one at posting.
+        vm.prank(owner);
+        dm.setSpvThresholdConditions(_conds(spvA, spvB));
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(lot);
+
+        _index(vm.getRecordedLogs());
+
+        _assertSettlementReconstructed(lot);
+        _assertConditionConfigReconstructed(ExemptionPathway.SECTION_4A7);
+        assertEq(idxSpvConditions.length, 2, "indexer applied the later replacement list");
+        assertEq(idxSpvConditions[1], spvB, "condition added between acceptance and finalize");
+
+        // The set Finalized reported must equal what replaying the config events resolves to: the direct
+        // record and the replay are two routes to one fact and must not disagree.
+        IdxSettlement storage s = idxSettlements[lot];
+        assertEq(s.thresholdConditions.length, 3, "SPV layer (2) ++ pathway layer (1)");
+        assertEq(s.thresholdConditions[0], spvA, "SPV layer first");
+        assertEq(s.thresholdConditions[1], spvB, "SPV layer second");
+        assertEq(s.thresholdConditions[2], pathwayCond, "pathway layer last");
+        assertEq(s.closingConditions.length, 1, "closing set");
+        assertEq(s.closingConditions[0], closingCond, "closing condition");
+        _assertFinalizedSetMatchesReplay(lot);
+    }
+
+    /// @dev Cross-checks the Finalized event's sets against the config the indexer replayed independently.
+    function _assertFinalizedSetMatchesReplay(bytes32 settlementId) internal view {
+        IdxSettlement storage s = idxSettlements[settlementId];
+        address[] storage pathwayConds = idxPathwayConditions[s.exemptionPathway];
+        assertEq(
+            s.thresholdConditions.length,
+            idxSpvConditions.length + pathwayConds.length,
+            "reported threshold set length matches replay"
+        );
+        for (uint256 i = 0; i < idxSpvConditions.length; i++) {
+            assertEq(s.thresholdConditions[i], idxSpvConditions[i], "replayed SPV element");
+        }
+        for (uint256 i = 0; i < pathwayConds.length; i++) {
+            assertEq(s.thresholdConditions[idxSpvConditions.length + i], pathwayConds[i], "replayed pathway element");
+        }
+        assertEq(s.closingConditions.length, idxClosingConditions.length, "reported closing set matches replay");
+        for (uint256 i = 0; i < idxClosingConditions.length; i++) {
+            assertEq(s.closingConditions[i], idxClosingConditions[i], "replayed closing element");
+        }
     }
 
     // BUY offer counterpart of the sell lifecycle: two partial fills (driven from the seller side),

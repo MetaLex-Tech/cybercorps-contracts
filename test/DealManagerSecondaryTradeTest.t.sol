@@ -74,7 +74,7 @@ import {
     MockCyberCorpForIM,
     MockUriBuilderForIM
 } from "./IssuanceManagerTest.t.sol";
-import {Test, console2} from "forge-std/Test.sol";
+import {Test, Vm, console2} from "forge-std/Test.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mocks
@@ -589,23 +589,6 @@ contract DealManagerSecondaryTradeTest is Test {
             assertEq(offer.adminMultisig, address(0), "sell offers carry no adminMultisig");
         }
 
-        // condition record: the set resolved for the offer's pathway
-        address[] memory spv = dm.getSpvThresholdConditions();
-        address[] memory pathway = offer.expectedExemptionPathway == ExemptionPathway.NONE
-            ? new address[](0)
-            : dm.getPathwayThresholdConditions(offer.expectedExemptionPathway);
-        assertEq(offer.expectedThresholdConditions.length, spv.length + pathway.length, "thresholdConditions length");
-        for (uint256 i = 0; i < spv.length; i++) {
-            assertEq(offer.expectedThresholdConditions[i], spv[i], "thresholdConditions SPV element");
-        }
-        for (uint256 i = 0; i < pathway.length; i++) {
-            assertEq(offer.expectedThresholdConditions[spv.length + i], pathway[i], "thresholdConditions pathway element");
-        }
-        address[] memory closing = dm.getClosingConditions();
-        assertEq(offer.closingConditions.length, closing.length, "closingConditions length");
-        for (uint256 i = 0; i < closing.length; i++) {
-            assertEq(offer.closingConditions[i], closing[i], "closingConditions element");
-        }
     }
 
     /// @dev Asserts an offer's whole record after a state change: the mutable fields (status, the three
@@ -664,14 +647,6 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(o.offerorPartyValues.length, b.offerorPartyValues.length, "offerorPartyValues length immutable");
         for (uint256 i = 0; i < b.offerorPartyValues.length; i++) {
             assertEq(o.offerorPartyValues[i], b.offerorPartyValues[i], "offerorPartyValues element immutable");
-        }
-        assertEq(o.expectedThresholdConditions.length, b.expectedThresholdConditions.length, "thresholdConditions length immutable");
-        for (uint256 i = 0; i < b.expectedThresholdConditions.length; i++) {
-            assertEq(o.expectedThresholdConditions[i], b.expectedThresholdConditions[i], "thresholdConditions element immutable");
-        }
-        assertEq(o.closingConditions.length, b.closingConditions.length, "closingConditions length immutable");
-        for (uint256 i = 0; i < b.closingConditions.length; i++) {
-            assertEq(o.closingConditions[i], b.closingConditions[i], "closingConditions element immutable");
         }
     }
 
@@ -750,9 +725,7 @@ contract DealManagerSecondaryTradeTest is Test {
             "",
             HostingMode.DIRECT,
             address(0),
-            "",
-            new address[](0),
-            new address[](0)
+            ""
         );
         bytes32 offerId = _postSellOffer();
 
@@ -787,9 +760,7 @@ contract DealManagerSecondaryTradeTest is Test {
             "Test Buyer",
             HostingMode.DIRECT,
             address(0),
-            "",
-            new address[](0),
-            new address[](0)
+            ""
         );
         bytes32 offerId = _postBuyOffer();
 
@@ -1295,36 +1266,29 @@ contract DealManagerSecondaryTradeTest is Test {
     // threshold condition configurations
     // ─────────────────────────────────────────────────────────────────────────
 
-    // The offer records what it resolved at posting; each settlement records what its own election resolved.
-    function test_Config_OfferSnapshotsAtPostAndSettlementRecordsResolvedSet() public {
+    // An unpinned offer clears the fund-specific layer alone at posting; the buyer's election adds the
+    // exemption layer, so a Layer 1 condition that fails only bites once someone elects that pathway.
+    function test_Config_PathwayLayerAppliesFromAcceptanceOnward() public {
         address spv = address(new SecConditionMock(true));
-        address pathway = address(new SecConditionMock(true));
-        vm.prank(owner);
+        address pathway = address(new SecConditionMock(false));
+        vm.startPrank(owner);
         dm.setSpvThresholdConditions(_conds(spv));
-        vm.prank(owner);
         dm.setPathwayThresholdConditions(ExemptionPathway.SECTION_4A7, _conds(pathway), true);
+        vm.stopPrank();
 
         PostOfferParams memory p = _defaultSellOfferParams();
-        p.salt = uint256(keccak256("test_Config_ResolvesSpvAndPathwayOntoOffer"));
+        p.salt = uint256(keccak256("test_Config_PathwayLayerAppliesFromAcceptanceOnward"));
         vm.prank(seller);
-        bytes32 offerId = dm.postOffer(p);
+        bytes32 offerId = dm.postOffer(p); // unpinned: the failing Layer 1 condition is not consulted
 
-        address[] memory atPost = dm.getOffer(offerId).expectedThresholdConditions;
-        assertEq(atPost.length, 1, "unpinned offer resolves the fund-specific layer alone");
-        assertEq(atPost[0], spv, "fund-specific (Layer 2)");
-
-        bytes32 settlementId = _acceptSellOffer(offerId); // elects SECTION_4A7
-
-        address[] memory onSettlement = dm.getSecondaryEscrow(settlementId).thresholdConditions;
-        assertEq(onSettlement.length, 2, "settlement records both layers for its elected pathway");
-        assertEq(onSettlement[0], spv, "fund-specific (Layer 2) first");
-        assertEq(onSettlement[1], pathway, "exemption-specific (Layer 1) last");
-
-        assertEq(dm.getOffer(offerId).expectedThresholdConditions.length, 1, "offer snapshot unchanged by acceptance");
+        AcceptOfferParams memory a = _sellAcceptParams(offerId);
+        vm.prank(buyer);
+        vm.expectRevert(abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, pathway));
+        dm.acceptOffer(a);
     }
 
-    // Two lots of one unpinned offer electing different pathways resolve different sets.
-    function test_Config_SiblingSettlementsRecordDifferentResolvedSets() public {
+    // Two lots of one unpinned offer settle under the pathway each buyer elected.
+    function test_Config_SiblingSettlementsElectDifferentPathways() public {
         address condA = address(new SecConditionMock(true));
         address condB = address(new SecConditionMock(true));
         vm.startPrank(owner);
@@ -1346,36 +1310,137 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(buyer);
         bytes32 settlementB = dm.acceptOffer(second);
 
-        address[] memory setA = dm.getSecondaryEscrow(settlementA).thresholdConditions;
-        address[] memory setB = dm.getSecondaryEscrow(settlementB).thresholdConditions;
-        assertEq(setA.length, 1, "4(a)(7) lot resolved one condition");
-        assertEq(setA[0], condA, "4(a)(7) condition");
-        assertEq(setB.length, 1, "144A lot resolved one condition");
-        assertEq(setB[0], condB, "144A condition");
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementA).exemptionPathway),
+            uint8(ExemptionPathway.SECTION_4A7),
+            "first lot settles under 4(a)(7)"
+        );
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementB).exemptionPathway),
+            uint8(ExemptionPathway.RULE_144A),
+            "second lot settles under 144A"
+        );
+        // Each election points at its own Layer 1 set, so the two lots were judged against different rules.
+        assertEq(dm.getPathwayThresholdConditions(ExemptionPathway.SECTION_4A7)[0], condA, "4(a)(7) condition");
+        assertEq(dm.getPathwayThresholdConditions(ExemptionPathway.RULE_144A)[0], condB, "144A condition");
     }
 
-    // A layer edited after posting governs the acceptance; the settlement records what it was judged against.
-    function test_Config_AcceptOffer_SettlementRecordsLiveResolvedSet() public {
-        address first = address(new SecConditionMock(true));
-        address second = address(new SecConditionMock(true));
+    // ─────────────────────────────────────────────────────────────────────────
+    // Condition config events — how an indexer tracks the live sets
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function test_Config_SetSpvThresholdConditions_EmitsEvent() public {
+        address[] memory conds = _conds(address(new SecConditionMock(true)), address(new SecConditionMock(true)));
+        vm.expectEmit(true, true, true, true, address(dm));
+        emit ISecondaryTradeStorage.SpvThresholdConditionsSet(conds, owner);
         vm.prank(owner);
-        dm.setSpvThresholdConditions(_conds(first));
+        dm.setSpvThresholdConditions(conds);
+    }
+
+    function test_Config_SetPathwayThresholdConditions_EmitsEvent() public {
+        address[] memory conds = _conds(address(new SecConditionMock(true)));
+        vm.expectEmit(true, true, true, true, address(dm));
+        emit ISecondaryTradeStorage.PathwayThresholdConditionsSet(
+            ExemptionPathway.REGULATION_S, conds, true, owner
+        );
+        vm.prank(owner);
+        dm.setPathwayThresholdConditions(ExemptionPathway.REGULATION_S, conds, true);
+    }
+
+    // Withdrawing a pathway is a config change too: the event must carry enabled=false so an indexer
+    // knows the pathway stopped being electable.
+    function test_Config_SetPathwayThresholdConditions_EmitsDisable() public {
+        vm.expectEmit(true, true, true, true, address(dm));
+        emit ISecondaryTradeStorage.PathwayThresholdConditionsSet(
+            ExemptionPathway.SECTION_4A7, new address[](0), false, owner
+        );
+        vm.prank(owner);
+        dm.setPathwayThresholdConditions(ExemptionPathway.SECTION_4A7, new address[](0), false);
+        assertFalse(dm.isPathwayEnabled(ExemptionPathway.SECTION_4A7), "pathway withdrawn");
+    }
+
+    function test_Config_SetClosingConditions_EmitsEvent() public {
+        address[] memory conds = _conds(address(new SecConditionMock(true)));
+        vm.expectEmit(true, true, true, true, address(dm));
+        emit ISecondaryTradeStorage.ClosingConditionsSet(conds, owner);
+        vm.prank(owner);
+        dm.setClosingConditions(conds);
+    }
+
+    // Finalized reports the sets the settlement was judged against, resolved after the mid-flight config
+    // change rather than the ones in force at acceptance.
+    function test_Config_FinalizeEmitsConditionSetsUsed() public {
+        address spvA = address(new SecConditionMock(true));
+        address pathwayCond = address(new SecConditionMock(true));
+        address closingCond = address(new SecConditionMock(true));
+        vm.startPrank(owner);
+        dm.setSpvThresholdConditions(_conds(spvA));
+        dm.setPathwayThresholdConditions(ExemptionPathway.SECTION_4A7, _conds(pathwayCond), true);
+        vm.stopPrank();
 
         bytes32 offerId = _postSellOffer();
-        assertEq(dm.getOffer(offerId).expectedThresholdConditions.length, 1, "snapshotted at posting");
+        bytes32 settlementId = _acceptSellOffer(offerId); // elects SECTION_4A7
 
-        // SPV layer grows after the offer is live
+        address spvB = address(new SecConditionMock(true));
+        vm.startPrank(owner);
+        dm.setSpvThresholdConditions(_conds(spvA, spvB));
+        dm.setClosingConditions(_conds(closingCond));
+        vm.stopPrank();
+
+        address[] memory expectedThreshold = new address[](3);
+        expectedThreshold[0] = spvA;
+        expectedThreshold[1] = spvB;
+        expectedThreshold[2] = pathwayCond;
+
+        vm.warp(block.timestamp + 1);
+        vm.expectEmit(true, false, false, true);
+        emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(
+            settlementId, seller, buyer, UNITS, CONSIDERATION, expectedThreshold, _conds(closingCond)
+        );
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+    }
+
+    // Config moves between acceptance and finalize, and a log-only indexer still lands on exactly what
+    // gated the finalize.
+    function test_Config_ResolvedSetReconstructableFromLogsAfterMidFlightChange() public {
+        address spvFirst = address(new SecConditionMock(true));
+        address pathwayCond = address(new SecConditionMock(true));
+        vm.startPrank(owner);
+        dm.setSpvThresholdConditions(_conds(spvFirst));
+        dm.setPathwayThresholdConditions(ExemptionPathway.SECTION_4A7, _conds(pathwayCond), true);
+        vm.stopPrank();
+
+        bytes32 offerId = _postSellOffer();
+        bytes32 settlementId = _acceptSellOffer(offerId); // elects SECTION_4A7
+
+        // SPV layer grows after acceptance, before finalize
+        address spvSecond = address(new SecConditionMock(true));
+        vm.recordLogs();
         vm.prank(owner);
-        dm.setSpvThresholdConditions(_conds(first, second));
+        dm.setSpvThresholdConditions(_conds(spvFirst, spvSecond));
 
-        bytes32 settlementId = _acceptSellOffer(offerId);
+        address[] memory indexedSpv;
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics[0] == ISecondaryTradeStorage.SpvThresholdConditionsSet.selector) {
+                (indexedSpv,) = abi.decode(logs[i].data, (address[], address));
+            }
+        }
+        assertEq(indexedSpv.length, 2, "indexer sees the replacement list");
 
-        address[] memory recorded = dm.getSecondaryEscrow(settlementId).thresholdConditions;
-        assertEq(recorded.length, 2, "settlement records the live set");
-        assertEq(recorded[0], first, "first condition");
-        assertEq(recorded[1], second, "condition added after posting");
+        vm.warp(block.timestamp + 1);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
 
-        assertEq(dm.getOffer(offerId).expectedThresholdConditions.length, 1, "offer snapshot still the posting-time set");
+        // Replay: indexed SPV layer ++ the settlement's elected pathway layer == the live resolved set.
+        ExemptionPathway elected = dm.getSecondaryEscrow(settlementId).exemptionPathway;
+        address[] memory indexedPathway = dm.getPathwayThresholdConditions(elected);
+        assertEq(indexedSpv[0], spvFirst, "SPV layer first element");
+        assertEq(indexedSpv[1], spvSecond, "SPV layer second element");
+        assertEq(indexedPathway.length, 1, "pathway layer");
+        assertEq(indexedPathway[0], pathwayCond, "pathway condition");
+        assertEq(dm.getSpvThresholdConditions().length, indexedSpv.length, "indexer matches chain");
     }
 
     // The counterpart: a condition added after posting is enforced at acceptance, not skipped because the
@@ -2321,7 +2386,9 @@ contract DealManagerSecondaryTradeTest is Test {
 
         // Finalize lot B (the last lot): offer reaches FINALIZED, reservation fully consumed, custody drained.
         vm.expectEmit(true, false, false, true);
-        emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(settlementIdB, seller, buyer, unitsB, lotB);
+        emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(
+            settlementIdB, seller, buyer, unitsB, lotB, new address[](0), new address[](0)
+        );
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementIdB);
 
@@ -2439,7 +2506,9 @@ contract DealManagerSecondaryTradeTest is Test {
 
         // Finalize lot B (the last lot): buy offer reaches FINALIZED, reservation fully consumed, custody drained.
         vm.expectEmit(true, false, false, true);
-        emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(settlementIdB, seller, buyer, unitsB, lotB);
+        emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(
+            settlementIdB, seller, buyer, unitsB, lotB, new address[](0), new address[](0)
+        );
         vm.prank(keeper);
         dm.finalizeSecondaryTradeAgreement(settlementIdB);
 
@@ -3597,7 +3666,7 @@ contract DealManagerSecondaryTradeTest is Test {
     // A closing condition registered after the offer was posted still gates its settlements.
     function test_RevertIf_FinalizeSecondaryTrade_ClosingConditionAddedAfterPosting() public {
         bytes32 offerId = _postSellOffer();
-        assertEq(dm.getOffer(offerId).closingConditions.length, 0, "no closing condition at posting");
+        assertEq(dm.getClosingConditions().length, 0, "no closing condition at posting");
         bytes32 settlementId = _acceptSellOffer(offerId);
 
         address failing = address(new SecConditionMock(false));
@@ -3758,8 +3827,7 @@ contract DealManagerSecondaryTradeTest is Test {
             HostingMode.DIRECT,
             address(0),
             OPEN_ENDORSEMENT_SIG,
-            ExemptionPathway.SECTION_4A7,
-            new address[](0)
+            ExemptionPathway.SECTION_4A7
         );
         vm.prank(buyer);
         dm.acceptOffer(p);

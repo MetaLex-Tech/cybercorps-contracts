@@ -89,10 +89,6 @@ struct Offer {
     HostingMode buyerHostingMode;   // buy offer-only: Direct or Administered; defaults to Direct for sell offers
     address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
     bytes32[] settlementAgreementIds; // appended at each acceptOffer; length == 0 at postOffer (no buyer known yet)
-    // `expected` prefix: posting-time snapshots, not the terms any trade settles under. The buyer's election
-    // at acceptOffer decides those, and SecondaryEscrow records them per lot.
-    address[] expectedThresholdConditions; // set resolved at postOffer; each settlement records its own on SecondaryEscrow
-    address[] closingConditions;      // set resolved at postOffer; gates asset transfer at finalize
 }
 
 // Per-settlement escrow for secondary trades, keyed by settlementAgreementId.
@@ -112,10 +108,9 @@ struct SecondaryEscrow {
     HostingMode buyerHostingMode;   // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
     address adminMultisig;          // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
     bytes openEndorsementSig;       // redundant for sell offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
-    // Exemption terms of this lot: two buyers of one sell offer may elect different pathways, so the
-    // shared Offer cannot hold them.
+    // The buyer's election, per lot: two buyers of one sell offer may elect different pathways, so the
+    // shared Offer cannot hold it.
     ExemptionPathway exemptionPathway;  // never NONE; the exemption this trade settles under, stamped into the cert's deal metadata
-    address[] thresholdConditions;      // set resolved for this lot
 }
 
 struct PostOfferParams {
@@ -163,6 +158,7 @@ interface ISecondaryTradeStorage {
     // Events below carry every field an off-chain indexer needs to reconstruct secondary-trade status
     // (open offers + settlements) from logs alone: an Offer is fully described by OfferPosted, each settlement
     // by OfferAccepted (which also reports its funding), and lifecycle transitions by the remaining events.
+    // For the condition sets, an indexer replays the config events below against the settlement's elected pathway.
     /// @dev offerId/offeror/certPrinter indexed so a UI can filter offers by security and by user.
     event OfferPosted(
         bytes32 indexed offerId,
@@ -181,9 +177,7 @@ interface ISecondaryTradeStorage {
         string buyerName,
         HostingMode buyerHostingMode,
         address adminMultisig,
-        bytes counterpartyRestrictions,
-        address[] expectedThresholdConditions,
-        address[] closingConditions
+        bytes counterpartyRestrictions
     );
     event OfferCancelled(bytes32 indexed offerId, address indexed offeror);
     event OfferAccepted(
@@ -201,11 +195,20 @@ interface ISecondaryTradeStorage {
         HostingMode buyerHostingMode,
         address adminMultisig,
         bytes openEndorsementSig,
-        // Per-settlement, so OfferPosted cannot carry them: buyers of one offer may elect different pathways.
-        ExemptionPathway exemptionPathway,
-        address[] thresholdConditions
+        // Per-settlement, so OfferPosted cannot carry it: buyers of one offer may elect different pathways.
+        ExemptionPathway exemptionPathway
     );
-    event SecondaryTradeAgreementFinalized(bytes32 indexed agreementId, address seller, address buyer, uint256 units, uint256 consideration);
+    /// @dev Carries the condition sets this settlement was actually judged against, resolved at this
+    /// moment from live config, so the record of what gated the asset transfer needs no replay to read.
+    event SecondaryTradeAgreementFinalized(
+        bytes32 indexed agreementId,
+        address seller,
+        address buyer,
+        uint256 units,
+        uint256 consideration,
+        address[] thresholdConditions,
+        address[] closingConditions
+    );
     event SecondaryTradeAgreementVoided(bytes32 indexed agreementId);
     /// @dev Reports the realized fee split: feeDestination is the credited integrator (zero when the fee
     /// routed entirely to the platform). The split is read from live factory state at settlement, so it is
@@ -223,6 +226,15 @@ interface ISecondaryTradeStorage {
         uint256 integratorFee,
         uint256 platformFee
     );
+
+    // Condition-config events. Each carries the full replacement list, never a delta, so an indexer can
+    // replay the config as of any block and derive the set that gated a given post/accept/finalize.
+    event SpvThresholdConditionsSet(address[] conditions, address setter);
+    /// @dev `enabled` rides along because it decides whether the pathway can be elected at all.
+    event PathwayThresholdConditionsSet(
+        ExemptionPathway indexed pathway, address[] conditions, bool enabled, address setter
+    );
+    event ClosingConditionsSet(address[] conditions, address setter);
 
     error OfferNotAvailable();
     error OfferExpired();

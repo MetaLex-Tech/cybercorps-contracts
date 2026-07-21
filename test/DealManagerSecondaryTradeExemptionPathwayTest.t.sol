@@ -438,9 +438,12 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         assertEq(
             uint8(accreditedEscrow.exemptionPathway), uint8(ExemptionPathway.SECTION_4A7), "4(a)(7) settlement pathway"
         );
-        // Each lot records the set its own election resolved — different sets from the same offer.
-        _assertResolvedSet(qibEscrow.thresholdConditions, ExemptionPathway.RULE_144A);
-        _assertResolvedSet(accreditedEscrow.thresholdConditions, ExemptionPathway.SECTION_4A7);
+        // Each election resolves its own Layer 1 set, so one offer settled two lots under different regimes.
+        assertTrue(
+            keccak256(abi.encode(dm.getPathwayThresholdConditions(ExemptionPathway.RULE_144A)))
+                != keccak256(abi.encode(dm.getPathwayThresholdConditions(ExemptionPathway.SECTION_4A7))),
+            "elections resolve different Layer 1 sets"
+        );
 
         vm.warp(block.timestamp + timeSettlement.DEFAULT_DELAY() + 1);
         vm.startPrank(keeper);
@@ -511,18 +514,6 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     }
 
     /// @dev Asserts a settlement's recorded set is the SPV layer followed by `pathway`'s exemption layer.
-    function _assertResolvedSet(address[] memory recorded, ExemptionPathway pathway) internal view {
-        address[] memory spv = dm.getSpvThresholdConditions();
-        address[] memory pathwayConds = dm.getPathwayThresholdConditions(pathway);
-        assertEq(recorded.length, spv.length + pathwayConds.length, "resolved condition count");
-        for (uint256 i = 0; i < spv.length; i++) {
-            assertEq(recorded[i], spv[i], "SPV condition");
-        }
-        for (uint256 i = 0; i < pathwayConds.length; i++) {
-            assertEq(recorded[spv.length + i], pathwayConds[i], "pathway condition");
-        }
-    }
-
     // ─────────────────────────────────────────────────────────────────────────
     // Lifecycle helper
     // ─────────────────────────────────────────────────────────────────────────

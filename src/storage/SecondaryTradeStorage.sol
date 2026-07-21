@@ -197,7 +197,6 @@ library SecondaryTradeStorage {
         // Resolved from this DealManager's config, never from the caller. An unpinned offer resolves the
         // fund-specific (§6) layer alone — the exemption (§5) layer awaits a buyer's election.
         address[] memory resolvedThreshold = _resolveThresholdConditions(ds, params.exemptionPathway);
-        address[] memory resolvedClosing = ds.closingConditions;
 
         // Store offer record before evaluating conditions so seller-side conditions that call
         // getOffer(offerId) see the populated record; a condition revert rolls this write back.
@@ -229,11 +228,7 @@ library SecondaryTradeStorage {
             buyerName: params.side == OfferSide.BUY ? params.buyerName : "",
             buyerHostingMode: params.side == OfferSide.BUY ? params.buyerHostingMode : HostingMode.DIRECT,
             adminMultisig: params.side == OfferSide.BUY ? params.adminMultisig : address(0),
-            settlementAgreementIds: new bytes32[](0),
-            // spec §conditions: threshold conditions gate posting, acceptance and finalize
-            expectedThresholdConditions: resolvedThreshold,
-            // spec §conditions: closing conditions gate asset transfer
-            closingConditions: resolvedClosing
+            settlementAgreementIds: new bytes32[](0)
         });
 
         // Evaluate threshold conditions (offer is now readable via getOffer). At posting there are no
@@ -259,7 +254,7 @@ library SecondaryTradeStorage {
             params.tokenId, params.units, params.paymentToken, params.consideration,
             params.exemptionPathway, params.validUntil, integrator,
             posted.templateId, posted.buyerName, posted.buyerHostingMode, posted.adminMultisig,
-            posted.counterpartyRestrictions, posted.expectedThresholdConditions, posted.closingConditions
+            posted.counterpartyRestrictions
         );
     }
 
@@ -471,8 +466,7 @@ library SecondaryTradeStorage {
             buyerHostingMode: buyerHostingMode,
             adminMultisig: adminMultisig,
             openEndorsementSig: endorsementSig,
-            exemptionPathway: electedPathway,
-            thresholdConditions: resolvedThreshold
+            exemptionPathway: electedPathway
         });
 
         // Record settlement for buyer-facing threshold condition lookup
@@ -498,7 +492,7 @@ library SecondaryTradeStorage {
             params.offerId, settlementAgreementId, acceptor, params.units, offer.paymentToken, partialConsideration,
             tokenId, settlementExpiry,
             buyerName, buyerHostingMode, adminMultisig, endorsementSig,
-            electedPathway, resolvedThreshold
+            electedPathway
         );
     }
 
@@ -545,9 +539,9 @@ library SecondaryTradeStorage {
         address[] memory resolvedThreshold =
             _resolveThresholdConditions(secondaryTradeStorage(), secEscrow.exemptionPathway);
         _checkConditions(resolvedThreshold, secEscrow.offerId, agreementId);
-        secEscrow.thresholdConditions = resolvedThreshold;
 
-        _checkConditions(secondaryTradeStorage().closingConditions, secEscrow.offerId, agreementId);
+        address[] memory resolvedClosing = secondaryTradeStorage().closingConditions;
+        _checkConditions(resolvedClosing, secEscrow.offerId, agreementId);
 
         // Effect: mark finalized before external calls
         secEscrow.status = SecondaryEscrowStatus.FINALIZED;
@@ -602,7 +596,10 @@ library SecondaryTradeStorage {
             )
         );
 
-        emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(agreementId, seller, buyer, secEscrow.units, secEscrow.paymentAmount);
+        emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(
+            agreementId, seller, buyer, secEscrow.units, secEscrow.paymentAmount,
+            resolvedThreshold, resolvedClosing
+        );
     }
 
     /// @notice Voids an expired secondary-trade settlement and refunds/releases its escrowed assets
@@ -673,7 +670,7 @@ library SecondaryTradeStorage {
         if (ds.minTradeConsideration > 0 && consideration < ds.minTradeConsideration) revert ISecondaryTradeStorage.BelowMinTradeThreshold();
     }
 
-    /// @dev Walks the offer's stored threshold conditions, reverting on the first failure. Conditions
+    /// @dev Walks the resolved threshold conditions, reverting on the first failure. Conditions
     /// receive the uniform secondary-trade payload `abi.encode(offerId, agreementId)`; `agreementId` is
     /// `bytes32(0)` at posting (no settlement yet) and the settlement id at acceptance and at finalization,
     /// so a buyer-facing condition reads its acceptor directly instead of reaching into settlementAgreementIds.
@@ -788,6 +785,7 @@ library SecondaryTradeStorage {
     function setSpvThresholdConditions(address[] calldata conditions) external {
         _validateConditions(conditions);
         secondaryTradeStorage().spvThresholdConditions = conditions;
+        emit ISecondaryTradeStorage.SpvThresholdConditionsSet(conditions, msg.sender);
     }
 
     /// @notice Replaces the exemption-specific (§5) layer for `pathway` and declares whether this SPV
@@ -800,12 +798,14 @@ library SecondaryTradeStorage {
         SecondaryTradeData storage ds = secondaryTradeStorage();
         ds.pathwayThresholdConditions[pathway] = conditions;
         ds.pathwayEnabled[pathway] = enabled;
+        emit ISecondaryTradeStorage.PathwayThresholdConditionsSet(pathway, conditions, enabled, msg.sender);
     }
 
     /// @notice Replaces the closing set wholesale.
     function setClosingConditions(address[] calldata conditions) external {
         _validateConditions(conditions);
         secondaryTradeStorage().closingConditions = conditions;
+        emit ISecondaryTradeStorage.ClosingConditionsSet(conditions, msg.sender);
     }
 
     /// @dev Gates every pathway a trade commits to, at posting and at acceptance, so an offer is never
