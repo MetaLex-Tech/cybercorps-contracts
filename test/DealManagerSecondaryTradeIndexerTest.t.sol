@@ -128,6 +128,8 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         uint8 buyerHostingMode;
         address adminMultisig;
         bytes openEndorsementSig; // per-settlement endorsement used (from OfferAccepted)
+        uint8 exemptionPathway; // pathway elected for this settlement (from OfferAccepted)
+        address[] pathwayThresholdConditions; // Layer 1 set the elected pathway pulled in (from OfferAccepted)
         uint8 status; // SecondaryEscrowStatus
         address feeDestination; // escrow routing: snapshotted from the offer's integrator
         address seller; // from Finalized
@@ -412,6 +414,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: units,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             buyerName: "Bob",
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -431,6 +434,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: units,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             buyerName: "Bob",
             buyerHostingMode: HostingMode.ADMINISTERED,
             adminMultisig: adminMultisig,
@@ -447,6 +451,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: units,
+            exemptionPathway: ExemptionPathway.NONE,  // ignored for a buy-offer acceptance: the offer's pin governs
             buyerName: "Bob",
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -593,8 +598,12 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
             string memory buyerName,
             uint8 buyerHostingMode,
             address adminMultisig,
-            bytes memory openEndorsementSig
-        ) = abi.decode(log.data, (uint256, address, uint256, uint256, uint256, string, uint8, address, bytes));
+            bytes memory openEndorsementSig,
+            uint8 exemptionPathway,
+            address[] memory pathwayThresholdConditions
+        ) = abi.decode(
+            log.data, (uint256, address, uint256, uint256, uint256, string, uint8, address, bytes, uint8, address[])
+        );
 
         IdxSettlement storage s = idxSettlements[settlementId];
         require(!s.exists, "indexer: settlement accepted twice");
@@ -610,6 +619,8 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         s.buyerHostingMode = buyerHostingMode;
         s.adminMultisig = adminMultisig;
         s.openEndorsementSig = openEndorsementSig;
+        s.exemptionPathway = exemptionPathway;
+        s.pathwayThresholdConditions = pathwayThresholdConditions;
         s.status = uint8(SecondaryEscrowStatus.ACCEPTED);
         idxSettlementIds.push(settlementId);
 
@@ -837,6 +848,19 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         assertEq(s.openEndorsementSig, c.openEndorsementSig, "settlement openEndorsementSig");
         assertEq(s.status, uint8(c.status), "settlement status");
         assertEq(s.feeDestination, c.feeDestination, "settlement feeDestination");
+        assertEq(s.exemptionPathway, uint8(c.exemptionPathway), "settlement exemptionPathway");
+        assertEq(
+            s.pathwayThresholdConditions.length,
+            c.pathwayThresholdConditions.length,
+            "settlement pathwayThresholdConditions length"
+        );
+        for (uint256 i = 0; i < c.pathwayThresholdConditions.length; i++) {
+            assertEq(
+                s.pathwayThresholdConditions[i],
+                c.pathwayThresholdConditions[i],
+                "settlement pathwayThresholdCondition"
+            );
+        }
     }
 
     /// @dev Asserts the settlement's Finalized/Fee-derived fields (no on-chain counterpart) match expected
@@ -1014,6 +1038,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         AcceptOfferParams memory ap = AcceptOfferParams({
             offerId: offerId,
             units: UNITS,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             buyerName: "Bob",
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),

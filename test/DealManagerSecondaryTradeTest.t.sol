@@ -355,7 +355,8 @@ contract DealManagerSecondaryTradeTest is Test {
             units: UNITS,
             paymentToken: address(paymentToken),
             consideration: CONSIDERATION,
-            exemptionPathway: ExemptionPathway.SECTION_4A7,
+            // unpinned, the ordinary sell-offer shape: each buyer elects their own pathway at acceptance
+            exemptionPathway: ExemptionPathway.NONE,
             validUntil: block.timestamp + 1 days,
             counterpartyRestrictions: "",
             additionalTerms: ADDITIONAL_TERMS,
@@ -438,9 +439,17 @@ contract DealManagerSecondaryTradeTest is Test {
     }
 
     function _acceptSellOffer(bytes32 offerAgreementId) internal returns (bytes32 settlementAgreementId) {
+        return _acceptSellOfferWithPathway(offerAgreementId, ExemptionPathway.SECTION_4A7);
+    }
+
+    function _acceptSellOfferWithPathway(bytes32 offerAgreementId, ExemptionPathway pathway)
+        internal
+        returns (bytes32 settlementAgreementId)
+    {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerAgreementId,
             units: UNITS,
+            exemptionPathway: pathway,
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -464,6 +473,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerAgreementId,
             units: units,
+            exemptionPathway: ExemptionPathway.NONE,  // ignored for a buy-offer acceptance: the offer's pin governs
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -572,15 +582,12 @@ contract DealManagerSecondaryTradeTest is Test {
             assertEq(offer.adminMultisig, address(0), "sell offers carry no adminMultisig");
         }
 
-        // condition snapshots from DealManager config
+        // condition snapshots from DealManager config: the offer carries the SPV layer only, since the
+        // exemption layer hangs off the pathway each buyer elects at acceptance
         address[] memory spv = dm.getSpvThresholdConditions();
-        address[] memory pathway = dm.getPathwayThresholdConditions(p.exemptionPathway);
-        assertEq(offer.thresholdConditions.length, spv.length + pathway.length, "thresholdConditions length");
+        assertEq(offer.thresholdConditions.length, spv.length, "thresholdConditions length");
         for (uint256 i = 0; i < spv.length; i++) {
             assertEq(offer.thresholdConditions[i], spv[i], "thresholdConditions SPV element");
-        }
-        for (uint256 i = 0; i < pathway.length; i++) {
-            assertEq(offer.thresholdConditions[spv.length + i], pathway[i], "thresholdConditions pathway element");
         }
         address[] memory closing = dm.getClosingConditions();
         assertEq(offer.closingConditions.length, closing.length, "closingConditions length");
@@ -724,7 +731,7 @@ contract DealManagerSecondaryTradeTest is Test {
             UNITS,
             address(paymentToken),
             CONSIDERATION,
-            ExemptionPathway.SECTION_4A7,
+            ExemptionPathway.NONE, // unpinned sell offer
             block.timestamp + 1 days,
             address(0),
             bytes32(0),
@@ -842,6 +849,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS,
+            exemptionPathway: ExemptionPathway.NONE,  // ignored for a buy-offer acceptance: the offer's pin governs
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -971,6 +979,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory ap = AcceptOfferParams({
             offerId: offerId,
             units: UNITS,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -1036,6 +1045,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory ap = AcceptOfferParams({
             offerId: offerId,
             units: UNITS,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -1054,15 +1064,18 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(owner);
         dm.addPathwayThresholdCondition(ExemptionPathway.RULE_144, succeeding);
 
-        // RULE_144 offer: should have the L3 condition
+        // RULE_144 offer: the pathway condition rides on the settlement, not the offer
         PostOfferParams memory p = _defaultSellOfferParams();
         p.salt = uint256(keccak256("test_Config_Pathway_144"));
         p.exemptionPathway = ExemptionPathway.RULE_144;
         vm.prank(seller);
         bytes32 offerId = dm.postOffer(p);
-        assertEq(
-            dm.getOffer(offerId).thresholdConditions.length, 1, "pathway condition should be applied to Rule 144 offer"
-        );
+        assertEq(dm.getOffer(offerId).thresholdConditions.length, 0, "offer carries the SPV layer only");
+
+        bytes32 settlementId = _acceptSellOfferWithPathway(offerId, ExemptionPathway.RULE_144);
+        address[] memory pathwayConds = dm.getSecondaryEscrow(settlementId).pathwayThresholdConditions;
+        assertEq(pathwayConds.length, 1, "pathway condition should be applied to the Rule 144 settlement");
+        assertEq(pathwayConds[0], succeeding, "Rule 144 condition");
     }
 
     function test_ThresholdConditions_PathwayConditionNotAppliesToOtherPathway() public {
@@ -1070,12 +1083,20 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(owner);
         dm.addPathwayThresholdCondition(ExemptionPathway.RULE_144, failing);
 
-        // SECTION_4A7 offer: the RULE_144 condition is not in its resolved set, so posting succeeds.
+        // The buyer elects SECTION_4A7, so the RULE_144 condition is not in this settlement's set and
+        // neither posting nor acceptance sees it.
         PostOfferParams memory p = _defaultSellOfferParams();
         p.salt = uint256(keccak256("test_Config_Pathway_4a7"));
         vm.prank(seller);
         bytes32 offerId = dm.postOffer(p);
-        assertEq(dm.getOffer(offerId).thresholdConditions.length, 0, "no pathway condition applied to 4(a)(7) offer");
+        assertEq(dm.getOffer(offerId).thresholdConditions.length, 0, "offer carries the SPV layer only");
+
+        bytes32 settlementId = _acceptSellOffer(offerId);
+        assertEq(
+            dm.getSecondaryEscrow(settlementId).pathwayThresholdConditions.length,
+            0,
+            "no pathway condition applied to the 4(a)(7) settlement"
+        );
     }
 
     function test_RevertIf_ThresholdConditions_PathwayConditionFailsForMatchingPathway() public {
@@ -1092,13 +1113,71 @@ contract DealManagerSecondaryTradeTest is Test {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // exemption pathway election
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // The buyer's election lands on the settlement; the unpinned offer itself is unchanged by it, so later
+    // buyers stay free to elect their own.
+    function test_AcceptOffer_Sell_UnpinnedOffer_RecordsElectedPathwayOnSettlement() public {
+        bytes32 offerId = _postSellOffer();
+        bytes32 settlementId = _acceptSellOfferWithPathway(offerId, ExemptionPathway.RULE_144A);
+
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).exemptionPathway),
+            uint8(ExemptionPathway.RULE_144A),
+            "settlement records the buyer's elected pathway"
+        );
+        assertEq(
+            uint8(dm.getOffer(offerId).exemptionPathway),
+            uint8(ExemptionPathway.NONE),
+            "offer stays unpinned"
+        );
+    }
+
+    // A buy offer's offeror is the buyer, so the pathway must be pinned up front — there is no later
+    // acceptance step at which the buyer could elect it.
+    function test_RevertIf_PostOffer_Buy_MissingExemptionPathway() public {
+        PostOfferParams memory p = _defaultBuyOfferParams();
+        p.exemptionPathway = ExemptionPathway.NONE;
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.ExemptionPathwayRequired.selector);
+        dm.postOffer(p);
+    }
+
+    // On a buy offer the accepting seller is not the one claiming the exemption, so whatever they pass is
+    // ignored in favor of the buy offer's own pathway.
+    function test_AcceptOffer_Buy_IgnoresAcceptorElectedPathway() public {
+        bytes32 offerId = _postBuyOffer();
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: UNITS,
+            exemptionPathway: ExemptionPathway.RULE_144A, // seller's election: ignored
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0),
+            sellerTokenId: sellerTokenId,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, seller, sellerKey),
+            openEndorsementSig: OPEN_ENDORSEMENT_SIG
+        });
+        vm.prank(seller);
+        bytes32 settlementId = dm.acceptOffer(p);
+
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).exemptionPathway),
+            uint8(ExemptionPathway.SECTION_4A7),
+            "buy offer's own pathway governs the settlement"
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // threshold condition configurations
     // ─────────────────────────────────────────────────────────────────────────
 
-    // The two §7.2 threshold layers — fund-specific (Layer 2 / per-SPV) ++ exemption-specific (Layer 1 /
-    // per-pathway) — are concatenated in order and snapshotted onto the offer at postOffer; the offeror
-    // supplies only the pathway, never the addresses.
-    function test_Config_ResolvesSpvAndPathwayOntoOffer() public {
+    // The two §7.2 threshold layers land in different places: the fund-specific (Layer 2 / per-SPV) layer is
+    // snapshotted onto the offer at postOffer, the exemption-specific (Layer 1 / per-pathway) layer onto each
+    // settlement at acceptOffer once its pathway is elected. Traders supply only the pathway, never addresses.
+    function test_Config_ResolvesSpvOntoOfferAndPathwayOntoSettlement() public {
         address spv = address(new SecConditionMock(true));
         address pathway = address(new SecConditionMock(true));
         vm.prank(owner);
@@ -1111,10 +1190,14 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(seller);
         bytes32 offerId = dm.postOffer(p);
 
-        address[] memory resolved = dm.getOffer(offerId).thresholdConditions;
-        assertEq(resolved.length, 2, "fund-specific + exemption-specific both resolved");
-        assertEq(resolved[0], spv, "fund-specific (Layer 2) first");
-        assertEq(resolved[1], pathway, "exemption-specific (Layer 1) last");
+        address[] memory onOffer = dm.getOffer(offerId).thresholdConditions;
+        assertEq(onOffer.length, 1, "offer carries the fund-specific layer");
+        assertEq(onOffer[0], spv, "fund-specific (Layer 2)");
+
+        bytes32 settlementId = _acceptSellOffer(offerId);
+        address[] memory onSettlement = dm.getSecondaryEscrow(settlementId).pathwayThresholdConditions;
+        assertEq(onSettlement.length, 1, "settlement carries the exemption-specific layer");
+        assertEq(onSettlement[0], pathway, "exemption-specific (Layer 1)");
     }
 
     function test_RevertIf_Config_AddSpvZeroAddressCondition() public {
@@ -1411,6 +1494,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS - 1, // partial fill, below min
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -1436,6 +1520,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS / 2, // pro-rata consideration = CONSIDERATION / 2, below min
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -1458,6 +1543,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: 0,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -1484,6 +1570,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: (UNITS * 9) / 10, // 90 units → 10-unit remainder, below the 25-unit floor
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -1509,6 +1596,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: (UNITS * 8) / 10, // 80 units → pro-rata 8 ether (ok), remainder 2 ether < 3 ether floor
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -1803,6 +1891,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: firstUnits,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -1871,6 +1960,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS + 1,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -1891,6 +1981,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS / 2,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -1922,6 +2013,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS,
+            exemptionPathway: ExemptionPathway.NONE,  // ignored for a buy-offer acceptance: the offer's pin governs
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -1941,6 +2033,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS + 1,
+            exemptionPathway: ExemptionPathway.NONE,  // ignored for a buy-offer acceptance: the offer's pin governs
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -2473,6 +2566,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerAgreementId,
             units: units,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -3143,6 +3237,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -3461,6 +3556,7 @@ contract DealManagerSecondaryTradeTest is Test {
         AcceptOfferParams memory p = AcceptOfferParams({
             offerId: offerId,
             units: UNITS,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -3485,7 +3581,9 @@ contract DealManagerSecondaryTradeTest is Test {
             SELL_ACCEPT_BUYER_NAME,
             HostingMode.DIRECT,
             address(0),
-            OPEN_ENDORSEMENT_SIG
+            OPEN_ENDORSEMENT_SIG,
+            ExemptionPathway.SECTION_4A7,
+            new address[](0)
         );
         vm.prank(buyer);
         dm.acceptOffer(p);
@@ -3509,7 +3607,7 @@ contract DealManagerSecondaryTradeTest is Test {
     string constant _POST_PARAMS_TYPE =
         "PostOfferParams(uint8 side,address certPrinter,uint256 tokenId,uint256 units,address paymentToken,uint256 consideration,uint8 exemptionPathway,uint256 validUntil,bytes counterpartyRestrictions,bytes additionalTerms,address integrator,bytes32 templateId,uint256 salt,string[] globalValues,string[] offerorPartyValues,bytes offerorAgreementSig,bytes openEndorsementSig,string buyerName,uint8 buyerHostingMode,address adminMultisig)";
     string constant _ACCEPT_PARAMS_TYPE =
-        "AcceptOfferParams(bytes32 offerId,uint256 units,string buyerName,uint8 buyerHostingMode,address adminMultisig,uint256 sellerTokenId,string[] acceptorPartyValues,bytes acceptorAgreementSig,bytes openEndorsementSig)";
+        "AcceptOfferParams(bytes32 offerId,uint256 units,uint8 exemptionPathway,string buyerName,uint8 buyerHostingMode,address adminMultisig,uint256 sellerTokenId,string[] acceptorPartyValues,bytes acceptorAgreementSig,bytes openEndorsementSig)";
 
     function _dmDomainSep() internal view returns (bytes32) {
         return keccak256(abi.encode(
@@ -3541,7 +3639,7 @@ contract DealManagerSecondaryTradeTest is Test {
     function _hashAcceptParams(AcceptOfferParams memory p) internal pure returns (bytes32) {
         return keccak256(abi.encode(
             keccak256(bytes(_ACCEPT_PARAMS_TYPE)),
-            p.offerId, p.units, keccak256(bytes(p.buyerName)), uint8(p.buyerHostingMode),
+            p.offerId, p.units, uint8(p.exemptionPathway), keccak256(bytes(p.buyerName)), uint8(p.buyerHostingMode),
             p.adminMultisig, p.sellerTokenId, _hashStrs(p.acceptorPartyValues),
             keccak256(p.acceptorAgreementSig), keccak256(p.openEndorsementSig)
         ));
@@ -3587,6 +3685,7 @@ contract DealManagerSecondaryTradeTest is Test {
         return AcceptOfferParams({
             offerId: offerId,
             units: UNITS,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
             buyerName: SELL_ACCEPT_BUYER_NAME,
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -3654,6 +3753,19 @@ contract DealManagerSecondaryTradeTest is Test {
 
         assertEq(dm.getSecondaryEscrow(settlementId).counterparty, buyer);
         assertEq(paymentToken.balanceOf(buyer), buyerBefore - CONSIDERATION);
+    }
+
+    // The elected pathway is part of the authorized params, so a relayer cannot swap in another one.
+    function test_RevertIf_AcceptOffer_Relayer_TamperedPathway() public {
+        bytes32 offerId = _postSellOffer();
+        address relayer = makeAddr("relayer");
+        AcceptOfferParams memory p = _sellAcceptParams(offerId);
+        bytes memory sig = _acceptAuthSig(p, buyer, 9, buyerKey);
+        p.exemptionPathway = ExemptionPathway.RULE_144A;
+
+        vm.prank(relayer);
+        vm.expectRevert(ISecondaryTradeStorage.InvalidSecondaryAuthSignature.selector);
+        dm.acceptOffer(p, buyer, 9, sig);
     }
 
     // A signature by the wrong key does not recover to `forAddr`.

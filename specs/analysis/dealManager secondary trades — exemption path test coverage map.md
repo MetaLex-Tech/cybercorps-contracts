@@ -16,7 +16,13 @@ blocking behavior.
 
 **Latest run:** `forge test --use solc:0.8.28 --via-ir --optimize --optimizer-runs 15
 --match-contract DealManagerSecondaryTradeExemptionPathwayTest` →
-**7 passed / 0 failed** (5 pathway happy paths + 2 closing-condition tests).
+**12 passed / 0 failed** (5 pathway happy paths + 3 closing-condition tests + 4 pathway-election tests).
+
+**Who elects the pathway.** The exemption is the buyer's to claim, so the buyer elects it: on a sell offer at
+`acceptOffer`, on a buy offer at `postOffer` (there the offeror *is* the buyer). A sell offeror may leave
+`exemptionPathway` as `NONE` — the ordinary shape — or pin one to restrict who can accept. Because the
+pathway is per-settlement, so is its Layer 1 condition set: the offer snapshots only the SPV layer, and each
+settlement snapshots the exemption layer for the pathway its buyer elected.
 
 ## Legend
 
@@ -75,6 +81,21 @@ settlement period).
 | CFIUSCondition                        |   ✓   | none                           | implemented; optional per-SPV, out of scope for these happy paths                                                                                |
 | GPLPApprovalCondition                 |   ✓   | none                           | implemented; optional per-SPV, out of scope                                                                                                      |
 
+## Pathway-election tests
+
+The five happy paths above run on offers that pin their pathway. These cover the unpinned (`NONE`) shape,
+where the buyer elects at acceptance.
+
+| Test fn                                                     | What it proves                                                                                                                                     |
+|-------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
+| `test_UnpinnedOffer_BuyersElectDifferentPathways`           | One unpinned offer, two half-fills: a QIB elects 144A and an accredited buyer elects §4(a)(7); each settlement snapshots only its own pathway's Layer 1 set, and both finalize |
+| `test_RevertIf_UnpinnedOffer_BuyerElectsPathwayTheyDoNotQualifyFor` | An accredited non-QIB electing 144A is stopped at acceptance by the QIB condition — the layer an unpinned offer never ran at posting        |
+| `test_RevertIf_UnpinnedOffer_BuyerElectsNoPathway`          | `NONE` at acceptance reverts `ExemptionPathwayRequired`; a settlement always has a real pathway                                                     |
+| `test_RevertIf_PinnedOffer_BuyerElectsAnotherPathway`       | A seller's pin restricts the election: a qualifying QIB electing 144A on a Rule 144 offer reverts `ExemptionPathwayMismatch`                        |
+
+Buy-side election rules (pathway required at `postOffer`, acceptor's election ignored) and the EIP-712
+binding of the elected pathway are covered in `DealManagerSecondaryTradeTest`.
+
 ## Test-fixture notes
 
 - The agreement template carries **two party fields** (`erisaAttestation`, `section4a7Ack`); every
@@ -91,7 +112,6 @@ settlement period).
 - Negative / revert paths per threshold condition (expired badge, unmet hold, blocked state,
   holder-cap breach, missing tax form, missing ERISA attestation, U.S. buyer on Reg S, unconfigured
   Reg S SPV, stale disclosure package, missing GP sign-off).
-- BUY-side offers (bids) per pathway.
-- Partial fills across multiple settlements.
+- BUY-side offers per pathway.
 - `TimeSettlementPeriodCondition` per-DealManager `setDelayOverride` (QMS-mode 45-day parameterization).
 - `KillSwitchCondition` admin rotation (`rotateAdmin`).

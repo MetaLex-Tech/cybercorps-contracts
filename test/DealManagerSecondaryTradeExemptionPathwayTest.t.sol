@@ -405,6 +405,120 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Buyer-elected pathway on an unpinned offer
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // One unpinned offer, two buyers, two exemptions: each lot pulls in only its own pathway's Layer 1
+    // conditions and settles independently.
+    function test_UnpinnedOffer_BuyersElectDifferentPathways() public {
+        (address qibBuyer, uint256 qibKey) = makeAddrAndKey("buyer.144a.split");
+        _commonBuyerSetup(qibBuyer, "US", CA);
+        _mintCred(qibBuyer, CAT_QIB, "US", bytes2(0));
+
+        (address accreditedBuyer, uint256 accreditedKey) = makeAddrAndKey("buyer.4a7.split");
+        _commonBuyerSetup(accreditedBuyer, "US", CA);
+        _mintCred(accreditedBuyer, CAT_ACCREDITED, "US", bytes2(0));
+
+        bytes32 offerId = _postSellOffer(ExemptionPathway.NONE, uint256(keccak256("unpinned.split")));
+        assertEq(uint8(dm.getOffer(offerId).exemptionPathway), uint8(ExemptionPathway.NONE), "offer left unpinned");
+
+        AcceptOfferParams memory qibAccept =
+            _sellAcceptParams(offerId, qibBuyer, qibKey, ExemptionPathway.RULE_144A, UNITS / 2);
+        vm.prank(qibBuyer);
+        bytes32 qibSettlement = dm.acceptOffer(qibAccept);
+
+        AcceptOfferParams memory accreditedAccept =
+            _sellAcceptParams(offerId, accreditedBuyer, accreditedKey, ExemptionPathway.SECTION_4A7, UNITS / 2);
+        vm.prank(accreditedBuyer);
+        bytes32 accreditedSettlement = dm.acceptOffer(accreditedAccept);
+
+        SecondaryEscrow memory qibEscrow = dm.getSecondaryEscrow(qibSettlement);
+        SecondaryEscrow memory accreditedEscrow = dm.getSecondaryEscrow(accreditedSettlement);
+        assertEq(uint8(qibEscrow.exemptionPathway), uint8(ExemptionPathway.RULE_144A), "144A settlement pathway");
+        assertEq(
+            uint8(accreditedEscrow.exemptionPathway), uint8(ExemptionPathway.SECTION_4A7), "4(a)(7) settlement pathway"
+        );
+        _assertPathwaySet(qibEscrow.pathwayThresholdConditions, ExemptionPathway.RULE_144A);
+        _assertPathwaySet(accreditedEscrow.pathwayThresholdConditions, ExemptionPathway.SECTION_4A7);
+
+        vm.warp(block.timestamp + timeSettlement.DEFAULT_DELAY() + 1);
+        vm.startPrank(keeper);
+        dm.finalizeSecondaryTradeAgreement(qibSettlement);
+        dm.finalizeSecondaryTradeAgreement(accreditedSettlement);
+        vm.stopPrank();
+
+        assertEq(
+            uint8(dm.getSecondaryEscrow(qibSettlement).status),
+            uint8(SecondaryEscrowStatus.FINALIZED),
+            "144A settlement FINALIZED"
+        );
+        assertEq(
+            uint8(dm.getSecondaryEscrow(accreditedSettlement).status),
+            uint8(SecondaryEscrowStatus.FINALIZED),
+            "4(a)(7) settlement FINALIZED"
+        );
+        assertGt(certPrinter.balanceOfLegalOwner(qibBuyer), 0, "144A buyer holds a Ledger Entry Token");
+        assertGt(certPrinter.balanceOfLegalOwner(accreditedBuyer), 0, "4(a)(7) buyer holds a Ledger Entry Token");
+        assertEq(_consumed(sellerTokenId), UNITS, "both lots consumed the seller's units");
+    }
+
+    // The election is a claim the buyer must back: an accredited (non-QIB) buyer electing 144A is stopped by
+    // that pathway's own condition, which an unpinned offer would never have run at posting.
+    function test_RevertIf_UnpinnedOffer_BuyerElectsPathwayTheyDoNotQualifyFor() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.notqib");
+        _commonBuyerSetup(buyer, "US", CA);
+        _mintCred(buyer, CAT_ACCREDITED, "US", bytes2(0));
+
+        bytes32 offerId = _postSellOffer(ExemptionPathway.NONE, uint256(keccak256("unpinned.notqib")));
+        AcceptOfferParams memory a = _sellAcceptParams(offerId, buyer, buyerKey, ExemptionPathway.RULE_144A, UNITS);
+
+        vm.prank(buyer);
+        vm.expectRevert(abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, address(qib)));
+        dm.acceptOffer(a);
+    }
+
+    function test_RevertIf_UnpinnedOffer_BuyerElectsNoPathway() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.nopathway");
+        _commonBuyerSetup(buyer, "US", CA);
+
+        bytes32 offerId = _postSellOffer(ExemptionPathway.NONE, uint256(keccak256("unpinned.nopathway")));
+        AcceptOfferParams memory a = _sellAcceptParams(offerId, buyer, buyerKey, ExemptionPathway.NONE, UNITS);
+
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.ExemptionPathwayRequired.selector);
+        dm.acceptOffer(a);
+    }
+
+    // A seller who pins a pathway restricts the election to it, even for a buyer who qualifies elsewhere.
+    function test_RevertIf_PinnedOffer_BuyerElectsAnotherPathway() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.qib.pinned");
+        _commonBuyerSetup(buyer, "US", CA);
+        _mintCred(buyer, CAT_QIB, "US", bytes2(0));
+
+        bytes32 offerId = _postSellOffer(ExemptionPathway.RULE_144, uint256(keccak256("pinned.mismatch")));
+        AcceptOfferParams memory a = _sellAcceptParams(offerId, buyer, buyerKey, ExemptionPathway.RULE_144A, UNITS);
+
+        vm.prank(buyer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ISecondaryTradeStorage.ExemptionPathwayMismatch.selector,
+                ExemptionPathway.RULE_144,
+                ExemptionPathway.RULE_144A
+            )
+        );
+        dm.acceptOffer(a);
+    }
+
+    /// @dev Asserts a settlement's Layer 1 snapshot is exactly the DealManager's configured set for `pathway`.
+    function _assertPathwaySet(address[] memory snapshot, ExemptionPathway pathway) internal view {
+        address[] memory configured = dm.getPathwayThresholdConditions(pathway);
+        assertEq(snapshot.length, configured.length, "pathway condition count");
+        for (uint256 i = 0; i < configured.length; i++) {
+            assertEq(snapshot[i], configured[i], "pathway condition");
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Lifecycle helper
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -462,16 +576,39 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         offerId = dm.postOffer(p);
     }
 
+    /// @dev Buyer elects the pathway the offer pinned; for an unpinned offer use the 4-arg overload.
     function _acceptSellOffer(bytes32 offerId, address buyer, uint256 buyerKey)
         internal
         returns (bytes32 settlementId)
     {
+        return _acceptSellOffer(offerId, buyer, buyerKey, dm.getOffer(offerId).exemptionPathway);
+    }
+
+    function _acceptSellOffer(bytes32 offerId, address buyer, uint256 buyerKey, ExemptionPathway pathway)
+        internal
+        returns (bytes32 settlementId)
+    {
+        AcceptOfferParams memory a = _sellAcceptParams(offerId, buyer, buyerKey, pathway, UNITS);
+        vm.prank(buyer);
+        settlementId = dm.acceptOffer(a);
+    }
+
+    /// @dev Builds a buyer's acceptance params. Kept separate from the call so revert tests can compute the
+    /// acceptor signature (which makes registry view calls) before arming vm.expectRevert.
+    function _sellAcceptParams(
+        bytes32 offerId,
+        address buyer,
+        uint256 buyerKey,
+        ExemptionPathway pathway,
+        uint256 units
+    ) internal view returns (AcceptOfferParams memory) {
         // The buyer records both attestations as signer values; each condition scans for its own marker,
         // so carrying the §4(a)(7) ack on non-4a7 pathways is harmless.
         string[] memory pv = _two(ERISA_ATTESTATION, SECTION4A7_ACK);
-        AcceptOfferParams memory a = AcceptOfferParams({
+        return AcceptOfferParams({
             offerId: offerId,
-            units: UNITS,
+            units: units,
+            exemptionPathway: pathway,
             buyerName: "Bob",
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
@@ -480,8 +617,6 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
             acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey, pv),
             openEndorsementSig: ""
         });
-        vm.prank(buyer);
-        settlementId = dm.acceptOffer(a);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -47,7 +47,18 @@ enum OfferStatus { LIVE, CANCELLED, PARTIALLY_ACCEPTED, FULLY_ACCEPTED, FINALIZE
 
 enum SecondaryEscrowStatus { ACCEPTED, FINALIZED, VOIDED }
 
-enum ExemptionPathway { RULE_144, SECTION_4A7, SECTION_4A1HALF, RULE_144A, REGULATION_S }
+/// @dev NONE means "not pinned": the buyer selects the pathway at acceptance. It is never a settled
+/// trade's pathway — every settlement resolves to one of the five real pathways.
+///
+/// The exemption is the buyer's to claim, so the buyer elects it:
+///
+///   | Offer side    | Pathway set by                                  | NONE allowed?                          |
+///   |---------------|-------------------------------------------------|----------------------------------------|
+///   | SELL unpinned | buyer, at acceptOffer                           | at post yes; at accept never           |
+///   | SELL pinned   | seller restricts; buyer must elect the same one | mismatch -> ExemptionPathwayMismatch   |
+///   | BUY           | offeror (who is the buyer), at postOffer        | no -> ExemptionPathwayRequired;        |
+///   |               |                                                 | acceptor's election ignored            |
+enum ExemptionPathway { NONE, RULE_144, SECTION_4A7, SECTION_4A1HALF, RULE_144A, REGULATION_S }
 
 enum HostingMode { DIRECT, ADMINISTERED }
 
@@ -60,7 +71,7 @@ struct Offer {
     uint256 units;                  // total units offered: immutable once offer is created
     address paymentToken;
     uint256 consideration;          // total payment for all offered units
-    ExemptionPathway exemptionPathway;
+    ExemptionPathway exemptionPathway; // offeror's pin; NONE on a sell offer leaves the choice to each buyer at acceptance
     uint256 validUntil;
     bytes counterpartyRestrictions; // spec §8.1 Counterparty restrictions
     bytes additionalTerms;          // spec §8.1 Supplemental fields
@@ -80,7 +91,7 @@ struct Offer {
     HostingMode buyerHostingMode;   // buy offer-only: Direct or Administered; defaults to Direct for sell offers
     address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
     bytes32[] settlementAgreementIds; // appended at each acceptOffer; length == 0 at postOffer (no buyer known yet)
-    address[] thresholdConditions;    // resolved from DealManager config at postOffer; re-evaluated at acceptOffer and at finalize
+    address[] thresholdConditions;    // SPV layer (§6) only, snapshotted at postOffer; the exemption layer (§5) is per-settlement, on SecondaryEscrow
     address[] closingConditions;      // snapshotted from DealManager config at postOffer; evaluated at finalize (gates asset transfer)
 }
 
@@ -101,6 +112,9 @@ struct SecondaryEscrow {
     HostingMode buyerHostingMode;   // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
     address adminMultisig;          // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
     bytes openEndorsementSig;       // redundant for sell offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
+    // exemption pathway, resolved per settlement: the buyer's choice on a sell offer, the offer's own on a buy offer
+    ExemptionPathway exemptionPathway;      // never NONE; this is the pathway the trade actually settles under
+    address[] pathwayThresholdConditions;   // Layer 1 (§5) for `exemptionPathway`, resolved at acceptOffer; re-evaluated at finalize
 }
 
 struct PostOfferParams {
@@ -110,7 +124,7 @@ struct PostOfferParams {
     uint256 units;
     address paymentToken;
     uint256 consideration;
-    ExemptionPathway exemptionPathway;
+    ExemptionPathway exemptionPathway; // sell offers: NONE leaves the choice to the buyer, or pin one to restrict; buy offers: required (the offeror is the buyer)
     uint256 validUntil;
     bytes counterpartyRestrictions;
     bytes additionalTerms;
@@ -129,6 +143,7 @@ struct PostOfferParams {
 struct AcceptOfferParams {
     bytes32 offerId;
     uint256 units;
+    ExemptionPathway exemptionPathway; // sell offer-only: the buyer's pathway, required and must satisfy any offer pin; ignored for buy offer acceptances
     string buyerName;               // sell offer-only: ignored for buy offer acceptances (read from Offer instead)
     HostingMode buyerHostingMode;   // sell offer-only: Direct or Administered; ignored for buy offer acceptances
     address adminMultisig;          // sell offer-only: delivery address for Administered hosting; ignored for buy offer acceptances
@@ -184,7 +199,11 @@ interface ISecondaryTradeStorage {
         string buyerName,
         HostingMode buyerHostingMode,
         address adminMultisig,
-        bytes openEndorsementSig
+        bytes openEndorsementSig,
+        // the settlement's resolved exemption pathway and the Layer 1 (§5) conditions it pulled in; both are
+        // per-settlement, so OfferPosted cannot carry them for an unpinned offer
+        ExemptionPathway exemptionPathway,
+        address[] pathwayThresholdConditions
     );
     event SecondaryTradeAgreementFinalized(bytes32 indexed agreementId, address seller, address buyer, uint256 units, uint256 consideration);
     event SecondaryTradeAgreementVoided(bytes32 indexed agreementId);
@@ -234,6 +253,11 @@ interface ISecondaryTradeStorage {
     /// (ownership moved after listing/acceptance), so the payee and the party whose units are consumed diverge
     error SecondaryTradeSellerOwnershipChanged();
     error SecondaryConditionsNotMet(address condition);
+    /// @notice No exemption pathway was supplied where one is required: a buy offer at postOffer (its offeror
+    /// is the buyer), or a sell-offer acceptance (the buyer must elect one)
+    error ExemptionPathwayRequired();
+    /// @notice The buyer's elected pathway is not the one the sell offer pinned
+    error ExemptionPathwayMismatch(ExemptionPathway offered, ExemptionPathway elected);
     /// @notice Condition address supplied to a config setter is the zero address
     error InvalidSecondaryCondition();
     /// @notice Condition does not advertise ISecondaryTradingCondition via ERC-165 supportsInterface
