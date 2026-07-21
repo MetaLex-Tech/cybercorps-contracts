@@ -3678,6 +3678,133 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.finalizeSecondaryTradeAgreement(settlementId);
     }
 
+    // An exemption the SPV has retired cannot carry a transfer, even one already accepted under it.
+    function test_RevertIf_FinalizeSecondaryTrade_PathwayWithdrawnAfterAcceptance() public {
+        bytes32 offerId = _postSellOffer();
+        bytes32 settlementId = _acceptSellOffer(offerId); // elects SECTION_4A7
+
+        vm.prank(owner);
+        dm.setPathwayThresholdConditions(ExemptionPathway.SECTION_4A7, new address[](0), false);
+
+        vm.prank(keeper);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ISecondaryTradeStorage.ExemptionPathwayNotEnabled.selector, ExemptionPathway.SECTION_4A7
+            )
+        );
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+    }
+
+    // Blocking the settlement costs the trade, not the assets: the buyer is made whole and the seller
+    // reclaims the units.
+    function test_FinalizeSecondaryTrade_PathwayWithdrawn_LotRecoverableByVoid() public {
+        bytes32 offerId = _postSellOffer();
+        bytes32 settlementId = _acceptSellOffer(offerId);
+        uint256 buyerBefore = paymentToken.balanceOf(buyer);
+
+        vm.prank(owner);
+        dm.setPathwayThresholdConditions(ExemptionPathway.SECTION_4A7, new address[](0), false);
+
+        vm.warp(dm.getSecondaryEscrow(settlementId).expiry + 1);
+        vm.prank(keeper);
+        dm.voidExpiredSecondaryTradeAgreement(settlementId, buyer, "");
+
+        assertEq(paymentToken.balanceOf(buyer), buyerBefore + CONSIDERATION, "buyer refunded");
+
+        vm.prank(seller);
+        dm.cancelOffer(offerId);
+        assertEq(certPrinter.unitsReserved(sellerTokenId), 0, "seller reservation released");
+    }
+
+    // A pinned offer dies with its exemption: no lot can settle and no new buyer can take its place, but
+    // the units stay reserved until the seller withdraws the offer himself. Nothing reclaims them for him.
+    function test_PathwayWithdrawn_PinnedOffer_SellerMustCancelToReclaimUnits() public {
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.salt = uint256(keccak256("pinned.withdrawn.reclaim"));
+        p.exemptionPathway = ExemptionPathway.RULE_144;
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+
+        AcceptOfferParams memory a = _sellAcceptParams(offerId);
+        a.units = UNITS / 4;
+        a.exemptionPathway = ExemptionPathway.RULE_144;
+        vm.prank(buyer);
+        bytes32 settlementId = dm.acceptOffer(a);
+
+        vm.prank(owner);
+        dm.setPathwayThresholdConditions(ExemptionPathway.RULE_144, new address[](0), false);
+
+        // The accepted lot cannot settle, and the free pool cannot be filled by anyone else.
+        vm.prank(keeper);
+        vm.expectRevert(
+            abi.encodeWithSelector(ISecondaryTradeStorage.ExemptionPathwayNotEnabled.selector, ExemptionPathway.RULE_144)
+        );
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+
+        AcceptOfferParams memory a2 = _sellAcceptParams(offerId);
+        a2.units = UNITS / 4;
+        a2.exemptionPathway = ExemptionPathway.RULE_144;
+        vm.prank(buyer);
+        vm.expectRevert(
+            abi.encodeWithSelector(ISecondaryTradeStorage.ExemptionPathwayNotEnabled.selector, ExemptionPathway.RULE_144)
+        );
+        dm.acceptOffer(a2);
+
+        // Voiding the dead lot refunds the buyer but returns its units to the offer's free pool, so the
+        // whole reservation still stands against an offer that can never trade again.
+        vm.warp(dm.getSecondaryEscrow(settlementId).expiry + 1);
+        vm.prank(keeper);
+        dm.voidExpiredSecondaryTradeAgreement(settlementId, buyer, "");
+        assertEq(certPrinter.unitsReserved(sellerTokenId), UNITS, "units still reserved after the void");
+
+        vm.prank(seller);
+        dm.cancelOffer(offerId);
+        assertEq(certPrinter.unitsReserved(sellerTokenId), 0, "cancelOffer is what frees the units");
+    }
+
+    // Why the void holds the reservation rather than releasing it: on an unpinned offer only the retired
+    // exemption is lost, and a buyer electing a supported one can still take the units.
+    function test_PathwayWithdrawn_UnpinnedOffer_RemainsTradeableUnderAnotherExemption() public {
+        bytes32 offerId = _postSellOffer(); // unpinned
+        bytes32 settlementId = _acceptSellOfferPartial(offerId, UNITS / 4); // elects SECTION_4A7
+
+        vm.prank(owner);
+        dm.setPathwayThresholdConditions(ExemptionPathway.SECTION_4A7, new address[](0), false);
+
+        // Unwound by agreement rather than expiry, so the offer itself is still live to be taken up.
+        _voidSettlementBothParties(settlementId);
+        assertEq(certPrinter.unitsReserved(sellerTokenId), UNITS, "units held for a future acceptor");
+
+        AcceptOfferParams memory a = _sellAcceptParams(offerId);
+        a.exemptionPathway = ExemptionPathway.RULE_144;
+        vm.prank(buyer);
+        bytes32 revived = dm.acceptOffer(a);
+
+        assertEq(
+            uint8(dm.getSecondaryEscrow(revived).exemptionPathway),
+            uint8(ExemptionPathway.RULE_144),
+            "offer trades on under a supported exemption"
+        );
+    }
+
+    // The seller's exit is never gated by the exemption: with every pathway retired he can still withdraw
+    // the offer, so assets can never be locked behind a config the SPV has revoked.
+    function test_PathwayWithdrawn_CancelOfferUngatedByPathway() public {
+        bytes32 offerId = _postSellOffer();
+
+        vm.startPrank(owner);
+        dm.setPathwayThresholdConditions(ExemptionPathway.SECTION_4A7, new address[](0), false);
+        dm.setPathwayThresholdConditions(ExemptionPathway.RULE_144, new address[](0), false);
+        dm.setPathwayThresholdConditions(ExemptionPathway.RULE_144A, new address[](0), false);
+        vm.stopPrank();
+
+        vm.prank(seller);
+        dm.cancelOffer(offerId);
+
+        assertEq(uint8(dm.getOffer(offerId).status), uint8(OfferStatus.CANCELLED), "offer withdrawn");
+        assertEq(certPrinter.unitsReserved(sellerTokenId), 0, "units returned to the seller");
+    }
+
     // TODO rename and refactor legacy `FinalizeDeal_` tests
     // Counterpart: a passing closing condition lets finalize through, proving the finalize-time
     // check runs and is not an unconditional block.

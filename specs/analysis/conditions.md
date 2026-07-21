@@ -83,6 +83,10 @@ Live resolution also means a pathway withdrawn or a condition added after postin
 stage, and re-running the threshold set at finalize means eligibility lost after acceptance (revoked
 credential, breached holder cap, blocked-state move, withdrawn approval) blocks the asset transfer.
 
+An SPV trades only under exemptions it currently supports, so pathway enablement is gated at all three
+stages alongside the set. Withdrawing one stops settlements already accepted under it; those lots unwind
+through the void/expiry path.
+
 Off-chain reconstruction works two ways, which must agree:
 
 - `SecondaryTradeAgreementFinalized` carries the threshold and closing sets the settlement was judged

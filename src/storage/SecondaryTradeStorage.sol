@@ -532,10 +532,10 @@ library SecondaryTradeStorage {
         // Defensive backstop: finalizeContract already reverts ContractExpired on the same deadline, so this
         // local guard is effectively unreachable, but kept in case the registry and escrow expiry ever diverge.
         if (block.timestamp > secEscrow.expiry) revert ISecondaryTradeStorage.SecondaryTradeAgreementExpired();
-        // Re-check threshold (eligibility) conditions at finalization: a buyer who was eligible at
-        // acceptance may have lost eligibility before settlement (credential revoked, holder cap
-        // breached, blocked-state move, kill of an approval). Both ids are known, so buyer-facing
-        // conditions read this lot's acceptor directly.
+        // Eligibility must hold at settlement, not just at acceptance: a buyer may have lost it in between
+        // (credential revoked, holder cap breached, approval killed), and the SPV may have withdrawn the
+        // exemption itself. Either way the transfer is blocked and the lot unwinds via void/expiry.
+        _requirePathwayEnabled(secEscrow.exemptionPathway);
         address[] memory resolvedThreshold =
             _resolveThresholdConditions(secondaryTradeStorage(), secEscrow.exemptionPathway);
         _checkConditions(resolvedThreshold, secEscrow.offerId, agreementId);
@@ -808,8 +808,9 @@ library SecondaryTradeStorage {
         emit ISecondaryTradeStorage.ClosingConditionsSet(conditions, msg.sender);
     }
 
-    /// @dev Gates every pathway a trade commits to, at posting and at acceptance, so an offer is never
-    /// posted against a pathway that would only turn its buyers away once units are reserved.
+    /// @dev An SPV only trades under exemptions it currently supports. Gated at every stage, so a pathway
+    /// it never enabled turns buyers away before units are committed, and one it withdraws mid-flight
+    /// stops the settlement rather than letting it complete under a retired exemption.
     function _requirePathwayEnabled(ExemptionPathway pathway) internal view {
         if (!secondaryTradeStorage().pathwayEnabled[pathway])
             revert ISecondaryTradeStorage.ExemptionPathwayNotEnabled(pathway);
