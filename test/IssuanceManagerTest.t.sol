@@ -247,9 +247,101 @@ contract IssuanceManagerTest is Test {
         );
     }
 
+    function test_updateSecurityClass_ReindexesOnTypeChange() public {
+        _deployPrinter("Cert", "CERT");
+
+        issuanceManager.updateSecurityClass(
+            1,
+            SecurityClass.PreferredStock,
+            "uri://class",
+            address(0),
+            bytes("")
+        );
+
+        assertEq(
+            uint256(issuanceManager.getSecurityClass(1).classType),
+            uint256(SecurityClass.PreferredStock),
+            "class type is updated"
+        );
+
+        // The reverse index must follow the type, or a printer of the new type creates a duplicate class.
+        ICyberCertPrinter preferred = _deployPrinterOfType(
+            "CertP",
+            "CERTP",
+            SecurityClass.PreferredStock
+        );
+        assertEq(
+            issuanceManager.getPrinterClassId(address(preferred)),
+            1,
+            "printer of the new type reuses the re-indexed class"
+        );
+        assertEq(issuanceManager.getSecurityClassCount(), 1, "no duplicate class is created");
+
+        // The vacated type is released and can be defined again.
+        uint256 commonId = issuanceManager.defineSecurityClass(
+            SecurityClass.CommonStock,
+            "uri://common",
+            address(0),
+            bytes("")
+        );
+        assertEq(commonId, 2, "vacated type is definable again");
+    }
+
+    function test_updateSecurityClass_RevertsWhenTargetTypeAlreadyDefined() public {
+        _deployPrinter("Cert", "CERT");
+        issuanceManager.defineSecurityClass(
+            SecurityClass.PreferredStock,
+            "uri://preferred",
+            address(0),
+            bytes("")
+        );
+
+        vm.expectRevert(IssuanceManagerStorage.SecurityClassAlreadyDefined.selector);
+        issuanceManager.updateSecurityClass(
+            1,
+            SecurityClass.PreferredStock,
+            "uri://class",
+            address(0),
+            bytes("")
+        );
+    }
+
+    function test_updateSecurityClass_KeepsIndexWhenTypeUnchanged() public {
+        _deployPrinter("Cert", "CERT");
+
+        issuanceManager.updateSecurityClass(
+            1,
+            SecurityClass.CommonStock,
+            "uri://class",
+            address(0),
+            bytes("")
+        );
+
+        assertEq(
+            bytes(issuanceManager.getSecurityClass(1).documentURI).length,
+            bytes("uri://class").length,
+            "non-type fields still update"
+        );
+        vm.expectRevert(IssuanceManagerStorage.SecurityClassAlreadyDefined.selector);
+        issuanceManager.defineSecurityClass(
+            SecurityClass.CommonStock,
+            "uri://class",
+            address(0),
+            bytes("")
+        );
+    }
+
     function _deployPrinter(
         string memory name,
         string memory symbol
+    ) internal returns (ICyberCertPrinter) {
+        return _deployPrinterOfType(name, symbol, SecurityClass.CommonStock);
+    }
+
+    function _deployPrinterOfType(
+        string memory name,
+        string memory symbol,
+        SecurityClass securityClass
     ) internal returns (ICyberCertPrinter) {
         return ICyberCertPrinter(
             issuanceManager.createCertPrinter(
@@ -257,7 +349,7 @@ contract IssuanceManagerTest is Test {
                 name,
                 symbol,
                 "uri://cert",
-                SecurityClass.CommonStock,
+                securityClass,
                 SecuritySeries.SeriesA,
                 address(0),
                 bytes("")

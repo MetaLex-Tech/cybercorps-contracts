@@ -346,6 +346,14 @@ library IssuanceManagerStorage {
     ) external {
         IssuanceManagerData storage s = issuanceManagerStorage();
         if (classId == 0 || classId > s.securityClassCount) revert ClassDoesNotExist();
+        // Re-index classIdByType when the type changes, otherwise the reverse index keeps pointing at the
+        // old type and the new type reads as undefined, letting a second class be created for it.
+        SecurityClass oldType = s.securityClasses[classId].classType;
+        if (classType != oldType) {
+            if (s.classIdByType[classType] != 0) revert SecurityClassAlreadyDefined();
+            delete s.classIdByType[oldType];
+            s.classIdByType[classType] = classId;
+        }
         s.securityClasses[classId] = SecurityClassInfo(classType, documentURI, dataExtension, classData);
         emit SecurityClassUpdated(classId, classType, documentURI, dataExtension);
     }

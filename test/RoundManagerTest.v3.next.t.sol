@@ -248,18 +248,23 @@ contract RoundManagerV3NextForkTest is Test {
         vm.stopPrank();
         vm.startPrank(deployer);
         IssuanceManager newIssuanceManager = new IssuanceManager();
+        address newCertPrinter = address(new CyberCertPrinter());
         issuanceFactory.setRefImplementation(address(newIssuanceManager));
-        issuanceFactory.setCyberCertPrinterRefImplementation(
-            address(new CyberCertPrinter())
-        );
+        issuanceFactory.setCyberCertPrinterRefImplementation(newCertPrinter);
         vm.stopPrank();
 
         address issuanceManagerV3 = CyberCorp(corpV3).issuanceManager();
-        vm.prank(corpOwnerV3);
+        vm.startPrank(corpOwnerV3);
         IssuanceManager(issuanceManagerV3).upgradeToAndCall(
             address(newIssuanceManager),
             ""
         );
+        // The v3 corp owns its own cert printer beacon; it must be upgraded too,
+        // otherwise printers minted post-upgrade still use the old initialize ABI.
+        IssuanceManager(issuanceManagerV3).upgradeCertPrinterBeaconImplementation(
+            newCertPrinter
+        );
+        vm.stopPrank();
 
         // ── deploy v4 corp ───────────────
 
