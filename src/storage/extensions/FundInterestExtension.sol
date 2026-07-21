@@ -45,7 +45,6 @@ struct FundInterestSeriesData {
     string interestClass;
     string fundEntityType;
     string icaExceptionRelied;
-    address transferRestrictionHookAddress;
     uint16 managementFeeRateBps;
     uint16 carriedInterestRateBps;
     string distributionWaterfallPosition;
@@ -131,7 +130,6 @@ contract FundInterestExtension is UUPSUpgradeable, ICertificateExtension, BorgAu
                 '"interestClass": "', data.interestClass,
                 '", "fundEntityType": "', data.fundEntityType,
                 '", "icaExceptionRelied": "', data.icaExceptionRelied,
-                '", "transferRestrictionHookAddress": "', _addressToString(data.transferRestrictionHookAddress),
                 '"'
             )
         );
@@ -173,19 +171,6 @@ contract FundInterestExtension is UUPSUpgradeable, ICertificateExtension, BorgAu
             json = string.concat(json, '"', values[i], '"');
         }
         return string.concat(json, "]");
-    }
-
-    function _addressToString(address account) internal pure returns (string memory) {
-        bytes memory data = abi.encodePacked(account);
-        bytes16 symbols = 0x30313233343536373839616263646566;
-        bytes memory str = new bytes(42);
-        str[0] = "0";
-        str[1] = "x";
-        for (uint256 i = 0; i < data.length; i++) {
-            str[2 + i * 2] = symbols[uint8(data[i] >> 4)];
-            str[3 + i * 2] = symbols[uint8(data[i] & 0x0f)];
-        }
-        return string(str);
     }
 
     function _uintToString(uint256 value) internal pure returns (string memory) {

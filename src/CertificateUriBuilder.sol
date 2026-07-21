@@ -45,6 +45,8 @@ import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./CyberCorpConstants.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
 import "./interfaces/ICertificateImageBuilder.sol";
+import "./interfaces/ICyberCorp.sol";
+import "./interfaces/IIssuanceManager.sol";
 import {
     ICyberCertPrinter,
     RestrictionType,
@@ -613,6 +615,8 @@ struct CertificateDetails {
         json = string.concat(json, ', "unitsReserved": "', unitsReservedToString(contractAddress, tokenId), '"');
         json = string.concat(json, ', "legalDetails": "', details.legalDetails, '"');
 
+        json = _appendCyberCorpExtensionData(json, contractAddress);
+
         //add extensionData
         if (extension != address(0) && details.extensionData.length > 0) {
             json = string.concat(json, ICertificateExtension(extension).getExtensionURI(details.extensionData));
@@ -638,6 +642,35 @@ struct CertificateDetails {
         json = Base64.encode(bytes(string(json)));
         json = string(abi.encodePacked('data:application/json;base64,', json));
         return json;
+    }
+
+    /// @dev Adds issuer-level extension metadata when the printer and IssuanceManager expose it.
+    /// Guards preserve URI availability for legacy printer or IssuanceManager implementations.
+    function _appendCyberCorpExtensionData(
+        string memory json,
+        address certificate
+    ) private view returns (string memory) {
+        try ICyberCertPrinter(certificate).issuanceManager() returns (
+            address issuanceManager
+        ) {
+            try IIssuanceManager(issuanceManager).CORP() returns (address corp) {
+                if (corp == address(0)) return json;
+
+                try ICyberCorp(corp).getExtensionURI() returns (
+                    string memory extensionJson
+                ) {
+                    return bytes(extensionJson).length == 0
+                        ? json
+                        : string.concat(json, extensionJson);
+                } catch {
+                    return json;
+                }
+            } catch {
+                return json;
+            }
+        } catch {
+            return json;
+        }
     }
 
     /// @dev Adds printer-level series metadata when its shared extension implements
@@ -778,6 +811,8 @@ struct CertificateDetails {
         json = string.concat(json, ', "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented), '"');
         json = string.concat(json, ', "unitsReserved": "', unitsReservedToString(contractAddress, tokenId), '"');
         json = string.concat(json, ', "legalDetails": "', details.legalDetails, '"');
+
+        json = _appendCyberCorpExtensionData(json, contractAddress);
 
         //add extensionData
         if (extension != address(0) && details.extensionData.length > 0) {

@@ -559,20 +559,6 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.issueTimestamp(1), issuedAt, "issue timestamp is immutable across owner changes");
     }
 
-    function test_HolderCount_TracksUniqueHoldersOnBurn() public {
-        _mintCert(1, investor, 100, bytes(""));
-        _mintCert(2, investor, 100, bytes(""));
-        assertEq(printer.holderCount(), 1);
-
-        vm.prank(address(issuanceManager));
-        printer.burn(1);
-        assertEq(printer.holderCount(), 1);
-
-        vm.prank(address(issuanceManager));
-        printer.burn(2);
-        assertEq(printer.holderCount(), 0);
-    }
-
     function test_SafeMintAndAssign_StoresNamedLegalOwner() public {
         vm.prank(address(issuanceManager));
         printer.safeMintAndAssign(investor, 1, _details(100, bytes("")), "Alice Investor");
@@ -600,21 +586,6 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.tokenOfLegalOwnerByIndex(investor, 1), 2);
     }
 
-    // A legacy token (enumeration never populated) must not underflow legalOwnerTokenCount when it is burned.
-    function test_LegalOwnerEnumeration_LegacyBurnDoesNotUnderflow() public {
-        _mintCert(1, investor, 100, bytes(""));
-        _mintCert(2, investor, 100, bytes(""));
-        uint256[] memory ids = new uint256[](2);
-        ids[0] = 1;
-        ids[1] = 2;
-        CyberCertPrinterEnhanced(address(printer)).debugClearLegalOwnerEnumeration(investor, ids);
-        assertEq(printer.balanceOfLegalOwner(investor), 0, "legacy enumeration starts empty");
-
-        vm.prank(address(issuanceManager));
-        printer.burn(1); // must not revert (guarded no-op remove)
-
-        assertEq(printer.balanceOfLegalOwner(investor), 0);
-    }
 
     // An owner-write (endorsed transfer) on a legacy token lazily backfills it under the new owner — and the
     // implicit remove from the old owner is a safe no-op (no underflow).
@@ -900,11 +871,6 @@ contract CyberCertPrinterTest is Test {
         printer.unvoidCert(tokenId);
     }
 
-    function _burnCert(uint256 tokenId) private {
-        vm.prank(address(issuanceManager));
-        printer.burn(tokenId);
-    }
-
     function test_LookThrough_IndividualCountsAsOne() public {
         MockLookThroughBadge b = new MockLookThroughBadge();
         _setBadge(b);
@@ -974,22 +940,6 @@ contract CyberCertPrinterTest is Test {
         _unvoid(2); // restored
         assertEq(printer.lookThroughHolderCount(), 4);
         assertEq(printer.usLookThroughHolderCount(), 4);
-        assertTrue(printer.isLegalHolder(investor));
-    }
-
-    function test_LookThrough_BurnDropsHolderAndReentryCountsFresh() public {
-        MockLookThroughBadge b = new MockLookThroughBadge();
-        b.setBo(investor, 2);
-        _setBadge(b);
-        _mintCert(1, investor, 100, bytes(""));
-        assertEq(printer.lookThroughHolderCount(), 2);
-
-        _burnCert(1);
-        assertEq(printer.lookThroughHolderCount(), 0);
-        assertFalse(printer.isLegalHolder(investor));
-
-        _mintCert(2, investor, 100, bytes("")); // re-enter
-        assertEq(printer.lookThroughHolderCount(), 2);
         assertTrue(printer.isLegalHolder(investor));
     }
 
@@ -1102,44 +1052,6 @@ contract CyberCertPrinterTest is Test {
         assertFalse(printer.isLegalHolder(recipient));
     }
 
-    function test_LookThrough_BurnVoidedCertIsSafe() public {
-        MockLookThroughBadge b = new MockLookThroughBadge();
-        b.setBo(investor, 2);
-        _setBadge(b);
-        _mintCert(1, investor, 100, bytes(""));
-        assertEq(printer.lookThroughHolderCount(), 2);
-
-        _void(1); // already uncounts the lot
-        assertEq(printer.lookThroughHolderCount(), 0);
-
-        _burnCert(1); // burn must not double-drop or underflow the already-uncounted lot
-        assertEq(printer.lookThroughHolderCount(), 0);
-        assertFalse(printer.isLegalHolder(investor));
-        assertEq(printer.balanceOfLegalOwner(investor), 0);
-    }
-
-    // Live burn (no void first) of a US holder: burning a non-last lot leaves the tally untouched; burning
-    // the last lot drops the holder and their US subtotal contribution.
-    function test_LookThrough_LiveBurnUsHolderNonLastThenLastLot() public {
-        MockLookThroughBadge b = new MockLookThroughBadge();
-        b.setBo(investor, 4);
-        b.setUs(investor, true);
-        _setBadge(b);
-        _mintCert(1, investor, 100, bytes(""));
-        _mintCert(2, investor, 100, bytes(""));
-        assertEq(printer.lookThroughHolderCount(), 4); // one holder, weight 4, two live lots
-        assertEq(printer.usLookThroughHolderCount(), 4);
-
-        _burnCert(1); // non-last lot: holder stays, tally unchanged
-        assertEq(printer.lookThroughHolderCount(), 4);
-        assertEq(printer.usLookThroughHolderCount(), 4);
-        assertTrue(printer.isLegalHolder(investor));
-
-        _burnCert(2); // last live lot: holder drops out of both totals
-        assertEq(printer.lookThroughHolderCount(), 0);
-        assertEq(printer.usLookThroughHolderCount(), 0);
-        assertFalse(printer.isLegalHolder(investor));
-    }
 
     // A single transfer drops the source below its last live lot and gives the destination its first,
     // reassigning weight (and the US subtotal) between two holders in one call.

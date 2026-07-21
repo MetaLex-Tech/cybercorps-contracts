@@ -73,7 +73,7 @@ contract IssuanceManagerMock {
     }
 
     function voidCertificate(address certAddress, uint256 tokenId) external {
-        CyberCertPrinterMock(certAddress).burn(tokenId);
+      
     }
 }
 

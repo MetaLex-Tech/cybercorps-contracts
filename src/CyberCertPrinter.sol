@@ -219,18 +219,6 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId] = details;
     }
 
-    // Restricted burning
-    function burn(uint256 tokenId) external onlyIssuanceManager {
-        _burn(tokenId);
-
-        // No transfer hook fires for a burn (to == 0), so drop the legal-owner enumeration entry explicitly.
-        CyberCertPrinterStorage.recordBurnLegalOwner(tokenId);
-
-        // Clear agreement details
-        delete CyberCertPrinterStorage.cyberCertStorage().certificateDetails[tokenId];
-        delete CyberCertPrinterStorage.cyberCertStorage().issuerSignatures[tokenId];
-    }
-
     /**
      * @dev Override _update to enforce transferability restrictions
      * This function is called for all token transfers, mints, and burns
