@@ -30,6 +30,41 @@ contract FundInterestExtensionTest is Test {
         );
     }
 
+    function test_typedAccessors_ReadFields() public view {
+        FundInterestData memory data = FundInterestData({
+            acquisitionDate: 1_700_000_000,
+            tackedFromAcquisitionDate: 1_600_000_000,
+            isAffiliateOrControlPerson: true
+        });
+        bytes memory encoded = abi.encode(data);
+
+        assertEq(extension.acquisitionDate(encoded), 1_700_000_000);
+        assertEq(extension.tackedFromAcquisitionDate(encoded), 1_600_000_000);
+    }
+
+    function test_typedAccessors_EmptyPayloadReverts() public {
+        // Empty/malformed data is not silently defaulted; callers guard the "no extension data" case.
+        vm.expectRevert();
+        extension.acquisitionDate("");
+        vm.expectRevert();
+        extension.tackedFromAcquisitionDate("");
+    }
+
+    function test_withTackedFrom_RewritesOnlyTackingAnchor() public view {
+        FundInterestData memory data = FundInterestData({
+            acquisitionDate: 1_700_000_000,
+            tackedFromAcquisitionDate: 0,
+            isAffiliateOrControlPerson: true
+        });
+
+        bytes memory rewritten = extension.withTackedFrom(abi.encode(data), 1_555_000_000);
+        FundInterestData memory decoded = abi.decode(rewritten, (FundInterestData));
+
+        assertEq(decoded.tackedFromAcquisitionDate, 1_555_000_000, "tacking anchor set");
+        assertEq(decoded.acquisitionDate, 1_700_000_000, "acquisition date preserved");
+        assertTrue(decoded.isAffiliateOrControlPerson, "affiliate flag preserved");
+    }
+
     function test_getSeriesExtensionURI_RendersCurrentSeriesData() public view {
         string[] memory documents = new string[](2);
         documents[0] = "ipfs://operating-agreement";

@@ -57,10 +57,7 @@ import {ILexChexBadge} from "../interfaces/ILexChexBadge.sol";
 import "../interfaces/IUriBuilder.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import "./extensions/ICertificateExtension.sol";
-import {
-    FundInterestData,
-    FUND_INTEREST_EXTENSION_TYPE
-} from "./extensions/FundInterestExtension.sol";
+import {FUND_INTEREST_EXTENSION_TYPE} from "./extensions/FundInterestExtension.sol";
 
 library CyberCertPrinterStorage {
     // Storage slot for our struct
@@ -550,9 +547,7 @@ library CyberCertPrinterStorage {
             !ICertificateExtension(ext).supportsExtensionType(FUND_INTEREST_EXTENSION_TYPE)
         ) revert ICyberCertPrinter.ExtensionTypeNotSupported();
         CertificateDetails memory details = getActiveCertificateDetails(tokenId);
-        FundInterestData memory fid = abi.decode(details.extensionData, (FundInterestData));
-        fid.tackedFromAcquisitionDate = ts;
-        details.extensionData = abi.encode(fid);
+        details.extensionData = IFundInterestExtension(ext).withTackedFrom(details.extensionData, ts);
         if (details.unitsRepresented < s.unitsReserved[tokenId]) revert ICyberCertPrinter.ExceedsAvailableUnits();
         s.certificateDetails[tokenId] = details;
     }
@@ -641,8 +636,8 @@ library CyberCertPrinterStorage {
             if (s.acquisitionTimestamp[tokenId] != 0) continue;
             bytes memory data = s.certificateDetails[tokenId].extensionData;
             if (data.length == 0) continue;
-            FundInterestData memory fid = abi.decode(data, (FundInterestData));
-            if (fid.acquisitionDate != 0) s.acquisitionTimestamp[tokenId] = fid.acquisitionDate;
+            uint64 acq = IFundInterestExtension(ext).acquisitionDate(data);
+            if (acq != 0) s.acquisitionTimestamp[tokenId] = acq;
         }
     }
 

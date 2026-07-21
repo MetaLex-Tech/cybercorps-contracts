@@ -17,7 +17,7 @@ import {
     RestrictionType,
     RestrictiveLegend
 } from "../src/interfaces/ICyberCertPrinter.sol";
-import {ICertificateExtension} from "../src/storage/extensions/ICertificateExtension.sol";
+import {ICertificateExtension, IFundInterestExtension} from "../src/storage/extensions/ICertificateExtension.sol";
 import {FundInterestData, FUND_INTEREST_EXTENSION_TYPE} from "../src/storage/extensions/FundInterestExtension.sol";
 
 contract MockCyberCorp {
@@ -203,11 +203,22 @@ contract CyberCertPrinterEnhanced is CyberCertPrinter {
     }
 }
 
-contract MockFundInterestExtension is ICertificateExtension {
+contract MockFundInterestExtension is IFundInterestExtension {
     function supportsExtensionType(bytes32 extensionType) external pure returns (bool) {
         return extensionType == FUND_INTEREST_EXTENSION_TYPE;
     }
     function getExtensionURI(bytes memory) external pure returns (string memory) { return ""; }
+    function acquisitionDate(bytes memory data) external pure returns (uint64) {
+        return abi.decode(data, (FundInterestData)).acquisitionDate;
+    }
+    function tackedFromAcquisitionDate(bytes memory data) external pure returns (uint64) {
+        return abi.decode(data, (FundInterestData)).tackedFromAcquisitionDate;
+    }
+    function withTackedFrom(bytes memory data, uint64 ts) external pure returns (bytes memory) {
+        FundInterestData memory fid = abi.decode(data, (FundInterestData));
+        fid.tackedFromAcquisitionDate = ts;
+        return abi.encode(fid);
+    }
 }
 
 contract MockNonFundExtension is ICertificateExtension {

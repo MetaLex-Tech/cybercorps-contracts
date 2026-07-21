@@ -5,7 +5,11 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
-import {FundInterestData} from "../../../storage/extensions/FundInterestExtension.sol";
+import {FUND_INTEREST_EXTENSION_TYPE} from "../../../storage/extensions/FundInterestExtension.sol";
+import {
+    ICertificateExtension,
+    IFundInterestExtension
+} from "../../../storage/extensions/ICertificateExtension.sol";
 import {ICyberCertPrinter} from "../../../interfaces/ICyberCertPrinter.sol";
 import {Offer, OfferSide} from "../../../interfaces/ISecondaryTradeStorage.sol";
 
@@ -63,10 +67,16 @@ contract HoldingPeriodCondition is SecondaryTradingConditionBase, UUPSUpgradeabl
         uint64 anchor = cert.acquisitionTimestamp(sellerTokenId);
         if (anchor == 0) return false;
 
-        // Rule 144(d)(3) tacking anchor (extension) governs where present and earlier.
+        // Rule 144(d)(3) tacking anchor (extension) governs where present and earlier. Read through the
+        // printer's extension so the payload is decoded at that printer's own version, not a hardcoded layout.
         bytes memory extensionData = cert.getCertificateDetails(sellerTokenId).extensionData;
-        if (extensionData.length != 0) {
-            uint64 tackedFrom = abi.decode(extensionData, (FundInterestData)).tackedFromAcquisitionDate;
+        address ext = cert.getExtension(sellerTokenId);
+        if (
+            extensionData.length != 0 &&
+            ext != address(0) &&
+            ICertificateExtension(ext).supportsExtensionType(FUND_INTEREST_EXTENSION_TYPE)
+        ) {
+            uint64 tackedFrom = IFundInterestExtension(ext).tackedFromAcquisitionDate(extensionData);
             if (tackedFrom != 0 && tackedFrom < anchor) anchor = tackedFrom;
         }
 

@@ -58,7 +58,7 @@ bytes32 constant FUND_INTEREST_EXTENSION_TYPE = keccak256("FUND_INTEREST");
 /// @title FundInterestExtension - split LET and series data for fund interests
 /// @notice The printer's `seriesData` encodes FundInterestSeriesData; each certificate's
 /// `CertificateDetails.extensionData` encodes FundInterestData.
-contract FundInterestExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
+contract FundInterestExtension is UUPSUpgradeable, IFundInterestExtension, BorgAuthACL {
     bytes32 public constant EXTENSION_TYPE = FUND_INTEREST_EXTENSION_TYPE;
 
     uint256[30] private __gap;
@@ -70,6 +70,24 @@ contract FundInterestExtension is UUPSUpgradeable, ICertificateExtension, BorgAu
 
     function supportsExtensionType(bytes32 extensionType) external pure override returns (bool) {
         return extensionType == EXTENSION_TYPE;
+    }
+
+    /// @notice Typed accessors so consumers read/rewrite the payload without knowing its layout. Each
+    /// deployed version decodes/encodes against its own FundInterestData, keeping the layout private here.
+    /// Like the sibling decode accessors these revert on empty/malformed data rather than defaulting; the
+    /// "no extension data" case is the caller's to guard (both current callers do).
+    function acquisitionDate(bytes memory data) external pure returns (uint64) {
+        return abi.decode(data, (FundInterestData)).acquisitionDate;
+    }
+
+    function tackedFromAcquisitionDate(bytes memory data) external pure returns (uint64) {
+        return abi.decode(data, (FundInterestData)).tackedFromAcquisitionDate;
+    }
+
+    function withTackedFrom(bytes memory data, uint64 ts) external pure returns (bytes memory) {
+        FundInterestData memory fid = abi.decode(data, (FundInterestData));
+        fid.tackedFromAcquisitionDate = ts;
+        return abi.encode(fid);
     }
 
     function decodeExtensionData(bytes memory data) external pure returns (FundInterestData memory) {

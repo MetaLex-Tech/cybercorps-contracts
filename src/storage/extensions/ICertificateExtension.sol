@@ -55,3 +55,14 @@ interface ICertificateExtensionV3 is ICertificateExtension {
     function supportsSeriesExtensionData() external pure returns (bool);
     function getSeriesExtensionURI(bytes memory seriesData) external view returns (string memory);
 }
+
+/// @notice Typed accessors over a fund-interest cert payload. Consumers (holding-period condition,
+/// printer backfill/tacking) read and rewrite the payload through these instead of decoding the struct
+/// directly, so each deployed extension version owns its own layout: a printer's payload is always decoded
+/// by the extension that printer points at. Feature-detect with `supportsExtensionType(FUND_INTEREST)`
+/// before casting.
+interface IFundInterestExtension is ICertificateExtension {
+    function acquisitionDate(bytes memory data) external pure returns (uint64);
+    function tackedFromAcquisitionDate(bytes memory data) external pure returns (uint64);
+    function withTackedFrom(bytes memory data, uint64 ts) external pure returns (bytes memory);
+}

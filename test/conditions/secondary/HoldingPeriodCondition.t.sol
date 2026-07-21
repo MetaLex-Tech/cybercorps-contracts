@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
 import {Offer, OfferSide, SecondaryEscrow} from "../../../src/interfaces/ISecondaryTradeStorage.sol";
 import {HoldingPeriodCondition} from "../../../src/libs/conditions/secondary/HoldingPeriodCondition.sol";
-import {FundInterestData} from "../../../src/storage/extensions/FundInterestExtension.sol";
+import {FundInterestData, FundInterestExtension} from "../../../src/storage/extensions/FundInterestExtension.sol";
 import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,6 +48,15 @@ contract HoldingPeriodConditionTest is SecondaryConditionTestBase {
                 abi.encodeCall(HoldingPeriodCondition.initialize, (address(auth), HOLD))
             )
         );
+        // The condition reads the tacking anchor through the printer's real extension, not a hardcoded
+        // struct decode, so point the mock printer at a live FundInterestExtension.
+        FundInterestExtension extension = FundInterestExtension(
+            _proxy(
+                address(new FundInterestExtension()),
+                abi.encodeCall(FundInterestExtension.initialize, (address(auth)))
+            )
+        );
+        cert.setExtension(address(extension));
     }
 
     function _sellPosting(uint64 anchor, uint64 tackedFrom) internal returns (bool) {
