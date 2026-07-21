@@ -62,14 +62,13 @@ contract ERISACondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgA
         bytes32 agreementId
     ) external view override returns (bool) {
         Offer memory offer = dealManager.getOffer(offerId);
-
-        // Silent for Reg S: non-U.S. buyer status is enforced by the pathway's own conditions
-        if (offer.exemptionPathway == ExemptionPathway.REGULATION_S) return true;
-
         (, address buyer,) = _resolveParties(dealManager, offer, agreementId);
 
         // The attestation lives on the settlement agreement, which only exists from acceptance onward
         if (agreementId == bytes32(0) || buyer == address(0)) return true;
+
+        // Silent for Reg S: non-U.S. buyer status is enforced by the pathway's own conditions
+        if (_resolvePathway(dealManager, offer, agreementId) == ExemptionPathway.REGULATION_S) return true;
 
         // TODO review: do we want to check it as CyberAgreement strings?
         string[] memory values = registry.getSignerValues(agreementId, buyer);

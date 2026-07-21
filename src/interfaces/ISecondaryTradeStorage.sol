@@ -69,7 +69,7 @@ struct Offer {
     uint256 units;                  // total units offered: immutable once offer is created
     address paymentToken;
     uint256 consideration;          // total payment for all offered units
-    ExemptionPathway exemptionPathway; // offeror's pin; NONE on a sell offer leaves the choice to each buyer at acceptance
+    ExemptionPathway expectedExemptionPathway; // offeror's pin; NONE on a sell offer leaves the choice to each buyer at acceptance
     uint256 validUntil;
     bytes counterpartyRestrictions; // spec §8.1 Counterparty restrictions
     bytes additionalTerms;          // spec §8.1 Supplemental fields
@@ -89,7 +89,9 @@ struct Offer {
     HostingMode buyerHostingMode;   // buy offer-only: Direct or Administered; defaults to Direct for sell offers
     address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
     bytes32[] settlementAgreementIds; // appended at each acceptOffer; length == 0 at postOffer (no buyer known yet)
-    address[] thresholdConditions;    // set resolved at postOffer; each settlement records its own on SecondaryEscrow
+    // `expected` prefix: posting-time snapshots, not the terms any trade settles under. The buyer's election
+    // at acceptOffer decides those, and SecondaryEscrow records them per lot.
+    address[] expectedThresholdConditions; // set resolved at postOffer; each settlement records its own on SecondaryEscrow
     address[] closingConditions;      // set resolved at postOffer; gates asset transfer at finalize
 }
 
@@ -172,7 +174,7 @@ interface ISecondaryTradeStorage {
         uint256 units,
         address paymentToken,
         uint256 consideration,
-        ExemptionPathway exemptionPathway,
+        ExemptionPathway expectedExemptionPathway,
         uint256 validUntil,
         address integrator,
         bytes32 templateId,
@@ -180,7 +182,7 @@ interface ISecondaryTradeStorage {
         HostingMode buyerHostingMode,
         address adminMultisig,
         bytes counterpartyRestrictions,
-        address[] thresholdConditions,
+        address[] expectedThresholdConditions,
         address[] closingConditions
     );
     event OfferCancelled(bytes32 indexed offerId, address indexed offeror);

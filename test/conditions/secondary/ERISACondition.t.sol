@@ -18,6 +18,8 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // | # | context                         | attestation recorded | expect | rationale                       |
 // |---|---------------------------------|----------------------|:------:|---------------------------------|
 // | 1 | Reg S pathway                   |         no           |  pass  | silent for Reg S                |
+// |1b | unpinned offer, lot elects Reg S|         no           |  pass  | election lives on the escrow    |
+// |1c | unpinned offer, lot elects 144  |         no           |  fail  | non-Reg S lot still attests     |
 // | 2 | posting (no agreement)          |         n/a          |  pass  | no attestation surface yet      |
 // | 3 | accepted, exact attestation     |         yes          |  pass  | negative attestation on file    |
 // | 4 | accepted, no party values       |         no           |  fail  | attestation missing             |
@@ -54,9 +56,29 @@ contract ERISAConditionTest is SecondaryConditionTestBase {
     // 1
     function test_RegS_Silent_Passes() public {
         Offer memory o = _sellOffer();
-        o.exemptionPathway = ExemptionPathway.REGULATION_S;
-        _postSellAndAccept(o, _sellEscrow());
+        o.expectedExemptionPathway = ExemptionPathway.REGULATION_S;
+        SecondaryEscrow memory e = _sellEscrow();
+        e.exemptionPathway = ExemptionPathway.REGULATION_S;
+        _postSellAndAccept(o, e);
         assertTrue(_check(AGREEMENT_ID));
+    }
+
+    // 1b
+    function test_UnpinnedOffer_BuyerElectedRegS_Silent_Passes() public {
+        Offer memory o = _sellOffer();
+        o.expectedExemptionPathway = ExemptionPathway.NONE;
+        SecondaryEscrow memory e = _sellEscrow();
+        e.exemptionPathway = ExemptionPathway.REGULATION_S;
+        _postSellAndAccept(o, e);
+        assertTrue(_check(AGREEMENT_ID));
+    }
+
+    // 1c
+    function test_UnpinnedOffer_BuyerElectedRule144_Enforced() public {
+        Offer memory o = _sellOffer();
+        o.expectedExemptionPathway = ExemptionPathway.NONE;
+        _postSellAndAccept(o, _sellEscrow());
+        assertFalse(_check(AGREEMENT_ID));
     }
 
     // 2

@@ -97,7 +97,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         address paymentToken;
         uint256 units;
         uint256 consideration;
-        uint8 exemptionPathway;
+        uint8 expectedExemptionPathway;
         uint256 validUntil;
         address integrator;
         uint8 status; // OfferStatus
@@ -110,7 +110,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         uint8 buyerHostingMode;
         address adminMultisig;
         bytes counterpartyRestrictions;
-        address[] thresholdConditions;
+        address[] expectedThresholdConditions;
         address[] closingConditions;
         // additionalTerms is intentionally not indexed (human/legal-read only, not emitted).
     }
@@ -548,7 +548,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
             o.units,
             o.paymentToken,
             o.consideration,
-            o.exemptionPathway,
+            o.expectedExemptionPathway,
             o.validUntil,
             o.integrator,
             o.templateId,
@@ -556,7 +556,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
             o.buyerHostingMode,
             o.adminMultisig,
             o.counterpartyRestrictions,
-            o.thresholdConditions,
+            o.expectedThresholdConditions,
             o.closingConditions
         ) =
             abi.decode(
@@ -809,7 +809,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         assertEq(o.paymentToken, c.paymentToken, "paymentToken");
         assertEq(o.units, c.units, "units");
         assertEq(o.consideration, c.consideration, "consideration");
-        assertEq(o.exemptionPathway, uint8(c.exemptionPathway), "exemptionPathway");
+        assertEq(o.expectedExemptionPathway, uint8(c.expectedExemptionPathway), "exemptionPathway");
         assertEq(o.validUntil, c.validUntil, "validUntil");
         assertEq(o.integrator, c.integrator, "integrator");
         assertEq(o.status, uint8(c.status), "offer status");
@@ -825,9 +825,9 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         assertEq(o.buyerHostingMode, uint8(c.buyerHostingMode), "buyerHostingMode");
         assertEq(o.adminMultisig, c.adminMultisig, "adminMultisig");
         assertEq(o.counterpartyRestrictions, c.counterpartyRestrictions, "counterpartyRestrictions");
-        assertEq(o.thresholdConditions.length, c.thresholdConditions.length, "thresholdConditions length");
-        for (uint256 i = 0; i < o.thresholdConditions.length; i++) {
-            assertEq(o.thresholdConditions[i], c.thresholdConditions[i], "thresholdCondition");
+        assertEq(o.expectedThresholdConditions.length, c.expectedThresholdConditions.length, "thresholdConditions length");
+        for (uint256 i = 0; i < o.expectedThresholdConditions.length; i++) {
+            assertEq(o.expectedThresholdConditions[i], c.expectedThresholdConditions[i], "thresholdCondition");
         }
         assertEq(o.closingConditions.length, c.closingConditions.length, "closingConditions length");
         for (uint256 i = 0; i < o.closingConditions.length; i++) {

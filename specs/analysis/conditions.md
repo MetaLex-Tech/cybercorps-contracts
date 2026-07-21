@@ -71,10 +71,14 @@ and **snapshotted onto the offer** — so an offer is governed by the rules in e
 and stored on the secondary-trade record itself (self-contained; no dependency on the primary-deal escrow
 library's `conditionsByEscrow`):
 
-| Array                       | Evaluated at                      | Entry points                                                  |
-|-----------------------------|-----------------------------------|---------------------------------------------------------------|
-| `offer.thresholdConditions` | Offer posted, accepted, finalized | `postOffer`, `acceptOffer`, `finalizeSecondaryTradeAgreement` |
-| `offer.closingConditions`   | Finalization                      | `finalizeSecondaryTradeAgreement`                             |
+| Array                                 | Evaluated at                      | Entry points                                                  |
+|---------------------------------------|-----------------------------------|---------------------------------------------------------------|
+| `offer.expectedThresholdConditions`   | Offer posted                      | `postOffer`                                                   |
+| `escrow.thresholdConditions`          | Accepted, finalized               | `acceptOffer`, `finalizeSecondaryTradeAgreement`              |
+| `offer.closingConditions`             | Finalization                      | `finalizeSecondaryTradeAgreement`                             |
+
+The offer's array is named `expected` because the buyer elects the exemption at `acceptOffer`; only the
+per-settlement escrow records the set a trade is actually judged against.
 
 Every condition in the array is walked in sequence at each entry point. Any failure reverts immediately.
 Snapshotting the addresses does not blunt the kill switch: `KillSwitchCondition` reads its live state
@@ -159,7 +163,7 @@ automatically.
 #### Layer 1 — Exemption-specific (§5) (individual `DealManager`, selected at `postOffer`)
 
 Condition contract addresses are registered in the DealManager (or a shared registry) at protocol initialization. At
-`postOffer`, DealManager reads the offer's `exemptionPathway` field and appends the corresponding subset to the
+`postOffer`, DealManager reads the offer's `expectedExemptionPathway` field and appends the corresponding subset to the
 threshold-condition array for that offer's `agreementId`. The same condition instances are shared across all SPVs.
 
 | Condition                              | Rule 144 | §4(a)(7) | §4(a)(1½) | Rule 144A | Reg S |

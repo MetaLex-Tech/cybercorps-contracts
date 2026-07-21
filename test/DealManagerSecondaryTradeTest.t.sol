@@ -548,7 +548,7 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(offer.units, p.units, "units");
         assertEq(offer.paymentToken, p.paymentToken, "paymentToken");
         assertEq(offer.consideration, p.consideration, "consideration");
-        assertEq(uint8(offer.exemptionPathway), uint8(p.exemptionPathway), "exemptionPathway");
+        assertEq(uint8(offer.expectedExemptionPathway), uint8(p.exemptionPathway), "exemptionPathway");
         assertEq(offer.validUntil, p.validUntil, "validUntil");
         address expectedIntegrator = p.integrator != address(0) ? p.integrator : dm.getDefaultIntegrator();
         assertEq(offer.integrator, expectedIntegrator, "integrator");
@@ -591,15 +591,15 @@ contract DealManagerSecondaryTradeTest is Test {
 
         // condition record: the set resolved for the offer's pathway
         address[] memory spv = dm.getSpvThresholdConditions();
-        address[] memory pathway = offer.exemptionPathway == ExemptionPathway.NONE
+        address[] memory pathway = offer.expectedExemptionPathway == ExemptionPathway.NONE
             ? new address[](0)
-            : dm.getPathwayThresholdConditions(offer.exemptionPathway);
-        assertEq(offer.thresholdConditions.length, spv.length + pathway.length, "thresholdConditions length");
+            : dm.getPathwayThresholdConditions(offer.expectedExemptionPathway);
+        assertEq(offer.expectedThresholdConditions.length, spv.length + pathway.length, "thresholdConditions length");
         for (uint256 i = 0; i < spv.length; i++) {
-            assertEq(offer.thresholdConditions[i], spv[i], "thresholdConditions SPV element");
+            assertEq(offer.expectedThresholdConditions[i], spv[i], "thresholdConditions SPV element");
         }
         for (uint256 i = 0; i < pathway.length; i++) {
-            assertEq(offer.thresholdConditions[spv.length + i], pathway[i], "thresholdConditions pathway element");
+            assertEq(offer.expectedThresholdConditions[spv.length + i], pathway[i], "thresholdConditions pathway element");
         }
         address[] memory closing = dm.getClosingConditions();
         assertEq(offer.closingConditions.length, closing.length, "closingConditions length");
@@ -643,7 +643,7 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(o.units, b.units, "units immutable");
         assertEq(o.paymentToken, b.paymentToken, "paymentToken immutable");
         assertEq(o.consideration, b.consideration, "consideration immutable");
-        assertEq(uint8(o.exemptionPathway), uint8(b.exemptionPathway), "exemptionPathway immutable");
+        assertEq(uint8(o.expectedExemptionPathway), uint8(b.expectedExemptionPathway), "exemptionPathway immutable");
         assertEq(o.validUntil, b.validUntil, "validUntil immutable");
         assertEq(o.integrator, b.integrator, "integrator immutable");
         assertEq(o.counterpartyRestrictions, b.counterpartyRestrictions, "counterpartyRestrictions immutable");
@@ -665,9 +665,9 @@ contract DealManagerSecondaryTradeTest is Test {
         for (uint256 i = 0; i < b.offerorPartyValues.length; i++) {
             assertEq(o.offerorPartyValues[i], b.offerorPartyValues[i], "offerorPartyValues element immutable");
         }
-        assertEq(o.thresholdConditions.length, b.thresholdConditions.length, "thresholdConditions length immutable");
-        for (uint256 i = 0; i < b.thresholdConditions.length; i++) {
-            assertEq(o.thresholdConditions[i], b.thresholdConditions[i], "thresholdConditions element immutable");
+        assertEq(o.expectedThresholdConditions.length, b.expectedThresholdConditions.length, "thresholdConditions length immutable");
+        for (uint256 i = 0; i < b.expectedThresholdConditions.length; i++) {
+            assertEq(o.expectedThresholdConditions[i], b.expectedThresholdConditions[i], "thresholdConditions element immutable");
         }
         assertEq(o.closingConditions.length, b.closingConditions.length, "closingConditions length immutable");
         for (uint256 i = 0; i < b.closingConditions.length; i++) {
@@ -1155,7 +1155,7 @@ contract DealManagerSecondaryTradeTest is Test {
             "settlement records the buyer's elected pathway"
         );
         assertEq(
-            uint8(dm.getOffer(offerId).exemptionPathway),
+            uint8(dm.getOffer(offerId).expectedExemptionPathway),
             uint8(ExemptionPathway.NONE),
             "offer stays unpinned"
         );
@@ -1309,7 +1309,7 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(seller);
         bytes32 offerId = dm.postOffer(p);
 
-        address[] memory atPost = dm.getOffer(offerId).thresholdConditions;
+        address[] memory atPost = dm.getOffer(offerId).expectedThresholdConditions;
         assertEq(atPost.length, 1, "unpinned offer resolves the fund-specific layer alone");
         assertEq(atPost[0], spv, "fund-specific (Layer 2)");
 
@@ -1320,7 +1320,7 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(onSettlement[0], spv, "fund-specific (Layer 2) first");
         assertEq(onSettlement[1], pathway, "exemption-specific (Layer 1) last");
 
-        assertEq(dm.getOffer(offerId).thresholdConditions.length, 1, "offer snapshot unchanged by acceptance");
+        assertEq(dm.getOffer(offerId).expectedThresholdConditions.length, 1, "offer snapshot unchanged by acceptance");
     }
 
     // Two lots of one unpinned offer electing different pathways resolve different sets.
@@ -1362,7 +1362,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.setSpvThresholdConditions(_conds(first));
 
         bytes32 offerId = _postSellOffer();
-        assertEq(dm.getOffer(offerId).thresholdConditions.length, 1, "snapshotted at posting");
+        assertEq(dm.getOffer(offerId).expectedThresholdConditions.length, 1, "snapshotted at posting");
 
         // SPV layer grows after the offer is live
         vm.prank(owner);
@@ -1375,7 +1375,7 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(recorded[0], first, "first condition");
         assertEq(recorded[1], second, "condition added after posting");
 
-        assertEq(dm.getOffer(offerId).thresholdConditions.length, 1, "offer snapshot still the posting-time set");
+        assertEq(dm.getOffer(offerId).expectedThresholdConditions.length, 1, "offer snapshot still the posting-time set");
     }
 
     // The counterpart: a condition added after posting is enforced at acceptance, not skipped because the

@@ -420,7 +420,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         _mintCred(accreditedBuyer, CAT_ACCREDITED, "US", bytes2(0));
 
         bytes32 offerId = _postSellOffer(ExemptionPathway.NONE, uint256(keccak256("unpinned.split")));
-        assertEq(uint8(dm.getOffer(offerId).exemptionPathway), uint8(ExemptionPathway.NONE), "offer left unpinned");
+        assertEq(uint8(dm.getOffer(offerId).expectedExemptionPathway), uint8(ExemptionPathway.NONE), "offer left unpinned");
 
         AcceptOfferParams memory qibAccept =
             _sellAcceptParams(offerId, qibBuyer, qibKey, ExemptionPathway.RULE_144A, UNITS / 2);
@@ -586,7 +586,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         internal
         returns (bytes32 settlementId)
     {
-        return _acceptSellOffer(offerId, buyer, buyerKey, dm.getOffer(offerId).exemptionPathway);
+        return _acceptSellOffer(offerId, buyer, buyerKey, dm.getOffer(offerId).expectedExemptionPathway);
     }
 
     function _acceptSellOffer(bytes32 offerId, address buyer, uint256 buyerKey, ExemptionPathway pathway)

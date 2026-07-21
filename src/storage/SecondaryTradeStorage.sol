@@ -210,7 +210,7 @@ library SecondaryTradeStorage {
             units: params.units,
             paymentToken: params.paymentToken,
             consideration: params.consideration,
-            exemptionPathway: params.exemptionPathway,
+            expectedExemptionPathway: params.exemptionPathway,
             validUntil: params.validUntil,
             counterpartyRestrictions: params.counterpartyRestrictions,
             additionalTerms: params.additionalTerms,
@@ -231,7 +231,7 @@ library SecondaryTradeStorage {
             adminMultisig: params.side == OfferSide.BUY ? params.adminMultisig : address(0),
             settlementAgreementIds: new bytes32[](0),
             // spec §conditions: threshold conditions gate posting, acceptance and finalize
-            thresholdConditions: resolvedThreshold,
+            expectedThresholdConditions: resolvedThreshold,
             // spec §conditions: closing conditions gate asset transfer
             closingConditions: resolvedClosing
         });
@@ -259,7 +259,7 @@ library SecondaryTradeStorage {
             params.tokenId, params.units, params.paymentToken, params.consideration,
             params.exemptionPathway, params.validUntil, integrator,
             posted.templateId, posted.buyerName, posted.buyerHostingMode, posted.adminMultisig,
-            posted.counterpartyRestrictions, posted.thresholdConditions, posted.closingConditions
+            posted.counterpartyRestrictions, posted.expectedThresholdConditions, posted.closingConditions
         );
     }
 
@@ -331,12 +331,13 @@ library SecondaryTradeStorage {
         // the acceptor's here on a sell offer, bounded by any pin. Each lot elects independently.
         ExemptionPathway electedPathway;
         if (offer.side == OfferSide.BUY) {
-            electedPathway = offer.exemptionPathway;
+            electedPathway = offer.expectedExemptionPathway;
         } else {
             electedPathway = params.exemptionPathway;
             if (electedPathway == ExemptionPathway.NONE) revert ISecondaryTradeStorage.ExemptionPathwayRequired();
-            if (offer.exemptionPathway != ExemptionPathway.NONE && offer.exemptionPathway != electedPathway)
-                revert ISecondaryTradeStorage.ExemptionPathwayMismatch(offer.exemptionPathway, electedPathway);
+            if (offer.expectedExemptionPathway != ExemptionPathway.NONE
+                && offer.expectedExemptionPathway != electedPathway)
+                revert ISecondaryTradeStorage.ExemptionPathwayMismatch(offer.expectedExemptionPathway, electedPathway);
         }
         _requirePathwayEnabled(electedPathway);
 
