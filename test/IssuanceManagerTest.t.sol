@@ -8,6 +8,7 @@ import "../src/CyberScrip.sol";
 import "../src/interfaces/ICyberCertPrinter.sol";
 import "../src/interfaces/IUriBuilder.sol";
 import {RestrictiveLegend} from "../src/storage/CyberCertPrinterStorage.sol";
+import {IssuanceManagerStorage} from "../src/storage/IssuanceManagerStorage.sol";
 import "../src/libs/auth.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
@@ -208,6 +209,42 @@ contract IssuanceManagerTest is Test {
         ICyberCertPrinter b = _deployPrinter("CertB", "CERTB");
         assertTrue(issuanceManager.isPrinter(address(a)), "first printer tracked");
         assertTrue(issuanceManager.isPrinter(address(b)), "second printer tracked");
+    }
+
+    function test_createCertPrinter_CreatesAndPairsCanonicalClass() public {
+        ICyberCertPrinter first = _deployPrinter("CertA", "CERTA");
+        uint256 classId = issuanceManager.getPrinterClassId(address(first));
+
+        assertEq(classId, 1, "first security type creates the first class");
+        SecurityClassInfo memory classInfo = issuanceManager.getSecurityClass(classId);
+        assertEq(
+            uint256(classInfo.classType),
+            uint256(SecurityClass.CommonStock),
+            "class type matches printer type"
+        );
+        assertEq(bytes(classInfo.documentURI).length, 0, "class URI starts empty");
+        assertEq(classInfo.dataExtension, address(0), "class extension starts empty");
+        assertEq(classInfo.classData.length, 0, "class data starts empty");
+
+        ICyberCertPrinter second = _deployPrinter("CertB", "CERTB");
+        assertEq(
+            issuanceManager.getPrinterClassId(address(second)),
+            classId,
+            "printers of the same security type share its canonical class"
+        );
+        assertEq(issuanceManager.getSecurityClassCount(), 1, "class is created once");
+    }
+
+    function test_defineSecurityClass_RevertsForExistingSecurityType() public {
+        _deployPrinter("Cert", "CERT");
+
+        vm.expectRevert(IssuanceManagerStorage.SecurityClassAlreadyDefined.selector);
+        issuanceManager.defineSecurityClass(
+            SecurityClass.CommonStock,
+            "uri://class",
+            address(0),
+            bytes("")
+        );
     }
 
     function _deployPrinter(

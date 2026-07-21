@@ -75,6 +75,7 @@ library IssuanceManagerStorage {
     error VaultRedemptionExceedsClaim();
     error VaultWithdrawalExceedsAssets();
     error ClassDoesNotExist();
+    error SecurityClassAlreadyDefined();
     error NotAPrinter();
 
     /// @dev Ray precision for vault price-per-share (assets per 1 nominal share, 1e27 = 1.0).
@@ -191,6 +192,8 @@ library IssuanceManagerStorage {
         mapping(uint256 => SecurityClassInfo) securityClasses;
         uint256 securityClassCount;
         mapping(address => uint256) printerClassIds;
+        // Canonical class for each SecurityClass enum value. A value of 0 means it has not been defined.
+        mapping(SecurityClass => uint256) classIdByType;
     }
 
     struct ScripRatio {
@@ -327,8 +330,10 @@ library IssuanceManagerStorage {
         bytes memory classData
     ) external returns (uint256 classId) {
         IssuanceManagerData storage s = issuanceManagerStorage();
+        if (s.classIdByType[classType] != 0) revert SecurityClassAlreadyDefined();
         classId = ++s.securityClassCount;
         s.securityClasses[classId] = SecurityClassInfo(classType, documentURI, dataExtension, classData);
+        s.classIdByType[classType] = classId;
         emit SecurityClassDefined(classId, classType, documentURI, dataExtension);
     }
 
@@ -365,6 +370,19 @@ library IssuanceManagerStorage {
 
     function getPrinterClassId(address printer) internal view returns (uint256) {
         return issuanceManagerStorage().printerClassIds[printer];
+    }
+
+    /// @dev Creates the empty canonical class for `classType` when one has not been explicitly
+    /// defined, then returns its ID. Class metadata can be populated later with updateSecurityClass.
+    function _getOrCreateClassId(SecurityClass classType) private returns (uint256 classId) {
+        IssuanceManagerData storage s = issuanceManagerStorage();
+        classId = s.classIdByType[classType];
+        if (classId != 0) return classId;
+
+        classId = ++s.securityClassCount;
+        s.securityClasses[classId] = SecurityClassInfo(classType, "", address(0), bytes(""));
+        s.classIdByType[classType] = classId;
+        emit SecurityClassDefined(classId, classType, "", address(0));
     }
 
     // Beacon upgrade function
@@ -664,6 +682,9 @@ library IssuanceManagerStorage {
             extension,
             seriesData
         );
+        uint256 classId = _getOrCreateClassId(securityType);
+        issuanceManagerStorage().printerClassIds[newCert] = classId;
+        emit PrinterClassAssigned(newCert, classId);
         emit CertPrinterCreated(
             newCert,
             getCORP(),
