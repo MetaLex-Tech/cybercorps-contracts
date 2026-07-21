@@ -518,18 +518,15 @@ contract DealManager is
     // Secondary trade — condition config (owner-managed; snapshotted onto each offer at postOffer)
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Each layer is configured by replacing its whole list, so one entry point per layer covers add, remove
-    // and reorder. The supplied list is validated as a set (no zero address, no duplicates, ERC-165 checked).
+    // Each layer is set as a whole list, so one entry point per layer covers add, remove and reorder.
 
     // Layer 2 — fund-specific (§6) threshold conditions (apply to every offer)
     function setSpvThresholdConditions(address[] calldata conditions) external onlyAdmin {
         SecondaryTradeStorage.setSpvThresholdConditions(conditions);
     }
 
-    /// @notice Layer 1 — exemption-specific (§5) threshold conditions for `pathway`, plus whether this SPV
-    /// supports the pathway at all. Offers cannot be pinned to, nor buyers elect, a pathway that is not
-    /// enabled — so an unconfigured pathway blocks trades instead of waving them through with no
-    /// exemption-specific checks.
+    /// @notice Layer 1 — exemption-specific (§5) conditions for `pathway`, plus whether this SPV supports
+    /// it. A pathway that is not enabled can be neither pinned nor elected.
     function setPathwayThresholdConditions(ExemptionPathway pathway, address[] calldata conditions, bool enabled)
         external
         onlyAdmin

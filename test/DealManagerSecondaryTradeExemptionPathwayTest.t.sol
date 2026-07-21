@@ -581,7 +581,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         offerId = dm.postOffer(p);
     }
 
-    /// @dev Buyer elects the pathway the offer pinned; for an unpinned offer use the 4-arg overload.
+    /// @dev Buyer elects the offer's pinned pathway; for an unpinned offer use the 4-arg overload.
     function _acceptSellOffer(bytes32 offerId, address buyer, uint256 buyerKey)
         internal
         returns (bytes32 settlementId)
@@ -736,8 +736,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         );
     }
 
-    /// @dev One call per list, since each setter replaces the whole list. The pathway calls also enable
-    /// their pathway — this SPV supports all five, and an unenabled one can be neither pinned nor elected.
+    /// @dev One call per list; the pathway calls also enable their pathway. This SPV supports all five.
     function _wireConditions() internal {
         // SPV-layer (every pathway).
         address[] memory spv = new address[](7);

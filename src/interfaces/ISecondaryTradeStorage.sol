@@ -47,10 +47,8 @@ enum OfferStatus { LIVE, CANCELLED, PARTIALLY_ACCEPTED, FULLY_ACCEPTED, FINALIZE
 
 enum SecondaryEscrowStatus { ACCEPTED, FINALIZED, VOIDED }
 
-/// @dev NONE means "not pinned": the buyer selects the pathway at acceptance. It is never a settled
-/// trade's pathway — every settlement resolves to one of the five real pathways.
-///
-/// The exemption is the buyer's to claim, so the buyer elects it:
+/// @dev The exemption is the buyer's to claim, so the buyer elects it. NONE means "not pinned" — never a
+/// settled trade's pathway:
 ///
 ///   | Offer side    | Pathway set by                                  | NONE allowed?                          |
 ///   |---------------|-------------------------------------------------|----------------------------------------|
@@ -91,8 +89,8 @@ struct Offer {
     HostingMode buyerHostingMode;   // buy offer-only: Direct or Administered; defaults to Direct for sell offers
     address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
     bytes32[] settlementAgreementIds; // appended at each acceptOffer; length == 0 at postOffer (no buyer known yet)
-    address[] thresholdConditions;    // resolved set snapshotted at postOffer (§6, ++ §5 when the offer pins a pathway); per-settlement sets live on SecondaryEscrow
-    address[] closingConditions;      // closing set snapshotted at postOffer; a record — finalize evaluates the live set (gates asset transfer)
+    address[] thresholdConditions;    // set resolved at postOffer; each settlement records its own on SecondaryEscrow
+    address[] closingConditions;      // set resolved at postOffer; gates asset transfer at finalize
 }
 
 // Per-settlement escrow for secondary trades, keyed by settlementAgreementId.
@@ -112,10 +110,10 @@ struct SecondaryEscrow {
     HostingMode buyerHostingMode;   // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
     address adminMultisig;          // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
     bytes openEndorsementSig;       // redundant for sell offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
-    // Exemption terms of this lot. Per-settlement because two buyers of the same sell offer can elect
-    // different pathways, and so resolve different threshold sets — neither of which the shared Offer can hold.
-    ExemptionPathway exemptionPathway;  // never NONE; the pathway this trade settles under. Load-bearing: selects the Layer 1 (§5) conditions at accept/finalize and is stamped into the cert's deal metadata
-    address[] thresholdConditions;      // full resolved set (§6 ++ §5 for `exemptionPathway`) as of this settlement's last check; a record, checks resolve live
+    // Exemption terms of this lot: two buyers of one sell offer may elect different pathways, so the
+    // shared Offer cannot hold them.
+    ExemptionPathway exemptionPathway;  // never NONE; the exemption this trade settles under, stamped into the cert's deal metadata
+    address[] thresholdConditions;      // set resolved for this lot
 }
 
 struct PostOfferParams {
@@ -125,7 +123,7 @@ struct PostOfferParams {
     uint256 units;
     address paymentToken;
     uint256 consideration;
-    ExemptionPathway exemptionPathway; // sell offers: NONE leaves the choice to the buyer, or pin one to restrict; buy offers: required (the offeror is the buyer)
+    ExemptionPathway exemptionPathway; // sell offers: NONE to let each buyer elect, or pin one to restrict; buy offers: required
     uint256 validUntil;
     bytes counterpartyRestrictions;
     bytes additionalTerms;
@@ -144,7 +142,7 @@ struct PostOfferParams {
 struct AcceptOfferParams {
     bytes32 offerId;
     uint256 units;
-    ExemptionPathway exemptionPathway; // sell offer-only: the buyer's pathway, required and must satisfy any offer pin; ignored for buy offer acceptances
+    ExemptionPathway exemptionPathway; // sell offer-only: buyer's elected pathway, bounded by any offer pin; ignored for buy offers
     string buyerName;               // sell offer-only: ignored for buy offer acceptances (read from Offer instead)
     HostingMode buyerHostingMode;   // sell offer-only: Direct or Administered; ignored for buy offer acceptances
     address adminMultisig;          // sell offer-only: delivery address for Administered hosting; ignored for buy offer acceptances
@@ -201,9 +199,7 @@ interface ISecondaryTradeStorage {
         HostingMode buyerHostingMode,
         address adminMultisig,
         bytes openEndorsementSig,
-        // The settlement's elected pathway and the full set that pathway resolved to at acceptance.
-        // Per-settlement, so OfferPosted cannot carry them: two buyers of one unpinned offer can elect
-        // different pathways. A point-in-time record — conditions resolve live at each check.
+        // Per-settlement, so OfferPosted cannot carry them: buyers of one offer may elect different pathways.
         ExemptionPathway exemptionPathway,
         address[] thresholdConditions
     );
@@ -255,13 +251,11 @@ interface ISecondaryTradeStorage {
     /// (ownership moved after listing/acceptance), so the payee and the party whose units are consumed diverge
     error SecondaryTradeSellerOwnershipChanged();
     error SecondaryConditionsNotMet(address condition);
-    /// @notice No exemption pathway was supplied where one is required: a buy offer at postOffer (its offeror
-    /// is the buyer), or a sell-offer acceptance (the buyer must elect one)
+    /// @notice No pathway supplied where the buyer must claim one: a buy offer at postOffer, or any acceptance
     error ExemptionPathwayRequired();
     /// @notice The buyer's elected pathway is not the one the sell offer pinned
     error ExemptionPathwayMismatch(ExemptionPathway offered, ExemptionPathway elected);
-    /// @notice This SPV does not support the pathway (never enabled, or since disabled). Distinct from a
-    /// supported pathway that happens to carry no Layer 1 conditions, which is allowed
+    /// @notice This SPV does not support the pathway (never enabled, or since withdrawn)
     error ExemptionPathwayNotEnabled(ExemptionPathway pathway);
     /// @notice Condition address supplied to a config setter is the zero address
     error InvalidSecondaryCondition();

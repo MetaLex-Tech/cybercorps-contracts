@@ -288,8 +288,7 @@ contract DealManagerSecondaryTradeTest is Test {
         vm.prank(owner);
         auth.updateRole(address(dm), 99);
 
-        // Pathways this SPV supports. Unenabled pathways cannot be pinned or elected, so every fixture that
-        // trades must declare the ones it uses.
+        // Pathways this SPV supports; unenabled ones cannot be pinned or elected.
         vm.startPrank(owner);
         dm.setPathwayThresholdConditions(ExemptionPathway.SECTION_4A7, new address[](0), true);
         dm.setPathwayThresholdConditions(ExemptionPathway.RULE_144, new address[](0), true);
@@ -590,8 +589,7 @@ contract DealManagerSecondaryTradeTest is Test {
             assertEq(offer.adminMultisig, address(0), "sell offers carry no adminMultisig");
         }
 
-        // condition record from DealManager config: the full resolved set for the offer's pathway — the SPV
-        // layer plus, once a pathway is known, that pathway's exemption layer
+        // condition record: the set resolved for the offer's pathway
         address[] memory spv = dm.getSpvThresholdConditions();
         address[] memory pathway = offer.exemptionPathway == ExemptionPathway.NONE
             ? new address[](0)
@@ -909,9 +907,8 @@ contract DealManagerSecondaryTradeTest is Test {
     // threshold conditions in an Offer
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Conditions are owner-managed DealManager config (snapshotted onto the offer at postOffer), not
-    // offeror-supplied. Register them as fund-specific (Layer 2 / per-SPV) conditions so they apply to
-    // every one of the test's offers regardless of exemption pathway.
+    // Conditions are owner-managed config, not offeror-supplied. Registered as fund-specific (§6) so they
+    // apply to every offer regardless of pathway.
     function _registerThresholdConditions(address[] memory conds) internal {
         vm.prank(owner);
         dm.setSpvThresholdConditions(conds);
@@ -1082,8 +1079,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.acceptOffer(ap);
     }
 
-    // An unpinned offer has no exemption layer at posting, so the buyer's election at acceptance is what
-    // pulls one in — a failing RULE_144 condition blocks the acceptance that elects RULE_144.
+    // The buyer's election pulls in that pathway's conditions at acceptance.
     function test_RevertIf_ThresholdConditions_PathwayConditionAppliesToElectedPathway() public {
         address failing = address(new SecConditionMock(false));
         vm.prank(owner);
@@ -1098,8 +1094,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.acceptOffer(p);
     }
 
-    // The mirror: electing another pathway leaves that condition out of the resolved set entirely, so the
-    // acceptance succeeds despite the RULE_144 condition failing for everyone.
+    // Electing another pathway leaves that condition out of the set, so the acceptance succeeds.
     function test_ThresholdConditions_PathwayConditionNotAppliesToOtherPathway() public {
         address failing = address(new SecConditionMock(false));
         vm.prank(owner);
@@ -1128,8 +1123,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.postOffer(p);
     }
 
-    // A buy offer always pins its pathway, so its Layer 1 conditions are evaluated at posting — the offeror
-    // is turned away before their consideration is escrowed, rather than at the first acceptance.
+    // A buy offer pins its pathway, so its §5 conditions gate posting — before consideration is escrowed.
     function test_RevertIf_PostOffer_Buy_PathwayConditionFails() public {
         address failing = address(new SecConditionMock(false));
         vm.prank(owner);
@@ -1150,8 +1144,7 @@ contract DealManagerSecondaryTradeTest is Test {
     // exemption pathway election
     // ─────────────────────────────────────────────────────────────────────────
 
-    // The buyer's election lands on the settlement; the unpinned offer itself is unchanged by it, so later
-    // buyers stay free to elect their own.
+    // The election lands on the settlement, leaving later buyers free to elect their own.
     function test_AcceptOffer_Sell_UnpinnedOffer_RecordsElectedPathwayOnSettlement() public {
         bytes32 offerId = _postSellOffer();
         bytes32 settlementId = _acceptSellOfferWithPathway(offerId, ExemptionPathway.RULE_144A);
@@ -1178,8 +1171,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.postOffer(p);
     }
 
-    // On a buy offer the accepting seller is not the one claiming the exemption, so whatever they pass is
-    // ignored in favor of the buy offer's own pathway.
+    // The accepting seller does not claim the exemption, so their election is ignored.
     function test_AcceptOffer_Buy_IgnoresAcceptorElectedPathway() public {
         bytes32 offerId = _postBuyOffer();
         AcceptOfferParams memory p = AcceptOfferParams({
@@ -1204,8 +1196,7 @@ contract DealManagerSecondaryTradeTest is Test {
         );
     }
 
-    // An unconfigured pathway must block trades rather than settle them with no exemption-specific checks:
-    // an empty Layer 1 list is otherwise indistinguishable from "no checks required".
+    // An unconfigured pathway blocks trades rather than settling them with no §5 checks.
     function test_RevertIf_AcceptOffer_ElectedPathwayNotEnabled() public {
         bytes32 offerId = _postSellOffer();
         AcceptOfferParams memory p = _sellAcceptParams(offerId);
@@ -1220,8 +1211,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.acceptOffer(p);
     }
 
-    // Rejected at posting too, so a seller's units are never reserved against a pathway whose buyers would
-    // only be turned away at acceptance.
+    // Rejected at posting too, so units are never reserved against a pathway its buyers cannot elect.
     function test_RevertIf_PostOffer_PinnedPathwayNotEnabled() public {
         PostOfferParams memory p = _defaultSellOfferParams();
         p.salt = uint256(keccak256("pinned.disabled"));
@@ -1248,8 +1238,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.postOffer(p);
     }
 
-    // Enablement is read live, not snapshotted: withdrawing a pathway stops acceptances on offers already
-    // posted under it.
+    // Withdrawing a pathway stops acceptances on offers already posted under it.
     function test_RevertIf_AcceptOffer_PathwayDisabledAfterPosting() public {
         PostOfferParams memory p = _defaultSellOfferParams();
         p.salt = uint256(keccak256("pinned.withdrawn"));
@@ -1270,8 +1259,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.acceptOffer(a);
     }
 
-    // A supported pathway that simply carries no Layer 1 conditions stays legitimate — the gate separates
-    // "not supported here" from "nothing extra to check".
+    // A supported pathway carrying no §5 conditions is legitimate: "not supported" differs from "nothing to check".
     function test_AcceptOffer_EnabledPathwayWithNoConditionsSettles() public {
         assertEq(dm.getPathwayThresholdConditions(ExemptionPathway.RULE_144A).length, 0, "no Layer 1 configured");
         bytes32 offerId = _postSellOffer();
@@ -1307,8 +1295,7 @@ contract DealManagerSecondaryTradeTest is Test {
     // threshold condition configurations
     // ─────────────────────────────────────────────────────────────────────────
 
-    // The offer snapshots what it resolved at posting; each settlement records what its own election
-    // resolved. Traders supply only the pathway, never addresses.
+    // The offer records what it resolved at posting; each settlement records what its own election resolved.
     function test_Config_OfferSnapshotsAtPostAndSettlementRecordsResolvedSet() public {
         address spv = address(new SecConditionMock(true));
         address pathway = address(new SecConditionMock(true));
@@ -1336,8 +1323,7 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(dm.getOffer(offerId).thresholdConditions.length, 1, "offer snapshot unchanged by acceptance");
     }
 
-    // The edge case the per-settlement record exists for: two lots of one unpinned offer electing different
-    // pathways resolve different sets, which a single shared field on the Offer could not represent.
+    // Two lots of one unpinned offer electing different pathways resolve different sets.
     function test_Config_SiblingSettlementsRecordDifferentResolvedSets() public {
         address condA = address(new SecConditionMock(true));
         address condB = address(new SecConditionMock(true));
@@ -1368,9 +1354,7 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(setB[0], condB, "144A condition");
     }
 
-    // Threshold conditions are resolved live at every check, so a layer edited after posting governs the
-    // acceptance — and the settlement records the set it was actually judged against, while the offer keeps
-    // its posting-time snapshot.
+    // A layer edited after posting governs the acceptance; the settlement records what it was judged against.
     function test_Config_AcceptOffer_SettlementRecordsLiveResolvedSet() public {
         address first = address(new SecConditionMock(true));
         address second = address(new SecConditionMock(true));
@@ -3610,8 +3594,7 @@ contract DealManagerSecondaryTradeTest is Test {
         dm.finalizeSecondaryTradeAgreement(settlementId);
     }
 
-    // The closing set is read live at finalize, like the threshold set: a condition registered after the
-    // offer was posted still gates its settlements, rather than being excused by the offer's older record.
+    // A closing condition registered after the offer was posted still gates its settlements.
     function test_RevertIf_FinalizeSecondaryTrade_ClosingConditionAddedAfterPosting() public {
         bytes32 offerId = _postSellOffer();
         assertEq(dm.getOffer(offerId).closingConditions.length, 0, "no closing condition at posting");
@@ -3948,7 +3931,7 @@ contract DealManagerSecondaryTradeTest is Test {
         assertEq(paymentToken.balanceOf(buyer), buyerBefore - CONSIDERATION);
     }
 
-    // The elected pathway is part of the authorized params, so a relayer cannot swap in another one.
+    // The elected pathway is part of the authorized params; a relayer cannot swap it.
     function test_RevertIf_AcceptOffer_Relayer_TamperedPathway() public {
         bytes32 offerId = _postSellOffer();
         address relayer = makeAddr("relayer");
