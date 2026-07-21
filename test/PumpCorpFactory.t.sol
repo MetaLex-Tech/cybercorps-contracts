@@ -9,6 +9,9 @@ import {PumpCorpFactory, PumpCorpFactoryLib} from "../src/PumpCorpFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
+import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {IssuanceManager} from "../src/IssuanceManager.sol";
+import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {FeeOverride} from "../src/interfaces/IRoundManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {EIP712Lib} from "../src/libs/EIP712Lib.sol";
@@ -138,6 +141,15 @@ contract PumpCorpFactoryForkTest is Test {
             saltStrPump,
             deployerPk
         );
+
+        // The fork predates the seriesData ABI. Make the factory references used by this
+        // isolated deployment point at current implementations before creating any corp.
+        vm.startPrank(metalexSafe);
+        rmFactory.setRefImplementation(address(new RoundManager()));
+        IssuanceManagerFactory issuanceFactory = IssuanceManagerFactory(net.issuanceManagerFactory);
+        issuanceFactory.setRefImplementation(address(new IssuanceManager()));
+        issuanceFactory.setCyberCertPrinterRefImplementation(address(new CyberCertPrinter()));
+        vm.stopPrank();
 
         // Simulate granting PumpCorpFactory owner access to LeXcheX and to RoundManagerFactory auth
         vm.startPrank(metalexSafe);

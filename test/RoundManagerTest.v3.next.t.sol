@@ -4,12 +4,16 @@ pragma solidity ^0.8.28;
 import {Test, Vm} from "forge-std/Test.sol";
 import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import {CyberCorpHelper} from "./RoundManagerTest.t.sol";
+import {LegacyCyberCertData} from "./libs/LegacyCyberCorpFactory.sol";
 import {SecuritySeries, SecurityClass, CompanyOfficer} from "../src/CyberCorpConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
+import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {IssuanceManager} from "../src/IssuanceManager.sol";
+import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {RoundLib, Round, RoundType} from "../src/libs/RoundLib.sol";
 import {RoundLib as RoundLibV3, Round as RoundV3} from "./libs/v3/RoundLib.sol";
@@ -20,7 +24,7 @@ import {LexScrowStorage, Escrow, EscrowStatus} from "../src/storage/LexScrowStor
 interface IRoundManagerV3 {
     function createRound(
         RoundV3 memory roundDraft,
-        CyberCertData[] memory certData
+        LegacyCyberCertData[] memory certData
     ) external returns (bytes32);
 }
 
@@ -49,15 +53,14 @@ library CyberCorpHelperV3 {
 
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Legend";
-        CyberCertData[] memory certData = new CyberCertData[](1);
-        certData[0] = CyberCertData({
+        LegacyCyberCertData[] memory certData = new LegacyCyberCertData[](1);
+        certData[0] = LegacyCyberCertData({
             name: "Equity",
             symbol: "EQ",
             uri: "ipfs://eq",
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
-            seriesData: bytes(""),
             defaultLegend: defaultLegend
         });
 
@@ -233,7 +236,31 @@ contract RoundManagerV3NextForkTest is Test {
 
         vm.prank(corpV3);
         RoundManager(rmV3).upgradeToAndCall(address(newRmRef), "");
-        
+
+        IssuanceManagerFactory issuanceFactory = IssuanceManagerFactory(
+            cyberCorpFactory.issuanceManagerFactory()
+        );
+        vm.startPrank(metalexSafe);
+        issuanceFactory.AUTH().updateRole(
+            deployer,
+            issuanceFactory.AUTH().OWNER_ROLE()
+        );
+        vm.stopPrank();
+        vm.startPrank(deployer);
+        IssuanceManager newIssuanceManager = new IssuanceManager();
+        issuanceFactory.setRefImplementation(address(newIssuanceManager));
+        issuanceFactory.setCyberCertPrinterRefImplementation(
+            address(new CyberCertPrinter())
+        );
+        vm.stopPrank();
+
+        address issuanceManagerV3 = CyberCorp(corpV3).issuanceManager();
+        vm.prank(corpOwnerV3);
+        IssuanceManager(issuanceManagerV3).upgradeToAndCall(
+            address(newIssuanceManager),
+            ""
+        );
+
         // ── deploy v4 corp ───────────────
 
         (corpV4, , , , rmV4) = cyberCorpFactory.deployCyberCorp(
