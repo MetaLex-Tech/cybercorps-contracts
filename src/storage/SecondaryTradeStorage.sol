@@ -124,6 +124,12 @@ library SecondaryTradeStorage {
         // Per-DealManager settlement window: how long after acceptance a lot has to finalize before it can be
         // voided as expired. Decouples settlement expiry from offer expiry (0 = DEFAULT_SETTLEMENT_WINDOW).
         uint256 settlementWindow;
+        // Which exemption pathways this SPV supports. Default false, so an SPV that never configured a
+        // pathway cannot have trades settled under it: an empty pathwayThresholdConditions entry would
+        // otherwise read as "no Layer 1 checks required" rather than "not supported here". Also doubles as a
+        // per-pathway off-switch. Read live (not snapshotted): disabling stops new offers and acceptances,
+        // while lots already accepted resolve under the rules they were accepted under.
+        mapping(ExemptionPathway => bool) pathwayEnabled;
     }
 
     /// @notice Effective settlement window, applying the default when unset (so legacy DealManager does not need migration)
@@ -185,6 +191,7 @@ library SecondaryTradeStorage {
         // offeror may still pin one to restrict who can accept, or leave it NONE and let each buyer elect.
         if (params.side == OfferSide.BUY && params.exemptionPathway == ExemptionPathway.NONE)
             revert ISecondaryTradeStorage.ExemptionPathwayRequired();
+        if (params.exemptionPathway != ExemptionPathway.NONE) _requirePathwayEnabled(params.exemptionPathway);
 
         // Validate min threshold against the whole offer
         _checkMinTradeThreshold(params.units, params.consideration);
@@ -346,6 +353,8 @@ library SecondaryTradeStorage {
             if (offer.exemptionPathway != ExemptionPathway.NONE && offer.exemptionPathway != electedPathway)
                 revert ISecondaryTradeStorage.ExemptionPathwayMismatch(offer.exemptionPathway, electedPathway);
         }
+        // Re-checked here for both sides: a pathway enabled at posting may have been withdrawn since.
+        _requirePathwayEnabled(electedPathway);
 
         // Reject zero-unit fills outright: the min-threshold check below only catches this when a
         // floor is configured, so a disabled-threshold offer would otherwise mint an empty settlement.
@@ -797,53 +806,57 @@ library SecondaryTradeStorage {
     // Condition config management (linked logic; called via delegatecall by DealManager owner setters)
     // ─────────────────────────────────────────────────────────────────────────
 
-    function addSpvThresholdCondition(address condition) external {
-        _addCondition(secondaryTradeStorage().spvThresholdConditions, condition);
+    /// @notice Replaces the fund-specific (§6) threshold layer wholesale.
+    function setSpvThresholdConditions(address[] calldata conditions) external {
+        _validateConditions(conditions);
+        secondaryTradeStorage().spvThresholdConditions = conditions;
     }
 
-    function removeSpvThresholdConditionAt(uint256 index) external {
-        _removeConditionAt(secondaryTradeStorage().spvThresholdConditions, index);
+    /// @notice Replaces the exemption-specific (§5) threshold layer for `pathway` and declares whether this
+    /// SPV supports the pathway at all. The two travel together: an unsupported pathway must not be
+    /// electable, and an empty condition list would otherwise read as "no Layer 1 checks required". NONE is
+    /// not a pathway — it only ever means "unpinned" on an offer.
+    function setPathwayThresholdConditions(ExemptionPathway pathway, address[] calldata conditions, bool enabled)
+        external
+    {
+        if (pathway == ExemptionPathway.NONE) revert ISecondaryTradeStorage.ExemptionPathwayRequired();
+        _validateConditions(conditions);
+        SecondaryTradeData storage ds = secondaryTradeStorage();
+        ds.pathwayThresholdConditions[pathway] = conditions;
+        ds.pathwayEnabled[pathway] = enabled;
     }
 
-    function addPathwayThresholdCondition(ExemptionPathway pathway, address condition) external {
-        _addCondition(secondaryTradeStorage().pathwayThresholdConditions[pathway], condition);
+    /// @notice Replaces the closing set wholesale.
+    function setClosingConditions(address[] calldata conditions) external {
+        _validateConditions(conditions);
+        secondaryTradeStorage().closingConditions = conditions;
     }
 
-    function removePathwayThresholdConditionAt(ExemptionPathway pathway, uint256 index) external {
-        _removeConditionAt(secondaryTradeStorage().pathwayThresholdConditions[pathway], index);
+    /// @dev Fail-closed gate on every pathway a trade can be committed to: pinned at posting, elected at
+    /// acceptance. Enforced at both, so an offer can never be posted against a pathway that would only
+    /// reject its buyers later, after the seller's units are already reserved.
+    function _requirePathwayEnabled(ExemptionPathway pathway) internal view {
+        if (!secondaryTradeStorage().pathwayEnabled[pathway])
+            revert ISecondaryTradeStorage.ExemptionPathwayNotEnabled(pathway);
     }
 
-    function addClosingCondition(address condition) external {
-        _addCondition(secondaryTradeStorage().closingConditions, condition);
-    }
-
-    function removeClosingConditionAt(uint256 index) external {
-        _removeConditionAt(secondaryTradeStorage().closingConditions, index);
-    }
-
-    /// @dev Appends to an owner-managed condition list, rejecting the zero address and duplicates so the
-    /// list behaves as a set. Lists are small (admin-curated), so the linear dedupe scan is cheap.
-    function _addCondition(address[] storage list, address condition) internal {
-        if (condition == address(0)) revert ISecondaryTradeStorage.InvalidSecondaryCondition();
-        // Only strongly-typed secondary-trading conditions may be wired in: reject anything that doesn't
-        // advertise ISecondaryTradingCondition via ERC-165 at config time, so a mismatched checkCondition
-        // signature can never reach post/accept/finalize. ERC165Checker returns false (no revert) for
-        // non-ERC165 targets.
-        if (!ERC165Checker.supportsInterface(condition, type(ISecondaryTradingCondition).interfaceId))
-            revert ISecondaryTradeStorage.SecondaryConditionInterfaceUnsupported(condition);
-        for (uint256 i = 0; i < list.length; i++) {
-            if (list[i] == condition) revert ISecondaryTradeStorage.SecondaryConditionAlreadyExists();
+    /// @dev Validates an owner-supplied condition list before it replaces a stored one, rejecting the zero
+    /// address and duplicates so the list behaves as a set. Lists are small (admin-curated), so the linear
+    /// dedupe scan is cheap.
+    function _validateConditions(address[] calldata conditions) internal view {
+        for (uint256 i = 0; i < conditions.length; i++) {
+            address condition = conditions[i];
+            if (condition == address(0)) revert ISecondaryTradeStorage.InvalidSecondaryCondition();
+            // Only strongly-typed secondary-trading conditions may be wired in: reject anything that doesn't
+            // advertise ISecondaryTradingCondition via ERC-165 at config time, so a mismatched checkCondition
+            // signature can never reach post/accept/finalize. ERC165Checker returns false (no revert) for
+            // non-ERC165 targets.
+            if (!ERC165Checker.supportsInterface(condition, type(ISecondaryTradingCondition).interfaceId))
+                revert ISecondaryTradeStorage.SecondaryConditionInterfaceUnsupported(condition);
+            for (uint256 j = 0; j < i; j++) {
+                if (conditions[j] == condition) revert ISecondaryTradeStorage.SecondaryConditionAlreadyExists();
+            }
         }
-        list.push(condition);
-    }
-
-    /// @dev Swap-pop removal — order within the list is not significant for membership, only for the
-    /// deterministic evaluation order of an already-posted offer (which snapshots its own copy anyway).
-    function _removeConditionAt(address[] storage list, uint256 index) internal {
-        uint256 len = list.length;
-        if (index >= len) revert ISecondaryTradeStorage.SecondaryConditionIndexOutOfBounds();
-        list[index] = list[len - 1];
-        list.pop();
     }
 
     /// @dev Terminal offer states: immutable, not cancellable, and never restored by a void

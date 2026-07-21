@@ -731,34 +731,38 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         );
     }
 
+    /// @dev One call per list, since each setter replaces the whole list. The pathway calls also enable
+    /// their pathway — this SPV supports all five, and an unenabled one can be neither pinned nor elected.
     function _wireConditions() internal {
         // SPV-layer (every pathway).
-        _addSpv(address(kyc));
-        _addSpv(address(taxInfo));
-        _addSpv(address(holderCap));
-        _addSpv(address(erisa));
-        _addSpv(address(usState));
-        _addSpv(address(legion));
-        _addSpv(address(agreementSigned));
+        address[] memory spv = new address[](7);
+        spv[0] = address(kyc);
+        spv[1] = address(taxInfo);
+        spv[2] = address(holderCap);
+        spv[3] = address(erisa);
+        spv[4] = address(usState);
+        spv[5] = address(legion);
+        spv[6] = address(agreementSigned);
+
+        vm.startPrank(owner);
+        dm.setSpvThresholdConditions(spv);
 
         // Pathway-layer.
-        _addPathway(ExemptionPathway.RULE_144, address(holdingPeriod));
-        _addPathway(ExemptionPathway.RULE_144, address(rule144Disclosure));
-        _addPathway(ExemptionPathway.SECTION_4A7, address(accredited));
-        _addPathway(ExemptionPathway.SECTION_4A7, address(section4a7Disclosure));
-        _addPathway(ExemptionPathway.SECTION_4A1HALF, address(legalOpinion));
-        _addPathway(ExemptionPathway.RULE_144A, address(qib));
-        _addPathway(ExemptionPathway.REGULATION_S, address(nonUsPerson));
-        _addPathway(ExemptionPathway.REGULATION_S, address(regS));
+        dm.setPathwayThresholdConditions(
+            ExemptionPathway.RULE_144, _list(address(holdingPeriod), address(rule144Disclosure)), true
+        );
+        dm.setPathwayThresholdConditions(
+            ExemptionPathway.SECTION_4A7, _list(address(accredited), address(section4a7Disclosure)), true
+        );
+        dm.setPathwayThresholdConditions(ExemptionPathway.SECTION_4A1HALF, _list(address(legalOpinion)), true);
+        dm.setPathwayThresholdConditions(ExemptionPathway.RULE_144A, _list(address(qib)), true);
+        dm.setPathwayThresholdConditions(
+            ExemptionPathway.REGULATION_S, _list(address(nonUsPerson), address(regS)), true
+        );
 
         // Closing set (all pathways).
-        _addClosing(address(killSwitch));
-        _addClosing(address(timeSettlement));
-    }
-
-    function _addClosing(address condition) internal {
-        vm.prank(owner);
-        dm.addClosingCondition(condition);
+        dm.setClosingConditions(_list(address(killSwitch), address(timeSettlement)));
+        vm.stopPrank();
     }
 
     function _commonBuyerSetup(address buyer, string memory jurisdiction, bytes2 state) internal {
@@ -837,14 +841,15 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         return address(new ERC1967Proxy(impl, initData));
     }
 
-    function _addSpv(address condition) internal {
-        vm.prank(owner);
-        dm.addSpvThresholdCondition(condition);
+    function _list(address a) internal pure returns (address[] memory out) {
+        out = new address[](1);
+        out[0] = a;
     }
 
-    function _addPathway(ExemptionPathway pathway, address condition) internal {
-        vm.prank(owner);
-        dm.addPathwayThresholdCondition(pathway, condition);
+    function _list(address a, address b) internal pure returns (address[] memory out) {
+        out = new address[](2);
+        out[0] = a;
+        out[1] = b;
     }
 
     function _partyFields() internal pure returns (string[] memory f) {

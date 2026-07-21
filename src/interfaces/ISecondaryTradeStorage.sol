@@ -258,12 +258,13 @@ interface ISecondaryTradeStorage {
     error ExemptionPathwayRequired();
     /// @notice The buyer's elected pathway is not the one the sell offer pinned
     error ExemptionPathwayMismatch(ExemptionPathway offered, ExemptionPathway elected);
+    /// @notice This SPV does not support the pathway (never enabled, or since disabled). Distinct from a
+    /// supported pathway that happens to carry no Layer 1 conditions, which is allowed
+    error ExemptionPathwayNotEnabled(ExemptionPathway pathway);
     /// @notice Condition address supplied to a config setter is the zero address
     error InvalidSecondaryCondition();
     /// @notice Condition does not advertise ISecondaryTradingCondition via ERC-165 supportsInterface
     error SecondaryConditionInterfaceUnsupported(address condition);
-    /// @notice Condition is already present in the target list (sets are deduplicated)
+    /// @notice The supplied condition list names the same condition twice (lists are sets)
     error SecondaryConditionAlreadyExists();
-    /// @notice removeConditionAt index is past the end of the target list
-    error SecondaryConditionIndexOutOfBounds();
 }

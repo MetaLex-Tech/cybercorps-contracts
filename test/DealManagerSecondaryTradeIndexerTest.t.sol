@@ -296,6 +296,10 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         vm.prank(owner);
         auth.updateRole(address(dm), 99);
 
+        // Pathways this SPV supports; unenabled ones cannot be pinned or elected.
+        vm.prank(owner);
+        dm.setPathwayThresholdConditions(ExemptionPathway.SECTION_4A7, new address[](0), true);
+
         // Real seller Ledger Entry Token, minted through the IssuanceManager with UNITS represented.
         // Record the primary-issuance logs and index them, so the ledger opens with the original-issue row
         // (the seller's founding cert) and the shares-held baseline before any secondary trading.

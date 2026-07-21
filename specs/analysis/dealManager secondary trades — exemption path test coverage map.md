@@ -93,8 +93,11 @@ where the buyer elects at acceptance.
 | `test_RevertIf_UnpinnedOffer_BuyerElectsNoPathway`          | `NONE` at acceptance reverts `ExemptionPathwayRequired`; a settlement always has a real pathway                                                     |
 | `test_RevertIf_PinnedOffer_BuyerElectsAnotherPathway`       | A seller's pin restricts the election: a qualifying QIB electing 144A on a Rule 144 offer reverts `ExemptionPathwayMismatch`                        |
 
-Buy-side election rules (pathway required at `postOffer`, acceptor's election ignored) and the EIP-712
-binding of the elected pathway are covered in `DealManagerSecondaryTradeTest`.
+Buy-side election rules (pathway required at `postOffer`, acceptor's election ignored), the EIP-712 binding
+of the elected pathway, and the per-SPV pathway enablement gate are covered in
+`DealManagerSecondaryTradeTest`. That gate is why this suite's `setUp` enables all five pathways: an SPV
+must declare which pathways it supports, so an unconfigured one blocks trades instead of settling them with
+no Layer 1 checks.
 
 ## Test-fixture notes
 
