@@ -24,6 +24,13 @@ blocking behavior.
 pathway is per-settlement, so is its Layer 1 condition set: the offer snapshots only the SPV layer, and each
 settlement snapshots the exemption layer for the pathway its buyer elected.
 
+| Offer side    | Pathway set by                                  | NONE allowed?                          |
+|---------------|-------------------------------------------------|----------------------------------------|
+| SELL unpinned | buyer, at acceptOffer                           | at post yes; at accept never           |
+| SELL pinned   | seller restricts; buyer must elect the same one | mismatch -> ExemptionPathwayMismatch   |
+| BUY           | offeror (who is the buyer), at postOffer        | no -> ExemptionPathwayRequired;        |
+|               |                                                 | acceptor's election ignored            |
+
 ## Legend
 
 - ✓ real condition, enforced and passing
