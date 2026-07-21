@@ -75,7 +75,17 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     }
 
     // Called by proxy on deployment (if needed)
-    function initialize(string[] memory _defaultLegend, string memory name, string memory ticker, string memory _certificateUri, address _issuanceManager, SecurityClass _securityType, SecuritySeries _securitySeries, address _extension) external initializer {
+    function initialize(
+        string[] memory _defaultLegend,
+        string memory name,
+        string memory ticker,
+        string memory _certificateUri,
+        address _issuanceManager,
+        SecurityClass _securityType,
+        SecuritySeries _securitySeries,
+        address _extension,
+        bytes memory _seriesData
+    ) external initializer {
         __ERC721_init(name, ticker);
         __ERC721Enumerable_init_unchained();
         
@@ -87,6 +97,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         s.certificateUri = _certificateUri;
         s.endorsementRequired = true;
         s.extension = _extension;
+        s.seriesData = _seriesData;
     }
 
     function updateIssuanceManager(address _issuanceManager) external onlyIssuanceManager {
@@ -498,6 +509,25 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
 
     function setExtension(uint256 tokenId, address extension) external onlyIssuanceManager {
         CyberCertPrinterStorage.cyberCertStorage().extension = extension;
+    }
+
+    /// @notice Sets the series-scope extension data (this printer is the series scope).
+    /// Same pattern as per-cert extensionData; both payloads are decoded/rendered by the printer's
+    /// single `extension` contract (ICertificateExtensionV3-capable extensions handle the series section).
+    function setSeriesData(bytes memory _seriesData) external onlyIssuanceManagerOrAdmin {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        s.seriesData = _seriesData;
+        emit ICyberCertPrinter.SeriesDataSet(s.extension);
+    }
+
+    /// @notice Series-scope extension data: the shared extension contract and opaque payload.
+    function getSeriesInfo()
+        external
+        view
+        returns (address extension, bytes memory seriesData)
+    {
+        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        return (s.extension, s.seriesData);
     }
 
     function setTokenTransferable(uint256 tokenId, bool value) external onlyIssuanceManagerOrAdmin {

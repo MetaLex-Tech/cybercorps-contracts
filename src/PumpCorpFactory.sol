@@ -473,7 +473,8 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
                     _certData[i].uri,
                     _certData[i].securityClass,
                     _certData[i].securitySeries,
-                    _certData[i].extension
+                    _certData[i].extension,
+                    bytes("")
                 )
             );
             certPrinterAddress[i] = address(certPrinter);

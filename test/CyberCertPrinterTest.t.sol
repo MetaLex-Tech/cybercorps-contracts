@@ -258,7 +258,8 @@ contract CyberCertPrinterTest is Test {
                 address(issuanceManager),
                 SecurityClass.PreferredStock,
                 SecuritySeries.SeriesA,
-                initialExtension
+                initialExtension,
+                bytes("")
             )
         );
         printer = CyberCertPrinter(address(new ERC1967Proxy(address(implementation), initData)));
@@ -669,8 +670,7 @@ contract CyberCertPrinterTest is Test {
         printer.setExtension(0, address(ext));
 
         uint64 legacyAcq = 12345;
-        bytes memory fid =
-            abi.encode(FundInterestData({acquisitionDate: legacyAcq, tackedFromAcquisitionDate: 0, customProvisions: ""}));
+        bytes memory fid = _fundInterestBlob(legacyAcq);
         _mintCert(1, investor, 100, fid); // token 1: legacy (base timestamp cleared below)
         _mintCert(2, investor, 100, fid); // token 2: keeps its mint-time stamp
         uint64 mintStamp = printer.acquisitionTimestamp(2);
@@ -692,8 +692,7 @@ contract CyberCertPrinterTest is Test {
         vm.prank(address(issuanceManager));
         printer.setExtension(0, address(ext));
 
-        bytes memory fid =
-            abi.encode(FundInterestData({acquisitionDate: 12345, tackedFromAcquisitionDate: 0, customProvisions: ""}));
+        bytes memory fid = _fundInterestBlob(12345);
         _mintCert(1, investor, 100, fid);
         CyberCertPrinterEnhanced(address(printer)).debugClearAcquisitionTimestamp(1);
 
@@ -1192,6 +1191,13 @@ contract CyberCertPrinterTest is Test {
     ) private {
         vm.prank(address(issuanceManager));
         printer.safeMint(tokenId, to, _details(unitsRepresented, extensionData));
+    }
+
+    /// @dev Encoded FundInterestData with only acquisitionDate set; other fields default
+    function _fundInterestBlob(uint64 acquisitionDate) private pure returns (bytes memory) {
+        FundInterestData memory fid;
+        fid.acquisitionDate = acquisitionDate;
+        return abi.encode(fid);
     }
 
     function _details(

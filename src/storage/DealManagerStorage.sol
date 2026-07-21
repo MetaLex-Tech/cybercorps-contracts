@@ -79,6 +79,8 @@ library DealManagerStorage {
         SecurityClass securityClass;
         SecuritySeries securitySeries;
         address extension;
+        /// @notice Series-scope payload encoded by `extension`.
+        bytes seriesData;
         string[] defaultLegend;
     }
 

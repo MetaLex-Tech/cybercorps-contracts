@@ -187,6 +187,7 @@ contract CyberScripUpgradeForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesA,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: new string[](0)
         });
 
@@ -1503,7 +1504,8 @@ contract CyberScripUpgradeForkTest is Test {
                 "uri://cert",
                 SecurityClass.CommonStock,
                 SecuritySeries.SeriesA,
-                address(0)
+                address(0),
+                bytes("")
             )
         );
     }

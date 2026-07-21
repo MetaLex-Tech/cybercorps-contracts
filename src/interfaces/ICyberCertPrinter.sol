@@ -148,6 +148,7 @@ interface ICyberCertPrinter is IERC721 {
         string newOwnerName,
         uint64 acquisitionTimestamp
     );
+    event SeriesDataSet(address indexed extension);
 
     function initialize(
         string[] memory defaultLegend,
@@ -157,7 +158,8 @@ interface ICyberCertPrinter is IERC721 {
         address _issuanceManager,
         SecurityClass _securityType,
         SecuritySeries _securitySeries,
-        address _extension
+        address _extension,
+        bytes memory _seriesData
     ) external;
     function name() external view returns (string memory);
     function symbol() external view returns (string memory);
@@ -231,6 +233,11 @@ interface ICyberCertPrinter is IERC721 {
         uint256 tokenId
     ) external view returns (CertificateDetails memory);
     function getExtension(uint256 tokenId) external view returns (address);
+    function setSeriesData(bytes memory _seriesData) external;
+    function getSeriesInfo()
+        external
+        view
+        returns (address extension, bytes memory seriesData);
     function getIssuerSignatureCount(uint256 tokenId) external view returns (uint256);
     function getIssuerSignatureAt(uint256 tokenId, uint256 index) external view returns (bytes memory);
     function addCertLegend(uint256 tokenId, string memory newLegend) external;

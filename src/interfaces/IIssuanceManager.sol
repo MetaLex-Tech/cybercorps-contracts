@@ -115,7 +115,8 @@ interface IIssuanceManager {
         string memory _certificateUri,
         SecurityClass _securityType,
         SecuritySeries _securitySeries,
-        address _extension
+        address _extension,
+        bytes memory _seriesData
     ) external returns (address);
 
     function createCert(
@@ -285,6 +286,41 @@ interface IIssuanceManager {
         address certAddress,
         uint256 amount
     ) external;
+
+    // Class-level LET designations (classIds start at 1; 0 = unclassified)
+    event SecurityClassDefined(
+        uint256 indexed classId,
+        SecurityClass classType,
+        string documentURI,
+        address dataExtension
+    );
+    event SecurityClassUpdated(
+        uint256 indexed classId,
+        SecurityClass classType,
+        string documentURI,
+        address dataExtension
+    );
+    event PrinterClassAssigned(address indexed printer, uint256 indexed classId);
+
+    function defineSecurityClass(
+        SecurityClass _classType,
+        string memory _documentURI,
+        address _dataExtension,
+        bytes memory _classData
+    ) external returns (uint256 classId);
+
+    function updateSecurityClass(
+        uint256 _classId,
+        SecurityClass _classType,
+        string memory _documentURI,
+        address _dataExtension,
+        bytes memory _classData
+    ) external;
+
+    function setPrinterClass(address _printer, uint256 _classId) external;
+    function getSecurityClass(uint256 _classId) external view returns (SecurityClassInfo memory);
+    function getSecurityClassCount() external view returns (uint256);
+    function getPrinterClassId(address _printer) external view returns (uint256);
 
     // Beacon / Config Functions
     function CORP() external view returns (address);

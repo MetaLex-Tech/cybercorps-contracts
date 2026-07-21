@@ -57,7 +57,10 @@ import {ILexChexBadge} from "../interfaces/ILexChexBadge.sol";
 import "../interfaces/IUriBuilder.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import "./extensions/ICertificateExtension.sol";
-import {FundInterestData, FUND_INTEREST_EXTENSION_TYPE} from "./extensions/FundInterestExtension.sol";
+import {
+    FundInterestData,
+    FUND_INTEREST_EXTENSION_TYPE
+} from "./extensions/FundInterestExtension.sol";
 
 library CyberCertPrinterStorage {
     // Storage slot for our struct
@@ -127,6 +130,13 @@ library CyberCertPrinterStorage {
         uint256 lookThroughHolderCount;        // Σ holderAcct.weight over all live holders
         uint256 usLookThroughHolderCount;      // Σ holderAcct.weight over US-resident live holders (subset)
         address lookThroughBadge;              // ILexChexBadge sampled for look-through weight + US residency
+
+        // Series-scope extension data: the printer itself is the series scope, so this is a singleton
+        // (vs the per-token `certificateDetails[].extensionData`). Both payloads are decoded/rendered by
+        // the printer's single `extension` contract (ICertificateExtensionV3 handles cert- and series-scope
+        // sections). The class-level counterpart lives on the IssuanceManager (SecurityClassInfo registry
+        // + printerClassIds).
+        bytes seriesData;
     }
 
     // Returns the storage layout
@@ -530,16 +540,15 @@ library CyberCertPrinterStorage {
         auth.onlyRole(auth.ADMIN_ROLE(), msg.sender);
     }
 
-    /// @dev Rewrites only the Rule 144(d)(3) tacking anchor in the cert's FundInterestData, leaving every other
-    /// field (including acquisitionDate) untouched, then writes the re-encoded blob back through the same
-    /// reserved-units invariant updateCertificateDetails enforces. Guards on the FUND_INTEREST extension type
-    /// before decoding so it never misreads or clobbers another extension's extensionData.
+    /// @dev Rewrites only the Rule 144(d)(3) tacking anchor in the cert's FundInterestData, then writes
+    /// it back through the same reserved-units invariant.
     function updateTackedFromAcquisitionDate(uint256 tokenId, uint64 ts) external {
         CyberCertStorage storage s = cyberCertStorage();
         address ext = s.extension;
-        if (ext == address(0) || !ICertificateExtension(ext).supportsExtensionType(FUND_INTEREST_EXTENSION_TYPE)) {
-            revert ICyberCertPrinter.ExtensionTypeNotSupported();
-        }
+        if (
+            ext == address(0) ||
+            !ICertificateExtension(ext).supportsExtensionType(FUND_INTEREST_EXTENSION_TYPE)
+        ) revert ICyberCertPrinter.ExtensionTypeNotSupported();
         CertificateDetails memory details = getActiveCertificateDetails(tokenId);
         FundInterestData memory fid = abi.decode(details.extensionData, (FundInterestData));
         fid.tackedFromAcquisitionDate = ts;
@@ -619,7 +628,10 @@ library CyberCertPrinterStorage {
     function backfillAcquisitionTimestamp(uint256 startIndex, uint256 count) external {
         CyberCertStorage storage s = cyberCertStorage();
         address ext = s.extension;
-        if (ext == address(0) || !ICertificateExtension(ext).supportsExtensionType(FUND_INTEREST_EXTENSION_TYPE)) return;
+        if (
+            ext == address(0) ||
+            !ICertificateExtension(ext).supportsExtensionType(FUND_INTEREST_EXTENSION_TYPE)
+        ) return;
         ICyberCertPrinter self = ICyberCertPrinter(address(this)); // delegatecalled: address(this) is the printer
         uint256 supply = self.totalSupply();
         uint256 end = startIndex + count;

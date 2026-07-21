@@ -52,12 +52,10 @@ contract HoldingPeriodConditionTest is SecondaryConditionTestBase {
 
     function _sellPosting(uint64 anchor, uint64 tackedFrom) internal returns (bool) {
         cert.setAcquisitionTimestamp(1, anchor);
-        cert.setExtensionData(
-            1,
-            abi.encode(
-                FundInterestData({acquisitionDate: 0, tackedFromAcquisitionDate: tackedFrom, customProvisions: ""})
-            )
-        );
+        // Only the tacking anchor matters here; every other FundInterestData field stays default
+        FundInterestData memory fid;
+        fid.tackedFromAcquisitionDate = tackedFrom;
+        cert.setExtensionData(1, abi.encode(fid));
         dm.setOffer(OFFER_ID, _sellOffer());
         return hold.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, bytes32(0));
     }

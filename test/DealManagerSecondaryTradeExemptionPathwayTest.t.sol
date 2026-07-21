@@ -232,7 +232,8 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 "uri://cert",
                 SecurityClass.CommonStock,
                 SecuritySeries.SeriesA,
-                address(0)
+                address(0),
+                bytes("")
             )
         );
         sellerTokenId = im.createCertAndAssign(address(certPrinter), seller, _sellerCertDetails());
@@ -687,16 +688,18 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
             unitsRepresented: UNITS,
             legalDetails: "",
             // acquisitionDate left 0: the base per-lot acquisitionTimestamp (stamped at mint) is now the
-            // authoritative hold anchor; extensionData carries only the tacking anchor (unused here).
-            extensionData: abi.encode(
-                FundInterestData({acquisitionDate: 0, tackedFromAcquisitionDate: 0, customProvisions: ""})
-            )
+            // authoritative hold anchor; all FundInterestData fields stay default (unused here).
+            extensionData: abi.encode(_defaultFundInterestData())
         });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Small utilities
     // ─────────────────────────────────────────────────────────────────────────
+
+    function _defaultFundInterestData() internal pure returns (FundInterestData memory fid) {
+        // Memory struct default-init: zero dates, empty strings/arrays
+    }
 
     function _proxy(address impl, bytes memory initData) internal returns (address) {
         return address(new ERC1967Proxy(impl, initData));

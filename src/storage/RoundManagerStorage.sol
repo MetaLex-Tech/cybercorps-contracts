@@ -75,6 +75,8 @@ struct CyberCertData {
     SecurityClass securityClass;
     SecuritySeries securitySeries;
     address extension;
+    /// @notice Series-scope payload encoded by `extension`.
+    bytes seriesData;
     string[] defaultLegend;
 }
 
@@ -197,7 +199,8 @@ library RoundManagerStorage {
                     certData[i].uri,
                     certData[i].securityClass,
                     certData[i].securitySeries,
-                    certData[i].extension
+                    certData[i].extension,
+                    certData[i].seriesData
                 )
             );
             certPrinterAddresses[i] = address(certPrinter);

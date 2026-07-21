@@ -147,7 +147,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         ICyberCertPrinter cert = ICyberCertPrinter(
             issuanceManager.createCertPrinter(
                 new string[](0), "Cert", "CERT", "uri://cert",
-                SecurityClass.CommonStock, SecuritySeries.SeriesA, address(0)
+                SecurityClass.CommonStock, SecuritySeries.SeriesA, address(0), bytes("")
             )
         );
         CertificateDetails memory details = CertificateDetails({
@@ -318,10 +318,10 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     }
 
     // The admin can override a cert's Rule 144(d)(3) tacking anchor (tackedFromAcquisitionDate) inside the
-    // FundInterestData blob, leaving acquisitionDate and the other fields intact; non-admins cannot.
+    // FundInterestData blob, leaving acquisitionDate and affiliate status intact; non-admins cannot.
     function test_UpdateCertificateTackedFromAcquisitionDate_AdminOverrides() public {
         vm.warp(200 days);
-        ICyberCertPrinter cert = _deployPrinterWithFundInterestCert(UNITS, uint64(111 days), 0, "keep");
+        ICyberCertPrinter cert = _deployPrinterWithFundInterestCert(UNITS, uint64(111 days), 0, true);
 
         uint64 tacked = uint64(90 days);
         cert.updateCertificateTackedFromAcquisitionDate(0, tacked);
@@ -329,7 +329,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         FundInterestData memory fid = abi.decode(cert.getCertificateDetails(0).extensionData, (FundInterestData));
         assertEq(fid.tackedFromAcquisitionDate, tacked, "tacking anchor updated");
         assertEq(fid.acquisitionDate, uint64(111 days), "acquisitionDate preserved");
-        assertEq(fid.customProvisions, "keep", "other FundInterestData fields preserved");
+        assertTrue(fid.isAffiliateOrControlPerson, "other FundInterestData fields preserved");
 
         address notAdmin = makeAddr("notAdmin");
         uint256 adminRole = auth.ADMIN_ROLE();
@@ -355,14 +355,18 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         uint256 units,
         uint64 acquisitionDate,
         uint64 tackedFromAcquisitionDate,
-        string memory customProvisions
+        bool isAffiliateOrControlPerson
     ) internal returns (ICyberCertPrinter cert) {
         cert = ICyberCertPrinter(
             issuanceManager.createCertPrinter(
                 new string[](0), "Cert", "CERT", "uri://cert",
-                SecurityClass.CommonStock, SecuritySeries.SeriesA, address(new FundInterestExtension())
+                SecurityClass.CommonStock, SecuritySeries.SeriesA, address(new FundInterestExtension()), bytes("")
             )
         );
+        FundInterestData memory fid;
+        fid.acquisitionDate = acquisitionDate;
+        fid.tackedFromAcquisitionDate = tackedFromAcquisitionDate;
+        fid.isAffiliateOrControlPerson = isAffiliateOrControlPerson;
         CertificateDetails memory details = CertificateDetails({
             signingOfficerName: "Officer",
             signingOfficerTitle: "Title",
@@ -370,7 +374,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
             issuerUSDValuationAtTimeOfInvestment: 10000,
             unitsRepresented: units,
             legalDetails: "",
-            extensionData: abi.encode(FundInterestData(acquisitionDate, tackedFromAcquisitionDate, customProvisions))
+            extensionData: abi.encode(fid)
         });
         issuanceManager.createCertAndAssign(address(cert), seller, details);
     }
@@ -385,7 +389,8 @@ contract IssuanceManagerSecondaryTransferTest is Test {
                 "uri://cert",
                 SecurityClass.CommonStock,
                 SecuritySeries.SeriesA,
-                address(0)
+                address(0),
+                bytes("")
             )
         );
         CertificateDetails memory details = CertificateDetails({
