@@ -344,6 +344,7 @@ library CyberCorpHelper {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegend
         });
 
@@ -427,6 +428,7 @@ library CyberCorpHelper {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegend
         });
 
@@ -884,6 +886,7 @@ contract RoundManagerTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegend
         });
 
@@ -2115,6 +2118,7 @@ contract RoundManagerTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegend
         });
         bytes32 roundIdFuture;
@@ -2473,6 +2477,7 @@ contract RoundManagerTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: legendA
         });
         certData[1] = CyberCertData({
@@ -2482,6 +2487,7 @@ contract RoundManagerTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: legendB
         });
 
@@ -2753,6 +2759,7 @@ contract RoundManagerFCFSTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegend
         });
         string[] memory roundPartyValues = new string[](2);
@@ -3269,6 +3276,7 @@ contract CyberCorpFactoryPublicRoundTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegend
         });
 

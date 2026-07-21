@@ -154,6 +154,7 @@ contract PumpCorpFactoryForkTest is Test {
             securityClass:  SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesSeed,
             extension:      address(0),
+            seriesData:     bytes(""),
             defaultLegend:  legend
         }));
 
@@ -1352,6 +1353,7 @@ contract PumpCorpFactoryForkTest is Test {
             securityClass:  SecurityClass.CommonStock,  // ← different from signed
             securitySeries: SecuritySeries.SeriesA,     // ← different from signed
             extension:      address(0),
+            seriesData:     bytes(""),
             defaultLegend:  legend
         });
 
@@ -1416,6 +1418,7 @@ contract PumpCorpFactoryForkTest is Test {
             securityClass:  SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesSeed,
             extension:      address(0),
+            seriesData:     bytes(""),
             defaultLegend:  legend
         });
 

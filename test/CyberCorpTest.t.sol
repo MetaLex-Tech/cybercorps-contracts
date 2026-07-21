@@ -4159,6 +4159,7 @@ contract CyberCorpForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegend
         });
 
@@ -4321,6 +4322,7 @@ contract CyberCorpForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: safeLegend
         });
         certData[1] = DealManagerStorage.CyberCertData({
@@ -4330,6 +4332,7 @@ contract CyberCorpForkTest is Test {
             securityClass: SecurityClass.TokenWarrant,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: warrantLegend
         });
 
@@ -4517,6 +4520,7 @@ contract CyberCorpForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegend
         });
 

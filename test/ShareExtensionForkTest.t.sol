@@ -484,6 +484,7 @@ contract ShareExtensionForkTest is Test {
             securityClass: SecurityClass.PreferredStock,
             securitySeries: SecuritySeries.SeriesA,
             extension: address(shareExtension),
+            seriesData: bytes(""),
             defaultLegend: legend
         });
 
