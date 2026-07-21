@@ -853,17 +853,14 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         assertEq(s.status, uint8(c.status), "settlement status");
         assertEq(s.feeDestination, c.feeDestination, "settlement feeDestination");
         assertEq(s.exemptionPathway, uint8(c.exemptionPathway), "settlement exemptionPathway");
+        // The Layer 1 set has no on-chain counterpart (conditions resolve live), so the indexed value is
+        // checked against the config the settlement's pathway points at.
+        address[] memory configured = dm.getPathwayThresholdConditions(c.exemptionPathway);
         assertEq(
-            s.pathwayThresholdConditions.length,
-            c.pathwayThresholdConditions.length,
-            "settlement pathwayThresholdConditions length"
+            s.pathwayThresholdConditions.length, configured.length, "settlement pathwayThresholdConditions length"
         );
-        for (uint256 i = 0; i < c.pathwayThresholdConditions.length; i++) {
-            assertEq(
-                s.pathwayThresholdConditions[i],
-                c.pathwayThresholdConditions[i],
-                "settlement pathwayThresholdCondition"
-            );
+        for (uint256 i = 0; i < configured.length; i++) {
+            assertEq(s.pathwayThresholdConditions[i], configured[i], "settlement pathwayThresholdCondition");
         }
     }
 

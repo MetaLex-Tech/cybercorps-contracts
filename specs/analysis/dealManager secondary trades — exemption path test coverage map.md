@@ -24,12 +24,12 @@ blocking behavior.
 pathway is per-settlement, so is its Layer 1 condition set: the offer snapshots only the SPV layer, and each
 settlement snapshots the exemption layer for the pathway its buyer elected.
 
-| Offer side    | Pathway set by                                  | NONE allowed?                          |
-|---------------|-------------------------------------------------|----------------------------------------|
-| SELL unpinned | buyer, at acceptOffer                           | at post yes; at accept never           |
-| SELL pinned   | seller restricts; buyer must elect the same one | mismatch -> ExemptionPathwayMismatch   |
-| BUY           | offeror (who is the buyer), at postOffer        | no -> ExemptionPathwayRequired;        |
-|               |                                                 | acceptor's election ignored            |
+| Offer side    | Pathway set by                                  | NONE allowed?                        |
+|---------------|-------------------------------------------------|--------------------------------------|
+| SELL unpinned | buyer, at acceptOffer                           | at post yes; at accept never         |
+| SELL pinned   | seller restricts; buyer must elect the same one | mismatch -> ExemptionPathwayMismatch |
+| BUY           | offeror (who is the buyer), at postOffer        | no -> ExemptionPathwayRequired;      |
+|               |                                                 | acceptor's election ignored          |
 
 ## Legend
 
@@ -93,12 +93,12 @@ settlement period).
 The five happy paths above run on offers that pin their pathway. These cover the unpinned (`NONE`) shape,
 where the buyer elects at acceptance.
 
-| Test fn                                                     | What it proves                                                                                                                                     |
-|-------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
-| `test_UnpinnedOffer_BuyersElectDifferentPathways`           | One unpinned offer, two half-fills: a QIB elects 144A and an accredited buyer elects §4(a)(7); each settlement snapshots only its own pathway's Layer 1 set, and both finalize |
-| `test_RevertIf_UnpinnedOffer_BuyerElectsPathwayTheyDoNotQualifyFor` | An accredited non-QIB electing 144A is stopped at acceptance by the QIB condition — the layer an unpinned offer never ran at posting        |
-| `test_RevertIf_UnpinnedOffer_BuyerElectsNoPathway`          | `NONE` at acceptance reverts `ExemptionPathwayRequired`; a settlement always has a real pathway                                                     |
-| `test_RevertIf_PinnedOffer_BuyerElectsAnotherPathway`       | A seller's pin restricts the election: a qualifying QIB electing 144A on a Rule 144 offer reverts `ExemptionPathwayMismatch`                        |
+| Test fn                                                             | What it proves                                                                                                                                                                 |
+|---------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `test_UnpinnedOffer_BuyersElectDifferentPathways`                   | One unpinned offer, two half-fills: a QIB elects 144A and an accredited buyer elects §4(a)(7); each settlement snapshots only its own pathway's Layer 1 set, and both finalize |
+| `test_RevertIf_UnpinnedOffer_BuyerElectsPathwayTheyDoNotQualifyFor` | An accredited non-QIB electing 144A is stopped at acceptance by the QIB condition — the layer an unpinned offer never ran at posting                                           |
+| `test_RevertIf_UnpinnedOffer_BuyerElectsNoPathway`                  | `NONE` at acceptance reverts `ExemptionPathwayRequired`; a settlement always has a real pathway                                                                                |
+| `test_RevertIf_PinnedOffer_BuyerElectsAnotherPathway`               | A seller's pin restricts the election: a qualifying QIB electing 144A on a Rule 144 offer reverts `ExemptionPathwayMismatch`                                                   |
 
 Buy-side election rules (pathway required at `postOffer`, acceptor's election ignored), the EIP-712 binding
 of the elected pathway, and the per-SPV pathway enablement gate are covered in

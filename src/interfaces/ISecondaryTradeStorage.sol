@@ -91,8 +91,8 @@ struct Offer {
     HostingMode buyerHostingMode;   // buy offer-only: Direct or Administered; defaults to Direct for sell offers
     address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
     bytes32[] settlementAgreementIds; // appended at each acceptOffer; length == 0 at postOffer (no buyer known yet)
-    address[] thresholdConditions;    // SPV layer (§6) only, snapshotted at postOffer; the exemption layer (§5) is per-settlement, on SecondaryEscrow
-    address[] closingConditions;      // snapshotted from DealManager config at postOffer; evaluated at finalize (gates asset transfer)
+    address[] thresholdConditions;    // resolved set snapshotted at postOffer (§6, ++ §5 when the offer pins a pathway); per-settlement sets live on SecondaryEscrow
+    address[] closingConditions;      // closing set snapshotted at postOffer; a record — finalize evaluates the live set (gates asset transfer)
 }
 
 // Per-settlement escrow for secondary trades, keyed by settlementAgreementId.
@@ -112,9 +112,10 @@ struct SecondaryEscrow {
     HostingMode buyerHostingMode;   // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
     address adminMultisig;          // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
     bytes openEndorsementSig;       // redundant for sell offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
-    // exemption pathway, resolved per settlement: the buyer's choice on a sell offer, the offer's own on a buy offer
-    ExemptionPathway exemptionPathway;      // never NONE; this is the pathway the trade actually settles under
-    address[] pathwayThresholdConditions;   // Layer 1 (§5) for `exemptionPathway`, resolved at acceptOffer; re-evaluated at finalize
+    // Exemption terms of this lot. Per-settlement because two buyers of the same sell offer can elect
+    // different pathways, and so resolve different threshold sets — neither of which the shared Offer can hold.
+    ExemptionPathway exemptionPathway;  // never NONE; the pathway this trade settles under. Load-bearing: selects the Layer 1 (§5) conditions at accept/finalize and is stamped into the cert's deal metadata
+    address[] thresholdConditions;      // full resolved set (§6 ++ §5 for `exemptionPathway`) as of this settlement's last check; a record, checks resolve live
 }
 
 struct PostOfferParams {
@@ -200,10 +201,11 @@ interface ISecondaryTradeStorage {
         HostingMode buyerHostingMode,
         address adminMultisig,
         bytes openEndorsementSig,
-        // the settlement's resolved exemption pathway and the Layer 1 (§5) conditions it pulled in; both are
-        // per-settlement, so OfferPosted cannot carry them for an unpinned offer
+        // The settlement's elected pathway and the full set that pathway resolved to at acceptance.
+        // Per-settlement, so OfferPosted cannot carry them: two buyers of one unpinned offer can elect
+        // different pathways. A point-in-time record — conditions resolve live at each check.
         ExemptionPathway exemptionPathway,
-        address[] pathwayThresholdConditions
+        address[] thresholdConditions
     );
     event SecondaryTradeAgreementFinalized(bytes32 indexed agreementId, address seller, address buyer, uint256 units, uint256 consideration);
     event SecondaryTradeAgreementVoided(bytes32 indexed agreementId);
