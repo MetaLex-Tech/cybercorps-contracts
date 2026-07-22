@@ -1572,6 +1572,82 @@ contract DealManagerSecondaryTradeTest is Test {
         );
     }
 
+    /// @notice PoC: with min thresholds disabled (defaults), floored pro-rata consideration can be 0 for a
+    /// positive-unit non-exhausting fill. Buyer finalizes and receives units while seller is paid nothing;
+    /// the full consideration is shoved onto the last lot.
+    ///
+    /// Math: offer.units=100, consideration=50 → fill of 1 yields `50 * 1 / 100 == 0`.
+    function test_PoC_ZeroConsiderationPartialFill_FreeUnits() public {
+        // Arrange: priced so any 1-unit non-final fill floors to zero payment.
+        // (Default CONSIDERATION=10 ether would still pay dust on a 1-unit fill.)
+        uint256 offerUnits = UNITS; // 100
+        uint256 offerConsideration = 50; // 50 * 1 / 100 = 0
+        assertEq(offerConsideration * 1 / offerUnits, 0, "precondition: pro-rata floors to zero");
+
+        PostOfferParams memory post = _defaultSellOfferParams();
+        post.units = offerUnits;
+        post.consideration = offerConsideration;
+        post.salt = uint256(keccak256("pocZeroConsideration"));
+
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(post);
+
+        uint256 sellerBefore = paymentToken.balanceOf(seller);
+        uint256 buyerBefore = paymentToken.balanceOf(buyer);
+
+        // Act: take 99 units as ninety-nine free 1-unit lots (each floors to 0 payment).
+        bytes32[] memory freeSettlements = new bytes32[](offerUnits - 1);
+        for (uint256 i = 0; i < offerUnits - 1; i++) {
+            freeSettlements[i] = _acceptSellOfferPartial(offerId, 1);
+            assertEq(
+                dm.getSecondaryEscrow(freeSettlements[i]).paymentAmount,
+                0,
+                "non-exhausting 1-unit fill must record zero consideration"
+            );
+        }
+
+        Offer memory mid = dm.getOffer(offerId);
+        assertEq(mid.unitsAccepted, offerUnits - 1, "nearly all units accepted for free");
+        assertEq(mid.paymentAccepted, 0, "no consideration credited yet");
+        assertEq(paymentToken.balanceOf(buyer), buyerBefore, "buyer paid nothing for free lots");
+        assertEq(paymentToken.balanceOf(address(dm)), 0, "no SELL custody for zero-payment lots");
+
+        // Finalize one free lot: ownership moves, seller still unpaid.
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(freeSettlements[0]);
+
+        assertEq(
+            uint8(dm.getSecondaryEscrow(freeSettlements[0]).status),
+            uint8(SecondaryEscrowStatus.FINALIZED),
+            "zero-payment lot finalizes"
+        );
+        assertEq(paymentToken.balanceOf(seller), sellerBefore, "seller unpaid for free lot");
+        assertEq(certPrinter.balanceOf(buyer), 1, "buyer received a cert for free units");
+        assertEq(
+            certPrinter.getCertificateDetails(certPrinter.tokenOfOwnerByIndex(buyer, 0)).unitsRepresented,
+            1,
+            "free lot minted 1 unit to buyer"
+        );
+
+        // Last unit: exhausting fill pays the entire leftover consideration (50).
+        bytes32 paidSettlement = _acceptSellOfferPartial(offerId, 1);
+        assertEq(
+            dm.getSecondaryEscrow(paidSettlement).paymentAmount,
+            offerConsideration,
+            "exhausting fill takes full leftover consideration"
+        );
+        assertEq(
+            paymentToken.balanceOf(buyer),
+            buyerBefore - offerConsideration,
+            "buyer only pays on the last unit"
+        );
+
+        Offer memory done = dm.getOffer(offerId);
+        assertEq(uint8(done.status), uint8(OfferStatus.FULLY_ACCEPTED));
+        assertEq(done.unitsAccepted, offerUnits);
+        assertEq(done.paymentAccepted, offerConsideration);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // cancelOffer — sell
     // ─────────────────────────────────────────────────────────────────────────
