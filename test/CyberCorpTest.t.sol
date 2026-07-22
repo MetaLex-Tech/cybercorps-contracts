@@ -330,6 +330,35 @@ contract CyberCorpForkTest is Test {
         vm.stopPrank();
     }
 
+    /// @dev Mirrors createContract's contractId preimage for agreements created through
+    /// deployCyberCorpAndCreateOffer. The finalizer is the DealManager the factory is about to
+    /// deploy, so predict its CREATE2 address from the corp salt. `expiry` is not part of the id.
+    function _expectedAgreementId(
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        bytes32 secretHash
+    ) internal view returns (bytes32) {
+        address dealManager = DealManagerFactory(cyberCorpFactory.dealManagerFactory())
+            .computeDealManagerAddress(keccak256(abi.encodePacked(salt)));
+        return _expectedAgreementId(templateId, salt, globalValues, parties, secretHash, dealManager);
+    }
+
+    /// @dev Same preimage, for flows where the finalizing DealManager already exists.
+    function _expectedAgreementId(
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        bytes32 secretHash,
+        address finalizer
+    ) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer)
+        );
+    }
+
     function testOffer() public {
         CertificateDetails[] memory _details = new CertificateDetails[](1);
         CertificateDetails memory _detailsA = CertificateDetails({
@@ -360,14 +389,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -454,14 +476,7 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Counter Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -601,14 +616,7 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Counter Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -773,14 +781,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -892,14 +893,7 @@ contract CyberCorpForkTest is Test {
             block.timestamp + 1000000
         );
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0), address(testAddress));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -989,14 +983,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -1122,14 +1109,7 @@ contract CyberCorpForkTest is Test {
         // Create secret hash from "passphrase"
         bytes32 secretHash = keccak256(abi.encodePacked("passphrase"));
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, secretHash);
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -1258,14 +1238,7 @@ contract CyberCorpForkTest is Test {
         // Create secret hash from "passphrase"
         bytes32 secretHash = keccak256(abi.encode("passphrase"));
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -1415,14 +1388,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -1520,14 +1486,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -1655,14 +1614,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -1760,14 +1712,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -1868,14 +1813,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -1963,14 +1901,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -2092,14 +2023,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -2226,14 +2150,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -2373,14 +2290,7 @@ contract CyberCorpForkTest is Test {
 
         bytes32 secretHash = keccak256(abi.encodePacked("passphrase"));
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, secretHash);
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -2504,14 +2414,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -2664,14 +2567,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0][3] = "Limited Liability Company";
         partyValues[0][4] = "Delaware";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(2)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(2)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -2918,14 +2814,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0][3] = "Limited Liability Company";
         partyValues[0][4] = "Delaware";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(2)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(2)), block.timestamp, globalValues, parties, bytes32(0));
 
         address[] memory extensions = new address[](1);
         extensions[0] = warrantExtension;
@@ -3177,9 +3066,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -3291,14 +3178,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -3415,14 +3295,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -3549,14 +3422,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -3680,14 +3546,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -3993,14 +3852,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0][3] = "Limited Liability Company";
         partyValues[0][4] = "Delaware";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(2)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(2)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -4169,14 +4021,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0][0] = "Party Value 1";
 
         // Create signature
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0), dealManagerAddr);
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -4340,14 +4185,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0][0] = "Party Value 1";
 
         // Create signature
-        bytes32 contractId = keccak256(
-            abi.encode(
-                templateId,
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(templateId, block.timestamp, globalValues, parties, bytes32(0), dealManagerAddr);
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -4525,14 +4363,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                templateId,
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(templateId, block.timestamp, globalValues, parties, bytes32(0), dealManagerAddr);
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -4648,14 +4479,7 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Counter Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -4796,14 +4620,7 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Counter Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -4940,14 +4757,7 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Counter Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -5101,14 +4911,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0][0] = "Investor Party Value";
 
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                templateId,
-                1337, // salt
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(templateId, 1337, globalValues, parties, bytes32(0), address(lexchexMinter));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -5195,13 +4998,8 @@ contract CyberCorpForkTest is Test {
         dealPartyValues[1] = new string[](1);
         dealPartyValues[1][0] = "Deal Counter Party Value 1";
 
-        bytes32 dealContractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                dealGlobalValues,
-                dealParties
-            )
+        bytes32 dealContractId = _expectedAgreementId(
+            bytes32(uint256(1)), block.timestamp, dealGlobalValues, dealParties, bytes32(0)
         );
 
         bytes memory dealSignature = CyberAgreementUtils.signAgreementTypedData(
@@ -5353,14 +5151,7 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Principal Party Value";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -5539,14 +5330,7 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Principal Party Value";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";

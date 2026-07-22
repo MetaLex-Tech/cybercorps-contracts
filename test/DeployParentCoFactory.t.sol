@@ -52,6 +52,7 @@ contract DeployParentCoFactoryForkTest is Test {
         deps = DeploymentConstants.deps(block.chainid);
 
         registry = CyberAgreementRegistry(coreDeployment.cyberAgreementRegistry);
+        CyberAgreementUtils.upgradeRegistry(vm, address(registry), coreDeployment.metalexSafe);
 
         (deployer, deployerPrivKey) = makeAddrAndKey("deployer");
 

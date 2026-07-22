@@ -42,8 +42,24 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import {Vm} from "forge-std/Test.sol";
+import {CyberAgreementRegistry} from "../../src/CyberAgreementRegistry.sol";
+
+interface IRegistryUUPS {
+    function upgradeToAndCall(address newImplementation, bytes calldata data) external payable;
+}
 
 library CyberAgreementUtils {
+    /// @notice Points a live (forked) registry at this repo's implementation.
+    /// @dev Fork tests run against the deployed registry, whose contractId preimage predates the
+    /// secretHash/finalizer binding. Without this the helpers here derive a different id than the
+    /// on-chain code and every signature fails to verify. Upgrading makes the fork exercise the
+    /// implementation under test rather than pinning tests to the old preimage.
+    function upgradeRegistry(Vm vm, address registry, address owner) internal {
+        address newImpl = address(new CyberAgreementRegistry());
+        vm.prank(owner);
+        IRegistryUUPS(registry).upgradeToAndCall(newImpl, "");
+    }
+
     function signAgreementTypedData(
         Vm vm,
         bytes32 _domainSeparator,

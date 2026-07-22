@@ -717,7 +717,10 @@ contract ShareExtensionForkTest is Test {
         parties[0] = officer;
         parties[1] = investor;
 
-        bytes32 contractId = keccak256(abi.encode(TEMPLATE_ID, salt, _globalValues(), parties));
+        // Mirrors createContract's preimage: secretHash (bytes32(0) at the submitEOI call site) and
+        // the finalizer (the RoundManager). `expiry` is deliberately not part of the id.
+        bytes32 contractId =
+            keccak256(abi.encode(TEMPLATE_ID, salt, _globalValues(), parties, bytes32(0), address(roundManager)));
 
         return CyberAgreementUtils.signAgreementTypedData(
             vm,

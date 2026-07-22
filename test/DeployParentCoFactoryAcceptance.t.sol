@@ -42,6 +42,7 @@ contract DeployParentCoFactoryAcceptanceForkTest is Test {
         (subCorpOfficer, subCorpOfficerPrivKey) = makeAddrAndKey("subCorpOfficer");
 
         registry = CyberAgreementRegistry(coreDeployment.cyberAgreementRegistry);
+        CyberAgreementUtils.upgradeRegistry(vm, address(registry), coreDeployment.metalexSafe);
 
         parentCoFactory = ParentCoFactory(umiaDeployment.parentCoFactory);
 

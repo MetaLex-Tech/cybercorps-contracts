@@ -143,6 +143,8 @@ contract CyberScripUpgradeForkTest is Test {
             deployment.issuanceManagerFactory
         );
 
+        CyberAgreementUtils.upgradeRegistry(vm, address(registry), METALEX_SAFE);
+
         address stable = corpFactory.stable();
         assertTrue(stable != address(0), "stable token not configured");
 
