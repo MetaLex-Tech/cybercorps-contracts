@@ -67,8 +67,18 @@ contract RoundManagerFCFSForkTest is Test {
     using RoundLib for Round;
     using RoundManagerStorage for RoundManagerStorage.RoundManagerData;
 
+    LeXcheXMinter constant LEXCHEX_MINTER = LeXcheXMinter(0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960);
+
     function setUp() public {
         vm.createSelectFork("base_sepolia");
+        // The LeXcheX minter's registry is the live deployment, whose contractId preimage predates
+        // the secretHash/finalizer binding. Upgrade it here (outside any prank) so the auto-mint
+        // signatures these tests build verify against the implementation under test.
+        CyberAgreementUtils.upgradeRegistry(
+            vm,
+            LEXCHEX_MINTER.dealRegistry(),
+            DeploymentConstants.coreV2(block.chainid).metalexSafe
+        );
     }
 
     function test_RevertIf_FCFS_SubmitEOI_FailLexChexCondition() public {
@@ -261,7 +271,7 @@ contract RoundManagerFCFSForkTest is Test {
             lxPartyValues[0][2] = eoi.jurisdiction;
             lxPartyValues[0][3] = eoi.contact;
 
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter), block.timestamp + 30 days));
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter)));
             bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 lxRegistry.DOMAIN_SEPARATOR(),
@@ -419,7 +429,7 @@ contract RoundManagerFCFSForkTest is Test {
             lxPartyValues[0][2] = eoi.jurisdiction;
             lxPartyValues[0][3] = eoi.contact;
 
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter), block.timestamp + 30 days));
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter)));
             bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 lxRegistry.DOMAIN_SEPARATOR(),
@@ -479,7 +489,7 @@ contract RoundManagerFCFSForkTest is Test {
             lxPartyValues[0][3] = eoi.contact;        // investorContact
 
             // Compute agreementId and signature for the LeXcheX agreement
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter), block.timestamp + 30 days));
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter)));
             bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 lxRegistry.DOMAIN_SEPARATOR(),
@@ -636,7 +646,7 @@ contract RoundManagerFCFSForkTest is Test {
             lxPartyValues[0][2] = eoi.jurisdiction;
             lxPartyValues[0][3] = eoi.contact;
 
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter), block.timestamp + 30 days));
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter)));
             bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 lxRegistry.DOMAIN_SEPARATOR(),
@@ -739,7 +749,7 @@ contract RoundManagerFCFSForkTest is Test {
             lxPartyValues[0][2] = eoi.jurisdiction;
             lxPartyValues[0][3] = eoi.contact;
 
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter), block.timestamp + 30 days));
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter)));
             bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 lxRegistry.DOMAIN_SEPARATOR(),
@@ -822,6 +832,7 @@ contract RoundManagerFCFSForkTest is Test {
         address investor = vm.addr(INVESTOR_PK);
 
         CyberAgreementRegistry registry = CyberAgreementRegistry(net.cyberAgreementRegistry);
+        CyberAgreementUtils.upgradeRegistry(vm, address(registry), net.metalexSafe);
         CyberCorpFactory cyberCorpFactory = CyberCorpFactory(net.cyberCorpFactory);
         CyberCorpSingleFactory cyberCorpSingleFactory = CyberCorpSingleFactory(cyberCorpFactory.cyberCorpSingleFactory());
         RoundManagerFactory roundManagerFactory = RoundManagerFactory(cyberCorpFactory.roundManagerFactory());

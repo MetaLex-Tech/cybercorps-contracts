@@ -107,8 +107,7 @@ contract CyberAgreementRegistryTest is Test {
             testGlobalValues,
             testParties,
             bytes32(0),
-            address(0),
-            block.timestamp + 10));
+            address(0)));
 
         vm.startPrank(alice);
         bytes32 agreementId = registry.createStandaloneContractAndSign(
@@ -377,8 +376,7 @@ contract CyberAgreementRegistryTest is Test {
             testGlobalValues,
             testParties,
             bytes32(0),
-            address(0),
-            block.timestamp + 10));
+            address(0)));
 
         vm.startPrank(alice);
         bytes32 agreementId = registry.createStandaloneContractAndSign(
@@ -431,8 +429,7 @@ contract CyberAgreementRegistryTest is Test {
             testGlobalValues,
             testParties,
             bytes32(0),
-            address(0),
-            block.timestamp + 10));
+            address(0)));
 
         vm.startPrank(alice);
         bytes32 agreementId = registry.createStandaloneContractAndSign(
@@ -684,8 +681,7 @@ contract CyberAgreementRegistryTest is Test {
             testGlobalValues,
             testParties,
             bytes32(0),
-            address(0),
-            block.timestamp + 10));
+            address(0)));
 
         vm.startPrank(alice);
         bytes32 agreementId = registry.createStandaloneContractAndSign(
@@ -729,8 +725,7 @@ contract CyberAgreementRegistryTest is Test {
             testGlobalValues,
             testParties,
             bytes32(0),
-            address(0),
-            block.timestamp + 10));
+            address(0)));
 
         vm.startPrank(deployer); // third-party
         bytes32 agreementId = registry.createStandaloneContractAndSignFor(
@@ -783,8 +778,7 @@ contract CyberAgreementRegistryTest is Test {
             testGlobalValues,
             testParties,
             bytes32(0),
-            address(0),
-            block.timestamp + 10));
+            address(0)));
 
         vm.startPrank(bob);
         bytes32 agreementId = registry.createStandaloneContractAndSignFor(
@@ -828,8 +822,7 @@ contract CyberAgreementRegistryTest is Test {
             testGlobalValues,
             testParties,
             bytes32(0),
-            address(0),
-            block.timestamp + 10));
+            address(0)));
         bytes32 agreementId0 = registry.createStandaloneContractAndSign(
             testTitle,
             testLegalContractUri,
@@ -862,8 +855,7 @@ contract CyberAgreementRegistryTest is Test {
             testGlobalValues,
             testParties,
             bytes32(0),
-            address(0),
-            block.timestamp + 10));
+            address(0)));
         bytes32 agreementId1 = registry.createStandaloneContractAndSign(
             testTitle,
             testLegalContractUri,
@@ -894,7 +886,7 @@ contract CyberAgreementRegistryTest is Test {
     }
 
     // ===== AUDIT: instantiation-hijack via front-running is blocked =====
-    // contractId now = keccak256(templateId, salt, globalValues, parties, secretHash, finalizer, expiry).
+    // contractId now = keccak256(templateId, salt, globalValues, parties, secretHash, finalizer).
     // An attacker who front-runs createContract with the same (templateId, salt, globalValues, parties)
     // but hostile lifecycle params gets a DIFFERENT contractId, so it can neither collide with the
     // victim's intended instance nor accept the victim's signature. Each test isolates one field.
@@ -904,11 +896,10 @@ contract CyberAgreementRegistryTest is Test {
         uint256 salt,
         address[] memory parties,
         bytes32 secretHash,
-        address finalizer,
-        uint256 expiry
+        address finalizer
     ) internal view returns (bytes32) {
         return keccak256(abi.encode(
-            expectedStandaloneTemplateId, salt, testGlobalValues, parties, secretHash, finalizer, expiry
+            expectedStandaloneTemplateId, salt, testGlobalValues, parties, secretHash, finalizer
         ));
     }
 
@@ -923,7 +914,7 @@ contract CyberAgreementRegistryTest is Test {
         string[][] memory partyValues = new string[][](1);
         partyValues[0] = testPartyValues[0];
 
-        bytes32 victimId = _standaloneId(salt, parties, bytes32(0), address(0), expiry);
+        bytes32 victimId = _standaloneId(salt, parties, bytes32(0), address(0));
         bytes memory aliceSig = CyberAgreementUtils.signAgreementTypedData(
             vm, registry.DOMAIN_SEPARATOR(), registry.SIGNATUREDATA_TYPEHASH(),
             victimId, testLegalContractUri, testGlobalFields, testPartyFields,
@@ -952,9 +943,13 @@ contract CyberAgreementRegistryTest is Test {
         assertTrue(registry.isFinalized(agreementId), "victim's no-finalizer agreement auto-finalizes");
     }
 
-    /// @notice A hostile expiry yields a different contractId, so it cannot pre-empt the victim's instance.
-    function test_AUDIT_frontRunExpiryCannotHijack() public {
-        uint256 salt = uint256(keccak256("test_AUDIT_frontRunExpiryCannotHijack"));
+    /// @notice `expiry` is NOT bound into contractId, so a front-runner CAN squat the victim's id with a
+    /// hostile expiry. This is an accepted trade-off: binding it would make presigned flows unusable,
+    /// because callers derive expiry from block.timestamp and an off-chain signer cannot predict it.
+    /// The squat is a denial-of-service (victim's create reverts), not a signature hijack: the victim
+    /// never signs the attacker's instance, and `salt` lets them retry on a fresh id.
+    function test_AUDIT_frontRunExpirySquatsIdButCannotStealSignature() public {
+        uint256 salt = uint256(keccak256("test_AUDIT_frontRunExpirySquatsId"));
         uint256 expiry = block.timestamp + 10;
 
         address[] memory parties = new address[](1);
@@ -962,14 +957,9 @@ contract CyberAgreementRegistryTest is Test {
         string[][] memory partyValues = new string[][](1);
         partyValues[0] = testPartyValues[0];
 
-        bytes32 victimId = _standaloneId(salt, parties, bytes32(0), address(0), expiry);
-        bytes memory aliceSig = CyberAgreementUtils.signAgreementTypedData(
-            vm, registry.DOMAIN_SEPARATOR(), registry.SIGNATUREDATA_TYPEHASH(),
-            victimId, testLegalContractUri, testGlobalFields, testPartyFields,
-            testGlobalValues, partyValues[0], alicePrivateKey
-        );
+        bytes32 victimId = _standaloneId(salt, parties, bytes32(0), address(0));
 
-        // Attacker front-runs with a different expiry -> different contractId, no collision
+        // Attacker front-runs with a different expiry -> SAME contractId, so the id is taken
         vm.startPrank(chad);
         registry.createTemplate(
             expectedStandaloneTemplateId, testTitle, testLegalContractUri, testGlobalFields, testPartyFields
@@ -979,14 +969,36 @@ contract CyberAgreementRegistryTest is Test {
             bytes32(0), address(0), block.timestamp + 1000
         );
         vm.stopPrank();
-        assertNotEq(attackerId, victimId, "hostile expiry must not collide with the intended id");
+        assertEq(attackerId, victimId, "expiry is not bound, so the ids collide");
 
+        bytes memory aliceSig = CyberAgreementUtils.signAgreementTypedData(
+            vm, registry.DOMAIN_SEPARATOR(), registry.SIGNATUREDATA_TYPEHASH(),
+            victimId, testLegalContractUri, testGlobalFields, testPartyFields,
+            testGlobalValues, partyValues[0], alicePrivateKey
+        );
+
+        // The victim's own creation reverts rather than silently adopting the attacker's terms
         vm.prank(alice);
-        bytes32 agreementId = registry.createStandaloneContractAndSign(
+        vm.expectRevert(CyberAgreementRegistry.ContractAlreadyExists.selector);
+        registry.createStandaloneContractAndSign(
             testTitle, testLegalContractUri, testGlobalFields, testPartyFields,
             salt, testGlobalValues, parties, partyValues, expiry, aliceSig
         );
-        assertEq(agreementId, victimId, "victim gets the intended contractId");
+
+        // A fresh salt sidesteps the squatted id entirely
+        uint256 freshSalt = salt + 1;
+        bytes32 freshId = _standaloneId(freshSalt, parties, bytes32(0), address(0));
+        bytes memory aliceFreshSig = CyberAgreementUtils.signAgreementTypedData(
+            vm, registry.DOMAIN_SEPARATOR(), registry.SIGNATUREDATA_TYPEHASH(),
+            freshId, testLegalContractUri, testGlobalFields, testPartyFields,
+            testGlobalValues, partyValues[0], alicePrivateKey
+        );
+        vm.prank(alice);
+        bytes32 agreementId = registry.createStandaloneContractAndSign(
+            testTitle, testLegalContractUri, testGlobalFields, testPartyFields,
+            freshSalt, testGlobalValues, parties, partyValues, expiry, aliceFreshSig
+        );
+        assertEq(agreementId, freshId, "victim gets the intended contractId on a fresh salt");
         assertTrue(registry.isFinalized(agreementId), "victim's agreement auto-finalizes");
     }
 
@@ -1000,7 +1012,7 @@ contract CyberAgreementRegistryTest is Test {
         string[][] memory partyValues = new string[][](1);
         partyValues[0] = testPartyValues[0];
 
-        bytes32 victimId = _standaloneId(salt, parties, bytes32(0), address(0), expiry);
+        bytes32 victimId = _standaloneId(salt, parties, bytes32(0), address(0));
         bytes memory aliceSig = CyberAgreementUtils.signAgreementTypedData(
             vm, registry.DOMAIN_SEPARATOR(), registry.SIGNATUREDATA_TYPEHASH(),
             victimId, testLegalContractUri, testGlobalFields, testPartyFields,

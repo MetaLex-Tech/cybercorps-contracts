@@ -16,6 +16,7 @@ import {RoundLib as RoundLibV3, Round as RoundV3} from "./libs/v3/RoundLib.sol";
 import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
 import {CyberCertData, EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {LexScrowStorage, Escrow, EscrowStatus} from "../src/storage/LexScrowStorage.sol";
+import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 
 interface IRoundManagerV3 {
     function createRound(
@@ -168,6 +169,8 @@ contract RoundManagerV3NextForkTest is Test {
         testRoundPartyValues[1] = "CEO";
 
         rmFactory = RoundManagerFactory(cyberCorpFactory.roundManagerFactory());
+
+        CyberAgreementUtils.upgradeRegistry(vm, address(registry), metalexSafe);
 
         // Create template 777 in the live registry so EOI signatures can be verified
         {

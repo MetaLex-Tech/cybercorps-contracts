@@ -515,34 +515,28 @@ contract DealManager is
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Secondary trade — condition config (owner-managed; snapshotted onto each offer at postOffer)
+    // Secondary trade — condition config (owner-managed; read live at every post/accept/finalize)
     // ─────────────────────────────────────────────────────────────────────────
 
+    // Each layer is set as a whole list, so one entry point per layer covers add, remove and reorder.
+
     // Layer 2 — fund-specific (§6) threshold conditions (apply to every offer)
-    function addSpvThresholdCondition(address condition) external onlyAdmin {
-        SecondaryTradeStorage.addSpvThresholdCondition(condition);
+    function setSpvThresholdConditions(address[] calldata conditions) external onlyAdmin {
+        SecondaryTradeStorage.setSpvThresholdConditions(conditions);
     }
 
-    function removeSpvThresholdConditionAt(uint256 index) external onlyAdmin {
-        SecondaryTradeStorage.removeSpvThresholdConditionAt(index);
-    }
-
-    // Layer 1 — exemption-specific (§5) threshold conditions (selected by offer.exemptionPathway)
-    function addPathwayThresholdCondition(ExemptionPathway pathway, address condition) external onlyAdmin {
-        SecondaryTradeStorage.addPathwayThresholdCondition(pathway, condition);
-    }
-
-    function removePathwayThresholdConditionAt(ExemptionPathway pathway, uint256 index) external onlyAdmin {
-        SecondaryTradeStorage.removePathwayThresholdConditionAt(pathway, index);
+    /// @notice Layer 1 — exemption-specific (§5) conditions for `pathway`, plus whether this SPV supports
+    /// it. A pathway that is not enabled can be neither pinned nor elected.
+    function setPathwayThresholdConditions(ExemptionPathway pathway, address[] calldata conditions, bool enabled)
+        external
+        onlyAdmin
+    {
+        SecondaryTradeStorage.setPathwayThresholdConditions(pathway, conditions, enabled);
     }
 
     // Closing conditions (apply to every offer; evaluated at finalize)
-    function addClosingCondition(address condition) external onlyAdmin {
-        SecondaryTradeStorage.addClosingCondition(condition);
-    }
-
-    function removeClosingConditionAt(uint256 index) external onlyAdmin {
-        SecondaryTradeStorage.removeClosingConditionAt(index);
+    function setClosingConditions(address[] calldata conditions) external onlyAdmin {
+        SecondaryTradeStorage.setClosingConditions(conditions);
     }
 
     function getSpvThresholdConditions() external view returns (address[] memory) {
@@ -551,6 +545,10 @@ contract DealManager is
 
     function getPathwayThresholdConditions(ExemptionPathway pathway) external view returns (address[] memory) {
         return SecondaryTradeStorage.secondaryTradeStorage().pathwayThresholdConditions[pathway];
+    }
+
+    function isPathwayEnabled(ExemptionPathway pathway) external view returns (bool) {
+        return SecondaryTradeStorage.secondaryTradeStorage().pathwayEnabled[pathway];
     }
 
     function getClosingConditions() external view returns (address[] memory) {

@@ -47,7 +47,16 @@ enum OfferStatus { LIVE, CANCELLED, PARTIALLY_ACCEPTED, FULLY_ACCEPTED, FINALIZE
 
 enum SecondaryEscrowStatus { ACCEPTED, FINALIZED, VOIDED }
 
-enum ExemptionPathway { RULE_144, SECTION_4A7, SECTION_4A1HALF, RULE_144A, REGULATION_S }
+/// @dev The exemption is the buyer's to claim, so the buyer elects it. NONE means "not pinned" — never a
+/// settled trade's pathway:
+///
+///   | Offer side    | Pathway set by                                  | NONE allowed?                          |
+///   |---------------|-------------------------------------------------|----------------------------------------|
+///   | SELL unpinned | buyer, at acceptOffer                           | at post yes; at accept never           |
+///   | SELL pinned   | seller restricts; buyer must elect the same one | mismatch -> ExemptionPathwayMismatch   |
+///   | BUY           | offeror (who is the buyer), at postOffer        | no -> ExemptionPathwayRequired;        |
+///   |               |                                                 | acceptor's election ignored            |
+enum ExemptionPathway { NONE, RULE_144, SECTION_4A7, SECTION_4A1HALF, RULE_144A, REGULATION_S }
 
 enum HostingMode { DIRECT, ADMINISTERED }
 
@@ -60,7 +69,7 @@ struct Offer {
     uint256 units;                  // total units offered: immutable once offer is created
     address paymentToken;
     uint256 consideration;          // total payment for all offered units
-    ExemptionPathway exemptionPathway;
+    ExemptionPathway expectedExemptionPathway; // offeror's pin; NONE on a sell offer leaves the choice to each buyer at acceptance
     uint256 validUntil;
     bytes counterpartyRestrictions; // spec §8.1 Counterparty restrictions
     bytes additionalTerms;          // spec §8.1 Supplemental fields
@@ -80,8 +89,6 @@ struct Offer {
     HostingMode buyerHostingMode;   // buy offer-only: Direct or Administered; defaults to Direct for sell offers
     address adminMultisig;          // buy offer-only: delivery address for Administered hosting; zero for sell offers
     bytes32[] settlementAgreementIds; // appended at each acceptOffer; length == 0 at postOffer (no buyer known yet)
-    address[] thresholdConditions;    // resolved from DealManager config at postOffer; re-evaluated at acceptOffer and at finalize
-    address[] closingConditions;      // snapshotted from DealManager config at postOffer; evaluated at finalize (gates asset transfer)
 }
 
 // Per-settlement escrow for secondary trades, keyed by settlementAgreementId.
@@ -101,6 +108,9 @@ struct SecondaryEscrow {
     HostingMode buyerHostingMode;   // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
     address adminMultisig;          // redundant for buy offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
     bytes openEndorsementSig;       // redundant for sell offer, it would be the same as its counterpart in `Offer`, but we still keep a record here for simplicity
+    // The buyer's election, per lot: two buyers of one sell offer may elect different pathways, so the
+    // shared Offer cannot hold it.
+    ExemptionPathway exemptionPathway;  // never NONE; the exemption this trade settles under, stamped into the cert's deal metadata
 }
 
 struct PostOfferParams {
@@ -110,7 +120,7 @@ struct PostOfferParams {
     uint256 units;
     address paymentToken;
     uint256 consideration;
-    ExemptionPathway exemptionPathway;
+    ExemptionPathway exemptionPathway; // sell offers: NONE to let each buyer elect, or pin one to restrict; buy offers: required
     uint256 validUntil;
     bytes counterpartyRestrictions;
     bytes additionalTerms;
@@ -129,6 +139,7 @@ struct PostOfferParams {
 struct AcceptOfferParams {
     bytes32 offerId;
     uint256 units;
+    ExemptionPathway exemptionPathway; // sell offer-only: buyer's elected pathway, bounded by any offer pin; ignored for buy offers
     string buyerName;               // sell offer-only: ignored for buy offer acceptances (read from Offer instead)
     HostingMode buyerHostingMode;   // sell offer-only: Direct or Administered; ignored for buy offer acceptances
     address adminMultisig;          // sell offer-only: delivery address for Administered hosting; ignored for buy offer acceptances
@@ -147,6 +158,7 @@ interface ISecondaryTradeStorage {
     // Events below carry every field an off-chain indexer needs to reconstruct secondary-trade status
     // (open offers + settlements) from logs alone: an Offer is fully described by OfferPosted, each settlement
     // by OfferAccepted (which also reports its funding), and lifecycle transitions by the remaining events.
+    // For the condition sets, an indexer replays the config events below against the settlement's elected pathway.
     /// @dev offerId/offeror/certPrinter indexed so a UI can filter offers by security and by user.
     event OfferPosted(
         bytes32 indexed offerId,
@@ -158,16 +170,14 @@ interface ISecondaryTradeStorage {
         uint256 units,
         address paymentToken,
         uint256 consideration,
-        ExemptionPathway exemptionPathway,
+        ExemptionPathway expectedExemptionPathway,
         uint256 validUntil,
         address integrator,
         bytes32 templateId,
         string buyerName,
         HostingMode buyerHostingMode,
         address adminMultisig,
-        bytes counterpartyRestrictions,
-        address[] thresholdConditions,
-        address[] closingConditions
+        bytes counterpartyRestrictions
     );
     event OfferCancelled(bytes32 indexed offerId, address indexed offeror);
     event OfferAccepted(
@@ -184,9 +194,21 @@ interface ISecondaryTradeStorage {
         string buyerName,
         HostingMode buyerHostingMode,
         address adminMultisig,
-        bytes openEndorsementSig
+        bytes openEndorsementSig,
+        // Per-settlement, so OfferPosted cannot carry it: buyers of one offer may elect different pathways.
+        ExemptionPathway exemptionPathway
     );
-    event SecondaryTradeAgreementFinalized(bytes32 indexed agreementId, address seller, address buyer, uint256 units, uint256 consideration);
+    /// @dev Carries the condition sets this settlement was actually judged against, resolved at this
+    /// moment from live config, so the record of what gated the asset transfer needs no replay to read.
+    event SecondaryTradeAgreementFinalized(
+        bytes32 indexed agreementId,
+        address seller,
+        address buyer,
+        uint256 units,
+        uint256 consideration,
+        address[] thresholdConditions,
+        address[] closingConditions
+    );
     event SecondaryTradeAgreementVoided(bytes32 indexed agreementId);
     /// @dev Reports the realized fee split: feeDestination is the credited integrator (zero when the fee
     /// routed entirely to the platform). The split is read from live factory state at settlement, so it is
@@ -204,6 +226,15 @@ interface ISecondaryTradeStorage {
         uint256 integratorFee,
         uint256 platformFee
     );
+
+    // Condition-config events. Each carries the full replacement list, never a delta, so an indexer can
+    // replay the config as of any block and derive the set that gated a given post/accept/finalize.
+    event SpvThresholdConditionsSet(address[] conditions, address setter);
+    /// @dev `enabled` rides along because it decides whether the pathway can be elected at all.
+    event PathwayThresholdConditionsSet(
+        ExemptionPathway indexed pathway, address[] conditions, bool enabled, address setter
+    );
+    event ClosingConditionsSet(address[] conditions, address setter);
 
     error OfferNotAvailable();
     error OfferExpired();
@@ -234,12 +265,16 @@ interface ISecondaryTradeStorage {
     /// (ownership moved after listing/acceptance), so the payee and the party whose units are consumed diverge
     error SecondaryTradeSellerOwnershipChanged();
     error SecondaryConditionsNotMet(address condition);
+    /// @notice No pathway supplied where the buyer must claim one: a buy offer at postOffer, or any acceptance
+    error ExemptionPathwayRequired();
+    /// @notice The buyer's elected pathway is not the one the sell offer pinned
+    error ExemptionPathwayMismatch(ExemptionPathway offered, ExemptionPathway elected);
+    /// @notice This SPV does not support the pathway (never enabled, or since withdrawn)
+    error ExemptionPathwayNotEnabled(ExemptionPathway pathway);
     /// @notice Condition address supplied to a config setter is the zero address
     error InvalidSecondaryCondition();
     /// @notice Condition does not advertise ISecondaryTradingCondition via ERC-165 supportsInterface
     error SecondaryConditionInterfaceUnsupported(address condition);
-    /// @notice Condition is already present in the target list (sets are deduplicated)
+    /// @notice The supplied condition list names the same condition twice (lists are sets)
     error SecondaryConditionAlreadyExists();
-    /// @notice removeConditionAt index is past the end of the target list
-    error SecondaryConditionIndexOutOfBounds();
 }

@@ -87,7 +87,7 @@ library SecondaryTradeStorage {
         "PostOfferParams(uint8 side,address certPrinter,uint256 tokenId,uint256 units,address paymentToken,uint256 consideration,uint8 exemptionPathway,uint256 validUntil,bytes counterpartyRestrictions,bytes additionalTerms,address integrator,bytes32 templateId,uint256 salt,string[] globalValues,string[] offerorPartyValues,bytes offerorAgreementSig,bytes openEndorsementSig,string buyerName,uint8 buyerHostingMode,address adminMultisig)"
     );
     bytes32 constant ACCEPT_OFFER_PARAMS_TYPEHASH = keccak256(
-        "AcceptOfferParams(bytes32 offerId,uint256 units,string buyerName,uint8 buyerHostingMode,address adminMultisig,uint256 sellerTokenId,string[] acceptorPartyValues,bytes acceptorAgreementSig,bytes openEndorsementSig)"
+        "AcceptOfferParams(bytes32 offerId,uint256 units,uint8 exemptionPathway,string buyerName,uint8 buyerHostingMode,address adminMultisig,uint256 sellerTokenId,string[] acceptorPartyValues,bytes acceptorAgreementSig,bytes openEndorsementSig)"
     );
     bytes32 constant POST_OFFER_AUTH_TYPEHASH = keccak256(
         "PostOfferAuth(PostOfferParams params,address forAddr,uint256 nonce)"
@@ -95,7 +95,7 @@ library SecondaryTradeStorage {
     );
     bytes32 constant ACCEPT_OFFER_AUTH_TYPEHASH = keccak256(
         "AcceptOfferAuth(AcceptOfferParams params,address forAddr,uint256 nonce)"
-        "AcceptOfferParams(bytes32 offerId,uint256 units,string buyerName,uint8 buyerHostingMode,address adminMultisig,uint256 sellerTokenId,string[] acceptorPartyValues,bytes acceptorAgreementSig,bytes openEndorsementSig)"
+        "AcceptOfferParams(bytes32 offerId,uint256 units,uint8 exemptionPathway,string buyerName,uint8 buyerHostingMode,address adminMultisig,uint256 sellerTokenId,string[] acceptorPartyValues,bytes acceptorAgreementSig,bytes openEndorsementSig)"
     );
     bytes32 constant CANCEL_OFFER_AUTH_TYPEHASH =
         keccak256("CancelOfferAuth(bytes32 offerId,address forAddr,uint256 nonce)");
@@ -112,16 +112,19 @@ library SecondaryTradeStorage {
         uint256 minTradeConsideration;                 // 0 = disabled
         address defaultIntegrator;
         // Condition config (owner-managed, per-DealManager). Threshold conditions gate post/accept and are
-        // re-checked at finalize; closing conditions gate finalize. Resolved/snapshotted onto each Offer at postOffer so an offer
-        // is governed by the rules in effect when it was posted. Offerors never supply condition addresses.
+        // re-checked at finalize; closing conditions gate finalize. Read live at every check, so a trade is
+        // judged by the SPV's current rules. Traders never supply condition addresses.
         address[] spvThresholdConditions;                        // Layer 2 — fund-specific (§6); added at SPV onboarding; applies to every offer
-        mapping(ExemptionPathway => address[]) pathwayThresholdConditions; // Layer 1 — exemption-specific (§5); selected by offer.exemptionPathway
+        mapping(ExemptionPathway => address[]) pathwayThresholdConditions; // Layer 1 — exemption-specific (§5); selected by the settlement's elected pathway
         address[] closingConditions;                             // default closing set
         // Consumed relayer-authorization nonces: usedAuthNonce[forAddr][nonce], order-independent single-use.
         mapping(address => mapping(uint256 => bool)) usedAuthNonce;
         // Per-DealManager settlement window: how long after acceptance a lot has to finalize before it can be
         // voided as expired. Decouples settlement expiry from offer expiry (0 = DEFAULT_SETTLEMENT_WINDOW).
         uint256 settlementWindow;
+        // Exemption pathways this SPV supports; default false so an unconfigured pathway blocks trades
+        // instead of admitting them with no §5 checks. Doubles as a per-pathway off-switch.
+        mapping(ExemptionPathway => bool) pathwayEnabled;
     }
 
     /// @notice Effective settlement window, applying the default when unset (so legacy DealManager does not need migration)
@@ -179,6 +182,11 @@ library SecondaryTradeStorage {
         // floor is configured, so a disabled-threshold offer would otherwise mint an empty, un-acceptable offer.
         if (params.units == 0) revert ISecondaryTradeStorage.BelowMinTradeThreshold();
 
+        // The exemption is the buyer's to claim; a sell offeror may pin one to restrict who can accept.
+        if (params.side == OfferSide.BUY && params.exemptionPathway == ExemptionPathway.NONE)
+            revert ISecondaryTradeStorage.ExemptionPathwayRequired();
+        if (params.exemptionPathway != ExemptionPathway.NONE) _requirePathwayEnabled(params.exemptionPathway);
+
         // Validate min threshold against the whole offer
         _checkMinTradeThreshold(params.units, params.consideration);
 
@@ -186,11 +194,9 @@ library SecondaryTradeStorage {
         offerId = keccak256(abi.encode(offeror, params.templateId, params.salt));
         if (ds.offers[offerId].offeror != address(0)) revert ISecondaryTradeStorage.OfferAlreadyExists();
 
-        // Resolve conditions from this DealManager's config (never from the caller): threshold = fund-specific
-        // (§6) ++ exemption-specific (§5), closing = the default set. Both are snapshotted onto the offer so it is governed by the rules in
-        // effect at posting; the kill switch still bites later since KillSwitchCondition reads live state internally.
+        // Resolved from this DealManager's config, never from the caller. An unpinned offer resolves the
+        // fund-specific (§6) layer alone — the exemption (§5) layer awaits a buyer's election.
         address[] memory resolvedThreshold = _resolveThresholdConditions(ds, params.exemptionPathway);
-        address[] memory resolvedClosing = ds.closingConditions;
 
         // Store offer record before evaluating conditions so seller-side conditions that call
         // getOffer(offerId) see the populated record; a condition revert rolls this write back.
@@ -203,7 +209,7 @@ library SecondaryTradeStorage {
             units: params.units,
             paymentToken: params.paymentToken,
             consideration: params.consideration,
-            exemptionPathway: params.exemptionPathway,
+            expectedExemptionPathway: params.exemptionPathway,
             validUntil: params.validUntil,
             counterpartyRestrictions: params.counterpartyRestrictions,
             additionalTerms: params.additionalTerms,
@@ -222,19 +228,13 @@ library SecondaryTradeStorage {
             buyerName: params.side == OfferSide.BUY ? params.buyerName : "",
             buyerHostingMode: params.side == OfferSide.BUY ? params.buyerHostingMode : HostingMode.DIRECT,
             adminMultisig: params.side == OfferSide.BUY ? params.adminMultisig : address(0),
-            settlementAgreementIds: new bytes32[](0),
-            // Persisted so they can be re-evaluated at acceptOffer (spec §conditions: threshold
-            // conditions gate both posting and acceptance).
-            thresholdConditions: resolvedThreshold,
-            // Persisted so they can be evaluated at finalize (spec §conditions: closing conditions
-            // gate asset transfer).
-            closingConditions: resolvedClosing
+            settlementAgreementIds: new bytes32[](0)
         });
 
         // Evaluate threshold conditions (offer is now readable via getOffer). At posting there are no
         // settlements yet (agreementId == 0), so buyer-facing conditions short-circuit; seller/offer-wide
         // conditions enforce.
-        _checkThresholdConditions(offerId, bytes32(0));
+        _checkConditions(resolvedThreshold, offerId, bytes32(0));
 
         if (params.side == OfferSide.SELL) {
             if (ICyberCertPrinter(params.certPrinter).legalOwnerOf(params.tokenId) != offeror)
@@ -254,7 +254,7 @@ library SecondaryTradeStorage {
             params.tokenId, params.units, params.paymentToken, params.consideration,
             params.exemptionPathway, params.validUntil, integrator,
             posted.templateId, posted.buyerName, posted.buyerHostingMode, posted.adminMultisig,
-            posted.counterpartyRestrictions, posted.thresholdConditions, posted.closingConditions
+            posted.counterpartyRestrictions
         );
     }
 
@@ -321,6 +321,20 @@ library SecondaryTradeStorage {
 
         if (offer.status != OfferStatus.LIVE && offer.status != OfferStatus.PARTIALLY_ACCEPTED) revert ISecondaryTradeStorage.OfferNotAvailable();
         if (block.timestamp > offer.validUntil) revert ISecondaryTradeStorage.OfferExpired();
+
+        // Elect this settlement's exemption. The buyer claims it: the offeror's own choice on a buy offer,
+        // the acceptor's here on a sell offer, bounded by any pin. Each lot elects independently.
+        ExemptionPathway electedPathway;
+        if (offer.side == OfferSide.BUY) {
+            electedPathway = offer.expectedExemptionPathway;
+        } else {
+            electedPathway = params.exemptionPathway;
+            if (electedPathway == ExemptionPathway.NONE) revert ISecondaryTradeStorage.ExemptionPathwayRequired();
+            if (offer.expectedExemptionPathway != ExemptionPathway.NONE
+                && offer.expectedExemptionPathway != electedPathway)
+                revert ISecondaryTradeStorage.ExemptionPathwayMismatch(offer.expectedExemptionPathway, electedPathway);
+        }
+        _requirePathwayEnabled(electedPathway);
 
         // Reject zero-unit fills outright: the min-threshold check below only catches this when a
         // floor is configured, so a disabled-threshold offer would otherwise mint an empty settlement.
@@ -435,6 +449,9 @@ library SecondaryTradeStorage {
         if (offer.side == OfferSide.SELL) {
             IERC20(offer.paymentToken).safeTransferFrom(buyer, address(this), partialConsideration);
         }
+        // This lot's threshold set: fund-specific (§6) plus the elected pathway's exemption (§5) layer.
+        address[] memory resolvedThreshold =
+            _resolveThresholdConditions(secondaryTradeStorage(), electedPathway);
         secondaryTradeStorage().escrows[settlementAgreementId] = SecondaryEscrow({
             counterparty: acceptor,
             paymentToken: offer.paymentToken,
@@ -448,7 +465,8 @@ library SecondaryTradeStorage {
             buyerName: buyerName,
             buyerHostingMode: buyerHostingMode,
             adminMultisig: adminMultisig,
-            openEndorsementSig: endorsementSig
+            openEndorsementSig: endorsementSig,
+            exemptionPathway: electedPathway
         });
 
         // Record settlement for buyer-facing threshold condition lookup
@@ -458,7 +476,7 @@ library SecondaryTradeStorage {
         // (KYC/AML, accreditation, holder caps, etc.) that short-circuited at posting resolve the
         // acceptor via the settlementAgreementId passed here and enforce. A failure reverts the whole
         // acceptance, undoing the settlement, escrow funding, and reservations above.
-        _checkThresholdConditions(params.offerId, settlementAgreementId);
+        _checkConditions(resolvedThreshold, params.offerId, settlementAgreementId);
 
         // Update offer accounting and fill state
         offer.unitsAccepted += params.units;
@@ -473,7 +491,8 @@ library SecondaryTradeStorage {
         emit ISecondaryTradeStorage.OfferAccepted(
             params.offerId, settlementAgreementId, acceptor, params.units, offer.paymentToken, partialConsideration,
             tokenId, settlementExpiry,
-            buyerName, buyerHostingMode, adminMultisig, endorsementSig
+            buyerName, buyerHostingMode, adminMultisig, endorsementSig,
+            electedPathway
         );
     }
 
@@ -513,18 +532,16 @@ library SecondaryTradeStorage {
         // Defensive backstop: finalizeContract already reverts ContractExpired on the same deadline, so this
         // local guard is effectively unreachable, but kept in case the registry and escrow expiry ever diverge.
         if (block.timestamp > secEscrow.expiry) revert ISecondaryTradeStorage.SecondaryTradeAgreementExpired();
-        // Re-check threshold (eligibility) conditions at finalization: a buyer who was eligible at
-        // acceptance may have lost eligibility before settlement (credential revoked, holder cap
-        // breached, blocked-state move, kill of an approval). Both ids are known, so buyer-facing
-        // conditions read this lot's acceptor directly.
-        _checkThresholdConditions(secEscrow.offerId, agreementId);
+        // Eligibility must hold at settlement, not just at acceptance: a buyer may have lost it in between
+        // (credential revoked, holder cap breached, approval killed), and the SPV may have withdrawn the
+        // exemption itself. Either way the transfer is blocked and the lot unwinds via void/expiry.
+        _requirePathwayEnabled(secEscrow.exemptionPathway);
+        address[] memory resolvedThreshold =
+            _resolveThresholdConditions(secondaryTradeStorage(), secEscrow.exemptionPathway);
+        _checkConditions(resolvedThreshold, secEscrow.offerId, agreementId);
 
-        address[] storage conditions = offer.closingConditions;
-        for (uint256 i = 0; i < conditions.length; i++) {
-            // note: always double check if `Offer` is properly updated because `checkCondition()` depends on it
-            if (!ISecondaryTradingCondition(conditions[i]).checkCondition(IDealManager(address(this)), msg.sig, secEscrow.offerId, agreementId))
-                revert ISecondaryTradeStorage.SecondaryConditionsNotMet(conditions[i]);
-        }
+        address[] memory resolvedClosing = secondaryTradeStorage().closingConditions;
+        _checkConditions(resolvedClosing, secEscrow.offerId, agreementId);
 
         // Effect: mark finalized before external calls
         secEscrow.status = SecondaryEscrowStatus.FINALIZED;
@@ -575,11 +592,14 @@ library SecondaryTradeStorage {
             _encodeDealMetadata(
                 offer.certPrinter, secEscrow.tokenId, secEscrow.units, buyer,
                 secEscrow.buyerName, secEscrow.buyerHostingMode, secEscrow.adminMultisig,
-                offer.exemptionPathway, agreementId, secEscrow.openEndorsementSig
+                secEscrow.exemptionPathway, agreementId, secEscrow.openEndorsementSig
             )
         );
 
-        emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(agreementId, seller, buyer, secEscrow.units, secEscrow.paymentAmount);
+        emit ISecondaryTradeStorage.SecondaryTradeAgreementFinalized(
+            agreementId, seller, buyer, secEscrow.units, secEscrow.paymentAmount,
+            resolvedThreshold, resolvedClosing
+        );
     }
 
     /// @notice Voids an expired secondary-trade settlement and refunds/releases its escrowed assets
@@ -650,15 +670,15 @@ library SecondaryTradeStorage {
         if (ds.minTradeConsideration > 0 && consideration < ds.minTradeConsideration) revert ISecondaryTradeStorage.BelowMinTradeThreshold();
     }
 
-    /// @dev Walks the offer's stored threshold conditions, reverting on the first failure. Conditions
+    /// @dev Walks the resolved threshold conditions, reverting on the first failure. Conditions
     /// receive the uniform secondary-trade payload `abi.encode(offerId, agreementId)`; `agreementId` is
     /// `bytes32(0)` at posting (no settlement yet) and the settlement id at acceptance and at finalization,
     /// so a buyer-facing condition reads its acceptor directly instead of reaching into settlementAgreementIds.
     /// Re-run at finalization so eligibility lost between acceptance and settlement blocks the asset transfer.
     /// The selector handed to conditions is `msg.sig` — the gated entrypoint's own selector, so the relayer
     /// overloads present their own selector (not the direct-call one); see ISecondaryTradingCondition.
-    function _checkThresholdConditions(bytes32 offerId, bytes32 agreementId) internal view {
-        address[] storage conditions = secondaryTradeStorage().offers[offerId].thresholdConditions;
+    /// @dev Reverts on the first condition that fails. Callers resolve the set and own recording it.
+    function _checkConditions(address[] memory conditions, bytes32 offerId, bytes32 agreementId) internal view {
         for (uint256 i = 0; i < conditions.length; i++) {
             // note: always double check if `Offer` is properly updated because `checkCondition()` depends on it
             if (!ISecondaryTradingCondition(conditions[i]).checkCondition(IDealManager(address(this)), msg.sig, offerId, agreementId))
@@ -703,6 +723,7 @@ library SecondaryTradeStorage {
             ACCEPT_OFFER_PARAMS_TYPEHASH,
             p.offerId,
             p.units,
+            uint8(p.exemptionPathway),
             keccak256(bytes(p.buyerName)),
             uint8(p.buyerHostingMode),
             p.adminMultisig,
@@ -741,16 +762,15 @@ library SecondaryTradeStorage {
         _useUnorderedNonce(forAddr, nonce);
     }
 
-    /// @dev Builds an offer's threshold set from this DealManager's config per v3.53 §7.2: the fund-specific
-    /// (§6, per-SPV) layer ++ the exemption-specific (§5) layer registered for the offer's exemption pathway.
-    /// Insertion order is preserved so failures surface deterministically. Offerors choose the pathway, never
-    /// the condition addresses.
+    /// @dev The threshold set per v3.53 §7.2: fund-specific (§6) ++ the exemption (§5) layer for `pathway`,
+    /// which NONE omits. Insertion order is preserved so failures surface deterministically.
     function _resolveThresholdConditions(SecondaryTradeData storage ds, ExemptionPathway pathway)
         internal view returns (address[] memory resolved)
     {
         address[] storage spv = ds.spvThresholdConditions;
-        address[] storage pathwayConds = ds.pathwayThresholdConditions[pathway];
+        if (pathway == ExemptionPathway.NONE) return spv;
 
+        address[] storage pathwayConds = ds.pathwayThresholdConditions[pathway];
         resolved = new address[](spv.length + pathwayConds.length);
         uint256 k;
         for (uint256 i = 0; i < spv.length; i++) resolved[k++] = spv[i];
@@ -761,53 +781,57 @@ library SecondaryTradeStorage {
     // Condition config management (linked logic; called via delegatecall by DealManager owner setters)
     // ─────────────────────────────────────────────────────────────────────────
 
-    function addSpvThresholdCondition(address condition) external {
-        _addCondition(secondaryTradeStorage().spvThresholdConditions, condition);
+    /// @notice Replaces the fund-specific (§6) threshold layer wholesale.
+    function setSpvThresholdConditions(address[] calldata conditions) external {
+        _validateConditions(conditions);
+        secondaryTradeStorage().spvThresholdConditions = conditions;
+        emit ISecondaryTradeStorage.SpvThresholdConditionsSet(conditions, msg.sender);
     }
 
-    function removeSpvThresholdConditionAt(uint256 index) external {
-        _removeConditionAt(secondaryTradeStorage().spvThresholdConditions, index);
+    /// @notice Replaces the exemption-specific (§5) layer for `pathway` and declares whether this SPV
+    /// supports it. Paired so an unsupported pathway can never be left electable with an empty set.
+    function setPathwayThresholdConditions(ExemptionPathway pathway, address[] calldata conditions, bool enabled)
+        external
+    {
+        if (pathway == ExemptionPathway.NONE) revert ISecondaryTradeStorage.ExemptionPathwayRequired();
+        _validateConditions(conditions);
+        SecondaryTradeData storage ds = secondaryTradeStorage();
+        ds.pathwayThresholdConditions[pathway] = conditions;
+        ds.pathwayEnabled[pathway] = enabled;
+        emit ISecondaryTradeStorage.PathwayThresholdConditionsSet(pathway, conditions, enabled, msg.sender);
     }
 
-    function addPathwayThresholdCondition(ExemptionPathway pathway, address condition) external {
-        _addCondition(secondaryTradeStorage().pathwayThresholdConditions[pathway], condition);
+    /// @notice Replaces the closing set wholesale.
+    function setClosingConditions(address[] calldata conditions) external {
+        _validateConditions(conditions);
+        secondaryTradeStorage().closingConditions = conditions;
+        emit ISecondaryTradeStorage.ClosingConditionsSet(conditions, msg.sender);
     }
 
-    function removePathwayThresholdConditionAt(ExemptionPathway pathway, uint256 index) external {
-        _removeConditionAt(secondaryTradeStorage().pathwayThresholdConditions[pathway], index);
+    /// @dev An SPV only trades under exemptions it currently supports. Gated at every stage, so a pathway
+    /// it never enabled turns buyers away before units are committed, and one it withdraws mid-flight
+    /// stops the settlement rather than letting it complete under a retired exemption.
+    function _requirePathwayEnabled(ExemptionPathway pathway) internal view {
+        if (!secondaryTradeStorage().pathwayEnabled[pathway])
+            revert ISecondaryTradeStorage.ExemptionPathwayNotEnabled(pathway);
     }
 
-    function addClosingCondition(address condition) external {
-        _addCondition(secondaryTradeStorage().closingConditions, condition);
-    }
-
-    function removeClosingConditionAt(uint256 index) external {
-        _removeConditionAt(secondaryTradeStorage().closingConditions, index);
-    }
-
-    /// @dev Appends to an owner-managed condition list, rejecting the zero address and duplicates so the
-    /// list behaves as a set. Lists are small (admin-curated), so the linear dedupe scan is cheap.
-    function _addCondition(address[] storage list, address condition) internal {
-        if (condition == address(0)) revert ISecondaryTradeStorage.InvalidSecondaryCondition();
-        // Only strongly-typed secondary-trading conditions may be wired in: reject anything that doesn't
-        // advertise ISecondaryTradingCondition via ERC-165 at config time, so a mismatched checkCondition
-        // signature can never reach post/accept/finalize. ERC165Checker returns false (no revert) for
-        // non-ERC165 targets.
-        if (!ERC165Checker.supportsInterface(condition, type(ISecondaryTradingCondition).interfaceId))
-            revert ISecondaryTradeStorage.SecondaryConditionInterfaceUnsupported(condition);
-        for (uint256 i = 0; i < list.length; i++) {
-            if (list[i] == condition) revert ISecondaryTradeStorage.SecondaryConditionAlreadyExists();
+    /// @dev Rejects the zero address and duplicates so a condition list behaves as a set. Lists are small
+    /// (admin-curated), so the linear dedupe scan is cheap.
+    function _validateConditions(address[] calldata conditions) internal view {
+        for (uint256 i = 0; i < conditions.length; i++) {
+            address condition = conditions[i];
+            if (condition == address(0)) revert ISecondaryTradeStorage.InvalidSecondaryCondition();
+            // Only strongly-typed secondary-trading conditions may be wired in: reject anything that doesn't
+            // advertise ISecondaryTradingCondition via ERC-165 at config time, so a mismatched checkCondition
+            // signature can never reach post/accept/finalize. ERC165Checker returns false (no revert) for
+            // non-ERC165 targets.
+            if (!ERC165Checker.supportsInterface(condition, type(ISecondaryTradingCondition).interfaceId))
+                revert ISecondaryTradeStorage.SecondaryConditionInterfaceUnsupported(condition);
+            for (uint256 j = 0; j < i; j++) {
+                if (conditions[j] == condition) revert ISecondaryTradeStorage.SecondaryConditionAlreadyExists();
+            }
         }
-        list.push(condition);
-    }
-
-    /// @dev Swap-pop removal — order within the list is not significant for membership, only for the
-    /// deterministic evaluation order of an already-posted offer (which snapshots its own copy anyway).
-    function _removeConditionAt(address[] storage list, uint256 index) internal {
-        uint256 len = list.length;
-        if (index >= len) revert ISecondaryTradeStorage.SecondaryConditionIndexOutOfBounds();
-        list[index] = list[len - 1];
-        list.pop();
     }
 
     /// @dev Terminal offer states: immutable, not cancellable, and never restored by a void
