@@ -356,11 +356,11 @@ library SecondaryTradeStorage {
         if (offer.consideration > 0 && partialConsideration == 0)
             revert ISecondaryTradeStorage.ZeroConsiderationFill();
 
-        // Re-apply the admin-set minimum-ticket floors that postOffer enforced on the whole offer, now
-        // against this lot — otherwise a tiny partial fill can settle below the floor. For a non-exhausting
-        // fill we also require the remainder left on the offer to clear the floor, so a sub-floor tail can
-        // never be created; that makes the eventual exhausting fill provably above the floor (by induction
-        // from postOffer's full-offer check) and needs no exemption.
+        // Re-apply the minimum-ticket floors postOffer enforced on the whole offer, now against this lot and
+        // against the remainder left behind, so no sub-floor tail is ever created. The exhausting fill is
+        // exempt: under a fixed floor it is provably above it by induction, and after a floor raise it is the
+        // only fill a pre-existing tail has left — checking it would strand that tail for good. A raise is
+        // therefore prospective, binding new offers at postOffer while in-flight ones finish as posted.
         if (params.units < remainingUnits) {
             _checkMinTradeThreshold(params.units, partialConsideration);
             uint256 remainderUnits = remainingUnits - params.units;

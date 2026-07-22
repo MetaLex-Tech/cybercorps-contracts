@@ -1863,6 +1863,33 @@ contract DealManagerSecondaryTradeTest is Test {
         );
     }
 
+    function test_AcceptOffer_FloorRaisedMidFlight_ExhaustingTailStillSettles() public {
+        // A floor raise binds new offers but not offers in flight: once it exceeds the remaining units, the
+        // exhausting fill is the only one left, so the exemption is what clears the tail rather than stranding it.
+        bytes32 offerId = _postSellOffer();
+
+        // Floors disabled at posting, so partial fills whittle the offer down to a 1-unit tail.
+        _acceptSellOfferPartial(offerId, UNITS - 1);
+
+        vm.prank(owner);
+        dm.setMinTradeThreshold(UNITS / 4, CONSIDERATION / 4); // 25 units / 2.5 ether, far above the tail
+
+        bytes32 settlementId = _acceptSellOfferPartial(offerId, 1);
+
+        Offer memory offer = dm.getOffer(offerId);
+        assertEq(uint8(offer.status), uint8(OfferStatus.FULLY_ACCEPTED), "sub-floor tail should still exhaust");
+        assertEq(offer.unitsAccepted, UNITS);
+        assertEq(dm.getSecondaryEscrow(settlementId).units, 1);
+
+        // The raised floor still binds a freshly posted offer.
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.salt = uint256(keccak256("floor.raised.new.offer"));
+        p.units = UNITS / 5; // 20 units, below the new 25-unit floor
+        vm.prank(seller);
+        vm.expectRevert(ISecondaryTradeStorage.BelowMinTradeThreshold.selector);
+        dm.postOffer(p);
+    }
+
     function test_AcceptOffer_PartialFill_NoThresholds_AllowsTinyLotAndRemainder() public {
         // Floors left disabled (never set): partial fills of any size are allowed, including a tiny lot that
         // leaves a large remainder and a tail fill that leaves a single-unit remainder. Neither the accepted
