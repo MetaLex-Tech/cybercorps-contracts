@@ -4062,6 +4062,7 @@ contract DealManagerSecondaryTradeTest is Test {
             address(paymentToken),
             CONSIDERATION,
             sellerTokenId,
+            block.timestamp,
             block.timestamp + 7 days,
             SELL_ACCEPT_BUYER_NAME,
             HostingMode.DIRECT,

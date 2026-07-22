@@ -463,6 +463,7 @@ library SecondaryTradeStorage {
             paymentToken: offer.paymentToken,
             paymentAmount: partialConsideration,
             units: params.units,
+            acceptedAt: block.timestamp,
             expiry: settlementExpiry,
             status: SecondaryEscrowStatus.ACCEPTED,
             feeDestination: offer.integrator,
@@ -496,7 +497,7 @@ library SecondaryTradeStorage {
         // Acceptance funds the escrow atomically, so this event carries the settlement's payment too.
         emit ISecondaryTradeStorage.OfferAccepted(
             params.offerId, settlementAgreementId, acceptor, params.units, offer.paymentToken, partialConsideration,
-            tokenId, settlementExpiry,
+            tokenId, block.timestamp, settlementExpiry,
             buyerName, buyerHostingMode, adminMultisig, endorsementSig,
             electedPathway
         );

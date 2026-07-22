@@ -83,7 +83,7 @@ settlement period).
 | Section4a7DisclosureCondition         |   ✓   | 4a7                            | package freshness (from posting) + buyer's acknowledgment-of-receipt signer value (from acceptance)                                              |
 | LegalOpinionCondition                 |   ✓   | 4a1½                           | GP records `recordGPSignOff(dm, offerId)` between post and accept, pre-approving the offer's settlements                                         |
 | KillSwitchCondition                   |   ✓   | all 5 (closing) + kill tests   | plain singleton; two admin slots (MetaLeX + Legion), raise unilateral / lower two-call, at both platform-wide and per-settlement scope           |
-| TimeSettlementPeriodCondition         |   ✓   | all 5 (closing) + timing test  | 24h default from acceptance (reconstructed as `escrow.expiry − settlementWindow`); happy paths warp past                                         |
+| TimeSettlementPeriodCondition         |   ✓   | all 5 (closing) + timing test  | 24h default from acceptance (`escrow.acceptedAt`, stamped per lot); happy paths warp past                                                        |
 | CFIUSCondition                        |   ✓   | none                           | implemented; optional per-SPV, out of scope for these happy paths                                                                                |
 | GPLPApprovalCondition                 |   ✓   | none                           | implemented; optional per-SPV, out of scope                                                                                                      |
 
