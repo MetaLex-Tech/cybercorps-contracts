@@ -243,7 +243,7 @@ library SecondaryTradeStorage {
             ICyberCertPrinter(params.certPrinter).increaseUnitsReserved(params.tokenId, params.units);
         } else {
             // BUY: pull consideration directly into contract custody
-            IERC20(params.paymentToken).safeTransferFrom(offeror, address(this), params.consideration);
+            LexScrowStorage.pullExact(params.paymentToken, offeror, params.consideration);
         }
 
         // Emit the full offer record (read back from storage so buy-side fields carry their normalized values)
@@ -453,7 +453,7 @@ library SecondaryTradeStorage {
         // BUY: funds are already in contract from postOffer(); no token movement needed.
         // SELL: pull the buyer's payment directly into contract.
         if (offer.side == OfferSide.SELL) {
-            IERC20(offer.paymentToken).safeTransferFrom(buyer, address(this), partialConsideration);
+            LexScrowStorage.pullExact(offer.paymentToken, buyer, partialConsideration);
         }
         // This lot's threshold set: fund-specific (§6) plus the elected pathway's exemption (§5) layer.
         address[] memory resolvedThreshold =
