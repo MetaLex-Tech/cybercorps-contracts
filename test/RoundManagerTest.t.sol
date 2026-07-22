@@ -713,7 +713,7 @@ library CyberCorpHelper {
         parties[0] = authorityOfficer;
         parties[1] = signer;
         bytes32 contractId = keccak256(
-            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer, expiry)
+            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer)
         );
         return
             CyberAgreementUtils.signAgreementTypedData(
@@ -992,7 +992,7 @@ contract RoundManagerTest is Test {
         parties[1] = investor;
         vm.expectEmit(true, true, true, true);
         emit RoundManager.EOISubmitted(
-            keccak256(abi.encode(CyberCorpHelper.TEMPLATE_ID, salt, globalValues, parties, bytes32(0), address(roundManager), block.timestamp + 7 days)),
+            keccak256(abi.encode(CyberCorpHelper.TEMPLATE_ID, salt, globalValues, parties, bytes32(0), address(roundManager))),
             roundId,
             investor,
             corp,

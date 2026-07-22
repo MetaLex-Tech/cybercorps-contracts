@@ -1250,7 +1250,7 @@ contract CyberScripUpgradeForkTest is Test {
         parties[0] = authorityOfficer;
         parties[1] = signer;
         bytes32 contractId = keccak256(
-            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer, expiry)
+            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer)
         );
         return
             CyberAgreementUtils.signAgreementTypedData(
@@ -1286,7 +1286,7 @@ contract CyberScripUpgradeForkTest is Test {
             string[] memory partyFields
         ) = registry.getTemplateDetails(templateId);
         bytes32 contractId = keccak256(
-            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer, expiry)
+            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer)
         );
         return
             CyberAgreementUtils.signAgreementTypedData(

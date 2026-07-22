@@ -689,7 +689,7 @@ contract DealManagerSecondaryTradeTest is Test {
         address[] memory parties = new address[](2);
         parties[0] = o.offeror;
         parties[1] = acceptor;
-        bytes32 settlementId = keccak256(abi.encode(o.templateId, uint256(settlementSalt), o.globalValues, parties, bytes32(0), address(dm), block.timestamp + dm.getSettlementWindow()));
+        bytes32 settlementId = keccak256(abi.encode(o.templateId, uint256(settlementSalt), o.globalValues, parties, bytes32(0), address(dm)));
         return _agreementSig(settlementId, new string[](0), key);
     }
 
@@ -2103,6 +2103,35 @@ contract DealManagerSecondaryTradeTest is Test {
 
         // Sell: the seller's pre-signed open-endorsement signature is captured on the escrow (asserted by
         // _assertAcceptedEscrow above), not written to the token until secondaryTransfer materializes it at finalize.
+    }
+
+    /// @notice The acceptor's agreement signature is produced off-chain, well before the accepting block.
+    /// Since the settlement expiry is derived from block.timestamp inside acceptOffer, the settlement
+    /// contractId must not depend on it — otherwise no real acceptor could ever sign a verifiable digest.
+    function test_AcceptOffer_SignatureSurvivesTimeGapBeforeAcceptance() public {
+        bytes32 offerId = _postSellOffer();
+
+        // Acceptor signs now...
+        AcceptOfferParams memory p = AcceptOfferParams({
+            offerId: offerId,
+            units: UNITS,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey),
+            openEndorsementSig: ""
+        });
+
+        // ...and the tx is only mined much later, at a timestamp they could not have predicted.
+        vm.warp(block.timestamp + 12 hours);
+
+        vm.prank(buyer);
+        bytes32 settlementId = dm.acceptOffer(p);
+
+        _assertAcceptedEscrow(settlementId, offerId, buyer, UNITS, CONSIDERATION);
     }
 
     function test_AcceptOffer_Sell_MultipleFills() public {

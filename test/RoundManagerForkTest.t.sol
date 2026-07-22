@@ -261,7 +261,7 @@ contract RoundManagerFCFSForkTest is Test {
             lxPartyValues[0][2] = eoi.jurisdiction;
             lxPartyValues[0][3] = eoi.contact;
 
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter), block.timestamp + 30 days));
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter)));
             bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 lxRegistry.DOMAIN_SEPARATOR(),
@@ -419,7 +419,7 @@ contract RoundManagerFCFSForkTest is Test {
             lxPartyValues[0][2] = eoi.jurisdiction;
             lxPartyValues[0][3] = eoi.contact;
 
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter), block.timestamp + 30 days));
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter)));
             bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 lxRegistry.DOMAIN_SEPARATOR(),
@@ -479,7 +479,7 @@ contract RoundManagerFCFSForkTest is Test {
             lxPartyValues[0][3] = eoi.contact;        // investorContact
 
             // Compute agreementId and signature for the LeXcheX agreement
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter), block.timestamp + 30 days));
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter)));
             bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 lxRegistry.DOMAIN_SEPARATOR(),
@@ -636,7 +636,7 @@ contract RoundManagerFCFSForkTest is Test {
             lxPartyValues[0][2] = eoi.jurisdiction;
             lxPartyValues[0][3] = eoi.contact;
 
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter), block.timestamp + 30 days));
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter)));
             bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 lxRegistry.DOMAIN_SEPARATOR(),
@@ -739,7 +739,7 @@ contract RoundManagerFCFSForkTest is Test {
             lxPartyValues[0][2] = eoi.jurisdiction;
             lxPartyValues[0][3] = eoi.contact;
 
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter), block.timestamp + 30 days));
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter)));
             bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 lxRegistry.DOMAIN_SEPARATOR(),

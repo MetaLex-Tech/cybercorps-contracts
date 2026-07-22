@@ -134,7 +134,7 @@ contract DeployParentCoFactoryAcceptanceForkTest is Test {
         address[] memory segCoParties = new address[](2);
         segCoParties[0] = parentCoOfficers[0].eoa;
         segCoParties[1] = subCorpOfficer;
-        bytes32 agreementId = keccak256(abi.encode(umiaDeployment.segCoTemplateId, subCorpSalt, globalValues, segCoParties, bytes32(0), address(parentCoFactory), block.timestamp + 7 days));
+        bytes32 agreementId = keccak256(abi.encode(umiaDeployment.segCoTemplateId, subCorpSalt, globalValues, segCoParties, bytes32(0), address(parentCoFactory)));
 
         (
             string memory legalContractUri,

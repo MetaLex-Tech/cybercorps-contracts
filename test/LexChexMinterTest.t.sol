@@ -173,8 +173,7 @@ contract LexChexMinterTest is Test {
                 globalValues,
                 parties,
                 bytes32(0), // secretHash
-                address(lexchexMinter), // finalizer
-                block.timestamp + 1 days // expiry (request.expiry)
+                address(lexchexMinter) // finalizer
             )
         );
 

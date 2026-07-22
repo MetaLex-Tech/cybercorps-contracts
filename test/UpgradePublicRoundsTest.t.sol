@@ -644,7 +644,7 @@ contract UpgradePublicRoundsForkTest is Test {
             lxPartyValues[0][2] = eoi.jurisdiction;
             lxPartyValues[0][3] = eoi.contact;
 
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(leXcheXMinter), block.timestamp + 30 days));
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(leXcheXMinter)));
             bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 lxRegistry.DOMAIN_SEPARATOR(),
@@ -737,7 +737,7 @@ contract UpgradePublicRoundsForkTest is Test {
         parties[0] = authorityOfficer;
         parties[1] = signer;
         bytes32 contractId = keccak256(
-            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer, expiry)
+            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer)
         );
         return
                             CyberAgreementUtils.signAgreementTypedData(
