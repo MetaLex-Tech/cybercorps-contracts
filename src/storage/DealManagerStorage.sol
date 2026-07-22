@@ -313,13 +313,7 @@ library DealManagerStorage {
         Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
         if (block.timestamp <= deal.expiry) revert IDealManagerStorage.DealNotExpired();
         ICyberAgreementRegistry(registry).voidContractFor(agreementId, signer, signature);
-        for (uint256 i = 0; i < deal.corpAssets.length; i++) {
-            if (deal.corpAssets[i].tokenType == TokenType.ERC721) {
-                ICyberCertPrinter(deal.corpAssets[i].tokenAddress).voidCert(
-                    deal.corpAssets[i].tokenId
-                );
-            }
-        }
+        _voidCorpCerts(deal);
         if (deal.status == EscrowStatus.PAID)
             // Interaction: payment
             LexScrowStorage.voidAndRefund(agreementId);
@@ -347,18 +341,41 @@ library DealManagerStorage {
         if(msg.sender != signer) revert IDealManagerStorage.CounterPartyValueMismatch();
 
         // Effect: update status
-        ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
-        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId) && LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PAID)
+        address registry = LexScrowStorage.getDealRegistry();
+        ICyberAgreementRegistry(registry).voidContractFor(agreementId, signer, signature);
+        // The agreement is only voided once enough parties have signed; until then there is nothing to tear down.
+        if (!ICyberAgreementRegistry(registry).isVoided(agreementId)) return;
+
+        Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
+        _voidCorpCerts(deal);
+        if (deal.status == EscrowStatus.PAID)
             // Interaction: payment
             LexScrowStorage.voidAndRefund(agreementId);
+        else if (deal.status == EscrowStatus.PENDING)
+            // Effect: update status
+            LexScrowStorage.voidEscrow(agreementId);
     }
 
     /// @notice Refund a voided deal
     /// @dev nonReentrant is carried by the DealManager wrapper that delegatecalls here.
     function refundVoidedDeal(bytes32 agreementId) public {
         if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
+        _voidCorpCerts(LexScrowStorage.getEscrow(agreementId));
         // Interaction: Re-sync Deal Manager internal escrow to VOIDED, then refund
         LexScrowStorage.voidAndRefund(agreementId);
+    }
+
+    /// @dev Teardown shared by every void path: the corp's certificates were minted to this manager at
+    /// proposal time and are never returned, so they must be voided or they keep counting toward the
+    /// printer's look-through holder tally. Idempotent — voiding an already-void lot is a no-op.
+    function _voidCorpCerts(Escrow storage deal) private {
+        for (uint256 i = 0; i < deal.corpAssets.length; i++) {
+            if (deal.corpAssets[i].tokenType == TokenType.ERC721) {
+                ICyberCertPrinter(deal.corpAssets[i].tokenAddress).voidCert(
+                    deal.corpAssets[i].tokenId
+                );
+            }
+        }
     }
 
 }

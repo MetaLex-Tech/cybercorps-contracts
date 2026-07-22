@@ -49,6 +49,7 @@ import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/pro
 import {IERC1967} from "../dependencies/openzeppelin-contracts/contracts/interfaces/IERC1967.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {DealManager, LexScrowStorage} from "../src/DealManager.sol";
+import {EscrowStatus} from "../src/storage/LexScrowStorage.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IDealManagerStorage} from "../src/interfaces/IDealManagerStorage.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
@@ -741,6 +742,7 @@ contract DealManagerTest is Test {
 
         // The agreement wasn't successfully voided yet, so no refund issued
         assertEq(paymentToken.balanceOf(alice), alicePaymentTokenBalancesBefore, "Alice should not receive the refund yet");
+        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), address(dm), "Cert should still be escrowed");
 
         // Simulate company sign to void
         registry.mockIsReadyToVoid(agreementId, true);
@@ -748,6 +750,47 @@ contract DealManagerTest is Test {
         dm.signToVoid(agreementId, companyOwner, GOOD_SIGNATURE);
 
         assertEq(paymentToken.balanceOf(alice), alicePaymentTokenBalancesBefore + 10 ether, "Alice should receive the refund");
+        _assertCertVoided(certIds[0]);
+    }
+
+    function test_SignToVoid_MutualVoidVoidsCertWithoutVoidExpiredDeal() public {
+        // A mutual void locks out voidExpiredDeal (every party is already in voidRequestedBy), so
+        // signToVoid must tear the escrowed certs down itself or they stay live forever.
+
+        (bytes32 agreementId, uint256[] memory certIds) = _proposeSignedDealAndPay(
+            alice,
+            GOOD_SIGNATURE,
+            alice
+        );
+
+        vm.prank(alice);
+        dm.signToVoid(agreementId, alice, GOOD_SIGNATURE);
+
+        registry.mockIsReadyToVoid(agreementId, true);
+        vm.prank(companyOwner);
+        dm.signToVoid(agreementId, companyOwner, GOOD_SIGNATURE);
+
+        _assertCertVoided(certIds[0]);
+
+        // The registry teardown path stays closed — cleanup must not depend on it
+        vm.warp(block.timestamp + 365 days);
+        vm.prank(companyOwner);
+        vm.expectRevert(CyberAgreementRegistry.ContractAlreadyVoided.selector);
+        dm.voidExpiredDeal(agreementId, companyOwner, GOOD_SIGNATURE);
+    }
+
+    function test_SignToVoid_PendingDealVoidsEscrowAndCert() public {
+        // Same teardown for a deal voided before payment: the escrow is re-synced to VOIDED and the
+        // certs are voided, matching voidExpiredDeal's PENDING branch.
+
+        (bytes32 agreementId, uint256[] memory certIds) = _proposeSignedDeal();
+
+        registry.mockIsReadyToVoid(agreementId, true);
+        vm.prank(companyOwner);
+        dm.signToVoid(agreementId, companyOwner, GOOD_SIGNATURE);
+
+        assertEq(uint8(dm.getEscrowDetails(agreementId).status), uint8(EscrowStatus.VOIDED), "Escrow should be voided");
+        _assertCertVoided(certIds[0]);
     }
 
     function test_PaymentFlow_RefundVoidedDeal() public {
@@ -781,6 +824,7 @@ contract DealManagerTest is Test {
         dm.refundVoidedDeal(agreementId);
 
         assertEq(paymentToken.balanceOf(alice), alicePaymentTokenBalancesBefore + 10 ether, "Alice should receive the refund");
+        _assertCertVoided(certIds[0]);
     }
 
     function test_RevertIf_PaymentFlow_RefundVoidedDealNotVoided() public {
@@ -1005,6 +1049,12 @@ contract DealManagerTest is Test {
             bytes32(0), // secretHash
             block.timestamp // expiry
         );
+    }
+
+    /// @dev The mock printer burns on voidCert, so a voided cert no longer resolves an owner.
+    function _assertCertVoided(uint256 certId) internal {
+        vm.expectRevert();
+        CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certId);
     }
 
     function _proposeSignedDealAndPay(
