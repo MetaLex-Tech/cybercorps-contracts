@@ -343,6 +343,9 @@ library DealManagerStorage {
 
     /// @notice Signs to void a deal; refunds if the deal was paid
     /// @dev nonReentrant is carried by the DealManager wrapper that delegatecalls here.
+    ///      When mutual void succeeds on a PAID deal, voids escrowed corp ERC721s (same teardown as
+    ///      voidExpiredDeal) before refunding — otherwise certs stay locked and voidExpiredDeal cannot
+    ///      clean up because every party is already in voidRequestedBy.
     function signToVoid(bytes32 agreementId, address signer, bytes memory signature) public {
         // Check: status
         if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
@@ -350,9 +353,18 @@ library DealManagerStorage {
 
         // Effect: update status
         ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).voidContractFor(agreementId, signer, signature);
-        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId) && LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PAID)
+        if(ICyberAgreementRegistry(LexScrowStorage.getDealRegistry()).isVoided(agreementId) && LexScrowStorage.getEscrow(agreementId).status == EscrowStatus.PAID) {
+            Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
+            for (uint256 i = 0; i < deal.corpAssets.length; i++) {
+                if (deal.corpAssets[i].tokenType == TokenType.ERC721) {
+                    ICyberCertPrinter(deal.corpAssets[i].tokenAddress).voidCert(
+                        deal.corpAssets[i].tokenId
+                    );
+                }
+            }
             // Interaction: payment
             LexScrowStorage.voidAndRefund(agreementId);
+        }
     }
 
     /// @notice Refund a voided deal

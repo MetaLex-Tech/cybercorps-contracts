@@ -735,6 +735,9 @@ contract DealManagerTest is Test {
 
         uint256 alicePaymentTokenBalancesBefore = paymentToken.balanceOf(alice);
 
+        // Cert is escrowed on DealManager while PAID
+        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), address(dm));
+
         // Simulate Alice sign to void
         vm.prank(alice);
         dm.signToVoid(agreementId, alice, GOOD_SIGNATURE);
@@ -748,6 +751,10 @@ contract DealManagerTest is Test {
         dm.signToVoid(agreementId, companyOwner, GOOD_SIGNATURE);
 
         assertEq(paymentToken.balanceOf(alice), alicePaymentTokenBalancesBefore + 10 ether, "Alice should receive the refund");
+
+        // Escrowed corp cert must be voided on mutual PAID void (not left locked on DealManager)
+        vm.expectRevert();
+        CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]);
     }
 
     function test_PaymentFlow_RefundVoidedDeal() public {
