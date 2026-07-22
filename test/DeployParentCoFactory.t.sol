@@ -145,11 +145,11 @@ contract DeployParentCoFactoryForkTest is Test {
         address[] memory segCoParties = new address[](2);
         segCoParties[0] = parentCoOfficer1;
         segCoParties[1] = subCorpOfficer;
-        r.expectedSegCoId = keccak256(abi.encode(segCoTemplateId, subCorpSalt, globalValues, segCoParties));
+        r.expectedSegCoId = keccak256(abi.encode(segCoTemplateId, subCorpSalt, globalValues, segCoParties, bytes32(0), address(parentCoFactory), block.timestamp + 7 days));
 
         address[] memory boardConsentParties = new address[](1);
         boardConsentParties[0] = parentCoOfficer1;
-        r.expectedBoardConsentId = keccak256(abi.encode(boardConsentTemplateId, subCorpSalt, globalValues, boardConsentParties));
+        r.expectedBoardConsentId = keccak256(abi.encode(boardConsentTemplateId, subCorpSalt, globalValues, boardConsentParties, bytes32(0), address(parentCoFactory), block.timestamp + 7 days));
 
         (
             string memory legalContractUri,
@@ -414,7 +414,7 @@ contract DeployParentCoFactoryForkTest is Test {
         address[] memory segCoParties = new address[](2);
         segCoParties[0] = parentCoOfficer2;
         segCoParties[1] = subCorpOfficer;
-        bytes32 agreementId = keccak256(abi.encode(segCoTemplateId, subCorpSalt, globalValues, segCoParties));
+        bytes32 agreementId = keccak256(abi.encode(segCoTemplateId, subCorpSalt, globalValues, segCoParties, bytes32(0), address(parentCoFactory), block.timestamp + 7 days));
 
         (
             string memory legalContractUri,

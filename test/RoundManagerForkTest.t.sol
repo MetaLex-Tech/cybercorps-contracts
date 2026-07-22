@@ -150,8 +150,10 @@ contract RoundManagerFCFSForkTest is Test {
             globalValues,
             partyValues,
             officerEOA,
-            privKey
-        );
+            privKey,
+            address(rm),
+            block.timestamp + 7 days,
+            bytes32(0));
 
         vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector);
         rm.submitEOI(
@@ -259,7 +261,7 @@ contract RoundManagerFCFSForkTest is Test {
             lxPartyValues[0][2] = eoi.jurisdiction;
             lxPartyValues[0][3] = eoi.contact;
 
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties));
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter), block.timestamp + 30 days));
             bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 lxRegistry.DOMAIN_SEPARATOR(),
@@ -307,8 +309,10 @@ contract RoundManagerFCFSForkTest is Test {
             glValues,
             pv,
             officerEOA,
-            investorPrivKey
-        );
+            investorPrivKey,
+            address(rm),
+            block.timestamp + 30 days,
+            bytes32(0));
 
         rm.submitEOI(
             roundId,
@@ -415,7 +419,7 @@ contract RoundManagerFCFSForkTest is Test {
             lxPartyValues[0][2] = eoi.jurisdiction;
             lxPartyValues[0][3] = eoi.contact;
 
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties));
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter), block.timestamp + 30 days));
             bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 lxRegistry.DOMAIN_SEPARATOR(),
@@ -475,7 +479,7 @@ contract RoundManagerFCFSForkTest is Test {
             lxPartyValues[0][3] = eoi.contact;        // investorContact
 
             // Compute agreementId and signature for the LeXcheX agreement
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties));
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter), block.timestamp + 30 days));
             bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 lxRegistry.DOMAIN_SEPARATOR(),
@@ -524,8 +528,10 @@ contract RoundManagerFCFSForkTest is Test {
             glValues,
             pv,
             officerEOA,
-            investorPrivKey
-        );
+            investorPrivKey,
+            address(rm),
+            block.timestamp + 30 days,
+            bytes32(0));
 
         //make sure lexchex is not valid
         assert(!ILexChex(0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62).hasValidLexCheX(investor));
@@ -630,7 +636,7 @@ contract RoundManagerFCFSForkTest is Test {
             lxPartyValues[0][2] = eoi.jurisdiction;
             lxPartyValues[0][3] = eoi.contact;
 
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties));
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter), block.timestamp + 30 days));
             bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 lxRegistry.DOMAIN_SEPARATOR(),
@@ -678,8 +684,10 @@ contract RoundManagerFCFSForkTest is Test {
             glValues,
             pv,
             officerEOA,
-            inv1PrivKey
-        );
+            inv1PrivKey,
+            address(rmPub),
+            block.timestamp + 30 days,
+            bytes32(0));
 
         // SUBMIT EOI - Should succeed but NOT mint LexChex because token is not whitelisted
         vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector);
@@ -731,7 +739,7 @@ contract RoundManagerFCFSForkTest is Test {
             lxPartyValues[0][2] = eoi.jurisdiction;
             lxPartyValues[0][3] = eoi.contact;
 
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties));
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(minter), block.timestamp + 30 days));
             bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 lxRegistry.DOMAIN_SEPARATOR(),
@@ -774,8 +782,10 @@ contract RoundManagerFCFSForkTest is Test {
             glValues,
             pv,
             officerEOA,
-            inv2PrivKey
-        );
+            inv2PrivKey,
+            address(rmPub),
+            block.timestamp + 30 days,
+            bytes32(0));
 
         // SUBMIT EOI - Should succeed AND mint LexChex
         rmPub.submitEOI(
@@ -940,8 +950,10 @@ contract RoundManagerFCFSForkTest is Test {
             globalValues,
             eoiPartyValues,
             companyOfficer.eoa,
-            INVESTOR_PK
-        );
+            INVESTOR_PK,
+            address(roundManager),
+            block.timestamp + 7 days,
+            bytes32(0));
 
         EOI memory eoi = EOI({
             name: "Fork Investor",
