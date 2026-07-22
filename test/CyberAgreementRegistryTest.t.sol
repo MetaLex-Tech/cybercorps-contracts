@@ -582,6 +582,92 @@ contract CyberAgreementRegistryTest is Test {
         vm.stopPrank();
     }
 
+    /// @notice A delegate must not be counted as an independent party for signature quorum.
+    /// Showcases the exploit where a party (alice) and her own delegate (bob) reach the
+    /// full-signature threshold of an [alice, chad] agreement without chad ever signing.
+    /// The delegate's own address is not a listed party, so signing under it must revert
+    /// `NotAParty`. Regression guard: `isParty()` must not treat a delegate address as a party.
+    function test_delegateCannotCountAsIndependentPartyForQuorum() public {
+        uint256 salt = uint256(keccak256("test_delegateCannotCountAsIndependentPartyForQuorum"));
+
+        // Agreement between alice (party) and chad (counterparty)
+        address[] memory parties = new address[](2);
+        parties[0] = alice;
+        parties[1] = chad;
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            salt,
+            testGlobalValues,
+            parties,
+            testPartyValues,
+            "", // secretHash
+            address(0), // finalizer undefined -> auto-finalize on full quorum
+            block.timestamp + 100
+        );
+
+        // alice delegates to bob
+        vm.prank(alice);
+        registry.setDelegation(bob, block.timestamp + 100);
+
+        // alice signs as herself
+        vm.prank(alice);
+        registry.signContractFor(
+            alice,
+            agreementId,
+            testPartyValues[0],
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                testLegalContractUri,
+                testGlobalFields,
+                testPartyFields,
+                testGlobalValues,
+                testPartyValues[0],
+                alicePrivateKey
+            ),
+            false,
+            ""
+        );
+
+        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed");
+        assertFalse(registry.hasSigned(agreementId, chad), "chad has not signed");
+        assertFalse(registry.allPartiesSigned(agreementId), "quorum must not be reached yet");
+
+        // EXPLOIT: bob (alice's delegate) signs using his OWN address as the signer,
+        // padding numSignatures to reach quorum without chad's consent.
+        bytes memory bobExploitSig = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            agreementId,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields,
+            testGlobalValues,
+            testPartyValues[1],
+            bobPrivateKey
+        );
+
+        vm.prank(bob);
+        vm.expectRevert(CyberAgreementRegistry.NotAParty.selector);
+        registry.signContractFor(
+            bob,
+            agreementId,
+            testPartyValues[1],
+            bobExploitSig,
+            false,
+            ""
+        );
+
+        // The counterparty's consent must still be outstanding
+        assertFalse(registry.allPartiesSigned(agreementId), "quorum must not be reachable without chad");
+        assertFalse(registry.isFinalized(agreementId), "agreement must not finalize without chad");
+    }
+
     /// @notice Should be able to prepare & sign a standalone agreement in one tx
     function test_createStandaloneContractAndSign() public {
         uint256 salt = uint256(keccak256("test_createStandaloneContractAndSign"));
