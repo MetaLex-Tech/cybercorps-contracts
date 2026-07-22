@@ -38,6 +38,7 @@ struct FundInterestData {
     uint64 acquisitionDate;
     uint64 tackedFromAcquisitionDate;
     bool isAffiliateOrControlPerson;
+    string customProvisions;
 }
 
 /// @notice Fund-interest terms shared by all LETs issued from one printer (the class/series scope).
