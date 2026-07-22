@@ -241,6 +241,9 @@ interface ISecondaryTradeStorage {
     /// @notice A trade's units or consideration is below the admin-set minimum-ticket threshold;
     /// enforced on the whole offer at postOffer and on each lot at acceptOffer
     error BelowMinTradeThreshold();
+    /// @notice A lot of a priced offer floored to zero consideration; the fill is worth less than one
+    /// base unit of the payment token
+    error ZeroConsiderationFill();
     error IntegratorNotWhitelisted();
     error UnitsExceedOffer();
     error NotOfferor();

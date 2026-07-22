@@ -1886,6 +1886,90 @@ contract DealManagerSecondaryTradeTest is Test {
         );
     }
 
+    function test_RevertIf_AcceptOffer_Buy_FillFloorsToZeroConsideration() public {
+        // A buy offer priced below one payment-token base unit per unit: floor(consideration * k / units)
+        // is 0 for a single-unit fill. Left unguarded the acceptor would deliver units and be paid nothing,
+        // while the offeror's escrow — never debited — comes back in full at cancel.
+        PostOfferParams memory p = _defaultBuyOfferParams();
+        p.consideration = UNITS / 2; // half a base unit per unit
+        p.salt = uint256(keccak256("zeroConsiderationBuyOffer"));
+
+        vm.prank(buyer);
+        bytes32 offerId = dm.postOffer(p);
+
+        AcceptOfferParams memory a = AcceptOfferParams({
+            offerId: offerId,
+            units: 1,
+            exemptionPathway: ExemptionPathway.NONE,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0),
+            sellerTokenId: sellerTokenId,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, seller, sellerKey),
+            openEndorsementSig: OPEN_ENDORSEMENT_SIG
+        });
+
+        vm.prank(seller);
+        vm.expectRevert(ISecondaryTradeStorage.ZeroConsiderationFill.selector);
+        dm.acceptOffer(a);
+    }
+
+    function test_RevertIf_AcceptOffer_Sell_FillFloorsToZeroConsideration() public {
+        // Sell mirror: the buyer would take units free and leave the whole price on the exhausting lot.
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.consideration = UNITS / 2;
+        p.salt = uint256(keccak256("zeroConsiderationSellOffer"));
+
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+
+        AcceptOfferParams memory a = AcceptOfferParams({
+            offerId: offerId,
+            units: 1,
+            exemptionPathway: ExemptionPathway.SECTION_4A7,
+            buyerName: SELL_ACCEPT_BUYER_NAME,
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0),
+            sellerTokenId: 0,
+            acceptorPartyValues: new string[](0),
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey),
+            openEndorsementSig: ""
+        });
+
+        vm.prank(buyer);
+        vm.expectRevert(ISecondaryTradeStorage.ZeroConsiderationFill.selector);
+        dm.acceptOffer(a);
+    }
+
+    function test_AcceptOffer_UnpricedOfferSettlesAtZeroConsideration() public {
+        // A wholly unpriced offer is a deliberate shape (no payment expected), so its lots settle at zero:
+        // the guard keys off the offer's own price, not the lot's amount.
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.consideration = 0;
+        p.salt = uint256(keccak256("unpricedSellOffer"));
+
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+
+        bytes32 settlementId = _acceptSellOfferPartial(offerId, 1);
+        assertEq(dm.getSecondaryEscrow(settlementId).paymentAmount, 0, "unpriced lot settles at zero");
+    }
+
+    function test_AcceptOffer_SmallestPricedFillStillSettles() public {
+        // Boundary: the first fill size whose pro-rata clears one base unit is allowed, so the guard only
+        // rejects the floored-to-nothing case.
+        PostOfferParams memory p = _defaultSellOfferParams();
+        p.consideration = UNITS / 2;
+        p.salt = uint256(keccak256("smallestPricedSellOffer"));
+
+        vm.prank(seller);
+        bytes32 offerId = dm.postOffer(p);
+
+        bytes32 settlementId = _acceptSellOfferPartial(offerId, 2); // floor(50 * 2 / 100) == 1
+        assertEq(dm.getSecondaryEscrow(settlementId).paymentAmount, 1, "smallest priced lot settles for 1");
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // cancelOffer — sell
     // ─────────────────────────────────────────────────────────────────────────

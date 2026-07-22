@@ -350,6 +350,12 @@ library SecondaryTradeStorage {
             ? offer.consideration - offer.paymentAccepted
             : offer.consideration * params.units / offer.units;
 
+        // A priced offer must never settle a lot for nothing: flooring zeroes any fill worth less than one
+        // base unit of the payment token, which would deliver units free and shove the whole price onto the
+        // exhausting lot. Unpriced (zero-consideration) offers are a deliberate shape and stay allowed.
+        if (offer.consideration > 0 && partialConsideration == 0)
+            revert ISecondaryTradeStorage.ZeroConsiderationFill();
+
         // Re-apply the admin-set minimum-ticket floors that postOffer enforced on the whole offer, now
         // against this lot — otherwise a tiny partial fill can settle below the floor. For a non-exhausting
         // fill we also require the remainder left on the offer to clear the floor, so a sub-floor tail can
