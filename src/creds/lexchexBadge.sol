@@ -260,7 +260,7 @@ contract LeXcheXBadge is
         return true;
     }
 
-    /// @notice The workhorse for KYCAMLCondition, LegionSoulboundCondition, and whitelist checks
+    /// @notice The workhorse for LegionSoulboundCondition and whitelist checks
     function hasValidCredential(address owner, bytes32 categoryId) public view returns (bool) {
         uint256 balance = balanceOf(owner);
         for (uint256 i = 0; i < balance; i++) {
