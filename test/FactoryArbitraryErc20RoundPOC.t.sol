@@ -197,8 +197,10 @@ contract FactoryArbitraryErc20RoundPOCTest is Test {
             globalValues,
             partyValues,
             companyOfficer.eoa,
-            investorPk
-        );
+            investorPk,
+            roundManagerAddr,
+            block.timestamp + 7 days,
+            bytes32(0));
 
         EOI memory eoi = EOI({
             name: "Investor",
