@@ -36,10 +36,8 @@ import {
     SecondaryEscrowStatus
 } from "../src/storage/SecondaryTradeStorage.sol";
 // Real secondary-trading conditions under test.
-import {KYCAMLCondition} from "../src/libs/conditions/secondary/KYCAMLCondition.sol";
-import {TaxInfoCondition} from "../src/libs/conditions/secondary/TaxInfoCondition.sol";
+import {EligibilityCondition} from "../src/libs/conditions/secondary/EligibilityCondition.sol";
 import {HolderCapCondition} from "../src/libs/conditions/secondary/HolderCapCondition.sol";
-import {ERISACondition} from "../src/libs/conditions/secondary/ERISACondition.sol";
 import {USStateOfResidenceCondition} from "../src/libs/conditions/secondary/USStateOfResidenceCondition.sol";
 import {LegionSoulboundCondition} from "../src/libs/conditions/secondary/LegionSoulboundCondition.sol";
 import {HoldingPeriodCondition} from "../src/libs/conditions/secondary/HoldingPeriodCondition.sol";
@@ -93,12 +91,10 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     bytes32 constant corpSalt = keccak256("DealManagerSecondaryTradeExemptionPathwayTest.corp");
     bytes32 constant imSalt = keccak256("DealManagerSecondaryTradeExemptionPathwayTest.im");
 
-    // Single template carrying TWO party fields, so the buyer's ERISA attestation and §4(a)(7)
-    // acknowledgment-of-receipt can be recorded as signer values on the settlement agreement
-    // (ERISACondition / Section4a7DisclosureCondition read registry.getSignerValues).
+    // Single template carrying the buyer's §4(a)(7) acknowledgment-of-receipt, recorded as a signer
+    // value on the settlement agreement (Section4a7DisclosureCondition reads registry.getSignerValues).
     bytes32 public constant TEMPLATE_ID = bytes32(0);
     string public constant TEMPLATE_URI = "ipfs://exemption-template";
-    string public constant ERISA_ATTESTATION = "ERISA:no-plan-assets";
     string public constant SECTION4A7_ACK = "4a7:information-package-received";
     string public constant DISCLOSURE_URI = "ipfs://disclosure-package";
     // Freshness policy for both disclosure conditions (Rule 144(c)(2) practice: 16 months)
@@ -134,10 +130,8 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     LeXcheXBadge public badge;
 
     // Real conditions.
-    KYCAMLCondition public kyc;
-    TaxInfoCondition public taxInfo;
+    EligibilityCondition public eligibility;
     HolderCapCondition public holderCap;
-    ERISACondition public erisa;
     USStateOfResidenceCondition public usState;
     LegionSoulboundCondition public legion;
     HoldingPeriodCondition public holdingPeriod;
@@ -184,7 +178,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         im = IssuanceManager(imFactory.deployIssuanceManager(imSalt));
         im.initialize(address(auth), address(corp), address(new MockUriBuilderForIM()), address(imFactory));
 
-        // Real CyberAgreementRegistry with a one-party-field template (for the ERISA attestation).
+        // Real CyberAgreementRegistry with a one-party-field template (for the §4(a)(7) ack).
         registry = CyberAgreementRegistry(
             address(
                 new ERC1967Proxy(
@@ -243,6 +237,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         vm.warp(500 days);
         _mintCred(seller, CAT_KYC, "US", CA);
         vm.startPrank(owner);
+        eligibility.setClearance(seller, true);
         rule144Disclosure.setDisclosurePackage(address(corp), DISCLOSURE_URI, uint64(block.timestamp));
         section4a7Disclosure.setDisclosurePackage(address(corp), DISCLOSURE_URI, uint64(block.timestamp));
         vm.stopPrank();
@@ -451,7 +446,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
             templateId: TEMPLATE_ID,
             salt: salt,
             globalValues: new string[](0),
-            offerorPartyValues: _two("", ""),
+            offerorPartyValues: _one(""),
             offerorAgreementSig: "",
             openEndorsementSig: "sellerEndorsement",
             buyerName: "",
@@ -466,9 +461,9 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         internal
         returns (bytes32 settlementId)
     {
-        // The buyer records both attestations as signer values; each condition scans for its own marker,
-        // so carrying the §4(a)(7) ack on non-4a7 pathways is harmless.
-        string[] memory pv = _two(ERISA_ATTESTATION, SECTION4A7_ACK);
+        // The buyer records the §4(a)(7) ack as a signer value; the condition scans for its marker,
+        // so carrying it on non-4a7 pathways is harmless.
+        string[] memory pv = _one(SECTION4A7_ACK);
         AcceptOfferParams memory a = AcceptOfferParams({
             offerId: offerId,
             units: UNITS,
@@ -505,11 +500,8 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     }
 
     function _deployConditions() internal {
-        kyc = KYCAMLCondition(
-            _proxy(address(new KYCAMLCondition()), abi.encodeCall(KYCAMLCondition.initialize, (address(auth), address(badge))))
-        );
-        taxInfo = TaxInfoCondition(
-            _proxy(address(new TaxInfoCondition()), abi.encodeCall(TaxInfoCondition.initialize, (address(auth))))
+        eligibility = EligibilityCondition(
+            _proxy(address(new EligibilityCondition()), abi.encodeCall(EligibilityCondition.initialize, (address(auth))))
         );
         holderCap = HolderCapCondition(
             _proxy(
@@ -518,12 +510,6 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                     HolderCapCondition.initialize,
                     (address(auth), address(badge), HolderCapCondition.IcaException.SECTION_3C1, uint256(100), false, false)
                 )
-            )
-        );
-        erisa = ERISACondition(
-            _proxy(
-                address(new ERISACondition()),
-                abi.encodeCall(ERISACondition.initialize, (address(auth), address(registry), ERISA_ATTESTATION))
             )
         );
         usState = USStateOfResidenceCondition(
@@ -598,10 +584,8 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
 
     function _wireConditions() internal {
         // SPV-layer (every pathway).
-        _addSpv(address(kyc));
-        _addSpv(address(taxInfo));
+        _addSpv(address(eligibility));
         _addSpv(address(holderCap));
-        _addSpv(address(erisa));
         _addSpv(address(usState));
         _addSpv(address(legion));
         _addSpv(address(agreementSigned));
@@ -630,7 +614,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         _mintCred(buyer, CAT_KYC, jurisdiction, state);
         _mintCred(buyer, CAT_LEGION, jurisdiction, state);
         vm.prank(owner);
-        taxInfo.setTaxForm(buyer, TaxInfoCondition.TaxFormType.W9, keccak256("form"));
+        eligibility.setClearance(buyer, true);
 
         paymentToken.mint(buyer, CONSIDERATION * 10);
         vm.prank(buyer);
@@ -713,15 +697,13 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     }
 
     function _partyFields() internal pure returns (string[] memory f) {
-        f = new string[](2);
-        f[0] = "erisaAttestation";
-        f[1] = "section4a7Ack";
+        f = new string[](1);
+        f[0] = "section4a7Ack";
     }
 
-    function _two(string memory v0, string memory v1) internal pure returns (string[] memory a) {
-        a = new string[](2);
+    function _one(string memory v0) internal pure returns (string[] memory a) {
+        a = new string[](1);
         a[0] = v0;
-        a[1] = v1;
     }
 
     /// @dev Cumulative units consumed from the seller cert: a full sale voids it, a partial decrements.
@@ -731,7 +713,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     }
 
     /// @dev Recomputes the next settlement agreement id for an offer and returns the acceptor's EIP-712
-    /// signature over it. partyValues must match what acceptOffer submits (the ERISA attestation).
+    /// signature over it. partyValues must match what acceptOffer submits (the §4(a)(7) ack).
     function _acceptorSig(bytes32 offerId, address acceptor, uint256 key, string[] memory partyValues)
         internal
         view

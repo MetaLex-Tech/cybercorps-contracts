@@ -31,15 +31,15 @@ buyer per pathway. SPV-layer conditions apply to every pathway; pathway-layer co
 by `exemptionPathway`; closing conditions are evaluated at finalize (after a +24h warp to clear the
 settlement period).
 
-| Scenario (test fn)              | Pathway         | Buyer profile                            | Seller cert `acquisitionDate` | KYCAML | TaxInfo | HolderCap | ERISA | USState | Legion | AgreementSigned | HoldingPeriod | Accredited | QIB | NonUSPerson | RegSCompliance | Rule144Disc | §4a7Disc | LegalOpinion | KillSwitch | TimeSettlement |
-|---------------------------------|-----------------|------------------------------------------|-------------------------------|:------:|:-------:|:---------:|:-----:|:-------:|:------:|:---------------:|:-------------:|:----------:|:---:|:-----------:|:--------------:|:-----------:|:--------:|:------------:|:----------:|:--------------:|
-| `test_Rule144_HappyPath`        | RULE_144        | US individual, state CA                  | > 365 d ago                   |   ✓    |    ✓    |     ✓     |   ✓   |    ✓    |   ✓    |        ✓        |       ✓       |     —      |  —  |      —      |       —        |      ✓      |    —     |      —       |     ✓      |       ✓        |
-| `test_Section4a7_HappyPath`     | SECTION_4A7     | US **accredited**, CA                    | any                           |   ✓    |    ✓    |     ✓     |   ✓   |    ✓    |   ✓    |        ✓        |       —       |     ✓      |  —  |      —      |       —        |      —      |    ✓     |      —       |     ✓      |       ✓        |
-| `test_Section4a1Half_HappyPath` | SECTION_4A1HALF | US sophisticated (KYC only), CA          | any                           |   ✓    |    ✓    |     ✓     |   ✓   |    ✓    |   ✓    |        ✓        |       —       |     —      |  —  |      —      |       —        |      —      |    —     |      ✓       |     ✓      |       ✓        |
-| `test_Rule144A_HappyPath`       | RULE_144A       | US **QIB**, CA                           | any                           |   ✓    |    ✓    |     ✓     |   ✓   |    ✓    |   ✓    |        ✓        |       —       |     —      |  ✓  |      —      |       —        |      —      |    —     |      —       |     ✓      |       ✓        |
-| `test_RegulationS_HappyPath`    | REGULATION_S    | **non-US person** (juris KY, no usState) | > compliance period ago       |   ✓    |    ✓    |     ✓     |   ○   |    ○    |   ✓    |        ✓        |       —       |     —      |  —  |      ✓      |       ✓        |      —      |    —     |      —       |     ✓      |       ✓        |
+| Scenario (test fn)              | Pathway         | Buyer profile                            | Seller cert `acquisitionDate` | Eligibility | HolderCap | USState | Legion | AgreementSigned | HoldingPeriod | Accredited | QIB | NonUSPerson | RegSCompliance | Rule144Disc | §4a7Disc | LegalOpinion | KillSwitch | TimeSettlement |
+|---------------------------------|-----------------|------------------------------------------|-------------------------------|:-----------:|:---------:|:-------:|:------:|:---------------:|:-------------:|:----------:|:---:|:-----------:|:--------------:|:-----------:|:--------:|:------------:|:----------:|:--------------:|
+| `test_Rule144_HappyPath`        | RULE_144        | US individual, state CA                  | > 365 d ago                   |      ✓      |     ✓     |    ✓    |   ✓    |        ✓        |       ✓       |     —      |  —  |      —      |       —        |      ✓      |    —     |      —       |     ✓      |       ✓        |
+| `test_Section4a7_HappyPath`     | SECTION_4A7     | US **accredited**, CA                    | any                           |      ✓      |     ✓     |    ✓    |   ✓    |        ✓        |       —       |     ✓      |  —  |      —      |       —        |      —      |    ✓     |      —       |     ✓      |       ✓        |
+| `test_Section4a1Half_HappyPath` | SECTION_4A1HALF | US sophisticated (KYC only), CA          | any                           |      ✓      |     ✓     |    ✓    |   ✓    |        ✓        |       —       |     —      |  —  |      —      |       —        |      —      |    —     |      ✓       |     ✓      |       ✓        |
+| `test_Rule144A_HappyPath`       | RULE_144A       | US **QIB**, CA                           | any                           |      ✓      |     ✓     |    ✓    |   ✓    |        ✓        |       —       |     —      |  ✓  |      —      |       —        |      —      |    —     |      —       |     ✓      |       ✓        |
+| `test_RegulationS_HappyPath`    | REGULATION_S    | **non-US person** (juris KY, no usState) | > compliance period ago       |      ✓      |     ✓     |    ○    |   ✓    |        ✓        |       —       |     —      |  —  |      ✓      |       ✓        |      —      |    —     |      —       |     ✓      |       ✓        |
 
-**SPV-layer (all pathways):** KYCAML, TaxInfo, HolderCap, ERISA, USState, Legion, AgreementSigned.
+**SPV-layer (all pathways):** Eligibility, HolderCap, USState, Legion, AgreementSigned.
 **Closing set (all):** KillSwitch, TimeSettlement.
 **Pathway-layer:** the columns between AgreementSigned and KillSwitch.
 
@@ -55,10 +55,8 @@ settlement period).
 
 | Condition                             | Real? | Covered by                     | Notes                                                                                                                                            |
 |---------------------------------------|:-----:|--------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
-| KYCAMLCondition                       |   ✓   | all 5                          | both buyer & seller hold a valid KYC_AML badge                                                                                                   |
-| TaxInfoCondition                      |   ✓   | all 5                          | admin records `setTaxForm(buyer, W9, …)`                                                                                                         |
+| EligibilityCondition                  |   ✓   | all 5                          | admin clears both buyer & seller (`setClearance(party, true)`); catch-all for KYC/AML, tax, ERISA, …                                             |
 | HolderCapCondition                    |   ✓   | all 5                          | §3(c)(1), cap 100; buyer is a fresh holder (+1 ≤ 100)                                                                                            |
-| ERISACondition                        |   ✓   | 144, 4a7, 4a1½, 144A (○ Reg S) | buyer's attestation recorded as a signer value on the settlement agreement                                                                       |
 | USStateOfResidenceCondition           |   ✓   | 144, 4a7, 4a1½, 144A (○ Reg S) | buyer state CA (NY is default-blocked, unused); silent for the non-US Reg S buyer                                                                |
 | LegionSoulboundCondition              |   ✓   | all 5                          | buyer holds the Legion custom-category credential                                                                                                |
 | AgreementSignedCondition              |   ✓   | all 5 (SPV-layer)              | `registry.allPartiesSigned(settlementId)`; silent at posting, satisfied from acceptance onward                                                   |
@@ -77,9 +75,9 @@ settlement period).
 
 ## Test-fixture notes
 
-- The agreement template carries **two party fields** (`erisaAttestation`, `section4a7Ack`); every
-  buyer submits both values at acceptance, and each condition scans signer values for its own marker,
-  so carrying the §4(a)(7) ack on non-4a7 pathways is harmless.
+- The agreement template carries a single party field (`section4a7Ack`); every buyer submits it at
+  acceptance, and the condition scans signer values for its marker, so carrying the §4(a)(7) ack on
+  non-4a7 pathways is harmless.
 - Per-SPV setters (`setRegSConfig`, `setDisclosurePackage`, `setStateBlocked`,
   `recordGPSignOff`) are gated on the SPV's / DealManager's own BorgAuth via
   `IBorgAuthProvider(target).AUTH()`; the test corp exposes `AUTH()` for this.
@@ -88,9 +86,9 @@ settlement period).
 
 ## Not yet covered (future work)
 
-- Negative / revert paths per threshold condition (expired badge, unmet hold, blocked state,
-  holder-cap breach, missing tax form, missing ERISA attestation, U.S. buyer on Reg S, unconfigured
-  Reg S SPV, stale disclosure package, missing GP sign-off).
+- Negative / revert paths per threshold condition (uncleared party, unmet hold, blocked state,
+  holder-cap breach, U.S. buyer on Reg S, unconfigured Reg S SPV, stale disclosure package, missing
+  GP sign-off).
 - BUY-side offers (bids) per pathway.
 - Partial fills across multiple settlements.
 - `TimeSettlementPeriodCondition` per-DealManager `setDelayOverride` (QMS-mode 45-day parameterization).
