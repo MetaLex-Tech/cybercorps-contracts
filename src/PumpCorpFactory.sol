@@ -82,10 +82,10 @@ library PumpCorpFactoryLib {
         "CompanyOfficer(address eoa,string name,string contact,string title)"
     );
     bytes32 constant CERT_DATA_TYPEHASH = keccak256(
-        "CyberCertData(string name,string symbol,string uri,uint8 securityClass,uint8 securitySeries,address extension,string[] defaultLegend)"
+        "CyberCertData(string name,string symbol,string uri,uint8 securityClass,uint8 securitySeries,address extension,bytes seriesData,string[] defaultLegend)"
     );
     bytes32 constant ROUND_SUPPLEMENTAL_TYPEHASH = keccak256(
-        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,bool publicRound,bool allowTimedOffers,bool restrictEndTimeReduction,CompanyOfficer officer,string companyName,string companyType,string companyJurisdiction,string companyContactDetails,string defaultDisputeResolution,bytes[] extensionData,string[] roundPartyValues,string[] legalDetails,CyberCertData[] certData,address[] conditionAddresses)CompanyOfficer(address eoa,string name,string contact,string title)CyberCertData(string name,string symbol,string uri,uint8 securityClass,uint8 securitySeries,address extension,string[] defaultLegend)"
+        "RoundSupplementalData(bytes32 corpSalt,address companyPayable,bool publicRound,bool allowTimedOffers,bool restrictEndTimeReduction,CompanyOfficer officer,string companyName,string companyType,string companyJurisdiction,string companyContactDetails,string defaultDisputeResolution,bytes[] extensionData,string[] roundPartyValues,string[] legalDetails,CyberCertData[] certData,address[] conditionAddresses)CompanyOfficer(address eoa,string name,string contact,string title)CyberCertData(string name,string symbol,string uri,uint8 securityClass,uint8 securitySeries,address extension,bytes seriesData,string[] defaultLegend)"
     );
 
     /// @notice EIP-712 helper for encoding an array of addresses
@@ -123,6 +123,7 @@ library PumpCorpFactoryLib {
             cd.securityClass,
             cd.securitySeries,
             cd.extension,
+            keccak256(cd.seriesData),
             hashStringArray(cd.defaultLegend)
         ));
     }

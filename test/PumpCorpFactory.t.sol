@@ -1475,6 +1475,76 @@ contract PumpCorpFactoryForkTest is Test {
         );
     }
 
+    /// Cert seriesData (the series-scope payload the extension bakes into the printer)
+    /// is not covered by the escrow signature but IS covered by the meta signature.
+    /// The malleability half is the real guard: the officer's signature is over the
+    /// default cert (empty seriesData) while the call submits a cert that differs
+    /// ONLY in seriesData — before seriesData was added to the CyberCertData typehash
+    /// that tampered payload validated against the officer's signature.
+    function test_RevertIf_MetaSigRequired_CertSeriesDataProtected() public {
+        uint256 salt = 60003;
+        (address predCorp, address predRM) = _predict(salt);
+        uint256 start = block.timestamp - 1;
+        uint256 end   = block.timestamp + 30 days;
+
+        bytes memory sig = _escrowSigFull(predRM, predCorp, officerPk, start, end, address(0), TEMPLATE_ID, RoundType.FCFS);
+
+        // Mirror the default cert exactly, tampering only seriesData.
+        CyberCertData[] memory altCert = new CyberCertData[](1);
+        string[] memory legend = new string[](1);
+        legend[0] = "SEED SAFE";
+        altCert[0] = CyberCertData({
+            name:           "SEED SAFE",
+            symbol:         "SEEDSAFE",
+            uri:            "ipfs://seed-safe",
+            securityClass:  SecurityClass.SAFE,
+            securitySeries: SecuritySeries.SeriesSeed,
+            extension:      address(0),
+            seriesData:     bytes("tampered series terms"), // ← only difference from signed
+            defaultLegend:  legend
+        });
+
+        // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, officerPartyValues, legalDetails, altCert, new address[](0), attackerPk);
+
+        vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
+            salt,
+            SecuritySeries.SeriesSeed,
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            address(this),
+            _officer(officer, "Alice Officer"),
+            legalDetails, extensionData,
+            altCert, // ← substituted cert
+            TEMPLATE_ID,
+            address(0), PRICE_PER_UNIT, VALUATION,
+            officerPartyValues, sig,
+            attackerMetaSig,
+            RoundType.FCFS, new address[](0),
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            start, end, true, true, true
+        );
+
+        // Officer's default signature (over empty seriesData) must not validate the tamper.
+        vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
+            salt,
+            SecuritySeries.SeriesSeed,
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            address(this),
+            _officer(officer, "Alice Officer"),
+            legalDetails, extensionData,
+            altCert, // ← substituted cert
+            TEMPLATE_ID,
+            address(0), PRICE_PER_UNIT, VALUATION,
+            officerPartyValues, sig,
+            _metaSigDefault(salt, officerPk),
+            RoundType.FCFS, new address[](0),
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            start, end, true, true, true
+        );
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     //  OFFICER METADATA PROTECTED BY META SIGNATURE
     //  The full officer struct (eoa, name, contact, title) is NOT covered by the
