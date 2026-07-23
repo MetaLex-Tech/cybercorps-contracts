@@ -63,6 +63,7 @@ library IssuanceManagerStorage {
     error RecertificationApprovalRequired();
     error CompanyDetailsNotSet();
     error InvalidScripRatio();
+    error ScripOutstanding();
     error SignatureRequired();
     error InvalidInvestor();
     error InvalidInvestorName();
@@ -933,6 +934,16 @@ library IssuanceManagerStorage {
         uint256 denominator
     ) external {
         if (numerator == 0 || denominator == 0) revert InvalidScripRatio();
+        // The ratio is read live at both mint and redeem, so repricing while scrip is
+        // outstanding retroactively changes what already-issued scrip redeems for. Only
+        // settable before the scrip contract exists or once every holder has redeemed.
+        address scripifiedCert = getScripifiedCert(certAddress);
+        if (
+            scripifiedCert != address(0) &&
+            ICyberScrip(scripifiedCert).totalSupply() != 0
+        ) {
+            revert ScripOutstanding();
+        }
         setScripRatio(certAddress, numerator, denominator);
     }
 

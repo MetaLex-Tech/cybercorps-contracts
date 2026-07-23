@@ -67,6 +67,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     error ConditionCheckFailed();
     error NotRefImplementation();
     error InvalidScripRatio();
+    error ScripOutstanding();
     error ScripToCertMinimumNotMet();
     error ScripifyNotWhitelisted();
     error RecertificationApprovalRequired();

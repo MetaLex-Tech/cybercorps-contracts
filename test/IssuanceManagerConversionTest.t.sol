@@ -684,6 +684,210 @@ contract IssuanceManagerConversionTest is Test {
         assertEq(newDetails.unitsRepresented, 10 * 1e18);
     }
 
+    // The ratio is read live at both ends (mint in scripifyCert, redeem in
+    // executeConvertScripToCert) with no per-mint snapshot, so it may only move while no scrip
+    // is outstanding. The tests below cover each way it could otherwise be moved mid-flight.
+
+    // Raising it would have halved what already-sold scrip redeems for, stranding the difference
+    // in the vault with no scrip left to claim it.
+    function test_ScripRatio_CannotBeRaisedWhileScripOutstanding() public {
+        ICyberCertPrinter certPrinter = _deployPrinter("Haircut Cert", "HAIR");
+        uint256 investorCertId = _mintCert(certPrinter, investor, 100);
+        uint256 otherInvestorCertId = _mintCert(certPrinter, otherInvestor, 100);
+        address scrip = _deployScripAtRatio(certPrinter, 1, 1);
+
+        // Investor scripifies 100 units at 1:1 and sells the scrip on.
+        vm.prank(investor);
+        issuanceManager.scripifyCert(
+            address(certPrinter),
+            investorCertId,
+            100 * 1e18,
+            address(0)
+        );
+        vm.prank(investor);
+        ICyberScrip(scrip).transfer(otherInvestor, 100 * 1e18);
+
+        // Re-ratio must be prohibited or otherwise the following assertions would not hold
+        vm.expectRevert(IssuanceManagerStorage.ScripOutstanding.selector);
+        issuanceManager.setScripRatio(address(certPrinter), 2, 1);
+
+        // The buyer redeems at the rate the scrip was issued at.
+        vm.prank(otherInvestor);
+        issuanceManager.convertScripToCert(address(certPrinter), 100 * 1e18);
+        assertEq(
+            certPrinter.getActiveCertificateDetails(otherInvestorCertId).unitsRepresented,
+            200 * 1e18
+        );
+
+        // Nothing is left behind in the vault.
+        assertEq(ICyberScrip(scrip).totalSupply(), 0);
+        (uint256 totalAssetsWad, ) = issuanceManager.getCertScripUnitVault(
+            address(certPrinter)
+        );
+        assertEq(totalAssetsWad, 0);
+    }
+
+    // Lowering it would have made the vault insolvent: each scrip claiming more units than were
+    // deposited for it, so the first converter drains the pool and the rest revert.
+    function test_ScripRatio_CannotBeLoweredWhileScripOutstanding() public {
+        ICyberCertPrinter certPrinter = _deployPrinter("Brick Cert", "BRICK");
+        uint256 investorCertId = _mintCert(certPrinter, investor, 100);
+        uint256 otherInvestorCertId = _mintCert(certPrinter, otherInvestor, 100);
+        address scrip = _deployScripAtRatio(certPrinter, 2, 1);
+
+        // Both holders scripify 100 units at 2:1, so the vault holds 200 units backing 400 scrip.
+        vm.prank(investor);
+        issuanceManager.scripifyCert(
+            address(certPrinter),
+            investorCertId,
+            100 * 1e18,
+            address(0)
+        );
+        vm.prank(otherInvestor);
+        issuanceManager.scripifyCert(
+            address(certPrinter),
+            otherInvestorCertId,
+            100 * 1e18,
+            address(0)
+        );
+
+        // Re-ratio must be prohibited or otherwise the following assertions would not hold
+        vm.expectRevert(IssuanceManagerStorage.ScripOutstanding.selector);
+        issuanceManager.setScripRatio(address(certPrinter), 1, 1);
+
+        // Both holders redeem in full, in either order, for exactly what they put in.
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(certPrinter), 200 * 1e18);
+        vm.prank(otherInvestor);
+        issuanceManager.convertScripToCert(address(certPrinter), 200 * 1e18);
+
+        assertEq(
+            certPrinter.getActiveCertificateDetails(investorCertId).unitsRepresented,
+            100 * 1e18
+        );
+        assertEq(
+            certPrinter.getActiveCertificateDetails(otherInvestorCertId).unitsRepresented,
+            100 * 1e18
+        );
+        assertEq(ICyberScrip(scrip).totalSupply(), 0);
+        (uint256 totalAssetsWad, ) = issuanceManager.getCertScripUnitVault(
+            address(certPrinter)
+        );
+        assertEq(totalAssetsWad, 0);
+    }
+
+    // The guard binds the role that sets the ratio, so an owner holding scrip cannot scripify at
+    // one ratio, reprice, and convert at the other to take units deposited by someone else.
+    function test_ScripRatio_OwnerRoleHolderCannotRepriceOutstandingScrip() public {
+        address insider = makeAddr("insider");
+        auth.updateRole(insider, auth.OWNER_ROLE());
+
+        ICyberCertPrinter certPrinter = _deployPrinter("Extract Cert", "EXTR");
+        uint256 insiderCertId = _mintCert(certPrinter, insider, 100);
+        uint256 investorCertId = _mintCert(certPrinter, investor, 100);
+        _deployScripAtRatio(certPrinter, 2, 1);
+
+        vm.prank(investor);
+        issuanceManager.scripifyCert(
+            address(certPrinter),
+            investorCertId,
+            100 * 1e18,
+            address(0)
+        );
+        vm.prank(insider);
+        issuanceManager.scripifyCert(
+            address(certPrinter),
+            insiderCertId,
+            100 * 1e18,
+            address(0)
+        );
+
+        // Re-ratio must be prohibited or otherwise the following assertions would not hold
+        vm.prank(insider);
+        vm.expectRevert(IssuanceManagerStorage.ScripOutstanding.selector);
+        issuanceManager.setScripRatio(address(certPrinter), 1, 1);
+
+        // Redeeming at the unchanged ratio returns exactly the deposit, leaving the investor's
+        // units in the vault.
+        vm.prank(insider);
+        issuanceManager.convertScripToCert(address(certPrinter), 200 * 1e18);
+        assertEq(
+            certPrinter.getActiveCertificateDetails(insiderCertId).unitsRepresented,
+            100 * 1e18
+        );
+        assertEq(
+            issuanceManager.getScripPoolSharesById(address(certPrinter), investorCertId),
+            100 * 1e18
+        );
+    }
+
+    // The guard leaves both legitimate windows open: before any scrip has been minted, and once
+    // every holder has redeemed.
+    function test_ScripRatio_SettableBeforeIssuanceAndAfterFullRedemption() public {
+        ICyberCertPrinter certPrinter = _deployPrinter("Window Cert", "WNDW");
+        uint256 investorCertId = _mintCert(certPrinter, investor, 100);
+
+        // Before the scrip contract exists.
+        issuanceManager.setScripRatio(address(certPrinter), 5, 1);
+
+        address scrip = _deployScripAtRatio(certPrinter, 1, 1);
+
+        // Deployed but nothing minted yet.
+        issuanceManager.setScripRatio(address(certPrinter), 3, 1);
+
+        vm.prank(investor);
+        issuanceManager.scripifyCert(
+            address(certPrinter),
+            investorCertId,
+            100 * 1e18,
+            address(0)
+        );
+        assertEq(ICyberScrip(scrip).balanceOf(investor), 300 * 1e18);
+
+        // Re-ratio must be prohibited or otherwise the following assertions would not hold
+        vm.expectRevert(IssuanceManagerStorage.ScripOutstanding.selector);
+        issuanceManager.setScripRatio(address(certPrinter), 4, 1);
+
+        // Partial redemption still leaves scrip outstanding.
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(certPrinter), 150 * 1e18);
+
+        vm.expectRevert(IssuanceManagerStorage.ScripOutstanding.selector);
+        issuanceManager.setScripRatio(address(certPrinter), 4, 1);
+
+        vm.prank(investor);
+        issuanceManager.convertScripToCert(address(certPrinter), 150 * 1e18);
+        assertEq(ICyberScrip(scrip).totalSupply(), 0);
+
+        issuanceManager.setScripRatio(address(certPrinter), 4, 1);
+        (uint256 numerator, uint256 denominator) = issuanceManager.getScripRatio(
+            address(certPrinter)
+        );
+        assertEq(numerator, 4);
+        assertEq(denominator, 1);
+    }
+
+    function _deployScripAtRatio(
+        ICyberCertPrinter certPrinter,
+        uint256 numerator,
+        uint256 denominator
+    ) internal returns (address scrip) {
+        scrip = issuanceManager.deployCyberScrip(
+            address(certPrinter),
+            new ITransferRestrictionHook[](0),
+            new ICondition[](0),
+            new ICondition[](0),
+            0,
+            numerator,
+            denominator,
+            new uint256[](0),
+            false,
+            true,
+            true,
+            true
+        );
+    }
+
     function test_ScripifyWhitelist_EnabledBlocksNonWhitelisted() public {
         ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
 
