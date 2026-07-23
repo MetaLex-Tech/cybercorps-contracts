@@ -399,8 +399,10 @@ contract ShareExtensionForkTest is Test {
 
     function _deployShareContracts() internal {
         extensionAuth = new BorgAuth(address(this));
-        shareExtension = new ShareExtension();
-        shareExtension.initialize(address(extensionAuth));
+        shareExtension = ShareExtension(address(new ERC1967Proxy(
+            address(new ShareExtension()),
+            abi.encodeWithSelector(ShareExtension.initialize.selector, address(extensionAuth))
+        )));
         shareLogic = new ShareExtensionLogic();
     }
 

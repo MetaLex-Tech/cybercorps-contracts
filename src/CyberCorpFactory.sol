@@ -161,6 +161,11 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
 
     event LexchexAuthUpdated(address indexed lexchexAuth, address oldLexchexAuth);
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(
         address _auth,
         address _registryAddress,

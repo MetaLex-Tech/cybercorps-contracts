@@ -73,6 +73,11 @@ contract CertificateUriBuilder is UUPSUpgradeable, BorgAuthACL {
     // Upgrade notes: Reduced gap to account for new variables (50 - 2 = 48)
     uint256[48] private __gap;
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(address _auth) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);

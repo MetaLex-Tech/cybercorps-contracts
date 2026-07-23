@@ -66,8 +66,10 @@ contract CyberCorpExtensionTest is Test {
     }
 
     function test_SetCyberCorpExtensionDataWithVersionedSchema() public {
-        CyberCorpExtension corpExtension = new CyberCorpExtension();
-        corpExtension.initialize(address(auth));
+        CyberCorpExtension corpExtension = CyberCorpExtension(address(new ERC1967Proxy(
+            address(new CyberCorpExtension()),
+            abi.encodeWithSelector(CyberCorpExtension.initialize.selector, address(auth))
+        )));
 
         bytes memory encoded = corpExtension.encodeExtensionData(
             CyberCorpData({
@@ -96,8 +98,10 @@ contract CyberCorpExtensionTest is Test {
     }
 
     function test_RevertIf_ExtensionTypeUnsupported() public {
-        CyberCorpExtension corpExtension = new CyberCorpExtension();
-        corpExtension.initialize(address(auth));
+        CyberCorpExtension corpExtension = CyberCorpExtension(address(new ERC1967Proxy(
+            address(new CyberCorpExtension()),
+            abi.encodeWithSelector(CyberCorpExtension.initialize.selector, address(auth))
+        )));
 
         vm.prank(owner);
         vm.expectRevert(CyberCorp.ExtensionTypeNotSupported.selector);
@@ -108,11 +112,15 @@ contract CyberCorpExtensionTest is Test {
     }
 
     function test_SettingNewExtensionClearsStaleExtensionData() public {
-        CyberCorpExtension corpExtension = new CyberCorpExtension();
-        corpExtension.initialize(address(auth));
+        CyberCorpExtension corpExtension = CyberCorpExtension(address(new ERC1967Proxy(
+            address(new CyberCorpExtension()),
+            abi.encodeWithSelector(CyberCorpExtension.initialize.selector, address(auth))
+        )));
 
-        CyberCorpExtensionV2 corpExtensionV2 = new CyberCorpExtensionV2();
-        corpExtensionV2.initialize(address(auth));
+        CyberCorpExtensionV2 corpExtensionV2 = CyberCorpExtensionV2(address(new ERC1967Proxy(
+            address(new CyberCorpExtensionV2()),
+            abi.encodeWithSelector(CyberCorpExtensionV2.initialize.selector, address(auth))
+        )));
 
         bytes memory encodedV1 = corpExtension.encodeExtensionData(
             CyberCorpData({
@@ -161,9 +169,10 @@ contract CyberCorpExtensionTest is Test {
     }
 
     function test_SetComplianceExtensionDataWithErisaOwnershipFeesAndRestrictions() public {
-        CyberCorpComplianceExtension complianceExtension =
-            new CyberCorpComplianceExtension();
-        complianceExtension.initialize(address(auth));
+        CyberCorpComplianceExtension complianceExtension = CyberCorpComplianceExtension(address(new ERC1967Proxy(
+            address(new CyberCorpComplianceExtension()),
+            abi.encodeWithSelector(CyberCorpComplianceExtension.initialize.selector, address(auth))
+        )));
 
         string[] memory holderRestrictions = new string[](3);
         holderRestrictions[0] = "No sanctioned persons";
@@ -264,8 +273,10 @@ contract CyberCorpExtensionTest is Test {
     }
 
     function test_SetFundExtensionDataWithFundWideTermsAndDocuments() public {
-        CyberCorpFundExtension fundExtension = new CyberCorpFundExtension();
-        fundExtension.initialize(address(auth));
+        CyberCorpFundExtension fundExtension = CyberCorpFundExtension(address(new ERC1967Proxy(
+            address(new CyberCorpFundExtension()),
+            abi.encodeWithSelector(CyberCorpFundExtension.initialize.selector, address(auth))
+        )));
 
         string[] memory governingDocumentURIs = new string[](3);
         governingDocumentURIs[0] = "ipfs://operating-agreement";

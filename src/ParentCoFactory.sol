@@ -165,6 +165,11 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     error OfficerValuesMismatch();
     error UnauthorizedEscrowSigner();
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(
         address _auth,
         address _registryAddress,

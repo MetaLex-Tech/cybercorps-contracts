@@ -177,7 +177,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     error FinalizerNotDefined();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {}
+    constructor() {
+        _disableInitializers();
+    }
 
     function initialize(address _auth) public initializer {
         __UUPSUpgradeable_init();

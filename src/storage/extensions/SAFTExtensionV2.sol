@@ -63,6 +63,11 @@ contract SAFTExtensionV2 is UUPSUpgradeable, ICertificateExtension, BorgAuthACL 
     //ofset to leave for future upgrades
     uint256[30] private __gap;
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(address _auth) external initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);

@@ -861,8 +861,10 @@ contract CyberCorpForkTest is Test {
         vm.startPrank(testAddress);
         BorgAuth auth = new BorgAuth(testAddress);
         // auth.initialize();
-        CyberAgreementRegistry registrya = new CyberAgreementRegistry();
-        registrya.initialize(address(auth));
+        CyberAgreementRegistry registrya = CyberAgreementRegistry(address(new ERC1967Proxy(
+            address(new CyberAgreementRegistry()),
+            abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
+        )));
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
         string[] memory partyFields = new string[](1);
