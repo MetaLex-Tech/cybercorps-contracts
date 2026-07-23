@@ -172,8 +172,11 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
     }
     
     // Add endorsement (for transfers in secondary market)
+    // Only the holder of record may endorse their own cert; possession alone does not authorize it, or a
+    // custodian could endorse a cert to itself and take legal title on delivery. The IssuanceManager endorses
+    // as registrar, on the owner's signature carried in the endorsement.
     function addEndorsement(uint256 tokenId, Endorsement memory newEndorsement) public {
-        if(msg.sender != CyberCertPrinterStorage.cyberCertStorage().issuanceManager && msg.sender != ownerOf(tokenId)) revert ICyberCertPrinter.InvalidEndorsement();
+        if(msg.sender != CyberCertPrinterStorage.cyberCertStorage().issuanceManager && msg.sender != legalOwnerOf(tokenId)) revert ICyberCertPrinter.InvalidEndorsement();
         CyberCertPrinterStorage.recordEndorsement(tokenId, newEndorsement);
     }
 
@@ -564,7 +567,7 @@ contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
         return CyberCertPrinterStorage.cyberCertStorage().tokenTransferable[tokenId];
     }
 
-    function legalOwnerOf(uint256 tokenId) external view returns (address) {
+    function legalOwnerOf(uint256 tokenId) public view returns (address) {
         if (!_exists(tokenId)) revert ICyberCertPrinter.TokenDoesNotExist();
         return CyberCertPrinterStorage.cyberCertStorage().owners[tokenId].ownerAddress;
     }

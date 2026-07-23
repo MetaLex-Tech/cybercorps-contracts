@@ -5651,9 +5651,10 @@ contract CyberCorpForkTest is Test {
         assertEq(CyberCertPrinter(certPrinter).ownerOf(0), midAddr);
         assertEq(CyberCertPrinter(certPrinter).legalOwnerOf(0), certOwner);
 
-        // Add endorsement and endorsed transfer updates legal owner record
+        // Add endorsement and endorsed transfer updates legal owner record. The holder of record endorses —
+        // midAddr only has possession — and then delivers the cert to the endorsee as a custodian would.
         Endorsement memory e = Endorsement({
-            endorser: midAddr,
+            endorser: certOwner,
             timestamp: block.timestamp,
             signatureHash: hex"01",
             registry: address(0),
@@ -5661,7 +5662,7 @@ contract CyberCorpForkTest is Test {
             endorsee: recipient,
             endorseeName: "Recipient"
         });
-        vm.prank(midAddr);
+        vm.prank(certOwner);
         CyberCertPrinter(certPrinter).addEndorsement(0, e);
         vm.prank(midAddr);
         CyberCertPrinter(certPrinter).transferFrom(midAddr, recipient, 0);

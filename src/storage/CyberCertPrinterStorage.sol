@@ -230,15 +230,14 @@ library CyberCertPrinterStorage {
             }
         // NOTE: we don't revert in this block: Owner is able to transfer to another address without an endorsement, but it does not update the owner
         }
-        else if (endorsementCount > 0) {
-            // Token is not being transferred from the current owner. It can only be transferrred to the latest endorsee, or the current owner
+        // Token is not being transferred from the current owner (e.g. held by a custodian). Delivery to the party
+        // named in the latest endorsement promotes legal title (DvP settlement); a move back to the legal owner or
+        // on to any other party is a possession-only custody move that leaves legal ownership untouched.
+        else if (endorsementCount > 0 && s.endorsements[tokenId][endorsementCount - 1].endorsee == to) {
             Endorsement memory endorsement = s.endorsements[tokenId][endorsementCount - 1];
-            if (endorsement.endorsee != to && ownerAddress != to) revert ICyberCertPrinter.EndorsementNotSignedOrInvalid();
-
             emit ICyberCertPrinter.CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(s.issuanceManager).companyName());
             _setLegalOwner(s, tokenId, endorsement.endorsee, endorsement.endorseeName);
         }
-        else revert ICyberCertPrinter.EndorsementNotSignedOrInvalid();
     }
 
     /// @dev Post-mint bookkeeping for CyberCertPrinter.safeMint (the _safeMint itself stays in the printer).
