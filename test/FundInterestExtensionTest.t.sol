@@ -20,7 +20,8 @@ contract FundInterestExtensionTest is Test {
         FundInterestData memory data = FundInterestData({
             acquisitionDate: 1_700_000_000,
             tackedFromAcquisitionDate: 1_600_000_000,
-            isAffiliateOrControlPerson: true
+            isAffiliateOrControlPerson: true,
+            customProvisions: ""
         });
 
         assertEq(
@@ -34,7 +35,8 @@ contract FundInterestExtensionTest is Test {
         FundInterestData memory data = FundInterestData({
             acquisitionDate: 1_700_000_000,
             tackedFromAcquisitionDate: 1_600_000_000,
-            isAffiliateOrControlPerson: true
+            isAffiliateOrControlPerson: true,
+            customProvisions: ""
         });
         bytes memory encoded = abi.encode(data);
 
@@ -54,7 +56,8 @@ contract FundInterestExtensionTest is Test {
         FundInterestData memory data = FundInterestData({
             acquisitionDate: 1_700_000_000,
             tackedFromAcquisitionDate: 0,
-            isAffiliateOrControlPerson: true
+            isAffiliateOrControlPerson: true,
+            customProvisions: ""
         });
 
         bytes memory rewritten = extension.withTackedFrom(abi.encode(data), 1_555_000_000);
