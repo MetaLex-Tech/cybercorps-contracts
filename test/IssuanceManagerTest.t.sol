@@ -5,9 +5,9 @@ import "forge-std/Test.sol";
 import "../src/IssuanceManager.sol";
 import "../src/LedgerEntryToken.sol";
 import "../src/CyberScrip.sol";
-import "../src/interfaces/ICyberCertPrinter.sol";
+import "../src/interfaces/ILedgerEntryToken.sol";
 import "../src/interfaces/IUriBuilder.sol";
-import {RestrictiveLegend} from "../src/storage/CyberCertPrinterStorage.sol";
+import {RestrictiveLegend} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {IssuanceManagerStorage} from "../src/storage/IssuanceManagerStorage.sol";
 import "../src/libs/auth.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -138,7 +138,7 @@ contract IssuanceManagerTest is Test {
     }
 
     function test_createCert_emitsCertificateCreated() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
         CertificateDetails memory details = _buildCertificateDetails(100);
 
         vm.expectEmit(true, true, false, true);
@@ -154,7 +154,7 @@ contract IssuanceManagerTest is Test {
     }
 
     function test_createCertAndAssign_emitsCertificateCreated() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
         CertificateDetails memory details = _buildCertificateDetails(100);
 
         vm.expectEmit(true, true, false, true);
@@ -170,7 +170,7 @@ contract IssuanceManagerTest is Test {
     }
 
     function test_createCertSignAndAssign_emitsCertificateCreated() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
         CertificateDetails memory details = _buildCertificateDetails(100);
 
         vm.expectEmit(true, true, false, true);
@@ -194,7 +194,7 @@ contract IssuanceManagerTest is Test {
     }
 
     function test_isPrinter_TrueForCreatedPrinter() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
         assertTrue(issuanceManager.isPrinter(address(certPrinter)), "created printer should be tracked");
     }
 
@@ -205,14 +205,14 @@ contract IssuanceManagerTest is Test {
     }
 
     function test_isPrinter_TracksMultiplePrinters() public {
-        ICyberCertPrinter a = _deployPrinter("CertA", "CERTA");
-        ICyberCertPrinter b = _deployPrinter("CertB", "CERTB");
+        ILedgerEntryToken a = _deployPrinter("CertA", "CERTA");
+        ILedgerEntryToken b = _deployPrinter("CertB", "CERTB");
         assertTrue(issuanceManager.isPrinter(address(a)), "first printer tracked");
         assertTrue(issuanceManager.isPrinter(address(b)), "second printer tracked");
     }
 
     function test_createCertPrinter_CreatesAndPairsCanonicalClass() public {
-        ICyberCertPrinter first = _deployPrinter("CertA", "CERTA");
+        ILedgerEntryToken first = _deployPrinter("CertA", "CERTA");
         uint256 classId = issuanceManager.getPrinterClassId(address(first));
 
         assertEq(classId, 1, "first security type creates the first class");
@@ -226,7 +226,7 @@ contract IssuanceManagerTest is Test {
         assertEq(classInfo.dataExtension, address(0), "class extension starts empty");
         assertEq(classInfo.classData.length, 0, "class data starts empty");
 
-        ICyberCertPrinter second = _deployPrinter("CertB", "CERTB");
+        ILedgerEntryToken second = _deployPrinter("CertB", "CERTB");
         assertEq(
             issuanceManager.getPrinterClassId(address(second)),
             classId,
@@ -265,7 +265,7 @@ contract IssuanceManagerTest is Test {
         );
 
         // The reverse index must follow the type, or a printer of the new type creates a duplicate class.
-        ICyberCertPrinter preferred = _deployPrinterOfType(
+        ILedgerEntryToken preferred = _deployPrinterOfType(
             "CertP",
             "CERTP",
             SecurityClass.PreferredStock
@@ -334,7 +334,7 @@ contract IssuanceManagerTest is Test {
     function _deployPrinter(
         string memory name,
         string memory symbol
-    ) internal returns (ICyberCertPrinter) {
+    ) internal returns (ILedgerEntryToken) {
         return _deployPrinterOfType(name, symbol, SecurityClass.CommonStock);
     }
 
@@ -342,8 +342,8 @@ contract IssuanceManagerTest is Test {
         string memory name,
         string memory symbol,
         SecurityClass securityClass
-    ) internal returns (ICyberCertPrinter) {
-        return ICyberCertPrinter(
+    ) internal returns (ILedgerEntryToken) {
+        return ILedgerEntryToken(
             issuanceManager.createCertPrinter(
                 new string[](0),
                 name,

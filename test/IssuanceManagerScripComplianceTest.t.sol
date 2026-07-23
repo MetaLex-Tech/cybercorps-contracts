@@ -11,7 +11,7 @@ import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHo
 import {ICondition} from "../src/interfaces/ICondition.sol";
 import {TestableCyberScrip} from "./mock/TestableCyberScrip.sol";
 import {MockTransferHook} from "./mock/MockTransferHook.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 
 contract MockCertPrinterBasic {
     string private _name;

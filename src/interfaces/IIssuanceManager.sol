@@ -46,7 +46,7 @@ import "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "./ITransferRestrictionHook.sol";
 import "./ICondition.sol";
 import "../CyberCorpConstants.sol";
-import "../storage/CyberCertPrinterStorage.sol";
+import "../storage/LedgerEntryTokenStorage.sol";
 
 interface IIssuanceManager {
     // Events

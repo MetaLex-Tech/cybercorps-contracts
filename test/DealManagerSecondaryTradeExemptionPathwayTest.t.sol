@@ -11,7 +11,7 @@ import {DealManager} from "../src/DealManager.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
-import {CertificateDetails, ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
+import {CertificateDetails, ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC5484} from "../src/interfaces/IERC5484.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
@@ -123,7 +123,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     BorgAuth public auth;
     MockCorpWithAuth public corp;
     IssuanceManager public im;
-    ICyberCertPrinter public certPrinter;
+    ILedgerEntryToken public certPrinter;
     CyberAgreementRegistry public registry;
     DealManagerFactory public dmFactory;
     DealManager public dm;
@@ -218,7 +218,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         // so we mint first and then warp forward to age the lot past the holding / Reg S compliance period —
         // the on-chain-faithful way to represent a seasoned position (no fakeable historical date).
         vm.startPrank(owner);
-        certPrinter = ICyberCertPrinter(
+        certPrinter = ILedgerEntryToken(
             im.createCertPrinter(
                 new string[](0),
                 "Secondary Cert",

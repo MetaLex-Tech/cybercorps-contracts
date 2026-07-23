@@ -8,13 +8,13 @@ import "../src/IssuanceManager.sol";
 import "../src/IssuanceManagerFactory.sol";
 import "../src/LedgerEntryToken.sol";
 import "../src/CyberScrip.sol";
-import "../src/interfaces/ICyberCertPrinter.sol";
+import "../src/interfaces/ILedgerEntryToken.sol";
 import "../src/interfaces/ICyberScrip.sol";
 import "../src/interfaces/ITransferRestrictionHook.sol";
 import "../src/interfaces/ICondition.sol";
 import "../src/interfaces/IUriBuilder.sol";
 import "../src/libs/auth.sol";
-import {RestrictiveLegend} from "../src/storage/CyberCertPrinterStorage.sol";
+import {RestrictiveLegend} from "../src/storage/LedgerEntryTokenStorage.sol";
 
 contract LegalOwnerMockCyberCorp {
     function cyberCORPName() external pure returns (string memory) {
@@ -132,7 +132,7 @@ contract LegalOwnerBugPOCTest is Test {
     bytes32 internal constant SALT = bytes32(keccak256("LegalOwnerBugPOC"));
 
     IssuanceManager internal issuanceManager;
-    ICyberCertPrinter internal certPrinter;
+    ILedgerEntryToken internal certPrinter;
     BorgAuth internal auth;
 
     address internal owner;
@@ -167,7 +167,7 @@ contract LegalOwnerBugPOCTest is Test {
             address(factory)
         );
 
-        certPrinter = ICyberCertPrinter(
+        certPrinter = ILedgerEntryToken(
             issuanceManager.createCertPrinter(
                 new string[](0),
                 "Legal Owner Cert",
@@ -247,7 +247,7 @@ contract LegalOwnerBugPOCTest is Test {
     function test_CreateCert_EmitsLegalOwnerChanged() public {
         uint256 nextId = certPrinter.totalSupply();
         vm.expectEmit(true, true, true, true, address(certPrinter));
-        emit ICyberCertPrinter.LegalOwnerChanged(nextId, address(0), investor, "", uint64(block.timestamp));
+        emit ILedgerEntryToken.LegalOwnerChanged(nextId, address(0), investor, "", uint64(block.timestamp));
         issuanceManager.createCert(address(certPrinter), investor, _details(10));
     }
 

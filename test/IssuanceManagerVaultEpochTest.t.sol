@@ -5,7 +5,7 @@ import "../src/LedgerEntryToken.sol";
 import "../src/CyberScrip.sol";
 import "../src/IssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
-import "../src/interfaces/ICyberCertPrinter.sol";
+import "../src/interfaces/ILedgerEntryToken.sol";
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
 import "../src/libs/auth.sol";
@@ -94,7 +94,7 @@ abstract contract VaultEpochHarness is Test {
 
     /// Gas for the conversion that drives the pool to exactly zero, on a printer with `supply` certificates.
     function _measureFinalConversionGas(uint256 supply) internal returns (uint256 gasUsed) {
-        (ICyberCertPrinter cert, uint256 scripBalance) = _setUpVaultWithSupply(supply);
+        (ILedgerEntryToken cert, uint256 scripBalance) = _setUpVaultWithSupply(supply);
 
         vm.prank(holder);
         uint256 gasBefore = gasleft();
@@ -109,9 +109,9 @@ abstract contract VaultEpochHarness is Test {
     /// participant regardless of supply. Returns the holder's scrip balance.
     function _setUpVaultWithSupply(uint256 supply)
         internal
-        returns (ICyberCertPrinter cert, uint256 scripBalance)
+        returns (ILedgerEntryToken cert, uint256 scripBalance)
     {
-        cert = ICyberCertPrinter(
+        cert = ILedgerEntryToken(
             issuanceManager.createCertPrinter(
                 new string[](0),
                 "Cert",
@@ -139,7 +139,7 @@ abstract contract VaultEpochHarness is Test {
     }
 
     /// Asserts the pool is empty and that no certificate in [0, supply) still claims shares or underlying.
-    function _assertVaultEmptyAndPositionsRetired(ICyberCertPrinter cert, uint256 supply) internal view {
+    function _assertVaultEmptyAndPositionsRetired(ILedgerEntryToken cert, uint256 supply) internal view {
         (uint256 assets, uint256 shares) = issuanceManager.getCertScripUnitVault(address(cert));
         assertEq(assets, 0, "pool emptied");
         assertEq(shares, 0, "pool shares zeroed");
@@ -151,7 +151,7 @@ abstract contract VaultEpochHarness is Test {
 
     /// Scripifies `tokenId` into the freshly emptied pool and asserts it owns the whole thing, which fails if
     /// any retired position carried into the new epoch.
-    function _assertRefillOwnsWholePool(ICyberCertPrinter cert, uint256 tokenId, uint256 units) internal {
+    function _assertRefillOwnsWholePool(ILedgerEntryToken cert, uint256 tokenId, uint256 units) internal {
         vm.prank(cert.legalOwnerOf(tokenId));
         issuanceManager.scripifyCert(address(cert), tokenId, units, address(0));
 
@@ -224,7 +224,7 @@ contract IssuanceManagerVaultEpochTest is VaultEpochHarness {
     /// Emptying the vault and converting all but a dust amount now cost about the same: neither path walks
     /// the token supply, so a holder is no longer pushed into leaving dust behind to keep the call cheap.
     function test_FullAndPartialConversion_CostAboutTheSame() public {
-        (ICyberCertPrinter cert, uint256 scripBalance) = _setUpVaultWithSupply(256);
+        (ILedgerEntryToken cert, uint256 scripBalance) = _setUpVaultWithSupply(256);
 
         uint256 gasBefore = gasleft();
         vm.prank(holder);
@@ -244,7 +244,7 @@ contract IssuanceManagerVaultEpochTest is VaultEpochHarness {
     /// mints 1:1 into an empty pool and adds to the stored share count, so a position surviving into the next
     /// epoch would let its holder claim more than the whole refilled pool.
     function test_VaultEpoch_InvalidatesPositionsAcrossAnEmptying() public {
-        (ICyberCertPrinter cert, uint256 scripBalance) = _setUpVaultWithSupply(8);
+        (ILedgerEntryToken cert, uint256 scripBalance) = _setUpVaultWithSupply(8);
 
         vm.prank(holder);
         issuanceManager.convertScripToCert(address(cert), scripBalance);
@@ -258,7 +258,7 @@ contract IssuanceManagerVaultEpochTest is VaultEpochHarness {
     /// A certificate that held a retired position must be able to scripify again in the new epoch: the write
     /// path clears the stale value first, so it starts from zero rather than accumulating onto dead shares.
     function test_VaultEpoch_RetiredCertCanScripifyAgain() public {
-        (ICyberCertPrinter cert, uint256 scripBalance) = _setUpVaultWithSupply(8);
+        (ILedgerEntryToken cert, uint256 scripBalance) = _setUpVaultWithSupply(8);
 
         vm.prank(holder);
         issuanceManager.convertScripToCert(address(cert), scripBalance);
@@ -271,7 +271,7 @@ contract IssuanceManagerVaultEpochTest is VaultEpochHarness {
     /// redeems that claim and then dilutes the rest of the pool away, so the OTHER participant's position is
     /// what the epoch bump has to retire.
     function test_VaultEpoch_EmptyingViaWithdrawal_RetiresOtherParticipant() public {
-        (ICyberCertPrinter cert,) = _setUpVaultWithSupply(8);
+        (ILedgerEntryToken cert,) = _setUpVaultWithSupply(8);
 
         uint256 otherTokenId = IERC721Enumerable(address(cert)).totalSupply();
         issuanceManager.createCertAndAssign(address(cert), otherHolder, _details(UNITS));
@@ -301,7 +301,7 @@ contract IssuanceManagerVaultEpochTest is VaultEpochHarness {
     /// Emptying via an admin force-burn reaches _resetVaultPositions through executeForceScripBurn rather
     /// than through a conversion, so it must retire positions the same way.
     function test_VaultEpoch_EmptyingViaForceScripBurn_RetiresPositions() public {
-        (ICyberCertPrinter cert, uint256 scripBalance) = _setUpVaultWithSupply(8);
+        (ILedgerEntryToken cert, uint256 scripBalance) = _setUpVaultWithSupply(8);
 
         issuanceManager.forceScripBurn(address(cert), holder, scripBalance);
 
@@ -311,7 +311,7 @@ contract IssuanceManagerVaultEpochTest is VaultEpochHarness {
 
     /// Repeated empty/refill cycles must keep working -- each bump retires only the epoch it ended.
     function test_VaultEpoch_SurvivesRepeatedEmptyRefillCycles() public {
-        (ICyberCertPrinter cert, uint256 scripBalance) = _setUpVaultWithSupply(8);
+        (ILedgerEntryToken cert, uint256 scripBalance) = _setUpVaultWithSupply(8);
 
         for (uint256 cycle = 0; cycle < 3; cycle++) {
             vm.prank(holder);
@@ -341,7 +341,7 @@ contract IssuanceManagerVaultEpochAdhocTest is VaultEpochHarness {
     /// At 6,500 certificates the old O(totalSupply()) reset burned 32.2M gas and reverted out-of-gas under a
     /// 30M budget, stranding the scrip and its underlying units.
     function test_VaultEmptyingConversion_FitsInABlockAtLargeSupply() public {
-        (ICyberCertPrinter cert, uint256 scripBalance) = _setUpVaultWithSupply(6_500);
+        (ILedgerEntryToken cert, uint256 scripBalance) = _setUpVaultWithSupply(6_500);
 
         vm.prank(holder);
         uint256 gasBefore = gasleft();

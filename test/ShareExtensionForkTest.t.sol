@@ -24,7 +24,7 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import {Round, RoundLib, RoundType} from "../src/libs/RoundLib.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {CyberCertData, EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {
     ShareExtension,

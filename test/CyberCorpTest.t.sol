@@ -44,7 +44,7 @@ pragma solidity ^0.8.18;
 import {Test, console} from "forge-std/Test.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {LedgerEntryToken, Endorsement} from "../src/LedgerEntryToken.sol";
-import {ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
+import {ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory, IssuanceManager} from "../src/IssuanceManagerFactory.sol";
@@ -60,8 +60,8 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
-import {CompanyOfficer} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
+import {CompanyOfficer} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {ToggleTransferHook} from "../src/hooks/transfer/ToggleTransferHook.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
@@ -5534,7 +5534,7 @@ contract CyberCorpForkTest is Test {
 
         // Token 0 should be blocked by hook
         vm.startPrank(certOwner);
-        vm.expectRevert(abi.encodeWithSelector(ICyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
+        vm.expectRevert(abi.encodeWithSelector(ILedgerEntryToken.TransferRestricted.selector, "Transfer disabled by global hook"));
         LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient, 0);
         vm.stopPrank();
 
@@ -5557,7 +5557,7 @@ contract CyberCorpForkTest is Test {
 
         // Token 2 should be blocked
         vm.startPrank(certOwner);
-        vm.expectRevert(abi.encodeWithSelector(ICyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
+        vm.expectRevert(abi.encodeWithSelector(ILedgerEntryToken.TransferRestricted.selector, "Transfer disabled by global hook"));
         LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient, 2);
         vm.stopPrank();
     }
@@ -5907,7 +5907,7 @@ contract CyberCorpForkTest is Test {
         vm.prank(certOwner);
         LedgerEntryToken(certPrinter).addEndorsement(0, e);
         vm.startPrank(certOwner);
-        vm.expectRevert(abi.encodeWithSelector(ICyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
+        vm.expectRevert(abi.encodeWithSelector(ILedgerEntryToken.TransferRestricted.selector, "Transfer disabled by global hook"));
         LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient, 0);
         vm.stopPrank();
     }

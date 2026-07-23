@@ -6,7 +6,7 @@ import "../src/IssuanceManager.sol";
 import "../src/CyberScrip.sol";
 import "../src/LedgerEntryToken.sol";
 import "../src/interfaces/ICyberScrip.sol";
-import "../src/interfaces/ICyberCertPrinter.sol";
+import "../src/interfaces/ILedgerEntryToken.sol";
 import "../src/interfaces/ICondition.sol";
 import "../src/interfaces/ITransferRestrictionHook.sol";
 import "../src/libs/auth.sol";
@@ -527,11 +527,11 @@ contract ScripPOCTest is Test {
     function test_POC9_SetExtension_IgnoresTokenId() public {
         // In LedgerEntryToken:
         //   function setExtension(uint256 tokenId, address extension) external onlyIssuanceManager {
-        //       CyberCertPrinterStorage.cyberCertStorage().extension = extension;
+        //       LedgerEntryTokenStorage.cyberCertStorage().extension = extension;
         //   }
         //
         //   function getExtension(uint256 tokenId) external view returns (address) {
-        //       return CyberCertPrinterStorage.cyberCertStorage().extension;
+        //       return LedgerEntryTokenStorage.cyberCertStorage().extension;
         //   }
         //
         // tokenId is completely ignored - extension is a single global value.
@@ -590,7 +590,7 @@ contract ScripPOCTest is Test {
     // =========================================================================
     // POC #5 - getEndorsementHistory interface mismatch (Medium)
     //
-    // ICyberCertPrinter declares getEndorsementHistory returning individual
+    // ILedgerEntryToken declares getEndorsementHistory returning individual
     // fields, but LedgerEntryToken returns Endorsement memory. These are
     // ABI-incompatible for external callers using the interface.
     // =========================================================================
@@ -611,7 +611,7 @@ contract ScripPOCTest is Test {
         // Avoid IssuanceManager.createCert in this PoC: it fetches tokenURI, which
         // depends on uriBuilder being configured in setUp.
         vm.prank(address(issuanceManager));
-        ICyberCertPrinter(realPrinter).safeMint(0, investor, _defaultDetails(100));
+        ILedgerEntryToken(realPrinter).safeMint(0, investor, _defaultDetails(100));
 
         bytes memory signature = abi.encodePacked(uint256(12345));
         bytes32 agreementId = keccak256("POC5");
@@ -625,11 +625,11 @@ contract ScripPOCTest is Test {
             ""
         );
         vm.prank(address(issuanceManager));
-        ICyberCertPrinter(realPrinter).addEndorsement(0, endorsement);
+        ILedgerEntryToken(realPrinter).addEndorsement(0, endorsement);
 
         // Do a raw call first (this succeeds and returns bytes).
         (bool ok, bytes memory returndata) = realPrinter.staticcall(
-            abi.encodeWithSelector(ICyberCertPrinter.getEndorsementHistory.selector, 0, 0)
+            abi.encodeWithSelector(ILedgerEntryToken.getEndorsementHistory.selector, 0, 0)
         );
         assertTrue(ok, "raw getEndorsementHistory call failed");
 

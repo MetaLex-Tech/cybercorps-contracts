@@ -6,7 +6,7 @@ import "../src/IssuanceManager.sol";
 import "../src/LedgerEntryToken.sol";
 import "../src/CyberScrip.sol";
 import "../src/interfaces/ICyberScrip.sol";
-import "../src/interfaces/ICyberCertPrinter.sol";
+import "../src/interfaces/ILedgerEntryToken.sol";
 import "../src/interfaces/ICondition.sol";
 import "../src/interfaces/ITransferRestrictionHook.sol";
 import "../src/interfaces/IUriBuilder.sol";
@@ -14,7 +14,7 @@ import "../src/libs/auth.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
-import {RestrictiveLegend} from "../src/storage/CyberCertPrinterStorage.sol";
+import {RestrictiveLegend} from "../src/storage/LedgerEntryTokenStorage.sol";
 
 contract MockRoundManagerForConversion {
     bool public exists;
@@ -289,8 +289,8 @@ contract IssuanceManagerConversionTest is Test {
     bytes32 salt = bytes32(keccak256("IssuanceManagerConversionTest"));
 
     IssuanceManager public issuanceManager;
-    ICyberCertPrinter public safePrinter;
-    ICyberCertPrinter public equityPrinter;
+    ILedgerEntryToken public safePrinter;
+    ILedgerEntryToken public equityPrinter;
     BorgAuth public auth;
     MockRoundManagerForConversion public mockRM;
     MockCyberCorp public mockCorp;
@@ -332,7 +332,7 @@ contract IssuanceManagerConversionTest is Test {
             address(imFactory)
         );
 
-        safePrinter = ICyberCertPrinter(
+        safePrinter = ILedgerEntryToken(
             issuanceManager.createCertPrinter(
                 new string[](0),
                 "SAFE Cert",
@@ -344,7 +344,7 @@ contract IssuanceManagerConversionTest is Test {
                 bytes("")
             )
         );
-        equityPrinter = ICyberCertPrinter(
+        equityPrinter = ILedgerEntryToken(
             issuanceManager.createCertPrinter(
                 new string[](0),
                 "Equity Cert",
@@ -364,7 +364,7 @@ contract IssuanceManagerConversionTest is Test {
     function test_createCertAndAssignWithName_storesEndorsementSignatureAndTimestamp()
         public
     {
-        ICyberCertPrinter certPrinter = _deployPrinter("Signed Cert", "SCERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Signed Cert", "SCERT");
         CertificateDetails memory details = CertificateDetails({
             signingOfficerName: "Officer",
             signingOfficerTitle: "Title",
@@ -405,7 +405,7 @@ contract IssuanceManagerConversionTest is Test {
     function test_createCertAndAssignWithName_withoutSignature_skipsIssuerSignatureStorage()
         public
     {
-        ICyberCertPrinter certPrinter = _deployPrinter("Unsigned Cert", "UCERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Unsigned Cert", "UCERT");
         CertificateDetails memory details = _buildCertificateDetails(
             25,
             "Unsigned legal details",
@@ -475,7 +475,7 @@ contract IssuanceManagerConversionTest is Test {
     }
 
     function test_convertScripToCert_AllowsNonOwnerMintPath() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
         // Integer unit count; _mintCert stores unitsRepresented as units * 1e18
         uint256 amount = 100;
         uint256 sourceCertId = _mintCert(certPrinter, otherInvestor, amount);
@@ -555,7 +555,7 @@ contract IssuanceManagerConversionTest is Test {
     }
 
     function test_ScripifyAndUnscripify_WithConditions() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
 
         CertificateDetails memory details = CertificateDetails({
             signingOfficerName: "Officer",
@@ -633,7 +633,7 @@ contract IssuanceManagerConversionTest is Test {
     }
 
     function test_ScripRatio_AppliesOnScripifyAndConvert() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
 
         CertificateDetails memory details = CertificateDetails({
             signingOfficerName: "Officer",
@@ -691,7 +691,7 @@ contract IssuanceManagerConversionTest is Test {
     // Raising it would have halved what already-sold scrip redeems for, stranding the difference
     // in the vault with no scrip left to claim it.
     function test_ScripRatio_CannotBeRaisedWhileScripOutstanding() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Haircut Cert", "HAIR");
+        ILedgerEntryToken certPrinter = _deployPrinter("Haircut Cert", "HAIR");
         uint256 investorCertId = _mintCert(certPrinter, investor, 100);
         uint256 otherInvestorCertId = _mintCert(certPrinter, otherInvestor, 100);
         address scrip = _deployScripAtRatio(certPrinter, 1, 1);
@@ -730,7 +730,7 @@ contract IssuanceManagerConversionTest is Test {
     // Lowering it would have made the vault insolvent: each scrip claiming more units than were
     // deposited for it, so the first converter drains the pool and the rest revert.
     function test_ScripRatio_CannotBeLoweredWhileScripOutstanding() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Brick Cert", "BRICK");
+        ILedgerEntryToken certPrinter = _deployPrinter("Brick Cert", "BRICK");
         uint256 investorCertId = _mintCert(certPrinter, investor, 100);
         uint256 otherInvestorCertId = _mintCert(certPrinter, otherInvestor, 100);
         address scrip = _deployScripAtRatio(certPrinter, 2, 1);
@@ -782,7 +782,7 @@ contract IssuanceManagerConversionTest is Test {
         address insider = makeAddr("insider");
         auth.updateRole(insider, auth.OWNER_ROLE());
 
-        ICyberCertPrinter certPrinter = _deployPrinter("Extract Cert", "EXTR");
+        ILedgerEntryToken certPrinter = _deployPrinter("Extract Cert", "EXTR");
         uint256 insiderCertId = _mintCert(certPrinter, insider, 100);
         uint256 investorCertId = _mintCert(certPrinter, investor, 100);
         _deployScripAtRatio(certPrinter, 2, 1);
@@ -824,7 +824,7 @@ contract IssuanceManagerConversionTest is Test {
     // The guard leaves both legitimate windows open: before any scrip has been minted, and once
     // every holder has redeemed.
     function test_ScripRatio_SettableBeforeIssuanceAndAfterFullRedemption() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Window Cert", "WNDW");
+        ILedgerEntryToken certPrinter = _deployPrinter("Window Cert", "WNDW");
         uint256 investorCertId = _mintCert(certPrinter, investor, 100);
 
         // Before the scrip contract exists.
@@ -868,7 +868,7 @@ contract IssuanceManagerConversionTest is Test {
     }
 
     function _deployScripAtRatio(
-        ICyberCertPrinter certPrinter,
+        ILedgerEntryToken certPrinter,
         uint256 numerator,
         uint256 denominator
     ) internal returns (address scrip) {
@@ -889,7 +889,7 @@ contract IssuanceManagerConversionTest is Test {
     }
 
     function test_ScripifyWhitelist_EnabledBlocksNonWhitelisted() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
 
         CertificateDetails memory details = CertificateDetails({
             signingOfficerName: "Officer",
@@ -929,7 +929,7 @@ contract IssuanceManagerConversionTest is Test {
     }
 
     function test_ScripifyWhitelist_EnabledAllowsWhitelisted() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
 
         CertificateDetails memory details = CertificateDetails({
             signingOfficerName: "Officer",
@@ -970,7 +970,7 @@ contract IssuanceManagerConversionTest is Test {
     }
 
     function test_ScripifyWhitelist_ToggleAndUpdate() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
 
         CertificateDetails memory details = CertificateDetails({
             signingOfficerName: "Officer",
@@ -1029,7 +1029,7 @@ contract IssuanceManagerConversionTest is Test {
     }
 
     function test_GetScripRatio_DefaultsToOneWhenUnset() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
 
         (uint256 numerator, uint256 denominator) = issuanceManager.getScripRatio(
             address(certPrinter)
@@ -1039,7 +1039,7 @@ contract IssuanceManagerConversionTest is Test {
     }
 
     function test_DeployCyberScrip_SetsDefaultRatio() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
 
         issuanceManager.deployCyberScrip(
             address(certPrinter),
@@ -1064,7 +1064,7 @@ contract IssuanceManagerConversionTest is Test {
     }
 
     function test_RevertWhen_SetScripRatioZeroNumeratorOrDenominator() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
 
         vm.expectRevert(IssuanceManager.InvalidScripRatio.selector);
         issuanceManager.setScripRatio(address(certPrinter), 0, 1);
@@ -1074,7 +1074,7 @@ contract IssuanceManagerConversionTest is Test {
     }
 
     function test_RevertWhen_ScripifyRatioRemainder() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Cert", "CERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Cert", "CERT");
 
         CertificateDetails memory details = CertificateDetails({
             signingOfficerName: "Officer",
@@ -1114,7 +1114,7 @@ contract IssuanceManagerConversionTest is Test {
     
 
     function test_convertScripToCert_parameterLifecycleAndRuntimeUpdates() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Lifecycle Cert", "LCERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Lifecycle Cert", "LCERT");
         uint256 certId = _mintCert(certPrinter, investor, 75);
 
         uint256[] memory whitelistIds = new uint256[](1);
@@ -1192,7 +1192,7 @@ contract IssuanceManagerConversionTest is Test {
     }
 
     function test_convertScripToCert_revertGatesAndConditionValidation() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Guard Cert", "GCERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Guard Cert", "GCERT");
 
         // Unconfigured cert should always fail conversion.
         vm.prank(investor);
@@ -1262,7 +1262,7 @@ contract IssuanceManagerConversionTest is Test {
     }
 
     function test_setCertLookThroughBadge_AdminWiresBadgeOnPrinter() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Badge Wire", "BW");
+        ILedgerEntryToken certPrinter = _deployPrinter("Badge Wire", "BW");
         assertEq(certPrinter.lookThroughBadge(), address(0));
 
         address badge = makeAddr("lookThroughBadge");
@@ -1271,7 +1271,7 @@ contract IssuanceManagerConversionTest is Test {
     }
 
     function test_setCertLookThroughBadge_NonAdminReverts() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Badge Wire 2", "BW2");
+        ILedgerEntryToken certPrinter = _deployPrinter("Badge Wire 2", "BW2");
         address badge = makeAddr("lookThroughBadge");
 
         vm.prank(investor);
@@ -1282,7 +1282,7 @@ contract IssuanceManagerConversionTest is Test {
     function test_convertScripToCert_ignoresVoidedCertAndMintsNewCertificate()
         public
     {
-        ICyberCertPrinter certPrinter = _deployPrinter("Voided Cert", "VCERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Voided Cert", "VCERT");
 
         CertificateDetails memory original = CertificateDetails({
             signingOfficerName: "Alice Officer",
@@ -1357,7 +1357,7 @@ contract IssuanceManagerConversionTest is Test {
     }
 
     function test_convertScripToCert_RequiresNativeRecertificationApproval() public {
-        ICyberCertPrinter certPrinter = _deployPrinter("Approval Cert", "APPR");
+        ILedgerEntryToken certPrinter = _deployPrinter("Approval Cert", "APPR");
         uint256 certId = _mintCert(certPrinter, otherInvestor, 10);
 
         address scrip = issuanceManager.deployCyberScrip(
@@ -1443,7 +1443,7 @@ contract IssuanceManagerConversionTest is Test {
     function test_TwoHolders_ScripTransferThenRecertify_UpdatesUnitsAsExpected()
         public
     {
-        ICyberCertPrinter certPrinter = _deployPrinter("Shared Cert", "SHARE");
+        ILedgerEntryToken certPrinter = _deployPrinter("Shared Cert", "SHARE");
         uint256 investorCertId = _mintCert(certPrinter, investor, 100);
         uint256 otherInvestorCertId = _mintCert(certPrinter, otherInvestor, 100);
 
@@ -1576,7 +1576,7 @@ contract IssuanceManagerConversionTest is Test {
     function test_ComplexScripPoolAccounting_FourHolders_MixedRecertificationsAndNewInvestors()
         public
     {
-        ICyberCertPrinter certPrinter = _deployPrinter("Four Holder Cert", "4CERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Four Holder Cert", "4CERT");
         address holderA = investor;
         address holderB = otherInvestor;
         address holderC = makeAddr("fourHolderC");
@@ -1888,7 +1888,7 @@ contract IssuanceManagerConversionTest is Test {
     function test_ComplexScripPoolAccounting_FiveHolders_MixedRecertifications()
         public
     {
-        ICyberCertPrinter certPrinter = _deployPrinter("Complex Cert", "CCERT");
+        ILedgerEntryToken certPrinter = _deployPrinter("Complex Cert", "CCERT");
         address holderA = investor;
         address holderB = otherInvestor;
         address holderC = makeAddr("holderC");
@@ -2186,8 +2186,8 @@ contract IssuanceManagerConversionTest is Test {
     function _deployPrinter(
         string memory name,
         string memory symbol
-    ) internal returns (ICyberCertPrinter certPrinter) {
-        certPrinter = ICyberCertPrinter(
+    ) internal returns (ILedgerEntryToken certPrinter) {
+        certPrinter = ILedgerEntryToken(
             issuanceManager.createCertPrinter(
                 new string[](0),
                 name,
@@ -2202,7 +2202,7 @@ contract IssuanceManagerConversionTest is Test {
     }
 
     function _mintCert(
-        ICyberCertPrinter certPrinter,
+        ILedgerEntryToken certPrinter,
         address to,
         uint256 units
     ) internal returns (uint256 tokenId) {
@@ -2220,7 +2220,7 @@ contract IssuanceManagerConversionTest is Test {
     }
 
     function _stageRecertificationApproval(
-        ICyberCertPrinter certPrinter,
+        ILedgerEntryToken certPrinter,
         address investorAddress,
         string memory investorName,
         uint256 units,

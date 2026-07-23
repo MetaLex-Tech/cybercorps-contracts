@@ -49,7 +49,7 @@ import {ERC721Enumerable} from "openzeppelin-contracts/token/ERC721/extensions/E
 import {BorgAuth} from "../src/libs/auth.sol";
 import {LexScrowStorage} from "../src/storage/LexScrowStorage.sol";
 import {LexScrowStorage, Escrow, Token, TokenType, EscrowStatus} from "../src/storage/LexScrowStorage.sol";
-import {Endorsement} from "../src/storage/CyberCertPrinterStorage.sol";
+import {Endorsement} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
 
 contract ERC20Mock is ERC20 {
@@ -491,7 +491,7 @@ contract LexScrowStorageTest is Test {
 
     function test_UpdateEscrowERC721() public {
         // updateEscrow should update the counter-party of the escrow, and if the token is ERC721,
-        // it assumes the token implements ICyberCertPrinter and will add endorsement to it.
+        // it assumes the token implements ILedgerEntryToken and will add endorsement to it.
 
         bytes32 agreementId = keccak256("LexScrowStorageTest.Agreement");
         Token[] memory corpAssets = new Token[](1);
@@ -506,13 +506,13 @@ contract LexScrowStorageTest is Test {
 
         lexScrow.createEscrow_(agreementId, alice, corpAssets, buyerAssets, block.timestamp);
 
-        // updateEscrow should fail because the corpAssets contain non-ICyberCertPrinter ERC-721 tokens
+        // updateEscrow should fail because the corpAssets contain non-ILedgerEntryToken ERC-721 tokens
 
         lexScrow.updateEscrow_(agreementId, bob, "Bob");
     }
 
     function test_RevertIf_UpdateEscrowERC721WithoutEndorsement() public {
-        // updateEscrow assumes an ERC721 token implements ICyberCertPrinter and
+        // updateEscrow assumes an ERC721 token implements ILedgerEntryToken and
         // will fail if it does not implement `addEndorsement()`
 
         bytes32 agreementId = keccak256("LexScrowStorageTest.Agreement");
@@ -521,7 +521,7 @@ contract LexScrowStorageTest is Test {
 
         lexScrow.createEscrow_(agreementId, alice, corpAssets, buyerAssets, block.timestamp);
 
-        // updateEscrow should fail because the corpAssets contain non-ICyberCertPrinter ERC-721 tokens
+        // updateEscrow should fail because the corpAssets contain non-ILedgerEntryToken ERC-721 tokens
         vm.expectRevert(); // ex. unrecognized function selector 0x94b5611f for contract 0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef, which has no fallback function
         lexScrow.updateEscrow_(agreementId, bob, "Bob");
     }

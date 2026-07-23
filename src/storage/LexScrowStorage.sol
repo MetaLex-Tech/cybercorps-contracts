@@ -47,7 +47,7 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "../interfaces/ICyberCorp.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
-import "../interfaces/ICyberCertPrinter.sol";
+import "../interfaces/ILedgerEntryToken.sol";
 import "../interfaces/ICondition.sol";
 import {ILexScrowStorage} from "../interfaces/ILexScrowStorage.sol";
 
@@ -214,7 +214,7 @@ library LexScrowStorage {
         );
         for(uint256 i = 0; i < escrow.corpAssets.length; i++) {
             if(escrow.corpAssets[i].tokenType == TokenType.ERC721) {
-                ICyberCertPrinter(escrow.corpAssets[i].tokenAddress).addEndorsement(escrow.corpAssets[i].tokenId, newEndorsement);
+                ILedgerEntryToken(escrow.corpAssets[i].tokenAddress).addEndorsement(escrow.corpAssets[i].tokenId, newEndorsement);
                 // check if there is an escrowed officer signature in cybercorp
                 bytes memory officerSignature = "";
                 address corp = getCorp();
@@ -228,7 +228,7 @@ library LexScrowStorage {
                     }
                 } catch {}
                 if (officerSignature.length > 0) {
-                    ICyberCertPrinter(escrow.corpAssets[i].tokenAddress).addIssuerSignature(
+                    ILedgerEntryToken(escrow.corpAssets[i].tokenAddress).addIssuerSignature(
                         escrow.corpAssets[i].tokenId,
                         officerSignature
                     );

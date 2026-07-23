@@ -50,7 +50,7 @@ import {DealManager} from "../src/DealManager.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
-import {CertificateDetails, Endorsement, ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
+import {CertificateDetails, Endorsement, ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {BaseSecondaryTradingCondition} from "../src/libs/conditions/BaseSecondaryTradingCondition.sol";
 import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
@@ -198,7 +198,7 @@ contract DealManagerSecondaryTradeTest is Test {
     bytes32 constant imSalt = keccak256("DealManagerSecondaryTradeTest.im");
 
     SecERC20Mock public paymentToken;
-    ICyberCertPrinter public certPrinter;
+    ILedgerEntryToken public certPrinter;
     IssuanceManager public im;
     CyberAgreementRegistry public registry;
     MockCyberCorpForIM public corp;
@@ -297,7 +297,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
         // Mint the seller's Ledger Entry Token through the real IssuanceManager, with UNITS represented.
         vm.startPrank(owner);
-        certPrinter = ICyberCertPrinter(
+        certPrinter = ILedgerEntryToken(
             im.createCertPrinter(
                 new string[](0),
                 "Secondary Cert",
@@ -854,7 +854,7 @@ contract DealManagerSecondaryTradeTest is Test {
         _postSellOffer();
 
         vm.prank(owner);
-        vm.expectRevert(ICyberCertPrinter.CertificateReserved.selector);
+        vm.expectRevert(ILedgerEntryToken.CertificateReserved.selector);
         im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS));
 
         // Below verifies DealManager does double-check the legal ownership at every step, but we will never reach there if
@@ -2516,7 +2516,7 @@ contract DealManagerSecondaryTradeTest is Test {
         // secondaryTransfer materializes the seller's endorsement on the Ledger Entry Token at finalize
         // (spec §7.4A): the signature signed in blank now carries the now-known buyer as endorsee, bound to the
         // settlement agreement. Index 1 — index 0 is the issuer endorsement written at mint.
-        // (Concrete LedgerEntryToken cast: the ICyberCertPrinter interface's getEndorsementHistory return is stale.)
+        // (Concrete LedgerEntryToken cast: the ILedgerEntryToken interface's getEndorsementHistory return is stale.)
         Endorsement memory sellerEndorsement =
             LedgerEntryToken(address(certPrinter)).getEndorsementHistory(sellerTokenId, 1);
         assertEq(sellerEndorsement.endorser, seller, "endorser is the seller");
@@ -2560,7 +2560,7 @@ contract DealManagerSecondaryTradeTest is Test {
         _acceptSellOffer(offerId);
 
         vm.prank(owner);
-        vm.expectRevert(ICyberCertPrinter.CertificateReserved.selector);
+        vm.expectRevert(ILedgerEntryToken.CertificateReserved.selector);
         im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS));
 
         // Below verifies DealManager does double-check the legal ownership at every step, but we will never reach there if
@@ -2580,7 +2580,7 @@ contract DealManagerSecondaryTradeTest is Test {
         _acceptBuyOffer(offerId);
 
         vm.prank(owner);
-        vm.expectRevert(ICyberCertPrinter.CertificateReserved.selector);
+        vm.expectRevert(ILedgerEntryToken.CertificateReserved.selector);
         im.assignCert(address(certPrinter), seller, sellerTokenId, newOwner, _sellerCertDetails(UNITS));
 
         // Below verifies DealManager does double-check the legal ownership at every step, but we will never reach there if

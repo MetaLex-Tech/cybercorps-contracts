@@ -14,7 +14,7 @@ pragma solidity ^0.8.18;
 //import {IDealManager} from "../src/interfaces/IDealManager.sol";
 //import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 //import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-//import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+//import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 //import "../src/CyberCorpConstants.sol";
 //import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 //import {SAFTExtension} from "../src/storage/extensions/SAFTExtension.sol";

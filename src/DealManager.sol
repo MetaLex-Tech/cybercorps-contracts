@@ -58,7 +58,7 @@ import "./interfaces/IDealManagerStorage.sol";
 import "./interfaces/ISecondaryTradeStorage.sol";
 import "./interfaces/ILexScrowStorage.sol";
 import "./interfaces/IDealManagerFactory.sol";
-import "./interfaces/ICyberCertPrinter.sol";
+import "./interfaces/ILedgerEntryToken.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
 
 /// @title DealManager

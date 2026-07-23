@@ -3,11 +3,11 @@ pragma solidity ^0.8.28;
 
 import "forge-std/Test.sol";
 import {IERC721Enumerable} from "openzeppelin-contracts/token/ERC721/extensions/IERC721Enumerable.sol";
-import {ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
+import {ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IIssuanceManagerFactory} from "../src/interfaces/IIssuanceManagerFactory.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 
 contract CyberCertPrinterAdhocTest is Test {
@@ -53,7 +53,7 @@ contract CyberCertPrinterAdhocTest is Test {
     }
 
     function _snapshot(address printerAddr) internal view returns (PrinterSnapshot memory s) {
-        ICyberCertPrinter printer = ICyberCertPrinter(printerAddr);
+        ILedgerEntryToken printer = ILedgerEntryToken(printerAddr);
 
         s.issuanceManager = LedgerEntryToken(printerAddr).issuanceManager();
         s.securityType = LedgerEntryToken(printerAddr).securityType();
@@ -65,7 +65,7 @@ contract CyberCertPrinterAdhocTest is Test {
 
 
         uint256 supply = 0;
-        // totalSupply is part of the ICyberCertPrinter interface
+        // totalSupply is part of the ILedgerEntryToken interface
         try printer.totalSupply() returns (uint256 ts) {
             supply = ts;
         } catch {}

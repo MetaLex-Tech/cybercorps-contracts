@@ -45,14 +45,14 @@ import "openzeppelin-contracts/proxy/beacon/BeaconProxy.sol";
 import "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "openzeppelin-contracts/utils/Create2.sol";
 import "../interfaces/ICondition.sol";
-import "../interfaces/ICyberCertPrinter.sol";
+import "../interfaces/ILedgerEntryToken.sol";
 import "../interfaces/ICyberCorp.sol";
 import "../interfaces/ICyberScrip.sol";
 import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/IIssuanceManagerFactory.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import {ExemptionPathway, HostingMode} from "../interfaces/ISecondaryTradeStorage.sol";
-import "./CyberCertPrinterStorage.sol";
+import "./LedgerEntryTokenStorage.sol";
 
 library IssuanceManagerStorage {
     error ConditionCheckFailed();
@@ -717,7 +717,7 @@ library IssuanceManagerStorage {
         bytes32 salt = keccak256(abi.encodePacked(getPrinters().length, address(this)));
         newCert = Create2.deploy(0, salt, _getBytecodeCertPrinter());
         addPrinter(newCert);
-        ICyberCertPrinter(newCert).initialize(
+        ILedgerEntryToken(newCert).initialize(
             ledger,
             name,
             ticker,
@@ -748,7 +748,7 @@ library IssuanceManagerStorage {
         address to,
         CertificateDetails memory details
     ) external returns (uint256 id) {
-        ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
+        ILedgerEntryToken cert = ILedgerEntryToken(certAddress);
         uint256 tokenId = cert.totalSupply();
         id = cert.safeMint(tokenId, to, details);
         _emitCertificateCreated(tokenId, certAddress, details);
@@ -761,7 +761,7 @@ library IssuanceManagerStorage {
         address investor,
         CertificateDetails memory details
     ) external {
-        ICyberCertPrinter(certAddress).assignCert(from, tokenId, investor, details);
+        ILedgerEntryToken(certAddress).assignCert(from, tokenId, investor, details);
     }
 
     function executeCreateCertAndAssign(
@@ -772,7 +772,7 @@ library IssuanceManagerStorage {
         bytes memory endorsementSignature,
         uint256 timestamp
     ) external returns (uint256 tokenId) {
-        ICyberCertPrinter cert;
+        ILedgerEntryToken cert;
         (cert, tokenId) = _mintAssignedCert(
             certAddress,
             investor,
@@ -813,7 +813,7 @@ library IssuanceManagerStorage {
         bytes32 agreementId,
         string memory investorName
     ) external returns (uint256 tokenId) {
-        ICyberCertPrinter cert;
+        ILedgerEntryToken cert;
         (cert, tokenId) = _mintAssignedCert(
             certAddress,
             investor,
@@ -870,7 +870,7 @@ library IssuanceManagerStorage {
             (address, uint256, uint256, address, string, HostingMode, address, ExemptionPathway, bytes32, bytes)
         );
 
-        ICyberCertPrinter cert = ICyberCertPrinter(certPrinter);
+        ILedgerEntryToken cert = ILedgerEntryToken(certPrinter);
         // Registered owner of the seller's Ledger Entry Token, unchanged by hosting mode (the token never moves).
         address seller = cert.legalOwnerOf(tokenId);
 
@@ -1010,10 +1010,10 @@ library IssuanceManagerStorage {
             certAddress,
             address(this),
             string(
-                abi.encodePacked("scrip", ICyberCertPrinter(certAddress).name())
+                abi.encodePacked("scrip", ILedgerEntryToken(certAddress).name())
             ),
             string(
-                abi.encodePacked("scrip", ICyberCertPrinter(certAddress).symbol())
+                abi.encodePacked("scrip", ILedgerEntryToken(certAddress).symbol())
             ),
             typeRestrictionHooks,
             enableForceTransfer,
@@ -1071,7 +1071,7 @@ library IssuanceManagerStorage {
             }
         }
 
-        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        ILedgerEntryToken certificate = ILedgerEntryToken(certAddress);
         if (certificate.isVoided(id)) revert CertificateVoided();
         if (certificate.legalOwnerOf(id) != account) revert NotLegalOwner();
 
@@ -1155,7 +1155,7 @@ library IssuanceManagerStorage {
             }
         }
 
-        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        ILedgerEntryToken certificate = ILedgerEntryToken(certAddress);
         RecertSelection memory selection = _selectFirstLegalOwnedToken(
             certAddress,
             account
@@ -1381,7 +1381,7 @@ library IssuanceManagerStorage {
         address certAddress,
         address owner
     ) internal view returns (RecertSelection memory selection) {
-        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        ILedgerEntryToken certificate = ILedgerEntryToken(certAddress);
         uint256 ownedBalance = certificate.balanceOfLegalOwner(owner);
 
         for (uint256 i = 0; i < ownedBalance; i++) {
@@ -1404,10 +1404,10 @@ library IssuanceManagerStorage {
         string memory ownerName
     )
         internal
-        returns (ICyberCertPrinter cert, uint256 tokenId)
+        returns (ILedgerEntryToken cert, uint256 tokenId)
     {
         _requireCompanyDetailsSet();
-        cert = ICyberCertPrinter(certAddress);
+        cert = ILedgerEntryToken(certAddress);
         tokenId = cert.totalSupply();
         cert.safeMintAndAssign(to, owner, tokenId, details, ownerName);
         _emitCertificateCreated(tokenId, certAddress, details);

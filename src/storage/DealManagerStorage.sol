@@ -48,7 +48,7 @@ import "openzeppelin-contracts/token/ERC1155/IERC1155.sol";
 import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/ICyberCorp.sol";
-import "../interfaces/ICyberCertPrinter.sol";
+import "../interfaces/ILedgerEntryToken.sol";
 import "../interfaces/IDealManagerFactory.sol";
 import "../interfaces/ICondition.sol";
 import "../CyberCorpConstants.sol";
@@ -376,7 +376,7 @@ library DealManagerStorage {
     function _voidCorpCerts(Escrow storage deal) private {
         for (uint256 i = 0; i < deal.corpAssets.length; i++) {
             if (deal.corpAssets[i].tokenType == TokenType.ERC721) {
-                ICyberCertPrinter(deal.corpAssets[i].tokenAddress).voidCert(
+                ILedgerEntryToken(deal.corpAssets[i].tokenAddress).voidCert(
                     deal.corpAssets[i].tokenId
                 );
             }

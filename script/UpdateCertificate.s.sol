@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 
 /// @notice Script to update certificate details via the IssuanceManager
 /// @dev Run with: forge script script/UpdateCertificate.s.sol --rpc-url $RPC_URL --broadcast

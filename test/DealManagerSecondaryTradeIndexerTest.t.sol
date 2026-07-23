@@ -67,7 +67,7 @@ import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
-import {CertificateDetails, ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
+import {CertificateDetails, ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
 // Reuse the payment-token mock and the minimal CyberCorp / uriBuilder fixtures from sibling test files.
 import {SecConditionMock, SecERC20Mock} from "./DealManagerSecondaryTradeTest.t.sol";
 import {
@@ -214,7 +214,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
     // Primary/secondary mint events that seed the issuance rows + shares-held balance. CertificateCreated
     // (units, emitter = IssuanceManager) is paired with CertificateAssigned (holder, emitter = LedgerEntryToken).
     bytes32 immutable TOPIC_CERT_CREATED = IIssuanceManager.CertificateCreated.selector;
-    bytes32 immutable TOPIC_CERT_ASSIGNED = ICyberCertPrinter.CertificateAssigned.selector;
+    bytes32 immutable TOPIC_CERT_ASSIGNED = ILedgerEntryToken.CertificateAssigned.selector;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Chain fixtures (mirrors DealManagerSecondaryTradeTest setUp)
@@ -233,7 +233,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
     address public keeper;
 
     SecERC20Mock public paymentToken;
-    ICyberCertPrinter public certPrinter;
+    ILedgerEntryToken public certPrinter;
     IssuanceManager public im;
     CyberAgreementRegistry public registry;
     MockCyberCorpForIM public corp;
@@ -315,7 +315,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         // (the seller's founding cert) and the shares-held baseline before any secondary trading.
         vm.recordLogs();
         vm.startPrank(owner);
-        certPrinter = ICyberCertPrinter(
+        certPrinter = ILedgerEntryToken(
             im.createCertPrinter(
                 new string[](0),
                 "Indexer Cert",

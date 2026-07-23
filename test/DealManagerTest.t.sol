@@ -54,7 +54,7 @@ import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IDealManagerStorage} from "../src/interfaces/IDealManagerStorage.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CertificateDetails, Endorsement} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails, Endorsement} from "../src/storage/LedgerEntryTokenStorage.sol";
 
 contract ERC20Mock is ERC20 {
     constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) {}

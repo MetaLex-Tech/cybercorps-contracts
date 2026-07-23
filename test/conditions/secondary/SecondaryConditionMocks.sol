@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 import {ERC1967Proxy} from "../../../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CategoryKind} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
-import {CertificateDetails} from "../../../src/interfaces/ICyberCertPrinter.sol";
+import {CertificateDetails} from "../../../src/interfaces/ILedgerEntryToken.sol";
 import {ExemptionPathway, Offer, OfferSide, SecondaryEscrow} from "../../../src/interfaces/ISecondaryTradeStorage.sol";
 import {BorgAuth} from "../../../src/libs/auth.sol";
 import {Test} from "forge-std/Test.sol";
