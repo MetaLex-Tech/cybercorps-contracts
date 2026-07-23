@@ -11,7 +11,7 @@ import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {FeeOverride} from "../src/interfaces/IRoundManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {EIP712Lib} from "../src/libs/EIP712Lib.sol";
@@ -148,7 +148,7 @@ contract PumpCorpFactoryForkTest is Test {
         rmFactory.setRefImplementation(address(new RoundManager()));
         IssuanceManagerFactory issuanceFactory = IssuanceManagerFactory(net.issuanceManagerFactory);
         issuanceFactory.setRefImplementation(address(new IssuanceManager()));
-        issuanceFactory.setCyberCertPrinterRefImplementation(address(new CyberCertPrinter()));
+        issuanceFactory.setCyberCertPrinterRefImplementation(address(new LedgerEntryToken()));
         vm.stopPrank();
 
         // Simulate granting PumpCorpFactory owner access to LeXcheX and to RoundManagerFactory auth

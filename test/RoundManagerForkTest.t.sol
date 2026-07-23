@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 import "../src/RoundManager.sol";
 import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import "../src/IssuanceManager.sol";
-import "../src/CyberCertPrinter.sol";
+import "../src/LedgerEntryToken.sol";
 import "../src/storage/RoundManagerStorage.sol";
 import "../src/CyberCorpConstants.sol";
 import "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";

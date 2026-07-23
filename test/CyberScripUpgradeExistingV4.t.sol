@@ -12,7 +12,7 @@ import {RoundManager} from "../src/RoundManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
@@ -549,7 +549,7 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
         impls.issuanceManager = address(new IssuanceManager());
         impls.dealManager = address(new DealManager());
         impls.roundManager = address(new RoundManager());
-        impls.certPrinter = address(new CyberCertPrinter());
+        impls.certPrinter = address(new LedgerEntryToken());
         impls.scrip = address(new CyberScrip());
     }
 

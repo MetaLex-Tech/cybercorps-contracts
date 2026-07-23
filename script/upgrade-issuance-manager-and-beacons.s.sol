@@ -7,7 +7,7 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {KnownAddressesLoader} from "./libs/KnownAddressesLoader.sol";
@@ -48,11 +48,11 @@ contract UpgradeIssuanceManagerAndBeaconsScript is Script {
 
         // Deploy new reference implementations
         IssuanceManager newImImpl = new IssuanceManager();
-        CyberCertPrinter newCertImpl = new CyberCertPrinter();
+        LedgerEntryToken newCertImpl = new LedgerEntryToken();
         CyberScrip newScripImpl = new CyberScrip();
 
         console2.log("New IssuanceManager impl:", address(newImImpl));
-        console2.log("New CyberCertPrinter impl:", address(newCertImpl));
+        console2.log("New LedgerEntryToken impl:", address(newCertImpl));
         console2.log("New CyberScrip impl:", address(newScripImpl));
 
         // Update factory reference implementations (required for UUPS upgrade checks)

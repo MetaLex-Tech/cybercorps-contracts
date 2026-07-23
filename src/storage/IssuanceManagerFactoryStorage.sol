@@ -53,7 +53,7 @@ library IssuanceManagerFactoryStorage {
     /// @dev Uses unstructured storage pattern to avoid storage collisions
     struct StorageData {
         address refImplementation; // implementation contract to use for new `IssuanceManager` deployments
-        address cyberCertPrinterRefImplementation; // implementation contract to use for new `CyberCertPrinter` deployments
+        address cyberCertPrinterRefImplementation; // implementation contract to use for new `LedgerEntryToken` deployments
         address cyberScripRefImplementation; // implementation contract to use for new `CyberScrip` deployments
     }
 

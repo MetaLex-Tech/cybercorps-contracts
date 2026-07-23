@@ -263,7 +263,7 @@ struct FundInterestData {
     bool isAffiliateOrControlPerson;
 }
 
-/// @notice V3 series-scope fund-interest data. One CyberCertPrinter represents one series, so this data
+/// @notice V3 series-scope fund-interest data. One LedgerEntryToken represents one series, so this data
 /// is stored once in the printer's `seriesData` and applies uniformly to its LETs.
 struct FundInterestSeriesData {
     string interestClass;

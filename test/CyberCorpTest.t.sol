@@ -43,7 +43,7 @@ pragma solidity ^0.8.18;
 
 import {Test, console} from "forge-std/Test.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
-import {CyberCertPrinter, Endorsement} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken, Endorsement} from "../src/LedgerEntryToken.sol";
 import {ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
@@ -169,7 +169,7 @@ contract CyberCorpForkTest is Test {
         //auth.initialize();
 
         address issuanceManagerImplementation = address(new IssuanceManager{salt: salt}());
-        address cyberCertPrinterImplementation = address(new CyberCertPrinter{salt: salt}());
+        address cyberCertPrinterImplementation = address(new LedgerEntryToken{salt: salt}());
         address cyberScripImplementation = address(new CyberScrip{salt: salt}());
         address issuanceManagerFactory = address(
             new ERC1967Proxy{salt: salt}(
@@ -746,10 +746,10 @@ contract CyberCorpForkTest is Test {
         );
         vm.stopPrank();
         console.log("tokens received:");
-        string memory contractURI = CyberCertPrinter(cyberCertPrinterAddr[0])
+        string memory contractURI = LedgerEntryToken(cyberCertPrinterAddr[0])
             .tokenURI(certIds[0]);
         console.log(contractURI);
-        string memory contractURI2 = CyberCertPrinter(cyberCertPrinterAddr[1])
+        string memory contractURI2 = LedgerEntryToken(cyberCertPrinterAddr[1])
             .tokenURI(certIds[1]);
         console.log(contractURI2);
     }
@@ -2674,18 +2674,18 @@ contract CyberCorpForkTest is Test {
         );
         vm.stopPrank();
         vm.warp(block.timestamp + 3000000);
-                string memory endorseeName = CyberCertPrinter(cyberCertPrinterAddr[0]).getEndorsementHistory(0, 0).endorseeName;
+                string memory endorseeName = LedgerEntryToken(cyberCertPrinterAddr[0]).getEndorsementHistory(0, 0).endorseeName;
         console.log("endorsee name:", endorseeName);
        // console.log("printer addr length:", cyberCertPrinterAddr.length);
 
         //print endorsee name
 
 
-        string memory certificateUri = CyberCertPrinter(cyberCertPrinterAddr[0])
+        string memory certificateUri = LedgerEntryToken(cyberCertPrinterAddr[0])
             .tokenURI(0);
         console.log(certificateUri);
 
-        /*string memory certificateUriJson = CyberCertPrinter(cyberCertPrinterAddr[0])
+        /*string memory certificateUriJson = LedgerEntryToken(cyberCertPrinterAddr[0])
             .tokenURIJson(0);
         console.log(certificateUriJson);*/
 
@@ -2695,7 +2695,7 @@ contract CyberCorpForkTest is Test {
         // Try to transfer without making transferable and without endorsement - should revert
         vm.startPrank(newPartyAddr);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(cyberCertPrinterAddr[0]).transferFrom(
+        LedgerEntryToken(cyberCertPrinterAddr[0]).transferFrom(
             newPartyAddr,
             newRecipient,
             0
@@ -2704,7 +2704,7 @@ contract CyberCorpForkTest is Test {
 
         // Make the certificate transferable
         vm.startPrank(issuanceManager);
-        CyberCertPrinter(cyberCertPrinterAddr[0]).setGlobalTransferable(true);
+        LedgerEntryToken(cyberCertPrinterAddr[0]).setGlobalTransferable(true);
         vm.stopPrank();
 
         // Create and add endorsement
@@ -2718,13 +2718,13 @@ contract CyberCorpForkTest is Test {
             registry: address(0),
             endorseeName: "New Owner"
         });
-        CyberCertPrinter(cyberCertPrinterAddr[0]).addEndorsement(
+        LedgerEntryToken(cyberCertPrinterAddr[0]).addEndorsement(
             0,
             endorsement
         );
 
         // Now transfer should succeed
-        CyberCertPrinter(cyberCertPrinterAddr[0]).transferFrom(
+        LedgerEntryToken(cyberCertPrinterAddr[0]).transferFrom(
             newPartyAddr,
             newRecipient,
             0
@@ -2732,7 +2732,7 @@ contract CyberCorpForkTest is Test {
 
         // Verify the transfer was successful
         assertEq(
-            CyberCertPrinter(cyberCertPrinterAddr[0]).ownerOf(0),
+            LedgerEntryToken(cyberCertPrinterAddr[0]).ownerOf(0),
             newRecipient
         );
         vm.stopPrank();
@@ -2912,7 +2912,7 @@ contract CyberCorpForkTest is Test {
         );
         vm.stopPrank();
         console.log("printer addr length:", cyberCertPrinterAddr.length);
-        string memory certificateUri = CyberCertPrinter(cyberCertPrinterAddr[0])
+        string memory certificateUri = LedgerEntryToken(cyberCertPrinterAddr[0])
             .tokenURI(0);
         console.log(certificateUri);
 
@@ -2922,7 +2922,7 @@ contract CyberCorpForkTest is Test {
         // Try to transfer without making transferable and without endorsement - should revert
         vm.startPrank(newPartyAddr);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(cyberCertPrinterAddr[0]).transferFrom(
+        LedgerEntryToken(cyberCertPrinterAddr[0]).transferFrom(
             newPartyAddr,
             newRecipient,
             0
@@ -2931,7 +2931,7 @@ contract CyberCorpForkTest is Test {
 
         // Make the certificate transferable
         vm.startPrank(issuanceManager);
-        CyberCertPrinter(cyberCertPrinterAddr[0]).setGlobalTransferable(true);
+        LedgerEntryToken(cyberCertPrinterAddr[0]).setGlobalTransferable(true);
         vm.stopPrank();
 
         // Create and add endorsement
@@ -2945,13 +2945,13 @@ contract CyberCorpForkTest is Test {
             registry: address(0),
             endorseeName: "New Owner"
         });
-        CyberCertPrinter(cyberCertPrinterAddr[0]).addEndorsement(
+        LedgerEntryToken(cyberCertPrinterAddr[0]).addEndorsement(
             0,
             endorsement
         );
 
         // Now transfer should succeed
-        CyberCertPrinter(cyberCertPrinterAddr[0]).transferFrom(
+        LedgerEntryToken(cyberCertPrinterAddr[0]).transferFrom(
             newPartyAddr,
             newRecipient,
             0
@@ -2959,7 +2959,7 @@ contract CyberCorpForkTest is Test {
 
         // Verify the transfer was successful
         assertEq(
-            CyberCertPrinter(cyberCertPrinterAddr[0]).ownerOf(0),
+            LedgerEntryToken(cyberCertPrinterAddr[0]).ownerOf(0),
             newRecipient
         );
         vm.stopPrank();
@@ -3381,9 +3381,9 @@ contract CyberCorpForkTest is Test {
         vm.prank(testAddress);
         IssuanceManager(issuanceManager).upgradeToAndCall(newIssuanceManagerImpl, "");
 
-        address newCyberCertPrinterImpl = address(new CyberCertPrinter());
+        address newCyberCertPrinterImpl = address(new LedgerEntryToken());
 
-        // Owner should be able to set CyberCertPrinter reference implementation
+        // Owner should be able to set LedgerEntryToken reference implementation
         vm.prank(multisig);
         IssuanceManagerFactory(factoryAddr).setCyberCertPrinterRefImplementation(newCyberCertPrinterImpl);
         assertEq(IssuanceManagerFactory(factoryAddr).getCyberCertPrinterRefImplementation(), newCyberCertPrinterImpl);
@@ -3630,7 +3630,7 @@ contract CyberCorpForkTest is Test {
             );
 
         // Deploy new implementation
-        address newCyberCertPrinterImpl = address(new CyberCertPrinter());
+        address newCyberCertPrinterImpl = address(new LedgerEntryToken());
 
         address factoryAddr = cyberCorpFactory.issuanceManagerFactory();
 
@@ -3648,7 +3648,7 @@ contract CyberCorpForkTest is Test {
         assertEq(IssuanceManager(issuanceManager).getCertPrinterBeaconImplementation(), newCyberCertPrinterImpl);
 
         //check the security type
-        assertEq(CyberCertPrinter(certPrinter).certificateUri(), "ipfs://test");
+        assertEq(LedgerEntryToken(certPrinter).certificateUri(), "ipfs://test");
     }
 
     function testUpdateCyberAgreementRegistry() public {
@@ -3950,7 +3950,7 @@ contract CyberCorpForkTest is Test {
         );
 
         // Get the token URI and verify it contains the SAFTE details
-        string memory tokenUri = CyberCertPrinter(cyberCertPrinterAddr[0]).tokenURI(0);
+        string memory tokenUri = LedgerEntryToken(cyberCertPrinterAddr[0]).tokenURI(0);
         assertTrue(bytes(tokenUri).length > 0, "Token URI should not be empty");
         console.log("tokenUri: ", tokenUri);
         vm.stopPrank();
@@ -4081,7 +4081,7 @@ contract CyberCorpForkTest is Test {
         assertTrue(id != bytes32(0), "Should have created a valid agreement ID");
 
         // Verify the certificate printer was created correctly
-        CyberCertPrinter certPrinter = CyberCertPrinter(certPrinterAddress[0]);
+        LedgerEntryToken certPrinter = LedgerEntryToken(certPrinterAddress[0]);
 
 
         // Verify the certificate name includes the company name
@@ -4247,10 +4247,10 @@ contract CyberCorpForkTest is Test {
         assertTrue(id != bytes32(0), "Should have created a valid agreement ID");
 
         // Verify the first certificate printer (SAFE)
-        CyberCertPrinter safePrinter = CyberCertPrinter(certPrinterAddress[0]);
+        LedgerEntryToken safePrinter = LedgerEntryToken(certPrinterAddress[0]);
 
         // Verify the second certificate printer (Token Warrant)
-        CyberCertPrinter warrantPrinter = CyberCertPrinter(certPrinterAddress[1]);
+        LedgerEntryToken warrantPrinter = LedgerEntryToken(certPrinterAddress[1]);
 
 
         // Verify the deal was created in the registry
@@ -5278,7 +5278,7 @@ contract CyberCorpForkTest is Test {
         assertTrue(registry.hasSigned(id, testAddress), "Company should have signed");
 
         // Verify the certificate was issued to the principal (not the delegate)
-        CyberCertPrinter certPrinter = CyberCertPrinter(cyberCertPrinterAddr[0]);
+        LedgerEntryToken certPrinter = LedgerEntryToken(cyberCertPrinterAddr[0]);
         assertEq(certPrinter.ownerOf(certIds[0]), principalAddr, "Certificate should be owned by principal");
 
         console.log("Delegation test completed successfully!");
@@ -5493,11 +5493,11 @@ contract CyberCorpForkTest is Test {
 
         // Attach the global hook via IssuanceManager (admin)
         vm.prank(testAddress);
-        CyberCertPrinter(certPrinter).setGlobalRestrictionHook(address(hook));
+        LedgerEntryToken(certPrinter).setGlobalRestrictionHook(address(hook));
 
         // Enable global transferable on the printer (so hook decides allow/deny)
         vm.prank(issuanceManager);
-        CyberCertPrinter(certPrinter).setGlobalTransferable(true);
+        LedgerEntryToken(certPrinter).setGlobalTransferable(true);
 
         // Configure hook: default off, tokenId 1 on
         vm.startPrank(testAddress);
@@ -5533,7 +5533,7 @@ contract CyberCorpForkTest is Test {
         // Token 0 should be blocked by hook
         vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSelector(ICyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 0);
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient, 0);
         vm.stopPrank();
 
         // Token 1 should be allowed by hook, but endorsement is required by printer
@@ -5547,16 +5547,16 @@ contract CyberCorpForkTest is Test {
             endorsee: recipient,
             endorseeName: "Recipient"
         });
-        CyberCertPrinter(certPrinter).addEndorsement(1, e);
+        LedgerEntryToken(certPrinter).addEndorsement(1, e);
         vm.stopPrank();
         vm.prank(certOwner);
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 1);
-        assertEq(CyberCertPrinter(certPrinter).ownerOf(1), recipient);
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient, 1);
+        assertEq(LedgerEntryToken(certPrinter).ownerOf(1), recipient);
 
         // Token 2 should be blocked
         vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSelector(ICyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 2);
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient, 2);
         vm.stopPrank();
     }
 
@@ -5635,19 +5635,19 @@ contract CyberCorpForkTest is Test {
         // Global off; token 0 off => revert
         vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 0);
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient, 0);
         vm.stopPrank();
 
         // Enable token 0 only
         vm.prank(issuanceManager);
-        CyberCertPrinter(certPrinter).setTokenTransferable(0, true);
+        LedgerEntryToken(certPrinter).setTokenTransferable(0, true);
 
         // Transfer without endorsement: ERC721 owner changes but legal owner record does not
         address midAddr = vm.addr(0xD0);
         vm.prank(certOwner);
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, midAddr, 0);
-        assertEq(CyberCertPrinter(certPrinter).ownerOf(0), midAddr);
-        assertEq(CyberCertPrinter(certPrinter).legalOwnerOf(0), certOwner);
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, midAddr, 0);
+        assertEq(LedgerEntryToken(certPrinter).ownerOf(0), midAddr);
+        assertEq(LedgerEntryToken(certPrinter).legalOwnerOf(0), certOwner);
 
         // Add endorsement and endorsed transfer updates legal owner record
         Endorsement memory e = Endorsement({
@@ -5660,16 +5660,16 @@ contract CyberCorpForkTest is Test {
             endorseeName: "Recipient"
         });
         vm.prank(midAddr);
-        CyberCertPrinter(certPrinter).addEndorsement(0, e);
+        LedgerEntryToken(certPrinter).addEndorsement(0, e);
         vm.prank(midAddr);
-        CyberCertPrinter(certPrinter).transferFrom(midAddr, recipient, 0);
-        assertEq(CyberCertPrinter(certPrinter).ownerOf(0), recipient);
-        assertEq(CyberCertPrinter(certPrinter).legalOwnerOf(0), recipient);
+        LedgerEntryToken(certPrinter).transferFrom(midAddr, recipient, 0);
+        assertEq(LedgerEntryToken(certPrinter).ownerOf(0), recipient);
+        assertEq(LedgerEntryToken(certPrinter).legalOwnerOf(0), recipient);
 
         // Token 1 should remain blocked
         vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, vm.addr(0xBEEF), 1);
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, vm.addr(0xBEEF), 1);
         vm.stopPrank();
     }
 
@@ -5783,27 +5783,27 @@ contract CyberCorpForkTest is Test {
             endorseeName: "R1"
         });
         vm.prank(certOwner);
-        CyberCertPrinter(certPrinter).addEndorsement(0, e0);
+        LedgerEntryToken(certPrinter).addEndorsement(0, e0);
 
         // Before enabling global: expect TokenNotTransferable
         vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient1, 0);
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient1, 0);
         vm.stopPrank();
 
         // Turn global on, transfer succeeds
         vm.prank(issuanceManager);
-        CyberCertPrinter(certPrinter).setGlobalTransferable(true);
+        LedgerEntryToken(certPrinter).setGlobalTransferable(true);
         vm.prank(certOwner);
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient1, 0);
-        assertEq(CyberCertPrinter(certPrinter).ownerOf(0), recipient1);
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient1, 0);
+        assertEq(LedgerEntryToken(certPrinter).ownerOf(0), recipient1);
 
         // Global off again
         vm.prank(issuanceManager);
-        CyberCertPrinter(certPrinter).setGlobalTransferable(false);
+        LedgerEntryToken(certPrinter).setGlobalTransferable(false);
 
         // Verify token flag not persisted
-        bool persisted = CyberCertPrinter(certPrinter).isTokenTransferable(0);
+        bool persisted = LedgerEntryToken(certPrinter).isTokenTransferable(0);
         assertEq(persisted, false);
 
         // Add endorsement for token 1 -> recipient2 and ensure it still reverts due to global off and no per-token flag
@@ -5817,10 +5817,10 @@ contract CyberCorpForkTest is Test {
             endorseeName: "R2"
         });
         vm.prank(certOwner);
-        CyberCertPrinter(certPrinter).addEndorsement(1, e1);
+        LedgerEntryToken(certPrinter).addEndorsement(1, e1);
         vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient2, 1);
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient2, 1);
         vm.stopPrank();
     }
 
@@ -5879,14 +5879,14 @@ contract CyberCorpForkTest is Test {
 
         // Enable per-token transferability for token 0
         vm.prank(issuanceManager);
-        CyberCertPrinter(certPrinter).setTokenTransferable(0, true);
+        LedgerEntryToken(certPrinter).setTokenTransferable(0, true);
 
         // Install a denying global hook
         ToggleTransferHook hook = new ToggleTransferHook();
         BorgAuth corpAuth = IssuanceManager(issuanceManager).AUTH();
         hook.initialize(address(corpAuth));
         vm.prank(testAddress);
-        CyberCertPrinter(certPrinter).setGlobalRestrictionHook(address(hook));
+        LedgerEntryToken(certPrinter).setGlobalRestrictionHook(address(hook));
         vm.prank(testAddress);
         hook.setDefaultTransferable(false);
 
@@ -5902,10 +5902,10 @@ contract CyberCorpForkTest is Test {
             endorseeName: "R"
         });
         vm.prank(certOwner);
-        CyberCertPrinter(certPrinter).addEndorsement(0, e);
+        LedgerEntryToken(certPrinter).addEndorsement(0, e);
         vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSelector(ICyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 0);
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient, 0);
         vm.stopPrank();
     }
 
@@ -5972,11 +5972,11 @@ contract CyberCorpForkTest is Test {
             endorseeName: "R"
         });
         vm.prank(dealManagerAddr);
-        CyberCertPrinter(certPrinter).addEndorsement(0, e);
+        LedgerEntryToken(certPrinter).addEndorsement(0, e);
 
         // With both global and token flags off, transfer from dealManager should succeed (exemption), subject to hooks/endorsement
         vm.prank(dealManagerAddr);
-        CyberCertPrinter(certPrinter).transferFrom(dealManagerAddr, recipient, 0);
-        assertEq(CyberCertPrinter(certPrinter).ownerOf(0), recipient);
+        LedgerEntryToken(certPrinter).transferFrom(dealManagerAddr, recipient, 0);
+        assertEq(LedgerEntryToken(certPrinter).ownerOf(0), recipient);
     }
 }

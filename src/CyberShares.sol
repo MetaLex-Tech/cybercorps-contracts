@@ -270,7 +270,7 @@
 
      function certificateTokenURI(uint256 tokenId) public view returns (string memory) {
          /*require(CyberSharesStorage.exists(tokenId), "URI query for nonexistent token");
-         // Adapt from CyberCertPrinter
+         // Adapt from LedgerEntryToken
          string[] memory certLegend = CyberSharesStorage.getCertLegend(tokenId);
          // Get corp details, perhaps from issuanceManager
          address issuanceManager = CyberSharesStorage.getIssuanceManager();

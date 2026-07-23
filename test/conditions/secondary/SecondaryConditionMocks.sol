@@ -158,7 +158,7 @@ contract MockRegistry {
     }
 }
 
-/// @notice Configurable CyberCertPrinter surface (per-lot acquisition anchor, tacking extension, holders).
+/// @notice Configurable LedgerEntryToken surface (per-lot acquisition anchor, tacking extension, holders).
 contract MockCertPrinter {
     mapping(uint256 => uint64) internal acqTs;
     mapping(uint256 => bytes) internal ext;

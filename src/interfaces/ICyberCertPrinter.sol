@@ -92,7 +92,7 @@ struct RestrictiveLegend {
 }
 
 interface ICyberCertPrinter is IERC721 {
-    // Shared errors — declared once here so CyberCertPrinter and its storage library (via delegatecall) revert
+    // Shared errors — declared once here so LedgerEntryToken and its storage library (via delegatecall) revert
     // with identical selectors.
     error NotIssuanceManager();
     error TokenNotTransferable();
@@ -112,7 +112,7 @@ interface ICyberCertPrinter is IERC721 {
     error ExceedsReservedUnits();
     error ExtensionTypeNotSupported();
 
-    // Shared events — declared once here so CyberCertPrinter and its storage library (via delegatecall) emit
+    // Shared events — declared once here so LedgerEntryToken and its storage library (via delegatecall) emit
     // with identical topics.
     event CertificateCreated(uint256 indexed tokenId, address indexed investor, uint256 amount, uint256 cap);
     event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);

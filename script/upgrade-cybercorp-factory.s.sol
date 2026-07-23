@@ -19,7 +19,7 @@ import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {Vm} from "forge-std/Test.sol";
 import "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 
 interface IUUPS {

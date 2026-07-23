@@ -14,7 +14,7 @@ import {CyberCorp} from "../src/CyberCorp.sol";
 import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
 import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -159,7 +159,7 @@ contract DeployScript is Script {
         console.log("CyberCorpSingleFactory:", address(cyberCorpSingleFactory));
         console.log("DealManagerFactory:", address(dealManagerFactory));
        // console.log("RoundManagerFactory:", address(roundManagerFactory));
-        //console.log("CyberCertPrinter Impl:", address(cyberCertPrinterImplementation));
+        //console.log("LedgerEntryToken Impl:", address(cyberCertPrinterImplementation));
        // console.log("CyberScrip Impl:", address(cyberCert20Implementation));
         console.log("MetaDAOFactory (proxy):", address(metaDAOFactory));
         console.log("ParentCorp:", parentCorp);

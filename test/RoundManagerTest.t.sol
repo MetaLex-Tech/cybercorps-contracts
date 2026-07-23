@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 import "../src/RoundManager.sol";
 import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import "../src/IssuanceManager.sol";
-import "../src/CyberCertPrinter.sol";
+import "../src/LedgerEntryToken.sol";
 import "../src/storage/RoundManagerStorage.sol";
 import "../src/CyberCorpConstants.sol";
 import "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
@@ -182,7 +182,7 @@ library CyberCorpHelper {
         }
 
         address issuanceManagerImpl = address(new IssuanceManager{salt: SALT}());
-        address certPrinterImpl = address(new CyberCertPrinter{salt: SALT}());
+        address certPrinterImpl = address(new LedgerEntryToken{salt: SALT}());
         address cyberScripImpl = address(new CyberScrip{salt: SALT}());
         address issuanceManagerFactory = address(
             new ERC1967Proxy{salt: SALT}(
@@ -781,7 +781,7 @@ contract RoundManagerTest is Test {
 
    // RoundManager public roundManager;
     IssuanceManager public issuanceManager;
-    CyberCertPrinter public certPrinter;
+    LedgerEntryToken public certPrinter;
     MockPaymentToken public paymentToken;
 
     address public owner;
@@ -1212,7 +1212,7 @@ contract RoundManagerTest is Test {
 		Escrow memory esc = RoundManager(roundManager).getEscrowDetails(agreementId);
 		assertGt(esc.corpAssets.length, 0);
 		Token memory corpToken = esc.corpAssets[0];
-		CertificateDetails memory details = CyberCertPrinter(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
+		CertificateDetails memory details = LedgerEntryToken(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
 
         assertEq(details.unitsRepresented, units18);
         assertEq(details.investmentAmountUSD, used1e18);
@@ -1302,7 +1302,7 @@ contract RoundManagerTest is Test {
         // Certificate USD uses 18-dec precision and reflects 10.5e18
 		Escrow memory esc = RoundManager(roundManager).getEscrowDetails(agreementId);
 		Token memory corpToken = esc.corpAssets[0];
-		CertificateDetails memory details = CyberCertPrinter(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
+		CertificateDetails memory details = LedgerEntryToken(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
         assertEq(details.unitsRepresented, 10500000000000000000);
 		assertEq(details.investmentAmountUSD, 10500000000000000000);
 	}
@@ -1370,7 +1370,7 @@ contract RoundManagerTest is Test {
 		Escrow memory esc = RoundManager(roundManager).getEscrowDetails(agreementId);
 		assertGt(esc.corpAssets.length, 0);
 		Token memory corpToken = esc.corpAssets[0];
-		CertificateDetails memory details = CyberCertPrinter(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
+		CertificateDetails memory details = LedgerEntryToken(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
 
         assertEq(details.unitsRepresented, units18, "unitsRepresented should be in 18-decimals");
         assertEq(details.investmentAmountUSD, used1e18, "investmentAmountUSD should be in 18-decimals");
@@ -1433,7 +1433,7 @@ contract RoundManagerTest is Test {
 		Escrow memory esc = RoundManager(roundManager).getEscrowDetails(agreementId);
 		assertGt(esc.corpAssets.length, 0);
 		Token memory corpToken = esc.corpAssets[0];
-		CertificateDetails memory details = CyberCertPrinter(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
+		CertificateDetails memory details = LedgerEntryToken(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
 
         assertEq(details.unitsRepresented, 30303030303030303030, "unitsRepresented should be in 18-decimals");
         assertEq(details.investmentAmountUSD, 999999999999999999990, "investmentAmountUSD should be in 18-decimals");
@@ -2476,11 +2476,11 @@ contract RoundManagerTest is Test {
         Token memory corpToken = esc.corpAssets[0];
 
         // Certificate should have been minted to the investor and total supply should be 1
-        assertEq(CyberCertPrinter(corpToken.tokenAddress).ownerOf(corpToken.tokenId), investor);
-        assertEq(CyberCertPrinter(corpToken.tokenAddress).totalSupply(), 1);
+        assertEq(LedgerEntryToken(corpToken.tokenAddress).ownerOf(corpToken.tokenId), investor);
+        assertEq(LedgerEntryToken(corpToken.tokenAddress).totalSupply(), 1);
 
         // Verify certificate details match round inputs
-        CertificateDetails memory details = CyberCertPrinter(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
+        CertificateDetails memory details = LedgerEntryToken(corpToken.tokenAddress).getCertificateDetails(corpToken.tokenId);
 
         // Officer info from createRound agreement
         assertEq(details.signingOfficerName, "Officer");
@@ -2615,13 +2615,13 @@ contract RoundManagerTest is Test {
 
         // First certificate
         Token memory t0 = esc.corpAssets[0];
-        CertificateDetails memory d0 = CyberCertPrinter(t0.tokenAddress).getCertificateDetails(t0.tokenId);
+        CertificateDetails memory d0 = LedgerEntryToken(t0.tokenAddress).getCertificateDetails(t0.tokenId);
         assertEq(d0.legalDetails, "LD A");
         assertEq(keccak256(d0.extensionData), keccak256(bytes("extA")));
 
         // Second certificate
         Token memory t1 = esc.corpAssets[1];
-        CertificateDetails memory d1 = CyberCertPrinter(t1.tokenAddress).getCertificateDetails(t1.tokenId);
+        CertificateDetails memory d1 = LedgerEntryToken(t1.tokenAddress).getCertificateDetails(t1.tokenId);
         assertEq(d1.legalDetails, "LD B");
         assertEq(keccak256(d1.extensionData), keccak256(bytes("extB")));
     }
@@ -2958,7 +2958,7 @@ contract RoundManagerFCFSTest is Test {
         assertGt(esc.corpAssets.length, 0);
         assertEq(usdc.balanceOf(me) - meUsdcBalanceBefore, 10_000 * (10 ** usdc.decimals()), "Investor should have paid maximum ticket size");
         Token memory corpToken = esc.corpAssets[0];
-        assertEq(CyberCertPrinter(corpToken.tokenAddress).ownerOf(corpToken.tokenId), investor, "Investor should have received equity");
+        assertEq(LedgerEntryToken(corpToken.tokenAddress).ownerOf(corpToken.tokenId), investor, "Investor should have received equity");
     }
 
     function test_FCFS_RefundsExcessPayment() public {

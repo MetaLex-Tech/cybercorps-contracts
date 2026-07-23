@@ -44,7 +44,7 @@ pragma solidity 0.8.28;
 import "openzeppelin-contracts/utils/Create2.sol";
 import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "./IssuanceManager.sol";
-import "./CyberCertPrinter.sol";
+import "./LedgerEntryToken.sol";
 import "./CyberScrip.sol";
 import "./libs/auth.sol";
 import "./storage/IssuanceManagerFactoryStorage.sol";
@@ -77,7 +77,7 @@ contract IssuanceManagerFactory is BorgAuthACL, UUPSUpgradeable {
         IssuanceManagerFactoryStorage.getStorageData().cyberCertPrinterRefImplementation = cyberCertPrinterRefImplementation;
         IssuanceManagerFactoryStorage.getStorageData().cyberScripRefImplementation = cyberScripRefImplementation;
         emit RefImplementationSet(refImplementation, IssuanceManager(refImplementation).DEPLOY_VERSION());
-        emit CyberCertPrinterRefImplementationSet(cyberCertPrinterRefImplementation, CyberCertPrinter(cyberCertPrinterRefImplementation).DEPLOY_VERSION());
+        emit CyberCertPrinterRefImplementationSet(cyberCertPrinterRefImplementation, LedgerEntryToken(cyberCertPrinterRefImplementation).DEPLOY_VERSION());
         emit CyberScripRefImplementationSet(cyberScripRefImplementation, CyberScrip(cyberScripRefImplementation).DEPLOY_VERSION());
     }
 
@@ -126,18 +126,18 @@ contract IssuanceManagerFactory is BorgAuthACL, UUPSUpgradeable {
         emit RefImplementationSet(_newImplementation, IssuanceManager(_newImplementation).DEPLOY_VERSION());
     }
 
-    /// @notice Get the reference implementation contract for the next `CyberCertPrinter` deployments
+    /// @notice Get the reference implementation contract for the next `LedgerEntryToken` deployments
     /// @return Current reference implementation contract address
     function getCyberCertPrinterRefImplementation() external view returns(address) {
         return IssuanceManagerFactoryStorage.getStorageData().cyberCertPrinterRefImplementation;
     }
 
-    /// @notice Set the reference implementation contract for the next `CyberCertPrinter` deployments
+    /// @notice Set the reference implementation contract for the next `LedgerEntryToken` deployments
     /// @dev Only callable by addresses with the admin role
     /// @param _newImplementation Address of the new implementation
     function setCyberCertPrinterRefImplementation(address _newImplementation) public onlyOwner {
         IssuanceManagerFactoryStorage.getStorageData().cyberCertPrinterRefImplementation = _newImplementation;
-        emit CyberCertPrinterRefImplementationSet(_newImplementation, CyberCertPrinter(_newImplementation).DEPLOY_VERSION());
+        emit CyberCertPrinterRefImplementationSet(_newImplementation, LedgerEntryToken(_newImplementation).DEPLOY_VERSION());
     }
 
     /// @notice Get the reference implementation contract for the next `CyberScrip` deployments

@@ -43,7 +43,7 @@ pragma solidity 0.8.28;
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC20} from "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {DealManager} from "../src/DealManager.sol";
@@ -239,7 +239,7 @@ contract DealManagerSecondaryTradeTest is Test {
         auth = new BorgAuth(owner);
         corp = new MockCyberCorpForIM();
 
-        // Real IssuanceManager + CyberCertPrinter, deployed through the IssuanceManagerFactory beacon stack.
+        // Real IssuanceManager + LedgerEntryToken, deployed through the IssuanceManagerFactory beacon stack.
         IssuanceManagerFactory imFactory = IssuanceManagerFactory(
             address(
                 new ERC1967Proxy(
@@ -248,7 +248,7 @@ contract DealManagerSecondaryTradeTest is Test {
                         IssuanceManagerFactory.initialize.selector,
                         address(auth),
                         new IssuanceManager(),
-                        new CyberCertPrinter(),
+                        new LedgerEntryToken(),
                         new CyberScrip()
                     )
                 )
@@ -349,7 +349,7 @@ contract DealManagerSecondaryTradeTest is Test {
 
     /// @dev Cumulative units released back to the seller's free pool (cancel/void), for a SELL offer that
     /// reserves the whole UNITS at postOffer: released == reserved-ever (UNITS) − consumed − still-reserved.
-    /// The real CyberCertPrinter tracks only net `unitsReserved`, so this reconstructs the old mock counter.
+    /// The real LedgerEntryToken tracks only net `unitsReserved`, so this reconstructs the old mock counter.
     /// Not valid for buy offers (which reserve per-lot, not UNITS); those assert live `unitsReserved` directly.
     function _released(uint256 tokenId) internal view returns (uint256) {
         return UNITS - _consumed(tokenId) - certPrinter.unitsReserved(tokenId);
@@ -2516,9 +2516,9 @@ contract DealManagerSecondaryTradeTest is Test {
         // secondaryTransfer materializes the seller's endorsement on the Ledger Entry Token at finalize
         // (spec §7.4A): the signature signed in blank now carries the now-known buyer as endorsee, bound to the
         // settlement agreement. Index 1 — index 0 is the issuer endorsement written at mint.
-        // (Concrete CyberCertPrinter cast: the ICyberCertPrinter interface's getEndorsementHistory return is stale.)
+        // (Concrete LedgerEntryToken cast: the ICyberCertPrinter interface's getEndorsementHistory return is stale.)
         Endorsement memory sellerEndorsement =
-            CyberCertPrinter(address(certPrinter)).getEndorsementHistory(sellerTokenId, 1);
+            LedgerEntryToken(address(certPrinter)).getEndorsementHistory(sellerTokenId, 1);
         assertEq(sellerEndorsement.endorser, seller, "endorser is the seller");
         assertEq(sellerEndorsement.endorsee, buyer, "endorsee is the now-known buyer");
         assertEq(sellerEndorsement.agreementId, settlementIdA, "endorsement bound to the settlement agreement");
@@ -2636,9 +2636,9 @@ contract DealManagerSecondaryTradeTest is Test {
         // secondaryTransfer materializes the seller's endorsement on the Ledger Entry Token at finalize
         // (spec §7.4A): the acceptor (seller) is the endorser; the buyer/offeror is the now-known endorsee.
         // Index 1 — index 0 is the issuer endorsement written at mint. The buy offer carries the buyer name; the
-        // acceptance carries the signature. (Concrete CyberCertPrinter cast: the interface return is stale.)
+        // acceptance carries the signature. (Concrete LedgerEntryToken cast: the interface return is stale.)
         Endorsement memory sellerEndorsement =
-            CyberCertPrinter(address(certPrinter)).getEndorsementHistory(sellerTokenId, 1);
+            LedgerEntryToken(address(certPrinter)).getEndorsementHistory(sellerTokenId, 1);
         assertEq(sellerEndorsement.endorser, seller, "endorser is the acceptor (seller)");
         assertEq(sellerEndorsement.endorsee, buyer, "endorsee is the buyer");
         assertEq(sellerEndorsement.agreementId, settlementIdA, "endorsement bound to the settlement agreement");

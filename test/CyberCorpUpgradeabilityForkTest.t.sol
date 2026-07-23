@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
@@ -165,7 +165,7 @@ contract CyberCorpUpgradeabilityForkTest is Test {
                     IssuanceManagerFactory.initialize.selector,
                     address(metalexAuth),
                     address(new IssuanceManager{salt: salt}()),
-                    address(new CyberCertPrinter()),
+                    address(new LedgerEntryToken()),
                     address(new CyberScrip())
                 )
             )
@@ -433,11 +433,11 @@ contract CyberCorpUpgradeabilityForkTest is Test {
         DealManager(dmAddr).finalizeDeal(agreementId);
 
         // Sanity check
-        assertEq(CyberCertPrinter(cyberCertPrinterAddrs[0]).ownerOf(certIds[0]), alice);
+        assertEq(LedgerEntryToken(cyberCertPrinterAddrs[0]).ownerOf(certIds[0]), alice);
 
         vm.startPrank(metalex);
 
-        // MetaLeX cannot unilaterally upgrade CyberCertPrinter implementation without company owner's consent
+        // MetaLeX cannot unilaterally upgrade LedgerEntryToken implementation without company owner's consent
         address rugImpl = address(new RugCyberCertPrinter());
         imFactory.setCyberCertPrinterRefImplementation(rugImpl);
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, BorgAuth(corpAuthAddr).OWNER_ROLE(), metalex));
