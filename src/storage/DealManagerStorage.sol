@@ -79,6 +79,8 @@ library DealManagerStorage {
         SecurityClass securityClass;
         SecuritySeries securitySeries;
         address extension;
+        /// @notice Series-scope payload encoded by `extension`.
+        bytes seriesData;
         string[] defaultLegend;
     }
 
@@ -335,6 +337,9 @@ library DealManagerStorage {
 
     /// @notice Signs to void a deal; refunds if the deal was paid
     /// @dev nonReentrant is carried by the DealManager wrapper that delegatecalls here.
+    ///      When mutual void succeeds on a PAID deal, voids escrowed corp ERC721s (same teardown as
+    ///      voidExpiredDeal) before refunding — otherwise certs stay locked and voidExpiredDeal cannot
+    ///      clean up because every party is already in voidRequestedBy.
     function signToVoid(bytes32 agreementId, address signer, bytes memory signature) public {
         // Check: status
         if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();

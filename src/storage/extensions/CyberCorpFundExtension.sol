@@ -45,11 +45,33 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./ICyberCorpExtension.sol";
 import "../../libs/auth.sol";
 
+/// @notice One line of the SPV's portfolio: which portfolio company it holds, the kind of security, and
+/// how many underlying shares/units. The SPV-unit-to-underlying ratio is derived offchain as
+/// totalUnitsOutstanding : underlyingShares (per holding).
+struct PortfolioHolding {
+    string portfolioCompany;   // e.g. "Anthropic, PBC"
+    string securityKind;       // e.g. "Series C Preferred Stock"
+    uint256 underlyingShares;  // underlying shares/units the SPV holds
+}
+
+/// @notice Per-SPV fund metadata carried by the fund entity's cyberCORP. Fund name, jurisdiction of
+/// domicile and legal designation live on the base CyberCorp fields (cyberCORPName / cyberCORPJurisdiction
+/// / cyberCORPType); this extension carries the fund-specific compliance and portfolio configuration.
+/// Informational counterparts of enforced values (holderCap vs HolderCapCondition.cap, regSIssuerCategory
+/// vs RegSDistributionComplianceCondition.regSConfigs) should be kept in sync by the SPV's admin.
 struct CyberCorpFundData {
-    string fundEntityType;
-    string icaExceptionRelied;
-    address transferRestrictionHookAddress;
-    string[] governingDocumentURIs;
+    string fundEntityType;                  // LLC, LP, or non-U.S. equivalent
+    string icaExceptionRelied;              // §3(c)(1), §3(c)(1)(C) QVCF, or §3(c)(7); note Touche Remnant
+                                            // modified counting for non-U.S. funds with U.S. resident BOs
+    uint8 regSIssuerCategory;               // Reg S issuer category 1/2/3 → distribution compliance period
+    uint256 holderCap;                      // 100 (§3(c)(1)) / 250 (§3(c)(1)(C)); 0 = none beyond the QP
+    uint256 totalUnitsOutstanding;          // ratio numerator base when unitized
+    bool ratioStable;                       // unit-to-underlying ratio "stable" vs "subject-to-change"
+    PortfolioHolding[] portfolioHoldings;
+    bool cfiusSensitive;                    // FIRRMA fund exception not met and portfolio co. is a TID U.S. business
+    bytes32 provenanceAttestationHash;      // GP underlying-asset provenance attestation (§4.1.0)
+    string documentRegistryURI;             // disclosure package referencing the provenance attestation
+    string[] governingDocumentURIs;         // operating agreement, PPM, subscription agreement templates
     string metadataURI;
 }
 
@@ -93,22 +115,113 @@ contract CyberCorpFundExtension is
             (CyberCorpFundData)
         );
 
+        // Built in parts to stay within stack limits
+        return string.concat(
+            ', "CyberCorpFundDetails": {',
+            _entityAndExceptionJson(decoded),
+            _portfolioJson(decoded),
+            _attestationAndDocsJson(decoded),
+            "}"
+        );
+    }
+
+    function _entityAndExceptionJson(
+        CyberCorpFundData memory decoded
+    ) internal pure returns (string memory) {
         return string(
             abi.encodePacked(
-                ', "CyberCorpFundDetails": {',
                 '"fundEntityType": "',
                 decoded.fundEntityType,
                 '", "icaExceptionRelied": "',
                 decoded.icaExceptionRelied,
-                '", "transferRestrictionHookAddress": "',
-                addressToString(decoded.transferRestrictionHookAddress),
+                '", "regSIssuerCategory": ',
+                uint256ToString(decoded.regSIssuerCategory),
+                ', "holderCap": ',
+                uint256ToString(decoded.holderCap)
+            )
+        );
+    }
+
+    function _portfolioJson(
+        CyberCorpFundData memory decoded
+    ) internal pure returns (string memory) {
+        return string(
+            abi.encodePacked(
+                ', "totalUnitsOutstanding": ',
+                uint256ToString(decoded.totalUnitsOutstanding),
+                ', "ratioStable": ',
+                boolToString(decoded.ratioStable),
+                ', "portfolioHoldings": ',
+                portfolioHoldingsToJson(decoded.portfolioHoldings)
+            )
+        );
+    }
+
+    function _attestationAndDocsJson(
+        CyberCorpFundData memory decoded
+    ) internal pure returns (string memory) {
+        return string(
+            abi.encodePacked(
+                ', "cfiusSensitive": ',
+                boolToString(decoded.cfiusSensitive),
+                ', "provenanceAttestationHash": "',
+                _toHexString(abi.encodePacked(decoded.provenanceAttestationHash)),
+                '", "documentRegistryURI": "',
+                decoded.documentRegistryURI,
                 '", "governingDocumentURIs": ',
                 stringArrayToJson(decoded.governingDocumentURIs),
                 ', "metadataURI": "',
                 decoded.metadataURI,
-                '"}'
+                '"'
             )
         );
+    }
+
+    function portfolioHoldingsToJson(
+        PortfolioHolding[] memory holdings
+    ) internal pure returns (string memory) {
+        string memory json = "[";
+
+        for (uint256 i = 0; i < holdings.length; i++) {
+            if (i > 0) {
+                json = string.concat(json, ", ");
+            }
+            json = string.concat(
+                json,
+                '{"portfolioCompany": "',
+                holdings[i].portfolioCompany,
+                '", "securityKind": "',
+                holdings[i].securityKind,
+                '", "underlyingShares": ',
+                uint256ToString(holdings[i].underlyingShares),
+                "}"
+            );
+        }
+
+        return string.concat(json, "]");
+    }
+
+    function boolToString(bool value) internal pure returns (string memory) {
+        return value ? "true" : "false";
+    }
+
+    function uint256ToString(uint256 value) internal pure returns (string memory) {
+        if (value == 0) {
+            return "0";
+        }
+        uint256 temp = value;
+        uint256 digits;
+        while (temp != 0) {
+            digits++;
+            temp /= 10;
+        }
+        bytes memory buffer = new bytes(digits);
+        while (value != 0) {
+            digits -= 1;
+            buffer[digits] = bytes1(uint8(48 + uint256(value % 10)));
+            value /= 10;
+        }
+        return string(buffer);
     }
 
     function stringArrayToJson(
@@ -124,10 +237,6 @@ contract CyberCorpFundExtension is
         }
 
         return string.concat(json, "]");
-    }
-
-    function addressToString(address account) internal pure returns (string memory) {
-        return _toHexString(abi.encodePacked(account));
     }
 
     function _toHexString(bytes memory data) internal pure returns (string memory) {

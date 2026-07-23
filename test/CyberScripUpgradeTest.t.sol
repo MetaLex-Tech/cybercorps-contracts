@@ -6,6 +6,10 @@ import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {IERC721} from "openzeppelin-contracts/token/ERC721/IERC721.sol";
 
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
+import {
+    ILegacyCyberCorpFactory,
+    LegacyCyberCertData
+} from "./libs/LegacyCyberCorpFactory.sol";
 import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
 
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
@@ -181,8 +185,8 @@ contract CyberScripUpgradeForkTest is Test {
         uint256 valuation = 5_000_000e18;
 
         // 1) Pre-upgrade: issuerA deploys corp stack and creates a deal via factory.
-        CyberCorpFactory.CyberCertData[] memory offerCertData = new CyberCorpFactory.CyberCertData[](1);
-        offerCertData[0] = CyberCorpFactory.CyberCertData({
+        LegacyCyberCertData[] memory offerCertData = new LegacyCyberCertData[](1);
+        offerCertData[0] = LegacyCyberCertData({
             name: "SAFE",
             symbol: "SAFE",
             uri: "ipfs://safe-cert",
@@ -237,7 +241,7 @@ contract CyberScripUpgradeForkTest is Test {
             ,
             ,
             preUpgradeCertIds
-        ) = corpFactory.deployCyberCorpAndCreateOffer(
+        ) = ILegacyCyberCorpFactory(address(corpFactory)).deployCyberCorpAndCreateOffer(
             userSalt,
             "Issuer A Corp",
             "Limited Liability Company",
@@ -269,6 +273,7 @@ contract CyberScripUpgradeForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesA,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: new string[](0)
         });
 
@@ -1105,7 +1110,7 @@ contract CyberScripUpgradeForkTest is Test {
         CompanyOfficer memory officer,
         string[] memory legalDetails,
         bytes[] memory extensionData,
-        CyberCertData[] memory certData,
+        LegacyCyberCertData[] memory certData,
         bytes32 templateId,
         address stable,
         uint256 pricePerUnit,
@@ -1130,7 +1135,7 @@ contract CyberScripUpgradeForkTest is Test {
     {
         vm.prank(companyOwner);
         return
-            corpFactory.deployCyberCorpAndCreateRound(
+            ILegacyCyberCorpFactory(address(corpFactory)).deployCyberCorpAndCreateRound(
                 userSalt,
                 SecuritySeries.SeriesA,
                 "CyberCorp Upgrade Test",
@@ -1450,8 +1455,8 @@ contract CyberScripUpgradeForkTest is Test {
             corpSingleFactory.computeCyberCorpSingleAddress(corpSalt)
         );
 
-        CyberCertData[] memory certData = new CyberCertData[](1);
-        certData[0] = CyberCertData({
+        LegacyCyberCertData[] memory certData = new LegacyCyberCertData[](1);
+        certData[0] = LegacyCyberCertData({
             name: "SAFE",
             symbol: "SAFE",
             uri: "ipfs://safe-cert",
@@ -1515,7 +1520,8 @@ contract CyberScripUpgradeForkTest is Test {
                 "uri://cert",
                 SecurityClass.CommonStock,
                 SecuritySeries.SeriesA,
-                address(0)
+                address(0),
+                bytes("")
             )
         );
     }

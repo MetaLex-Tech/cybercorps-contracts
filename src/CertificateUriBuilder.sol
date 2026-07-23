@@ -45,8 +45,17 @@ import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./CyberCorpConstants.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
 import "./interfaces/ICertificateImageBuilder.sol";
-import {RestrictionType, RestrictiveLegend} from "./interfaces/ICyberCertPrinter.sol";
-import "./storage/extensions/ICertificateExtension.sol";
+import "./interfaces/ICyberCorp.sol";
+import "./interfaces/IIssuanceManager.sol";
+import {
+    ICyberCertPrinter,
+    RestrictionType,
+    RestrictiveLegend
+} from "./interfaces/ICyberCertPrinter.sol";
+import {
+    ICertificateExtension,
+    ICertificateExtensionV3
+} from "./storage/extensions/ICertificateExtension.sol";
 import "./libs/auth.sol";
 
 interface ICertificateUnitsReserved {
@@ -559,63 +568,60 @@ struct CertificateDetails {
         // Start building the JSON string with ERC-721 metadata standard format
         // Build on-chain SVG image using the image builder
         
-        // Fetch timestamp from registry in scoped block to reduce stack pressure
-        uint256 certTimestamp = _getAgreementTimestamp(registry, agreementId);
-
-        CertificateSVGParams memory svgParams = CertificateSVGParams({
-            corpName: cyberCORPName,
-            securityType: securityType,
-            securitySeries: securitySeries,
-            officerName: details.signingOfficerName,
-            officerTitle: details.signingOfficerTitle,
-            units: details.unitsRepresented,
-            valuation: details.issuerUSDValuationAtTimeOfInvestment,
-            jurisdiction: cyberCORPJurisdiction,
-            ownerName: owner.name,
-            tokenId: tokenId,
-            certificateUri: certificateUri
-        });
-
-        string memory svg = ICertificateImageBuilder(imageBuilder).buildCertificateSVG(svgParams, certTimestamp);
-        string memory imageDataUri = string(abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg))));
-
-        string memory json = string(abi.encodePacked(
-            '{"title": "MetaLeX Tokenized Certificate",',
-            '"type": "', securityClassToString(securityType),
-            '", "image": "', imageDataUri, '",',
-            '"attributes": [', buildAttributes(owner, details, cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri),
-            '],'
-        ));
+        string memory json;
+        {
+            uint256 certTimestamp = _getAgreementTimestamp(registry, agreementId);
+            CertificateSVGParams memory svgParams = CertificateSVGParams({
+                corpName: cyberCORPName,
+                securityType: securityType,
+                securitySeries: securitySeries,
+                officerName: details.signingOfficerName,
+                officerTitle: details.signingOfficerTitle,
+                units: details.unitsRepresented,
+                valuation: details.issuerUSDValuationAtTimeOfInvestment,
+                jurisdiction: cyberCORPJurisdiction,
+                ownerName: owner.name,
+                tokenId: tokenId,
+                certificateUri: certificateUri
+            });
+            string memory svg = ICertificateImageBuilder(imageBuilder).buildCertificateSVG(svgParams, certTimestamp);
+            string memory imageDataUri = string(
+                abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg)))
+            );
+            json = string(abi.encodePacked(
+                '{"title": "MetaLeX Tokenized Certificate",',
+                '"type": "', securityClassToString(securityType),
+                '", "image": "', imageDataUri, '",',
+                '"attributes": [', buildAttributes(owner, details, cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri),
+                '],'
+            ));
+        }
 
         // Add all existing properties at root level
-        json = string.concat(
-            json,
-            '"cyberCORPName": "', cyberCORPName,
-            '", "cyberCORPType": "', cyberCORPType,
-            '", "cyberCORPJurisdiction": "', cyberCORPJurisdiction,
-            '", "cyberCORPContactDetails": "', cyberCORPContactDetails,
-            '", "securityType": "', securityClassToString(securityType),
-            '", "securitySeries": "', securitySeriesToString(securitySeries),
-            '", "certificateUri": "', certificateUri,
-            '"'
-        );
+        json = string.concat(json, '"cyberCORPName": "', cyberCORPName, '"');
+        json = string.concat(json, ', "cyberCORPType": "', cyberCORPType, '"');
+        json = string.concat(json, ', "cyberCORPJurisdiction": "', cyberCORPJurisdiction, '"');
+        json = string.concat(json, ', "cyberCORPContactDetails": "', cyberCORPContactDetails, '"');
+        json = string.concat(json, ', "securityType": "', securityClassToString(securityType), '"');
+        json = string.concat(json, ', "securitySeries": "', securitySeriesToString(securitySeries), '"');
+        json = string.concat(json, ', "certificateUri": "', certificateUri, '"');
 
         // Add certificate details
-        json = string.concat(json, 
-            ', "signingOfficerName": "', details.signingOfficerName,
-            '", "signingOfficerTitle": "', details.signingOfficerTitle,
-            '", "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD),
-            '", "issuerUSDValuationAtTimeOfInvestment": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
-            '", "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented),
-            '", "unitsReserved": "', unitsReservedToString(contractAddress, tokenId),
-            '", "legalDetails": "', details.legalDetails,
-            '"'
-        );
+        json = string.concat(json, ', "signingOfficerName": "', details.signingOfficerName, '"');
+        json = string.concat(json, ', "signingOfficerTitle": "', details.signingOfficerTitle, '"');
+        json = string.concat(json, ', "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD), '"');
+        json = string.concat(json, ', "issuerUSDValuationAtTimeOfInvestment": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment), '"');
+        json = string.concat(json, ', "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented), '"');
+        json = string.concat(json, ', "unitsReserved": "', unitsReservedToString(contractAddress, tokenId), '"');
+        json = string.concat(json, ', "legalDetails": "', details.legalDetails, '"');
+
+        json = _appendCyberCorpExtensionData(json, contractAddress);
 
         //add extensionData
         if (extension != address(0) && details.extensionData.length > 0) {
             json = string.concat(json, ICertificateExtension(extension).getExtensionURI(details.extensionData));
         }
+        json = _appendSeriesExtensionData(json, contractAddress);
 
         // Add endorsement history
         json = string.concat(json, ', "endorsementHistory": ', buildEndorsementHistory(endorsements, registry, agreementId));
@@ -636,6 +642,68 @@ struct CertificateDetails {
         json = Base64.encode(bytes(string(json)));
         json = string(abi.encodePacked('data:application/json;base64,', json));
         return json;
+    }
+
+    /// @dev Adds issuer-level extension metadata when the printer and IssuanceManager expose it.
+    /// Guards preserve URI availability for legacy printer or IssuanceManager implementations.
+    function _appendCyberCorpExtensionData(
+        string memory json,
+        address certificate
+    ) private view returns (string memory) {
+        try ICyberCertPrinter(certificate).issuanceManager() returns (
+            address issuanceManager
+        ) {
+            try IIssuanceManager(issuanceManager).CORP() returns (address corp) {
+                if (corp == address(0)) return json;
+
+                try ICyberCorp(corp).getExtensionURI() returns (
+                    string memory extensionJson
+                ) {
+                    return bytes(extensionJson).length == 0
+                        ? json
+                        : string.concat(json, extensionJson);
+                } catch {
+                    return json;
+                }
+            } catch {
+                return json;
+            }
+        } catch {
+            return json;
+        }
+    }
+
+    /// @dev Adds printer-level series metadata when its shared extension implements
+    /// ICertificateExtensionV3. All calls are guarded so legacy printer implementations and V1/V2
+    /// extensions continue returning their existing metadata unchanged.
+    function _appendSeriesExtensionData(
+        string memory json,
+        address certificate
+    ) private view returns (string memory) {
+        try ICyberCertPrinter(certificate).getSeriesInfo() returns (
+            address seriesExtension,
+            bytes memory seriesData
+        ) {
+            if (seriesExtension == address(0) || seriesData.length == 0) return json;
+
+            try ICertificateExtensionV3(seriesExtension).supportsSeriesExtensionData() returns (
+                bool supported
+            ) {
+                if (!supported) return json;
+            } catch {
+                return json;
+            }
+
+            try ICertificateExtensionV3(seriesExtension).getSeriesExtensionURI(seriesData) returns (
+                string memory seriesJson
+            ) {
+                return bytes(seriesJson).length == 0 ? json : string.concat(json, seriesJson);
+            } catch {
+                return json;
+            }
+        } catch {
+            return json;
+        }
     }
 
     function buildCertificateUriNotEncoded(
@@ -697,63 +765,60 @@ struct CertificateDetails {
         // Start building the JSON string with ERC-721 metadata standard format
         // Build on-chain SVG image using the image builder
 
-        // Fetch timestamp from registry in scoped block to reduce stack pressure
-        uint256 certTimestamp = _getAgreementTimestamp(registry, agreementId);
-
-        CertificateSVGParams memory svgParams = CertificateSVGParams({
-            corpName: cyberCORPName,
-            securityType: securityType,
-            securitySeries: securitySeries,
-            officerName: details.signingOfficerName,
-            officerTitle: details.signingOfficerTitle,
-            units: details.unitsRepresented,
-            valuation: details.issuerUSDValuationAtTimeOfInvestment,
-            jurisdiction: cyberCORPJurisdiction,
-            ownerName: owner.name,
-            tokenId: tokenId,
-            certificateUri: certificateUri
-        });
-
-        string memory svg = ICertificateImageBuilder(imageBuilder).buildCertificateSVG(svgParams, certTimestamp);
-        string memory imageDataUri = string(abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg))));
-
-        string memory json = string(abi.encodePacked(
-            '{"title": "MetaLeX Tokenized Certificate",',
-            '"type": "', securityClassToString(securityType),
-            '", "image": "', imageDataUri, '",',
-            '"attributes": [', buildAttributes(owner, details, cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri),
-            '],'
-        ));
+        string memory json;
+        {
+            uint256 certTimestamp = _getAgreementTimestamp(registry, agreementId);
+            CertificateSVGParams memory svgParams = CertificateSVGParams({
+                corpName: cyberCORPName,
+                securityType: securityType,
+                securitySeries: securitySeries,
+                officerName: details.signingOfficerName,
+                officerTitle: details.signingOfficerTitle,
+                units: details.unitsRepresented,
+                valuation: details.issuerUSDValuationAtTimeOfInvestment,
+                jurisdiction: cyberCORPJurisdiction,
+                ownerName: owner.name,
+                tokenId: tokenId,
+                certificateUri: certificateUri
+            });
+            string memory svg = ICertificateImageBuilder(imageBuilder).buildCertificateSVG(svgParams, certTimestamp);
+            string memory imageDataUri = string(
+                abi.encodePacked('data:image/svg+xml;base64,', Base64.encode(bytes(svg)))
+            );
+            json = string(abi.encodePacked(
+                '{"title": "MetaLeX Tokenized Certificate",',
+                '"type": "', securityClassToString(securityType),
+                '", "image": "', imageDataUri, '",',
+                '"attributes": [', buildAttributes(owner, details, cyberCORPName, cyberCORPType, cyberCORPJurisdiction, cyberCORPContactDetails, securityType, securitySeries, certificateUri),
+                '],'
+            ));
+        }
 
         // Add all existing properties at root level
-        json = string.concat(
-            json,
-            '"cyberCORPName": "', cyberCORPName,
-            '", "cyberCORPType": "', cyberCORPType,
-            '", "cyberCORPJurisdiction": "', cyberCORPJurisdiction,
-            '", "cyberCORPContactDetails": "', cyberCORPContactDetails,
-            '", "securityType": "', securityClassToString(securityType),
-            '", "securitySeries": "', securitySeriesToString(securitySeries),
-            '", "certificateUri": "', certificateUri,
-            '"'
-        );
+        json = string.concat(json, '"cyberCORPName": "', cyberCORPName, '"');
+        json = string.concat(json, ', "cyberCORPType": "', cyberCORPType, '"');
+        json = string.concat(json, ', "cyberCORPJurisdiction": "', cyberCORPJurisdiction, '"');
+        json = string.concat(json, ', "cyberCORPContactDetails": "', cyberCORPContactDetails, '"');
+        json = string.concat(json, ', "securityType": "', securityClassToString(securityType), '"');
+        json = string.concat(json, ', "securitySeries": "', securitySeriesToString(securitySeries), '"');
+        json = string.concat(json, ', "certificateUri": "', certificateUri, '"');
 
         // Add certificate details
-        json = string.concat(json, 
-            ', "signingOfficerName": "', details.signingOfficerName,
-            '", "signingOfficerTitle": "', details.signingOfficerTitle,
-            '", "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD),
-            '", "issuerUSDValuationAtTimeOfInvestment": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment),
-            '", "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented),
-            '", "unitsReserved": "', unitsReservedToString(contractAddress, tokenId),
-            '", "legalDetails": "', details.legalDetails,
-            '"'
-        );
+        json = string.concat(json, ', "signingOfficerName": "', details.signingOfficerName, '"');
+        json = string.concat(json, ', "signingOfficerTitle": "', details.signingOfficerTitle, '"');
+        json = string.concat(json, ', "investmentAmountUSD": "', from18DecimalsToString(details.investmentAmountUSD), '"');
+        json = string.concat(json, ', "issuerUSDValuationAtTimeOfInvestment": "', from18DecimalsToString(details.issuerUSDValuationAtTimeOfInvestment), '"');
+        json = string.concat(json, ', "unitsRepresented": "', from18DecimalsToString(details.unitsRepresented), '"');
+        json = string.concat(json, ', "unitsReserved": "', unitsReservedToString(contractAddress, tokenId), '"');
+        json = string.concat(json, ', "legalDetails": "', details.legalDetails, '"');
+
+        json = _appendCyberCorpExtensionData(json, contractAddress);
 
         //add extensionData
         if (extension != address(0) && details.extensionData.length > 0) {
             json = string.concat(json, ICertificateExtension(extension).getExtensionURI(details.extensionData));
         }
+        json = _appendSeriesExtensionData(json, contractAddress);
 
         // Add endorsement history
         json = string.concat(json, ', "endorsementHistory": ', buildEndorsementHistory(endorsements, registry, agreementId));

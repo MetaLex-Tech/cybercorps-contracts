@@ -205,15 +205,9 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         _;
     }
 
-    /// @notice Creates a new certificate printer contract
-    /// @dev Only callable by owner
-    /// @param _ledger Array of default restrictive ledgers for a certificate
-    /// @param _name Name of the certificate
-    /// @param _ticker Trading symbol
-    /// @param _certificateUri URI containing certificate metadata
-    /// @param _securityType Type of security being represented
-    /// @param _securitySeries Series of the security
-    /// @return address Address of the new certificate printer contract
+    /// @notice Creates a new certificate printer with extension-formatted series-scope data.
+    /// @dev Only callable by owner. `_seriesData` is decoded by the same `_extension` contract that
+    /// handles per-cert extensionData; pass an empty byte string when the extension has no series section.
     function createCertPrinter(
         string[] memory _ledger,
         string memory _name,
@@ -221,18 +215,83 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         string memory _certificateUri,
         SecurityClass _securityType,
         SecuritySeries _securitySeries,
-        address _extension
+        address _extension,
+        bytes memory _seriesData
     ) public onlyOwner returns (address) {
         return
             IssuanceManagerStorage.executeCreateCertPrinter(
-            _ledger,
-            _name,
-            _ticker,
-            _certificateUri,
-            _securityType,
-            _securitySeries,
-            _extension
+                _ledger,
+                _name,
+                _ticker,
+                _certificateUri,
+                _securityType,
+                _securitySeries,
+                _extension,
+                _seriesData
+            );
+    }
+
+    /// @notice Registers a new class-level LET designation (see SecurityClassInfo)
+    /// @dev Only callable by owner; classIds are sequential starting at 1 (0 = unclassified)
+    /// @param _classType Type tag for the class
+    /// @param _documentURI URI of the class-level governing document
+    /// @param _dataExtension Optional ICertificateExtension-style decoder/renderer for _classData
+    /// @param _classData extensionData-style opaque payload for the class
+    /// @return classId ID of the new class
+    function defineSecurityClass(
+        SecurityClass _classType,
+        string memory _documentURI,
+        address _dataExtension,
+        bytes memory _classData
+    ) external onlyOwner returns (uint256 classId) {
+        return
+            IssuanceManagerStorage.executeDefineSecurityClass(
+                _classType,
+                _documentURI,
+                _dataExtension,
+                _classData
+            );
+    }
+
+    /// @notice Replaces an existing class designation's fields
+    /// @dev Only callable by owner
+    function updateSecurityClass(
+        uint256 _classId,
+        SecurityClass _classType,
+        string memory _documentURI,
+        address _dataExtension,
+        bytes memory _classData
+    ) external onlyOwner {
+        IssuanceManagerStorage.executeUpdateSecurityClass(
+            _classId,
+            _classType,
+            _documentURI,
+            _dataExtension,
+            _classData
         );
+    }
+
+    /// @notice Assigns a certificate printer (the series scope) to a class; 0 clears the assignment
+    /// @dev Only callable by owner; also the backfill path for pre-existing printers
+    function setPrinterClass(address _printer, uint256 _classId) external onlyOwner {
+        IssuanceManagerStorage.executeSetPrinterClass(_printer, _classId);
+    }
+
+    /// @notice Gets a class designation by ID
+    function getSecurityClass(
+        uint256 _classId
+    ) external view returns (SecurityClassInfo memory) {
+        return IssuanceManagerStorage.getSecurityClass(_classId);
+    }
+
+    /// @notice Number of classes defined; valid classIds are 1..count
+    function getSecurityClassCount() external view returns (uint256) {
+        return IssuanceManagerStorage.getSecurityClassCount();
+    }
+
+    /// @notice The classId a printer is assigned to (0 = unclassified)
+    function getPrinterClassId(address _printer) external view returns (uint256) {
+        return IssuanceManagerStorage.getPrinterClassId(_printer);
     }
 
     /// @notice Creates a new certificate

@@ -425,7 +425,8 @@ contract DealManager is
                     _certData[i].uri,
                     _certData[i].securityClass,
                     _certData[i].securitySeries,
-                    _certData[i].extension
+                    _certData[i].extension,
+                    _certData[i].seriesData
                 );
             }
         }

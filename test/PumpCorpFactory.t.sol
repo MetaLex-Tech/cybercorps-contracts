@@ -9,6 +9,9 @@ import {PumpCorpFactory, PumpCorpFactoryLib} from "../src/PumpCorpFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
+import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {IssuanceManager} from "../src/IssuanceManager.sol";
+import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
 import {FeeOverride} from "../src/interfaces/IRoundManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {EIP712Lib} from "../src/libs/EIP712Lib.sol";
@@ -139,6 +142,15 @@ contract PumpCorpFactoryForkTest is Test {
             deployerPk
         );
 
+        // The fork predates the seriesData ABI. Make the factory references used by this
+        // isolated deployment point at current implementations before creating any corp.
+        vm.startPrank(metalexSafe);
+        rmFactory.setRefImplementation(address(new RoundManager()));
+        IssuanceManagerFactory issuanceFactory = IssuanceManagerFactory(net.issuanceManagerFactory);
+        issuanceFactory.setRefImplementation(address(new IssuanceManager()));
+        issuanceFactory.setCyberCertPrinterRefImplementation(address(new CyberCertPrinter()));
+        vm.stopPrank();
+
         // Simulate granting PumpCorpFactory owner access to LeXcheX and to RoundManagerFactory auth
         vm.startPrank(metalexSafe);
         BorgAuth(pumpFactory.lexchexAuth()).updateRole(address(pumpFactory), 99);
@@ -154,6 +166,7 @@ contract PumpCorpFactoryForkTest is Test {
             securityClass:  SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesSeed,
             extension:      address(0),
+            seriesData:     bytes(""),
             defaultLegend:  legend
         }));
 
@@ -1352,6 +1365,7 @@ contract PumpCorpFactoryForkTest is Test {
             securityClass:  SecurityClass.CommonStock,  // ← different from signed
             securitySeries: SecuritySeries.SeriesA,     // ← different from signed
             extension:      address(0),
+            seriesData:     bytes(""),
             defaultLegend:  legend
         });
 
@@ -1416,6 +1430,7 @@ contract PumpCorpFactoryForkTest is Test {
             securityClass:  SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesSeed,
             extension:      address(0),
+            seriesData:     bytes(""),
             defaultLegend:  legend
         });
 
@@ -1441,6 +1456,76 @@ contract PumpCorpFactoryForkTest is Test {
         );
 
         // Test against signature malleability
+        vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
+            salt,
+            SecuritySeries.SeriesSeed,
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            address(this),
+            _officer(officer, "Alice Officer"),
+            legalDetails, extensionData,
+            altCert, // ← substituted cert
+            TEMPLATE_ID,
+            address(0), PRICE_PER_UNIT, VALUATION,
+            officerPartyValues, sig,
+            _metaSigDefault(salt, officerPk),
+            RoundType.FCFS, new address[](0),
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            start, end, true, true, true
+        );
+    }
+
+    /// Cert seriesData (the series-scope payload the extension bakes into the printer)
+    /// is not covered by the escrow signature but IS covered by the meta signature.
+    /// The malleability half is the real guard: the officer's signature is over the
+    /// default cert (empty seriesData) while the call submits a cert that differs
+    /// ONLY in seriesData — before seriesData was added to the CyberCertData typehash
+    /// that tampered payload validated against the officer's signature.
+    function test_RevertIf_MetaSigRequired_CertSeriesDataProtected() public {
+        uint256 salt = 60003;
+        (address predCorp, address predRM) = _predict(salt);
+        uint256 start = block.timestamp - 1;
+        uint256 end   = block.timestamp + 30 days;
+
+        bytes memory sig = _escrowSigFull(predRM, predCorp, officerPk, start, end, address(0), TEMPLATE_ID, RoundType.FCFS);
+
+        // Mirror the default cert exactly, tampering only seriesData.
+        CyberCertData[] memory altCert = new CyberCertData[](1);
+        string[] memory legend = new string[](1);
+        legend[0] = "SEED SAFE";
+        altCert[0] = CyberCertData({
+            name:           "SEED SAFE",
+            symbol:         "SEEDSAFE",
+            uri:            "ipfs://seed-safe",
+            securityClass:  SecurityClass.SAFE,
+            securitySeries: SecuritySeries.SeriesSeed,
+            extension:      address(0),
+            seriesData:     bytes("tampered series terms"), // ← only difference from signed
+            defaultLegend:  legend
+        });
+
+        // Attacker forges meta sig with their own key → signer != officer.eoa → revert.
+        bytes memory attackerMetaSig = _metaSig(salt, address(this), true, true, true, _officer(officer, "Alice Officer"), "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration", extensionData, officerPartyValues, legalDetails, altCert, new address[](0), attackerPk);
+
+        vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
+        pumpFactory.deployCyberCorpAndCreateRoundFor(
+            salt,
+            SecuritySeries.SeriesSeed,
+            "Test Corp", "C-Corp", "DE", "contact@test.com", "Arbitration",
+            address(this),
+            _officer(officer, "Alice Officer"),
+            legalDetails, extensionData,
+            altCert, // ← substituted cert
+            TEMPLATE_ID,
+            address(0), PRICE_PER_UNIT, VALUATION,
+            officerPartyValues, sig,
+            attackerMetaSig,
+            RoundType.FCFS, new address[](0),
+            RAISE_CAP, MIN_TICKET, MAX_TICKET,
+            start, end, true, true, true
+        );
+
+        // Officer's default signature (over empty seriesData) must not validate the tamper.
         vm.expectRevert(PumpCorpFactory.InvalidMetadataSignature.selector);
         pumpFactory.deployCyberCorpAndCreateRoundFor(
             salt,

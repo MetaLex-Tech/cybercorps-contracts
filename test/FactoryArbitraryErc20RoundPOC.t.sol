@@ -99,6 +99,7 @@ contract FactoryArbitraryErc20RoundPOCTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesSeed,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegend
         });
 

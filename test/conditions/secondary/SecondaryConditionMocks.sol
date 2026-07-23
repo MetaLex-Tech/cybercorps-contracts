@@ -162,6 +162,7 @@ contract MockRegistry {
 contract MockCertPrinter {
     mapping(uint256 => uint64) internal acqTs;
     mapping(uint256 => bytes) internal ext;
+    address internal extensionAddr;
     mapping(address => uint256) internal legalBalance;
     mapping(uint256 => address) internal legalOwner;
     mapping(uint256 => uint256) internal tokenAtIndex;
@@ -177,6 +178,14 @@ contract MockCertPrinter {
 
     function setExtensionData(uint256 tokenId, bytes memory data) external {
         ext[tokenId] = data;
+    }
+
+    function setExtension(address _extension) external {
+        extensionAddr = _extension;
+    }
+
+    function getExtension(uint256) external view returns (address) {
+        return extensionAddr;
     }
 
     function setBalanceOfLegalOwner(address owner, uint256 bal) external {

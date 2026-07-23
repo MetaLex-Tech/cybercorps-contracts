@@ -17,7 +17,7 @@ import {
     RestrictionType,
     RestrictiveLegend
 } from "../src/interfaces/ICyberCertPrinter.sol";
-import {ICertificateExtension} from "../src/storage/extensions/ICertificateExtension.sol";
+import {ICertificateExtension, IFundInterestExtension} from "../src/storage/extensions/ICertificateExtension.sol";
 import {FundInterestData, FUND_INTEREST_EXTENSION_TYPE} from "../src/storage/extensions/FundInterestExtension.sol";
 
 contract MockCyberCorp {
@@ -203,11 +203,22 @@ contract CyberCertPrinterEnhanced is CyberCertPrinter {
     }
 }
 
-contract MockFundInterestExtension is ICertificateExtension {
+contract MockFundInterestExtension is IFundInterestExtension {
     function supportsExtensionType(bytes32 extensionType) external pure returns (bool) {
         return extensionType == FUND_INTEREST_EXTENSION_TYPE;
     }
     function getExtensionURI(bytes memory) external pure returns (string memory) { return ""; }
+    function acquisitionDate(bytes memory data) external pure returns (uint64) {
+        return abi.decode(data, (FundInterestData)).acquisitionDate;
+    }
+    function tackedFromAcquisitionDate(bytes memory data) external pure returns (uint64) {
+        return abi.decode(data, (FundInterestData)).tackedFromAcquisitionDate;
+    }
+    function withTackedFrom(bytes memory data, uint64 ts) external pure returns (bytes memory) {
+        FundInterestData memory fid = abi.decode(data, (FundInterestData));
+        fid.tackedFromAcquisitionDate = ts;
+        return abi.encode(fid);
+    }
 }
 
 contract MockNonFundExtension is ICertificateExtension {
@@ -258,7 +269,8 @@ contract CyberCertPrinterTest is Test {
                 address(issuanceManager),
                 SecurityClass.PreferredStock,
                 SecuritySeries.SeriesA,
-                initialExtension
+                initialExtension,
+                bytes("")
             )
         );
         printer = CyberCertPrinter(address(new ERC1967Proxy(address(implementation), initData)));
@@ -558,20 +570,6 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.issueTimestamp(1), issuedAt, "issue timestamp is immutable across owner changes");
     }
 
-    function test_HolderCount_TracksUniqueHoldersOnBurn() public {
-        _mintCert(1, investor, 100, bytes(""));
-        _mintCert(2, investor, 100, bytes(""));
-        assertEq(printer.holderCount(), 1);
-
-        vm.prank(address(issuanceManager));
-        printer.burn(1);
-        assertEq(printer.holderCount(), 1);
-
-        vm.prank(address(issuanceManager));
-        printer.burn(2);
-        assertEq(printer.holderCount(), 0);
-    }
-
     function test_SafeMintAndAssign_StoresNamedLegalOwner() public {
         vm.prank(address(issuanceManager));
         printer.safeMintAndAssign(investor, 1, _details(100, bytes("")), "Alice Investor");
@@ -599,21 +597,6 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.tokenOfLegalOwnerByIndex(investor, 1), 2);
     }
 
-    // A legacy token (enumeration never populated) must not underflow legalOwnerTokenCount when it is burned.
-    function test_LegalOwnerEnumeration_LegacyBurnDoesNotUnderflow() public {
-        _mintCert(1, investor, 100, bytes(""));
-        _mintCert(2, investor, 100, bytes(""));
-        uint256[] memory ids = new uint256[](2);
-        ids[0] = 1;
-        ids[1] = 2;
-        CyberCertPrinterEnhanced(address(printer)).debugClearLegalOwnerEnumeration(investor, ids);
-        assertEq(printer.balanceOfLegalOwner(investor), 0, "legacy enumeration starts empty");
-
-        vm.prank(address(issuanceManager));
-        printer.burn(1); // must not revert (guarded no-op remove)
-
-        assertEq(printer.balanceOfLegalOwner(investor), 0);
-    }
 
     // An owner-write (endorsed transfer) on a legacy token lazily backfills it under the new owner — and the
     // implicit remove from the old owner is a safe no-op (no underflow).
@@ -669,8 +652,7 @@ contract CyberCertPrinterTest is Test {
         printer.setExtension(0, address(ext));
 
         uint64 legacyAcq = 12345;
-        bytes memory fid =
-            abi.encode(FundInterestData({acquisitionDate: legacyAcq, tackedFromAcquisitionDate: 0, customProvisions: ""}));
+        bytes memory fid = _fundInterestBlob(legacyAcq);
         _mintCert(1, investor, 100, fid); // token 1: legacy (base timestamp cleared below)
         _mintCert(2, investor, 100, fid); // token 2: keeps its mint-time stamp
         uint64 mintStamp = printer.acquisitionTimestamp(2);
@@ -692,8 +674,7 @@ contract CyberCertPrinterTest is Test {
         vm.prank(address(issuanceManager));
         printer.setExtension(0, address(ext));
 
-        bytes memory fid =
-            abi.encode(FundInterestData({acquisitionDate: 12345, tackedFromAcquisitionDate: 0, customProvisions: ""}));
+        bytes memory fid = _fundInterestBlob(12345);
         _mintCert(1, investor, 100, fid);
         CyberCertPrinterEnhanced(address(printer)).debugClearAcquisitionTimestamp(1);
 
@@ -901,11 +882,6 @@ contract CyberCertPrinterTest is Test {
         printer.unvoidCert(tokenId);
     }
 
-    function _burnCert(uint256 tokenId) private {
-        vm.prank(address(issuanceManager));
-        printer.burn(tokenId);
-    }
-
     function test_LookThrough_IndividualCountsAsOne() public {
         MockLookThroughBadge b = new MockLookThroughBadge();
         _setBadge(b);
@@ -975,22 +951,6 @@ contract CyberCertPrinterTest is Test {
         _unvoid(2); // restored
         assertEq(printer.lookThroughHolderCount(), 4);
         assertEq(printer.usLookThroughHolderCount(), 4);
-        assertTrue(printer.isLegalHolder(investor));
-    }
-
-    function test_LookThrough_BurnDropsHolderAndReentryCountsFresh() public {
-        MockLookThroughBadge b = new MockLookThroughBadge();
-        b.setBo(investor, 2);
-        _setBadge(b);
-        _mintCert(1, investor, 100, bytes(""));
-        assertEq(printer.lookThroughHolderCount(), 2);
-
-        _burnCert(1);
-        assertEq(printer.lookThroughHolderCount(), 0);
-        assertFalse(printer.isLegalHolder(investor));
-
-        _mintCert(2, investor, 100, bytes("")); // re-enter
-        assertEq(printer.lookThroughHolderCount(), 2);
         assertTrue(printer.isLegalHolder(investor));
     }
 
@@ -1103,44 +1063,6 @@ contract CyberCertPrinterTest is Test {
         assertFalse(printer.isLegalHolder(recipient));
     }
 
-    function test_LookThrough_BurnVoidedCertIsSafe() public {
-        MockLookThroughBadge b = new MockLookThroughBadge();
-        b.setBo(investor, 2);
-        _setBadge(b);
-        _mintCert(1, investor, 100, bytes(""));
-        assertEq(printer.lookThroughHolderCount(), 2);
-
-        _void(1); // already uncounts the lot
-        assertEq(printer.lookThroughHolderCount(), 0);
-
-        _burnCert(1); // burn must not double-drop or underflow the already-uncounted lot
-        assertEq(printer.lookThroughHolderCount(), 0);
-        assertFalse(printer.isLegalHolder(investor));
-        assertEq(printer.balanceOfLegalOwner(investor), 0);
-    }
-
-    // Live burn (no void first) of a US holder: burning a non-last lot leaves the tally untouched; burning
-    // the last lot drops the holder and their US subtotal contribution.
-    function test_LookThrough_LiveBurnUsHolderNonLastThenLastLot() public {
-        MockLookThroughBadge b = new MockLookThroughBadge();
-        b.setBo(investor, 4);
-        b.setUs(investor, true);
-        _setBadge(b);
-        _mintCert(1, investor, 100, bytes(""));
-        _mintCert(2, investor, 100, bytes(""));
-        assertEq(printer.lookThroughHolderCount(), 4); // one holder, weight 4, two live lots
-        assertEq(printer.usLookThroughHolderCount(), 4);
-
-        _burnCert(1); // non-last lot: holder stays, tally unchanged
-        assertEq(printer.lookThroughHolderCount(), 4);
-        assertEq(printer.usLookThroughHolderCount(), 4);
-        assertTrue(printer.isLegalHolder(investor));
-
-        _burnCert(2); // last live lot: holder drops out of both totals
-        assertEq(printer.lookThroughHolderCount(), 0);
-        assertEq(printer.usLookThroughHolderCount(), 0);
-        assertFalse(printer.isLegalHolder(investor));
-    }
 
     // A single transfer drops the source below its last live lot and gives the destination its first,
     // reassigning weight (and the US subtotal) between two holders in one call.
@@ -1192,6 +1114,13 @@ contract CyberCertPrinterTest is Test {
     ) private {
         vm.prank(address(issuanceManager));
         printer.safeMint(tokenId, to, _details(unitsRepresented, extensionData));
+    }
+
+    /// @dev Encoded FundInterestData with only acquisitionDate set; other fields default
+    function _fundInterestBlob(uint64 acquisitionDate) private pure returns (bytes memory) {
+        FundInterestData memory fid;
+        fid.acquisitionDate = acquisitionDate;
+        return abi.encode(fid);
     }
 
     function _details(

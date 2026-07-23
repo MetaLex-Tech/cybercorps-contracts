@@ -74,6 +74,9 @@ library IssuanceManagerStorage {
     error EmptyVault();
     error VaultRedemptionExceedsClaim();
     error VaultWithdrawalExceedsAssets();
+    error ClassDoesNotExist();
+    error SecurityClassAlreadyDefined();
+    error NotAPrinter();
 
     /// @dev Ray precision for vault price-per-share (assets per 1 nominal share, 1e27 = 1.0).
     uint256 internal constant VAULT_RAY = 1e27;
@@ -148,6 +151,19 @@ library IssuanceManagerStorage {
         uint256 newUnitsRepresented,
         uint256 newUnitsScripified
     );
+    event SecurityClassDefined(
+        uint256 indexed classId,
+        SecurityClass classType,
+        string documentURI,
+        address dataExtension
+    );
+    event SecurityClassUpdated(
+        uint256 indexed classId,
+        SecurityClass classType,
+        string documentURI,
+        address dataExtension
+    );
+    event PrinterClassAssigned(address indexed printer, uint256 indexed classId);
 
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.issuancemanager.storage.v1");
@@ -171,6 +187,13 @@ library IssuanceManagerStorage {
         mapping(address => CertScripUnitPool) certScripUnitPools;
         mapping(address => mapping(address => RecertificationApproval))
             recertificationApprovals;
+        // Class-level LET designations (appended for upgrade safety). classIds start at 1; 0 = unclassified.
+        // Each printer is the series scope and may be assigned to one class; several printers can share one.
+        mapping(uint256 => SecurityClassInfo) securityClasses;
+        uint256 securityClassCount;
+        mapping(address => uint256) printerClassIds;
+        // Canonical class for each SecurityClass enum value. A value of 0 means it has not been defined.
+        mapping(SecurityClass => uint256) classIdByType;
     }
 
     struct ScripRatio {
@@ -294,6 +317,80 @@ library IssuanceManagerStorage {
                 break;
             }
         }
+    }
+
+    // Class-level LET designations. Mutators are external (delegatecalled) to keep IssuanceManager itself
+    // under the EIP-170 size limit; wrappers there enforce access control before delegating here.
+
+    /// @notice Registers a new class; classIds are sequential starting at 1 (0 = unclassified).
+    function executeDefineSecurityClass(
+        SecurityClass classType,
+        string memory documentURI,
+        address dataExtension,
+        bytes memory classData
+    ) external returns (uint256 classId) {
+        IssuanceManagerData storage s = issuanceManagerStorage();
+        if (s.classIdByType[classType] != 0) revert SecurityClassAlreadyDefined();
+        classId = ++s.securityClassCount;
+        s.securityClasses[classId] = SecurityClassInfo(classType, documentURI, dataExtension, classData);
+        s.classIdByType[classType] = classId;
+        emit SecurityClassDefined(classId, classType, documentURI, dataExtension);
+    }
+
+    function executeUpdateSecurityClass(
+        uint256 classId,
+        SecurityClass classType,
+        string memory documentURI,
+        address dataExtension,
+        bytes memory classData
+    ) external {
+        IssuanceManagerData storage s = issuanceManagerStorage();
+        if (classId == 0 || classId > s.securityClassCount) revert ClassDoesNotExist();
+        // Re-index classIdByType when the type changes, otherwise the reverse index keeps pointing at the
+        // old type and the new type reads as undefined, letting a second class be created for it.
+        SecurityClass oldType = s.securityClasses[classId].classType;
+        if (classType != oldType) {
+            if (s.classIdByType[classType] != 0) revert SecurityClassAlreadyDefined();
+            delete s.classIdByType[oldType];
+            s.classIdByType[classType] = classId;
+        }
+        s.securityClasses[classId] = SecurityClassInfo(classType, documentURI, dataExtension, classData);
+        emit SecurityClassUpdated(classId, classType, documentURI, dataExtension);
+    }
+
+    /// @notice Assigns a printer (the series scope) to a class; classId 0 clears the assignment.
+    /// Also the backfill path for printers created before the class registry existed.
+    function executeSetPrinterClass(address printer, uint256 classId) external {
+        IssuanceManagerData storage s = issuanceManagerStorage();
+        if (!isPrinter(printer)) revert NotAPrinter();
+        if (classId > s.securityClassCount) revert ClassDoesNotExist();
+        s.printerClassIds[printer] = classId;
+        emit PrinterClassAssigned(printer, classId);
+    }
+
+    function getSecurityClass(uint256 classId) internal view returns (SecurityClassInfo storage) {
+        return issuanceManagerStorage().securityClasses[classId];
+    }
+
+    function getSecurityClassCount() internal view returns (uint256) {
+        return issuanceManagerStorage().securityClassCount;
+    }
+
+    function getPrinterClassId(address printer) internal view returns (uint256) {
+        return issuanceManagerStorage().printerClassIds[printer];
+    }
+
+    /// @dev Creates the empty canonical class for `classType` when one has not been explicitly
+    /// defined, then returns its ID. Class metadata can be populated later with updateSecurityClass.
+    function _getOrCreateClassId(SecurityClass classType) private returns (uint256 classId) {
+        IssuanceManagerData storage s = issuanceManagerStorage();
+        classId = s.classIdByType[classType];
+        if (classId != 0) return classId;
+
+        classId = ++s.securityClassCount;
+        s.securityClasses[classId] = SecurityClassInfo(classType, "", address(0), bytes(""));
+        s.classIdByType[classType] = classId;
+        emit SecurityClassDefined(classId, classType, "", address(0));
     }
 
     // Beacon upgrade function
@@ -576,7 +673,8 @@ library IssuanceManagerStorage {
         string memory certificateUri,
         SecurityClass securityType,
         SecuritySeries securitySeries,
-        address extension
+        address extension,
+        bytes memory seriesData
     ) external returns (address newCert) {
         bytes32 salt = keccak256(abi.encodePacked(getPrinters().length, address(this)));
         newCert = Create2.deploy(0, salt, _getBytecodeCertPrinter());
@@ -589,8 +687,12 @@ library IssuanceManagerStorage {
             address(this),
             securityType,
             securitySeries,
-            extension
+            extension,
+            seriesData
         );
+        uint256 classId = _getOrCreateClassId(securityType);
+        issuanceManagerStorage().printerClassIds[newCert] = classId;
+        emit PrinterClassAssigned(newCert, classId);
         emit CertPrinterCreated(
             newCert,
             getCORP(),

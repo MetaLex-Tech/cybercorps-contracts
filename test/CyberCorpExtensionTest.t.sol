@@ -21,7 +21,8 @@ import {
 } from "../src/storage/extensions/CyberCorpComplianceExtension.sol";
 import {
     CyberCorpFundExtension,
-    CyberCorpFundData
+    CyberCorpFundData,
+    PortfolioHolding
 } from "../src/storage/extensions/CyberCorpFundExtension.sol";
 
 contract CyberCorpExtensionTest is Test {
@@ -271,10 +272,24 @@ contract CyberCorpExtensionTest is Test {
         governingDocumentURIs[1] = "ipfs://subscription-agreement";
         governingDocumentURIs[2] = "ipfs://ppm";
 
+        PortfolioHolding[] memory portfolioHoldings = new PortfolioHolding[](1);
+        portfolioHoldings[0] = PortfolioHolding({
+            portfolioCompany: "Anthropic, PBC",
+            securityKind: "Series C Preferred Stock",
+            underlyingShares: 4_200_000
+        });
+
         CyberCorpFundData memory fundData = CyberCorpFundData({
-            fundEntityType: "LP",
-            icaExceptionRelied: "3(c)(7)",
-            transferRestrictionHookAddress: address(0xF00D),
+            fundEntityType: "LLC",
+            icaExceptionRelied: "3(c)(1)",
+            regSIssuerCategory: 3,
+            holderCap: 100,
+            totalUnitsOutstanding: 100_000_000,
+            ratioStable: true,
+            portfolioHoldings: portfolioHoldings,
+            cfiusSensitive: false,
+            provenanceAttestationHash: keccak256("gp-provenance-attestation"),
+            documentRegistryURI: "ipfs://legion-af1-disclosures",
             governingDocumentURIs: governingDocumentURIs,
             metadataURI: "ipfs://fund-metadata"
         });
@@ -294,9 +309,19 @@ contract CyberCorpExtensionTest is Test {
 
         assertEq(cyberCorp.extension(), address(fundExtension));
         assertEq(cyberCorp.extensionType(), fundExtension.EXTENSION_TYPE());
-        assertEq(decoded.fundEntityType, "LP");
-        assertEq(decoded.icaExceptionRelied, "3(c)(7)");
-        assertEq(decoded.transferRestrictionHookAddress, address(0xF00D));
+        assertEq(decoded.fundEntityType, "LLC");
+        assertEq(decoded.icaExceptionRelied, "3(c)(1)");
+        assertEq(decoded.regSIssuerCategory, 3);
+        assertEq(decoded.holderCap, 100);
+        assertEq(decoded.totalUnitsOutstanding, 100_000_000);
+        assertTrue(decoded.ratioStable);
+        assertEq(decoded.portfolioHoldings.length, 1);
+        assertEq(decoded.portfolioHoldings[0].portfolioCompany, "Anthropic, PBC");
+        assertEq(decoded.portfolioHoldings[0].securityKind, "Series C Preferred Stock");
+        assertEq(decoded.portfolioHoldings[0].underlyingShares, 4_200_000);
+        assertFalse(decoded.cfiusSensitive);
+        assertEq(decoded.provenanceAttestationHash, keccak256("gp-provenance-attestation"));
+        assertEq(decoded.documentRegistryURI, "ipfs://legion-af1-disclosures");
         assertEq(decoded.governingDocumentURIs.length, 3);
         assertEq(decoded.governingDocumentURIs[2], "ipfs://ppm");
         assertEq(decoded.metadataURI, "ipfs://fund-metadata");
@@ -308,16 +333,36 @@ contract CyberCorpExtensionTest is Test {
             "fund extension json should not be empty"
         );
         assertTrue(
-            _contains(extensionJson, '"fundEntityType": "LP"'),
+            _contains(extensionJson, '"fundEntityType": "LLC"'),
             "fund entity type missing"
         );
         assertTrue(
-            _contains(extensionJson, '"icaExceptionRelied": "3(c)(7)"'),
+            _contains(extensionJson, '"icaExceptionRelied": "3(c)(1)"'),
             "ICA exception missing"
+        );
+        assertTrue(
+            _contains(extensionJson, '"regSIssuerCategory": 3'),
+            "Reg S issuer category missing"
+        );
+        assertTrue(
+            _contains(extensionJson, '"holderCap": 100'),
+            "holder cap missing"
+        );
+        assertTrue(
+            _contains(extensionJson, '"portfolioCompany": "Anthropic, PBC"'),
+            "portfolio holding missing"
+        );
+        assertTrue(
+            _contains(extensionJson, '"totalUnitsOutstanding": 100000000'),
+            "total units outstanding missing"
         );
         assertTrue(
             _contains(extensionJson, "ipfs://operating-agreement"),
             "governing document missing"
+        );
+        assertTrue(
+            _contains(extensionJson, '"documentRegistryURI": "ipfs://legion-af1-disclosures"'),
+            "document registry URI missing"
         );
         assertTrue(
             _contains(extensionJson, '"metadataURI": "ipfs://fund-metadata"'),

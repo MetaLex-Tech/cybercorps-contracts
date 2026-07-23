@@ -76,6 +76,17 @@ enum SecurityStatus {
     Void
 }
 
+/// @notice Class-level designation for Ledger Entry Tokens (LETs), registered on the IssuanceManager.
+/// Each certificate printer (the series scope) may be assigned to one class by classId; multiple printers
+/// (series) can share a class. `classData` follows the extensionData pattern: an opaque abi-encoded payload
+/// with an optional ICertificateExtension-style `dataExtension` that knows how to decode/render it.
+struct SecurityClassInfo {
+    SecurityClass classType;
+    string documentURI;    // class-level governing document (e.g. certificate of designation, class terms)
+    address dataExtension; // optional decoder/renderer for classData (ICertificateExtension-compatible)
+    bytes classData;       // extensionData-style opaque payload
+}
+
 struct CompanyOfficer {
     address eoa;
     string name;

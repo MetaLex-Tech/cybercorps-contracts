@@ -340,7 +340,8 @@ contract IssuanceManagerConversionTest is Test {
                 "uri://safe",
                 SecurityClass.SAFT,
                 SecuritySeries.NA,
-                address(0)
+                address(0),
+                bytes("")
             )
         );
         equityPrinter = ICyberCertPrinter(
@@ -351,7 +352,8 @@ contract IssuanceManagerConversionTest is Test {
                 "uri://eq",
                 SecurityClass.PreferredStock,
                 SecuritySeries.SeriesA,
-                address(0)
+                address(0),
+                bytes("")
             )
         );
 
@@ -1989,7 +1991,8 @@ contract IssuanceManagerConversionTest is Test {
                 "uri://cert",
                 SecurityClass.CommonStock,
                 SecuritySeries.SeriesA,
-                address(0)
+                address(0),
+                bytes("")
             )
         );
     }

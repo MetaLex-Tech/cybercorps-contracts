@@ -103,6 +103,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         SecurityClass securityClass;
         SecuritySeries securitySeries;
         address extension;
+        /// @notice Series-scope payload encoded by `extension` (ICertificateExtensionV3-compatible).
+        bytes seriesData;
         string[] defaultLegend;
     }
 
@@ -358,7 +360,8 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
                     _certData[i].uri,
                     _certData[i].securityClass,
                     _certData[i].securitySeries,
-                    _certData[i].extension
+                    _certData[i].extension,
+                    _certData[i].seriesData
                 )
             );
             certPrinterAddress[i] = address(certPrinter);

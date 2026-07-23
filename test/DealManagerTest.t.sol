@@ -74,7 +74,7 @@ contract IssuanceManagerMock {
     }
 
     function voidCertificate(address certAddress, uint256 tokenId) external {
-        CyberCertPrinterMock(certAddress).burn(tokenId);
+      
     }
 }
 
@@ -735,6 +735,9 @@ contract DealManagerTest is Test {
         );
 
         uint256 alicePaymentTokenBalancesBefore = paymentToken.balanceOf(alice);
+
+        // Cert is escrowed on DealManager while PAID
+        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), address(dm));
 
         // Simulate Alice sign to void
         vm.prank(alice);

@@ -71,7 +71,7 @@ contract ACESAFEExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL
         return abi.encode(data);
     }
 
-    function supportsExtensionType(bytes32 extensionType) external pure override returns (bool) {
+    function supportsExtensionType(bytes32 extensionType) external pure virtual override returns (bool) {
         return extensionType == EXTENSION_TYPE;
     }
 
