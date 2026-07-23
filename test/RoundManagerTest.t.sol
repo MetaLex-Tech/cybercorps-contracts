@@ -331,6 +331,27 @@ library CyberCorpHelper {
         address companyAddress,
         bool publicRound
     ) internal returns (bytes32) {
+        return createRound(
+            rm, paymentToken, templateId, raiseCap, minTicket, maxTicket, pricePerUnit,
+            valuation, roundType, officerPrivKey, companyAddress, publicRound, true
+        );
+    }
+
+    function createRound(
+        RoundManager rm,
+        address paymentToken,
+        bytes32 templateId,
+        uint256 raiseCap,
+        uint256 minTicket,
+        uint256 maxTicket,
+        uint256 pricePerUnit,
+        uint256 valuation,
+        RoundType roundType,
+        uint256 officerPrivKey,
+        address companyAddress,
+        bool publicRound,
+        bool allowTimedOffers
+    ) internal returns (bytes32) {
         address officerEOA = vm.addr(officerPrivKey);
 
         string[] memory defaultLegend = new string[](1);
@@ -374,7 +395,7 @@ library CyberCorpHelper {
                     SecuritySeries.SeriesSeed,
                     roundType,
                     publicRound,
-                    true,
+                    allowTimedOffers,
                     false,
                     raiseCap,
                     minTicket,
