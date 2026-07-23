@@ -9,7 +9,7 @@ import {DeploymentConstants} from "../script//libs/DeploymentConstants.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
@@ -80,7 +80,7 @@ contract ShareExtensionForkTest is Test {
     CyberCorpFactory internal corpFactory;
     RoundManager internal roundManager;
     IIssuanceManager internal issuanceManager;
-    CyberCertPrinter internal certPrinter;
+    LedgerEntryToken internal certPrinter;
     CertificateUriBuilder internal uriBuilder;
     ShareExtension internal shareExtension;
     ShareExtensionLogic internal shareLogic;
@@ -339,7 +339,7 @@ contract ShareExtensionForkTest is Test {
                     IssuanceManagerFactory.initialize.selector,
                     address(bootstrapAuth),
                     address(new IssuanceManager()),
-                    address(new CyberCertPrinter()),
+                    address(new LedgerEntryToken()),
                     address(new CyberScrip())
                 )
             )
@@ -471,7 +471,7 @@ contract ShareExtensionForkTest is Test {
         vm.stopPrank();
 
         Round memory round = roundManager.getRound(roundId);
-        certPrinter = CyberCertPrinter(round.certPrinter[0]);
+        certPrinter = LedgerEntryToken(round.certPrinter[0]);
     }
 
     function _createSeriesARound(bytes memory extensionData) internal returns (bytes32 createdRoundId) {

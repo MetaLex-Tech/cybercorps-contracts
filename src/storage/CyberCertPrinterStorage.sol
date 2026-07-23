@@ -183,7 +183,7 @@ library CyberCertPrinterStorage {
     }
 
     /// @dev Transfer-time restriction and endorsement logic, extracted from
-    /// CyberCertPrinter._update to reduce the printer's bytecode size.
+    /// LedgerEntryToken._update to reduce the printer's bytecode size.
     /// External so it runs via delegatecall against this deployed library.
     /// Only called for true transfers (from != 0 && to != 0).
     function processTransfer(address from, address to, uint256 tokenId) external {
@@ -240,7 +240,7 @@ library CyberCertPrinterStorage {
         }
     }
 
-    /// @dev Post-mint bookkeeping for CyberCertPrinter.safeMint (the _safeMint itself stays in the printer).
+    /// @dev Post-mint bookkeeping for LedgerEntryToken.safeMint (the _safeMint itself stays in the printer).
     function recordMint(uint256 tokenId, address to, CertificateDetails memory details) external {
         CyberCertStorage storage s = cyberCertStorage();
         s.certLegend[tokenId] = s.defaultLegend;
@@ -250,7 +250,7 @@ library CyberCertPrinterStorage {
         emit ICyberCertPrinter.CyberCertPrinter_CertificateCreated(tokenId);
     }
 
-    /// @dev Post-mint bookkeeping for CyberCertPrinter.safeMintAndAssign.
+    /// @dev Post-mint bookkeeping for LedgerEntryToken.safeMintAndAssign.
     function recordMintAndAssign(
         uint256 tokenId,
         address to,
@@ -266,7 +266,7 @@ library CyberCertPrinterStorage {
         emit ICyberCertPrinter.CyberCertPrinter_CertificateCreated(tokenId);
     }
 
-    /// @dev Bookkeeping for CyberCertPrinter.assignCert (the ownerOf check stays in the printer).
+    /// @dev Bookkeeping for LedgerEntryToken.assignCert (the ownerOf check stays in the printer).
     function recordAssign(uint256 tokenId, address to, CertificateDetails memory details) external {
         CyberCertStorage storage s = cyberCertStorage();
         s.certificateDetails[tokenId] = details;
@@ -274,7 +274,7 @@ library CyberCertPrinterStorage {
         emit ICyberCertPrinter.CertificateAssigned(tokenId, to, "", IIssuanceManager(s.issuanceManager).companyName());
     }
 
-    /// @dev Endorsement push + event for CyberCertPrinter.addEndorsement (the auth check stays in the printer).
+    /// @dev Endorsement push + event for LedgerEntryToken.addEndorsement (the auth check stays in the printer).
     function recordEndorsement(uint256 tokenId, Endorsement memory newEndorsement) external {
         _recordEndorsement(tokenId, newEndorsement);
     }

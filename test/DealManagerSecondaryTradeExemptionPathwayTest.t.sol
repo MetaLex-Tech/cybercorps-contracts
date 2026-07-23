@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC20} from "../dependencies/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {DealManager} from "../src/DealManager.sol";
@@ -160,7 +160,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         auth = new BorgAuth(owner);
         corp = new MockCorpWithAuth(address(auth));
 
-        // Real IssuanceManager + CyberCertPrinter via the factory beacon stack.
+        // Real IssuanceManager + LedgerEntryToken via the factory beacon stack.
         IssuanceManagerFactory imFactory = IssuanceManagerFactory(
             address(
                 new ERC1967Proxy(
@@ -169,7 +169,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                         IssuanceManagerFactory.initialize.selector,
                         address(auth),
                         new IssuanceManager(),
-                        new CyberCertPrinter(),
+                        new LedgerEntryToken(),
                         new CyberScrip()
                     )
                 )

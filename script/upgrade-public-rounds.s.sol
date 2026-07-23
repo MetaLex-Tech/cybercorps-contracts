@@ -16,7 +16,7 @@ import {RoundManager} from "../src/RoundManager.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {ILegacyFactory} from "../script/interfaces/ILegacyFactory.sol";
 
@@ -171,14 +171,14 @@ contract UpgradePublicRoundsScript is Script {
         // 5) Deploy new IssuanceManagerFactory
         // Deploy new reference implementations
         IssuanceManager refIm = new IssuanceManager{salt: salt}();
-        CyberCertPrinter refCertPrinter = new CyberCertPrinter{salt: salt}();
+        LedgerEntryToken refCertPrinter = new LedgerEntryToken{salt: salt}();
         CyberScrip refScrip = new CyberScrip{salt: salt}();
         console.log(
             "New IssuanceManager implementation:",
             address(refIm)
         );
         console.log(
-            "New CyberCertPrinter implementation:",
+            "New LedgerEntryToken implementation:",
             address(refCertPrinter)
         );
         console.log(

@@ -13,7 +13,7 @@ import {RoundManager} from "../src/RoundManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {RoundLib, Round, RoundType} from "../src/libs/RoundLib.sol";
 import {RoundLib as RoundLibV3, Round as RoundV3} from "./libs/v3/RoundLib.sol";
@@ -251,7 +251,7 @@ contract RoundManagerV3NextForkTest is Test {
         vm.stopPrank();
         vm.startPrank(deployer);
         IssuanceManager newIssuanceManager = new IssuanceManager();
-        address newCertPrinter = address(new CyberCertPrinter());
+        address newCertPrinter = address(new LedgerEntryToken());
         issuanceFactory.setRefImplementation(address(newIssuanceManager));
         issuanceFactory.setCyberCertPrinterRefImplementation(newCertPrinter);
         vm.stopPrank();

@@ -61,8 +61,8 @@ import {
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {Test, console2} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
-// Real contract stack for the IssuanceManager + CyberCertPrinter side.
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+// Real contract stack for the IssuanceManager + LedgerEntryToken side.
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
@@ -212,7 +212,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
     // Emitted by the IssuanceManager (not the DealManager), so the indexer also watches that emitter.
     bytes32 immutable TOPIC_SECONDARY_TRANSFER = IIssuanceManager.SecondaryTransferExecuted.selector;
     // Primary/secondary mint events that seed the issuance rows + shares-held balance. CertificateCreated
-    // (units, emitter = IssuanceManager) is paired with CertificateAssigned (holder, emitter = CyberCertPrinter).
+    // (units, emitter = IssuanceManager) is paired with CertificateAssigned (holder, emitter = LedgerEntryToken).
     bytes32 immutable TOPIC_CERT_CREATED = IIssuanceManager.CertificateCreated.selector;
     bytes32 immutable TOPIC_CERT_ASSIGNED = ICyberCertPrinter.CertificateAssigned.selector;
 
@@ -258,7 +258,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         auth = new BorgAuth(owner);
         corp = new MockCyberCorpForIM();
 
-        // Real IssuanceManager + CyberCertPrinter, deployed through the IssuanceManagerFactory beacon stack
+        // Real IssuanceManager + LedgerEntryToken, deployed through the IssuanceManagerFactory beacon stack
         // (mirrors IssuanceManagerSecondaryTransferTest), so the secondary-transfer logs are the real ones.
         IssuanceManagerFactory imFactory = IssuanceManagerFactory(
             address(
@@ -268,7 +268,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
                         IssuanceManagerFactory.initialize.selector,
                         address(auth),
                         new IssuanceManager(),
-                        new CyberCertPrinter(),
+                        new LedgerEntryToken(),
                         new CyberScrip()
                     )
                 )
@@ -523,7 +523,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         for (uint256 i = 0; i < logs.length; i++) {
             Vm.Log memory log = logs[i];
             // The DealManager's offer/settlement events, the IssuanceManager's secondary-transfer and
-            // certificate-creation events, and the CyberCertPrinter's assignment events; everything else
+            // certificate-creation events, and the LedgerEntryToken's assignment events; everything else
             // (ERC20, registry, …) is ignored.
             if (
                 (log.emitter != address(dm) && log.emitter != address(im) && log.emitter != address(certPrinter))
@@ -1268,12 +1268,12 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         // On-chain split: the multisig custodies the buyer's certs, but the buyer is the registered legal owner.
         // Each fill mints its own lot, so the two lookups address distinct tokens.
         assertEq(
-            CyberCertPrinter(address(certPrinter)).ownerOf(idxSettlements[lotA].issuedTokenId),
+            LedgerEntryToken(address(certPrinter)).ownerOf(idxSettlements[lotA].issuedTokenId),
             adminMultisig,
             "lot A custodied by multisig"
         );
         assertEq(
-            CyberCertPrinter(address(certPrinter)).ownerOf(idxSettlements[lotB].issuedTokenId),
+            LedgerEntryToken(address(certPrinter)).ownerOf(idxSettlements[lotB].issuedTokenId),
             adminMultisig,
             "lot B custodied by multisig"
         );

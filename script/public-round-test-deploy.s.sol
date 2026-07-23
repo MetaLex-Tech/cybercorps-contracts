@@ -14,7 +14,7 @@ import {CyberCorp} from "../src/CyberCorp.sol";
 import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
 import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
@@ -66,7 +66,7 @@ contract PublicRoundTestDeploy is Script {
 
         // Factories + Implementations
         address issuanceManagerImpl = address(new IssuanceManager{salt: salt}());
-        address cyberCertPrinterImpl = address(new CyberCertPrinter{salt: salt}());
+        address cyberCertPrinterImpl = address(new LedgerEntryToken{salt: salt}());
         address cyberScripImpl = address(new CyberScrip{salt: salt}());
         address issuanceManagerFactory = address(
             new ERC1967Proxy{salt: salt}(

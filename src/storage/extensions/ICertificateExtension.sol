@@ -49,7 +49,7 @@ interface ICertificateExtension {
 /// @notice V3 certificate extension: one extension contract decodes/renders BOTH the per-cert
 /// `CertificateDetails.extensionData` payload (inherited ICertificateExtension surface, unchanged for
 /// backwards compatibility) and a series-scope payload (the printer's `seriesData`, since each
-/// CyberCertPrinter is the series scope). Callers feature-detect V3 via `supportsSeriesExtensionData()`
+/// LedgerEntryToken is the series scope). Callers feature-detect V3 via `supportsSeriesExtensionData()`
 /// (or try/catch) so V1/V2 extensions keep working untouched.
 interface ICertificateExtensionV3 is ICertificateExtension {
     function supportsSeriesExtensionData() external pure returns (bool);

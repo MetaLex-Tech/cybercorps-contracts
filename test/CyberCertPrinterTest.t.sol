@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberCertPrinterStorage} from "../src/storage/CyberCertPrinterStorage.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
@@ -182,8 +182,8 @@ contract MockUriBuilder is IUriBuilder {
 
 /// @dev Test-only subclass exposing a hook to recreate the pre-enumeration ("legacy") storage state directly —
 /// owners[] populated but the legal-owner enumeration empty — so tests don't have to vm.store into the diamond
-/// storage by hand. It only ADDS a function; all production CyberCertPrinter logic is inherited unchanged.
-contract CyberCertPrinterEnhanced is CyberCertPrinter {
+/// storage by hand. It only ADDS a function; all production LedgerEntryToken logic is inherited unchanged.
+contract CyberCertPrinterEnhanced is LedgerEntryToken {
     /// @dev Clear the legal-owner enumeration for `owner`/`tokenIds`, mimicking certs minted before the
     /// enumeration existed (owners[] stays; count/index/tracked are zeroed).
     function debugClearLegalOwnerEnumeration(address owner, uint256[] calldata tokenIds) external {
@@ -245,7 +245,7 @@ contract MockLookThroughBadge {
 }
 
 contract CyberCertPrinterTest is Test {
-    CyberCertPrinter private printer;
+    LedgerEntryToken private printer;
     MockIssuanceManager private issuanceManager;
 
     address private investor = address(0xA11CE);
@@ -266,9 +266,9 @@ contract CyberCertPrinterTest is Test {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Default legend";
 
-        CyberCertPrinter implementation = new CyberCertPrinterEnhanced();
+        LedgerEntryToken implementation = new CyberCertPrinterEnhanced();
         bytes memory initData = abi.encodeCall(
-            CyberCertPrinter.initialize,
+            LedgerEntryToken.initialize,
             (
                 defaultLegend,
                 "Mock Cert",
@@ -281,7 +281,7 @@ contract CyberCertPrinterTest is Test {
                 bytes("")
             )
         );
-        printer = CyberCertPrinter(address(new ERC1967Proxy(address(implementation), initData)));
+        printer = LedgerEntryToken(address(new ERC1967Proxy(address(implementation), initData)));
     }
 
     function test_AddIssuerSignature_StoresSignatureAndEmitsEvent() public {

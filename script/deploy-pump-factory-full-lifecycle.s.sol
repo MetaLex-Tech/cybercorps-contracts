@@ -16,7 +16,7 @@ import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {CyberAgreementUtils} from "../test/libs/CyberAgreementUtils.sol";
 import {CompanyOfficer, SecuritySeries, SecurityClass} from "../src/CyberCorpConstants.sol";

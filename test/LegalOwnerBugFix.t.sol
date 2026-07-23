@@ -6,7 +6,7 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 
 import "../src/IssuanceManager.sol";
 import "../src/IssuanceManagerFactory.sol";
-import "../src/CyberCertPrinter.sol";
+import "../src/LedgerEntryToken.sol";
 import "../src/CyberScrip.sol";
 import "../src/interfaces/ICyberCertPrinter.sol";
 import "../src/interfaces/ICyberScrip.sol";
@@ -152,7 +152,7 @@ contract LegalOwnerBugPOCTest is Test {
                         IssuanceManagerFactory.initialize.selector,
                         address(auth),
                         new IssuanceManager(),
-                        new CyberCertPrinter(),
+                        new LedgerEntryToken(),
                         new CyberScrip()
                     )
                 )

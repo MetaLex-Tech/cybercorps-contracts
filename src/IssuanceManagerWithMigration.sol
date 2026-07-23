@@ -52,7 +52,7 @@ except with the express prior written permission of the copyright holder.*/
 //    address public constant NEW_UPGRADE_FACTORY = 0xD353972D7955F421d94d0eA8c42c88c417F7155A; // TODO TBD
 //
 //    /// @notice Migrate legacy contracts and set upgradeFactory to the known new contract (for reference implementation lookup)
-//    /// Also migrate its beacons for CyberCertPrinter and CyberScrip to new reference implementations
+//    /// Also migrate its beacons for LedgerEntryToken and CyberScrip to new reference implementations
 //    /// @dev Since the migration target is predefined, it doesn't matter who called it or when it is called
 //    /// Note older contracts may not have CyberScrip beacon setup yet, in such case we will create it for them
 //    function migrateUpgradeFactory() public {

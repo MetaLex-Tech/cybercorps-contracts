@@ -15,7 +15,7 @@ import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
@@ -104,7 +104,7 @@ contract DeployPumpCorpFactoryScript is Script {
 //            )
 //        ));
 //
-//        // TODO WIP: as of 2026/03/16 the on-chain IssuanceManager and CyberCertPrinter lack addOfficerSignature/addIssuerSignature,
+//        // TODO WIP: as of 2026/03/16 the on-chain IssuanceManager and LedgerEntryToken lack addOfficerSignature/addIssuerSignature,
 //        //  so we deploy a new factory pointing to locally compiled implementations
 //        imFactory = IssuanceManagerFactory(address(
 //            new ERC1967Proxy{salt: salt}(
@@ -113,7 +113,7 @@ contract DeployPumpCorpFactoryScript is Script {
 //                    IssuanceManagerFactory.initialize.selector,
 //                    address(pumpAuth),
 //                    address(new IssuanceManager()),
-//                    address(new CyberCertPrinter()),
+//                    address(new LedgerEntryToken()),
 //                    address(new CyberScrip())
 //                )
 //            )

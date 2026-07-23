@@ -632,7 +632,7 @@ library IssuanceManagerStorage {
         return _assetsOfVaultPosition(certAddress, id);
     }
 
-    /// @notice Deploys the CyberCertPrinter and CyberScrip beacons and wires up core storage.
+    /// @notice Deploys the LedgerEntryToken and CyberScrip beacons and wires up core storage.
     /// @dev Split out of IssuanceManager.initialize to keep that contract under the EIP-170 size
     /// limit. Runs via delegatecall, so `address(this)` is the IssuanceManager and it owns the beacons.
     function executeInitialize(

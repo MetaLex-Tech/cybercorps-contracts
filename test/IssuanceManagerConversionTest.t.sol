@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 import "../src/IssuanceManager.sol";
-import "../src/CyberCertPrinter.sol";
+import "../src/LedgerEntryToken.sol";
 import "../src/CyberScrip.sol";
 import "../src/interfaces/ICyberScrip.sol";
 import "../src/interfaces/ICyberCertPrinter.sol";
@@ -315,7 +315,7 @@ contract IssuanceManagerConversionTest is Test {
                     IssuanceManagerFactory.initialize.selector,
                     address(auth),
                     new IssuanceManager(),
-                    new CyberCertPrinter(),
+                    new LedgerEntryToken(),
                     new CyberScrip()
                 )
             )
@@ -387,7 +387,7 @@ contract IssuanceManagerConversionTest is Test {
             endorsementTimestamp
         );
 
-        Endorsement memory endorsement = CyberCertPrinter(address(certPrinter))
+        Endorsement memory endorsement = LedgerEntryToken(address(certPrinter))
             .getEndorsementHistory(certId, 0);
 
         assertEq(endorsement.endorser, address(issuanceManager));
@@ -423,7 +423,7 @@ contract IssuanceManagerConversionTest is Test {
             endorsementTimestamp
         );
 
-        Endorsement memory endorsement = CyberCertPrinter(address(certPrinter))
+        Endorsement memory endorsement = LedgerEntryToken(address(certPrinter))
             .getEndorsementHistory(certId, 0);
 
         assertEq(certPrinter.ownerOf(certId), investor);

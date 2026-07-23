@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "../src/CyberCertPrinter.sol";
+import "../src/LedgerEntryToken.sol";
 import "../src/CyberScrip.sol";
 import "../src/IssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
@@ -21,7 +21,7 @@ import {
 } from "./IssuanceManagerTest.t.sol";
 
 /// @title IssuanceManagerSecondaryTransferTest
-/// @notice Exercises the real IssuanceManager.secondaryTransfer against a real CyberCertPrinter (no mocks),
+/// @notice Exercises the real IssuanceManager.secondaryTransfer against a real LedgerEntryToken (no mocks),
 /// proving the mutate-and-mint ownership change, the seller-token and buyer-token endorsements materialized at
 /// finalization, and the SecondaryTransferExecuted signal an indexer reads for the buyer's new token id.
 contract IssuanceManagerSecondaryTransferTest is Test {
@@ -53,7 +53,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
                         IssuanceManagerFactory.initialize.selector,
                         address(auth),
                         new IssuanceManager(),
-                        new CyberCertPrinter(),
+                        new LedgerEntryToken(),
                         new CyberScrip()
                     )
                 )
@@ -464,7 +464,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     {
         // Concrete type: the ICyberCertPrinter interface declares a stale flat-tuple return; the contract
         // returns the Endorsement struct.
-        Endorsement memory mirror = CyberCertPrinter(address(cert)).getEndorsementHistory(buyerTokenId, 0);
+        Endorsement memory mirror = LedgerEntryToken(address(cert)).getEndorsementHistory(buyerTokenId, 0);
         assertEq(mirror.endorser, seller, "mirror endorser is the seller");
         assertEq(mirror.endorsee, buyer, "mirror endorsee is the buyer");
         assertEq(mirror.endorseeName, buyerName, "mirror endorsee name");
@@ -480,7 +480,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         internal
         view
     {
-        Endorsement memory e = CyberCertPrinter(address(cert)).getEndorsementHistory(sellerTokenId, 1);
+        Endorsement memory e = LedgerEntryToken(address(cert)).getEndorsementHistory(sellerTokenId, 1);
         assertEq(e.endorser, seller, "seller-token endorser is the seller");
         assertEq(e.endorsee, buyer, "seller-token endorsee is the buyer");
         assertEq(e.endorseeName, buyerName, "seller-token endorsee name");

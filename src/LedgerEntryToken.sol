@@ -50,7 +50,14 @@ import "./interfaces/IUriBuilder.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
 
 
-contract CyberCertPrinter is Initializable, ERC721EnumerableUpgradeable {
+/// @title LedgerEntryToken (formerly CyberCertPrinter)
+/// @dev Renamed from CyberCertPrinter. The rename is source-level only: this implementation must remain
+/// ABI- and storage-compatible with the CyberCertPrinter BeaconProxy instances already deployed, so
+/// the ICyberCertPrinter interface members (functions, errors, and events — including
+/// CyberCertPrinter_CertificateCreated), the CyberCertPrinterStorage library and its
+/// "cybercorp.cert.printer.storage.v1" slot, and all external signatures are intentionally unchanged.
+/// Do NOT rename any of those without treating it as a breaking ABI change.
+contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     using CyberCertPrinterStorage for CyberCertPrinterStorage.CyberCertStorage;
 
     string public constant DEPLOY_VERSION = "4"; // For version-tracking on all deployment and future upgrades

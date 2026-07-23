@@ -113,7 +113,7 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
         ICyberCertPrinter printer = ICyberCertPrinter(offer.certPrinter);
 
         // Note threshold conditions are checked BEFORE the transaction happens, so we need to consider the fact
-        // that the holder counts we get from `CyberCertPrinter` are BEFORE the buyer bought it
+        // that the holder counts we get from `LedgerEntryToken` are BEFORE the buyer bought it
 
         // Early termination: Position increase, not a new holder: the cap is not implicated. Uses the live-holder tally, so a
         // holder who fully sold out (and re-enters) is correctly treated as new rather than bypassing the cap.

@@ -21,7 +21,7 @@ import {RoundManager} from "../src/RoundManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
@@ -983,7 +983,7 @@ contract CyberScripUpgradeForkTest is Test {
         address newIssuanceManagerImpl = address(new IssuanceManager());
         address newDealManagerImpl = address(new DealManager());
         address newRoundManagerImpl = address(new RoundManager());
-        address newCertPrinterImpl = address(new CyberCertPrinter());
+        address newCertPrinterImpl = address(new LedgerEntryToken());
         address newScripImpl = address(new CyberScrip());
         address newUriBuilderImpl = address(new CertificateUriBuilder());
 
@@ -1020,7 +1020,7 @@ contract CyberScripUpgradeForkTest is Test {
         assertEq(
             imFactory.getCyberCertPrinterRefImplementation(),
             newCertPrinterImpl,
-            "CyberCertPrinter factory ref implementation mismatch"
+            "LedgerEntryToken factory ref implementation mismatch"
         );
         assertEq(
             imFactory.getCyberScripRefImplementation(),
@@ -1076,7 +1076,7 @@ contract CyberScripUpgradeForkTest is Test {
         assertEq(
             issuanceManager.getCertPrinterBeaconImplementation(),
             newCertPrinterImpl,
-            "CyberCertPrinter beacon implementation not upgraded"
+            "LedgerEntryToken beacon implementation not upgraded"
         );
         assertEq(
             issuanceManager.getScripBeaconImplementation(),

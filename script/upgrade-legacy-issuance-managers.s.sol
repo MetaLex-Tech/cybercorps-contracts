@@ -5,7 +5,7 @@ pragma solidity ^0.8.18;
 //import {Script} from "forge-std/Script.sol";
 //import {Test, console2} from "forge-std/Test.sol";
 //import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
-//import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+//import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 //import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 //import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 //import {BorgAuth} from "../src/libs/auth.sol";
@@ -36,7 +36,7 @@ pragma solidity ^0.8.18;
 //        CyberCorpFactory cyberCorpFactory = CyberCorpFactory(0x51413048f3Dfc4516e95BC8e249341B1D53B6cB2);
 //        IssuanceManagerFactory imFactoryV2 = IssuanceManagerFactory(cyberCorpFactory.issuanceManagerFactory()); // this is the v2 one (with reference implementation)
 //
-//        // CyberCertPrinter beacons are owned by each individual IssuanceManagers, so to upgrade them we must
+//        // LedgerEntryToken beacons are owned by each individual IssuanceManagers, so to upgrade them we must
 //        // enumerate all existing IssuanceManager addresses and their corresponding factories (https://dune.com/queries/6129394):
 //        // - 0xA32547aAdAA4975082D729c79e79dBaE4385EBCf
 //        // - 0xade5d9fBaC6201535dc558FBD247e6859f5aa8C5 (deprecated, won't touch it)
@@ -77,7 +77,7 @@ pragma solidity ^0.8.18;
 //            vm.assertEq(
 //                IssuanceManager(imAddr).getCertPrinterBeaconImplementation(),
 //                IssuanceManagerFactory(cyberCorpFactory.issuanceManagerFactory()).getCyberCertPrinterRefImplementation(),
-//                "should point CyberCertPrinter implementation to reference now"
+//                "should point LedgerEntryToken implementation to reference now"
 //            );
 //            vm.assertEq(
 //                IssuanceManager(imAddr).getScripBeaconImplementation(),

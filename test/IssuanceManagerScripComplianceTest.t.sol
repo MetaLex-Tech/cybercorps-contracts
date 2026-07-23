@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
@@ -73,7 +73,7 @@ contract IssuanceManagerScripComplianceTest is Test {
                         IssuanceManagerFactory.initialize.selector,
                         address(auth),
                         address(new IssuanceManager()),
-                        address(new CyberCertPrinter()),
+                        address(new LedgerEntryToken()),
                         address(new TestableCyberScrip())
                     )
                 )

@@ -94,7 +94,7 @@ contract UpgradePublicRoundsForkTest is Test {
 
         IssuanceManagerFactory imFactory = IssuanceManagerFactory(CyberCorpFactory(cyberCorpFactoryProxyAddr).issuanceManagerFactory());
         assertNotEq(imFactory.getRefImplementation(), address(0), "IssuanceManagerFactory should have reference implementation");
-        assertNotEq(imFactory.getCyberCertPrinterRefImplementation(), address(0), "IssuanceManagerFactory should have reference implementation for CyberCertPrinter");
+        assertNotEq(imFactory.getCyberCertPrinterRefImplementation(), address(0), "IssuanceManagerFactory should have reference implementation for LedgerEntryToken");
         assertNotEq(imFactory.getCyberScripRefImplementation(), address(0), "IssuanceManagerFactory should have reference implementation for CyberScrip");
 
         // Legacy ecosystem should be partially upgraded

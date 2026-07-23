@@ -70,7 +70,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     address public issuanceManager;
     /// @notice Address of the deal manager contract
     address public dealManager;
-    /// @notice Implementation address for the CyberCertPrinter contract
+    /// @notice Implementation address for the LedgerEntryToken contract
     address public cyberCertPrinterImplementation;
 
     address public upgradeFactory;

@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 import "../src/IssuanceManager.sol";
-import "../src/CyberCertPrinter.sol";
+import "../src/LedgerEntryToken.sol";
 import "../src/CyberScrip.sol";
 import "../src/interfaces/ICyberCertPrinter.sol";
 import "../src/interfaces/IUriBuilder.sol";
@@ -122,7 +122,7 @@ contract IssuanceManagerTest is Test {
                     IssuanceManagerFactory.initialize.selector,
                     address(auth),
                     new IssuanceManager(),
-                    new CyberCertPrinter(),
+                    new LedgerEntryToken(),
                     new CyberScrip()
                 )
             )
