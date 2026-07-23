@@ -294,13 +294,15 @@ abstract contract SecondaryConditionTestBase is Test {
         o.side = OfferSide.SELL;
         o.certPrinter = address(cert);
         o.tokenId = 1;
-        o.exemptionPathway = ExemptionPathway.RULE_144;
+        o.expectedExemptionPathway = ExemptionPathway.RULE_144;
     }
 
     /// @dev An escrow whose counterparty is the buyer (as materialized at acceptOffer for a SELL offer).
+    /// The elected pathway is never NONE on a real settlement, so the default mirrors _sellOffer's pin.
     function _sellEscrow() internal view returns (SecondaryEscrow memory e) {
         e.counterparty = buyer;
         e.tokenId = 1;
+        e.exemptionPathway = ExemptionPathway.RULE_144;
     }
 
     /// @dev Posts a SELL offer and its accepted escrow into the mock DealManager.

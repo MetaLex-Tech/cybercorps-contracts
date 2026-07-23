@@ -499,8 +499,10 @@ contract LifeCycleGasLimitTest is Test {
             globalValues,
             partyValues,
             officer,
-            investorKey
-        );
+            investorKey,
+            rmAddr,
+            block.timestamp + 7 days,
+            bytes32(0));
 
         usdc.mint(investor, EOI_AMOUNT * 2);
         vm.prank(investor);

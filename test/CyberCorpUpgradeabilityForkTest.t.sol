@@ -273,7 +273,18 @@ contract CyberCorpUpgradeabilityForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Counter Party Value 1";
 
-        bytes32 expectedAgreementId = keccak256(abi.encode(TEMPLATE_ID, uint256(salt), globalValues, parties));
+        // Mirrors createContract's preimage. The finalizer is the DealManager the factory is about to
+        // deploy, so predict its CREATE2 address; `expiry` is deliberately not part of the id.
+        bytes32 expectedAgreementId = keccak256(
+            abi.encode(
+                TEMPLATE_ID,
+                uint256(salt),
+                globalValues,
+                parties,
+                bytes32(0), // secretHash, as passed below
+                dmFactory.computeDealManagerAddress(keccak256(abi.encodePacked(uint256(salt))))
+            )
+        );
 
         vm.startPrank(corpOwner);
         (cyberCorpAddr, corpAuthAddr, imAddr, dmAddr, rmAddr, cyberCertPrinterAddrs, agreementId, certIds) =

@@ -331,6 +331,27 @@ library CyberCorpHelper {
         address companyAddress,
         bool publicRound
     ) internal returns (bytes32) {
+        return createRound(
+            rm, paymentToken, templateId, raiseCap, minTicket, maxTicket, pricePerUnit,
+            valuation, roundType, officerPrivKey, companyAddress, publicRound, true
+        );
+    }
+
+    function createRound(
+        RoundManager rm,
+        address paymentToken,
+        bytes32 templateId,
+        uint256 raiseCap,
+        uint256 minTicket,
+        uint256 maxTicket,
+        uint256 pricePerUnit,
+        uint256 valuation,
+        RoundType roundType,
+        uint256 officerPrivKey,
+        address companyAddress,
+        bool publicRound,
+        bool allowTimedOffers
+    ) internal returns (bytes32) {
         address officerEOA = vm.addr(officerPrivKey);
 
         string[] memory defaultLegend = new string[](1);
@@ -375,7 +396,7 @@ library CyberCorpHelper {
                     SecuritySeries.SeriesSeed,
                     roundType,
                     publicRound,
-                    true,
+                    allowTimedOffers,
                     false,
                     raiseCap,
                     minTicket,
@@ -522,7 +543,10 @@ library CyberCorpHelper {
                 new string[](1),
                 new string[](2),
                 officerEOA,
-                investorPrivKey
+                investorPrivKey,
+                address(rm),
+                eoi.expiry,
+                bytes32(0)
             ),
             salt,
             new address[](0),
@@ -571,7 +595,10 @@ library CyberCorpHelper {
             glValues,
             pv,
             officerEOA,
-            privKey
+            privKey,
+            address(rm),
+            eoi.expiry,
+            bytes32(0)
         );
 
         (bytes32 agreementId, ) = rm.submitEOI(
@@ -693,7 +720,10 @@ library CyberCorpHelper {
         string[] memory globalValues,
         string[] memory partyValues,
         address authorityOfficer,
-        uint256 signerPrivKey
+        uint256 signerPrivKey,
+        address finalizer,
+        uint256 expiry,
+        bytes32 secretHash
     ) internal view returns (bytes memory) {
         (
             string memory legalUri,
@@ -706,7 +736,7 @@ library CyberCorpHelper {
         parties[0] = authorityOfficer;
         parties[1] = signer;
         bytes32 contractId = keccak256(
-            abi.encode(templateId, salt, globalValues, parties)
+            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer)
         );
         return
             CyberAgreementUtils.signAgreementTypedData(
@@ -971,8 +1001,10 @@ contract RoundManagerTest is Test {
             globalValues,
             partyValues,
             corpOwner,
-            investorPrivKey
-        );
+            investorPrivKey,
+            address(roundManager),
+            block.timestamp + 7 days,
+            bytes32(0));
         address[] memory conditions = new address[](0);
         bytes32 secretHash = bytes32(0);
         uint256 expiry = block.timestamp + 7 days;
@@ -984,7 +1016,7 @@ contract RoundManagerTest is Test {
         parties[1] = investor;
         vm.expectEmit(true, true, true, true);
         emit RoundManager.EOISubmitted(
-            keccak256(abi.encode(CyberCorpHelper.TEMPLATE_ID, salt, globalValues, parties)),
+            keccak256(abi.encode(CyberCorpHelper.TEMPLATE_ID, salt, globalValues, parties, bytes32(0), address(roundManager))),
             roundId,
             investor,
             corp,
@@ -1037,8 +1069,10 @@ contract RoundManagerTest is Test {
             globalValues,
             partyValues,
             owner,
-            investorPrivKey
-        );
+            investorPrivKey,
+            address(roundManager),
+            block.timestamp + 7 days,
+            bytes32(0));
 
         vm.expectRevert(
             abi.encodeWithSelector(RoundManager.InvalidAmount.selector)
@@ -1667,8 +1701,10 @@ contract RoundManagerTest is Test {
             new string[](1),
             new string[](2),
             corpOwner,
-            investorPrivKey
-        );
+            investorPrivKey,
+            address(roundManager),
+            block.timestamp + 7 days,
+            bytes32(0));
         vm.expectRevert(
             abi.encodeWithSelector(RoundManager.InvalidAmount.selector)
         );
@@ -2087,8 +2123,10 @@ contract RoundManagerTest is Test {
                 new string[](1),
                 new string[](2),
                 corpOwner,
-                investorPrivKey
-            ),
+                investorPrivKey,
+                address(roundManager),
+                block.timestamp + 7 days,
+                bytes32(0)),
             4,
             conditions,
             bytes32(0)
@@ -2192,8 +2230,10 @@ contract RoundManagerTest is Test {
             new string[](1),
             new string[](2),
             corpOwner,
-            investorPrivKey
-        );
+            investorPrivKey,
+            address(roundManager),
+            block.timestamp + 7 days,
+            bytes32(0));
          vm.expectRevert(
             abi.encodeWithSelector(RoundManager.RoundNotOpen.selector)
         );
@@ -2242,8 +2282,10 @@ contract RoundManagerTest is Test {
             gl,
             pv,
             corpOwner,
-            investorPrivKey
-        );
+            investorPrivKey,
+            address(roundManager),
+            block.timestamp + 7 days,
+            bytes32(0));
         vm.expectRevert(
             abi.encodeWithSelector(RoundManager.InvalidRound.selector)
         );
@@ -2894,8 +2936,10 @@ contract RoundManagerFCFSTest is Test {
             globalValues,
             partyValues,
             officerEOA,
-            privKey
-        );
+            privKey,
+            address(rm),
+            block.timestamp + 7 days,
+            bytes32(0));
 
         (bytes32 agreementId, ) = rm.submitEOI(
             roundId,
@@ -3137,8 +3181,10 @@ contract RoundManagerFCFSTest is Test {
             globalValues,
             partyValues,
             officerEOA,
-            privKey1
-        );
+            privKey1,
+            address(rm),
+            block.timestamp + 7 days,
+            bytes32(0));
                 vm.expectRevert(
             abi.encodeWithSelector(RoundManager.InvalidAmount.selector)
         );
@@ -3179,8 +3225,10 @@ contract RoundManagerFCFSTest is Test {
             globalValues,
             partyValues,
             officerEOA,
-            privKey2
-        );
+            privKey2,
+            address(rm),
+            block.timestamp + 7 days,
+            bytes32(0));
         vm.expectRevert(
             abi.encodeWithSelector(RoundManager.InvalidAllocation.selector)
         );

@@ -15,13 +15,12 @@ offer; closing conditions receive `abi.encode(settlementAgreementId)` and refer 
 
 | Condition                              | Stage         | Parties            | Offer fields used                                                                                                              |
 |----------------------------------------|---------------|--------------------|--------------------------------------------------------------------------------------------------------------------------------|
-| `KYCAMLCondition`                      | threshold     | buyer + seller     | `offeror`, buyer via `settlementAgreementIds`                                                                                  |
+| `EligibilityCondition`                 | threshold     | buyer + seller     | `offeror`, buyer via `settlementAgreementIds`                                                                                  |
 | `AccreditedInvestorCondition`          | threshold     | buyer              | buyer via `settlementAgreementIds`                                                                                             |
 | `QualifiedPurchaserCondition`          | threshold     | buyer + seller     | `offeror`, buyer via `settlementAgreementIds`                                                                                  |
 | `QualifiedInstitutionalBuyerCondition` | threshold     | buyer              | buyer via `settlementAgreementIds`                                                                                             |
 | `NonUSNationalityCondition`            | threshold     | buyer              | buyer via `settlementAgreementIds`                                                                                             |
 | `USStateOfResidenceCondition`          | threshold     | buyer              | buyer via `settlementAgreementIds`, `spvAddress`                                                                               |
-| `TaxInfoCondition`                     | threshold     | buyer + seller     | `offeror`, buyer via `settlementAgreementIds`                                                                                  |
 | `LegionSoulboundCondition`             | threshold     | buyer + seller     | `offeror`, buyer via `settlementAgreementIds`                                                                                  |
 | ~~`AgreementSignedCondition`~~         | ~~threshold~~ | ~~buyer + seller~~ | _(dropped — agreement creation is deferred to acceptOffer; signing IS acceptance, so checking "is it signed" is tautological)_ |
 | `Section4a7DisclosureCondition`        | threshold     | buyer              | buyer via `settlementAgreementIds`, `spvAddress`                                                                               |
@@ -36,7 +35,6 @@ offer; closing conditions receive `abi.encode(settlementAgreementId)` and refer 
 | `GPLPApprovalCondition`                | threshold     | —                  | `spvAddress`                                                                                                                   |
 | `GPConsentCondition`                   | threshold     | —                  | `spvAddress`                                                                                                                   |
 | `QMSModeCondition`                     | threshold     | —                  | `spvAddress`                                                                                                                   |
-| `ERISACondition`                       | threshold     | buyer              | buyer via `settlementAgreementIds`                                                                                             |
 | `KillSwitchCondition`                  | closing       | —                  | _(no Offer lookup; checks kill-switch state)_                                                                                  |
 | `TimeSettlementPeriodCondition`        | closing       | —                  | _(no Offer lookup; checks settlement timestamp)_                                                                               |
 
@@ -66,21 +64,44 @@ acceptors (partial fills). Buyer-facing conditions instead check `offer.settleme
 
 ### Two-array lifecycle
 
-Both sets are owner-managed DealManager config (never offeror-supplied). At `postOffer` they are resolved
-and **snapshotted onto the offer** — so an offer is governed by the rules in effect when it was posted —
-and stored on the secondary-trade record itself (self-contained; no dependency on the primary-deal escrow
-library's `conditionsByEscrow`):
+Both sets are owner-managed DealManager config (never offeror-supplied). Each stage resolves the set from
+live config, so a trade is judged by the SPV's rules as they stand at that moment.
 
-| Array                       | Evaluated at                      | Entry points                                                  |
-|-----------------------------|-----------------------------------|---------------------------------------------------------------|
-| `offer.thresholdConditions` | Offer posted, accepted, finalized | `postOffer`, `acceptOffer`, `finalizeSecondaryTradeAgreement` |
-| `offer.closingConditions`   | Finalization                      | `finalizeSecondaryTradeAgreement`                             |
+| Set                                          | Resolved from                                                     | Evaluated at                                                  |
+|----------------------------------------------|-------------------------------------------------------------------|---------------------------------------------------------------|
+| Threshold (§6 fund-specific ++ §5 exemption) | `spvThresholdConditions` ++ `pathwayThresholdConditions[pathway]` | `postOffer`, `acceptOffer`, `finalizeSecondaryTradeAgreement` |
+| Closing                                      | `closingConditions`                                               | `finalizeSecondaryTradeAgreement`                             |
 
-Every condition in the array is walked in sequence at each entry point. Any failure reverts immediately.
-Snapshotting the addresses does not blunt the kill switch: `KillSwitchCondition` reads its live state
-internally, so a switch raised after posting still halts an in-flight settlement at finalize. Likewise,
-re-running the threshold set at finalize means eligibility lost after acceptance (revoked credential,
-breached holder cap, blocked-state move, withdrawn approval) blocks the asset transfer.
+At `postOffer` the pathway is the offeror's pin (`NONE` on an unpinned sell offer resolves the §6 layer
+alone); from `acceptOffer` onward it is the buyer's election, recorded per lot on
+`SecondaryEscrow.exemptionPathway`.
+
+Every condition in the set is walked in sequence at each entry point. Any failure reverts immediately.
+Live resolution also means a pathway withdrawn or a condition added after posting takes effect on the next
+stage, and re-running the threshold set at finalize means eligibility lost after acceptance (revoked
+credential, breached holder cap, blocked-state move, withdrawn approval) blocks the asset transfer.
+
+An SPV trades only under exemptions it currently supports, so pathway enablement is gated at all three
+stages alongside the set. Withdrawing one stops settlements already accepted under it; those lots unwind
+through the void/expiry path.
+
+Off-chain reconstruction works two ways, which must agree:
+
+- `SecondaryTradeAgreementFinalized` carries the threshold and closing sets the settlement was judged
+  against, read directly — no replay, no knowledge of how the layers compose.
+- The config setters emit `SpvThresholdConditionsSet` / `PathwayThresholdConditionsSet` /
+  `ClosingConditionsSet`, each carrying the whole replacement list. Replaying those against a settlement's
+  elected pathway covers the stages the finalize event does not: posting and acceptance.
+
+Replay carries assumptions the logs do not state, so an indexer relying on it must: compose the threshold
+set as SPV layer ++ pathway layer in that order (`NONE` omits the pathway layer); order events by
+`(blockNumber, logIndex)`, since a config change and a finalize can share a block; partition config by
+`log.emitter`, as each DealManager has its own; and bootstrap from the getters at a pinned block, because
+an absent `PathwayThresholdConditionsSet` is indistinguishable from one emitted before the start block
+(and `pathwayEnabled` defaults to false).
+
+Either route reports which conditions were *consulted*, not which ones bound: conditions that self-silence
+(e.g. `ERISACondition` on Reg S) appear in the set having returned `true` unconditionally.
 
 ### Within threshold: posting vs. acceptance
 
@@ -131,21 +152,19 @@ order fund-specific (Layer 2) ++ exemption-specific (Layer 1) and snapshotted on
 
 | Layer                             | Where configured                  | When                                                                                                          | Conditions                                                                                                                                                                                                                                                  |
 |-----------------------------------|-----------------------------------|---------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Layer 2 — Fund-specific (§6)      | Individual `DealManager`          | SPV onboarding; applies to every offer for the SPV                                                            | `KYCAMLCondition`, `TaxInfoCondition`, `ERISACondition`, `USStateOfResidenceCondition`, `HolderCapCondition`, `QualifiedPurchaserCondition`, `CFIUSCondition`, `LegionSoulboundCondition`, `GPLPApprovalCondition`, `QMSModeCondition`                      |
+| Layer 2 — Fund-specific (§6)      | Individual `DealManager`          | SPV onboarding; applies to every offer for the SPV                                                            | `EligibilityCondition`, `USStateOfResidenceCondition`, `HolderCapCondition`, `QualifiedPurchaserCondition`, `CFIUSCondition`, `LegionSoulboundCondition`, `GPLPApprovalCondition`, `QMSModeCondition`                      |
 | Layer 1 — Exemption-specific (§5) | Individual `DealManager` registry | Protocol initialization (addresses registered); selected per-offer at `postOffer` based on `exemptionPathway` | `HoldingPeriodCondition`, `Rule144DisclosureCondition`, `AccreditedInvestorCondition`, `Section4a7DisclosureCondition`, `LegalOpinionCondition`, `QualifiedInstitutionalBuyerCondition`, `NonUSNationalityCondition`, `RegSDistributionComplianceCondition` |
 
 #### Layer 2 — Fund-specific (§6) (individual `DealManager`, configured at SPV onboarding)
 
 Added to the individual DealManager during SPV onboarding and applied to every offer for that SPV. Only conditions
-applicable to the SPV are added. §7.2 classifies the baseline buyer-credential gates (the first four below) as
+applicable to the SPV are added. §7.2 classifies the baseline buyer-credential gates (the first two below) as
 fund-specific, so each SPV must register them explicitly — there is no platform-wide tier that injects them
 automatically.
 
 | Condition                     | When present                                                                 | Parameterization                                                                                                                                                                                    |
 |-------------------------------|------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `KYCAMLCondition`             | All SPVs / all paths                                                         | None                                                                                                                                                                                                |
-| `TaxInfoCondition`            | All SPVs / all paths; blocks acceptance until W-9/W-8BEN recorded in LeXcheX | None                                                                                                                                                                                                |
-| `ERISACondition`              | All U.S. pathways; silent for Reg S non-U.S. buyers                          | None                                                                                                                                                                                                |
+| `EligibilityCondition`        | All SPVs / all paths; admin-cleared flag per party (KYC/AML, tax, ERISA, …)  | None                                                                                                                                                                                                |
 | `USStateOfResidenceCondition` | All SPVs                                                                     | Issuer-configurable blocked-states list; **New York is on the default blocked-states list** for every SPV that has not registered under NY Martin Act Article 23-A, regardless of exemption pathway |
 | `HolderCapCondition`          | All SPVs                                                                     | ICA exception (`§3(c)(1)`, `§3(c)(1)(C)`, or `§3(c)(7)`); SPV domicile (for Touche Remnant U.S.-resident-only count); cap (100 / 250 / none)                                                        |
 | `QualifiedPurchaserCondition` | §3(c)(7) funds only                                                          | Parameterizes `LexChexCondition` for QP `investorType`                                                                                                                                              |
@@ -159,7 +178,7 @@ automatically.
 #### Layer 1 — Exemption-specific (§5) (individual `DealManager`, selected at `postOffer`)
 
 Condition contract addresses are registered in the DealManager (or a shared registry) at protocol initialization. At
-`postOffer`, DealManager reads the offer's `exemptionPathway` field and appends the corresponding subset to the
+`postOffer`, DealManager reads the offer's `expectedExemptionPathway` field and appends the corresponding subset to the
 threshold-condition array for that offer's `agreementId`. The same condition instances are shared across all SPVs.
 
 | Condition                              | Rule 144 | §4(a)(7) | §4(a)(1½) | Rule 144A | Reg S |

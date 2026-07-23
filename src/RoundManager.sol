@@ -417,9 +417,7 @@ contract RoundManager is
         // Check: round validity
         if (round.id == bytes32(0)) revert InvalidRound();
 
-       // Check: eoi has not expired
-        if (eoi.expiry < block.timestamp) revert EOIExpired();
-        // Check: offer has not expired based on escrow expiry (captures per-round setting)
+        // Check: offer has not expired based on escrow expiry ( = round.allowTimedOffers ? eoi.expiry : round.endTime)
         if (escrow.expiry < block.timestamp) revert EOIExpired();
 
         uint256 remaining = round.raiseCap - round.raised;

@@ -14,14 +14,13 @@ import {SecondaryEscrow} from "../../../interfaces/ISecondaryTradeStorage.sol";
 /// under this architecture the buyer's deposit is atomic with acceptance, so acceptance and deposit
 /// triggers coincide). Future QMS parameterization (Addendum E): a 45-day delay measured from the
 /// offer's listing timestamp for QMS-mode SPVs — same contract, different per-DealManager delay.
-/// @dev The acceptance timestamp is reconstructed as escrow.expiry - settlementWindow (acceptOffer
-/// stamps expiry = acceptance + window). If the DealManager's settlement window is reconfigured while a
-/// lot is in flight, the reconstruction shifts with it; owners should change the window only between
-/// settlements. A DealManager's effective delay must stay below its settlement window or no lot can
-/// ever finalize.
+/// @dev The delay is measured from the escrow's stamped acceptedAt, so it is fixed per lot and a later
+/// settlement-window change cannot move it. A DealManager's effective delay must stay below its
+/// settlement window or no lot can ever finalize; setDelayOverride enforces that for new overrides.
 contract TimeSettlementPeriodCondition is SecondaryTradingConditionBase {
     error InvalidDealManager();
     error NotDealManagerOwner();
+    error DelayExceedsSettlementWindow();
 
     event DelayOverrideUpdated(address indexed dealManager, uint256 delay);
 
@@ -32,11 +31,14 @@ contract TimeSettlementPeriodCondition is SecondaryTradingConditionBase {
     mapping(address => uint256) public delayOverrides;
 
     /// @notice Sets a DealManager's delay override (0 restores the default); only that DealManager's
-    /// BorgAuth owner
+    /// BorgAuth owner. The delay must stay under the settlement window, else no lot could ever finalize.
     function setDelayOverride(address dealManager, uint256 delay) external {
         if (dealManager == address(0)) revert InvalidDealManager();
         _requireAuthOwner(dealManager);
         delayOverrides[dealManager] = delay;
+        // Checked through delayFor so restoring the default (0) is validated too
+        if (delayFor(dealManager) >= IDealManager(dealManager).getSettlementWindow())
+            revert DelayExceedsSettlementWindow();
         emit DelayOverrideUpdated(dealManager, delay);
     }
 
@@ -49,8 +51,7 @@ contract TimeSettlementPeriodCondition is SecondaryTradingConditionBase {
     /// @notice Earliest timestamp at which a settlement lot may finalize (what a keeper waits on)
     function finalizableAt(IDealManager dealManager, bytes32 agreementId) public view returns (uint256) {
         SecondaryEscrow memory escrow = dealManager.getSecondaryEscrow(agreementId);
-        uint256 acceptedAt = escrow.expiry - dealManager.getSettlementWindow();
-        return acceptedAt + delayFor(address(dealManager));
+        return escrow.acceptedAt + delayFor(address(dealManager));
     }
 
     function checkCondition(

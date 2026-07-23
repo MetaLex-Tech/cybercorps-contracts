@@ -101,6 +101,7 @@ library LexScrowStorage {
     error DealNotPaid();
     error DealVoided();
     error DealDoesNotExist();
+    error TokenTransferMismatch(address token, uint256 expected, uint256 received);
 
     event DealVoidedAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
     event DealPaidAt(bytes32 indexed agreementId, address agreementRegistry, uint256 timestamp);
@@ -236,6 +237,22 @@ library LexScrowStorage {
         }
     }
 
+    /// @notice Pull `amount` of `token` into custody, requiring the full amount to land
+    /// @dev Custody is pooled across every escrow in a manager and payouts pay recorded amounts, so a token
+    /// whose delivered amount differs from the requested one (fee-on-transfer, rebasing) would desync custody
+    /// from the books — funding a shortfall out of co-depositors' balances, or wedging refunds that can no
+    /// longer be covered. Requiring an exact match keeps the recorded amount and the received amount identical
+    /// everywhere downstream.
+    /// @param token ERC20 being pulled
+    /// @param from Address the tokens are pulled from
+    /// @param amount Exact amount that must land in custody
+    function pullExact(address token, address from, uint256 amount) internal {
+        uint256 balanceBefore = IERC20(token).balanceOf(address(this));
+        IERC20(token).safeTransferFrom(from, address(this), amount);
+        uint256 received = IERC20(token).balanceOf(address(this)) - balanceBefore;
+        if (received != amount) revert TokenTransferMismatch(token, amount, received);
+    }
+
     /// @notice Pull buyer assets into escrow and mark the escrow as PAID
     /// @param agreementId Unique identifier of the agreement
     function handleCounterPartyPayment(bytes32 agreementId) public {
@@ -245,7 +262,7 @@ library LexScrowStorage {
 
         for(uint256 i = 0; i < escrow.buyerAssets.length; i++) {
             if(escrow.buyerAssets[i].tokenType == TokenType.ERC20) {
-                IERC20(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(escrow.counterParty, address(this), escrow.buyerAssets[i].amount);
+                pullExact(escrow.buyerAssets[i].tokenAddress, escrow.counterParty, escrow.buyerAssets[i].amount);
             }
             else if(escrow.buyerAssets[i].tokenType == TokenType.ERC721) {
                 IERC721(escrow.buyerAssets[i].tokenAddress).safeTransferFrom(escrow.counterParty, address(this), escrow.buyerAssets[i].tokenId);

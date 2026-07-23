@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 import "../BaseSecondaryTradingCondition.sol";
 import "../../auth.sol";
-import {Offer, SecondaryEscrow, OfferSide} from "../../../interfaces/ISecondaryTradeStorage.sol";
+import {Offer, SecondaryEscrow, OfferSide, ExemptionPathway} from "../../../interfaces/ISecondaryTradeStorage.sol";
 
 /// @notice Minimal surface for reading the BorgAuth wired into a CyberCorp / DealManager
 /// (both inherit BorgAuthACL, whose public AUTH getter this matches).
@@ -45,6 +45,18 @@ abstract contract SecondaryTradingConditionBase is BaseSecondaryTradingCondition
             }
             sellerTokenId = escrow.tokenId;
         }
+    }
+
+    /// @dev The exemption a condition must judge the context under. The buyer elects it at acceptance, so
+    /// from a settlement onward only the escrow is authoritative; the offer's pin is NONE on an unpinned
+    /// sell offer. At posting the offer's pin is all there is.
+    function _resolvePathway(
+        IDealManager dealManager,
+        Offer memory offer,
+        bytes32 agreementId
+    ) internal view returns (ExemptionPathway) {
+        if (agreementId == bytes32(0)) return offer.expectedExemptionPathway;
+        return dealManager.getSecondaryEscrow(agreementId).exemptionPathway;
     }
 
     /// @dev Reverts unless msg.sender holds ADMIN_ROLE (or above) on the target's BorgAuth.
