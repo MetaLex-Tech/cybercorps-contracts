@@ -208,18 +208,23 @@ library IssuanceManagerStorage {
 
     /// @notice Per-certificate vault position: nominal shares in the scripified-units vault.
     ///         Claim on underlying (wad) = vaultNominalShares * totalAssetsWad / totalNominalShares.
-    /// @dev Three slots preserve layout vs legacy (amount, reductionDebt, maxUnitsRepresented).
+    /// @dev Three slots preserve layout vs legacy (amount, reductionDebt, maxUnitsRepresented);
+    ///      `vaultEpoch` is appended, so existing positions read epoch 0 and match a fresh pool.
     struct CertScripState {
         uint256 vaultNominalShares;
         /// @dev Legacy `reductionDebt` slot — unused after ERC4626 vault migration.
         uint256 deprecatedMasterChefDebtSlot;
         uint256 maxUnitsRepresented;
+        /// @dev Vault epoch `vaultNominalShares` was recorded in; a stale epoch means zero shares.
+        uint256 vaultEpoch;
     }
 
     /// @notice ERC4626-style pool for scripified certificate units (underlying in 18-dec wad).
     struct CertScripUnitPool {
         uint256 totalAssetsWad;
         uint256 totalNominalShares;
+        /// @dev Bumped whenever the pool empties, invalidating every outstanding position at once.
+        uint256 vaultEpoch;
     }
 
     struct RecertificationApproval {
@@ -497,9 +502,41 @@ library IssuanceManagerStorage {
         if (pool.totalNominalShares == 0) {
             return 0;
         }
-        CertScripState storage certState = getCertScripState(certAddress, tokenId);
         return
-            certState.vaultNominalShares * pool.totalAssetsWad / pool.totalNominalShares;
+            _vaultSharesOf(certAddress, tokenId) * pool.totalAssetsWad /
+            pool.totalNominalShares;
+    }
+
+    /// @dev Shares this certificate holds in the pool's current epoch. A position recorded before the pool
+    ///      last emptied is worthless and reads as zero without needing to have been written back.
+    function _vaultSharesOf(
+        address certAddress,
+        uint256 tokenId
+    ) internal view returns (uint256) {
+        CertScripState storage certState = getCertScripState(certAddress, tokenId);
+        if (
+            certState.vaultEpoch !=
+            issuanceManagerStorage().certScripUnitPools[certAddress].vaultEpoch
+        ) {
+            return 0;
+        }
+        return certState.vaultNominalShares;
+    }
+
+    /// @dev Same position, normalized into the current epoch so it is safe to write to: a stale position is
+    ///      cleared before use, so the deposit path can never add new shares on top of dead ones.
+    function _vaultPositionForWrite(
+        address certAddress,
+        uint256 tokenId
+    ) internal returns (CertScripState storage certState) {
+        certState = getCertScripState(certAddress, tokenId);
+        uint256 epoch = issuanceManagerStorage()
+            .certScripUnitPools[certAddress]
+            .vaultEpoch;
+        if (certState.vaultEpoch != epoch) {
+            certState.vaultNominalShares = 0;
+            certState.vaultEpoch = epoch;
+        }
     }
 
     /// @dev Scrip-token-equivalent claim for a single certificate's vault position.
@@ -518,7 +555,7 @@ library IssuanceManagerStorage {
         address certAddress,
         uint256 tokenId
     ) internal view returns (uint256 shares) {
-        return getCertScripState(certAddress, tokenId).vaultNominalShares;
+        return _vaultSharesOf(certAddress, tokenId);
     }
 
     function getRecertificationApproval(
@@ -1450,9 +1487,13 @@ library IssuanceManagerStorage {
         uint256 tokenId,
         uint256 assetsWad
     ) internal {
-        IssuanceManagerData storage ds = issuanceManagerStorage();
-        CertScripUnitPool storage pool = ds.certScripUnitPools[certAddress];
-        CertScripState storage certState = ds.certScripStates[certAddress][tokenId];
+        CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
+            certAddress
+        ];
+        CertScripState storage certState = _vaultPositionForWrite(
+            certAddress,
+            tokenId
+        );
 
         uint256 sharesMinted = pool.totalNominalShares == 0
             ? assetsWad
@@ -1475,7 +1516,10 @@ library IssuanceManagerStorage {
         CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
             certAddress
         ];
-        CertScripState storage certState = getCertScripState(certAddress, tokenId);
+        CertScripState storage certState = _vaultPositionForWrite(
+            certAddress,
+            tokenId
+        );
         uint256 S = pool.totalNominalShares;
         uint256 T = pool.totalAssetsWad;
         if (S == 0 || T == 0) revert EmptyVault();
@@ -1494,7 +1538,7 @@ library IssuanceManagerStorage {
         pool.totalAssetsWad -= assetsWad;
 
         if (pool.totalAssetsWad == 0) {
-            _zeroAllVaultNominals(certAddress);
+            _resetVaultPositions(certAddress);
         }
         return assetsWad;
     }
@@ -1515,7 +1559,7 @@ library IssuanceManagerStorage {
 
         pool.totalAssetsWad -= assetsOutWad;
         if (pool.totalAssetsWad == 0) {
-            _zeroAllVaultNominals(certAddress);
+            _resetVaultPositions(certAddress);
         }
     }
 
@@ -1526,16 +1570,13 @@ library IssuanceManagerStorage {
         if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
     }
 
-    function _zeroAllVaultNominals(address certAddress) internal {
-        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
-        uint256 supply = certificate.totalSupply();
-        for (uint256 i = 0; i < supply; i++) {
-            uint256 tokenId = certificate.tokenByIndex(i);
-            getCertScripState(certAddress, tokenId).vaultNominalShares = 0;
-        }
+    /// @dev Retires every outstanding position in one step by bumping the epoch, so an emptied pool costs
+    ///      O(1) instead of a walk over the printer's whole (permanently growing) token supply.
+    function _resetVaultPositions(address certAddress) internal {
         CertScripUnitPool storage pool = issuanceManagerStorage().certScripUnitPools[
             certAddress
         ];
         pool.totalNominalShares = 0;
+        pool.vaultEpoch++;
     }
 }
