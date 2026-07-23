@@ -98,6 +98,7 @@ struct SecondaryEscrow {
     address paymentToken;           // ERC20 payment token
     uint256 paymentAmount;          // consideration for this settlement lot
     uint256 units;                  // units in this settlement lot
+    uint256 acceptedAt;             // acceptance timestamp; immutable per lot, basis for the closing delay
     uint256 expiry;                 // settlement deadline
     SecondaryEscrowStatus status;   // ACCEPTED | FINALIZED | VOIDED
     // secondary-specific routing
@@ -188,6 +189,8 @@ interface ISecondaryTradeStorage {
         address paymentToken,
         uint256 paymentAmount,
         uint256 tokenId,
+        // acceptedAt lets a keeper schedule the closing delay from logs alone
+        uint256 acceptedAt,
         uint256 agreementExpiry,
         // per-settlement materialization fields, mirroring SecondaryEscrow (sourced from the offer or the
         // acceptance per side); feeDestination is omitted as it equals the offer's integrator (see OfferPosted).
@@ -241,6 +244,9 @@ interface ISecondaryTradeStorage {
     /// @notice A trade's units or consideration is below the admin-set minimum-ticket threshold;
     /// enforced on the whole offer at postOffer and on each lot at acceptOffer
     error BelowMinTradeThreshold();
+    /// @notice A lot of a priced offer floored to zero consideration; the fill is worth less than one
+    /// base unit of the payment token
+    error ZeroConsiderationFill();
     error IntegratorNotWhitelisted();
     error UnitsExceedOffer();
     error NotOfferor();

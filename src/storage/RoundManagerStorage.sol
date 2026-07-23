@@ -251,6 +251,9 @@ library RoundManagerStorage {
         partyValuesArray[0] = round.roundPartyValues;
         partyValuesArray[1] = partyValues;
 
+        // Rounds without timed offers ignore the EOI expiry and run to the round end instead
+        uint256 expiry = round.allowTimedOffers ? eoi.expiry : round.endTime;
+
         agreementId = ICyberAgreementRegistry(ls.DEAL_REGISTRY)
             .createContract(
                 round.templateId,
@@ -260,7 +263,7 @@ library RoundManagerStorage {
                 partyValuesArray,
                 secretHash,
                 address(this),
-                eoi.expiry
+                expiry
             );
 
         Token[] memory corpAssets = new Token[](0);
@@ -274,8 +277,7 @@ library RoundManagerStorage {
         );
 
         // Create the escrow via the shared LexScrowStorage library (no longer duplicated here)
-        uint256 expiryForEscrow = round.allowTimedOffers ? eoi.expiry : round.endTime;
-        LexScrowStorage.createEscrow(agreementId, counterParty, corpAssets, buyerAssets, expiryForEscrow);
+        LexScrowStorage.createEscrow(agreementId, counterParty, corpAssets, buyerAssets, expiry);
 
         if (round.roundType == RoundType.FCFS) {
             ICyberAgreementRegistry(ls.DEAL_REGISTRY)

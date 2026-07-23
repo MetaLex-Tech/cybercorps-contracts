@@ -243,7 +243,7 @@ library SecondaryTradeStorage {
             ICyberCertPrinter(params.certPrinter).increaseUnitsReserved(params.tokenId, params.units);
         } else {
             // BUY: pull consideration directly into contract custody
-            IERC20(params.paymentToken).safeTransferFrom(offeror, address(this), params.consideration);
+            LexScrowStorage.pullExact(params.paymentToken, offeror, params.consideration);
         }
 
         // Emit the full offer record (read back from storage so buy-side fields carry their normalized values)
@@ -350,11 +350,17 @@ library SecondaryTradeStorage {
             ? offer.consideration - offer.paymentAccepted
             : offer.consideration * params.units / offer.units;
 
-        // Re-apply the admin-set minimum-ticket floors that postOffer enforced on the whole offer, now
-        // against this lot — otherwise a tiny partial fill can settle below the floor. For a non-exhausting
-        // fill we also require the remainder left on the offer to clear the floor, so a sub-floor tail can
-        // never be created; that makes the eventual exhausting fill provably above the floor (by induction
-        // from postOffer's full-offer check) and needs no exemption.
+        // A priced offer must never settle a lot for nothing: flooring zeroes any fill worth less than one
+        // base unit of the payment token, which would deliver units free and shove the whole price onto the
+        // exhausting lot. Unpriced (zero-consideration) offers are a deliberate shape and stay allowed.
+        if (offer.consideration > 0 && partialConsideration == 0)
+            revert ISecondaryTradeStorage.ZeroConsiderationFill();
+
+        // Re-apply the minimum-ticket floors postOffer enforced on the whole offer, now against this lot and
+        // against the remainder left behind, so no sub-floor tail is ever created. The exhausting fill is
+        // exempt: under a fixed floor it is provably above it by induction, and after a floor raise it is the
+        // only fill a pre-existing tail has left — checking it would strand that tail for good. A raise is
+        // therefore prospective, binding new offers at postOffer while in-flight ones finish as posted.
         if (params.units < remainingUnits) {
             _checkMinTradeThreshold(params.units, partialConsideration);
             uint256 remainderUnits = remainingUnits - params.units;
@@ -447,7 +453,7 @@ library SecondaryTradeStorage {
         // BUY: funds are already in contract from postOffer(); no token movement needed.
         // SELL: pull the buyer's payment directly into contract.
         if (offer.side == OfferSide.SELL) {
-            IERC20(offer.paymentToken).safeTransferFrom(buyer, address(this), partialConsideration);
+            LexScrowStorage.pullExact(offer.paymentToken, buyer, partialConsideration);
         }
         // This lot's threshold set: fund-specific (§6) plus the elected pathway's exemption (§5) layer.
         address[] memory resolvedThreshold =
@@ -457,6 +463,7 @@ library SecondaryTradeStorage {
             paymentToken: offer.paymentToken,
             paymentAmount: partialConsideration,
             units: params.units,
+            acceptedAt: block.timestamp,
             expiry: settlementExpiry,
             status: SecondaryEscrowStatus.ACCEPTED,
             feeDestination: offer.integrator,
@@ -490,7 +497,7 @@ library SecondaryTradeStorage {
         // Acceptance funds the escrow atomically, so this event carries the settlement's payment too.
         emit ISecondaryTradeStorage.OfferAccepted(
             params.offerId, settlementAgreementId, acceptor, params.units, offer.paymentToken, partialConsideration,
-            tokenId, settlementExpiry,
+            tokenId, block.timestamp, settlementExpiry,
             buyerName, buyerHostingMode, adminMultisig, endorsementSig,
             electedPathway
         );

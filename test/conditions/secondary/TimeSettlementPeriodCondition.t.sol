@@ -11,25 +11,35 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 //
 // Legal/economic intent: a structural cooling-off window between acceptance and finalization — the
 // intervention window for the Compromised Credential voidness provision and the kill switch, and the
-// timer the keeper waits on. Default 24h from acceptance; per-DealManager overrides. Acceptance time
-// is reconstructed as escrow.expiry - settlementWindow.
+// timer the keeper waits on. Default 24h from acceptance; per-DealManager overrides. The delay is
+// measured from the escrow's stamped acceptedAt.
 //
 // Scenario × outcome (default delay 24h; acceptance at A, window 7d, expiry = A + 7d)
-// | # | scenario                                     | expect | rationale                          |
-// |---|----------------------------------------------|:------:|------------------------------------|
-// | 1 | posting (no settlement id)                   |  pass  | silent, evaluated at finalize      |
-// | 2 | at acceptance (no time elapsed)              |  fail  | window not yet elapsed             |
-// | 3 | exactly A + 24h                              |  pass  | window elapsed (>=)                |
-// | 4 | finalizableAt == A + DEFAULT_DELAY           |  true  | getter matches                     |
-// | 5 | delay override 2d: at A + 24h                 |  fail  | longer window not yet elapsed      |
-// | 6 | delay override 2d: at A + 2d                  |  pass  | overridden window elapsed          |
-// | 7 | override back to 0 restores default          |  pass  | 0 == DEFAULT_DELAY                  |
+// | #  | scenario                                     | expect | rationale                          |
+// |----|----------------------------------------------|:------:|------------------------------------|
+// | 1  | posting (no settlement id)                   |  pass  | silent, evaluated at finalize      |
+// | 2  | at acceptance (no time elapsed)              |  fail  | window not yet elapsed             |
+// | 3  | exactly A + 24h                              |  pass  | window elapsed (>=)                |
+// | 4  | finalizableAt == A + DEFAULT_DELAY           |  true  | getter matches                     |
+// | 5  | delay override 2d: at A + 24h                |  fail  | longer window not yet elapsed      |
+// | 6  | delay override 2d: at A + 2d                 |  pass  | overridden window elapsed          |
+// | 7  | override back to 0 restores default          |  pass  | 0 == DEFAULT_DELAY                 |
+//
+// Settlement-window changes must not move an in-flight lot's delay (acceptedAt is stamped per lot)
+// | #  | scenario                                     | expect | rationale                          |
+// |----|----------------------------------------------|:------:|------------------------------------|
+// | 10 | window enlarged after acceptance              |  fail  | delay not shortened retroactively  |
+// | 11 | window shrunk after acceptance               |  pass  | delay not extended, lot not stranded |
+// | 12 | window set absurdly large                    |  pass  | no underflow in finalizableAt      |
+// | 13 | two lots accepted under different windows    |  true  | each keeps its own basis           |
 //
 // Config/authorization
-// | # | case                              | expect                  |
-// |---|-----------------------------------|-------------------------|
-// | 8 | setDelayOverride zero dealManager | revert InvalidDealManager |
-// | 9 | setDelayOverride by non-owner     | revert (not owner)      |
+// | #  | case                                    | expect                            |
+// |----|-----------------------------------------|-----------------------------------|
+// | 8  | setDelayOverride zero dealManager        | revert InvalidDealManager         |
+// | 9  | setDelayOverride by non-owner            | revert (not owner)                |
+// | 14 | override >= settlement window            | revert DelayExceedsSettlementWindow |
+// | 15 | override 0 when default >= window        | revert DelayExceedsSettlementWindow |
 // ─────────────────────────────────────────────────────────────────────────────
 
 contract TimeSettlementPeriodConditionTest is SecondaryConditionTestBase {
@@ -42,7 +52,8 @@ contract TimeSettlementPeriodConditionTest is SecondaryConditionTestBase {
         timing = new TimeSettlementPeriodCondition();
         dm.setSettlementWindow(WINDOW);
         SecondaryEscrow memory e = _sellEscrow();
-        e.expiry = A + WINDOW; // acceptOffer stamps expiry = acceptance + window
+        e.acceptedAt = A; // acceptOffer stamps acceptedAt = now, expiry = now + window
+        e.expiry = A + WINDOW;
         dm.setEscrow(AGREEMENT_ID, e);
     }
 
@@ -106,5 +117,61 @@ contract TimeSettlementPeriodConditionTest is SecondaryConditionTestBase {
         vm.prank(stranger);
         vm.expectRevert();
         timing.setDelayOverride(address(dm), 1 days);
+    }
+
+    // 10 — enlarging the window used to slide the reconstructed acceptance backwards, erasing the delay
+    function test_WindowEnlargedAfterAcceptance_DelayUnchanged() public {
+        uint256 expected = timing.finalizableAt(IDealManager(address(dm)), AGREEMENT_ID);
+        dm.setSettlementWindow(WINDOW + 2 days);
+        assertEq(timing.finalizableAt(IDealManager(address(dm)), AGREEMENT_ID), expected);
+        vm.warp(A + timing.DEFAULT_DELAY() - 1);
+        assertFalse(_check());
+        vm.warp(A + timing.DEFAULT_DELAY());
+        assertTrue(_check());
+    }
+
+    // 11 — shrinking the window used to push the delay past the lot's expiry, stranding it
+    function test_WindowShrunkAfterAcceptance_DelayUnchanged() public {
+        uint256 expected = timing.finalizableAt(IDealManager(address(dm)), AGREEMENT_ID);
+        dm.setSettlementWindow(2 days);
+        assertEq(timing.finalizableAt(IDealManager(address(dm)), AGREEMENT_ID), expected);
+        vm.warp(A + timing.DEFAULT_DELAY());
+        assertTrue(_check());
+    }
+
+    // 12 — a window above the expiry timestamp used to underflow the reconstruction
+    function test_WindowLargerThanExpiry_NoUnderflow() public {
+        dm.setSettlementWindow(A + WINDOW + 1 days);
+        assertEq(timing.finalizableAt(IDealManager(address(dm)), AGREEMENT_ID), A + timing.DEFAULT_DELAY());
+    }
+
+    // 13
+    function test_LotsAcceptedUnderDifferentWindows_KeepOwnBasis() public {
+        bytes32 secondId = keccak256("settlement.2");
+        uint256 secondAcceptedAt = A + 3 days;
+        dm.setSettlementWindow(2 days);
+        SecondaryEscrow memory e = _sellEscrow();
+        e.acceptedAt = secondAcceptedAt;
+        e.expiry = secondAcceptedAt + 2 days;
+        dm.setEscrow(secondId, e);
+
+        assertEq(timing.finalizableAt(IDealManager(address(dm)), AGREEMENT_ID), A + timing.DEFAULT_DELAY());
+        assertEq(
+            timing.finalizableAt(IDealManager(address(dm)), secondId),
+            secondAcceptedAt + timing.DEFAULT_DELAY()
+        );
+    }
+
+    // 14
+    function test_SetDelayOverride_AtOrAboveWindow_Reverts() public {
+        vm.expectRevert(TimeSettlementPeriodCondition.DelayExceedsSettlementWindow.selector);
+        timing.setDelayOverride(address(dm), WINDOW);
+    }
+
+    // 15
+    function test_SetDelayOverride_ZeroWithDefaultAboveWindow_Reverts() public {
+        dm.setSettlementWindow(1 hours);
+        vm.expectRevert(TimeSettlementPeriodCondition.DelayExceedsSettlementWindow.selector);
+        timing.setDelayOverride(address(dm), 0);
     }
 }

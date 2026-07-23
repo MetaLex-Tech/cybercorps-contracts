@@ -121,6 +121,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         uint256 paymentAmount;
         uint256 units;
         uint256 tokenId; // seller's Ledger Entry Token (from OfferAccepted; acceptor-supplied for buy offers)
+        uint256 acceptedAt; // acceptance timestamp (from OfferAccepted)
         uint256 expiry; // escrow settlement deadline (agreementExpiry from OfferAccepted)
         string buyerName; // per-settlement materialization (from OfferAccepted)
         uint8 buyerHostingMode;
@@ -625,6 +626,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
             address payToken,
             uint256 paymentAmount,
             uint256 tokenId,
+            uint256 acceptedAt,
             uint256 expiry,
             string memory buyerName,
             uint8 buyerHostingMode,
@@ -632,7 +634,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
             bytes memory openEndorsementSig,
             uint8 exemptionPathway
         ) = abi.decode(
-            log.data, (uint256, address, uint256, uint256, uint256, string, uint8, address, bytes, uint8)
+            log.data, (uint256, address, uint256, uint256, uint256, uint256, string, uint8, address, bytes, uint8)
         );
 
         IdxSettlement storage s = idxSettlements[settlementId];
@@ -644,6 +646,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         s.paymentAmount = paymentAmount;
         s.units = units;
         s.tokenId = tokenId;
+        s.acceptedAt = acceptedAt;
         s.expiry = expiry;
         s.buyerName = buyerName;
         s.buyerHostingMode = buyerHostingMode;
@@ -892,6 +895,7 @@ contract DealManagerSecondaryTradeIndexerTest is Test {
         assertEq(s.paymentAmount, c.paymentAmount, "settlement paymentAmount");
         assertEq(s.units, c.units, "settlement units");
         assertEq(s.tokenId, c.tokenId, "settlement tokenId");
+        assertEq(s.acceptedAt, c.acceptedAt, "settlement acceptedAt");
         assertEq(s.expiry, c.expiry, "settlement expiry");
         assertEq(s.buyerName, c.buyerName, "settlement buyerName");
         assertEq(s.buyerHostingMode, uint8(c.buyerHostingMode), "settlement buyerHostingMode");
