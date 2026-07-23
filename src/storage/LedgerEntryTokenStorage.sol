@@ -45,11 +45,11 @@ import "../CyberCorpConstants.sol";
 import {
     CertificateDetails,
     Endorsement,
-    ICyberCertPrinter,
+    ILedgerEntryToken,
     OwnerDetails,
     RestrictiveLegend,
     RestrictionType
-} from "../interfaces/ICyberCertPrinter.sol";
+} from "../interfaces/ILedgerEntryToken.sol";
 import "../interfaces/ICyberCorp.sol";
 import "../interfaces/IIssuanceManager.sol";
 import {BorgAuth} from "../libs/auth.sol";
@@ -59,11 +59,11 @@ import "../interfaces/ITransferRestrictionHook.sol";
 import "./extensions/ICertificateExtension.sol";
 import {FUND_INTEREST_EXTENSION_TYPE} from "./extensions/FundInterestExtension.sol";
 
-library CyberCertPrinterStorage {
+library LedgerEntryTokenStorage {
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.cert.printer.storage.v1");
 
-    // Errors and events are shared: declared once on ICyberCertPrinter and referenced as ICyberCertPrinter.X
+    // Errors and events are shared: declared once on ILedgerEntryToken and referenced as ILedgerEntryToken.X
     // (below), so library reverts/logs carry the same selectors/topics as the printer's under delegatecall.
 
     /// @dev Per-legal-owner account for the §3(c)(1)(A) look-through holder tally. Packs into one slot.
@@ -146,7 +146,7 @@ library CyberCertPrinterStorage {
 
     // URI storage functionality
     function tokenURI(uint256 tokenId) external view returns (string memory) {
-        CyberCertPrinterStorage.CyberCertStorage storage s = cyberCertStorage();
+        LedgerEntryTokenStorage.CyberCertStorage storage s = cyberCertStorage();
         RestrictiveLegend[] memory certLegend = getEffectiveRestrictiveLegends(tokenId);
         ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
         CertificateDetails memory effectiveDetails = getCertificateDetails(
@@ -192,7 +192,7 @@ library CyberCertPrinterStorage {
         // Check built-in transferability flag and per-token override
         if (!s.transferable && !s.tokenTransferable[tokenId]) {
             ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
-            if (from != corp.dealManager() && from != corp.roundManager()) revert ICyberCertPrinter.TokenNotTransferable();
+            if (from != corp.dealManager() && from != corp.roundManager()) revert ILedgerEntryToken.TokenNotTransferable();
         }
 
         // Check global hook if it exists
@@ -200,16 +200,16 @@ library CyberCertPrinterStorage {
             (bool allowed, string memory reason) = s.globalRestrictionHook.checkTransferRestriction(
                 from, to, tokenId, ""
             );
-            if (!allowed) revert ICyberCertPrinter.TransferRestricted(reason);
+            if (!allowed) revert ILedgerEntryToken.TransferRestricted(reason);
         }
 
-        ITransferRestrictionHook typeHook = CyberCertPrinterStorage.cyberCertStorage().restrictionHooksById[tokenId];
+        ITransferRestrictionHook typeHook = LedgerEntryTokenStorage.cyberCertStorage().restrictionHooksById[tokenId];
             
         if (address(typeHook) != address(0)) {
             (bool allowed, string memory reason) = typeHook.checkTransferRestriction(
                 from, to, tokenId, ""
             );
-            if (!allowed) revert ICyberCertPrinter.TransferRestricted(reason);
+            if (!allowed) revert ILedgerEntryToken.TransferRestricted(reason);
         }
 
         address ownerAddress = s.owners[tokenId].ownerAddress;
@@ -217,14 +217,14 @@ library CyberCertPrinterStorage {
         //check endorsement and update owners
         if (from == ownerAddress) {
             if (!s.endorsementRequired) {
-                emit ICyberCertPrinter.CertificateAssigned(tokenId, to, "", IIssuanceManager(s.issuanceManager).companyName());
+                emit ILedgerEntryToken.CertificateAssigned(tokenId, to, "", IIssuanceManager(s.issuanceManager).companyName());
                 _setLegalOwner(s, tokenId, to, "");
             }
             else if (endorsementCount > 0) {
                 Endorsement memory endorsement = s.endorsements[tokenId][endorsementCount - 1];
                 if (endorsement.endorsee == to) {
                     // Endorsement exists; ownership will be updated
-                    emit ICyberCertPrinter.CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(s.issuanceManager).companyName());
+                    emit ILedgerEntryToken.CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(s.issuanceManager).companyName());
                     _setLegalOwner(s, tokenId, endorsement.endorsee, endorsement.endorseeName);
                 }
             }
@@ -235,7 +235,7 @@ library CyberCertPrinterStorage {
         // on to any other party is a possession-only custody move that leaves legal ownership untouched.
         else if (endorsementCount > 0 && s.endorsements[tokenId][endorsementCount - 1].endorsee == to) {
             Endorsement memory endorsement = s.endorsements[tokenId][endorsementCount - 1];
-            emit ICyberCertPrinter.CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(s.issuanceManager).companyName());
+            emit ILedgerEntryToken.CertificateAssigned(tokenId, to, endorsement.endorseeName, IIssuanceManager(s.issuanceManager).companyName());
             _setLegalOwner(s, tokenId, endorsement.endorsee, endorsement.endorseeName);
         }
     }
@@ -247,7 +247,7 @@ library CyberCertPrinterStorage {
         copyDefaultRestrictiveLegendsToCert(s, tokenId);
         s.certificateDetails[tokenId] = details;
         _setLegalOwner(s, tokenId, to, "");
-        emit ICyberCertPrinter.CyberCertPrinter_CertificateCreated(tokenId);
+        emit ILedgerEntryToken.CyberCertPrinter_CertificateCreated(tokenId);
     }
 
     /// @dev Post-mint bookkeeping for LedgerEntryToken.safeMintAndAssign.
@@ -262,8 +262,8 @@ library CyberCertPrinterStorage {
         copyDefaultRestrictiveLegendsToCert(s, tokenId);
         s.certificateDetails[tokenId] = details;
         _setLegalOwner(s, tokenId, to, investorName);
-        emit ICyberCertPrinter.CertificateAssigned(tokenId, to, investorName, IIssuanceManager(s.issuanceManager).companyName());
-        emit ICyberCertPrinter.CyberCertPrinter_CertificateCreated(tokenId);
+        emit ILedgerEntryToken.CertificateAssigned(tokenId, to, investorName, IIssuanceManager(s.issuanceManager).companyName());
+        emit ILedgerEntryToken.CyberCertPrinter_CertificateCreated(tokenId);
     }
 
     /// @dev Bookkeeping for LedgerEntryToken.assignCert (the ownerOf check stays in the printer).
@@ -271,7 +271,7 @@ library CyberCertPrinterStorage {
         CyberCertStorage storage s = cyberCertStorage();
         s.certificateDetails[tokenId] = details;
         _setLegalOwner(s, tokenId, to, "");
-        emit ICyberCertPrinter.CertificateAssigned(tokenId, to, "", IIssuanceManager(s.issuanceManager).companyName());
+        emit ILedgerEntryToken.CertificateAssigned(tokenId, to, "", IIssuanceManager(s.issuanceManager).companyName());
     }
 
     /// @dev Endorsement push + event for LedgerEntryToken.addEndorsement (the auth check stays in the printer).
@@ -304,7 +304,7 @@ library CyberCertPrinterStorage {
     function _recordEndorsement(uint256 tokenId, Endorsement memory newEndorsement) private {
         CyberCertStorage storage s = cyberCertStorage();
         s.endorsements[tokenId].push(newEndorsement);
-        emit ICyberCertPrinter.CertificateEndorsed(
+        emit ILedgerEntryToken.CertificateEndorsed(
             tokenId,
             newEndorsement.endorser,
             newEndorsement.endorsee,
@@ -328,7 +328,7 @@ library CyberCertPrinterStorage {
             if (newOwner != address(0)) {
                 _addToLegalOwnerEnumeration(s, newOwner, tokenId);
                 if (keccak256(bytes(record.name)) != keccak256(bytes(name))) {
-                    emit ICyberCertPrinter.LegalOwnerChanged(tokenId, current, newOwner, name, s.acquisitionTimestamp[tokenId]);
+                    emit ILedgerEntryToken.LegalOwnerChanged(tokenId, current, newOwner, name, s.acquisitionTimestamp[tokenId]);
                 }
             }
             record.name = name;
@@ -346,7 +346,7 @@ library CyberCertPrinterStorage {
         } else {
             s.acquisitionTimestamp[tokenId] = 0;
         }
-        emit ICyberCertPrinter.LegalOwnerChanged(tokenId, current, newOwner, name, ts);
+        emit ILedgerEntryToken.LegalOwnerChanged(tokenId, current, newOwner, name, ts);
 
         // Look-through tally: this lot leaves `current` and joins `newOwner` (both no-ops when the address
         // is 0 or the token is void/untracked).
@@ -407,7 +407,7 @@ library CyberCertPrinterStorage {
     /// and safe to re-run — already-tracked tokens are skipped. Call in batches over [0, totalSupply()).
     function backfillLegalOwnerEnumeration(uint256 startIndex, uint256 count) external {
         CyberCertStorage storage s = cyberCertStorage();
-        ICyberCertPrinter self = ICyberCertPrinter(address(this)); // delegatecalled: address(this) is the printer
+        ILedgerEntryToken self = ILedgerEntryToken(address(this)); // delegatecalled: address(this) is the printer
         uint256 supply = self.totalSupply();
         uint256 end = startIndex + count;
         if (end > supply) end = supply;
@@ -514,7 +514,7 @@ library CyberCertPrinterStorage {
     /// (already-counted tokens are skipped). Call in batches over [0, totalSupply()).
     function backfillLookThroughTally(uint256 startIndex, uint256 count) external {
         CyberCertStorage storage s = cyberCertStorage();
-        ICyberCertPrinter self = ICyberCertPrinter(address(this)); // delegatecalled: address(this) is the printer
+        ILedgerEntryToken self = ILedgerEntryToken(address(this)); // delegatecalled: address(this) is the printer
         uint256 supply = self.totalSupply();
         uint256 end = startIndex + count;
         if (end > supply) end = supply;
@@ -544,10 +544,10 @@ library CyberCertPrinterStorage {
         if (
             ext == address(0) ||
             !ICertificateExtension(ext).supportsExtensionType(FUND_INTEREST_EXTENSION_TYPE)
-        ) revert ICyberCertPrinter.ExtensionTypeNotSupported();
+        ) revert ILedgerEntryToken.ExtensionTypeNotSupported();
         CertificateDetails memory details = getActiveCertificateDetails(tokenId);
         details.extensionData = IFundInterestExtension(ext).withTackedFrom(details.extensionData, ts);
-        if (details.unitsRepresented < s.unitsReserved[tokenId]) revert ICyberCertPrinter.ExceedsAvailableUnits();
+        if (details.unitsRepresented < s.unitsReserved[tokenId]) revert ILedgerEntryToken.ExceedsAvailableUnits();
         s.certificateDetails[tokenId] = details;
     }
 
@@ -576,20 +576,20 @@ library CyberCertPrinterStorage {
     function increaseUnitsReserved(uint256 tokenId, uint256 amount) external {
         CyberCertStorage storage s = cyberCertStorage();
         uint256 newReserved = s.unitsReserved[tokenId] + amount;
-        if (newReserved > s.certificateDetails[tokenId].unitsRepresented) revert ICyberCertPrinter.ExceedsAvailableUnits();
+        if (newReserved > s.certificateDetails[tokenId].unitsRepresented) revert ILedgerEntryToken.ExceedsAvailableUnits();
         s.unitsReserved[tokenId] = newReserved;
-        emit ICyberCertPrinter.UnitsReservedUpdated(tokenId, newReserved);
+        emit ILedgerEntryToken.UnitsReservedUpdated(tokenId, newReserved);
     }
 
     /// @dev Release previously reserved units. Reverts if releasing more than is reserved.
     function decreaseUnitsReserved(uint256 tokenId, uint256 amount) external {
         CyberCertStorage storage s = cyberCertStorage();
         uint256 reserved = s.unitsReserved[tokenId];
-        if (amount > reserved) revert ICyberCertPrinter.ExceedsReservedUnits();
+        if (amount > reserved) revert ILedgerEntryToken.ExceedsReservedUnits();
         uint256 newReserved;
         unchecked { newReserved = reserved - amount; }
         s.unitsReserved[tokenId] = newReserved;
-        emit ICyberCertPrinter.UnitsReservedUpdated(tokenId, newReserved);
+        emit ILedgerEntryToken.UnitsReservedUpdated(tokenId, newReserved);
     }
 
     function getUnitsReserved(uint256 tokenId) internal view returns (uint256) {
@@ -603,7 +603,7 @@ library CyberCertPrinterStorage {
     /// @dev Admin override of issueTimestamp for positions issued off-chain before being recorded on-chain.
     function setIssueTimestamp(uint256 tokenId, uint64 ts) external {
         cyberCertStorage().issueTimestamp[tokenId] = ts;
-        emit ICyberCertPrinter.IssueTimestampSet(tokenId, ts);
+        emit ILedgerEntryToken.IssueTimestampSet(tokenId, ts);
     }
 
     function getAcquisitionTimestamp(uint256 tokenId) internal view returns (uint64) {
@@ -613,7 +613,7 @@ library CyberCertPrinterStorage {
     /// @dev Admin override of acquisitionTimestamp, e.g. to seed a seasoned position migrated on-chain.
     function setAcquisitionTimestamp(uint256 tokenId, uint64 ts) external {
         cyberCertStorage().acquisitionTimestamp[tokenId] = ts;
-        emit ICyberCertPrinter.AcquisitionTimestampSet(tokenId, ts);
+        emit ILedgerEntryToken.AcquisitionTimestampSet(tokenId, ts);
     }
 
     /// @dev Idempotent migration for tokens minted before acquisitionTimestamp became a base field: copies each
@@ -626,7 +626,7 @@ library CyberCertPrinterStorage {
             ext == address(0) ||
             !ICertificateExtension(ext).supportsExtensionType(FUND_INTEREST_EXTENSION_TYPE)
         ) return;
-        ICyberCertPrinter self = ICyberCertPrinter(address(this)); // delegatecalled: address(this) is the printer
+        ILedgerEntryToken self = ILedgerEntryToken(address(this)); // delegatecalled: address(this) is the printer
         uint256 supply = self.totalSupply();
         uint256 end = startIndex + count;
         if (end > supply) end = supply;
@@ -680,7 +680,7 @@ library CyberCertPrinterStorage {
     function removeLegendAt(uint256 tokenId, bool isDefault, uint256 index) external {
         string[] storage arr = _legendArray(tokenId, isDefault);
         uint256 len = arr.length;
-        if (index >= len) revert ICyberCertPrinter.InvalidLegendIndex();
+        if (index >= len) revert ILedgerEntryToken.InvalidLegendIndex();
 
         // Move the last element to the index being removed (if it's not the last element)
         // and then pop the last element
@@ -714,7 +714,7 @@ library CyberCertPrinterStorage {
     function removeRestrictiveLegendAt(uint256 tokenId, bool isDefault, uint256 index) external {
         RestrictiveLegend[] storage arr = _restrictiveLegendArray(tokenId, isDefault);
         uint256 len = arr.length;
-        if (index >= len) revert ICyberCertPrinter.InvalidLegendIndex();
+        if (index >= len) revert ILedgerEntryToken.InvalidLegendIndex();
 
         uint256 lastIndex = len - 1;
         if (index != lastIndex) {

@@ -91,7 +91,7 @@ struct RestrictiveLegend {
     bytes data;
 }
 
-interface ICyberCertPrinter is IERC721 {
+interface ILedgerEntryToken is IERC721 {
     // Shared errors — declared once here so LedgerEntryToken and its storage library (via delegatecall) revert
     // with identical selectors.
     error NotIssuanceManager();

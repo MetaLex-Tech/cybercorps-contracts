@@ -15,13 +15,13 @@ import {CyberCorp} from "../src/CyberCorp.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
+import {ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
 import {ICyberScrip} from "../src/interfaces/ICyberScrip.sol";
 import {IssuerApprovalRecertificationCondition} from "../src/libs/conditions/IssuerApprovalRecertificationCondition.sol";
 import {
     CertificateDetails,
     Endorsement
-} from "../src/storage/CyberCertPrinterStorage.sol";
+} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
@@ -78,7 +78,7 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
 
     struct MultiHolderFixture {
         IssuanceManager issuanceManager;
-        ICyberCertPrinter certPrinter;
+        ILedgerEntryToken certPrinter;
         address scrip;
         uint256 certIdA;
         uint256 certIdB;
@@ -131,7 +131,7 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
 
     function test_PostUpgrade_ConversionLifecycleAndRuntimeUpdates() public {
         IssuanceManager issuanceManager = _setupLegacyUpgradedIssuanceManager();
-        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+        ILedgerEntryToken certPrinter = _deployPrinterAfterUpgrade(
             issuanceManager,
             "Lifecycle Cert",
             "LCERT"
@@ -196,7 +196,7 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
 
     function test_PostUpgrade_ScripifyUsesLegalOwner() public {
         IssuanceManager issuanceManager = _setupLegacyUpgradedIssuanceManager();
-        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+        ILedgerEntryToken certPrinter = _deployPrinterAfterUpgrade(
             issuanceManager,
             "Legal Owner Cert",
             "LOCERT"
@@ -239,7 +239,7 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
 
     function test_PostUpgrade_ConversionGatesAndConditions() public {
         IssuanceManager issuanceManager = _setupLegacyUpgradedIssuanceManager();
-        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+        ILedgerEntryToken certPrinter = _deployPrinterAfterUpgrade(
             issuanceManager,
             "Guard Cert",
             "GCERT"
@@ -295,7 +295,7 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
 
     function test_PostUpgrade_ReformsVoidedPath() public {
         IssuanceManager issuanceManager = _setupLegacyUpgradedIssuanceManager();
-        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+        ILedgerEntryToken certPrinter = _deployPrinterAfterUpgrade(
             issuanceManager,
             "Voided Cert",
             "VCERT"
@@ -343,7 +343,7 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
 
     function test_PostUpgrade_ForceBurnReducesPoolTotals() public {
         IssuanceManager issuanceManager = _setupLegacyUpgradedIssuanceManager();
-        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+        ILedgerEntryToken certPrinter = _deployPrinterAfterUpgrade(
             issuanceManager,
             "Force Burn Cert",
             "FBCERT"
@@ -450,7 +450,7 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
 
     function test_PostUpgrade_RequiresIssuerApprovalCondition() public {
         IssuanceManager issuanceManager = _setupLegacyUpgradedIssuanceManager();
-        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+        ILedgerEntryToken certPrinter = _deployPrinterAfterUpgrade(
             issuanceManager,
             "Approval Cert",
             "APPR"
@@ -623,9 +623,9 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
         IssuanceManager issuanceManager,
         string memory name,
         string memory symbol
-    ) internal returns (ICyberCertPrinter certPrinter) {
+    ) internal returns (ILedgerEntryToken certPrinter) {
         vm.prank(companyOwner);
-        certPrinter = ICyberCertPrinter(
+        certPrinter = ILedgerEntryToken(
             issuanceManager.createCertPrinter(
                 new string[](0),
                 name,
@@ -641,7 +641,7 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
 
     function _deployDefaultScrip(
         IssuanceManager issuanceManager,
-        ICyberCertPrinter certPrinter,
+        ILedgerEntryToken certPrinter,
         uint256 minimum,
         uint256 numerator,
         uint256 denominator
@@ -665,7 +665,7 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
 
     function _deployWhitelistedScrip(
         IssuanceManager issuanceManager,
-        ICyberCertPrinter certPrinter,
+        ILedgerEntryToken certPrinter,
         uint256 minimum,
         uint256 numerator,
         uint256 denominator,
@@ -690,7 +690,7 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
 
     function _deployScripWithScripToCertConditions(
         IssuanceManager issuanceManager,
-        ICyberCertPrinter certPrinter,
+        ILedgerEntryToken certPrinter,
         ICondition[] memory scripToCertConditions,
         uint256 minimum,
         uint256 numerator,
@@ -715,7 +715,7 @@ contract CyberScripUpgradeExistingV4ForkTest is Test {
 
     function _mintCertAfterUpgrade(
         IssuanceManager issuanceManager,
-        ICyberCertPrinter certPrinter,
+        ILedgerEntryToken certPrinter,
         address to,
         uint256 units
     ) internal returns (uint256 tokenId) {

@@ -45,14 +45,14 @@ pragma solidity 0.8.28;
 import "openzeppelin-contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/ICondition.sol";
-import "../interfaces/ICyberCertPrinter.sol";
+import "../interfaces/ILedgerEntryToken.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/ILexChex.sol";
 import "../interfaces/IRoundManagerFactory.sol";
 import "../libs/EIP712Lib.sol";
 import "../libs/RoundLib.sol";
 import "../storage/LexScrowStorage.sol";
-import "../storage/CyberCertPrinterStorage.sol";
+import "../storage/LedgerEntryTokenStorage.sol";
 import "../CyberCorpConstants.sol";
 
 interface ILexChexMinter {
@@ -191,7 +191,7 @@ library RoundManagerStorage {
 
         address[] memory certPrinterAddresses = new address[](certData.length);
         for (uint256 i = 0; i < certData.length; i++) {
-            ICyberCertPrinter certPrinter = ICyberCertPrinter(
+            ILedgerEntryToken certPrinter = ILedgerEntryToken(
                 issuanceManager.createCertPrinter(
                     certData[i].defaultLegend,
                     string.concat(companyName, " ", certData[i].name),
@@ -428,7 +428,7 @@ library RoundManagerStorage {
             );
 
             //add officer signature from round escrowed signature
-            ICyberCertPrinter(round.certPrinter[i]).addIssuerSignature(
+            ILedgerEntryToken(round.certPrinter[i]).addIssuerSignature(
                 certIds[i],
                 round.escrowedSignature
             );
@@ -447,7 +447,7 @@ library RoundManagerStorage {
 
             if (secondEscrowedSignature.length > 0) {
                 for (uint256 i = 0; i < round.certPrinter.length; i++) {
-                    ICyberCertPrinter(round.certPrinter[i]).addIssuerSignature(
+                    ILedgerEntryToken(round.certPrinter[i]).addIssuerSignature(
                         certIds[i],
                         secondEscrowedSignature
                     );
@@ -470,7 +470,7 @@ library RoundManagerStorage {
 
         // Effect: loop through certPrinter and add endorsement to each
         for (uint256 i = 0; i < round.certPrinter.length; i++) {
-            ICyberCertPrinter(round.certPrinter[i]).addEndorsement(
+            ILedgerEntryToken(round.certPrinter[i]).addEndorsement(
                 certIds[i],
                 endorsement
             );

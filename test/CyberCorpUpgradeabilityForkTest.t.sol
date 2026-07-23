@@ -18,7 +18,7 @@ import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
 import {MockERC20} from "./mock/MockERC20.sol";

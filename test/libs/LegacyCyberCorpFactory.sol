@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../../src/CyberCorpConstants.sol";
-import {CertificateDetails} from "../../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "../../src/storage/LedgerEntryTokenStorage.sol";
 import {RoundType} from "../../src/libs/RoundLib.sol";
 
 /// @dev Certificate tuple used by factory and round-manager implementations deployed before series data.

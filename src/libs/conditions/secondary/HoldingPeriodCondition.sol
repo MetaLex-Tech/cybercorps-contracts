@@ -10,7 +10,7 @@ import {
     ICertificateExtension,
     IFundInterestExtension
 } from "../../../storage/extensions/ICertificateExtension.sol";
-import {ICyberCertPrinter} from "../../../interfaces/ICyberCertPrinter.sol";
+import {ILedgerEntryToken} from "../../../interfaces/ILedgerEntryToken.sol";
 import {Offer, OfferSide} from "../../../interfaces/ISecondaryTradeStorage.sol";
 
 /// @title  HoldingPeriodCondition - Rule 144 holding-period verification
@@ -62,7 +62,7 @@ contract HoldingPeriodCondition is SecondaryTradingConditionBase, UUPSUpgradeabl
 
         (,, uint256 sellerTokenId) = _resolveParties(dealManager, offer, agreementId);
 
-        ICyberCertPrinter cert = ICyberCertPrinter(offer.certPrinter);
+        ILedgerEntryToken cert = ILedgerEntryToken(offer.certPrinter);
         // Base acquisitionTimestamp; no record = fail closed.
         uint64 anchor = cert.acquisitionTimestamp(sellerTokenId);
         if (anchor == 0) return false;

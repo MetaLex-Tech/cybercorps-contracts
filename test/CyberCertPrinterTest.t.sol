@@ -5,18 +5,18 @@ import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
-import {CyberCertPrinterStorage} from "../src/storage/CyberCertPrinterStorage.sol";
+import {LedgerEntryTokenStorage} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {IUriBuilder} from "../src/interfaces/IUriBuilder.sol";
 import {
     CertificateDetails,
     Endorsement,
-    ICyberCertPrinter,
+    ILedgerEntryToken,
     OwnerDetails,
     RestrictionType,
     RestrictiveLegend
-} from "../src/interfaces/ICyberCertPrinter.sol";
+} from "../src/interfaces/ILedgerEntryToken.sol";
 import {ICertificateExtension, IFundInterestExtension} from "../src/storage/extensions/ICertificateExtension.sol";
 import {FundInterestData, FUND_INTEREST_EXTENSION_TYPE} from "../src/storage/extensions/FundInterestExtension.sol";
 
@@ -187,7 +187,7 @@ contract CyberCertPrinterEnhanced is LedgerEntryToken {
     /// @dev Clear the legal-owner enumeration for `owner`/`tokenIds`, mimicking certs minted before the
     /// enumeration existed (owners[] stays; count/index/tracked are zeroed).
     function debugClearLegalOwnerEnumeration(address owner, uint256[] calldata tokenIds) external {
-        CyberCertPrinterStorage.CyberCertStorage storage s = CyberCertPrinterStorage.cyberCertStorage();
+        LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];
             delete s.legalOwnedTokens[owner][s.legalOwnedTokensIndex[tokenId]];
@@ -199,13 +199,13 @@ contract CyberCertPrinterEnhanced is LedgerEntryToken {
 
     /// @dev Zero a token's base acquisitionTimestamp, mimicking a cert minted before it became a base field.
     function debugClearAcquisitionTimestamp(uint256 tokenId) external {
-        CyberCertPrinterStorage.cyberCertStorage().acquisitionTimestamp[tokenId] = 0;
+        LedgerEntryTokenStorage.cyberCertStorage().acquisitionTimestamp[tokenId] = 0;
     }
 
     /// @dev Flip endorsementRequired to exercise the bearer (unrestricted) mode; production certs are always
     /// registered (endorsementRequired == true, set at initialize with no setter).
     function debugSetEndorsementRequired(bool required) external {
-        CyberCertPrinterStorage.cyberCertStorage().endorsementRequired = required;
+        LedgerEntryTokenStorage.cyberCertStorage().endorsementRequired = required;
     }
 }
 
@@ -303,13 +303,13 @@ contract CyberCertPrinterTest is Test {
         _mintCert(1, investor, 100, bytes(""));
 
         vm.prank(address(issuanceManager));
-        vm.expectRevert(ICyberCertPrinter.SignatureRequired.selector);
+        vm.expectRevert(ILedgerEntryToken.SignatureRequired.selector);
         printer.addIssuerSignature(1, "");
     }
 
     function test_AddIssuerSignature_RevertsForNonexistentToken() public {
         vm.prank(address(issuanceManager));
-        vm.expectRevert(ICyberCertPrinter.TokenDoesNotExist.selector);
+        vm.expectRevert(ILedgerEntryToken.TokenDoesNotExist.selector);
         printer.addIssuerSignature(999, hex"123456");
     }
 
@@ -343,7 +343,7 @@ contract CyberCertPrinterTest is Test {
 
     function test_SetExtension_RevertsWhenCallerIsNotIssuanceManager() public {
         vm.prank(investor);
-        vm.expectRevert(ICyberCertPrinter.NotIssuanceManager.selector);
+        vm.expectRevert(ILedgerEntryToken.NotIssuanceManager.selector);
         printer.setExtension(1, updatedExtension);
     }
 
@@ -363,7 +363,7 @@ contract CyberCertPrinterTest is Test {
         _mintCert(1, investor, 100, bytes(""));
 
         vm.prank(address(issuanceManager));
-        vm.expectRevert(ICyberCertPrinter.ExceedsAvailableUnits.selector);
+        vm.expectRevert(ILedgerEntryToken.ExceedsAvailableUnits.selector);
         printer.increaseUnitsReserved(1, 101);
     }
 
@@ -374,17 +374,17 @@ contract CyberCertPrinterTest is Test {
         printer.increaseUnitsReserved(1, 40);
 
         vm.prank(address(issuanceManager));
-        vm.expectRevert(ICyberCertPrinter.ExceedsReservedUnits.selector);
+        vm.expectRevert(ILedgerEntryToken.ExceedsReservedUnits.selector);
         printer.decreaseUnitsReserved(1, 41);
     }
 
     function test_UnitsReserved_RevertsForNonexistentTokens() public {
         vm.prank(address(issuanceManager));
-        vm.expectRevert(ICyberCertPrinter.TokenDoesNotExist.selector);
+        vm.expectRevert(ILedgerEntryToken.TokenDoesNotExist.selector);
         printer.increaseUnitsReserved(999, 1);
 
         vm.prank(address(issuanceManager));
-        vm.expectRevert(ICyberCertPrinter.TokenDoesNotExist.selector);
+        vm.expectRevert(ILedgerEntryToken.TokenDoesNotExist.selector);
         printer.decreaseUnitsReserved(999, 1);
     }
 
@@ -401,7 +401,7 @@ contract CyberCertPrinterTest is Test {
         printer.increaseUnitsReserved(1, 1);
 
         vm.prank(investor);
-        vm.expectRevert(ICyberCertPrinter.CertificateReserved.selector);
+        vm.expectRevert(ILedgerEntryToken.CertificateReserved.selector);
         printer.transferFrom(investor, recipient, 1);
 
         // Releasing the reservation (settlement/void) unfreezes the transfer.
@@ -431,7 +431,7 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.legalOwnerOf(1), recipient);
 
         vm.prank(investor);
-        vm.expectRevert(ICyberCertPrinter.TokenNotTransferable.selector);
+        vm.expectRevert(ILedgerEntryToken.TokenNotTransferable.selector);
         printer.transferFrom(investor, recipient, 2);
     }
 
@@ -742,7 +742,7 @@ contract CyberCertPrinterTest is Test {
         CertificateDetails memory d = _details(100, bytes(""));
 
         vm.expectEmit(true, true, true, true, address(printer));
-        emit ICyberCertPrinter.LegalOwnerChanged(1, investor, investor, "", acquiredAt);
+        emit ILedgerEntryToken.LegalOwnerChanged(1, investor, investor, "", acquiredAt);
         vm.prank(address(issuanceManager));
         printer.assignCert(investor, 1, investor, d); // recordAssign resets the name to "" for the same owner
 
@@ -757,7 +757,7 @@ contract CyberCertPrinterTest is Test {
         CertificateDetails memory d = _details(100, bytes(""));
 
         vm.expectEmit(true, true, true, true, address(printer));
-        emit ICyberCertPrinter.LegalOwnerChanged(1, investor, address(0), "", 0);
+        emit ILedgerEntryToken.LegalOwnerChanged(1, investor, address(0), "", 0);
         vm.prank(address(issuanceManager));
         printer.assignCert(investor, 1, address(0), d);
 
@@ -777,7 +777,7 @@ contract CyberCertPrinterTest is Test {
         CertificateDetails memory d = _details(100, bytes(""));
 
         vm.expectEmit(true, true, true, true, address(printer));
-        emit ICyberCertPrinter.LegalOwnerChanged(1, investor, recipient, "", uint64(block.timestamp));
+        emit ILedgerEntryToken.LegalOwnerChanged(1, investor, recipient, "", uint64(block.timestamp));
         vm.prank(address(issuanceManager));
         printer.assignCert(investor, 1, recipient, d);
 
@@ -1006,7 +1006,7 @@ contract CyberCertPrinterTest is Test {
 
         CertificateDetails memory updated = _details(39, bytes(""));
         vm.prank(address(issuanceManager));
-        vm.expectRevert(ICyberCertPrinter.ExceedsAvailableUnits.selector);
+        vm.expectRevert(ILedgerEntryToken.ExceedsAvailableUnits.selector);
         printer.updateCertificateDetails(1, updated);
     }
 
@@ -1047,12 +1047,12 @@ contract CyberCertPrinterTest is Test {
     }
 
     function test_GetIssuerSignatureCount_RevertsForNonexistentToken() public {
-        vm.expectRevert(ICyberCertPrinter.TokenDoesNotExist.selector);
+        vm.expectRevert(ILedgerEntryToken.TokenDoesNotExist.selector);
         printer.getIssuerSignatureCount(999);
     }
 
     function test_GetIssuerSignatureAt_RevertsForNonexistentToken() public {
-        vm.expectRevert(ICyberCertPrinter.TokenDoesNotExist.selector);
+        vm.expectRevert(ILedgerEntryToken.TokenDoesNotExist.selector);
         printer.getIssuerSignatureAt(999, 0);
     }
 
@@ -1334,7 +1334,7 @@ contract CyberCertPrinterTest is Test {
         assertEq(printer.legalOwnerOf(1), investor);
 
         vm.prank(custodian);
-        vm.expectRevert(ICyberCertPrinter.InvalidEndorsement.selector);
+        vm.expectRevert(ILedgerEntryToken.InvalidEndorsement.selector);
         printer.addEndorsement(1, _endorsement(custodian, custodian));
     }
 

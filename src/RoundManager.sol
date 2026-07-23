@@ -52,7 +52,7 @@ import "./storage/RoundManagerStorage.sol";
 import "./storage/RoundManagerFactoryStorage.sol";
 import "./storage/BorgAuthStorage.sol";
 import "./interfaces/ICyberCorp.sol";
-import "./interfaces/ICyberCertPrinter.sol";
+import "./interfaces/ILedgerEntryToken.sol";
 import "./interfaces/IRoundManagerFactory.sol";
 import "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
 import "./interfaces/ILexChex.sol";

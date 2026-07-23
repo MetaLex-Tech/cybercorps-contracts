@@ -48,10 +48,10 @@ import "./interfaces/ICertificateImageBuilder.sol";
 import "./interfaces/ICyberCorp.sol";
 import "./interfaces/IIssuanceManager.sol";
 import {
-    ICyberCertPrinter,
+    ILedgerEntryToken,
     RestrictionType,
     RestrictiveLegend
-} from "./interfaces/ICyberCertPrinter.sol";
+} from "./interfaces/ILedgerEntryToken.sol";
 import {
     ICertificateExtension,
     ICertificateExtensionV3
@@ -655,7 +655,7 @@ struct CertificateDetails {
         string memory json,
         address certificate
     ) private view returns (string memory) {
-        try ICyberCertPrinter(certificate).issuanceManager() returns (
+        try ILedgerEntryToken(certificate).issuanceManager() returns (
             address issuanceManager
         ) {
             try IIssuanceManager(issuanceManager).CORP() returns (address corp) {
@@ -685,7 +685,7 @@ struct CertificateDetails {
         string memory json,
         address certificate
     ) private view returns (string memory) {
-        try ICyberCertPrinter(certificate).getSeriesInfo() returns (
+        try ILedgerEntryToken(certificate).getSeriesInfo() returns (
             address seriesExtension,
             bytes memory seriesData
         ) {

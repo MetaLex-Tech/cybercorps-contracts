@@ -10,8 +10,8 @@ import {
     RestrictiveLegend,
     SecurityClass,
     SecuritySeries
-} from "../src/storage/CyberCertPrinterStorage.sol";
-import {ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
+} from "../src/storage/LedgerEntryTokenStorage.sol";
+import {ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
 import {ICyberScrip} from "../src/interfaces/ICyberScrip.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
@@ -131,7 +131,7 @@ contract IssuanceManagerRecertTokenUriRegressionTest is
         UriBuilderWithUnits uriBuilder = new UriBuilderWithUnits();
         issuanceManager.setUriBuilder(address(uriBuilder));
 
-        ICyberCertPrinter certPrinter = _deployPrinter("Regression Cert", "REG");
+        ILedgerEntryToken certPrinter = _deployPrinter("Regression Cert", "REG");
         uint256 originalCertId = _mintCert(certPrinter, investor, 100);
         address investor2 = otherInvestor;
 
@@ -210,7 +210,7 @@ contract IssuanceManagerRecertTokenUriRegressionTest is
         UriBuilderWithUnits uriBuilder = new UriBuilderWithUnits();
         issuanceManager.setUriBuilder(address(uriBuilder));
 
-        ICyberCertPrinter certPrinter = _deployPrinter("Regression Cert", "REG");
+        ILedgerEntryToken certPrinter = _deployPrinter("Regression Cert", "REG");
         uint256 certId = _mintCert(certPrinter, investor, 100);
 
         issuanceManager.deployCyberScrip(

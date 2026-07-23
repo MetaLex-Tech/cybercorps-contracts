@@ -5,7 +5,7 @@ import "../src/LedgerEntryToken.sol";
 import "../src/CyberScrip.sol";
 import "../src/IssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
-import "../src/interfaces/ICyberCertPrinter.sol";
+import "../src/interfaces/ILedgerEntryToken.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
@@ -76,7 +76,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     // Full sale: the entire seller position is sold, so the seller's Ledger Entry Token is voided and the
     // buyer's new token represents all the units.
     function test_SecondaryTransfer_FullSale_VoidsSellerMintsBuyer() public {
-        ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
+        ILedgerEntryToken cert = _deployPrinterWithSellerCert(UNITS);
 
         // The buyer's new token is the next minted id (seller cert is tokenId 0).
         uint256 expectedBuyerTokenId = 1;
@@ -106,7 +106,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     // Partial sale: only part of the seller position is sold, so the seller's token is decremented in place
     // (not voided) and the buyer's new token represents only the sold units.
     function test_SecondaryTransfer_PartialSale_DecrementsSeller() public {
-        ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
+        ILedgerEntryToken cert = _deployPrinterWithSellerCert(UNITS);
         uint256 soldUnits = 40;
 
         uint256 expectedBuyerTokenId = 1;
@@ -144,7 +144,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     // scripified units back in. Reading effective and writing it straight back would corrupt the stored raw
     // count, double-counting the scripified portion on the next read.
     function test_SecondaryTransfer_ScripifiedSellerToken_DecrementsRawUnits() public {
-        ICyberCertPrinter cert = ICyberCertPrinter(
+        ILedgerEntryToken cert = ILedgerEntryToken(
             issuanceManager.createCertPrinter(
                 new string[](0), "Cert", "CERT", "uri://cert",
                 SecurityClass.CommonStock, SecuritySeries.SeriesA, address(0), bytes("")
@@ -185,7 +185,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     // Administered hosting (HostingMode.ADMINISTERED) custodies the new token with the admin multisig, but the
     // buyer is still the registered legal owner of record (spec §7.4A) — custody and ownership are distinct.
     function test_SecondaryTransfer_AdministeredHosting_MultisigCustodiesBuyerOwns() public {
-        ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
+        ILedgerEntryToken cert = _deployPrinterWithSellerCert(UNITS);
         address adminMultisig = makeAddr("adminMultisig");
 
         issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, UNITS, "Bob", HostingMode.ADMINISTERED, adminMultisig));
@@ -200,7 +200,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     // Fresh-mint-per-lot: a buyer's repeat purchase mints a NEW cert each time (its own acquisitionTimestamp
     // clock) rather than folding into an existing one — the per-lot holding-period model (§7.5).
     function test_SecondaryTransfer_RepeatPurchase_MintsDistinctLots() public {
-        ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
+        ILedgerEntryToken cert = _deployPrinterWithSellerCert(UNITS);
 
         // First purchase: 40 units mints the buyer a fresh cert (id 1).
         issuanceManager.secondaryTransfer(_dealMetadata(address(cert), 0, 40, "Bob", HostingMode.DIRECT, address(0)));
@@ -221,7 +221,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     // Fresh-mint-per-lot: a secondary purchase never folds into a cert the buyer already holds from PRIMARY
     // issuance — a distinct lot is minted, and the primary cert (units and cost-basis snapshot) is untouched.
     function test_SecondaryTransfer_DoesNotMergeIntoPrimaryCert() public {
-        ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
+        ILedgerEntryToken cert = _deployPrinterWithSellerCert(UNITS);
 
         // The buyer already holds a primary-issued cert (id 1) with its own cost basis.
         CertificateDetails memory primaryDetails = CertificateDetails({
@@ -255,7 +255,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     // means each fill mints its own cert to the multisig, owned of record by the respective buyer — the legal
     // owner of record (not the shared custodian) is what distinguishes lots.
     function test_SecondaryTransfer_AdministeredHosting_MintsLotPerFillByLegalOwner() public {
-        ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
+        ILedgerEntryToken cert = _deployPrinterWithSellerCert(UNITS);
         address adminMultisig = makeAddr("adminMultisig");
         (address buyer2,) = makeAddrAndKey("buyer2");
 
@@ -281,12 +281,12 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     // on-chain (overrides the mint-stamped value); non-admins cannot.
     function test_SetIssueTimestamp_AdminOverridesMintStamp() public {
         vm.warp(200 days);
-        ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
+        ILedgerEntryToken cert = _deployPrinterWithSellerCert(UNITS);
         assertEq(cert.issueTimestamp(0), uint64(block.timestamp), "mint stamps the on-chain issue time");
 
         uint64 historical = uint64(110 days); // truly issued off-chain, earlier than the on-chain record
         vm.expectEmit(true, false, false, true, address(cert));
-        emit ICyberCertPrinter.IssueTimestampSet(0, historical);
+        emit ILedgerEntryToken.IssueTimestampSet(0, historical);
         cert.setIssueTimestamp(0, historical);
         assertEq(cert.issueTimestamp(0), historical, "admin override applied");
 
@@ -301,12 +301,12 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     // non-admins cannot.
     function test_SetAcquisitionTimestamp_AdminOverridesMintStamp() public {
         vm.warp(200 days);
-        ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS);
+        ILedgerEntryToken cert = _deployPrinterWithSellerCert(UNITS);
         assertEq(cert.acquisitionTimestamp(0), uint64(block.timestamp), "mint stamps the acquisition time");
 
         uint64 seasoned = uint64(110 days); // acquired off-chain earlier than the on-chain record
         vm.expectEmit(true, false, false, true, address(cert));
-        emit ICyberCertPrinter.AcquisitionTimestampSet(0, seasoned);
+        emit ILedgerEntryToken.AcquisitionTimestampSet(0, seasoned);
         cert.setAcquisitionTimestamp(0, seasoned);
         assertEq(cert.acquisitionTimestamp(0), seasoned, "admin override applied");
 
@@ -321,7 +321,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     // FundInterestData blob, leaving acquisitionDate and affiliate status intact; non-admins cannot.
     function test_UpdateCertificateTackedFromAcquisitionDate_AdminOverrides() public {
         vm.warp(200 days);
-        ICyberCertPrinter cert = _deployPrinterWithFundInterestCert(UNITS, uint64(111 days), 0, true);
+        ILedgerEntryToken cert = _deployPrinterWithFundInterestCert(UNITS, uint64(111 days), 0, true);
 
         uint64 tacked = uint64(90 days);
         cert.updateCertificateTackedFromAcquisitionDate(0, tacked);
@@ -341,8 +341,8 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     // Guarding a non-FUND_INTEREST cert: the setter reverts before touching extensionData, so it can never
     // misread or clobber another extension's blob (mirrors backfillAcquisitionTimestamp's extension-type gate).
     function test_UpdateCertificateTackedFromAcquisitionDate_RevertsOnNonFundInterestCert() public {
-        ICyberCertPrinter cert = _deployPrinterWithSellerCert(UNITS); // printer has no extension (address(0))
-        vm.expectRevert(ICyberCertPrinter.ExtensionTypeNotSupported.selector);
+        ILedgerEntryToken cert = _deployPrinterWithSellerCert(UNITS); // printer has no extension (address(0))
+        vm.expectRevert(ILedgerEntryToken.ExtensionTypeNotSupported.selector);
         cert.updateCertificateTackedFromAcquisitionDate(0, uint64(90 days));
     }
 
@@ -356,8 +356,8 @@ contract IssuanceManagerSecondaryTransferTest is Test {
         uint64 acquisitionDate,
         uint64 tackedFromAcquisitionDate,
         bool isAffiliateOrControlPerson
-    ) internal returns (ICyberCertPrinter cert) {
-        cert = ICyberCertPrinter(
+    ) internal returns (ILedgerEntryToken cert) {
+        cert = ILedgerEntryToken(
             issuanceManager.createCertPrinter(
                 new string[](0), "Cert", "CERT", "uri://cert",
                 SecurityClass.CommonStock, SecuritySeries.SeriesA, address(new FundInterestExtension()), bytes("")
@@ -380,8 +380,8 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     }
 
     /// @dev Deploys a printer and mints the seller's Ledger Entry Token (id 0, `units` units)
-    function _deployPrinterWithSellerCert(uint256 units) internal returns (ICyberCertPrinter cert) {
-        cert = ICyberCertPrinter(
+    function _deployPrinterWithSellerCert(uint256 units) internal returns (ILedgerEntryToken cert) {
+        cert = ILedgerEntryToken(
             issuanceManager.createCertPrinter(
                 new string[](0),
                 "Cert",
@@ -458,11 +458,11 @@ contract IssuanceManagerSecondaryTransferTest is Test {
 
     /// @dev The buyer's new token carries one mirror endorsement (index 0) back-pointing to the seller and the
     /// settlement agreement, reusing the seller's open-endorsement signature.
-    function _assertMirrorEndorsement(ICyberCertPrinter cert, uint256 buyerTokenId, string memory buyerName)
+    function _assertMirrorEndorsement(ILedgerEntryToken cert, uint256 buyerTokenId, string memory buyerName)
         internal
         view
     {
-        // Concrete type: the ICyberCertPrinter interface declares a stale flat-tuple return; the contract
+        // Concrete type: the ILedgerEntryToken interface declares a stale flat-tuple return; the contract
         // returns the Endorsement struct.
         Endorsement memory mirror = LedgerEntryToken(address(cert)).getEndorsementHistory(buyerTokenId, 0);
         assertEq(mirror.endorser, seller, "mirror endorser is the seller");
@@ -476,7 +476,7 @@ contract IssuanceManagerSecondaryTransferTest is Test {
     /// (no open endorsement is written at acceptance). It sits at index 1 — index 0 is the endorsement the mint
     /// (createCertAndAssign) records. Endorser is the seller of record (spec §3676-3680), endorsee the now-known
     /// buyer.
-    function _assertSellerEndorsement(ICyberCertPrinter cert, uint256 sellerTokenId, string memory buyerName)
+    function _assertSellerEndorsement(ILedgerEntryToken cert, uint256 sellerTokenId, string memory buyerName)
         internal
         view
     {

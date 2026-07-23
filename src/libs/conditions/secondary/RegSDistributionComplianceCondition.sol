@@ -5,7 +5,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
-import {ICyberCertPrinter} from "../../../interfaces/ICyberCertPrinter.sol";
+import {ILedgerEntryToken} from "../../../interfaces/ILedgerEntryToken.sol";
 import {Offer, OfferSide} from "../../../interfaces/ISecondaryTradeStorage.sol";
 
 /// @title  RegSDistributionComplianceCondition - Regulation S distribution compliance period
@@ -72,7 +72,7 @@ contract RegSDistributionComplianceCondition is SecondaryTradingConditionBase, U
         (,, uint256 sellerTokenId) = _resolveParties(dealManager, offer, agreementId);
 
         // Base acquisitionTimestamp; no record = fail closed.
-        uint64 acquisition = ICyberCertPrinter(offer.certPrinter).acquisitionTimestamp(sellerTokenId);
+        uint64 acquisition = ILedgerEntryToken(offer.certPrinter).acquisitionTimestamp(sellerTokenId);
         if (acquisition == 0) return false;
 
         return block.timestamp >= uint256(acquisition) + config.compliancePeriod;

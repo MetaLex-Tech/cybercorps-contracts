@@ -46,7 +46,7 @@ import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import {EIP712Lib} from "../libs/EIP712Lib.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/IIssuanceManager.sol";
-import {ICyberCertPrinter} from "../interfaces/ICyberCertPrinter.sol";
+import {ILedgerEntryToken} from "../interfaces/ILedgerEntryToken.sol";
 import "../interfaces/IDealManagerFactory.sol";
 import "../interfaces/IDealManager.sol";
 import "openzeppelin-contracts/utils/introspection/ERC165Checker.sol";
@@ -237,10 +237,10 @@ library SecondaryTradeStorage {
         _checkConditions(resolvedThreshold, offerId, bytes32(0));
 
         if (params.side == OfferSide.SELL) {
-            if (ICyberCertPrinter(params.certPrinter).legalOwnerOf(params.tokenId) != offeror)
+            if (ILedgerEntryToken(params.certPrinter).legalOwnerOf(params.tokenId) != offeror)
                 revert ISecondaryTradeStorage.NotCertOwner();
             // Reserve units on the seller's cert (the printer authorizes this DealManager as an admin)
-            ICyberCertPrinter(params.certPrinter).increaseUnitsReserved(params.tokenId, params.units);
+            ILedgerEntryToken(params.certPrinter).increaseUnitsReserved(params.tokenId, params.units);
         } else {
             // BUY: pull consideration directly into contract custody
             LexScrowStorage.pullExact(params.paymentToken, offeror, params.consideration);
@@ -288,7 +288,7 @@ library SecondaryTradeStorage {
             // Release only the uncommitted units; in-flight settlement lots are consumed at finalize or released at void
             uint256 freeUnits = offer.units - offer.unitsAccepted;
             if (freeUnits > 0) {
-                ICyberCertPrinter(offer.certPrinter).decreaseUnitsReserved(offer.tokenId, freeUnits);
+                ILedgerEntryToken(offer.certPrinter).decreaseUnitsReserved(offer.tokenId, freeUnits);
             }
         } else {
             // BUY: refund only the uncommitted portion; paymentAccepted tracks what's committed to
@@ -421,17 +421,17 @@ library SecondaryTradeStorage {
             buyer = acceptor;
             endorsementSig = offer.openEndorsementSig;
             // Re-check the seller still owns the cert
-            if (ICyberCertPrinter(certPrinter).legalOwnerOf(tokenId) != offer.offeror)
+            if (ILedgerEntryToken(certPrinter).legalOwnerOf(tokenId) != offer.offeror)
                 revert ISecondaryTradeStorage.SecondaryTradeSellerOwnershipChanged();
         } else {
             certPrinter = offer.certPrinter;
             tokenId = params.sellerTokenId;
             buyer = offer.offeror;
             endorsementSig = params.openEndorsementSig;
-            if (ICyberCertPrinter(certPrinter).legalOwnerOf(tokenId) != acceptor)
+            if (ILedgerEntryToken(certPrinter).legalOwnerOf(tokenId) != acceptor)
                 revert ISecondaryTradeStorage.NotCertOwner();
             // Reserve units on the seller's cert at acceptance (buy-offer flow, routed through IssuanceManager)
-            ICyberCertPrinter(certPrinter).increaseUnitsReserved(tokenId, params.units);
+            ILedgerEntryToken(certPrinter).increaseUnitsReserved(tokenId, params.units);
         }
 
         // Resolve the buyer info per side: buy offers carry it on the offer (the offeror is the buyer),
@@ -561,7 +561,7 @@ library SecondaryTradeStorage {
         (address seller, address buyer) = _settlementParties(offer, secEscrow);
         // Require seller ownership to remain unchanged; if it was a legitimately-moved
         // position it'd still revert here and it could be resolved via the void/expiry path instead of mispaying.
-        if (ICyberCertPrinter(offer.certPrinter).legalOwnerOf(secEscrow.tokenId) != seller)
+        if (ILedgerEntryToken(offer.certPrinter).legalOwnerOf(secEscrow.tokenId) != seller)
             revert ISecondaryTradeStorage.SecondaryTradeSellerOwnershipChanged();
         // Fee math (mirrors DealManager.computeFee / getPlatformPayable) computed directly from the factory
         address upgradeFactory = DealManagerStorage.getUpgradeFactory();
@@ -592,7 +592,7 @@ library SecondaryTradeStorage {
         }
 
         // Ready to transfer units, release this lot's reservation first
-        ICyberCertPrinter(offer.certPrinter).decreaseUnitsReserved(secEscrow.tokenId, secEscrow.units);
+        ILedgerEntryToken(offer.certPrinter).decreaseUnitsReserved(secEscrow.tokenId, secEscrow.units);
 
         // Execute ownership change: void/decrement seller cert + mint buyer cert.
         DealManagerStorage.getIssuanceManager().secondaryTransfer(
@@ -883,7 +883,7 @@ library SecondaryTradeStorage {
         // (the lot can never be re-accepted); otherwise the lot returns to the offer's free pool
         // and stays reserved.
         if (offer.side == OfferSide.BUY || offer.status == OfferStatus.CANCELLED) {
-            ICyberCertPrinter(offer.certPrinter).decreaseUnitsReserved(secEscrow.tokenId, secEscrow.units);
+            ILedgerEntryToken(offer.certPrinter).decreaseUnitsReserved(secEscrow.tokenId, secEscrow.units);
         }
 
         // Restore offer status (keep terminal offers closed)

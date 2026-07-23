@@ -6,7 +6,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
 import "../../../interfaces/ILexChexBadge.sol";
-import {ICyberCertPrinter} from "../../../interfaces/ICyberCertPrinter.sol";
+import {ILedgerEntryToken} from "../../../interfaces/ILedgerEntryToken.sol";
 import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
 
 /// @title  HolderCapCondition - ICA §3(c)(1) / §3(c)(1)(C) / §3(c)(7) holder limits at transfer time
@@ -110,7 +110,7 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
 
         if (cap == 0) return true;
 
-        ICyberCertPrinter printer = ICyberCertPrinter(offer.certPrinter);
+        ILedgerEntryToken printer = ILedgerEntryToken(offer.certPrinter);
 
         // Note threshold conditions are checked BEFORE the transaction happens, so we need to consider the fact
         // that the holder counts we get from `LedgerEntryToken` are BEFORE the buyer bought it

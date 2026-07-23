@@ -67,6 +67,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     error ConditionCheckFailed();
     error NotRefImplementation();
     error InvalidScripRatio();
+    error ScripOutstanding();
     error ScripToCertMinimumNotMet();
     error ScripifyNotWhitelisted();
     error RecertificationApprovalRequired();
@@ -420,7 +421,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         uint256 tokenId,
         CertificateDetails memory _details
     ) external onlyAdmin {
-        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        ILedgerEntryToken certificate = ILedgerEntryToken(certAddress);
         certificate.updateCertificateDetails(tokenId, _details);
     }*/
 

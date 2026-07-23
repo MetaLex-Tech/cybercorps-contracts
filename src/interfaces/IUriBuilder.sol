@@ -47,7 +47,7 @@ import {
     Endorsement,
     OwnerDetails,
     RestrictiveLegend
-} from "./ICyberCertPrinter.sol";
+} from "./ILedgerEntryToken.sol";
 
 interface IUriBuilder {
     function buildCertificateUri(

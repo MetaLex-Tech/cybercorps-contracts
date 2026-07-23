@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import "../interfaces/ICertificateConverter.sol";
-import "../interfaces/ICyberCertPrinter.sol";
+import "../interfaces/ILedgerEntryToken.sol";
 import "../RoundManager.sol";
 
 /// @title SafeCertificateConverter
@@ -19,7 +19,7 @@ contract SafeCertificateConverter is ICertificateConverter {
         uint256 tokenId
     ) external view override returns (ConversionPlan memory plan) {
         // Read source cert details
-       /* ICyberCertPrinter source = ICyberCertPrinter(certPrinter);
+       /* ILedgerEntryToken source = ILedgerEntryToken(certPrinter);
         CertificateDetails memory src = source.getCertificateDetails(tokenId);
 
         // Pull round info from RoundManager via primitive getters
