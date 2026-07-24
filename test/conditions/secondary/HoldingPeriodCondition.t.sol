@@ -2,10 +2,12 @@
 pragma solidity 0.8.28;
 
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
-import {Offer, OfferSide, SecondaryEscrow} from "../../../src/interfaces/ISecondaryTradeStorage.sol";
+import {CertificateDetails, ILedgerEntryToken} from "../../../src/interfaces/ILedgerEntryToken.sol";
+import {LedgerEntryToken} from "../../../src/LedgerEntryToken.sol";
+import {SecurityClass, SecuritySeries} from "../../../src/CyberCorpConstants.sol";
 import {HoldingPeriodCondition} from "../../../src/libs/conditions/secondary/HoldingPeriodCondition.sol";
 import {FundInterestData, FundInterestExtension} from "../../../src/storage/extensions/FundInterestExtension.sol";
-import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
+import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HoldingPeriodCondition — Rule 144 holding-period verification.
@@ -14,6 +16,10 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // required hold (one year for non-reporting issuers). The anchor is the lot's base acquisition
 // timestamp; where Rule 144(d)(3) tacking is asserted (non-zero tackedFrom), the EARLIER date
 // governs. A missing anchor fails closed. A buy offer at posting has no seller yet, so it is verified later.
+//
+// Real integration: a real cert printer configured with a live FundInterestExtension holds the seller's
+// lot; the base acquisition timestamp and the Rule 144(d)(3) tacking anchor are set via the printer's real
+// admin overrides, and the seller's lot is offered through a real postOffer.
 //
 // Scenario × outcome (hold = 365 days)
 // | # | scenario                                          | expect | rationale                          |
@@ -34,13 +40,15 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // |10 | updateHoldingPeriod stranger  | revert (not admin)          |
 // ─────────────────────────────────────────────────────────────────────────────
 
-contract HoldingPeriodConditionTest is SecondaryConditionTestBase {
+contract HoldingPeriodConditionTest is SecondaryConditionIntegrationBase {
     HoldingPeriodCondition internal hold;
+    ILedgerEntryToken internal fundPrinter;
+    uint256 internal fundTokenId;
     uint64 internal constant HOLD = 365 days;
     uint256 internal constant NOW = 500 days;
 
     function setUp() public {
-        _setUpBase();
+        _setUpIntegration();
         vm.warp(NOW);
         hold = HoldingPeriodCondition(
             _proxy(
@@ -48,31 +56,40 @@ contract HoldingPeriodConditionTest is SecondaryConditionTestBase {
                 abi.encodeCall(HoldingPeriodCondition.initialize, (address(auth), HOLD))
             )
         );
-        // The condition reads the tacking anchor through the printer's real extension, not a hardcoded
-        // struct decode, so point the mock printer at a live FundInterestExtension.
+        // A real printer wired to a live FundInterestExtension, holding a seller lot whose base + tacking
+        // anchors we drive through the printer's real admin overrides.
         FundInterestExtension extension = FundInterestExtension(
             _proxy(
                 address(new FundInterestExtension()),
                 abi.encodeCall(FundInterestExtension.initialize, (address(auth)))
             )
         );
-        cert.setExtension(address(extension));
+        fundPrinter = ILedgerEntryToken(
+            im.createCertPrinter(
+                new string[](0), "Fund", "FUND", "ipfs://fund",
+                SecurityClass.CommonStock, SecuritySeries.SeriesA, address(extension), bytes("")
+            )
+        );
+        CertificateDetails memory d = _certDetails(UNITS);
+        FundInterestData memory fid;
+        d.extensionData = abi.encode(fid);
+        fundTokenId = im.createCertAndAssign(address(fundPrinter), seller, d);
     }
 
     function _sellPosting(uint64 anchor, uint64 tackedFrom) internal returns (bool) {
-        cert.setAcquisitionTimestamp(1, anchor);
-        // Only the tacking anchor matters here; every other FundInterestData field stays default
-        FundInterestData memory fid;
-        fid.tackedFromAcquisitionDate = tackedFrom;
-        cert.setExtensionData(1, abi.encode(fid));
-        dm.setOffer(OFFER_ID, _sellOffer());
-        return hold.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, bytes32(0));
+        LedgerEntryToken(address(fundPrinter)).setAcquisitionTimestamp(fundTokenId, anchor);
+        if (tackedFrom != 0) {
+            LedgerEntryToken(address(fundPrinter)).updateCertificateTackedFromAcquisitionDate(fundTokenId, tackedFrom);
+        }
+        bytes32 offerId = _postSellOn(address(fundPrinter), fundTokenId);
+        return hold.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, bytes32(0));
     }
 
     // 1
     function test_NoRecord_FailsClosed() public {
-        dm.setOffer(OFFER_ID, _sellOffer());
-        assertFalse(hold.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, bytes32(0)));
+        LedgerEntryToken(address(fundPrinter)).setAcquisitionTimestamp(fundTokenId, 0);
+        bytes32 offerId = _postSellOn(address(fundPrinter), fundTokenId);
+        assertFalse(hold.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, bytes32(0)));
     }
 
     // 2
@@ -102,11 +119,8 @@ contract HoldingPeriodConditionTest is SecondaryConditionTestBase {
 
     // 7
     function test_BuyPosting_Passes() public {
-        Offer memory o = _sellOffer();
-        o.side = OfferSide.BUY;
-        o.tokenId = 0;
-        dm.setOffer(OFFER_ID, o);
-        assertTrue(hold.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, bytes32(0)));
+        bytes32 offerId = _postBuy();
+        assertTrue(hold.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, bytes32(0)));
     }
 
     // 8

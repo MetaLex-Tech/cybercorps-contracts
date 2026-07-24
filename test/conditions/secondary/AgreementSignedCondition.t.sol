@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
 import {AgreementSignedCondition} from "../../../src/libs/conditions/secondary/AgreementSignedCondition.sol";
-import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
+import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AgreementSignedCondition — every party's signature recorded on the trade agreement.
@@ -11,6 +11,10 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // Legal/economic intent: a defensive invariant that the settlement agreement is fully executed before
 // it clears. Trivially true at acceptance (acceptOffer creates it fully signed) but guards any flow
 // that composes conditions independently. Silent at posting — no settlement agreement exists yet.
+//
+// Real integration: the "all signed" case is a real posted+accepted settlement (fully executed by the
+// registry during acceptOffer); the "not all signed" case is a real agreement created directly on the
+// registry and left unsigned.
 //
 // Scenario × outcome
 // | # | context   | all parties signed | expect | rationale                     |
@@ -27,11 +31,11 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // | 6 | updateRegistry by stranger  | revert (not admin)     |
 // ─────────────────────────────────────────────────────────────────────────────
 
-contract AgreementSignedConditionTest is SecondaryConditionTestBase {
+contract AgreementSignedConditionTest is SecondaryConditionIntegrationBase {
     AgreementSignedCondition internal signed;
 
     function setUp() public {
-        _setUpBase();
+        _setUpIntegration();
         signed = AgreementSignedCondition(
             _proxy(
                 address(new AgreementSignedCondition()),
@@ -41,7 +45,21 @@ contract AgreementSignedConditionTest is SecondaryConditionTestBase {
     }
 
     function _check(bytes32 agreementId) internal view returns (bool) {
-        return signed.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, agreementId);
+        return signed.checkCondition(IDealManager(address(dm)), bytes4(0), bytes32("offer"), agreementId);
+    }
+
+    /// @dev Creates a real agreement on the registry with two parties and leaves it unsigned.
+    function _unsignedAgreement() internal returns (bytes32) {
+        address[] memory parties = new address[](2);
+        parties[0] = seller;
+        parties[1] = buyer;
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+        return registry.createContract(
+            TEMPLATE_ID, uint256(keccak256("unsigned")), new string[](0), parties, partyValues,
+            bytes32(0), address(dm), block.timestamp + 1 days
+        );
     }
 
     // 1
@@ -51,13 +69,13 @@ contract AgreementSignedConditionTest is SecondaryConditionTestBase {
 
     // 2
     function test_Accepted_AllSigned_Passes() public {
-        registry.setAllPartiesSigned(AGREEMENT_ID, true);
-        assertTrue(_check(AGREEMENT_ID));
+        (, bytes32 settlementId) = _postAndAcceptSell();
+        assertTrue(_check(settlementId));
     }
 
     // 3
-    function test_Accepted_NotAllSigned_Fails() public view {
-        assertFalse(_check(AGREEMENT_ID));
+    function test_Accepted_NotAllSigned_Fails() public {
+        assertFalse(_check(_unsignedAgreement()));
     }
 
     // 4

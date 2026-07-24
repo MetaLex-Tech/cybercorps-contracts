@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import {CategoryKind} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
+import {ATTR_INVESTOR_JURISDICTION, CategoryKind, Credential}
+    from "../../../src/creds/storage/lexchexBadgeStorage.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
-import {Offer, SecondaryEscrow} from "../../../src/interfaces/ISecondaryTradeStorage.sol";
 import {CFIUSCondition} from "../../../src/libs/conditions/secondary/CFIUSCondition.sol";
-import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
+import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CFIUSCondition — FIRRMA gating for CFIUS-sensitive SPVs.
@@ -14,6 +14,9 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // investment-fund exception), block transfers to non-U.S. persons — or U.S. persons from a blocked-
 // affiliation jurisdiction — until the GP records a manual CFIUS clearance. Dormant (always passes)
 // when the SPV is not TID-sensitive.
+//
+// Real integration: the buyer's jurisdiction and NON_US_PERSON status are real badge credentials; the buyer
+// is resolved from a real posted+accepted sell offer (the settlement is created once in setUp).
 //
 // Scenario × outcome (deployed tidUsBusiness = true)
 // | # | scenario                                        | expect | rationale                        |
@@ -34,14 +37,20 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // |10 | initialize zero badge         | revert InvalidBadge |
 // ─────────────────────────────────────────────────────────────────────────────
 
-contract CFIUSConditionTest is SecondaryConditionTestBase {
+contract CFIUSConditionTest is SecondaryConditionIntegrationBase {
     CFIUSCondition internal cfius;
+    bytes32 internal constant CAT_KYC = keccak256("cat.kyc");
+    bytes32 internal constant CAT_NONUS = keccak256("cat.nonus");
+    bytes32 internal offerId;
+    bytes32 internal settlementId;
 
     function setUp() public {
-        _setUpBase();
+        _setUpIntegration();
+        _createCategory(CAT_KYC, CategoryKind.KYC_AML, address(0), ATTR_INVESTOR_JURISDICTION);
+        _createCategory(CAT_NONUS, CategoryKind.NON_US_PERSON, address(0), 0);
         cfius = _deploy(true, new string[](0));
-        badge.setInvestorJurisdiction(buyer, "US");
-        _postSellAndAccept(_sellOffer(), _sellEscrow());
+        _setJurisdiction("US");
+        (offerId, settlementId) = _postAndAcceptSell();
     }
 
     function _deploy(bool tid, string[] memory blocked) internal returns (CFIUSCondition c) {
@@ -53,20 +62,35 @@ contract CFIUSConditionTest is SecondaryConditionTestBase {
         );
     }
 
+    function _setJurisdiction(string memory j) internal {
+        Credential memory c;
+        c.investorName = "Inv";
+        c.investorType = "Individual";
+        c.investorJurisdiction = j;
+        _mintCred(buyer, CAT_KYC, c);
+    }
+
+    function _markNonUsPerson() internal {
+        Credential memory c;
+        c.investorName = "Inv";
+        c.investorType = "Individual";
+        _mintCred(buyer, CAT_NONUS, c);
+    }
+
     function _check() internal view returns (bool) {
-        return cfius.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, AGREEMENT_ID);
+        return cfius.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId);
     }
 
     // 1
     function test_Dormant_Passes() public {
         cfius.setTidUsBusiness(false);
-        badge.setInvestorJurisdiction(buyer, "KY");
+        _setJurisdiction("KY");
         assertTrue(_check());
     }
 
     // 2
     function test_Posting_NoBuyer_Passes() public view {
-        assertTrue(cfius.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, bytes32(0)));
+        assertTrue(cfius.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, bytes32(0)));
     }
 
     // 3
@@ -76,19 +100,19 @@ contract CFIUSConditionTest is SecondaryConditionTestBase {
 
     // 4
     function test_NonUsPersonBadge_Fails() public {
-        badge.setValidKind(buyer, CategoryKind.NON_US_PERSON, "", true);
+        _markNonUsPerson();
         assertFalse(_check());
     }
 
     // 5
     function test_NonUsJurisdiction_Fails() public {
-        badge.setInvestorJurisdiction(buyer, "KY");
+        _setJurisdiction("KY");
         assertFalse(_check());
     }
 
     // 6
     function test_NonUsPerson_WithClearance_Passes() public {
-        badge.setValidKind(buyer, CategoryKind.NON_US_PERSON, "", true);
+        _markNonUsPerson();
         cfius.setCfiusClearance(buyer, true);
         assertTrue(_check());
     }
@@ -98,7 +122,7 @@ contract CFIUSConditionTest is SecondaryConditionTestBase {
         string[] memory blocked = new string[](1);
         blocked[0] = "United States";
         cfius = _deploy(true, blocked);
-        badge.setInvestorJurisdiction(buyer, "United States");
+        _setJurisdiction("United States");
         assertFalse(_check());
     }
 

@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
 import {GPLPApprovalCondition} from "../../../src/libs/conditions/secondary/GPLPApprovalCondition.sol";
-import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
+import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GPLPApprovalCondition — per-deal GP/LP manual approval gate.
@@ -12,6 +12,10 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // (spousal, co-investor), the deal cannot clear until the DealManager's designated approver signs off
 // on the specific deal — the offerId (pre-approving every settlement) or a specific
 // settlementAgreementId. Silent at posting; withdrawal bites at finalize (conditions re-run there).
+//
+// Real integration: approvals are keyed by the real DealManager and gated on its BorgAuth (setApprover =
+// owner, setDealApproval = the approver). The condition never reads the offer/escrow, so a real posted
+// offer + accepted settlement supply the offerId/settlementId keys.
 //
 // Scenario × outcome
 // | # | context   | approval present            | expect | rationale                     |
@@ -31,22 +35,25 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // | 9 | setDealApproval zero dealId      | revert InvalidDealId      |
 // ─────────────────────────────────────────────────────────────────────────────
 
-contract GPLPApprovalConditionTest is SecondaryConditionTestBase {
+contract GPLPApprovalConditionTest is SecondaryConditionIntegrationBase {
     GPLPApprovalCondition internal gplp;
     address internal approver = makeAddr("approver");
+    bytes32 internal offerId;
+    bytes32 internal settlementId;
 
     function setUp() public {
-        _setUpBase();
+        _setUpIntegration();
         gplp = GPLPApprovalCondition(
             _proxy(
                 address(new GPLPApprovalCondition()), abi.encodeCall(GPLPApprovalCondition.initialize, (address(auth)))
             )
         );
         gplp.setApprover(address(dm), approver);
+        (offerId, settlementId) = _postAndAcceptSell();
     }
 
     function _check(bytes32 agreementId) internal view returns (bool) {
-        return gplp.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, agreementId);
+        return gplp.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, agreementId);
     }
 
     function _approve(bytes32 dealId, bool approved) internal {
@@ -61,27 +68,27 @@ contract GPLPApprovalConditionTest is SecondaryConditionTestBase {
 
     // 2
     function test_Accepted_NoApproval_Fails() public view {
-        assertFalse(_check(AGREEMENT_ID));
+        assertFalse(_check(settlementId));
     }
 
     // 3
     function test_Accepted_ApprovedOnOffer_Passes() public {
-        _approve(OFFER_ID, true);
-        assertTrue(_check(AGREEMENT_ID));
+        _approve(offerId, true);
+        assertTrue(_check(settlementId));
     }
 
     // 4
     function test_Accepted_ApprovedOnSettlement_Passes() public {
-        _approve(AGREEMENT_ID, true);
-        assertTrue(_check(AGREEMENT_ID));
+        _approve(settlementId, true);
+        assertTrue(_check(settlementId));
     }
 
     // 5
     function test_Accepted_ApprovalWithdrawn_Fails() public {
-        _approve(OFFER_ID, true);
-        assertTrue(_check(AGREEMENT_ID));
-        _approve(OFFER_ID, false);
-        assertFalse(_check(AGREEMENT_ID));
+        _approve(offerId, true);
+        assertTrue(_check(settlementId));
+        _approve(offerId, false);
+        assertFalse(_check(settlementId));
     }
 
     // 6
@@ -101,7 +108,7 @@ contract GPLPApprovalConditionTest is SecondaryConditionTestBase {
     function test_SetDealApproval_ByNonApprover_Reverts() public {
         vm.prank(stranger);
         vm.expectRevert(GPLPApprovalCondition.NotApprover.selector);
-        gplp.setDealApproval(address(dm), OFFER_ID, true);
+        gplp.setDealApproval(address(dm), offerId, true);
     }
 
     // 9

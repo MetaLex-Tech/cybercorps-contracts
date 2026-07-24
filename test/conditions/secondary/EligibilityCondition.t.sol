@@ -2,9 +2,8 @@
 pragma solidity 0.8.28;
 
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
-import {Offer, OfferSide} from "../../../src/interfaces/ISecondaryTradeStorage.sol";
 import {EligibilityCondition} from "../../../src/libs/conditions/secondary/EligibilityCondition.sol";
-import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
+import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EligibilityCondition — both parties must be admin-cleared to trade.
@@ -12,6 +11,9 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // Catch-all gate backing offchain eligibility review (KYC/AML, tax forms, ERISA, …). The admin
 // toggles a per-account clearance flag; an uncleared party cannot clear a secondary trade. Buyer
 // is unknown at posting, so buyer-facing checks short-circuit until a settlement exists.
+//
+// Real integration: parties are resolved from real posted/accepted offers — a sell offer (seller =
+// offeror, buyer = escrow counterparty) and a buy offer (offeror is the buyer).
 //
 // Scenario × outcome
 // | # | context       | seller cleared | buyer cleared | expect | rationale                     |
@@ -30,11 +32,11 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // | 8 | setClearance by stranger    | revert (not admin)     |
 // ─────────────────────────────────────────────────────────────────────────────
 
-contract EligibilityConditionTest is SecondaryConditionTestBase {
+contract EligibilityConditionTest is SecondaryConditionIntegrationBase {
     EligibilityCondition internal eligibility;
 
     function setUp() public {
-        _setUpBase();
+        _setUpIntegration();
         eligibility = EligibilityCondition(
             _proxy(address(new EligibilityCondition()), abi.encodeCall(EligibilityCondition.initialize, (address(auth))))
         );
@@ -44,56 +46,49 @@ contract EligibilityConditionTest is SecondaryConditionTestBase {
         eligibility.setClearance(who, v);
     }
 
-    function _check(bytes32 agreementId) internal view returns (bool) {
-        return eligibility.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, agreementId);
+    function _check(bytes32 offerId, bytes32 agreementId) internal view returns (bool) {
+        return eligibility.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, agreementId);
     }
 
     // 1
     function test_SellPosting_SellerCleared_Passes() public {
         _clear(seller, true);
-        dm.setOffer(OFFER_ID, _sellOffer());
-        assertTrue(_check(bytes32(0)));
+        assertTrue(_check(_postSell(), bytes32(0)));
     }
 
     // 2
     function test_SellPosting_SellerNotCleared_Fails() public {
-        dm.setOffer(OFFER_ID, _sellOffer());
-        assertFalse(_check(bytes32(0)));
+        assertFalse(_check(_postSell(), bytes32(0)));
     }
 
     // 3
     function test_SellAccepted_BothCleared_Passes() public {
         _clear(seller, true);
         _clear(buyer, true);
-        _postSellAndAccept(_sellOffer(), _sellEscrow());
-        assertTrue(_check(AGREEMENT_ID));
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertTrue(_check(offerId, settlementId));
     }
 
     // 4
     function test_SellAccepted_BuyerNotCleared_Fails() public {
         _clear(seller, true);
-        _postSellAndAccept(_sellOffer(), _sellEscrow());
-        assertFalse(_check(AGREEMENT_ID));
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_check(offerId, settlementId));
     }
 
     // 5
     function test_SellAccepted_SellerClearanceRevoked_Fails() public {
         _clear(buyer, true);
-        _postSellAndAccept(_sellOffer(), _sellEscrow());
-        assertFalse(_check(AGREEMENT_ID));
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_check(offerId, settlementId));
     }
 
     // 6
     function test_BuyPosting_BuyerGate() public {
-        Offer memory o = _sellOffer();
-        o.side = OfferSide.BUY;
-        o.offeror = buyer;
-        o.tokenId = 0;
-        dm.setOffer(OFFER_ID, o);
-
-        assertFalse(_check(bytes32(0)));
+        bytes32 offerId = _postBuy();
+        assertFalse(_check(offerId, bytes32(0)));
         _clear(buyer, true);
-        assertTrue(_check(bytes32(0)));
+        assertTrue(_check(offerId, bytes32(0)));
     }
 
     // 7

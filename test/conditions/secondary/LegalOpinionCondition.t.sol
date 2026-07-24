@@ -2,9 +2,8 @@
 pragma solidity 0.8.28;
 
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
-import {Offer, SecondaryEscrow} from "../../../src/interfaces/ISecondaryTradeStorage.sol";
 import {LegalOpinionCondition} from "../../../src/libs/conditions/secondary/LegalOpinionCondition.sol";
-import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
+import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LegalOpinionCondition — §4(a)(1½) GP/issuer-counsel assurance gate.
@@ -14,6 +13,9 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // opinion). Assurance is per-deal — keyed by the offerId (pre-approving every settlement) or a
 // specific settlementAgreementId — and is silent at posting. Revoking sign-off bites at finalize
 // because threshold conditions re-run there.
+//
+// Real integration: the mechanism is keyed by the SPV (offer.spvAddress = corp); sign-offs/opinions are
+// keyed by the DealManager. offerId/settlementId come from a real posted+accepted sell offer.
 //
 // Scenario × outcome
 // | # | mechanism | context  | assurance present            | expect | rationale                     |
@@ -38,21 +40,23 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // |14 | setMechanism by non-SPV-admin     | revert (not admin)     |
 // ─────────────────────────────────────────────────────────────────────────────
 
-contract LegalOpinionConditionTest is SecondaryConditionTestBase {
+contract LegalOpinionConditionTest is SecondaryConditionIntegrationBase {
     LegalOpinionCondition internal legal;
+    bytes32 internal offerId;
+    bytes32 internal settlementId;
 
     function setUp() public {
-        _setUpBase();
+        _setUpIntegration();
         legal = LegalOpinionCondition(
             _proxy(
                 address(new LegalOpinionCondition()), abi.encodeCall(LegalOpinionCondition.initialize, (address(auth)))
             )
         );
-        _postSellAndAccept(_sellOffer(), _sellEscrow());
+        (offerId, settlementId) = _postAndAcceptSell();
     }
 
     function _check(bytes32 agreementId) internal view returns (bool) {
-        return legal.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, agreementId);
+        return legal.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, agreementId);
     }
 
     // 1
@@ -62,60 +66,60 @@ contract LegalOpinionConditionTest is SecondaryConditionTestBase {
 
     // 2
     function test_Accepted_NoAssurance_Fails() public view {
-        assertFalse(_check(AGREEMENT_ID));
+        assertFalse(_check(settlementId));
     }
 
     // 3
     function test_Either_SignOffOnOffer_Passes() public {
-        legal.recordGPSignOff(address(dm), OFFER_ID);
-        assertTrue(_check(AGREEMENT_ID));
+        legal.recordGPSignOff(address(dm), offerId);
+        assertTrue(_check(settlementId));
     }
 
     // 4
     function test_Either_SignOffOnSettlement_Passes() public {
-        legal.recordGPSignOff(address(dm), AGREEMENT_ID);
-        assertTrue(_check(AGREEMENT_ID));
+        legal.recordGPSignOff(address(dm), settlementId);
+        assertTrue(_check(settlementId));
     }
 
     // 5
     function test_Either_FormalOpinion_Passes() public {
-        legal.submitOpinion(address(dm), OFFER_ID, keccak256("opinion"), "ipfs://opinion");
-        assertTrue(_check(AGREEMENT_ID));
+        legal.submitOpinion(address(dm), offerId, keccak256("opinion"), "ipfs://opinion");
+        assertTrue(_check(settlementId));
     }
 
     // 6
     function test_GpSignoffMechanism_OpinionOnly_Fails() public {
-        legal.setMechanism(address(dm), LegalOpinionCondition.OpinionMechanism.GP_SIGNOFF);
-        legal.submitOpinion(address(dm), OFFER_ID, keccak256("opinion"), "ipfs://opinion");
-        assertFalse(_check(AGREEMENT_ID));
+        legal.setMechanism(address(corp), LegalOpinionCondition.OpinionMechanism.GP_SIGNOFF);
+        legal.submitOpinion(address(dm), offerId, keccak256("opinion"), "ipfs://opinion");
+        assertFalse(_check(settlementId));
     }
 
     // 7
     function test_GpSignoffMechanism_SignOff_Passes() public {
-        legal.setMechanism(address(dm), LegalOpinionCondition.OpinionMechanism.GP_SIGNOFF);
-        legal.recordGPSignOff(address(dm), OFFER_ID);
-        assertTrue(_check(AGREEMENT_ID));
+        legal.setMechanism(address(corp), LegalOpinionCondition.OpinionMechanism.GP_SIGNOFF);
+        legal.recordGPSignOff(address(dm), offerId);
+        assertTrue(_check(settlementId));
     }
 
     // 8
     function test_FormalMechanism_SignOffOnly_Fails() public {
-        legal.setMechanism(address(dm), LegalOpinionCondition.OpinionMechanism.FORMAL_OPINION);
-        legal.recordGPSignOff(address(dm), OFFER_ID);
-        assertFalse(_check(AGREEMENT_ID));
+        legal.setMechanism(address(corp), LegalOpinionCondition.OpinionMechanism.FORMAL_OPINION);
+        legal.recordGPSignOff(address(dm), offerId);
+        assertFalse(_check(settlementId));
     }
 
     // 9
     function test_SignOffRevoked_Fails() public {
-        legal.recordGPSignOff(address(dm), OFFER_ID);
-        assertTrue(_check(AGREEMENT_ID));
-        legal.revokeGPSignOff(address(dm), OFFER_ID);
-        assertFalse(_check(AGREEMENT_ID));
+        legal.recordGPSignOff(address(dm), offerId);
+        assertTrue(_check(settlementId));
+        legal.revokeGPSignOff(address(dm), offerId);
+        assertFalse(_check(settlementId));
     }
 
     // 10
     function test_RecordSignOff_ZeroDealManager_Reverts() public {
         vm.expectRevert(LegalOpinionCondition.InvalidDealManager.selector);
-        legal.recordGPSignOff(address(0), OFFER_ID);
+        legal.recordGPSignOff(address(0), offerId);
     }
 
     // 11
@@ -128,19 +132,19 @@ contract LegalOpinionConditionTest is SecondaryConditionTestBase {
     function test_RecordSignOff_ByNonAdmin_Reverts() public {
         vm.prank(stranger);
         vm.expectRevert();
-        legal.recordGPSignOff(address(dm), OFFER_ID);
+        legal.recordGPSignOff(address(dm), offerId);
     }
 
     // 13
     function test_SubmitOpinion_ZeroHash_Reverts() public {
         vm.expectRevert(LegalOpinionCondition.InvalidOpinionHash.selector);
-        legal.submitOpinion(address(dm), OFFER_ID, bytes32(0), "ipfs://opinion");
+        legal.submitOpinion(address(dm), offerId, bytes32(0), "ipfs://opinion");
     }
 
     // 14
     function test_SetMechanism_ByNonSpvAdmin_Reverts() public {
         vm.prank(stranger);
         vm.expectRevert();
-        legal.setMechanism(address(dm), LegalOpinionCondition.OpinionMechanism.GP_SIGNOFF);
+        legal.setMechanism(address(corp), LegalOpinionCondition.OpinionMechanism.GP_SIGNOFF);
     }
 }

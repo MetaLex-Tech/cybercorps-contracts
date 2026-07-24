@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
+import {CategoryKind, Credential} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
-import {Offer, OfferSide, SecondaryEscrow} from "../../../src/interfaces/ISecondaryTradeStorage.sol";
 import {LegionSoulboundCondition} from "../../../src/libs/conditions/secondary/LegionSoulboundCondition.sol";
-import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
+import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LegionSoulboundCondition — issuer-specific credential category/tier gate.
@@ -12,6 +12,9 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // Legal/economic intent: enforce issuer-specific gating not captured by generic credentials —
 // syndicate-circle restrictions, non-accredited-tier requirements. Configured with a required
 // category and whether it applies to the buyer only, or buyer and seller.
+//
+// Real integration: circle membership is a real badge credential in the required category; parties are
+// resolved from a real posted/accepted sell offer.
 //
 // Scenario × outcome
 // | # | applyToSeller | context       | buyer cred | seller cred | expect | rationale                     |
@@ -31,12 +34,13 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // | 9 | updateConfig by stranger        | revert (not admin)    |
 // ─────────────────────────────────────────────────────────────────────────────
 
-contract LegionSoulboundConditionTest is SecondaryConditionTestBase {
+contract LegionSoulboundConditionTest is SecondaryConditionIntegrationBase {
     LegionSoulboundCondition internal legion;
     bytes32 internal constant CAT = keccak256("cat.legion");
 
     function setUp() public {
-        _setUpBase();
+        _setUpIntegration();
+        _createCategory(CAT, CategoryKind.SYNDICATE, address(0), 0);
         legion = _deploy(false);
     }
 
@@ -49,52 +53,58 @@ contract LegionSoulboundConditionTest is SecondaryConditionTestBase {
         );
     }
 
-    function _check(LegionSoulboundCondition c, bytes32 agreementId) internal view returns (bool) {
-        return c.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, agreementId);
+    function _grant(address who) internal {
+        Credential memory c;
+        c.investorName = "Inv";
+        c.investorType = "Individual";
+        c.investorJurisdiction = "US";
+        _mintCred(who, CAT, c);
+    }
+
+    function _check(LegionSoulboundCondition c, bytes32 offerId, bytes32 agreementId) internal view returns (bool) {
+        return c.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, agreementId);
     }
 
     // 1
     function test_BuyerOnly_Posting_SellerUngated_Passes() public {
-        dm.setOffer(OFFER_ID, _sellOffer());
-        assertTrue(_check(legion, bytes32(0)));
+        assertTrue(_check(legion, _postSell(), bytes32(0)));
     }
 
     // 2
     function test_BuyerOnly_Accepted_BuyerInCircle_Passes() public {
-        badge.setValidCredential(buyer, CAT, true);
-        _postSellAndAccept(_sellOffer(), _sellEscrow());
-        assertTrue(_check(legion, AGREEMENT_ID));
+        _grant(buyer);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertTrue(_check(legion, offerId, settlementId));
     }
 
     // 3
     function test_BuyerOnly_Accepted_BuyerNotInCircle_Fails() public {
-        badge.setValidCredential(seller, CAT, true);
-        _postSellAndAccept(_sellOffer(), _sellEscrow());
-        assertFalse(_check(legion, AGREEMENT_ID));
+        _grant(seller);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_check(legion, offerId, settlementId));
     }
 
     // 4
     function test_ApplyToSeller_SellerMissing_Fails() public {
         LegionSoulboundCondition c = _deploy(true);
-        badge.setValidCredential(buyer, CAT, true);
-        _postSellAndAccept(_sellOffer(), _sellEscrow());
-        assertFalse(_check(c, AGREEMENT_ID));
+        _grant(buyer);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_check(c, offerId, settlementId));
     }
 
     // 5
     function test_ApplyToSeller_BothInCircle_Passes() public {
         LegionSoulboundCondition c = _deploy(true);
-        badge.setValidCredential(buyer, CAT, true);
-        badge.setValidCredential(seller, CAT, true);
-        _postSellAndAccept(_sellOffer(), _sellEscrow());
-        assertTrue(_check(c, AGREEMENT_ID));
+        _grant(buyer);
+        _grant(seller);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertTrue(_check(c, offerId, settlementId));
     }
 
     // 6
     function test_ApplyToSeller_Posting_SellerMissing_Fails() public {
         LegionSoulboundCondition c = _deploy(true);
-        dm.setOffer(OFFER_ID, _sellOffer());
-        assertFalse(_check(c, bytes32(0)));
+        assertFalse(_check(c, _postSell(), bytes32(0)));
     }
 
     // 7

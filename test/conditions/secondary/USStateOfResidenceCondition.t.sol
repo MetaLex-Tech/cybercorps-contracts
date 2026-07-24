@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
+import {ATTR_INVESTOR_JURISDICTION, ATTR_US_STATE, CategoryKind, Credential}
+    from "../../../src/creds/storage/lexchexBadgeStorage.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
-import {Offer, SecondaryEscrow} from "../../../src/interfaces/ISecondaryTradeStorage.sol";
 import {USStateOfResidenceCondition} from "../../../src/libs/conditions/secondary/USStateOfResidenceCondition.sol";
-import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
+import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // USStateOfResidenceCondition — blue-sky state gating for U.S. acceptors (§6.9, Addendum D).
@@ -13,6 +14,9 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // states list; New York is blocked by default until the SPV registers under the Martin Act. Non-U.S.
 // acceptors carry no usState and are silent; U.S. acceptors in an unlisted state pass. Setters are
 // gated on the SPV's own BorgAuth admin (the GP), not the condition's global admin.
+//
+// Real integration: the acceptor's usState is a real badge credential; the buyer is resolved from a real
+// posted+accepted sell offer, whose spvAddress is the CyberCorp — so the per-SPV setters target `corp`.
 //
 // Scenario × outcome
 // | # | scenario                                        | expect | rationale                          |
@@ -34,11 +38,13 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // |11 | initialize zero badge               | revert InvalidBadge|
 // ─────────────────────────────────────────────────────────────────────────────
 
-contract USStateOfResidenceConditionTest is SecondaryConditionTestBase {
+contract USStateOfResidenceConditionTest is SecondaryConditionIntegrationBase {
     USStateOfResidenceCondition internal usState;
+    bytes32 internal constant CAT_KYC = keccak256("cat.kyc");
 
     function setUp() public {
-        _setUpBase();
+        _setUpIntegration();
+        _createCategory(CAT_KYC, CategoryKind.KYC_AML, address(0), ATTR_INVESTOR_JURISDICTION | ATTR_US_STATE);
         usState = USStateOfResidenceCondition(
             _proxy(
                 address(new USStateOfResidenceCondition()),
@@ -48,15 +54,20 @@ contract USStateOfResidenceConditionTest is SecondaryConditionTestBase {
     }
 
     function _accepted(bytes2 state) internal returns (bool) {
-        badge.setUsState(buyer, state);
-        _postSellAndAccept(_sellOffer(), _sellEscrow());
-        return usState.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, AGREEMENT_ID);
+        Credential memory c;
+        c.investorName = "Inv";
+        c.investorType = "Individual";
+        c.investorJurisdiction = state == bytes2(0) ? "KY" : "US";
+        c.usState = state;
+        _mintCred(buyer, CAT_KYC, c);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        return usState.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId);
     }
 
     // 1
     function test_Posting_NoAcquirer_Passes() public {
-        dm.setOffer(OFFER_ID, _sellOffer());
-        assertTrue(usState.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, bytes32(0)));
+        bytes32 offerId = _postSell();
+        assertTrue(usState.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, bytes32(0)));
     }
 
     // 2
@@ -76,20 +87,20 @@ contract USStateOfResidenceConditionTest is SecondaryConditionTestBase {
 
     // 5
     function test_NewYork_MartinActRegistered_Passes() public {
-        usState.setMartinActRegistered(address(dm), true);
+        usState.setMartinActRegistered(address(corp), true);
         assertTrue(_accepted("NY"));
     }
 
     // 6
     function test_GpBlockedState_Fails() public {
-        usState.setStateBlocked(address(dm), "AL", true);
+        usState.setStateBlocked(address(corp), "AL", true);
         assertFalse(_accepted("AL"));
     }
 
     // 7
     function test_BlockThenUnblock_Passes() public {
-        usState.setStateBlocked(address(dm), "AL", true);
-        usState.setStateBlocked(address(dm), "AL", false);
+        usState.setStateBlocked(address(corp), "AL", true);
+        usState.setStateBlocked(address(corp), "AL", false);
         assertTrue(_accepted("AL"));
     }
 
@@ -103,14 +114,14 @@ contract USStateOfResidenceConditionTest is SecondaryConditionTestBase {
     function test_SetStateBlocked_ByNonSpvAdmin_Reverts() public {
         vm.prank(stranger);
         vm.expectRevert();
-        usState.setStateBlocked(address(dm), "AL", true);
+        usState.setStateBlocked(address(corp), "AL", true);
     }
 
     // 10
     function test_SetMartinAct_ByNonSpvAdmin_Reverts() public {
         vm.prank(stranger);
         vm.expectRevert();
-        usState.setMartinActRegistered(address(dm), true);
+        usState.setMartinActRegistered(address(corp), true);
     }
 
     // 11
