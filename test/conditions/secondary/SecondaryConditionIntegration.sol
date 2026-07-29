@@ -11,10 +11,9 @@ import {IssuanceManager} from "../../../src/IssuanceManager.sol";
 import {IssuanceManagerFactory} from "../../../src/IssuanceManagerFactory.sol";
 import {LedgerEntryToken} from "../../../src/LedgerEntryToken.sol";
 import {LeXcheXBadge} from "../../../src/creds/lexchexBadge.sol";
-import {CategoryKind, Credential, CredentialCategory} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
+import {Credential} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
 import {CertificateDetails, ILedgerEntryToken} from "../../../src/interfaces/ILedgerEntryToken.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
-import {IERC5484} from "../../../src/interfaces/IERC5484.sol";
 import {BorgAuth} from "../../../src/libs/auth.sol";
 import {
     AcceptOfferParams,
@@ -193,19 +192,12 @@ abstract contract SecondaryConditionIntegrationBase is Test {
         });
     }
 
-    function _createCategory(bytes32 id, CategoryKind kind, address scope, uint256 governedAttributes) internal {
-        CredentialCategory memory c;
-        c.name = "cat";
-        c.kind = kind;
-        c.defaultValidityDuration = 3650 days;
-        c.burnAuth = IERC5484.BurnAuth.OwnerOnly;
-        c.scope = scope;
-        c.governedAttributes = governedAttributes;
-        badge.createCategory(id, c);
-    }
-
-    function _mintCred(address to, bytes32 categoryId, Credential memory c) internal returns (uint256) {
-        return badge.mint(to, categoryId, c);
+    /// @dev Mints an immutable credential asserting `asserts` (the K_* fact-key mask from ILexChexBadge);
+    /// stamps a far expiry if the caller left it unset.
+    function _mintCred(address to, uint256 asserts, Credential memory c) internal returns (uint256) {
+        c.asserts = asserts;
+        if (c.expiryDate == 0) c.expiryDate = uint64(block.timestamp + 3650 days);
+        return badge.mint(to, c);
     }
 
     /// @dev Mints a live cert on the real printer to `owner` (used to seed a legal holder / look-through weight).

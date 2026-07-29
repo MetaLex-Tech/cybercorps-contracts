@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import {ATTR_INVESTOR_JURISDICTION, ATTR_US_STATE, CategoryKind, Credential}
-    from "../../../src/creds/storage/lexchexBadgeStorage.sol";
+import {K_INVESTOR_JURISDICTION, K_INVESTOR_TYPE, K_US_STATE, InvestorType}
+    from "../../../src/interfaces/ILexChexBadge.sol";
+import {Credential} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
 import {USStateOfResidenceCondition} from "../../../src/libs/conditions/secondary/USStateOfResidenceCondition.sol";
 import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
@@ -40,11 +41,9 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 
 contract USStateOfResidenceConditionTest is SecondaryConditionIntegrationBase {
     USStateOfResidenceCondition internal usState;
-    bytes32 internal constant CAT_KYC = keccak256("cat.kyc");
 
     function setUp() public {
         _setUpIntegration();
-        _createCategory(CAT_KYC, CategoryKind.KYC_AML, address(0), ATTR_INVESTOR_JURISDICTION | ATTR_US_STATE);
         usState = USStateOfResidenceCondition(
             _proxy(
                 address(new USStateOfResidenceCondition()),
@@ -55,11 +54,13 @@ contract USStateOfResidenceConditionTest is SecondaryConditionIntegrationBase {
 
     function _accepted(bytes2 state) internal returns (bool) {
         Credential memory c;
-        c.investorName = "Inv";
-        c.investorType = "Individual";
+        c.investorType = InvestorType.INDIVIDUAL;
         c.investorJurisdiction = state == bytes2(0) ? "KY" : "US";
         c.usState = state;
-        _mintCred(buyer, CAT_KYC, c);
+        // K_US_STATE requires a non-empty value, so a non-U.S. acceptor (state 0) asserts only jurisdiction.
+        uint256 asserts = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION;
+        if (state != bytes2(0)) asserts |= K_US_STATE;
+        _mintCred(buyer, asserts, c);
         (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
         return usState.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId);
     }

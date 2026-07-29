@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import {CategoryKind, Credential} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
+import {K_INVESTOR_JURISDICTION, K_INVESTOR_TYPE, InvestorType} from "../../../src/interfaces/ILexChexBadge.sol";
+import {Credential} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
 import {LegionSoulboundCondition} from "../../../src/libs/conditions/secondary/LegionSoulboundCondition.sol";
 import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
@@ -40,7 +41,6 @@ contract LegionSoulboundConditionTest is SecondaryConditionIntegrationBase {
 
     function setUp() public {
         _setUpIntegration();
-        _createCategory(CAT, CategoryKind.SYNDICATE, address(0), 0);
         legion = _deploy(false);
     }
 
@@ -55,10 +55,10 @@ contract LegionSoulboundConditionTest is SecondaryConditionIntegrationBase {
 
     function _grant(address who) internal {
         Credential memory c;
-        c.investorName = "Inv";
-        c.investorType = "Individual";
+        c.investorType = InvestorType.INDIVIDUAL;
         c.investorJurisdiction = "US";
-        _mintCred(who, CAT, c);
+        c.categoryId = CAT; // Legion gates on the free-form categoryId label
+        _mintCred(who, K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION, c);
     }
 
     function _check(LegionSoulboundCondition c, bytes32 offerId, bytes32 agreementId) internal view returns (bool) {

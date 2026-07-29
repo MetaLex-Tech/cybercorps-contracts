@@ -89,7 +89,7 @@ contract USStateOfResidenceCondition is SecondaryTradingConditionBase, UUPSUpgra
         // No acquirer yet (posting context) — nothing to gate
         if (buyer == address(0)) return true;
 
-        // Non-U.S. acceptors carry no usState attribute (enforced at badge mint): silent
+        // Non-U.S. acceptors carry no usState attribute (empty): silent
         bytes2 state = badge.getUsState(buyer);
         if (state == bytes2(0)) return true;
 

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import {ATTR_INVESTOR_JURISDICTION, CategoryKind, Credential}
-    from "../../../src/creds/storage/lexchexBadgeStorage.sol";
+import {K_INVESTOR_JURISDICTION, K_INVESTOR_TYPE, InvestorType} from "../../../src/interfaces/ILexChexBadge.sol";
+import {Credential} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
 import {CFIUSCondition} from "../../../src/libs/conditions/secondary/CFIUSCondition.sol";
 import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
@@ -15,8 +15,9 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 // affiliation jurisdiction — until the GP records a manual CFIUS clearance. Dormant (always passes)
 // when the SPV is not TID-sensitive.
 //
-// Real integration: the buyer's jurisdiction and NON_US_PERSON status are real badge credentials; the buyer
-// is resolved from a real posted+accepted sell offer (the settlement is created once in setUp).
+// Real integration: the buyer's US-ness is derived from one real jurisdiction credential (there is no
+// separate non-U.S.-person representation to disagree with it); the buyer is resolved from a real
+// posted+accepted sell offer (the settlement is created once in setUp).
 //
 // Scenario × outcome (deployed tidUsBusiness = true)
 // | # | scenario                                        | expect | rationale                        |
@@ -39,15 +40,11 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 
 contract CFIUSConditionTest is SecondaryConditionIntegrationBase {
     CFIUSCondition internal cfius;
-    bytes32 internal constant CAT_KYC = keccak256("cat.kyc");
-    bytes32 internal constant CAT_NONUS = keccak256("cat.nonus");
     bytes32 internal offerId;
     bytes32 internal settlementId;
 
     function setUp() public {
         _setUpIntegration();
-        _createCategory(CAT_KYC, CategoryKind.KYC_AML, address(0), ATTR_INVESTOR_JURISDICTION);
-        _createCategory(CAT_NONUS, CategoryKind.NON_US_PERSON, address(0), 0);
         cfius = _deploy(true, new string[](0));
         _setJurisdiction("US");
         (offerId, settlementId) = _postAndAcceptSell();
@@ -64,17 +61,15 @@ contract CFIUSConditionTest is SecondaryConditionIntegrationBase {
 
     function _setJurisdiction(string memory j) internal {
         Credential memory c;
-        c.investorName = "Inv";
-        c.investorType = "Individual";
+        c.investorType = InvestorType.INDIVIDUAL;
         c.investorJurisdiction = j;
-        _mintCred(buyer, CAT_KYC, c);
+        _mintCred(buyer, K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION, c);
     }
 
+    /// @dev Non-U.S.-person status is now derived from the jurisdiction fact: mint a superseding non-U.S.
+    /// jurisdiction credential (the newest valid one governs the read).
     function _markNonUsPerson() internal {
-        Credential memory c;
-        c.investorName = "Inv";
-        c.investorType = "Individual";
-        _mintCred(buyer, CAT_NONUS, c);
+        _setJurisdiction("KY");
     }
 
     function _check() internal view returns (bool) {

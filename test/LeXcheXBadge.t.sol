@@ -5,14 +5,23 @@ import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/pro
 import {BorgAuth} from "../src/libs/auth.sol";
 import {LeXcheXBadge} from "../src/creds/lexchexBadge.sol";
 import {
-    CategoryKind,
-    Credential,
-    CredentialCategory,
-    ATTR_INVESTOR_JURISDICTION,
-    ATTR_REGULATORY_JURISDICTION,
-    ATTR_US_STATE,
-    ATTR_BO_COUNT
-} from "../src/creds/storage/lexchexBadgeStorage.sol";
+    ILexChexBadge,
+    K_INVESTOR_TYPE,
+    K_INVESTOR_JURISDICTION,
+    K_LOOKTHROUGH_JURISDICTION,
+    K_US_STATE,
+    K_BO_COUNT,
+    K_DATA,
+    K_ACCREDITED,
+    K_QP,
+    K_QIB,
+    K_BAD_ACTOR_CLEAR,
+    K_SPV_WHITELIST,
+    PRESET_KYC_AML,
+    PRESET_ENTITY_LOOKTHROUGH,
+    InvestorType
+} from "../src/interfaces/ILexChexBadge.sol";
+import {Credential} from "../src/creds/storage/lexchexBadgeStorage.sol";
 import {IERC5484} from "../src/interfaces/IERC5484.sol";
 import {Test} from "forge-std/Test.sol";
 
@@ -21,29 +30,27 @@ import {Test} from "forge-std/Test.sol";
 ///
 /// Key invariants / assumptions this suite guards (legal / economic intent, not mechanics):
 ///  1. Validity is the master gate: a wallet is eligible only while it holds a credential that is issued,
-///     unexpired, and not voided. Expiry forces re-attestation; a void (sanctions hit, failed re-KYC,
-///     discovered bad actor) locks the holder out at once, regardless of how recent it is.
-///  2. Current standing governs, per attribute: each attribute read reflects the holder's most-recent valid
-///     credential from a credential type authoritative for that attribute, so corrections and recertifications
-///     take effect immediately and stale facts never override fresher ones.
-///  3. Eligibility filters on what is attested, not which credential: any valid credential of the required
-///     kind (and investor type, where relevant) admits — the specific instance is interchangeable.
-///  4. Whitelist and syndicate entitlements are scoped to a single SPV; membership never leaks to another SPV.
+///     unexpired, and not voided. Expiry forces re-attestation; a void locks the holder out at once.
+///  2. Current standing governs, per fact: each read reflects the holder's most-recent valid credential that
+///     ASSERTS that fact-key, so a superseding credential takes effect immediately and stale facts never win.
+///  3. A credential answers a fact only if it asserts the key: a credential that does not assert a fact can
+///     neither answer it nor shadow one that does (authority is the `asserts` bitmask, not the credential type).
+///  4. Whitelist entitlements are scoped to a single SPV; membership never leaks to another SPV.
 ///  5. U.S. status is conservative: a holder is U.S. if either its §3(c)(1)(A) look-through classification or
-///     its physical domicile is U.S., and a U.S.-domiciled party can never be declassified out of the count.
-///  6. Look-through classification is decoupled from physical domicile: a non-U.S. feeder with any U.S.
-///     beneficial owner counts as U.S. for the ICA look-through while its domicile stays foreign for
-///     CFIUS / blue-sky.
-///  7. Recertification preserves the seasoning anchor (original issuance date), so a routine refresh does not
-///     reset time-based eligibility.
-///  8. Credentials are soulbound to the verified wallet: non-transferable, no delegation.
-///  9. Attribute authority is per credential type: only a type the issuer designates as a source of truth for
-///     an attribute can answer it, so an unrelated credential (e.g. a whitelist) neither answers it nor shadows
-///     one that does. The newest authoritative credential is taken verbatim, so a blank field is a deliberate
-///     clear (an entity leaving the U.S. clears its state), never a silent gap.
+///     its physical domicile is U.S.; a U.S.-domiciled party can never be declassified out of the count.
+///  6. Look-through classification is decoupled from physical domicile.
+///  7. Credentials are IMMUTABLE: a fact is changed by minting a newer credential and revoked by voiding — never
+///     edited in place, never burned. A voided/expired credential is retained on-chain for audit.
+///  8. A value read for an unestablished fact returns the field's empty value; the convenience getters resolve
+///     an unknown holder in whichever direction is conservative for the law they answer.
+///  9. Credentials are soulbound to the verified wallet: non-transferable, no delegation.
 contract LeXcheXBadgeTest is Test {
-    bytes32 constant CAT_KYC = keccak256("cat.kyc");
-    bytes32 constant CAT_ACCREDITED = keccak256("cat.accredited");
+    bytes32 constant LABEL_LEGION = keccak256("label.legion");
+
+    // Local copies of the emitted events (the indexer surface asserted by the event tests).
+    event CredentialIssued(address indexed owner, uint256 indexed tokenId, Credential cred);
+    event CredentialVoided(address indexed owner, uint256 indexed tokenId, string reason);
+    event Issued(address indexed from, address indexed to, uint256 indexed tokenId, IERC5484.BurnAuth burnAuth);
 
     address owner;
     LeXcheXBadge badge;
@@ -58,388 +65,968 @@ contract LeXcheXBadgeTest is Test {
                 )
             )
         );
-        _createCategory(CAT_KYC, CategoryKind.KYC_AML);
-        _createCategory(CAT_ACCREDITED, CategoryKind.ACCREDITED_INVESTOR);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Single live credential — baseline: every read resolves to the one record
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Baseline ────────────────────────────────────────────────────────────
 
-    // A holder with one live credential: every read resolves to that credential's facts, across every attribute
-    // (jurisdiction, regulatory, U.S. state, beneficial-owner count).
-    function test_SingleLiveCredential_AllSelectorsResolveToIt() public {
-        address holder = address(0xB0B5);
-        Credential memory c = _baseCred("US", bytes2("CA"));
-        c.investorName = "Domestic Fund LP";
-        c.investorType = "Fund";
+    // A holder with one live credential: every read resolves to that credential's facts.
+    function test_SingleCredential_AllReadsResolve() public {
+        address holder = makeAddr("holder");
+        Credential memory c = _cred(K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_LOOKTHROUGH_JURISDICTION | K_US_STATE | K_BO_COUNT);
+        c.investorType = InvestorType.ENTITY;
+        c.investorJurisdiction = "US";
+        c.lookThroughJurisdiction = "US";
+        c.usState = "CA";
         c.beneficialOwnerCount = 4;
-        c.regulatoryJurisdiction = "US";
-        _mint(holder, CAT_ACCREDITED, c);
+        _mint(holder, c);
 
+        assertEq(uint256(badge.getInvestorType(holder)), uint256(InvestorType.ENTITY));
         assertEq(badge.getUsState(holder), bytes2("CA"));
         assertEq(uint256(badge.getBeneficialOwnerCount(holder)), 4);
         assertEq(badge.getInvestorJurisdiction(holder), "US");
-        assertEq(badge.getRegulatoryJurisdiction(holder), "US");
-        assertTrue(badge.isUSInvestor(holder));
+        assertEq(badge.getLookThroughJurisdiction(holder), "US");
+        assertTrue(badge.isUSLookThroughInvestor(holder));
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // regulatoryJurisdiction / isUSInvestor (the _ANY selector)
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── isUSLookThroughInvestor (regulatory vs physical) ─────────────────────────────────
 
-    // A Cayman feeder with any U.S. beneficial owner is classified regulatory-US; the look-through read
-    // (isUSInvestor) is U.S. while the physical domicile stays Cayman for CFIUS/blue-sky.
-    function test_RegulatoryJurisdiction_DecouplesFromPhysicalDomicile() public {
-        address feeder = address(0xFEEDFEED);
-        Credential memory c = _baseCred("KY", bytes2(0));
-        c.investorName = "Acme Feeder LP";
-        c.investorType = "Fund";
-        c.beneficialOwnerCount = 10;
-        c.regulatoryJurisdiction = "US";
-        _mint(feeder, CAT_ACCREDITED, c);
+    // A Cayman feeder with a U.S. look-through classification is a U.S. investor while its physical domicile
+    // stays Cayman for CFIUS / blue-sky.
+    function test_RegulatoryDecouplesFromPhysical() public {
+        address feeder = makeAddr("feeder");
+        Credential memory c = _cred(K_INVESTOR_JURISDICTION | K_LOOKTHROUGH_JURISDICTION);
+        c.investorJurisdiction = "KY";
+        c.lookThroughJurisdiction = "US";
+        _mint(feeder, c);
 
-        assertTrue(badge.isUSInvestor(feeder));
-        assertEq(badge.getRegulatoryJurisdiction(feeder), "US");
+        assertTrue(badge.isUSLookThroughInvestor(feeder));
+        assertEq(badge.getLookThroughJurisdiction(feeder), "US");
         assertEq(badge.getInvestorJurisdiction(feeder), "KY");
     }
 
-    // When regulatoryJurisdiction is unset, isUSInvestor falls back to the physical investorJurisdiction.
-    function test_RegulatoryJurisdiction_FallsBackToPhysicalWhenUnset() public {
-        address usIndiv = address(0xB0B0);
-        _mintCred(usIndiv, CAT_ACCREDITED, "US", bytes2(0));
-        assertEq(badge.getRegulatoryJurisdiction(usIndiv), "");
-        assertTrue(badge.isUSInvestor(usIndiv));
+    // When regulatory is unset, isUSLookThroughInvestor falls back to the physical jurisdiction (and the regulatory read
+    // itself returns empty). A holder with an established non-U.S. jurisdiction is not U.S.
+    function test_RegulatoryFallsBackToPhysical() public {
+        address usIndiv = makeAddr("usIndiv");
+        _mint(usIndiv, _jurisdiction("US"));
+        assertTrue(badge.isUSLookThroughInvestor(usIndiv));
+        assertEq(badge.getLookThroughJurisdiction(usIndiv), "");
 
-        address kyIndiv = address(0xB0B1);
-        _mintCred(kyIndiv, CAT_ACCREDITED, "KY", bytes2(0));
-        assertFalse(badge.isUSInvestor(kyIndiv));
+        address kyIndiv = makeAddr("kyIndiv");
+        _mint(kyIndiv, _jurisdiction("KY"));
+        assertFalse(badge.isUSLookThroughInvestor(kyIndiv)); // established non-U.S. jurisdiction is not conservatively U.S.
     }
 
-    // A wholly-non-US feeder that admits its first U.S. beneficial owner flips to regulatory-US in place,
-    // without disturbing the physical domicile.
-    function test_SetRegulatoryJurisdiction_FlipsClassificationInPlace() public {
-        address feeder = address(0xFEED02);
-        _mintCred(feeder, CAT_ACCREDITED, "KY", bytes2(0));
-        assertFalse(badge.isUSInvestor(feeder));
-
-        uint256 tokenId = badge.getCredentialByOwner(feeder);
-        vm.prank(owner);
-        badge.setRegulatoryJurisdiction(tokenId, "US");
-
-        assertTrue(badge.isUSInvestor(feeder));
-        assertEq(badge.getInvestorJurisdiction(feeder), "KY");
+    // Conservative: a U.S.-domiciled party is a U.S. investor even if its regulatory classification says otherwise.
+    function test_UsDomicileCannotBeDeclassified() public {
+        address usEntity = makeAddr("usEntity");
+        Credential memory c = _cred(K_INVESTOR_JURISDICTION | K_LOOKTHROUGH_JURISDICTION);
+        c.investorJurisdiction = "US";
+        c.lookThroughJurisdiction = "KY";
+        _mint(usEntity, c);
+        assertTrue(badge.isUSLookThroughInvestor(usEntity));
     }
 
-    // Conservative: a U.S.-domiciled party is a U.S. investor even if its regulatory classification says
-    // otherwise — physical U.S. domicile can never be declassified out of the count.
-    function test_RegulatoryJurisdiction_UsDomicileCannotBeDeclassified() public {
-        address usEntity = address(0xB0B2);
-        Credential memory c = _baseCred("US", bytes2(0));
-        c.investorName = "US Co";
-        c.investorType = "Fund";
-        c.beneficialOwnerCount = 3;
-        c.regulatoryJurisdiction = "KY";
-        _mint(usEntity, CAT_ACCREDITED, c);
-
-        assertTrue(badge.isUSInvestor(usEntity));
+    // "US"/"USA"/"United States" all read as U.S. (lenient jurisdiction matching).
+    function test_UsJurisdiction_LenientMatching() public {
+        address a = makeAddr("usa");
+        _mint(a, _jurisdiction("USA"));
+        assertTrue(badge.isUSLookThroughInvestor(a));
+        address b = makeAddr("unitedstates");
+        _mint(b, _jurisdiction("United States"));
+        assertTrue(badge.isUSLookThroughInvestor(b));
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Recency & determinism of _mostRecentValidWith
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Recency & determinism ─────────────────────────────────────────────────
 
-    // Recency ranks on lastUpdated, not issuanceDate: an in-place correction on the OLDER-issuance credential
-    // must win selection even when a newer-issuance credential exists and was left untouched.
-    function test_RegulatoryJurisdiction_FreshCorrectionOnOlderCredentialWins() public {
-        address feeder = address(0xFEED03);
-        _mintCred(feeder, CAT_ACCREDITED, "KY", bytes2(0)); // credential A: earlier issuanceDate
-        uint256 older = badge.getTokenIdsByOwner(feeder)[0];
-
+    // The most-recent (by issuanceDate) valid credential asserting a fact governs it: a newer credential
+    // supersedes an older one.
+    function test_Recency_NewerValidWins() public {
+        address holder = makeAddr("recency");
+        _mint(holder, _kyc("US", "NY")); // older
         vm.warp(block.timestamp + 30 days);
-        _mintCred(feeder, CAT_ACCREDITED, "KY", bytes2(0)); // credential B: later issuanceDate, untouched
-        assertFalse(badge.isUSInvestor(feeder));
-
-        // Flip the OLDER credential to regulatory-US; ranking on issuanceDate would keep B and miss this.
-        vm.warp(block.timestamp + 1 days);
-        vm.prank(owner);
-        badge.setRegulatoryJurisdiction(older, "US");
-
-        assertTrue(badge.isUSInvestor(feeder));
-        assertEq(badge.getRegulatoryJurisdiction(feeder), "US");
+        _mint(holder, _kyc("US", "TX")); // newer
+        assertEq(badge.getUsState(holder), bytes2("TX"));
     }
 
-    // recertify bumps the recency key (lastUpdated) while preserving issuanceDate: a refreshed OLDER-issuance
-    // credential wins selection over an untouched newer one, and its seasoning anchor is not reset.
-    function test_Recertify_RefreshesRecencyForSelection() public {
-        address feeder = address(0xFEED04);
-        uint256 older = _mintCred(feeder, CAT_ACCREDITED, "KY", bytes2(0)); // credential A
-        uint64 seasonedAt = badge.getCredential(older).issuanceDate;
-
-        vm.warp(block.timestamp + 30 days);
-        _mintCred(feeder, CAT_ACCREDITED, "KY", bytes2(0)); // credential B: later issuance, untouched
-        assertFalse(badge.isUSInvestor(feeder));
-
-        vm.warp(block.timestamp + 1 days);
-        Credential memory refreshed = _baseCred("KY", bytes2(0));
-        refreshed.regulatoryJurisdiction = "US";
-        vm.prank(owner);
-        badge.recertify(older, refreshed); // bumps A's lastUpdated past B, preserves issuanceDate
-
-        assertTrue(badge.isUSInvestor(feeder));
-        assertEq(badge.getRegulatoryJurisdiction(feeder), "US");
-        assertEq(uint256(badge.getCredential(older).issuanceDate), uint256(seasonedAt));
-    }
-
-    // Ties on lastUpdated (two credentials attested in the same block) resolve deterministically to the higher
-    // tokenId, independent of enumeration order — the read cannot flip based on unrelated burns.
-    function test_UsState_TieBreaksOnHigherTokenId() public {
-        address holder = address(0xB0B3);
-        _mintCred(holder, CAT_KYC, "US", bytes2("NY"));        // lower tokenId
-        _mintCred(holder, CAT_ACCREDITED, "US", bytes2("TX")); // higher tokenId, same block
+    // Ties on issuanceDate (same block) resolve deterministically to the higher tokenId.
+    function test_Recency_TieBreaksOnHigherTokenId() public {
+        address holder = makeAddr("tie");
+        _mint(holder, _kyc("US", "NY")); // lower tokenId
+        _mint(holder, _kyc("US", "TX")); // higher tokenId, same block
 
         uint256[] memory ids = badge.getTokenIdsByOwner(holder);
         assertGt(ids[1], ids[0]);
         assertEq(badge.getUsState(holder), bytes2("TX"));
     }
 
-    // A newer credential of a category that does NOT govern regulatory (here KYC) cannot shadow the look-through
-    // classification a governing credential attests — the resolution of #14.
-    function test_RegulatoryJurisdiction_UnrelatedCategoryDoesNotShadow() public {
-        address feeder = address(0xFEED05);
-        Credential memory c = _baseCred("KY", bytes2(0));
-        c.regulatoryJurisdiction = "US";
-        _mint(feeder, CAT_ACCREDITED, c); // accredited governs regulatory
-        assertTrue(badge.isUSInvestor(feeder));
+    // A newer credential that does NOT assert a fact cannot shadow an older one that does.
+    function test_AssertsAuthority_NonAssertingDoesNotShadow() public {
+        address feeder = makeAddr("shadow");
+        Credential memory c = _cred(K_INVESTOR_JURISDICTION | K_LOOKTHROUGH_JURISDICTION);
+        c.investorJurisdiction = "KY";
+        c.lookThroughJurisdiction = "US";
+        _mint(feeder, c); // older, asserts regulatory
+        assertTrue(badge.isUSLookThroughInvestor(feeder));
 
         vm.warp(block.timestamp + 1 days);
-        _mintCred(feeder, CAT_KYC, "KY", bytes2(0)); // newer, but KYC does not govern regulatory
+        _mint(feeder, _jurisdiction("KY")); // newer, asserts jurisdiction only (not regulatory)
 
-        assertEq(badge.getRegulatoryJurisdiction(feeder), "US"); // preserved
-        assertTrue(badge.isUSInvestor(feeder));
+        assertEq(badge.getLookThroughJurisdiction(feeder), "US"); // preserved: newer didn't assert it
+        assertTrue(badge.isUSLookThroughInvestor(feeder));
     }
 
-    // Within a governing category, the newest credential is authoritative verbatim: a later governing credential
-    // that omits the classification clears it (a deliberate reclassification, not a silent gap).
-    function test_RegulatoryJurisdiction_ClearedByNewerGoverningCredential() public {
-        address feeder = address(0xFEED06);
-        Credential memory c = _baseCred("KY", bytes2(0));
-        c.regulatoryJurisdiction = "US";
-        _mint(feeder, CAT_ACCREDITED, c);
-        assertTrue(badge.isUSInvestor(feeder));
+    // Individual vs. entity resolves like any other value fact: UNSET when unestablished, superseded by a
+    // newer asserting credential, never shadowed by a non-asserting one, and restored when the newer is voided.
+    function test_GetInvestorType_ResolvesAndDefaultsUnset() public {
+        address holder = makeAddr("investorType");
+        assertEq(uint256(badge.getInvestorType(holder)), uint256(InvestorType.UNSET));
+
+        Credential memory entity = _cred(K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION);
+        entity.investorType = InvestorType.ENTITY;
+        entity.investorJurisdiction = "KY";
+        _mint(holder, entity);
+        assertEq(uint256(badge.getInvestorType(holder)), uint256(InvestorType.ENTITY));
 
         vm.warp(block.timestamp + 1 days);
-        _mintCred(feeder, CAT_ACCREDITED, "KY", bytes2(0)); // newer governing credential, regulatory empty
-
-        assertEq(badge.getRegulatoryJurisdiction(feeder), ""); // cleared
-        assertFalse(badge.isUSInvestor(feeder));
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Attribute filters & validity gating
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // No credentials: every attribute read returns its default and isUSInvestor is false (found == false path).
-    function test_NoCredential_ReturnsDefaults() public view {
-        address nobody = address(0xDEAD);
-        assertEq(badge.getUsState(nobody), bytes2(0));
-        assertEq(uint256(badge.getBeneficialOwnerCount(nobody)), 0);
-        assertEq(badge.getInvestorJurisdiction(nobody), "");
-        assertEq(badge.getRegulatoryJurisdiction(nobody), "");
-        assertFalse(badge.isUSInvestor(nobody));
-    }
-
-    // A holder that relocates out of the U.S. clears its usState: the newest state-governing credential is
-    // non-U.S. and carries no state, so getUsState reports none rather than resurfacing the stale U.S. state.
-    function test_GetUsState_ClearedByNewerNonUsCredential() public {
-        address holder = address(0xA2);
-        _mintCred(holder, CAT_KYC, "US", bytes2("NY")); // older: U.S. resident, state NY
-        vm.warp(block.timestamp + 1 days);
-        _mintCred(holder, CAT_KYC, "KY", bytes2(0));     // newer: relocated to KY, no state
-
-        assertEq(badge.getUsState(holder), bytes2(0));
-        assertEq(badge.getInvestorJurisdiction(holder), "KY");
-        assertFalse(badge.isUSInvestor(holder));
-    }
-
-    // A newer credential of a category that does NOT govern the look-through count (here KYC) cannot shadow the
-    // §3(c)(1)(A) count a governing (accredited entity) credential attests.
-    function test_GetBeneficialOwnerCount_NotShadowedByNonGoverningCategory() public {
-        address entity = address(0xB1);
-        Credential memory withCount = _baseCred("US", bytes2("CA"));
-        withCount.investorType = "Fund";
-        withCount.beneficialOwnerCount = 5;
-        _mint(entity, CAT_ACCREDITED, withCount); // older, count 5, governs BO count
+        _mint(holder, _cred(K_ACCREDITED)); // newer, asserts no type
+        assertEq(uint256(badge.getInvestorType(holder)), uint256(InvestorType.ENTITY));
 
         vm.warp(block.timestamp + 1 days);
-        _mintCred(entity, CAT_KYC, "US", bytes2("CA")); // newer, but KYC does not govern BO count
+        Credential memory individual = _cred(K_INVESTOR_TYPE);
+        individual.investorType = InvestorType.INDIVIDUAL;
+        uint256 reclassified = _mint(holder, individual); // newer, asserts the type
+        assertEq(uint256(badge.getInvestorType(holder)), uint256(InvestorType.INDIVIDUAL));
+
+        vm.prank(owner);
+        badge.void(reclassified, "revoked");
+        assertEq(uint256(badge.getInvestorType(holder)), uint256(InvestorType.ENTITY)); // older valid governs
+    }
+
+    // A newer credential that does not assert the look-through count cannot shadow an older one that does.
+    function test_AssertsAuthority_BoCountNotShadowed() public {
+        address entity = makeAddr("entity");
+        Credential memory c = _cred(K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_BO_COUNT);
+        c.investorType = InvestorType.ENTITY;
+        c.investorJurisdiction = "US";
+        c.beneficialOwnerCount = 5;
+        _mint(entity, c); // older, asserts BO count
+
+        vm.warp(block.timestamp + 1 days);
+        _mint(entity, _kyc("US", "CA")); // newer, does not assert BO count
 
         assertEq(uint256(badge.getBeneficialOwnerCount(entity)), 5);
     }
 
+    // ── Validity gating ───────────────────────────────────────────────────────
+
     // Expired credentials are excluded from selection even when they are the most recent.
     function test_ExpiredCredentialSkipped() public {
-        address holder = address(0xC1);
-        _mintCred(holder, CAT_KYC, "US", bytes2("CA")); // long-lived, state CA
+        address holder = makeAddr("expired");
+        _mint(holder, _kyc("US", "CA")); // long-lived, state CA
 
-        vm.warp(block.timestamp + 1 days);
-        Credential memory shortLived = _baseCred("US", bytes2("NY"));
-        shortLived.expiryDate = uint64(block.timestamp + 1 days);
-        _mint(holder, CAT_ACCREDITED, shortLived); // newer, state NY, expires soon
+        Credential memory shortLived = _kyc("US", "NY");
+        shortLived.expiryDate = uint64(block.timestamp + 2 days);
+        uint256 ny = _mint(holder, shortLived); // higher tokenId, state NY, expires at +2 days
+        assertEq(badge.getUsState(holder), bytes2("NY")); // NY wins the tie while valid
 
-        vm.warp(block.timestamp + 2 days); // NY expired, CA still valid
+        vm.warp(block.timestamp + 3 days); // NY expired, CA still valid
+        assertFalse(badge.isValid(ny));
         assertEq(badge.getUsState(holder), bytes2("CA"));
     }
 
-    // Voided credentials are excluded despite void bumping lastUpdated to the newest touch — isValid gates them
-    // out before the recency comparison, so the selection cannot land on a revoked credential.
-    function test_VoidedCredentialExcluded_DespiteMostRecentTouch() public {
-        address holder = address(0xD1);
-        _mintCred(holder, CAT_KYC, "US", bytes2("CA")); // older, CA
+    // Voided credentials are excluded; an older valid credential legitimately governs again.
+    function test_VoidedCredentialExcluded() public {
+        address holder = makeAddr("voided");
+        _mint(holder, _kyc("US", "CA")); // older, CA
         vm.warp(block.timestamp + 1 days);
-        uint256 ny = _mintCred(holder, CAT_ACCREDITED, "US", bytes2("NY")); // newer, NY
+        uint256 ny = _mint(holder, _kyc("US", "NY")); // newer, NY
 
         vm.warp(block.timestamp + 1 days);
         vm.prank(owner);
-        badge.void(ny, "revoked"); // bumps lastUpdated to newest, but isValid == false
+        badge.void(ny, "revoked");
 
         assertEq(badge.getUsState(holder), bytes2("CA"));
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Category-gating reads (Matrix A)
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Unknown reads as empty; isUSLookThroughInvestor is conservatively U.S. ────────────
 
-    // hasValidCredential resolves an EXACT category: the right id admits, a valid credential of a different
-    // category does not, and an uncredentialed wallet is rejected.
-    function test_HasValidCredential_ExactCategoryMatch() public {
-        address holder = address(0xE1);
-        _mintCred(holder, CAT_KYC, "US", bytes2("CA"));
-        assertTrue(badge.hasValidCredential(holder, CAT_KYC));
-        assertFalse(badge.hasValidCredential(holder, CAT_ACCREDITED));
-        assertFalse(badge.hasValidCredential(address(0xDEAD), CAT_KYC));
+    function test_NoCredential_ReturnsDefaults() public {
+        address nobody = makeAddr("nobody");
+        assertEq(uint256(badge.getInvestorType(nobody)), uint256(InvestorType.UNSET));
+        assertEq(badge.getUsState(nobody), bytes2(0));
+        assertEq(uint256(badge.getBeneficialOwnerCount(nobody)), 0);
+        assertEq(badge.getInvestorJurisdiction(nobody), "");
+        assertEq(badge.getLookThroughJurisdiction(nobody), "");
+        assertTrue(badge.isUSLookThroughInvestor(nobody)); // unknown jurisdiction → conservatively U.S.
     }
 
-    // The gate closes when the credential lapses: expiry and void both deny admission (the isValid mechanism
-    // is category-agnostic, so this stands in for every kind's deny path).
-    function test_HasValidCredential_DeniedWhenExpiredOrVoided() public {
-        address expired = address(0xE2);
-        Credential memory shortLived = _baseCred("US", bytes2("CA"));
-        shortLived.expiryDate = uint64(block.timestamp + 1 days);
-        _mint(expired, CAT_KYC, shortLived);
-        vm.warp(block.timestamp + 2 days);
-        assertFalse(badge.hasValidCredential(expired, CAT_KYC));
+    // Immutability: a fact persists until the asserting credential is voided/expires. Minting a newer
+    // non-U.S. jurisdiction changes the jurisdiction read, but the old U.S. state only clears when voided.
+    function test_Relocation_StateClearsOnlyByVoid() public {
+        address holder = makeAddr("relocate");
+        uint256 nyId = _mint(holder, _kyc("US", "NY")); // U.S. resident, state NY
+        vm.warp(block.timestamp + 1 days);
+        _mint(holder, _jurisdiction("KY")); // relocates: newer jurisdiction, no state asserted
 
-        address voided = address(0xE3);
-        uint256 id = _mintCred(voided, CAT_KYC, "US", bytes2("CA"));
+        assertEq(badge.getInvestorJurisdiction(holder), "KY");
+        assertFalse(badge.isUSLookThroughInvestor(holder));
+        assertEq(badge.getUsState(holder), bytes2("NY")); // still NY: the newer cred didn't assert usState
+
+        vm.prank(owner);
+        badge.void(nyId, "relocated");
+        assertEq(badge.getUsState(holder), bytes2(0)); // now cleared: no valid credential asserts usState
+    }
+
+    // ── Existence / entitlement reads ─────────────────────────────────────────
+
+    // hasValidCredential matches the free-form issuer label verbatim. The label is never interpreted: it
+    // neither gates nor shadows the credential's fact reads.
+    function test_HasValidCredential_LabelMatch() public {
+        address holder = makeAddr("legion");
+        Credential memory c = _kyc("US", "CA");
+        c.categoryId = LABEL_LEGION;
+        _mint(holder, c);
+        assertTrue(badge.hasValidCredential(holder, LABEL_LEGION));
+        assertFalse(badge.hasValidCredential(holder, keccak256("label.other")));
+        assertFalse(badge.hasValidCredential(makeAddr("nobody2"), LABEL_LEGION));
+        assertEq(badge.getUsState(holder), bytes2("CA")); // facts resolve regardless of the label
+    }
+
+    // An unlabelled credential carries no label, so the empty label matches nothing — it is not a catch-all.
+    function test_HasValidCredential_UnlabelledMatchesNoLabel() public {
+        address holder = makeAddr("unlabelled");
+        _mint(holder, _kyc("US", "CA")); // categoryId left zero
+        assertFalse(badge.hasValidCredential(holder, bytes32(0)));
+        assertFalse(badge.hasValidCredential(holder, LABEL_LEGION));
+        assertTrue(badge.hasValidLexCheX(holder)); // still a valid credential, just not label-addressable
+    }
+
+    function test_HasValidCredential_DeniedWhenExpiredOrVoided() public {
+        address expired = makeAddr("exp");
+        Credential memory shortLived = _kyc("US", "CA");
+        shortLived.categoryId = LABEL_LEGION;
+        shortLived.expiryDate = uint64(block.timestamp + 1 days);
+        _mint(expired, shortLived);
+        vm.warp(block.timestamp + 2 days);
+        assertFalse(badge.hasValidCredential(expired, LABEL_LEGION));
+
+        address voided = makeAddr("vd");
+        Credential memory c = _kyc("US", "CA");
+        c.categoryId = LABEL_LEGION;
+        uint256 id = _mint(voided, c);
         vm.prank(owner);
         badge.void(id, "revoked");
-        assertFalse(badge.hasValidCredential(voided, CAT_KYC));
+        assertFalse(badge.hasValidCredential(voided, LABEL_LEGION));
     }
 
-    // hasValidCredentialOfKind matches ANY category of the kind — the whole point of kind vs categoryId: a
-    // second, differently-identified accredited category still satisfies an accredited gate, while a
-    // different kind (qualified purchaser) the holder lacks is rejected.
-    function test_HasValidCredentialOfKind_MatchesKindAcrossCategories() public {
-        bytes32 catAccreditedAlt = keccak256("cat.accredited.alt");
-        _createCategory(catAccreditedAlt, CategoryKind.ACCREDITED_INVESTOR);
-
-        address holder = address(0xE4);
-        _mintCred(holder, catAccreditedAlt, "US", bytes2("CA"));
-        assertTrue(badge.hasValidCredentialOfKind(holder, CategoryKind.ACCREDITED_INVESTOR, ""));
-        assertFalse(badge.hasValidCredentialOfKind(holder, CategoryKind.QUALIFIED_PURCHASER, ""));
+    // hasValidCredentialOf resolves a status fact-key: the asserted key admits, another is rejected.
+    function test_HasValidCredentialOf_StatusKey() public {
+        address holder = makeAddr("acc");
+        _mint(holder, _cred(K_ACCREDITED));
+        assertTrue(badge.hasValidCredentialOf(holder, K_ACCREDITED));
+        assertFalse(badge.hasValidCredentialOf(holder, K_QP));
+        assertFalse(badge.hasValidCredentialOf(makeAddr("nobody3"), K_ACCREDITED));
     }
 
-    // The investorType filter separates parameterizations that share a kind (e.g. accredited entity vs
-    // individual): an empty filter matches any type, a matching type admits, a non-matching type is rejected.
-    function test_HasValidCredentialOfKind_InvestorTypeFilter() public {
-        address fund = address(0xE5);
-        Credential memory c = _baseCred("US", bytes2("CA"));
-        c.investorType = "Fund";
-        _mint(fund, CAT_ACCREDITED, c);
+    // Each status key resolves on its own, and a compound query is answered only by a SINGLE credential
+    // asserting every requested bit — two single-key credentials never add up to a combined attestation.
+    function test_HasValidCredentialOf_AllStatusKeysAndCompound() public {
+        address holder = makeAddr("statuses");
+        _mint(holder, _cred(K_QP));
+        _mint(holder, _cred(K_QIB));
+        _mint(holder, _cred(K_BAD_ACTOR_CLEAR));
+        assertTrue(badge.hasValidCredentialOf(holder, K_QP));
+        assertTrue(badge.hasValidCredentialOf(holder, K_QIB));
+        assertTrue(badge.hasValidCredentialOf(holder, K_BAD_ACTOR_CLEAR));
+        assertFalse(badge.hasValidCredentialOf(holder, K_ACCREDITED));
+        assertFalse(badge.hasValidCredentialOf(holder, K_QP | K_QIB)); // no one credential asserts both
 
-        assertTrue(badge.hasValidCredentialOfKind(fund, CategoryKind.ACCREDITED_INVESTOR, ""));
-        assertTrue(badge.hasValidCredentialOfKind(fund, CategoryKind.ACCREDITED_INVESTOR, "Fund"));
-        assertFalse(badge.hasValidCredentialOfKind(fund, CategoryKind.ACCREDITED_INVESTOR, "Individual"));
+        address both = makeAddr("qpAndQib");
+        _mint(both, _cred(K_QP | K_QIB));
+        assertTrue(badge.hasValidCredentialOf(both, K_QP | K_QIB));
     }
 
-    // hasValidWhitelistFor is scoped to a specific SPV: a whitelist minted for one SPV admits only that SPV's
-    // offers and never another's, and a SYNDICATE credential resolves the same scoped way.
+    // A status gate closes on expiry and on void, the same way a value fact does.
+    function test_HasValidCredentialOf_DeniedWhenExpiredOrVoided() public {
+        address expired = makeAddr("qpExpired");
+        Credential memory shortLived = _cred(K_QP);
+        shortLived.expiryDate = uint64(block.timestamp + 1 days);
+        _mint(expired, shortLived);
+        assertTrue(badge.hasValidCredentialOf(expired, K_QP));
+        vm.warp(block.timestamp + 2 days);
+        assertFalse(badge.hasValidCredentialOf(expired, K_QP)); // expired, before any sweep
+
+        address voided = makeAddr("qpVoided");
+        uint256 id = _mint(voided, _cred(K_QP));
+        vm.prank(owner);
+        badge.void(id, "revoked");
+        assertFalse(badge.hasValidCredentialOf(voided, K_QP));
+    }
+
+    // hasValidWhitelistFor is scoped to a specific SPV and to the holder it was issued to.
     function test_HasValidWhitelistFor_ScopedToSPV() public {
-        address spvA = address(0x5A);
-        address spvB = address(0x5B);
-
-        bytes32 whitelistA = keccak256("cat.wl.spvA");
-        _createScopedCategory(whitelistA, CategoryKind.SPV_WHITELIST, spvA);
-        address holder = address(0xE6);
-        _mintCred(holder, whitelistA, "KY", bytes2(0));
+        address spvA = makeAddr("spvA");
+        address spvB = makeAddr("spvB");
+        address holder = makeAddr("wl");
+        Credential memory c = _cred(K_SPV_WHITELIST);
+        c.scope = spvA;
+        _mint(holder, c);
         assertTrue(badge.hasValidWhitelistFor(holder, spvA));
-        assertFalse(badge.hasValidWhitelistFor(holder, spvB));
-
-        bytes32 syndicateB = keccak256("cat.syn.spvB");
-        _createScopedCategory(syndicateB, CategoryKind.SYNDICATE, spvB);
-        address member = address(0xE7);
-        _mintCred(member, syndicateB, "KY", bytes2(0));
-        assertTrue(badge.hasValidWhitelistFor(member, spvB));
+        assertFalse(badge.hasValidWhitelistFor(holder, spvB));      // scope-specific
+        assertFalse(badge.hasValidWhitelistFor(makeAddr("wl2"), spvA)); // holder-specific
     }
 
-    // A non-whitelist credential (KYC) never grants SPV whitelist entitlement, even when valid.
-    function test_HasValidWhitelistFor_IgnoresNonWhitelistKinds() public {
-        address holder = address(0xE8);
-        _mintCred(holder, CAT_KYC, "US", bytes2("CA"));
-        assertFalse(badge.hasValidWhitelistFor(holder, address(0x5A)));
+    // A whitelist entitlement closes on void and on expiry.
+    function test_HasValidWhitelistFor_DeniedWhenExpiredOrVoided() public {
+        address spv = makeAddr("spvVE");
+        Credential memory c = _cred(K_SPV_WHITELIST);
+        c.scope = spv;
+
+        address voided = makeAddr("wlVoid");
+        uint256 id = _mint(voided, c);
+        vm.prank(owner);
+        badge.void(id, "revoked");
+        assertFalse(badge.hasValidWhitelistFor(voided, spv));
+
+        address expiring = makeAddr("wlExpire");
+        Credential memory shortLived = _cred(K_SPV_WHITELIST);
+        shortLived.scope = spv;
+        shortLived.expiryDate = uint64(block.timestamp + 1 days);
+        _mint(expiring, shortLived);
+        assertTrue(badge.hasValidWhitelistFor(expiring, spv));
+        vm.warp(block.timestamp + 2 days);
+        assertFalse(badge.hasValidWhitelistFor(expiring, spv)); // expired, before any sweep
     }
 
-    // hasValidLexCheX (v1-compatible) is true for any valid credential and false for an uncredentialed wallet.
-    function test_HasValidLexCheX_AnyValidCredential() public {
-        address holder = address(0xE9);
-        assertFalse(badge.hasValidLexCheX(holder));
-        _mintCred(holder, CAT_KYC, "US", bytes2("CA"));
+    // One canonical U.S.-jurisdiction test, published so downstream conditions never re-implement the match.
+    function test_IsUSJurisdiction_CanonicalSpellingsOnly() public view {
+        assertTrue(badge.isUSJurisdiction("US"));
+        assertTrue(badge.isUSJurisdiction("USA"));
+        assertTrue(badge.isUSJurisdiction("United States"));
+        assertFalse(badge.isUSJurisdiction("us"));
+        assertFalse(badge.isUSJurisdiction("U.S."));
+        assertFalse(badge.isUSJurisdiction("KY"));
+        assertFalse(badge.isUSJurisdiction(""));
+    }
+
+    // A non-whitelist credential never grants an SPV whitelist entitlement.
+    function test_HasValidWhitelistFor_IgnoresNonWhitelist() public {
+        address holder = makeAddr("kycOnly");
+        _mint(holder, _kyc("US", "CA"));
+        assertFalse(badge.hasValidWhitelistFor(holder, makeAddr("spvA")));
+    }
+
+    // K_DATA: a generic programmable bytes payload, resolved most-recent-valid like any value fact.
+    function test_Data_ProgrammablePayload() public {
+        address holder = makeAddr("data");
+        assertEq(badge.getData(holder), ""); // unknown → empty
+        Credential memory c = _cred(K_DATA);
+        c.data = abi.encode(uint256(42), "hello");
+        _mint(holder, c);
+        assertEq(badge.getData(holder), abi.encode(uint256(42), "hello"));
+    }
+
+    // Active set: void evicts at once; expiry needs a sweep; reads stay correct throughout.
+    function test_ActiveSet_VoidAndSweepEvict() public {
+        address holder = makeAddr("active");
+        uint256 id1 = _mint(holder, _kyc("US", "CA")); // long-lived
+        Credential memory shortC = _kyc("US", "NY");
+        shortC.expiryDate = uint64(block.timestamp + 2 days);
+        _mint(holder, shortC);                          // expires soon
+        uint256 id3 = _mint(holder, _cred(K_ACCREDITED));
+        assertEq(badge.getActiveTokenIds(holder).length, 3);
+
+        vm.prank(owner);
+        badge.void(id3, "revoked"); // evicted immediately
+        assertEq(badge.getActiveTokenIds(holder).length, 2);
+
+        vm.warp(block.timestamp + 3 days); // the short-lived cred expired
+        assertEq(badge.getActiveTokenIds(holder).length, 2); // not yet swept
+        badge.sweep(holder);                                  // permissionless
+        uint256[] memory active = badge.getActiveTokenIds(holder);
+        assertEq(active.length, 1);
+        assertEq(active[0], id1); // only the long-lived one remains
+
+        assertEq(badge.getUsState(holder), bytes2("CA")); // read still correct after eviction
+        assertFalse(badge.hasValidCredentialOf(holder, K_ACCREDITED)); // voided status gone
+    }
+
+    // Eviction is a swap-pop, so the position index has to survive removals from the front, the middle and
+    // the tail: every surviving credential must stay addressable and evictable in turn.
+    function test_ActiveSet_SwapPopKeepsRemainingAddressable() public {
+        address holder = makeAddr("swapPop");
+        uint256 accredited = _mint(holder, _cred(K_ACCREDITED));
+        uint256 qp = _mint(holder, _cred(K_QP));
+        uint256 qib = _mint(holder, _cred(K_QIB));
+        uint256 badActorClear = _mint(holder, _cred(K_BAD_ACTOR_CLEAR));
+        assertEq(badge.getActiveTokenIds(holder).length, 4);
+
+        vm.startPrank(owner);
+        badge.void(accredited, "front"); // head slot; the tail entry swaps into it
+        badge.void(badActorClear, "swapped-in"); // that swapped-in entry, at its new position
+        badge.void(qib, "tail");
+        vm.stopPrank();
+
+        uint256[] memory active = badge.getActiveTokenIds(holder);
+        assertEq(active.length, 1);
+        assertEq(active[0], qp);
+        assertTrue(badge.hasValidCredentialOf(holder, K_QP));
+        assertFalse(badge.hasValidCredentialOf(holder, K_ACCREDITED));
+        assertFalse(badge.hasValidCredentialOf(holder, K_QIB));
+        assertFalse(badge.hasValidCredentialOf(holder, K_BAD_ACTOR_CLEAR));
+    }
+
+    // The categoryId label index is evicted in lockstep with the active set: voiding one labelled credential
+    // must leave the holder's other credential under that label findable.
+    function test_ActiveSet_LabelIndexEvictedInLockstep() public {
+        address holder = makeAddr("labelIdx");
+        Credential memory first = _kyc("US", "CA");
+        first.categoryId = LABEL_LEGION;
+        Credential memory second = _kyc("US", "NY");
+        second.categoryId = LABEL_LEGION;
+        uint256 id1 = _mint(holder, first);
+        uint256 id2 = _mint(holder, second);
+
+        vm.prank(owner);
+        badge.void(id1, "superseded"); // head of the label index; id2 swaps into its slot
+        assertTrue(badge.hasValidCredential(holder, LABEL_LEGION));
+
+        vm.prank(owner);
+        badge.void(id2, "revoked");
+        assertFalse(badge.hasValidCredential(holder, LABEL_LEGION));
+        assertEq(badge.getActiveTokenIds(holder).length, 0);
+    }
+
+    // sweep evicts only what has expired, is safe to repeat, and is a no-op for an uncredentialed holder.
+    function test_Sweep_EvictsOnlyExpired_AndIsIdempotent() public {
+        address holder = makeAddr("sweeper");
+        Credential memory shortA = _cred(K_ACCREDITED);
+        shortA.expiryDate = uint64(block.timestamp + 1 days);
+        Credential memory shortB = _cred(K_QP);
+        shortB.expiryDate = uint64(block.timestamp + 1 days);
+        _mint(holder, shortA);
+        _mint(holder, shortB);
+        uint256 live = _mint(holder, _kyc("US", "CA"));
+
+        badge.sweep(holder); // nothing expired yet
+        assertEq(badge.getActiveTokenIds(holder).length, 3);
+
+        vm.warp(block.timestamp + 2 days);
+        badge.sweep(holder); // both short-lived ones evicted in a single pass
+        uint256[] memory active = badge.getActiveTokenIds(holder);
+        assertEq(active.length, 1);
+        assertEq(active[0], live);
+
+        badge.sweep(holder); // repeat: no further change
+        assertEq(badge.getActiveTokenIds(holder).length, 1);
+
+        badge.sweep(makeAddr("neverCredentialed")); // no-op, must not revert
+    }
+
+    function test_SweepHolders_BatchesAcrossHolders() public {
+        address[] memory holders = new address[](3);
+        for (uint256 i = 0; i < holders.length; i++) {
+            holders[i] = makeAddr(string.concat("batch", vm.toString(i)));
+            Credential memory short = _cred(K_ACCREDITED);
+            short.expiryDate = uint64(block.timestamp + 1 days);
+            _mint(holders[i], short);
+            _mint(holders[i], _kyc("US", "CA"));
+        }
+
+        vm.warp(block.timestamp + 2 days);
+        badge.sweepHolders(holders);
+        for (uint256 i = 0; i < holders.length; i++) {
+            assertEq(badge.getActiveTokenIds(holders[i]).length, 1);
+        }
+    }
+
+    // sweepTokens evicts exactly the named expired ids and reports the count.
+    function test_SweepTokens_EvictsNamedExpiredIds() public {
+        address holder = makeAddr("named");
+        Credential memory shortA = _cred(K_ACCREDITED);
+        shortA.expiryDate = uint64(block.timestamp + 1 days);
+        Credential memory shortB = _cred(K_QP);
+        shortB.expiryDate = uint64(block.timestamp + 1 days);
+        uint256 a = _mint(holder, shortA);
+        uint256 b = _mint(holder, shortB);
+        uint256 live = _mint(holder, _kyc("US", "CA"));
+
+        vm.warp(block.timestamp + 2 days);
+        uint256[] memory batch = new uint256[](1);
+        batch[0] = a;
+        assertEq(badge.sweepTokens(batch), 1); // only the id we named
+        assertEq(badge.getActiveTokenIds(holder).length, 2);
+
+        batch[0] = b;
+        assertEq(badge.sweepTokens(batch), 1);
+        uint256[] memory active = badge.getActiveTokenIds(holder);
+        assertEq(active.length, 1);
+        assertEq(active[0], live);
+    }
+
+    // The point of sweepTokens: an active set larger than one sweep can scan still drains, batch by batch,
+    // because each call is bounded by its own calldata and its progress persists.
+    function test_SweepTokens_DrainsASetTooLargeToSweepAtOnce() public {
+        address holder = makeAddr("oversized");
+        uint256 total = 60;
+        for (uint256 i = 0; i < total; i++) {
+            Credential memory short = _cred(K_ACCREDITED);
+            short.expiryDate = uint64(block.timestamp + 1 days);
+            _mint(holder, short);
+        }
+        uint256 live = _mint(holder, _kyc("US", "CA"));
+        vm.warp(block.timestamp + 2 days);
+
+        // Drain in fixed-size batches, re-reading the set each round: no single call scans the whole set.
+        uint256 evicted;
+        while (badge.getActiveTokenIds(holder).length > 1) {
+            uint256[] memory active = badge.getActiveTokenIds(holder);
+            uint256 size = active.length > 10 ? 10 : active.length;
+            uint256[] memory batch = new uint256[](size);
+            for (uint256 i = 0; i < size; i++) batch[i] = active[i];
+            evicted += badge.sweepTokens(batch);
+        }
+
+        assertEq(evicted, total);
+        uint256[] memory remaining = badge.getActiveTokenIds(holder);
+        assertEq(remaining.length, 1);
+        assertEq(remaining[0], live); // the valid credential survived every batch
         assertTrue(badge.hasValidLexCheX(holder));
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ─────────────────────────────────────────────────────────────────────────
+    // An untrusted caller must not be able to drop a VALID credential and suppress a compliance fact.
+    function test_SweepTokens_CannotEvictValidCredential() public {
+        address holder = makeAddr("protected");
+        uint256 live = _mint(holder, _kyc("US", "CA"));
 
-    function _createCategory(bytes32 id, CategoryKind kind) internal {
-        _createScopedCategory(id, kind, address(0));
+        uint256[] memory batch = new uint256[](1);
+        batch[0] = live;
+        vm.prank(makeAddr("stranger"));
+        assertEq(badge.sweepTokens(batch), 0);
+
+        uint256[] memory active = badge.getActiveTokenIds(holder);
+        assertEq(active.length, 1);
+        assertEq(active[0], live);
+        assertEq(badge.getUsState(holder), bytes2("CA")); // the fact still answers
     }
 
-    function _createScopedCategory(bytes32 id, CategoryKind kind, address scope) internal {
-        CredentialCategory memory c;
-        c.name = "cat";
-        c.kind = kind;
-        c.defaultValidityDuration = 3650 days;
-        c.burnAuth = IERC5484.BurnAuth.OwnerOnly;
-        c.scope = scope;
-        // Governance map for these tests: KYC_AML is the identity/residence anchor (jurisdiction + usState);
-        // ACCREDITED_INVESTOR carries the full entity profile; whitelist/syndicate/custom govern nothing.
-        if (kind == CategoryKind.KYC_AML) {
-            c.governedAttributes = ATTR_INVESTOR_JURISDICTION | ATTR_US_STATE;
-        } else if (kind == CategoryKind.ACCREDITED_INVESTOR) {
-            c.governedAttributes = ATTR_INVESTOR_JURISDICTION | ATTR_REGULATORY_JURISDICTION | ATTR_US_STATE | ATTR_BO_COUNT;
-        }
+    // sweepTokens derives each holder from its token, so one batch spanning two holders evicts from each
+    // holder's own set and leaves the other's intact.
+    function test_SweepTokens_MixedHoldersStayIsolated() public {
+        address first = makeAddr("mixedFirst");
+        address second = makeAddr("mixedSecond");
+        Credential memory short = _cred(K_ACCREDITED);
+        short.expiryDate = uint64(block.timestamp + 1 days);
+
+        uint256 firstExpired = _mint(first, short);
+        uint256 firstLive = _mint(first, _kyc("US", "CA"));
+        uint256 secondExpired = _mint(second, short);
+        uint256 secondLive = _mint(second, _kyc("KY", bytes2(0)));
+
+        vm.warp(block.timestamp + 2 days);
+        uint256[] memory batch = new uint256[](2);
+        batch[0] = secondExpired; // deliberately out of holder order
+        batch[1] = firstExpired;
+        assertEq(badge.sweepTokens(batch), 2);
+
+        uint256[] memory firstActive = badge.getActiveTokenIds(first);
+        assertEq(firstActive.length, 1);
+        assertEq(firstActive[0], firstLive);
+        uint256[] memory secondActive = badge.getActiveTokenIds(second);
+        assertEq(secondActive.length, 1);
+        assertEq(secondActive[0], secondLive);
+    }
+
+    // A stale or malformed batch is harmless: unknown ids, unexpired ids and ids already evicted by void()
+    // or an earlier sweep are all skipped, and the count reports only real evictions.
+    function test_SweepTokens_SkipsUnknownAndAlreadyEvicted() public {
+        address holder = makeAddr("stale");
+        Credential memory short = _cred(K_ACCREDITED);
+        short.expiryDate = uint64(block.timestamp + 1 days);
+        uint256 expired = _mint(holder, short);
+        Credential memory shortVoided = _cred(K_QP);
+        shortVoided.expiryDate = uint64(block.timestamp + 1 days);
+        uint256 voided = _mint(holder, shortVoided);
+        uint256 live = _mint(holder, _kyc("US", "CA"));
+
         vm.prank(owner);
-        badge.createCategory(id, c);
+        badge.void(voided, "revoked"); // already evicted at void time
+        vm.warp(block.timestamp + 2 days);
+
+        uint256[] memory batch = new uint256[](4);
+        batch[0] = 9999; // never minted
+        batch[1] = voided; // expired but already evicted
+        batch[2] = live; // still valid
+        batch[3] = expired; // the only real eviction
+        assertEq(badge.sweepTokens(batch), 1);
+        assertEq(badge.getActiveTokenIds(holder).length, 1);
+
+        assertEq(badge.sweepTokens(batch), 0); // replaying the batch changes nothing
+        assertEq(badge.getActiveTokenIds(holder).length, 1);
+        assertTrue(badge.isValid(live)); // records survive: nothing was burned
+        assertFalse(badge.isValid(expired));
     }
 
-    function _baseCred(string memory jurisdiction, bytes2 state) internal pure returns (Credential memory c) {
-        c.investorName = "Inv";
-        c.investorType = "Individual";
+    function test_HasValidLexCheX_AnyValidCredential() public {
+        address holder = makeAddr("v1");
+        assertFalse(badge.hasValidLexCheX(holder));
+        _mint(holder, _kyc("US", "CA"));
+        assertTrue(badge.hasValidLexCheX(holder));
+    }
+
+    // Seasoning: earliest valid issuance asserting a key (0 when none).
+    function test_EarliestValidIssuance() public {
+        address holder = makeAddr("season");
+        assertEq(uint256(badge.earliestValidIssuance(holder, K_ACCREDITED)), 0);
+        uint256 firstId = _mint(holder, _cred(K_ACCREDITED));
+        uint64 t0 = badge.getCredential(firstId).issuanceDate;
+        vm.warp(block.timestamp + 10 days);
+        _mint(holder, _cred(K_ACCREDITED)); // later issuance; earliest must stay the first
+        assertEq(uint256(badge.earliestValidIssuance(holder, K_ACCREDITED)), uint256(t0));
+    }
+
+    // ── Mint validation & lifecycle ───────────────────────────────────────────
+
+    function test_Mint_OnlyAdmin() public {
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert();
+        badge.mint(makeAddr("to"), _kyc("US", "CA"));
+    }
+
+    function test_Mint_EmptyAsserts_Reverts() public {
+        Credential memory c;
+        c.expiryDate = uint64(block.timestamp + 1 days);
+        vm.prank(owner);
+        vm.expectRevert(ILexChexBadge.LexChexBadge_BadAsserts.selector);
+        badge.mint(makeAddr("to"), c);
+    }
+
+    // Every VALUE key must carry its payload: asserting one while leaving its field empty is a hollow
+    // attestation and is rejected at mint. One case per value key.
+    function test_Mint_MissingValue_EachValueKeyReverts() public {
+        _expectMissingValue(K_INVESTOR_TYPE);
+        _expectMissingValue(K_INVESTOR_JURISDICTION);
+        _expectMissingValue(K_LOOKTHROUGH_JURISDICTION);
+        _expectMissingValue(K_US_STATE);
+        _expectMissingValue(K_BO_COUNT);
+        _expectMissingValue(K_DATA);
+    }
+
+    // `asserts` admits only defined K_* bits — an undefined bit would be an uninterpretable claim.
+    function test_Mint_UnknownAssertBit_Reverts() public {
+        address to = makeAddr("unknownBit");
+        Credential memory gapBit = _cred(1 << 6); // reserved gap between the VALUE and STATUS ranges
+        vm.prank(owner);
+        vm.expectRevert(ILexChexBadge.LexChexBadge_BadAsserts.selector);
+        badge.mint(to, gapBit);
+
+        Credential memory aboveTop = _cred(K_SPV_WHITELIST << 1); // above the highest defined key
+        vm.prank(owner);
+        vm.expectRevert(ILexChexBadge.LexChexBadge_BadAsserts.selector);
+        badge.mint(to, aboveTop);
+
+        Credential memory mixed = _kyc("US", "CA"); // otherwise-valid credential plus one unknown bit
+        mixed.asserts |= (1 << 6);
+        vm.prank(owner);
+        vm.expectRevert(ILexChexBadge.LexChexBadge_BadAsserts.selector);
+        badge.mint(to, mixed);
+    }
+
+    // Presets are issuer guidance, not a schema: a preset mints, and so does a bespoke composition that
+    // matches no preset.
+    function test_Presets_UsableAndNotMandatory() public {
+        address individual = makeAddr("presetKyc");
+        Credential memory kyc = _cred(PRESET_KYC_AML);
+        kyc.investorType = InvestorType.INDIVIDUAL;
+        kyc.investorJurisdiction = "US";
+        _mint(individual, kyc);
+        assertEq(badge.getInvestorJurisdiction(individual), "US");
+
+        address feeder = makeAddr("presetLookthrough");
+        Credential memory lookThrough = _cred(PRESET_ENTITY_LOOKTHROUGH);
+        lookThrough.investorType = InvestorType.ENTITY;
+        lookThrough.lookThroughJurisdiction = "US";
+        lookThrough.beneficialOwnerCount = 3;
+        _mint(feeder, lookThrough);
+        assertEq(badge.getLookThroughJurisdiction(feeder), "US");
+        assertEq(uint256(badge.getBeneficialOwnerCount(feeder)), 3);
+
+        address bespoke = makeAddr("bespoke");
+        address spv = makeAddr("spvBespoke");
+        Credential memory composed = _cred(K_QIB | K_SPV_WHITELIST | K_DATA); // matches no preset
+        composed.scope = spv;
+        composed.data = hex"01";
+        _mint(bespoke, composed);
+        assertTrue(badge.hasValidCredentialOf(bespoke, K_QIB));
+        assertTrue(badge.hasValidWhitelistFor(bespoke, spv));
+        assertEq(badge.getData(bespoke), hex"01");
+    }
+
+    function test_Mint_MissingScope_Reverts() public {
+        Credential memory c = _cred(K_SPV_WHITELIST); // whitelist without a scope
+        vm.prank(owner);
+        vm.expectRevert(ILexChexBadge.LexChexBadge_MissingScope.selector);
+        badge.mint(makeAddr("to"), c);
+    }
+
+    function test_Mint_InvalidExpiry_Reverts() public {
+        Credential memory c = _jurisdiction("US");
+        c.expiryDate = uint64(block.timestamp); // not in the future
+        vm.prank(owner);
+        vm.expectRevert(ILexChexBadge.LexChexBadge_InvalidExpiry.selector);
+        badge.mint(makeAddr("to"), c);
+    }
+
+    function test_Void_OnlyOwner_RecordRetained() public {
+        address holder = makeAddr("retain");
+        uint256 id = _mint(holder, _kyc("US", "CA"));
+
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert();
+        badge.void(id, "x");
+
+        vm.prank(owner);
+        badge.void(id, "revoked");
+
+        assertFalse(badge.isValid(id));
+        Credential memory stored = badge.getCredential(id); // record survives for audit
+        assertEq(stored.usState, bytes2("CA"));
+        assertEq(stored.voided, "revoked");
+    }
+
+    // Voiding records the reason and nothing else — every attested field is frozen at issuance.
+    function test_Void_LeavesAttestedFieldsUnchanged() public {
+        address holder = makeAddr("frozen");
+        Credential memory c = _cred(
+            K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_LOOKTHROUGH_JURISDICTION | K_US_STATE | K_BO_COUNT
+                | K_DATA | K_SPV_WHITELIST
+        );
+        c.investorType = InvestorType.ENTITY;
+        c.investorJurisdiction = "KY";
+        c.lookThroughJurisdiction = "US";
+        c.usState = "DE";
+        c.beneficialOwnerCount = 9;
+        c.data = abi.encode("payload");
+        c.scope = makeAddr("spvFrozen");
+        c.categoryId = LABEL_LEGION;
+        c.agreementId = keccak256("agreement");
+        c.evidenceHash = keccak256("evidence");
+        uint256 id = _mint(holder, c);
+        Credential memory beforeVoid = badge.getCredential(id);
+        assertEq(beforeVoid.voided, "");
+
+        vm.prank(owner);
+        badge.void(id, "revoked");
+        Credential memory afterVoid = badge.getCredential(id);
+
+        assertEq(afterVoid.voided, "revoked"); // the only field that changes
+        assertEq(afterVoid.asserts, beforeVoid.asserts);
+        assertEq(uint256(afterVoid.investorType), uint256(beforeVoid.investorType));
+        assertEq(afterVoid.investorJurisdiction, beforeVoid.investorJurisdiction);
+        assertEq(afterVoid.lookThroughJurisdiction, beforeVoid.lookThroughJurisdiction);
+        assertEq(afterVoid.usState, beforeVoid.usState);
+        assertEq(uint256(afterVoid.beneficialOwnerCount), uint256(beforeVoid.beneficialOwnerCount));
+        assertEq(afterVoid.data, beforeVoid.data);
+        assertEq(afterVoid.scope, beforeVoid.scope);
+        assertEq(afterVoid.categoryId, beforeVoid.categoryId);
+        assertEq(afterVoid.agreementId, beforeVoid.agreementId);
+        assertEq(afterVoid.evidenceHash, beforeVoid.evidenceHash);
+        assertEq(uint256(afterVoid.issuanceDate), uint256(beforeVoid.issuanceDate));
+        assertEq(uint256(afterVoid.expiryDate), uint256(beforeVoid.expiryDate));
+    }
+
+    // Revocation is one-way: there is no un-void path, and a repeated void is a harmless no-op that can
+    // neither resurface the credential nor corrupt the active set.
+    function test_Void_TwiceIsNoop_NeverResurfaces() public {
+        address holder = makeAddr("oneWay");
+        _mint(holder, _kyc("US", "CA")); // older, CA
+        uint256 ny = _mint(holder, _kyc("US", "NY")); // newer, NY
+
+        vm.startPrank(owner);
+        badge.void(ny, "revoked");
+        badge.void(ny, "revoked again");
+        vm.stopPrank();
+
+        assertFalse(badge.isValid(ny));
+        assertEq(badge.getActiveTokenIds(holder).length, 1);
+        assertEq(badge.getUsState(holder), bytes2("CA")); // the older valid credential governs again
+    }
+
+    function test_Void_NonexistentToken_Reverts() public {
+        vm.prank(owner);
+        vm.expectRevert(ILexChexBadge.LexChexBadge_TokenDoesNotExist.selector);
+        badge.void(999, "nope");
+    }
+
+    // Nothing is ever burned: an expired credential stops answering reads immediately (before any sweep) and,
+    // once swept out of the active set, still keeps its record and its place in the ERC-721 enumeration.
+    function test_AuditRecordSurvivesExpiryAndSweep() public {
+        address holder = makeAddr("audit");
+        Credential memory shortLived = _kyc("US", "CA");
+        shortLived.expiryDate = uint64(block.timestamp + 1 days);
+        uint256 id = _mint(holder, shortLived);
+
+        vm.warp(block.timestamp + 2 days);
+        assertFalse(badge.isValid(id));
+        assertEq(badge.getUsState(holder), bytes2(0)); // fact no longer answered, still unswept
+        assertFalse(badge.hasValidLexCheX(holder));
+        assertEq(badge.getActiveTokenIds(holder).length, 1);
+
+        badge.sweep(holder);
+        assertEq(badge.getActiveTokenIds(holder).length, 0);
+
+        assertEq(badge.balanceOf(holder), 1); // never burned
+        uint256[] memory owned = badge.getTokenIdsByOwner(holder); // full enumeration, incl. expired
+        assertEq(owned.length, 1);
+        assertEq(owned[0], id);
+        assertEq(badge.getCredentialByOwner(holder), id);
+        assertEq(badge.getCredential(id).usState, bytes2("CA")); // record intact despite eviction
+    }
+
+    // Issuance emits the indexer surface: the credential record plus the EIP-5484 Issued event, whose burn
+    // authority is always Neither.
+    function test_Mint_EmitsCredentialIssuedAndIssued() public {
+        address holder = makeAddr("mintEvent");
+        Credential memory c = _kyc("US", "CA");
+        uint256 expectedId = badge.totalSupply();
+        c.issuanceDate = uint64(block.timestamp); // stamped by mint; mirrored here for the record comparison
+
+        vm.expectEmit(true, true, false, true, address(badge));
+        emit CredentialIssued(holder, expectedId, c);
+        vm.expectEmit(true, true, true, true, address(badge));
+        emit Issued(address(0), holder, expectedId, IERC5484.BurnAuth.Neither);
+        vm.prank(owner);
+        assertEq(badge.mint(holder, c), expectedId);
+    }
+
+    function test_Void_EmitsCredentialVoided() public {
+        address holder = makeAddr("voidEvent");
+        uint256 id = _mint(holder, _kyc("US", "CA"));
+
+        vm.expectEmit(true, true, false, true, address(badge));
+        emit CredentialVoided(holder, id, "sanctions hit");
+        vm.prank(owner);
+        badge.void(id, "sanctions hit");
+    }
+
+    function test_BurnAuth_AlwaysNeither() public {
+        address holder = makeAddr("ba");
+        uint256 id = _mint(holder, _kyc("US", "CA"));
+        assertEq(uint256(badge.burnAuth(id)), uint256(IERC5484.BurnAuth.Neither));
+    }
+
+    // Upgrade authority is the badge owner: nobody else can swap the implementation out from under the
+    // credential registry, and the credentials themselves survive an upgrade.
+    function test_AuthorizeUpgrade_OnlyOwner() public {
+        bytes32 implSlot = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc; // ERC-1967
+        address holder = makeAddr("upgrade");
+        uint256 id = _mint(holder, _kyc("US", "CA"));
+        address newImpl = address(new LeXcheXBadge());
+
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert();
+        badge.upgradeToAndCall(newImpl, "");
+
+        vm.prank(owner);
+        badge.upgradeToAndCall(newImpl, "");
+
+        assertEq(address(uint160(uint256(vm.load(address(badge), implSlot)))), newImpl);
+        assertTrue(badge.isValid(id)); // credential state survives
+        assertEq(badge.getUsState(holder), bytes2("CA"));
+    }
+
+    function test_Soulbound_TransferReverts() public {
+        address holder = makeAddr("soul");
+        address other = makeAddr("other");
+        uint256 id = _mint(holder, _kyc("US", "CA"));
+        vm.prank(holder);
+        vm.expectRevert(ILexChexBadge.LexChexBadge_SoulBound.selector);
+        badge.transferFrom(holder, other, id);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    function _cred(uint256 asserts) internal view returns (Credential memory c) {
+        c.asserts = asserts;
+        c.expiryDate = uint64(block.timestamp + 3650 days);
+    }
+
+    /// @dev Individual with a physical jurisdiction (and U.S. state when non-empty).
+    function _kyc(string memory jurisdiction, bytes2 state) internal view returns (Credential memory c) {
+        uint256 asserts = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION;
+        if (state != bytes2(0)) asserts |= K_US_STATE;
+        c = _cred(asserts);
+        c.investorType = InvestorType.INDIVIDUAL;
         c.investorJurisdiction = jurisdiction;
         c.usState = state;
     }
 
-    function _mint(address to, bytes32 categoryId, Credential memory c) internal returns (uint256) {
-        vm.prank(owner);
-        return badge.mint(to, categoryId, c);
+    function _jurisdiction(string memory j) internal view returns (Credential memory c) {
+        c = _cred(K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION);
+        c.investorType = InvestorType.INDIVIDUAL;
+        c.investorJurisdiction = j;
     }
 
-    function _mintCred(address to, bytes32 categoryId, string memory jurisdiction, bytes2 state)
-        internal
-        returns (uint256)
-    {
-        return _mint(to, categoryId, _baseCred(jurisdiction, state));
+    function _mint(address to, Credential memory c) internal returns (uint256) {
+        vm.prank(owner);
+        return badge.mint(to, c);
+    }
+
+    /// @dev Asserts `key` alone, leaving every value field empty, and expects the mint to be rejected.
+    function _expectMissingValue(uint256 key) internal {
+        address to = makeAddr("missingValue");
+        Credential memory c = _cred(key);
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(ILexChexBadge.LexChexBadge_MissingValue.selector, key));
+        badge.mint(to, c);
+    }
+}
+
+/// @notice The gas cliff `sweepTokens` exists to remove, exercised under a real gas cap. Kept in its own
+/// contract because the assertions need a low-level call with a gas budget.
+contract LeXcheXBadgeSweepGasTest is Test {
+    address owner;
+    LeXcheXBadge badge;
+
+    function setUp() public {
+        owner = makeAddr("owner");
+        BorgAuth auth = new BorgAuth(owner);
+        badge = LeXcheXBadge(
+            address(
+                new ERC1967Proxy(
+                    address(new LeXcheXBadge()), abi.encodeCall(LeXcheXBadge.initialize, (address(auth)))
+                )
+            )
+        );
+    }
+
+    // Scanning an oversized set does not fit and rolls back having evicted nothing, while a calldata-bounded
+    // batch fits under the same cap and its progress persists — so the set is always drainable.
+    function test_SweepTokens_MakesProgressWhereFullSweepRunsOut() public {
+        address holder = makeAddr("cliff");
+        for (uint256 i = 0; i < 60; i++) {
+            Credential memory short;
+            short.asserts = K_ACCREDITED;
+            short.expiryDate = uint64(block.timestamp + 1 days);
+            vm.prank(owner);
+            badge.mint(holder, short);
+        }
+        vm.warp(block.timestamp + 2 days);
+        uint256 before = badge.getActiveTokenIds(holder).length;
+        assertEq(before, 60);
+
+        uint256 cap = 200_000;
+        (bool fullSwept,) = address(badge).call{gas: cap}(abi.encodeWithSelector(badge.sweep.selector, holder));
+        assertFalse(fullSwept); // the whole-set scan runs out of gas
+        assertEq(badge.getActiveTokenIds(holder).length, before); // all-or-nothing: nothing was evicted
+
+        uint256[] memory active = badge.getActiveTokenIds(holder);
+        uint256[] memory batch = new uint256[](5);
+        for (uint256 i = 0; i < batch.length; i++) batch[i] = active[i];
+        (bool batchSwept,) =
+            address(badge).call{gas: cap}(abi.encodeWithSelector(badge.sweepTokens.selector, batch));
+        assertTrue(batchSwept); // the bounded batch fits under the same cap
+        assertEq(badge.getActiveTokenIds(holder).length, before - batch.length); // and its progress persisted
     }
 }

@@ -4,33 +4,23 @@ pragma solidity 0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 import {LeXcheXBadgeRender} from "../src/creds/LeXcheXBadgeRender.sol";
-import {Credential, CredentialCategory, CategoryKind} from "../src/creds/storage/lexchexBadgeStorage.sol";
-import {IERC5484} from "../src/interfaces/IERC5484.sol";
+import {Credential} from "../src/creds/storage/lexchexBadgeStorage.sol";
+import {InvestorType} from "../src/interfaces/ILexChexBadge.sol";
 
-/// @notice Covers the regulatoryJurisdiction rendering added to LeXcheXBadgeRender: the tokenURI metadata
+/// @notice Covers the lookThroughJurisdiction rendering added to LeXcheXBadgeRender: the tokenURI metadata
 /// trait and the SVG row are emitted only when the field is set, and never displace the physical jurisdiction.
 contract LeXcheXBadgeRenderTest is Test {
     using stdJson for string;
 
     function _cred(string memory regulatory) internal pure returns (Credential memory c) {
-        c.investorName = "Acme Feeder LP";
-        c.investorType = "Fund";
+        c.investorType = InvestorType.ENTITY;
         c.investorJurisdiction = "KY";
-        c.regulatoryJurisdiction = regulatory;
+        c.lookThroughJurisdiction = regulatory;
         c.expiryDate = 1_893_456_000;
     }
 
-    function _cat() internal pure returns (CredentialCategory memory c) {
-        c.name = "Accredited";
-        c.description = "desc";
-        c.kind = CategoryKind.ACCREDITED_INVESTOR;
-        c.burnAuth = IERC5484.BurnAuth.OwnerOnly;
-        c.exists = true;
-        c.active = true;
-    }
-
     function test_TokenUri_IncludesRegulatoryJurisdiction_WhenSet() public {
-        (string memory json, string memory svg) = _decode(LeXcheXBadgeRender.tokenURI(1, _cred("US"), _cat(), true));
+        (string memory json, string memory svg) = _decode(LeXcheXBadgeRender.tokenURI(1, _cred("US"), true));
 
         (bool foundReg, string memory regValue) = _trait(json, "Regulatory Jurisdiction");
         assertTrue(foundReg, "reg trait missing");
@@ -45,7 +35,7 @@ contract LeXcheXBadgeRenderTest is Test {
     }
 
     function test_TokenUri_OmitsRegulatoryJurisdiction_WhenEmpty() public {
-        (string memory json, string memory svg) = _decode(LeXcheXBadgeRender.tokenURI(1, _cred(""), _cat(), true));
+        (string memory json, string memory svg) = _decode(LeXcheXBadgeRender.tokenURI(1, _cred(""), true));
 
         (bool foundReg,) = _trait(json, "Regulatory Jurisdiction");
         assertFalse(foundReg, "reg trait should be absent");

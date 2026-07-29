@@ -16,13 +16,9 @@ import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC5484} from "../src/interfaces/IERC5484.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {LeXcheXBadge} from "../src/creds/lexchexBadge.sol";
-import {
-    CategoryKind,
-    Credential,
-    CredentialCategory,
-    ATTR_INVESTOR_JURISDICTION,
-    ATTR_US_STATE
-} from "../src/creds/storage/lexchexBadgeStorage.sol";
+import {K_INVESTOR_TYPE, K_INVESTOR_JURISDICTION, K_US_STATE, K_ACCREDITED, K_QIB, InvestorType}
+    from "../src/interfaces/ILexChexBadge.sol";
+import {Credential} from "../src/creds/storage/lexchexBadgeStorage.sol";
 import {FundInterestData} from "../src/storage/extensions/FundInterestExtension.sol";
 import {
     AcceptOfferParams,
@@ -137,7 +133,8 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     HoldingPeriodCondition public holdingPeriod;
     LexChexBadgeKindCondition public accredited;
     LexChexBadgeKindCondition public qib;
-    LexChexBadgeKindCondition public nonUsPerson;
+    // Non-U.S.-person status is attested as a labeled credential (CAT_NONUS) and gated as an issuer tier.
+    LegionSoulboundCondition public nonUsPerson;
     RegSDistributionComplianceCondition public regS;
     Rule144DisclosureCondition public rule144Disclosure;
     Section4a7DisclosureCondition public section4a7Disclosure;
@@ -624,11 +621,6 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 )
             )
         );
-        _createCategory(CAT_KYC, CategoryKind.KYC_AML);
-        _createCategory(CAT_ACCREDITED, CategoryKind.ACCREDITED_INVESTOR);
-        _createCategory(CAT_QIB, CategoryKind.QIB);
-        _createCategory(CAT_NONUS, CategoryKind.NON_US_PERSON);
-        _createCategory(CAT_LEGION, CategoryKind.CUSTOM);
     }
 
     function _deployConditions() internal {
@@ -662,9 +654,14 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 abi.encodeCall(HoldingPeriodCondition.initialize, (address(auth), uint256(HOLD)))
             )
         );
-        accredited = _deployKindCondition(CategoryKind.ACCREDITED_INVESTOR);
-        qib = _deployKindCondition(CategoryKind.QIB);
-        nonUsPerson = _deployKindCondition(CategoryKind.NON_US_PERSON);
+        accredited = _deployKindCondition(K_ACCREDITED);
+        qib = _deployKindCondition(K_QIB);
+        nonUsPerson = LegionSoulboundCondition(
+            _proxy(
+                address(new LegionSoulboundCondition()),
+                abi.encodeCall(LegionSoulboundCondition.initialize, (address(auth), address(badge), CAT_NONUS, false))
+            )
+        );
         regS = RegSDistributionComplianceCondition(
             _proxy(
                 address(new RegSDistributionComplianceCondition()),
@@ -705,11 +702,11 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         timeSettlement = new TimeSettlementPeriodCondition();
     }
 
-    function _deployKindCondition(CategoryKind kind) internal returns (LexChexBadgeKindCondition) {
+    function _deployKindCondition(uint256 kindKey) internal returns (LexChexBadgeKindCondition) {
         return LexChexBadgeKindCondition(
             _proxy(
                 address(new LexChexBadgeKindCondition()),
-                abi.encodeCall(LexChexBadgeKindCondition.initialize, (address(auth), address(badge), kind, "", false))
+                abi.encodeCall(LexChexBadgeKindCondition.initialize, (address(auth), address(badge), kindKey, false))
             )
         );
     }
@@ -756,45 +753,25 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         paymentToken.approve(address(dm), type(uint256).max);
     }
 
-    function _createCategory(bytes32 id, CategoryKind kind) internal {
-        bool isAnchor = kind == CategoryKind.KYC_AML; // KYC is the residence/identity anchor for these tests
-        CredentialCategory memory c = CredentialCategory({
-            name: "cat",
-            description: "",
-            kind: kind,
-            defaultValidityDuration: 3650 days,
-            requiresUsState: false,
-            requiresBeneficialOwnerCount: false,
-            requiresEvidenceHash: false,
-            burnAuth: IERC5484.BurnAuth.OwnerOnly,
-            scope: address(0),
-            active: true,
-            exists: true,
-            governedAttributes: isAnchor ? (ATTR_INVESTOR_JURISDICTION | ATTR_US_STATE) : 0
-        });
-        vm.prank(owner);
-        badge.createCategory(id, c);
-    }
-
+    /// @dev Mints a credential whose facts follow the categoryId's role: CAT_KYC carries the residence anchor
+    /// (jurisdiction + state), CAT_ACCREDITED / CAT_QIB assert the corresponding status fact-key, and every
+    /// categoryId is also written as the free-form label so issuer-tier gates (Legion, non-U.S. person) match.
     function _mintCred(address to, bytes32 categoryId, string memory jurisdiction, bytes2 state) internal {
-        Credential memory cred = Credential({
-            categoryId: categoryId,
-            investorName: "Inv",
-            investorType: "Individual",
-            investorJurisdiction: jurisdiction,
-            usState: state,
-            beneficialOwnerCount: 0,
-            issuanceDate: 0,
-            expiryDate: 0,
-            voided: "",
-            agreementId: bytes32(0),
-            evidenceHash: bytes32(0),
-            extensionData: "",
-            regulatoryJurisdiction: "",
-            lastUpdated: 0
-        });
+        Credential memory cred;
+        cred.categoryId = categoryId; // free-form label (Legion / non-U.S.-person gates match on it)
+        cred.investorType = InvestorType.INDIVIDUAL;
+        cred.investorJurisdiction = jurisdiction;
+        cred.usState = state;
+        cred.expiryDate = uint64(block.timestamp + 3650 days);
+
+        uint256 asserts = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION;
+        if (state != bytes2(0)) asserts |= K_US_STATE;
+        if (categoryId == CAT_ACCREDITED) asserts |= K_ACCREDITED;
+        else if (categoryId == CAT_QIB) asserts |= K_QIB;
+        cred.asserts = asserts;
+
         vm.prank(owner);
-        badge.mint(to, categoryId, cred);
+        badge.mint(to, cred);
     }
 
     function _sellerCertDetails() internal view returns (CertificateDetails memory) {

@@ -105,7 +105,9 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
         // No acquirer yet (posting context) — the cap is evaluated at acceptance and finalization
         if (buyer == address(0)) return true;
 
-        bool buyerIsUS = badge.isUSInvestor(buyer);
+        // isUSLookThroughInvestor resolves an unknown holder conservatively as U.S., so an unknown buyer is both blocked
+        // (when blockUsInvestors) and counted (when usResidentOnlyCount) rather than slipping through.
+        bool buyerIsUS = badge.isUSLookThroughInvestor(buyer);
         if (blockUsInvestors && buyerIsUS) return false;
 
         if (cap == 0) return true;
@@ -128,7 +130,7 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
             : printer.lookThroughHolderCount();
 
         // §3(c)(1)(A) look-through for the incoming buyer (not yet a holder at check time): a credentialed
-        // entity BO count flows through instead of 1
+        // entity BO count flows through instead of 1. No look-through credential (count 0) → single holder.
         uint32 boCount = badge.getBeneficialOwnerCount(buyer);
         uint256 addition = boCount > 0 ? boCount : 1;
 

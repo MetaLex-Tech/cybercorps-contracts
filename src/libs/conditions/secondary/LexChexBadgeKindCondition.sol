@@ -6,30 +6,28 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
 import "../../../interfaces/ILexChexBadge.sol";
-import {CategoryKind} from "../../../creds/storage/lexchexBadgeStorage.sol";
 import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
 
 /// @title  LexChexBadgeKindCondition - parameterizable investor-status gate on the LeXcheXBadge layer
 /// @author MetaLeX Labs, Inc.
 /// @notice The secondary-trading successor of LexChexCondition: one primitive, deployed per
-/// parameterization (spec §B):
-///  - AccreditedInvestorCondition: kind = ACCREDITED_INVESTOR, buyer only — required for §4(a)(7) trades
+/// parameterization (spec §B), configured with the required status fact-key (a K_* value from
+/// ILexChexBadge):
+///  - AccreditedInvestorCondition: kindKey = K_ACCREDITED, buyer only — required for §4(a)(7) trades
 ///    and typically by operating agreements generally
-///  - QualifiedPurchaserCondition: kind = QUALIFIED_PURCHASER, buyer + seller — §3(c)(7) funds only
-///  - QualifiedInstitutionalBuyerCondition: kind = QIB, buyer only — Rule 144A pathway only
-/// An optional investorType filter narrows within the kind (e.g. accredited / QP / QIB subtype strings).
+///  - QualifiedPurchaserCondition: kindKey = K_QP, buyer + seller — §3(c)(7) funds only
+///  - QualifiedInstitutionalBuyerCondition: kindKey = K_QIB, buyer only — Rule 144A pathway only
 contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgAuthACL {
     error InvalidBadge();
 
     event BadgeUpdated(address badge);
-    event ParametersUpdated(CategoryKind kind, string investorTypeFilter, bool checkSeller);
+    event ParametersUpdated(uint256 kindKey, bool checkSeller);
 
     ILexChexBadge public badge;
-    CategoryKind public kind;
-    string public investorTypeFilter;
+    uint256 public kindKey;
     bool public checkSeller;
 
-    uint256[46] private __gap;
+    uint256[47] private __gap;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -39,19 +37,17 @@ contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgrade
     function initialize(
         address _auth,
         address _badge,
-        CategoryKind _kind,
-        string memory _investorTypeFilter,
+        uint256 _kindKey,
         bool _checkSeller
     ) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
         if (_badge == address(0)) revert InvalidBadge();
         badge = ILexChexBadge(_badge);
-        kind = _kind;
-        investorTypeFilter = _investorTypeFilter;
+        kindKey = _kindKey;
         checkSeller = _checkSeller;
         emit BadgeUpdated(_badge);
-        emit ParametersUpdated(_kind, _investorTypeFilter, _checkSeller);
+        emit ParametersUpdated(_kindKey, _checkSeller);
     }
 
     function updateBadge(address _badge) external onlyAdmin {
@@ -60,15 +56,10 @@ contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgrade
         emit BadgeUpdated(_badge);
     }
 
-    function updateParameters(
-        CategoryKind _kind,
-        string memory _investorTypeFilter,
-        bool _checkSeller
-    ) external onlyAdmin {
-        kind = _kind;
-        investorTypeFilter = _investorTypeFilter;
+    function updateParameters(uint256 _kindKey, bool _checkSeller) external onlyAdmin {
+        kindKey = _kindKey;
         checkSeller = _checkSeller;
-        emit ParametersUpdated(_kind, _investorTypeFilter, _checkSeller);
+        emit ParametersUpdated(_kindKey, _checkSeller);
     }
 
     function checkCondition(
@@ -80,10 +71,10 @@ contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgrade
         Offer memory offer = dealManager.getOffer(offerId);
         (address seller, address buyer,) = _resolveParties(dealManager, offer, agreementId);
 
-        if (buyer != address(0) && !badge.hasValidCredentialOfKind(buyer, kind, investorTypeFilter)) {
+        if (buyer != address(0) && !badge.hasValidCredentialOf(buyer, kindKey)) {
             return false;
         }
-        if (checkSeller && seller != address(0) && !badge.hasValidCredentialOfKind(seller, kind, investorTypeFilter)) {
+        if (checkSeller && seller != address(0) && !badge.hasValidCredentialOf(seller, kindKey)) {
             return false;
         }
         return true;

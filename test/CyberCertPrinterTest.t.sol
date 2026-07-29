@@ -241,7 +241,7 @@ contract MockLookThroughBadge {
     function setUs(address a, bool v) external { us[a] = v; }
 
     function getBeneficialOwnerCount(address a) external view returns (uint32) { return bo[a]; }
-    function isUSInvestor(address a) external view returns (bool) { return us[a]; }
+    function isUSLookThroughInvestor(address a) external view returns (bool) { return us[a]; }
 }
 
 contract CyberCertPrinterTest is Test {

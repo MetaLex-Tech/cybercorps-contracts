@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import {
-    ATTR_BO_COUNT,
-    ATTR_INVESTOR_JURISDICTION,
-    ATTR_REGULATORY_JURISDICTION,
-    ATTR_US_STATE,
-    CategoryKind,
-    Credential
-} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
+import {K_BO_COUNT, K_INVESTOR_JURISDICTION, K_INVESTOR_TYPE, InvestorType}
+    from "../../../src/interfaces/ILexChexBadge.sol";
+import {Credential} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
 import {LedgerEntryToken} from "../../../src/LedgerEntryToken.sol";
 import {HolderCapCondition} from "../../../src/libs/conditions/secondary/HolderCapCondition.sol";
@@ -56,19 +51,9 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
     HolderCapCondition internal holderCap;
     address internal incumbent = makeAddr("incumbent");
-    bytes32 internal constant CAT_ACCREDITED = keccak256("cat.accredited");
-
-    // Mirror of LeXcheXBadge.CredentialAttributesUpdated for expectEmit.
-    event CredentialAttributesUpdated(uint256 indexed tokenId, bytes2 usState, uint32 beneficialOwnerCount);
 
     function setUp() public {
         _setUpIntegration();
-        _createCategory(
-            CAT_ACCREDITED,
-            CategoryKind.ACCREDITED_INVESTOR,
-            address(0),
-            ATTR_INVESTOR_JURISDICTION | ATTR_REGULATORY_JURISDICTION | ATTR_US_STATE | ATTR_BO_COUNT
-        );
         holderCap = HolderCapCondition(
             _proxy(
                 address(new HolderCapCondition()),
@@ -85,11 +70,13 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
     /// test supersedes the setUp default (jurisdiction / beneficial-owner count).
     function _credential(address to, string memory jurisdiction, uint32 boCount) internal {
         Credential memory c;
-        c.investorName = "Inv";
-        c.investorType = "Fund";
+        c.investorType = InvestorType.ENTITY;
         c.investorJurisdiction = jurisdiction;
         c.beneficialOwnerCount = boCount;
-        _mintCred(to, CAT_ACCREDITED, c);
+        // A value key may only be asserted with a non-empty value, so K_BO_COUNT is only added when non-zero.
+        uint256 asserts = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION;
+        if (boCount > 0) asserts |= K_BO_COUNT;
+        _mintCred(to, asserts, c);
     }
 
     function _credentialBuyer(string memory jurisdiction, uint32 boCount) internal {
@@ -226,17 +213,14 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
     // 15
     function test_StaleLookThroughTally_ResyncReconciles() public {
         _seedHolder("KY", 90); // seller(1) + 90 = tally 91
-        uint256 credId = badge.getCredentialByOwner(incumbent);
 
         // A single posted+accepted offer, evaluated before and after the keeper resync (a second postOffer on
         // the same cert would revert on the still-reserved units, so we re-check the same settlement).
         (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
 
-        // Admin re-credentials the incumbent: BO count 90 -> 99. The badge emits the attribute update, but
-        // nothing pokes the printer.
-        vm.expectEmit(true, false, false, true, address(badge));
-        emit CredentialAttributesUpdated(credId, bytes2(0), 99);
-        badge.updateAttributes(credId, bytes2(0), 99);
+        // Admin re-credentials the incumbent: BO count 90 -> 99 by minting a superseding credential (the newest
+        // valid one governs the reads). Nothing pokes the printer.
+        _credential(incumbent, "KY", 99);
 
         // The badge now reports 99, yet the printer's cached tally is still the pre-update snapshot (91).
         assertEq(badge.getBeneficialOwnerCount(incumbent), 99, "badge reflects the re-credential");

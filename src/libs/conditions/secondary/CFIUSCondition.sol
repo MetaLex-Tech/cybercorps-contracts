@@ -6,7 +6,6 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
 import "../../../interfaces/ILexChexBadge.sol";
-import {CategoryKind} from "../../../creds/storage/lexchexBadgeStorage.sol";
 import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
 
 /// @title  CFIUSCondition - FIRRMA gating for CFIUS-sensitive SPVs
@@ -103,23 +102,19 @@ contract CFIUSCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgA
         // A recorded clearance attestation satisfies the condition regardless of nationality
         if (cfiusCleared[buyer]) return true;
 
-        // Non-U.S. persons require clearance
-        if (badge.hasValidCredentialOfKind(buyer, CategoryKind.NON_US_PERSON, "")) return false;
+        // Non-U.S. persons require clearance; US-ness now routes through the single physical-jurisdiction fact
+        // (no separate non-U.S.-person credential to disagree with it). An unestablished jurisdiction reads as
+        // empty, which is not U.S., so the buyer is treated as requiring clearance (fail closed for CFIUS). The
+        // U.S.-string test is the badge's canonical one, shared to avoid drift.
         string memory jurisdiction = badge.getInvestorJurisdiction(buyer);
-        if (!_isUS(jurisdiction)) return false;
+        if (!badge.isUSJurisdiction(jurisdiction)) return false;
 
-        // U.S. persons from a blocked-affiliation jurisdiction list cannot occur (US-only above), but a
-        // buyer whose credential jurisdiction matches a blocked entry still requires clearance
+        // A U.S. buyer whose credential jurisdiction matches a blocked-affiliation entry still needs clearance
         bytes32 j = keccak256(bytes(jurisdiction));
         for (uint256 i = 0; i < blockedJurisdictions.length; i++) {
             if (keccak256(bytes(blockedJurisdictions[i])) == j) return false;
         }
         return true;
-    }
-
-    function _isUS(string memory jurisdiction) internal pure returns (bool) {
-        bytes32 h = keccak256(bytes(jurisdiction));
-        return h == keccak256("US") || h == keccak256("USA") || h == keccak256("United States");
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}

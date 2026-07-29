@@ -29,19 +29,19 @@ import "./storage/lexchexBadgeStorage.sol";
 /// @author MetaLeX Labs, Inc.
 /// @notice Extracted from LeXcheXBadge so the SVG string literals live in a separately-deployed,
 /// delegatecall-linked library, keeping the badge under the EIP-170 24,576 B limit. Pure rendering:
-/// callers pass in the credential, its category, and the validity flag.
+/// callers pass in the credential and the validity flag.
 library LeXcheXBadgeRender {
     using Strings for uint256;
+
+    string constant TITLE = "LeXcheX Credential";
+    string constant DESCRIPTION = "Soulbound credential issued on the LeXcheX Badge registry.";
 
     function tokenURI(
         uint256 tokenId,
         Credential memory cred,
-        CredentialCategory memory category,
         bool valid
     ) public pure returns (string memory) {
-        string memory title = category.exists ? category.name : "LeXcheX Credential";
-
-        string memory image = generateSVGImage(title, cred);
+        string memory image = generateSVGImage(TITLE, cred);
 
         return string(
             abi.encodePacked(
@@ -50,29 +50,26 @@ library LeXcheXBadgeRender {
                     bytes(
                         abi.encodePacked(
                             '{"name": "',
-                            title,
+                            TITLE,
                             " #",
                             tokenId.toString(),
                             '", "description": "',
-                            category.exists ? category.description : "Soulbound credential issued on the LeXcheX Badge registry.",
+                            DESCRIPTION,
                             '",',
                             '"image": "data:image/svg+xml;base64,',
                             Base64.encode(bytes(image)),
                             '", "attributes": [',
-                            '{"trait_type": "Name", "value": "',
-                            cred.investorName,
-                            '"},',
-                            '{"trait_type": "Entity Type", "value": "',
-                            cred.investorType,
+                            '{"trait_type": "Investor Type", "value": "',
+                            investorTypeLabel(cred.investorType),
                             '"},',
                             '{"trait_type": "Jurisdiction", "value": "',
                             cred.investorJurisdiction,
                             '"},',
-                            bytes(cred.regulatoryJurisdiction).length > 0
+                            bytes(cred.lookThroughJurisdiction).length > 0
                                 ? string(
                                     abi.encodePacked(
                                         '{"trait_type": "Regulatory Jurisdiction", "value": "',
-                                        cred.regulatoryJurisdiction,
+                                        cred.lookThroughJurisdiction,
                                         '"},'
                                     )
                                 )
@@ -122,7 +119,7 @@ library LeXcheXBadgeRender {
                 "</text>",
                 '<text x="500" y="226" text-anchor="middle" font-family="Georgia" font-size="25" fill="#f2f2f2">THIS SOULBOUND CREDENTIAL IS HELD BY</text>',
                 '<text x="500" y="266" text-anchor="middle" font-family="Georgia" font-size="25" fill="#f2f2f2">',
-                cred.investorName,
+                investorTypeLabel(cred.investorType),
                 "</text>",
                 generateDefs(),
                 '<rect width="100%" height="100%" fill="url(#grad1)" />',
@@ -131,12 +128,12 @@ library LeXcheXBadgeRender {
                 cred.investorJurisdiction,
                 "</text>",
                 '<rect x="380" y="363" width="470px" height="5px" fill="#f2f2f2" opacity=".24"></rect>',
-                bytes(cred.regulatoryJurisdiction).length > 0
+                bytes(cred.lookThroughJurisdiction).length > 0
                     ? string(
                         abi.encodePacked(
                             '<text x="150" y="405" font-family="Georgia" font-size="26" fill="#f2f2f2" opacity=".6">REGULATORY</text>',
                             '<text x="495" y="405" font-family="Georgia" font-size="30" fill="url(#textGrad)">',
-                            cred.regulatoryJurisdiction,
+                            cred.lookThroughJurisdiction,
                             "</text>"
                         )
                     )
@@ -175,6 +172,13 @@ library LeXcheXBadgeRender {
                 "</defs>"
             )
         );
+    }
+
+    /// @dev Empty for UNSET — a credential that doesn't assert K_INVESTOR_TYPE states no type.
+    function investorTypeLabel(InvestorType investorType) internal pure returns (string memory) {
+        if (investorType == InvestorType.INDIVIDUAL) return "Individual";
+        if (investorType == InvestorType.ENTITY) return "Entity";
+        return "";
     }
 
     function timestampToDate(uint256 timestamp) internal pure returns (string memory) {
