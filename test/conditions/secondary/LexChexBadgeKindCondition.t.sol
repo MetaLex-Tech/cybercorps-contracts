@@ -28,10 +28,13 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 // | 5 | QP, buyer+seller       | accepted     |     yes      |      yes      |  pass  | both qualified        |
 //
 // Config/authorization
-// | # | case                        | expect              |
-// |---|-----------------------------|---------------------|
-// | 6 | initialize zero badge       | revert InvalidBadge |
-// | 7 | updateParameters by stranger| revert (not admin)  |
+// | #  | case                            | expect                |
+// |----|---------------------------------|-----------------------|
+// | 6  | initialize zero badge           | revert InvalidBadge   |
+// | 7  | updateParameters by stranger    | revert (not admin)    |
+// | 8  | initialize kindKey 0            | revert InvalidKindKey |
+// | 9  | updateParameters kindKey 0      | revert InvalidKindKey |
+// | 10 | updateParameters undefined bit  | revert InvalidKindKey |
 // ─────────────────────────────────────────────────────────────────────────────
 
 contract LexChexBadgeKindConditionTest is SecondaryConditionIntegrationBase {
@@ -116,5 +119,26 @@ contract LexChexBadgeKindConditionTest is SecondaryConditionIntegrationBase {
         vm.prank(stranger);
         vm.expectRevert();
         cond.updateParameters(K_QIB, true);
+    }
+
+    // 8 — an unset key would match every credential, degrading the gate to "buyer holds any badge"
+    function test_Initialize_ZeroKindKey_Reverts() public {
+        LexChexBadgeKindCondition impl = new LexChexBadgeKindCondition();
+        bytes memory initData =
+            abi.encodeCall(LexChexBadgeKindCondition.initialize, (address(auth), address(badge), 0, false));
+        vm.expectRevert(LexChexBadgeKindCondition.InvalidKindKey.selector);
+        _proxy(address(impl), initData);
+    }
+
+    // 9
+    function test_UpdateParameters_ZeroKindKey_Reverts() public {
+        vm.expectRevert(LexChexBadgeKindCondition.InvalidKindKey.selector);
+        cond.updateParameters(0, false);
+    }
+
+    // 10 — an undefined bit can never be asserted, so it would block every trade
+    function test_UpdateParameters_UndefinedKindKey_Reverts() public {
+        vm.expectRevert(LexChexBadgeKindCondition.InvalidKindKey.selector);
+        cond.updateParameters(1 << 200, false);
     }
 }

@@ -21,6 +21,7 @@ import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
 ///    the buyer's recorded country, so a holder can clear the gate without disclosing a jurisdiction
 contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgAuthACL {
     error InvalidBadge();
+    error InvalidKindKey();
 
     event BadgeUpdated(address badge);
     event ParametersUpdated(uint256 kindKey, bool checkSeller);
@@ -46,10 +47,8 @@ contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgrade
         __BorgAuthACL_init(_auth);
         if (_badge == address(0)) revert InvalidBadge();
         badge = ILexChexBadge(_badge);
-        kindKey = _kindKey;
-        checkSeller = _checkSeller;
         emit BadgeUpdated(_badge);
-        emit ParametersUpdated(_kindKey, _checkSeller);
+        _setParameters(_kindKey, _checkSeller);
     }
 
     function updateBadge(address _badge) external onlyAdmin {
@@ -59,6 +58,12 @@ contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgrade
     }
 
     function updateParameters(uint256 _kindKey, bool _checkSeller) external onlyAdmin {
+        _setParameters(_kindKey, _checkSeller);
+    }
+
+    /// @dev _kindKey is validated first
+    function _setParameters(uint256 _kindKey, bool _checkSeller) internal {
+        if (_kindKey == 0 || (_kindKey & ~ALL_KEYS) != 0) revert InvalidKindKey();
         kindKey = _kindKey;
         checkSeller = _checkSeller;
         emit ParametersUpdated(_kindKey, _checkSeller);

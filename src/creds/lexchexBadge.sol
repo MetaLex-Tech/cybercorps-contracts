@@ -219,7 +219,7 @@ contract LeXcheXBadge is
     }
 
     /// @notice True when the owner holds a valid credential asserting `kindKey` (a K_* status/kind fact-key).
-    /// Serves the LexChex parameterizations (accredited / QP / QIB / bad-actor-clear).
+    /// Serves the LexChex parameterizations (accredited / QP / QIB / bad-actor-clear / non-U.S. person).
     function hasValidCredentialOf(address owner, uint256 kindKey) public view returns (bool) {
         (, bool found) = _mostRecentValidWith(owner, kindKey);
         return found;
@@ -281,6 +281,8 @@ contract LeXcheXBadge is
     /// @notice Seasoning reference for the UI (§11.1B): earliest valid issuance asserting `kindKey`; 0 when none.
     /// The seasoning policy (30 vs 45 days) stays at the UI layer; this only supplies the timestamp.
     function earliestValidIssuance(address owner, uint256 kindKey) public view returns (uint64) {
+        if (kindKey == 0) return 0; // the empty key answers no fact; see _mostRecentValidWith
+
         uint64 earliest = 0;
         uint256[] storage ids = LeXcheXBadgeStorage.getActiveTokens(owner);
         for (uint256 i = 0; i < ids.length; i++) {
@@ -376,6 +378,9 @@ contract LeXcheXBadge is
     /// unrelated credential can neither answer the fact nor shadow one that does. Scans the (bounded) active set;
     /// expired-but-not-yet-swept entries are skipped by isValid.
     function _mostRecentValidWith(address owner, uint256 key) internal view returns (uint256 tokenId, bool found) {
+        // reject empty key early
+        if (key == 0) return (0, false);
+
         uint64 latest = 0;
         uint256[] storage ids = LeXcheXBadgeStorage.getActiveTokens(owner);
         for (uint256 i = 0; i < ids.length; i++) {

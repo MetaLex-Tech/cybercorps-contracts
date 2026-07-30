@@ -294,6 +294,14 @@ contract LeXcheXBadgeTest is Test {
         assertTrue(badge.hasValidCredentialOf(both, K_QP | K_QIB));
     }
 
+    function test_HasValidCredentialOf_EmptyKeyIsRejected() public {
+        address holder = makeAddr("emptyKey");
+        _mint(holder, _cred(K_ACCREDITED));
+        assertTrue(badge.hasValidLexCheX(holder)); // the holder does have an active badge
+        assertFalse(badge.hasValidCredentialOf(holder, 0)); // but no credential asserts nothing
+        assertEq(uint256(badge.earliestValidIssuance(holder, 0)), 0);
+    }
+
     // A status gate closes on expiry and on void, the same way a value fact does.
     function test_HasValidCredentialOf_DeniedWhenExpiredOrVoided() public {
         address expired = makeAddr("qpExpired");
