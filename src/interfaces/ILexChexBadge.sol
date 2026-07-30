@@ -24,8 +24,11 @@ uint256 constant K_BAD_ACTOR_CLEAR = 1 << 19;          // Rule 506(d) disqualifi
 // hasValidWhitelistFor); the whitelist-vs-syndicate label, if any, lives in the off-chain categoryId/notes.
 uint256 constant K_SPV_WHITELIST = 1 << 20;
 
+// Reg S (§6.5): the issuer's attestation that the holder is not a U.S. person
+uint256 constant K_NON_US = 1 << 21;
+
 uint256 constant ALL_KEYS = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_LOOKTHROUGH_JURISDICTION | K_US_STATE
-    | K_BO_COUNT | K_DATA | K_ACCREDITED | K_QP | K_QIB | K_BAD_ACTOR_CLEAR | K_SPV_WHITELIST;
+    | K_BO_COUNT | K_DATA | K_ACCREDITED | K_QP | K_QIB | K_BAD_ACTOR_CLEAR | K_SPV_WHITELIST | K_NON_US;
 
 // Presets: recommended `asserts` per badge purpose (issuer guidance only — OR in extras as needed).
 uint256 constant PRESET_KYC_AML             = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION;
@@ -36,6 +39,7 @@ uint256 constant PRESET_QUALIFIED_PURCHASER = K_QP;
 uint256 constant PRESET_QIB                 = K_QIB;
 uint256 constant PRESET_BAD_ACTOR_CLEAR     = K_BAD_ACTOR_CLEAR;
 uint256 constant PRESET_SPV_WHITELIST       = K_SPV_WHITELIST;
+uint256 constant PRESET_NON_US              = K_NON_US;
 
 /// @notice Value for K_INVESTOR_TYPE. UNSET is the empty value: a credential asserting the key must name one of
 /// the real types, and a holder with no such credential reads UNSET.
@@ -52,8 +56,8 @@ enum InvestorType {
 /// @dev A credential's `asserts` bitmask (the K_* fact-keys declared above) is the sole authority axis.
 /// Credentials are immutable once minted: supersede by minting a newer one (recency wins) and revoke by
 /// voiding — there is no in-place edit and no burn. Value getters return the field's empty value (0, "",
-/// bytes2(0)) when the holder has no valid credential asserting the fact; the `isUSLookThroughInvestor` convenience
-/// getter instead resolves an unknown holder conservatively as U.S.
+/// bytes2(0)) when the holder has no valid credential asserting the fact. Empty is reported, never interpreted:
+/// whether an unestablished fact should fail open or closed is each condition's own decision.
 interface ILexChexBadge is IERC5484 {
     // Events (indexer surface: Ponder ingests these for /api/offers eligibility and the admin panel §8.7)
     event CredentialIssued(address indexed owner, uint256 indexed tokenId, Credential cred);
@@ -95,13 +99,6 @@ interface ILexChexBadge is IERC5484 {
     function getInvestorJurisdiction(address owner) external view returns (string memory);
     /// @notice §3(c)(1)(A) look-through classification; decoupled from investorJurisdiction.
     function getLookThroughJurisdiction(address owner) external view returns (string memory);
-    /// @notice True when the owner counts as a U.S. investor for the ICA look-through. Conservative: U.S. if
-    /// either the regulatory classification or the physical investorJurisdiction is U.S., and U.S. when
-    /// jurisdiction is entirely unestablished (unknown → U.S.). Sole home for the rule.
-    function isUSLookThroughInvestor(address owner) external view returns (bool);
-    /// @notice Canonical U.S.-jurisdiction string test ("US"/"USA"/"United States"); shared so downstream
-    /// conditions (e.g. CFIUS) don't replicate the match.
-    function isUSJurisdiction(string memory jurisdiction) external pure returns (bool);
 
     /// @notice Seasoning reference (§11.1B): earliest valid issuance asserting `kindKey`; 0 when none.
     function earliestValidIssuance(address owner, uint256 kindKey) external view returns (uint64);

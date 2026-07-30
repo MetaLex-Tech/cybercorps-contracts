@@ -7,6 +7,7 @@ import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
 import "../../../interfaces/ILexChexBadge.sol";
 import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
+import {USJurisdictionPolicy} from "../../policies/USJurisdictionPolicy.sol";
 
 /// @title  USStateOfResidenceCondition - blue-sky state gating for U.S. acceptors (§6.9, Addendum D)
 /// @author MetaLeX Labs, Inc.
@@ -14,8 +15,16 @@ import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
 /// by the GP via a setter gated on the SPV's own BorgAuth admin. New York defaults onto the list for any
 /// SPV without Martin Act registration; typical additions are Alabama, Kentucky, Virginia for SPVs
 /// expecting only §4(a)(1½)/Rule 144 trades. Reads the state-of-residence (individuals) or
-/// state-of-organization (entities) attribute on the acquirer's LeXcheXBadge credential (§4.1.3A).
-/// Silent for non-U.S. acceptors (no usState attribute) and for U.S. acceptors whose state is not listed.
+/// state-of-organization (entities) attribute on the acquirer's credential (§4.1.3A).
+///
+/// | `K_INVESTOR_JURISDICTION` ↓ / `K_US_STATE` → | EMPTY | unblocked | blocked |
+/// |----------------------------------------------|-------|-----------|---------|
+/// | EMPTY                                        | BLOCK | BLOCK     | BLOCK   |
+/// | US                                           | BLOCK | PASS      | BLOCK   |
+/// | non-US                                       | PASS  | PASS      | BLOCK   |
+///
+/// A non-U.S. acquirer carrying no state is out of blue-sky reach and passes. One carrying a blocked state
+/// is contradictory evidence — the blue-sky exposure is the side to believe, so it blocks.
 contract USStateOfResidenceCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgAuthACL {
     error InvalidBadge();
     error InvalidSpv();
@@ -89,10 +98,18 @@ contract USStateOfResidenceCondition is SecondaryTradingConditionBase, UUPSUpgra
         // No acquirer yet (posting context) — nothing to gate
         if (buyer == address(0)) return true;
 
-        // Non-U.S. acceptors carry no usState attribute (empty): silent
-        bytes2 state = badge.getUsState(buyer);
-        if (state == bytes2(0)) return true;
+        // An acquirer with no recorded jurisdiction has not shown whether blue sky reaches the trade
+        string memory jurisdiction = badge.getInvestorJurisdiction(buyer);
+        if (bytes(jurisdiction).length == 0) return false;
 
+        // No state recorded: a non-U.S. acquirer is out of blue-sky reach, but a U.S. one blocks rather than
+        // passing silently — nothing forces the credential to carry a state, so passing would leave the
+        // screen opt-in by the credentialed party
+        bytes2 state = badge.getUsState(buyer);
+        if (state == bytes2(0)) return !USJurisdictionPolicy.isUS(jurisdiction);
+
+        // A recorded blocked state blocks whatever the jurisdiction says: a foreign domicile alongside a
+        // blocked state is contradictory evidence, and the blue-sky exposure is the side to believe
         return !isStateBlocked(offer.spvAddress, state);
     }
 

@@ -6,19 +6,35 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
 import "../../../interfaces/ILexChexBadge.sol";
+import {LookThroughPolicy} from "../../policies/LookThroughPolicy.sol";
 import {ILedgerEntryToken} from "../../../interfaces/ILedgerEntryToken.sol";
 import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
 
 /// @title  HolderCapCondition - ICA §3(c)(1) / §3(c)(1)(C) / §3(c)(7) holder limits at transfer time
 /// @author MetaLeX Labs, Inc.
-/// @notice Per-SPV deployment. Reads the cert printer's maintained O(1) §3(c)(1)(A) look-through holder
-/// tally at acceptance/finalization — not offer time — to avoid stale-count races, plus the acquirer's
-/// entity-beneficial-owner-count credential attribute from LeXcheXBadge (§4.1.3A). Look-through applies to
-/// both sides on one basis: each existing holder already contributes its credentialed beneficial-owner
-/// count in the printer's tally, and the incoming acquirer's credentialed count (non-zero for a
-/// look-through entity, determined offchain during credentialing) is added on top instead of counting it
-/// as one holder. A buyer who already holds live interests in the SPV (position increase, not new holder)
-/// does not implicate the cap.
+/// @notice Per-SPV deployment. Counts holders at acceptance/finalization — not offer time — to avoid
+/// stale-count races. Look-through applies to both sides on one basis: each existing holder already
+/// contributes its credentialed beneficial-owner count in the printer's tally, and the acquirer's
+/// credentialed count is added on top instead of counting it as one holder.
+///
+/// Offshore SPVs may also refuse U.S. money outright (`blockUsInvestors`) or count only U.S. holders
+/// toward the cap (`usResidentOnlyCount`, Touche Remnant). Both read the acquirer's classification from
+/// LookThroughPolicy, which resolves an unknown acquirer as U.S. — so missing evidence never slips a gate.
+///
+/// | classification | `blockUsInvestors` | `usResidentOnlyCount` |
+/// |----------------|--------------------|-----------------------|
+/// | US             | BLOCK              | counted               |
+/// | non-US         | pass               | not counted           |
+///
+/// Count added for an acquirer who is not already a holder (`cap` ≠ 0):
+///
+/// | `K_BO_COUNT` | addition |
+/// |--------------|----------|
+/// | 0            | +1       |
+/// | >0           | +count   |
+///
+/// An acquirer already holding live interests is a position increase, not a new holder, and skips the
+/// count — but not the `blockUsInvestors` floor, which an existing U.S. holder still fails.
 contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgAuthACL {
     /// @notice The ICA exception the SPV relies on (informational for the indexer/UI; the cap value and
     /// counting mode below drive the enforcement)
@@ -105,9 +121,8 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
         // No acquirer yet (posting context) — the cap is evaluated at acceptance and finalization
         if (buyer == address(0)) return true;
 
-        // isUSLookThroughInvestor resolves an unknown holder conservatively as U.S., so an unknown buyer is both blocked
-        // (when blockUsInvestors) and counted (when usResidentOnlyCount) rather than slipping through.
-        bool buyerIsUS = badge.isUSLookThroughInvestor(buyer);
+        // The no-U.S.-investor floor is absolute — it precedes the cap and applies even to an existing holder
+        bool buyerIsUS = LookThroughPolicy.isUSInvestor(badge, buyer);
         if (blockUsInvestors && buyerIsUS) return false;
 
         if (cap == 0) return true;
@@ -129,8 +144,8 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
             ? printer.usLookThroughHolderCount()
             : printer.lookThroughHolderCount();
 
-        // §3(c)(1)(A) look-through for the incoming buyer (not yet a holder at check time): a credentialed
-        // entity BO count flows through instead of 1. No look-through credential (count 0) → single holder.
+        // A credentialed entity BO count flows through instead of 1. `_validate` rejects an asserted count of
+        // zero, so a zero read means no look-through credential — a single holder.
         uint32 boCount = badge.getBeneficialOwnerCount(buyer);
         uint256 addition = boCount > 0 ? boCount : 1;
 

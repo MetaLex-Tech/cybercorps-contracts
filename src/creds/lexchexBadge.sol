@@ -59,33 +59,22 @@ import "../interfaces/ILexChexBadge.sol";
 /// Unknown / empty values
 /// - A raw value getter returns the field's empty value (0, "", bytes2(0)) when no valid credential asserts the
 ///   fact — never reverts — so downstream conditions read defaults just like the pre-redesign badge did.
-/// - Convenience getters resolve unknown conservatively for the legal question they answer: `isUSLookThroughInvestor`
-///   treats an entirely-unestablished holder as U.S., so a missing jurisdiction can never slip an ICA /
-///   no-U.S.-investor gate. Callers whose conservative direction is the opposite (e.g. CFIUS blocking foreign
-///   persons) read the raw jurisdiction getter instead, where empty reads as non-U.S. and blocks.
+/// - Empty is reported, never interpreted. This contract does not decide whether an unestablished fact should
+///   fail open or closed — that direction is regime-specific and opposite between callers (an ICA look-through
+///   wants unknown to read U.S.; a CFIUS screen wants unknown to read foreign), so each condition applies its
+///   own rule to the raw value. See LookThroughPolicy for the §3(c)(1)(A) reading.
 ///
-/// Regulatory regime map — which read serves which body of law (downstream apps: DO NOT cross-wire these):
-///   - CFIUS / FIRRMA (foreign-person nationality)       -> getInvestorJurisdiction (physical domicile)
-///   - Blue-sky (state securities registration)          -> getUsState (physical U.S. state)
-///   - ICA 3(c)(1)(A) look-through (U.S.-holder counting) -> getLookThroughJurisdiction / isUSLookThroughInvestor
-///   - Reg D / Rule 144A investor status                 -> hasValidCredentialOf(K_ACCREDITED / K_QP / K_QIB)
+/// Credential catalogue — what each fact carries and which body of law reads it. DO NOT cross-wire.
 ///
-/// CFIUS (physical domicile) and isUSLookThroughInvestor (ICA look-through) answer DIFFERENT "is it U.S.?"
-/// questions and deliberately diverge — never substitute one for the other:
-///
-///   holder profile                  | physical | look-through | CFIUS (reads physical) | isUSLookThroughInvestor |
-///   --------------------------------|----------|--------------|------------------------|-------------------------|
-///   U.S. person                     |   US     |     -        | U.S.    -> pass        | U.S.                    | agree
-///   Foreign person, no U.S. BOs     |   KY     |   - / KY     | foreign -> review      | non-U.S.                | agree
-///   Offshore feeder WITH U.S. BOs   |   KY     |     US       | foreign -> review      | U.S.                    | OPPOSITE
-///   U.S.-domiciled entity           |   US     |     KY       | U.S.    -> pass        | U.S. (physical wins)    | agree
-///   Unknown / uncredentialed        |   -      |     -        | foreign -> review      | U.S. (unknown -> US)    | OPPOSITE
-///
-/// - Row 3: a foreign-organized feeder is a CFIUS foreign person (review) yet counts U.S. for the ICA look-through
-/// (any U.S. beneficial owner => US); CFIUS's own carve-out is a control test, a far higher bar than "any U.S.
-/// BO".
-/// - Row 5: opposite fail-safe defaults — CFIUS holds unknowns for review, the look-through treats unknowns
-/// as U.S. so they cannot slip an ICA / no-U.S.-investor gate.
+/// | Fact-key                    | Read                       | Outcome domain              | Serves                    |
+/// |-----------------------------|----------------------------|-----------------------------|---------------------------|
+/// | K_INVESTOR_TYPE             | getInvestorType            | UNSET / INDIVIDUAL / ENTITY | —                         |
+/// | K_INVESTOR_JURISDICTION     | getInvestorJurisdiction    | EMPTY / country code        | CFIUS/FIRRMA; blue sky    |
+/// | K_LOOKTHROUGH_JURISDICTION  | getLookThroughJurisdiction | EMPTY / country code        | ICA §3(c)(1)(A)           |
+/// | K_US_STATE                  | getUsState                 | EMPTY / state code          | blue sky                  |
+/// | K_BO_COUNT                  | getBeneficialOwnerCount    | 0 / >0                      | ICA §3(c)(1)(A)           |
+/// | K_ACCREDITED / K_QP / K_QIB | hasValidCredentialOf       | absent / asserted           | Reg D; Rule 144A          |
+/// | K_NON_US                    | hasValidCredentialOf       | absent / asserted           | Reg S                     |
 ///
 /// Invariants
 /// - Tokens are deliberately NOT burnable — revocation is void-only, so every credential (voided, expired, or
@@ -142,7 +131,7 @@ contract LeXcheXBadge is
 
     /// @notice Revocation: failed re-KYC, discovered bad-actor status, relocation, sanctions hits. The
     /// credential is retained (never burned) with the reason recorded, so the record survives for audit.
-    function void(uint256 tokenId, string memory reason) external onlyOwner {
+    function void(uint256 tokenId, string memory reason) external onlyAdmin {
         Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
         if (cred.issuanceDate == 0) revert LexChexBadge_TokenDoesNotExist();
         address holder = _requireOwned(tokenId);
@@ -287,25 +276,6 @@ contract LeXcheXBadge is
     function getLookThroughJurisdiction(address owner) public view returns (string memory) {
         (uint256 tokenId, bool found) = _mostRecentValidWith(owner, K_LOOKTHROUGH_JURISDICTION);
         return found ? LeXcheXBadgeStorage.getCredential(tokenId).lookThroughJurisdiction : "";
-    }
-
-    /// @notice True when the owner is a U.S. investor for the ICA look-through. Conservative twice over: U.S. if
-    /// either the regulatory look-through or the physical domicile is U.S. (a U.S.-domiciled party can never be
-    /// declassified out of the count), AND U.S. when jurisdiction is entirely unestablished — an unknown holder
-    /// is treated as U.S. so it can never slip an ICA/no-U.S.-investor gate on missing evidence.
-    function isUSLookThroughInvestor(address owner) public view returns (bool) {
-        string memory reg = getLookThroughJurisdiction(owner);
-        string memory phys = getInvestorJurisdiction(owner);
-        if (bytes(reg).length == 0 && bytes(phys).length == 0) return true; // unknown → conservatively U.S.
-        return isUSJurisdiction(reg) || isUSJurisdiction(phys);
-    }
-
-    /// @notice Canonical "does this jurisdiction string denote the U.S.?" test — "US"/"USA"/"United States" all
-    /// read as U.S. (matched leniently). Published so downstream conditions (e.g. CFIUS reading the physical
-    /// jurisdiction) share one definition instead of replicating the string comparison.
-    function isUSJurisdiction(string memory jurisdiction) public pure returns (bool) {
-        bytes32 h = keccak256(bytes(jurisdiction));
-        return h == keccak256("US") || h == keccak256("USA") || h == keccak256("United States");
     }
 
     /// @notice Seasoning reference for the UI (§11.1B): earliest valid issuance asserting `kindKey`; 0 when none.

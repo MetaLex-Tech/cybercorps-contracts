@@ -54,6 +54,7 @@ import "../interfaces/ICyberCorp.sol";
 import "../interfaces/IIssuanceManager.sol";
 import {BorgAuth} from "../libs/auth.sol";
 import {ILexChexBadge} from "../interfaces/ILexChexBadge.sol";
+import {LookThroughPolicy} from "../libs/policies/LookThroughPolicy.sol";
 import "../interfaces/IUriBuilder.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import "./extensions/ICertificateExtension.sol";
@@ -428,13 +429,13 @@ library LedgerEntryTokenStorage {
 
     /// @dev Sample the look-through weight and US flag from the configured badge; if no badge is wired the
     /// tally degrades to address-level (weight 1, non-US). A holder with no established BO count contributes
-    /// weight 1 (a single holder — the look-through exception), and isUSLookThroughInvestor resolves unknown as U.S.
+    /// weight 1 (a single holder — the look-through exception), and LookThroughPolicy resolves unknown as U.S.
     function _sample(CyberCertStorage storage s, address owner) private view returns (uint32 weight, bool isUS) {
         address badge = s.lookThroughBadge;
         if (badge == address(0)) return (1, false);
         uint32 bo = ILexChexBadge(badge).getBeneficialOwnerCount(owner);
         weight = bo > 0 ? bo : 1;
-        isUS = ILexChexBadge(badge).isUSLookThroughInvestor(owner);
+        isUS = LookThroughPolicy.isUSInvestor(ILexChexBadge(badge), owner);
     }
 
     /// @dev Re-read the badge for a live holder and reconcile the totals by the delta, so

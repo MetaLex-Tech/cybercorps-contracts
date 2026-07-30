@@ -17,6 +17,8 @@ import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
 ///    and typically by operating agreements generally
 ///  - QualifiedPurchaserCondition: kindKey = K_QP, buyer + seller — §3(c)(7) funds only
 ///  - QualifiedInstitutionalBuyerCondition: kindKey = K_QIB, buyer only — Rule 144A pathway only
+///  - NonUSPersonCondition: kindKey = K_NON_US, buyer only — Reg S pathway only. The attested fact, never
+///    the buyer's recorded country, so a holder can clear the gate without disclosing a jurisdiction
 contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgAuthACL {
     error InvalidBadge();
 

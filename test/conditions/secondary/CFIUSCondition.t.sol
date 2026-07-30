@@ -10,14 +10,8 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 // ─────────────────────────────────────────────────────────────────────────────
 // CFIUSCondition — FIRRMA gating for CFIUS-sensitive SPVs.
 //
-// Legal/economic intent: for SPVs holding a TID U.S. business (and not qualifying for the FIRRMA
-// investment-fund exception), block transfers to non-U.S. persons — or U.S. persons from a blocked-
-// affiliation jurisdiction — until the GP records a manual CFIUS clearance. Dormant (always passes)
-// when the SPV is not TID-sensitive.
-//
-// Real integration: the buyer's US-ness is derived from one real jurisdiction credential (there is no
-// separate non-U.S.-person representation to disagree with it); the buyer is resolved from a real
-// posted+accepted sell offer (the settlement is created once in setUp).
+// Real integration: the buyer's US-ness is derived from one real jurisdiction credential; the buyer is
+// resolved from a real posted+accepted sell offer (the settlement is created once in setUp).
 //
 // Scenario × outcome (deployed tidUsBusiness = true)
 // | # | scenario                                        | expect | rationale                        |
@@ -119,6 +113,22 @@ contract CFIUSConditionTest is SecondaryConditionIntegrationBase {
         cfius = _deploy(true, blocked);
         _setJurisdiction("United States");
         assertFalse(_check());
+    }
+
+    // 7a — polarity: anything not a canonical U.S. spelling reads non-U.S. and falls through to requiring
+    // clearance, CFIUS's fail-closed direction.
+    function test_UsJurisdiction_CanonicalSpellingsOnly() public {
+        string[3] memory us = ["US", "USA", "United States"];
+        for (uint256 i = 0; i < us.length; i++) {
+            _setJurisdiction(us[i]);
+            assertTrue(_check(), us[i]);
+        }
+
+        string[3] memory notUs = ["us", "U.S.", "KY"];
+        for (uint256 i = 0; i < notUs.length; i++) {
+            _setJurisdiction(notUs[i]);
+            assertFalse(_check(), notUs[i]);
+        }
     }
 
     // 8

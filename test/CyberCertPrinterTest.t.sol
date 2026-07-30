@@ -232,7 +232,9 @@ contract MockNonFundExtension is ICertificateExtension {
     function getExtensionURI(bytes memory) external pure returns (string memory) { return ""; }
 }
 
-/// @notice Minimal LeXcheXBadge surface the look-through tally samples: beneficial-owner count + US flag.
+/// @notice Minimal LeXcheXBadge surface the look-through tally samples: beneficial-owner count plus the raw
+/// jurisdiction facts LookThroughPolicy classifies. setUs toggles the physical jurisdiction between an
+/// established U.S. and an established non-U.S. code, so an un-set holder reads non-U.S. rather than unknown.
 contract MockLookThroughBadge {
     mapping(address => uint32) internal bo;
     mapping(address => bool) internal us;
@@ -241,7 +243,8 @@ contract MockLookThroughBadge {
     function setUs(address a, bool v) external { us[a] = v; }
 
     function getBeneficialOwnerCount(address a) external view returns (uint32) { return bo[a]; }
-    function isUSLookThroughInvestor(address a) external view returns (bool) { return us[a]; }
+    function getInvestorJurisdiction(address a) external view returns (string memory) { return us[a] ? "US" : "KY"; }
+    function getLookThroughJurisdiction(address) external pure returns (string memory) { return ""; }
 }
 
 contract CyberCertPrinterTest is Test {

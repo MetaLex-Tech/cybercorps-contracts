@@ -71,13 +71,13 @@ settlement period).
 |---------------------------------------|:-----:|--------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
 | EligibilityCondition                  |   ✓   | all 5                          | admin clears both buyer & seller (`setClearance(party, true)`); catch-all for KYC/AML, tax, ERISA, …                                             |
 | HolderCapCondition                    |   ✓   | all 5                          | §3(c)(1), cap 100; buyer is a fresh holder (+1 ≤ 100)                                                                                            |
-| USStateOfResidenceCondition           |   ✓   | 144, 4a7, 4a1½, 144A (○ Reg S) | buyer state CA (NY is default-blocked, unused); silent for the non-US Reg S buyer                                                                |
+| USStateOfResidenceCondition           |   ✓   | 144, 4a7, 4a1½, 144A (○ Reg S) | buyer state CA (NY is default-blocked, unused); the non-US Reg S buyer's state is not consulted                                                  |
 | LegionSoulboundCondition              |   ✓   | all 5                          | buyer holds the Legion custom-category credential                                                                                                |
 | AgreementSignedCondition              |   ✓   | all 5 (SPV-layer)              | `registry.allPartiesSigned(settlementId)`; silent at posting, satisfied from acceptance onward                                                   |
 | HoldingPeriodCondition                |   ✓   | 144                            | reads the seller cert's base `acquisitionTimestamp` (tacking anchor still from the extension); seller lot aged past HOLD by minting then warping |
 | LexChexBadgeKind(ACCREDITED_INVESTOR) |   ✓   | 4a7                            | buyer-only                                                                                                                                       |
 | LexChexBadgeKind(QIB)                 |   ✓   | 144A                           | buyer-only                                                                                                                                       |
-| LexChexBadgeKind(NON_US_PERSON)       |   ✓   | Reg S                          | buyer-only; approximates the spec's zkPassport `NonUSPersonCondition` (a generic `ICondition`, not typed)                                        |
+| LexChexBadgeKind(K_NON_US)            |   ✓   | Reg S                          | buyer-only; the attested fact-key, not the buyer's recorded country — negative case covered                                                      |
 | RegSDistributionComplianceCondition   |   ✓   | Reg S                          | `setRegSConfig(corp, 3, 365 d)`; reads the seller cert's base `acquisitionTimestamp`                                                             |
 | Rule144DisclosureCondition            |   ✓   | 144                            | SPV admin records `setDisclosurePackage(corp, uri, asOf)`; 16-month freshness policy                                                             |
 | Section4a7DisclosureCondition         |   ✓   | 4a7                            | package freshness (from posting) + buyer's acknowledgment-of-receipt signer value (from acceptance)                                              |
@@ -98,6 +98,7 @@ where the buyer elects at acceptance.
 | `test_RevertIf_UnpinnedOffer_BuyerElectsPathwayTheyDoNotQualifyFor` | An accredited non-QIB electing 144A is stopped at acceptance by the QIB condition — the layer an unpinned offer never ran at posting                                                         |
 | `test_RevertIf_UnpinnedOffer_BuyerElectsNoPathway`                  | `NONE` at acceptance reverts `ExemptionPathwayRequired`; a settlement always has a real pathway                                                                                              |
 | `test_RevertIf_PinnedOffer_BuyerElectsAnotherPathway`               | A seller's pin restricts the election: a qualifying QIB electing 144A on a Rule 144 offer reverts `ExemptionPathwayMismatch`                                                                 |
+| `test_RevertIf_RegulationS_BuyerNotAttestedNonUsPerson`             | Reg S turns on the attested `K_NON_US` fact, not the recorded country: a KY-jurisdiction buyer with no attestation is refused by the NonUSPerson condition                                   |
 
 Buy-side election rules (pathway required at `postOffer`, acceptor's election ignored), the EIP-712 binding
 of the elected pathway, and the per-SPV pathway enablement gate are covered in
@@ -119,8 +120,7 @@ no Layer 1 checks.
 ## Not yet covered (future work)
 
 - Negative / revert paths per threshold condition (expired badge, unmet hold, blocked state,
-  holder-cap breach, U.S. buyer on Reg S, unconfigured Reg S SPV, stale disclosure package, missing
-  GP sign-off).
+  holder-cap breach, unconfigured Reg S SPV, stale disclosure package, missing GP sign-off).
 - BUY-side offers (bids) per pathway.
 - Partial fills across multiple settlements.
 - `TimeSettlementPeriodCondition` per-DealManager `setDelayOverride` (QMS-mode 45-day parameterization).

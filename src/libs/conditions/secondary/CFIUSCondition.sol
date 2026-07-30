@@ -1,19 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
 import "../../../interfaces/ILexChexBadge.sol";
 import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
+import {USJurisdictionPolicy} from "../../policies/USJurisdictionPolicy.sol";
 
 /// @title  CFIUSCondition - FIRRMA gating for CFIUS-sensitive SPVs
 /// @author MetaLeX Labs, Inc.
-/// @notice Per-SPV deployment, and only for SPVs that do not satisfy the FIRRMA investment fund
-/// exception (31 CFR §800.307) — most SPVs never deploy it. Blocks transfers to non-U.S. persons or
-/// persons from blocked jurisdictions pending manual GP review and a CFIUS clearance attestation
-/// recorded here by the SPV's admin.
+/// @notice Per-SPV deployment, only for SPVs that do not satisfy the FIRRMA investment fund exception
+/// (31 CFR §800.307) — most SPVs never deploy it. A foreign acquirer, or one from a jurisdiction the GP
+/// treats as a blocked affiliation, cannot take the interest until the GP records a manual clearance.
+///
+/// A dormant SPV (not a TID U.S. business), no acquirer yet, or a recorded clearance passes ahead of the table.
+///
+/// | `K_INVESTOR_JURISDICTION` | policy    |
+/// |---------------------------|-----------|
+/// | EMPTY                     | CLEARANCE |
+/// | US                        | PASS      |
+/// | non-US                    | CLEARANCE |
 contract CFIUSCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgAuthACL {
     error InvalidBadge();
     error InvalidBuyer();
@@ -69,10 +77,6 @@ contract CFIUSCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgA
         emit TidUsBusinessUpdated(_tidUsBusiness);
     }
 
-    // TODO:
-    // - legion will add the regions
-    // - potentially zkpassport
-    // - ideally handle/aggregated by LexChexBadge
     function setBlockedJurisdictions(string[] memory _blockedJurisdictions) external onlyAdmin {
         blockedJurisdictions = _blockedJurisdictions;
         emit BlockedJurisdictionsUpdated(_blockedJurisdictions);
@@ -102,12 +106,10 @@ contract CFIUSCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgA
         // A recorded clearance attestation satisfies the condition regardless of nationality
         if (cfiusCleared[buyer]) return true;
 
-        // Non-U.S. persons require clearance; US-ness now routes through the single physical-jurisdiction fact
-        // (no separate non-U.S.-person credential to disagree with it). An unestablished jurisdiction reads as
-        // empty, which is not U.S., so the buyer is treated as requiring clearance (fail closed for CFIUS). The
-        // U.S.-string test is the badge's canonical one, shared to avoid drift.
+        // Foreign acquirers require clearance, and an unestablished jurisdiction is empty — not U.S. — so it
+        // falls the same way (fail closed for CFIUS)
         string memory jurisdiction = badge.getInvestorJurisdiction(buyer);
-        if (!badge.isUSJurisdiction(jurisdiction)) return false;
+        if (!USJurisdictionPolicy.isUS(jurisdiction)) return false;
 
         // A U.S. buyer whose credential jurisdiction matches a blocked-affiliation entry still needs clearance
         bytes32 j = keccak256(bytes(jurisdiction));

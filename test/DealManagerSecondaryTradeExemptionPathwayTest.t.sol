@@ -16,7 +16,7 @@ import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC5484} from "../src/interfaces/IERC5484.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {LeXcheXBadge} from "../src/creds/lexchexBadge.sol";
-import {K_INVESTOR_TYPE, K_INVESTOR_JURISDICTION, K_US_STATE, K_ACCREDITED, K_QIB, InvestorType}
+import {K_INVESTOR_TYPE, K_INVESTOR_JURISDICTION, K_US_STATE, K_ACCREDITED, K_QIB, K_NON_US, InvestorType}
     from "../src/interfaces/ILexChexBadge.sol";
 import {Credential} from "../src/creds/storage/lexchexBadgeStorage.sol";
 import {FundInterestData} from "../src/storage/extensions/FundInterestExtension.sol";
@@ -133,8 +133,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     HoldingPeriodCondition public holdingPeriod;
     LexChexBadgeKindCondition public accredited;
     LexChexBadgeKindCondition public qib;
-    // Non-U.S.-person status is attested as a labeled credential (CAT_NONUS) and gated as an issuer tier.
-    LegionSoulboundCondition public nonUsPerson;
+    LexChexBadgeKindCondition public nonUsPerson;
     RegSDistributionComplianceCondition public regS;
     Rule144DisclosureCondition public rule144Disclosure;
     Section4a7DisclosureCondition public section4a7Disclosure;
@@ -474,6 +473,22 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         dm.acceptOffer(a);
     }
 
+    // Reg S turns on the attested fact, not on the buyer's recorded country: a foreign buyer whose
+    // credential never asserts K_NON_US is refused the pathway.
+    function test_RevertIf_RegulationS_BuyerNotAttestedNonUsPerson() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.regs.unattested");
+        _commonBuyerSetup(buyer, "KY", bytes2(0)); // KYC only — jurisdiction KY, no K_NON_US
+
+        bytes32 offerId = _postSellOffer(ExemptionPathway.REGULATION_S, uint256(keccak256("regs.unattested")));
+        AcceptOfferParams memory a = _sellAcceptParams(offerId, buyer, buyerKey, ExemptionPathway.REGULATION_S, UNITS);
+
+        vm.prank(buyer);
+        vm.expectRevert(
+            abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, address(nonUsPerson))
+        );
+        dm.acceptOffer(a);
+    }
+
     function test_RevertIf_UnpinnedOffer_BuyerElectsNoPathway() public {
         (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.nopathway");
         _commonBuyerSetup(buyer, "US", CA);
@@ -656,12 +671,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         );
         accredited = _deployKindCondition(K_ACCREDITED);
         qib = _deployKindCondition(K_QIB);
-        nonUsPerson = LegionSoulboundCondition(
-            _proxy(
-                address(new LegionSoulboundCondition()),
-                abi.encodeCall(LegionSoulboundCondition.initialize, (address(auth), address(badge), CAT_NONUS, false))
-            )
-        );
+        nonUsPerson = _deployKindCondition(K_NON_US);
         regS = RegSDistributionComplianceCondition(
             _proxy(
                 address(new RegSDistributionComplianceCondition()),
@@ -754,11 +764,11 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     }
 
     /// @dev Mints a credential whose facts follow the categoryId's role: CAT_KYC carries the residence anchor
-    /// (jurisdiction + state), CAT_ACCREDITED / CAT_QIB assert the corresponding status fact-key, and every
-    /// categoryId is also written as the free-form label so issuer-tier gates (Legion, non-U.S. person) match.
+    /// (jurisdiction + state), CAT_ACCREDITED / CAT_QIB / CAT_NONUS assert the corresponding status fact-key,
+    /// and every categoryId is also written as the free-form label so the Legion issuer-tier gate matches.
     function _mintCred(address to, bytes32 categoryId, string memory jurisdiction, bytes2 state) internal {
         Credential memory cred;
-        cred.categoryId = categoryId; // free-form label (Legion / non-U.S.-person gates match on it)
+        cred.categoryId = categoryId; // free-form label (the Legion tier gate matches on it)
         cred.investorType = InvestorType.INDIVIDUAL;
         cred.investorJurisdiction = jurisdiction;
         cred.usState = state;
@@ -768,6 +778,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         if (state != bytes2(0)) asserts |= K_US_STATE;
         if (categoryId == CAT_ACCREDITED) asserts |= K_ACCREDITED;
         else if (categoryId == CAT_QIB) asserts |= K_QIB;
+        else if (categoryId == CAT_NONUS) asserts |= K_NON_US;
         cred.asserts = asserts;
 
         vm.prank(owner);

@@ -12,12 +12,10 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 // ─────────────────────────────────────────────────────────────────────────────
 // HolderCapCondition — ICA §3(c)(1)/§3(c)(1)(C)/§3(c)(7) holder limits at transfer time.
 //
-// Real integration (see SecondaryConditionIntegrationBase): each scenario posts + accepts a real sell offer,
-// so checkCondition reads a genuine Offer + SecondaryEscrow. Acceptance materializes the escrow (counterparty
-// = buyer) with NO transfer — that happens at finalize — so the printer's §3(c)(1)(A) look-through tally is
-// still the pre-transfer count the condition reads, derived from each holder's badge beneficial-owner count /
-// U.S. classification. The condition is deliberately NOT wired as a pathway threshold, so acceptance always
-// succeeds and the test asserts checkCondition's boolean directly.
+// Real integration (see SecondaryConditionIntegrationBase): each scenario posts + accepts a real sell offer.
+// Acceptance materializes the escrow with NO transfer — that happens at finalize — so the printer's tally is
+// still the pre-transfer count the condition reads. The condition is deliberately NOT wired as a pathway
+// threshold, so acceptance always succeeds and the test asserts checkCondition's boolean directly.
 //
 // The seller holds the offered cert, so it already contributes weight 1 to the tally; seeded incumbents make
 // up the rest, hence `_seedHolder(bo)` targets `count - 1`.
@@ -33,6 +31,7 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 // |  6 | entity look-through boCount 5, count 96 (=101)  |  fail  | look-through breaches the cap         |
 // |  7 | §3(c)(7) (cap 0), fresh buyer, count 500        |  pass  | no numeric cap                        |
 // |  8 | blockUsInvestors, U.S. buyer                    |  fail  | offshore no-U.S.-investor floor       |
+// | 8a | blockUsInvestors, existing U.S. holder          |  fail  | floor precedes the position-increase  |
 // |  9 | blockUsInvestors, non-U.S. buyer                |  pass  | floor only bites U.S. buyers          |
 // | 10 | usResidentOnlyCount, non-U.S. buyer             |  pass  | non-U.S. acquirer not counted         |
 // | 11 | usResidentOnlyCount, fresh U.S. buyer at cap    |  fail  | only U.S. residents counted, breaches |
@@ -146,6 +145,14 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
     // 8
     function test_BlockUsInvestors_UsBuyer_Fails() public {
         holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C1, 100, false, true);
+        assertFalse(_check());
+    }
+
+    // 8a — the floor is absolute: it precedes the position-increase short-circuit, so an existing U.S.
+    // holder cannot add to a position an offshore SPV would refuse them today.
+    function test_BlockUsInvestors_ExistingUsHolder_Fails() public {
+        holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C1, 100, false, true);
+        _makeHolder(buyer);
         assertFalse(_check());
     }
 

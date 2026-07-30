@@ -17,6 +17,7 @@ import {
     K_QIB,
     K_BAD_ACTOR_CLEAR,
     K_SPV_WHITELIST,
+    K_NON_US,
     PRESET_KYC_AML,
     PRESET_ENTITY_LOOKTHROUGH,
     InvestorType
@@ -36,14 +37,14 @@ import {Test} from "forge-std/Test.sol";
 ///  3. A credential answers a fact only if it asserts the key: a credential that does not assert a fact can
 ///     neither answer it nor shadow one that does (authority is the `asserts` bitmask, not the credential type).
 ///  4. Whitelist entitlements are scoped to a single SPV; membership never leaks to another SPV.
-///  5. U.S. status is conservative: a holder is U.S. if either its §3(c)(1)(A) look-through classification or
-///     its physical domicile is U.S.; a U.S.-domiciled party can never be declassified out of the count.
-///  6. Look-through classification is decoupled from physical domicile.
-///  7. Credentials are IMMUTABLE: a fact is changed by minting a newer credential and revoked by voiding — never
+///  5. The two jurisdiction facts are stored and read independently — neither derives from nor shadows the other.
+///  6. Credentials are IMMUTABLE: a fact is changed by minting a newer credential and revoked by voiding — never
 ///     edited in place, never burned. A voided/expired credential is retained on-chain for audit.
-///  8. A value read for an unestablished fact returns the field's empty value; the convenience getters resolve
-///     an unknown holder in whichever direction is conservative for the law they answer.
-///  9. Credentials are soulbound to the verified wallet: non-transferable, no delegation.
+///  7. A value read for an unestablished fact returns the field's empty value. What that emptiness *means* is
+///     each condition's decision, not the badge's.
+///  8. Credentials are soulbound to the verified wallet: non-transferable, no delegation.
+///
+/// What those facts mean for the §3(c)(1)(A) holder count is covered in LookThroughPolicy.t.sol.
 contract LeXcheXBadgeTest is Test {
     bytes32 constant LABEL_LEGION = keccak256("label.legion");
 
@@ -85,56 +86,6 @@ contract LeXcheXBadgeTest is Test {
         assertEq(uint256(badge.getBeneficialOwnerCount(holder)), 4);
         assertEq(badge.getInvestorJurisdiction(holder), "US");
         assertEq(badge.getLookThroughJurisdiction(holder), "US");
-        assertTrue(badge.isUSLookThroughInvestor(holder));
-    }
-
-    // ── isUSLookThroughInvestor (regulatory vs physical) ─────────────────────────────────
-
-    // A Cayman feeder with a U.S. look-through classification is a U.S. investor while its physical domicile
-    // stays Cayman for CFIUS / blue-sky.
-    function test_RegulatoryDecouplesFromPhysical() public {
-        address feeder = makeAddr("feeder");
-        Credential memory c = _cred(K_INVESTOR_JURISDICTION | K_LOOKTHROUGH_JURISDICTION);
-        c.investorJurisdiction = "KY";
-        c.lookThroughJurisdiction = "US";
-        _mint(feeder, c);
-
-        assertTrue(badge.isUSLookThroughInvestor(feeder));
-        assertEq(badge.getLookThroughJurisdiction(feeder), "US");
-        assertEq(badge.getInvestorJurisdiction(feeder), "KY");
-    }
-
-    // When regulatory is unset, isUSLookThroughInvestor falls back to the physical jurisdiction (and the regulatory read
-    // itself returns empty). A holder with an established non-U.S. jurisdiction is not U.S.
-    function test_RegulatoryFallsBackToPhysical() public {
-        address usIndiv = makeAddr("usIndiv");
-        _mint(usIndiv, _jurisdiction("US"));
-        assertTrue(badge.isUSLookThroughInvestor(usIndiv));
-        assertEq(badge.getLookThroughJurisdiction(usIndiv), "");
-
-        address kyIndiv = makeAddr("kyIndiv");
-        _mint(kyIndiv, _jurisdiction("KY"));
-        assertFalse(badge.isUSLookThroughInvestor(kyIndiv)); // established non-U.S. jurisdiction is not conservatively U.S.
-    }
-
-    // Conservative: a U.S.-domiciled party is a U.S. investor even if its regulatory classification says otherwise.
-    function test_UsDomicileCannotBeDeclassified() public {
-        address usEntity = makeAddr("usEntity");
-        Credential memory c = _cred(K_INVESTOR_JURISDICTION | K_LOOKTHROUGH_JURISDICTION);
-        c.investorJurisdiction = "US";
-        c.lookThroughJurisdiction = "KY";
-        _mint(usEntity, c);
-        assertTrue(badge.isUSLookThroughInvestor(usEntity));
-    }
-
-    // "US"/"USA"/"United States" all read as U.S. (lenient jurisdiction matching).
-    function test_UsJurisdiction_LenientMatching() public {
-        address a = makeAddr("usa");
-        _mint(a, _jurisdiction("USA"));
-        assertTrue(badge.isUSLookThroughInvestor(a));
-        address b = makeAddr("unitedstates");
-        _mint(b, _jurisdiction("United States"));
-        assertTrue(badge.isUSLookThroughInvestor(b));
     }
 
     // ── Recency & determinism ─────────────────────────────────────────────────
@@ -167,13 +118,11 @@ contract LeXcheXBadgeTest is Test {
         c.investorJurisdiction = "KY";
         c.lookThroughJurisdiction = "US";
         _mint(feeder, c); // older, asserts regulatory
-        assertTrue(badge.isUSLookThroughInvestor(feeder));
 
         vm.warp(block.timestamp + 1 days);
         _mint(feeder, _jurisdiction("KY")); // newer, asserts jurisdiction only (not regulatory)
 
         assertEq(badge.getLookThroughJurisdiction(feeder), "US"); // preserved: newer didn't assert it
-        assertTrue(badge.isUSLookThroughInvestor(feeder));
     }
 
     // Individual vs. entity resolves like any other value fact: UNSET when unestablished, superseded by a
@@ -249,7 +198,7 @@ contract LeXcheXBadgeTest is Test {
         assertEq(badge.getUsState(holder), bytes2("CA"));
     }
 
-    // ── Unknown reads as empty; isUSLookThroughInvestor is conservatively U.S. ────────────
+    // ── Unknown reads as empty; the look-through is conservatively U.S. ────────────
 
     function test_NoCredential_ReturnsDefaults() public {
         address nobody = makeAddr("nobody");
@@ -258,7 +207,6 @@ contract LeXcheXBadgeTest is Test {
         assertEq(uint256(badge.getBeneficialOwnerCount(nobody)), 0);
         assertEq(badge.getInvestorJurisdiction(nobody), "");
         assertEq(badge.getLookThroughJurisdiction(nobody), "");
-        assertTrue(badge.isUSLookThroughInvestor(nobody)); // unknown jurisdiction → conservatively U.S.
     }
 
     // Immutability: a fact persists until the asserting credential is voided/expires. Minting a newer
@@ -270,7 +218,6 @@ contract LeXcheXBadgeTest is Test {
         _mint(holder, _jurisdiction("KY")); // relocates: newer jurisdiction, no state asserted
 
         assertEq(badge.getInvestorJurisdiction(holder), "KY");
-        assertFalse(badge.isUSLookThroughInvestor(holder));
         assertEq(badge.getUsState(holder), bytes2("NY")); // still NY: the newer cred didn't assert usState
 
         vm.prank(owner);
@@ -364,6 +311,47 @@ contract LeXcheXBadgeTest is Test {
         assertFalse(badge.hasValidCredentialOf(voided, K_QP));
     }
 
+    // ── Reg S non-U.S. person (K_NON_US) ──────────────────────────────────────
+    //
+    // | K_NON_US | hasValidCredentialOf |
+    // |----------|----------------------|
+    // | absent   | false                |
+    // | asserted | true                 |
+
+    // The attestation stands alone: it needs no jurisdiction payload, and it is never inferred from one.
+    function test_NonUsPerson_AttestedAndNeverInferred() public {
+        address attested = makeAddr("nonUsAttested");
+        _mint(attested, _cred(K_NON_US));
+        assertTrue(badge.hasValidCredentialOf(attested, K_NON_US));
+
+        // A foreign jurisdiction alone does not attest the Reg S fact, and a U.S. one does not refute it.
+        address ky = makeAddr("kyOnly");
+        Credential memory c = _cred(K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION);
+        c.investorType = InvestorType.INDIVIDUAL;
+        c.investorJurisdiction = "KY";
+        _mint(ky, c);
+        assertFalse(badge.hasValidCredentialOf(ky, K_NON_US));
+
+        assertFalse(badge.hasValidCredentialOf(makeAddr("nobodyNonUs"), K_NON_US));
+    }
+
+    // The gate closes on expiry and on void, so a lapsed attestation cannot carry a Reg S trade.
+    function test_NonUsPerson_DeniedWhenExpiredOrVoided() public {
+        address expired = makeAddr("nonUsExpired");
+        Credential memory shortLived = _cred(K_NON_US);
+        shortLived.expiryDate = uint64(block.timestamp + 1 days);
+        _mint(expired, shortLived);
+        assertTrue(badge.hasValidCredentialOf(expired, K_NON_US));
+        vm.warp(block.timestamp + 2 days);
+        assertFalse(badge.hasValidCredentialOf(expired, K_NON_US));
+
+        address voided = makeAddr("nonUsVoided");
+        uint256 id = _mint(voided, _cred(K_NON_US));
+        vm.prank(owner);
+        badge.void(id, "reclassified as U.S. person");
+        assertFalse(badge.hasValidCredentialOf(voided, K_NON_US));
+    }
+
     // hasValidWhitelistFor is scoped to a specific SPV and to the holder it was issued to.
     function test_HasValidWhitelistFor_ScopedToSPV() public {
         address spvA = makeAddr("spvA");
@@ -397,17 +385,6 @@ contract LeXcheXBadgeTest is Test {
         assertTrue(badge.hasValidWhitelistFor(expiring, spv));
         vm.warp(block.timestamp + 2 days);
         assertFalse(badge.hasValidWhitelistFor(expiring, spv)); // expired, before any sweep
-    }
-
-    // One canonical U.S.-jurisdiction test, published so downstream conditions never re-implement the match.
-    function test_IsUSJurisdiction_CanonicalSpellingsOnly() public view {
-        assertTrue(badge.isUSJurisdiction("US"));
-        assertTrue(badge.isUSJurisdiction("USA"));
-        assertTrue(badge.isUSJurisdiction("United States"));
-        assertFalse(badge.isUSJurisdiction("us"));
-        assertFalse(badge.isUSJurisdiction("U.S."));
-        assertFalse(badge.isUSJurisdiction("KY"));
-        assertFalse(badge.isUSJurisdiction(""));
     }
 
     // A non-whitelist credential never grants an SPV whitelist entitlement.
@@ -721,7 +698,7 @@ contract LeXcheXBadgeTest is Test {
         vm.expectRevert(ILexChexBadge.LexChexBadge_BadAsserts.selector);
         badge.mint(to, gapBit);
 
-        Credential memory aboveTop = _cred(K_SPV_WHITELIST << 1); // above the highest defined key
+        Credential memory aboveTop = _cred(K_NON_US << 1); // above the highest defined key
         vm.prank(owner);
         vm.expectRevert(ILexChexBadge.LexChexBadge_BadAsserts.selector);
         badge.mint(to, aboveTop);

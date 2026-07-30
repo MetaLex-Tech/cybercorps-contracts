@@ -12,7 +12,8 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 //
 // Legal/economic intent: one primitive deployed per investor-status parameterization —
 // AccreditedInvestor (buyer only, §4(a)(7)), QIB (buyer only, Rule 144A), QualifiedPurchaser
-// (buyer + seller, §3(c)(7)). The status is a single fact-key (K_ACCREDITED / K_QP / K_QIB).
+// (buyer + seller, §3(c)(7)), NonUSPerson (buyer only, Reg S). The status is a single fact-key
+// (K_ACCREDITED / K_QP / K_QIB / K_NON_US).
 //
 // Real integration: investor status is a real badge credential asserting the required fact-key; parties
 // are resolved from a real posted/accepted sell offer.
