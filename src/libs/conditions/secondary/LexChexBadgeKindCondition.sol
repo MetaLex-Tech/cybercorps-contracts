@@ -19,6 +19,11 @@ import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
 ///  - QualifiedInstitutionalBuyerCondition: kindKey = K_QIB, buyer only — Rule 144A pathway only
 ///  - NonUSPersonCondition: kindKey = K_NON_US, buyer only — Reg S pathway only. The attested fact, never
 ///    the buyer's recorded country, so a holder can clear the gate without disclosing a jurisdiction
+///  - SpvWhitelistCondition: kindKey = K_SPV_WHITELIST — admission to the SPV the offer belongs to
+///  - SyndicateCondition: kindKey = K_SYNDICATE — a seat in that SPV's issuer circle (§4.1.3A)
+///
+/// The first four are statuses, which follow the party anywhere. The last two are entitlements granted per
+/// SPV, so they only count for the SPV the offer belongs to.
 contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgAuthACL {
     error InvalidBadge();
     error InvalidKindKey();
@@ -61,9 +66,14 @@ contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgrade
         _setParameters(_kindKey, _checkSeller);
     }
 
-    /// @dev _kindKey is validated first
+    /// @dev Rejects a _kindKey the gate cannot enforce:
+    ///  - empty: matches every credential, so the gate becomes "holds any badge"
+    ///  - undefined bit: matches nothing, so every trade is blocked
+    ///  - a scoped key mixed with anything else: one entitlement per gate, checked against one SPV
     function _setParameters(uint256 _kindKey, bool _checkSeller) internal {
         if (_kindKey == 0 || (_kindKey & ~ALL_KEYS) != 0) revert InvalidKindKey();
+        uint256 scoped = _kindKey & SCOPED_KEYS;
+        if (scoped != 0 && (scoped != _kindKey || (_kindKey & (_kindKey - 1)) != 0)) revert InvalidKindKey();
         kindKey = _kindKey;
         checkSeller = _checkSeller;
         emit ParametersUpdated(_kindKey, _checkSeller);
@@ -78,13 +88,21 @@ contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgrade
         Offer memory offer = dealManager.getOffer(offerId);
         (address seller, address buyer,) = _resolveParties(dealManager, offer, agreementId);
 
-        if (buyer != address(0) && !badge.hasValidCredentialOf(buyer, kindKey)) {
+        if (buyer != address(0) && !_holds(buyer, offer.spvAddress)) {
             return false;
         }
-        if (checkSeller && seller != address(0) && !badge.hasValidCredentialOf(seller, kindKey)) {
+        if (checkSeller && seller != address(0) && !_holds(seller, offer.spvAddress)) {
             return false;
         }
         return true;
+    }
+
+    /// @dev A status follows the party anywhere. An entitlement is granted per SPV, so it only counts for the
+    /// SPV this offer belongs to.
+    function _holds(address party, address spv) private view returns (bool) {
+        uint256 key = kindKey;
+        if ((key & SCOPED_KEYS) != 0) return badge.hasValidScopedCredentialOf(party, key, spv);
+        return badge.hasValidCredentialOf(party, key);
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}

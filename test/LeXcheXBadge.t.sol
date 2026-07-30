@@ -17,6 +17,7 @@ import {
     K_QIB,
     K_BAD_ACTOR_CLEAR,
     K_SPV_WHITELIST,
+    K_SYNDICATE,
     K_NON_US,
     PRESET_KYC_AML,
     PRESET_ENTITY_LOOKTHROUGH,
@@ -36,7 +37,8 @@ import {Test} from "forge-std/Test.sol";
 ///     ASSERTS that fact-key, so a superseding credential takes effect immediately and stale facts never win.
 ///  3. A credential answers a fact only if it asserts the key: a credential that does not assert a fact can
 ///     neither answer it nor shadow one that does (authority is the `asserts` bitmask, not the credential type).
-///  4. Whitelist entitlements are scoped to a single SPV; membership never leaks to another SPV.
+///  4. Scoped entitlements (whitelist, syndicate) name a single SPV: membership never leaks to another SPV,
+///     and admission to an SPV never stands in for a seat in its issuer's circle, or the reverse.
 ///  5. The two jurisdiction facts are stored and read independently — neither derives from nor shadows the other.
 ///  6. Credentials are IMMUTABLE: a fact is changed by minting a newer credential and revoked by voiding — never
 ///     edited in place, never burned. A voided/expired credential is retained on-chain for audit.
@@ -402,6 +404,68 @@ contract LeXcheXBadgeTest is Test {
         assertFalse(badge.hasValidWhitelistFor(holder, makeAddr("spvA")));
     }
 
+    // A syndicate seat reads exactly like a whitelist entitlement: scoped to one SPV and to its holder.
+    function test_HasValidSyndicateFor_ScopedToSPV() public {
+        address spvA = makeAddr("synSpvA");
+        address spvB = makeAddr("synSpvB");
+        address holder = makeAddr("syn");
+        Credential memory c = _cred(K_SYNDICATE);
+        c.scope = spvA;
+        _mint(holder, c);
+        assertTrue(badge.hasValidSyndicateFor(holder, spvA));
+        assertFalse(badge.hasValidSyndicateFor(holder, spvB));          // scope-specific
+        assertFalse(badge.hasValidSyndicateFor(makeAddr("syn2"), spvA)); // holder-specific
+    }
+
+    // The point of splitting the two: admission to an SPV is not a seat in its issuer's circle, and a seat
+    // is not admission. Each grant has to be issued on its own.
+    function test_ScopedKeys_WhitelistAndSyndicateNeverSubstitute() public {
+        address spv = makeAddr("spvBoth");
+        address listed = makeAddr("listedOnly");
+        Credential memory wl = _cred(K_SPV_WHITELIST);
+        wl.scope = spv;
+        _mint(listed, wl);
+        assertTrue(badge.hasValidWhitelistFor(listed, spv));
+        assertFalse(badge.hasValidSyndicateFor(listed, spv));
+
+        address seated = makeAddr("seatedOnly");
+        Credential memory syn = _cred(K_SYNDICATE);
+        syn.scope = spv;
+        _mint(seated, syn);
+        assertTrue(badge.hasValidSyndicateFor(seated, spv));
+        assertFalse(badge.hasValidWhitelistFor(seated, spv));
+
+        // One credential may carry both grants for the same SPV.
+        address full = makeAddr("listedAndSeated");
+        Credential memory both = _cred(K_SPV_WHITELIST | K_SYNDICATE);
+        both.scope = spv;
+        _mint(full, both);
+        assertTrue(badge.hasValidWhitelistFor(full, spv));
+        assertTrue(badge.hasValidSyndicateFor(full, spv));
+    }
+
+    // A seat closes on void and on expiry, like every other entitlement.
+    function test_HasValidSyndicateFor_DeniedWhenExpiredOrVoided() public {
+        address spv = makeAddr("synSpvVE");
+
+        address voided = makeAddr("synVoid");
+        Credential memory c = _cred(K_SYNDICATE);
+        c.scope = spv;
+        uint256 id = _mint(voided, c);
+        vm.prank(owner);
+        badge.void(id, "left the circle");
+        assertFalse(badge.hasValidSyndicateFor(voided, spv));
+
+        address expiring = makeAddr("synExpire");
+        Credential memory shortLived = _cred(K_SYNDICATE);
+        shortLived.scope = spv;
+        shortLived.expiryDate = uint64(block.timestamp + 1 days);
+        _mint(expiring, shortLived);
+        assertTrue(badge.hasValidSyndicateFor(expiring, spv));
+        vm.warp(block.timestamp + 2 days);
+        assertFalse(badge.hasValidSyndicateFor(expiring, spv)); // expired, before any sweep
+    }
+
     // K_DATA: a generic programmable bytes payload, resolved most-recent-valid like any value fact.
     function test_Data_ProgrammablePayload() public {
         address holder = makeAddr("data");
@@ -701,12 +765,12 @@ contract LeXcheXBadgeTest is Test {
     // `asserts` admits only defined K_* bits — an undefined bit would be an uninterpretable claim.
     function test_Mint_UnknownAssertBit_Reverts() public {
         address to = makeAddr("unknownBit");
-        Credential memory gapBit = _cred(1 << 6); // reserved gap between the VALUE and STATUS ranges
+        Credential memory gapBit = _cred(1 << 6); // free bit reserved inside the VALUE block
         vm.prank(owner);
         vm.expectRevert(ILexChexBadge.LexChexBadge_BadAsserts.selector);
         badge.mint(to, gapBit);
 
-        Credential memory aboveTop = _cred(K_NON_US << 1); // above the highest defined key
+        Credential memory aboveTop = _cred(K_SYNDICATE << 1); // above the highest defined key
         vm.prank(owner);
         vm.expectRevert(ILexChexBadge.LexChexBadge_BadAsserts.selector);
         badge.mint(to, aboveTop);
@@ -748,11 +812,11 @@ contract LeXcheXBadgeTest is Test {
         assertEq(badge.getData(bespoke), hex"01");
     }
 
+    // Every scoped key names the SPV it entitles; asserting one without a scope is a hollow entitlement.
     function test_Mint_MissingScope_Reverts() public {
-        Credential memory c = _cred(K_SPV_WHITELIST); // whitelist without a scope
-        vm.prank(owner);
-        vm.expectRevert(ILexChexBadge.LexChexBadge_MissingScope.selector);
-        badge.mint(makeAddr("to"), c);
+        _expectMissingScope(K_SPV_WHITELIST);
+        _expectMissingScope(K_SYNDICATE);
+        _expectMissingScope(K_SPV_WHITELIST | K_SYNDICATE);
     }
 
     function test_Mint_InvalidExpiry_Reverts() public {
@@ -964,6 +1028,15 @@ contract LeXcheXBadgeTest is Test {
         Credential memory c = _cred(key);
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSelector(ILexChexBadge.LexChexBadge_MissingValue.selector, key));
+        badge.mint(to, c);
+    }
+
+    /// @dev Asserts scoped `keys` with no scope named, and expects the mint to be rejected.
+    function _expectMissingScope(uint256 keys) internal {
+        address to = makeAddr("missingScope");
+        Credential memory c = _cred(keys);
+        vm.prank(owner);
+        vm.expectRevert(ILexChexBadge.LexChexBadge_MissingScope.selector);
         badge.mint(to, c);
     }
 }

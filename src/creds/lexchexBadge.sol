@@ -39,8 +39,8 @@ import "../interfaces/ILexChexBadge.sol";
 /// @author MetaLeX Labs, Inc.
 /// @notice One soulbound credential registry covering all credentialing and whitelisting in the cyberTRADE
 /// spec: KYC/AML, accredited investor, qualified purchaser, QIB, bad-actor negative attestation, per-SPV
-/// whitelist entitlements — plus the §4.1.3A credential attributes (U.S. state of residence/organization
-/// and entity beneficial-owner count).
+/// whitelist and syndicate entitlements — plus the §4.1.3A credential attributes (U.S. state of
+/// residence/organization and entity beneficial-owner count).
 /// @dev One deployment = one credentialing layer under one operator's BorgAuth (§4.1.3A layer model).
 /// Pure state: no per-trade compliance logic (conditions do that), no offer-visibility enforcement, no KYC
 /// itself, no delegation — credentials attach to the verified wallet only.
@@ -75,6 +75,8 @@ import "../interfaces/ILexChexBadge.sol";
 /// | K_BO_COUNT                  | getBeneficialOwnerCount    | 0 / >0                      | ICA §3(c)(1)(A)           |
 /// | K_ACCREDITED / K_QP / K_QIB | hasValidCredentialOf       | absent / asserted           | Reg D; Rule 144A          |
 /// | K_NON_US                    | hasValidCredentialOf       | absent / asserted           | Reg S                     |
+/// | K_SPV_WHITELIST             | hasValidWhitelistFor       | absent / scoped to an SPV   | offer visibility (§16.2)  |
+/// | K_SYNDICATE                 | hasValidSyndicateFor       | absent / scoped to an SPV   | issuer circle (§4.1.3A)   |
 ///
 /// Invariants
 /// - Tokens are deliberately NOT burnable — revocation is void-only, so every credential (voided, expired, or
@@ -225,15 +227,29 @@ contract LeXcheXBadge is
         return found;
     }
 
-    /// @notice Resolves K_SPV_WHITELIST credentials scoped to the SPV. Backs per-SPV offer-visibility
-    /// entitlements (§16.2) and any onchain issuer gating. Scans the (bounded) active set.
-    function hasValidWhitelistFor(address owner, address spv) public view returns (bool) {
+    /// @notice True when the owner holds a valid credential granting scoped entitlement `scopeKey` for `spv`.
+    /// An entitlement answers only for the SPV it names, so one SPV's membership never leaks to another. Any
+    /// valid credential carrying the key and scope admits — a second grant of the same entitlement says the
+    /// same thing, so there is no recency contest. Scans the (bounded) active set.
+    function hasValidScopedCredentialOf(address owner, uint256 scopeKey, address spv) public view returns (bool) {
         uint256[] storage ids = LeXcheXBadgeStorage.getActiveTokens(owner);
         for (uint256 i = 0; i < ids.length; i++) {
             Credential storage cred = LeXcheXBadgeStorage.getCredential(ids[i]);
-            if ((cred.asserts & K_SPV_WHITELIST) != 0 && cred.scope == spv && isValid(ids[i])) return true;
+            if ((cred.asserts & scopeKey) != 0 && cred.scope == spv && isValid(ids[i])) return true;
         }
         return false;
+    }
+
+    /// @notice Admission to one SPV's offers: backs per-SPV offer-visibility entitlements (§16.2) and any
+    /// onchain issuer gating.
+    function hasValidWhitelistFor(address owner, address spv) public view returns (bool) {
+        return hasValidScopedCredentialOf(owner, K_SPV_WHITELIST, spv);
+    }
+
+    /// @notice A seat in the issuer's private circle within one SPV (§4.1.3A). Read apart from the whitelist
+    /// so an issuer can restrict a trade to the circle without admission to the SPV standing in for it.
+    function hasValidSyndicateFor(address owner, address spv) public view returns (bool) {
+        return hasValidScopedCredentialOf(owner, K_SYNDICATE, spv);
     }
 
     /// @notice Individual vs. entity from the owner's authoritative credential; UNSET when unestablished. Only
@@ -408,7 +424,7 @@ contract LeXcheXBadge is
         if ((a & K_US_STATE) != 0 && cred.usState == bytes2(0)) revert LexChexBadge_MissingValue(K_US_STATE);
         if ((a & K_BO_COUNT) != 0 && cred.beneficialOwnerCount == 0) revert LexChexBadge_MissingValue(K_BO_COUNT);
         if ((a & K_DATA) != 0 && cred.data.length == 0) revert LexChexBadge_MissingValue(K_DATA);
-        if ((a & K_SPV_WHITELIST) != 0 && cred.scope == address(0)) revert LexChexBadge_MissingScope();
+        if ((a & SCOPED_KEYS) != 0 && cred.scope == address(0)) revert LexChexBadge_MissingScope();
     }
 
     /// @dev Only owner can upgrade it

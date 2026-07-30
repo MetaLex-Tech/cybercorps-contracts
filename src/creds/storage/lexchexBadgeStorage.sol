@@ -37,7 +37,7 @@ struct Credential {
     InvestorType investorType;          // value for K_INVESTOR_TYPE
     bytes2 usState;                     // value for K_US_STATE
     uint32 beneficialOwnerCount;        // value for K_BO_COUNT
-    address scope;                      // SPV entitled by a K_SPV_WHITELIST credential; zero otherwise
+    address scope;                      // SPV entitled by a scoped credential (K_SPV_WHITELIST / K_SYNDICATE)
     uint64 issuanceDate;                // mint time; recency key (max) and §11.1B seasoning reference (min); immutable
     uint64 expiryDate;                  // isValid fails after it
     string voided;                      // non-empty = voided, with reason

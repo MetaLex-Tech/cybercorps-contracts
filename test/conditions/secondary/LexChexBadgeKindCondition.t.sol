@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import {K_ACCREDITED, K_QP, K_QIB} from "../../../src/interfaces/ILexChexBadge.sol";
+import {K_ACCREDITED, K_QP, K_QIB, K_SPV_WHITELIST, K_SYNDICATE} from "../../../src/interfaces/ILexChexBadge.sol";
 import {Credential} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
 import {LexChexBadgeKindCondition} from "../../../src/libs/conditions/secondary/LexChexBadgeKindCondition.sol";
@@ -10,13 +10,14 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 // ─────────────────────────────────────────────────────────────────────────────
 // LexChexBadgeKindCondition — parameterizable investor-status gate on the LeXcheXBadge layer.
 //
-// Legal/economic intent: one primitive deployed per investor-status parameterization —
-// AccreditedInvestor (buyer only, §4(a)(7)), QIB (buyer only, Rule 144A), QualifiedPurchaser
-// (buyer + seller, §3(c)(7)), NonUSPerson (buyer only, Reg S). The status is a single fact-key
-// (K_ACCREDITED / K_QP / K_QIB / K_NON_US).
+// Legal/economic intent: one primitive deployed per parameterization. Four read a status the party carries
+// everywhere — AccreditedInvestor (buyer only, §4(a)(7)), QIB (buyer only, Rule 144A), QualifiedPurchaser
+// (buyer + seller, §3(c)(7)), NonUSPerson (buyer only, Reg S). Two read an entitlement the issuer grants per
+// SPV — SpvWhitelist and Syndicate (§4.1.3A) — which is checked against the offer's own SPV, so a grant made
+// for another SPV never clears the gate.
 //
-// Real integration: investor status is a real badge credential asserting the required fact-key; parties
-// are resolved from a real posted/accepted sell offer.
+// Real integration: status and entitlement alike are real badge credentials asserting the required fact-key;
+// parties are resolved from a real posted/accepted sell offer.
 //
 // Scenario × outcome
 // | # | config                 | context      | buyer status | seller status | expect | rationale             |
@@ -27,14 +28,24 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 // | 4 | QP, buyer+seller       | accepted     |     yes      |      no       |  fail  | seller also gated     |
 // | 5 | QP, buyer+seller       | accepted     |     yes      |      yes      |  pass  | both qualified        |
 //
+// Scoped entitlements — read against the offer's SPV
+// | #  | config          | buyer's grant           | expect | rationale                          |
+// |----|-----------------|-------------------------|:------:|------------------------------------|
+// | 6  | SPV_WHITELIST   | this SPV                |  pass  | admitted where the offer lives     |
+// | 7  | SPV_WHITELIST   | another SPV             |  fail  | membership never travels           |
+// | 8  | SYNDICATE       | this SPV                |  pass  | seated in the issuer's circle      |
+// | 9  | SYNDICATE       | whitelist on this SPV   |  fail  | admission is not a seat            |
+//
 // Config/authorization
-// | #  | case                            | expect                |
-// |----|---------------------------------|-----------------------|
-// | 6  | initialize zero badge           | revert InvalidBadge   |
-// | 7  | updateParameters by stranger    | revert (not admin)    |
-// | 8  | initialize kindKey 0            | revert InvalidKindKey |
-// | 9  | updateParameters kindKey 0      | revert InvalidKindKey |
-// | 10 | updateParameters undefined bit  | revert InvalidKindKey |
+// | #  | case                              | expect                |
+// |----|-----------------------------------|-----------------------|
+// | 10 | initialize zero badge             | revert InvalidBadge   |
+// | 11 | updateParameters by stranger      | revert (not admin)    |
+// | 12 | initialize kindKey 0              | revert InvalidKindKey |
+// | 13 | updateParameters kindKey 0        | revert InvalidKindKey |
+// | 14 | updateParameters undefined bit    | revert InvalidKindKey |
+// | 15 | updateParameters scoped + status  | revert InvalidKindKey |
+// | 16 | updateParameters two scoped keys  | revert InvalidKindKey |
 // ─────────────────────────────────────────────────────────────────────────────
 
 contract LexChexBadgeKindConditionTest is SecondaryConditionIntegrationBase {
@@ -59,6 +70,13 @@ contract LexChexBadgeKindConditionTest is SecondaryConditionIntegrationBase {
     /// @dev Grants a status credential asserting `kindKey` (status keys carry no value).
     function _grant(address who, uint256 kindKey) internal {
         Credential memory c;
+        _mintCred(who, kindKey, c);
+    }
+
+    /// @dev Grants a scoped entitlement asserting `kindKey` for one SPV.
+    function _grantScoped(address who, uint256 kindKey, address spv) internal {
+        Credential memory c;
+        c.scope = spv;
         _mintCred(who, kindKey, c);
     }
 
@@ -102,7 +120,43 @@ contract LexChexBadgeKindConditionTest is SecondaryConditionIntegrationBase {
         assertTrue(_check(c, offerId, settlementId));
     }
 
+    // ── Scoped entitlements ─────────────────────────────────────────────────
+
     // 6
+    function test_Whitelist_ForThisSpv_Passes() public {
+        LexChexBadgeKindCondition c = _deploy(K_SPV_WHITELIST, false);
+        _grantScoped(buyer, K_SPV_WHITELIST, address(corp));
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertTrue(_check(c, offerId, settlementId));
+    }
+
+    // 7 — the same grant made for a different SPV is no admission to this one
+    function test_Whitelist_ForAnotherSpv_Fails() public {
+        LexChexBadgeKindCondition c = _deploy(K_SPV_WHITELIST, false);
+        _grantScoped(buyer, K_SPV_WHITELIST, makeAddr("otherSpv"));
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_check(c, offerId, settlementId));
+    }
+
+    // 8
+    function test_Syndicate_ForThisSpv_Passes() public {
+        LexChexBadgeKindCondition c = _deploy(K_SYNDICATE, false);
+        _grantScoped(buyer, K_SYNDICATE, address(corp));
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertTrue(_check(c, offerId, settlementId));
+    }
+
+    // 9 — admission to the SPV is not a seat in its issuer's circle
+    function test_Syndicate_WhitelistDoesNotSubstitute_Fails() public {
+        LexChexBadgeKindCondition c = _deploy(K_SYNDICATE, false);
+        _grantScoped(buyer, K_SPV_WHITELIST, address(corp));
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_check(c, offerId, settlementId));
+    }
+
+    // ── Config / authorization ──────────────────────────────────────────────
+
+    // 10
     function test_Initialize_ZeroBadge_Reverts() public {
         LexChexBadgeKindCondition impl = new LexChexBadgeKindCondition();
         vm.expectRevert(LexChexBadgeKindCondition.InvalidBadge.selector);
@@ -114,14 +168,14 @@ contract LexChexBadgeKindConditionTest is SecondaryConditionIntegrationBase {
         );
     }
 
-    // 7
+    // 11
     function test_UpdateParameters_ByStranger_Reverts() public {
         vm.prank(stranger);
         vm.expectRevert();
         cond.updateParameters(K_QIB, true);
     }
 
-    // 8 — an unset key would match every credential, degrading the gate to "buyer holds any badge"
+    // 12 — an unset key would match every credential, degrading the gate to "buyer holds any badge"
     function test_Initialize_ZeroKindKey_Reverts() public {
         LexChexBadgeKindCondition impl = new LexChexBadgeKindCondition();
         bytes memory initData =
@@ -130,15 +184,28 @@ contract LexChexBadgeKindConditionTest is SecondaryConditionIntegrationBase {
         _proxy(address(impl), initData);
     }
 
-    // 9
+    // 13
     function test_UpdateParameters_ZeroKindKey_Reverts() public {
         vm.expectRevert(LexChexBadgeKindCondition.InvalidKindKey.selector);
         cond.updateParameters(0, false);
     }
 
-    // 10 — an undefined bit can never be asserted, so it would block every trade
+    // 14 — an undefined bit can never be asserted, so it would block every trade
     function test_UpdateParameters_UndefinedKindKey_Reverts() public {
         vm.expectRevert(LexChexBadgeKindCondition.InvalidKindKey.selector);
         cond.updateParameters(1 << 200, false);
+    }
+
+    // 15 — an entitlement is read against one SPV and a status is not, so no single credential can answer
+    // both halves of a mixed key
+    function test_UpdateParameters_ScopedPlusStatus_Reverts() public {
+        vm.expectRevert(LexChexBadgeKindCondition.InvalidKindKey.selector);
+        cond.updateParameters(K_QP | K_SYNDICATE, false);
+    }
+
+    // 16 — accepting either of two entitlements is a second condition, not this one
+    function test_UpdateParameters_TwoScopedKeys_Reverts() public {
+        vm.expectRevert(LexChexBadgeKindCondition.InvalidKindKey.selector);
+        cond.updateParameters(K_SPV_WHITELIST | K_SYNDICATE, false);
     }
 }

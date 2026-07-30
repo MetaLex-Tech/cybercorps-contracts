@@ -6,8 +6,8 @@ import {Credential} from "../creds/storage/lexchexBadgeStorage.sol";
 
 // Fact-keys — a credential's `asserts` bitmask is the sole authority axis. VALUE keys carry a payload in the
 // matching Credential field; STATUS keys carry no payload (asserting the key IS the truth); SCOPE keys require
-// Credential.scope (the SPV entitled). Free bit ranges are left between the groups so issuers/upgrades can add
-// keys without reshuffling.
+// Credential.scope (the SPV entitled). Each group owns a bit block (VALUE 0-15, STATUS 16-31, SCOPE 32+) so a
+// new key joins its own kind without reshuffling, and a key's group is legible from its position.
 uint256 constant K_INVESTOR_TYPE           = 1 << 0;   // Individual / entity
 uint256 constant K_INVESTOR_JURISDICTION   = 1 << 1;   // physical country of residence/organization
 uint256 constant K_LOOKTHROUGH_JURISDICTION = 1 << 2;   // §3(c)(1)(A) look-through classification
@@ -19,16 +19,18 @@ uint256 constant K_ACCREDITED      = 1 << 16;
 uint256 constant K_QP              = 1 << 17;          // qualified purchaser
 uint256 constant K_QIB             = 1 << 18;          // qualified institutional buyer
 uint256 constant K_BAD_ACTOR_CLEAR = 1 << 19;          // Rule 506(d) disqualification cleared
+uint256 constant K_NON_US          = 1 << 20;          // Reg S (§6.5): the holder is not a U.S. person
 
-// One scoped-entitlement key covers per-SPV whitelist and syndicate alike (read identically by
-// hasValidWhitelistFor); the whitelist-vs-syndicate label, if any, lives in the off-chain categoryId/notes.
-uint256 constant K_SPV_WHITELIST = 1 << 20;
+// SCOPE keys. A whitelist admits the holder to one SPV's offers (§16.2); a syndicate seats them in that
+// issuer's private circle (§4.1.3A). Separate grants an issuer makes for separate reasons, so neither key
+// ever satisfies the other, and each names the SPV it entitles in Credential.scope.
+uint256 constant K_SPV_WHITELIST = 1 << 32;
+uint256 constant K_SYNDICATE     = 1 << 33;
 
-// Reg S (§6.5): the issuer's attestation that the holder is not a U.S. person
-uint256 constant K_NON_US = 1 << 21;
+uint256 constant SCOPED_KEYS = K_SPV_WHITELIST | K_SYNDICATE;
 
 uint256 constant ALL_KEYS = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_LOOKTHROUGH_JURISDICTION | K_US_STATE
-    | K_BO_COUNT | K_DATA | K_ACCREDITED | K_QP | K_QIB | K_BAD_ACTOR_CLEAR | K_SPV_WHITELIST | K_NON_US;
+    | K_BO_COUNT | K_DATA | K_ACCREDITED | K_QP | K_QIB | K_BAD_ACTOR_CLEAR | K_NON_US | SCOPED_KEYS;
 
 // Presets: recommended `asserts` per badge purpose (issuer guidance only — OR in extras as needed).
 uint256 constant PRESET_KYC_AML             = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION;
@@ -38,8 +40,9 @@ uint256 constant PRESET_ACCREDITED          = K_ACCREDITED;
 uint256 constant PRESET_QUALIFIED_PURCHASER = K_QP;
 uint256 constant PRESET_QIB                 = K_QIB;
 uint256 constant PRESET_BAD_ACTOR_CLEAR     = K_BAD_ACTOR_CLEAR;
-uint256 constant PRESET_SPV_WHITELIST       = K_SPV_WHITELIST;
 uint256 constant PRESET_NON_US              = K_NON_US;
+uint256 constant PRESET_SPV_WHITELIST       = K_SPV_WHITELIST;
+uint256 constant PRESET_SYNDICATE           = K_SYNDICATE;
 
 /// @notice Value for K_INVESTOR_TYPE. UNSET is the empty value: a credential asserting the key must name one of
 /// the real types, and a holder with no such credential reads UNSET.
@@ -87,7 +90,13 @@ interface ILexChexBadge is IERC5484 {
     function hasValidCredential(address owner, bytes32 categoryId) external view returns (bool);
     /// @notice True when the owner holds a valid credential asserting `kindKey` (a K_* status/kind fact-key).
     function hasValidCredentialOf(address owner, uint256 kindKey) external view returns (bool);
+    /// @notice True when the owner holds a valid credential granting scoped entitlement `scopeKey` for `spv`.
+    /// An entitlement granted for another SPV never answers here.
+    function hasValidScopedCredentialOf(address owner, uint256 scopeKey, address spv) external view returns (bool);
     function hasValidWhitelistFor(address owner, address spv) external view returns (bool);
+    /// @notice True when the owner holds a valid syndicate seat in `spv`'s circle. Never satisfied by a
+    /// whitelist credential, nor by a syndicate seat in another SPV.
+    function hasValidSyndicateFor(address owner, address spv) external view returns (bool);
 
     // ── Attribute getters (most recent valid credential asserting the fact; empty value when none) ──
     /// @notice Individual vs. entity; UNSET when unestablished. Qualifies the §3(c)(1)(A) look-through count.
