@@ -226,6 +226,8 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 bytes("")
             )
         );
+        // The printer's tally and HolderCapCondition must read the same badge.
+        LedgerEntryToken(address(certPrinter)).setLookThroughBadge(address(badge));
         sellerTokenId = im.createCertAndAssign(address(certPrinter), seller, _sellerCertDetails());
         vm.stopPrank();
 

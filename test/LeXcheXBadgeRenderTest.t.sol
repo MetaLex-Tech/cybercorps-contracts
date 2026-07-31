@@ -48,6 +48,51 @@ contract LeXcheXBadgeRenderTest is Test {
         assertFalse(vm.contains(svg, "REGULATORY"), "svg reg row should be absent");
     }
 
+    // ── Audit findings ──────────────────────────────────────────────────────────
+
+    // L1 — the expiry is the holder's record of when re-attestation is due, so it has to be the real date.
+    // Covers a leap day, both sides of a month boundary, and a year end.
+    function test_Audit_L1_ExpiryRendersTheRealCalendarDate() public {
+        assertEq(_expiryShown(1_767_225_600), "1/1/2026");   // 2026-01-01
+        assertEq(_expiryShown(1_772_323_200), "3/1/2026");   // 2026-03-01, the day after a 28-day February
+        assertEq(_expiryShown(1_772_236_800), "2/28/2026");  // 2026-02-28
+        assertEq(_expiryShown(1_709_164_800), "2/29/2024");  // 2024-02-29, a leap day
+        assertEq(_expiryShown(1_798_675_200), "12/31/2026"); // 2026-12-31
+        assertEq(_expiryShown(1_893_456_000), "1/1/2030");   // the fixture's default expiry
+    }
+
+    /// @dev Renders a credential expiring at `ts` and reads the Expiry trait back.
+    function _expiryShown(uint64 ts) internal view returns (string memory) {
+        Credential memory c = _cred("");
+        c.expiryDate = ts;
+        (string memory json,) = _decode(LeXcheXBadgeRender.tokenURI(1, c, true));
+        (bool found, string memory shown) = _trait(json, "Expiry");
+        assertTrue(found, "expiry trait missing");
+        return shown;
+    }
+
+    // L2 — jurisdictions are typed in by an operator, the only part of a credential that can contain
+    // characters JSON reserves. A quote has to stay inside the value instead of ending it.
+    function test_Audit_L2_JurisdictionIsEscapedInJson() public {
+        Credential memory c = _cred("");
+        c.investorJurisdiction = "US\", \"injected\": \"yes";
+        (string memory json,) = _decode(LeXcheXBadgeRender.tokenURI(1, c, true));
+
+        // The whole value stays one string, and no extra field appears next to it.
+        assertEq(json.readString(".attributes[1].value"), "US\", \"injected\": \"yes");
+        assertFalse(vm.keyExistsJson(json, ".attributes[1].injected"), "no field was injected");
+    }
+
+    // The same value in the SVG, where the reserved characters are XML's instead.
+    function test_Audit_L2_JurisdictionIsEscapedInSvg() public {
+        Credential memory c = _cred("<script>&");
+        c.investorJurisdiction = "KY";
+        (, string memory svg) = _decode(LeXcheXBadgeRender.tokenURI(1, c, true));
+
+        assertTrue(vm.contains(svg, "&lt;script&gt;&amp;"), "reserved characters must be escaped");
+        assertFalse(vm.contains(svg, "<script>"), "raw markup must not reach the image");
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     /// @dev Reads the metadata `attributes` array as JSON and returns the value for a trait_type (exact match).

@@ -21,6 +21,8 @@ uint256 constant K_QIB             = 1 << 18;          // qualified institutiona
 uint256 constant K_BAD_ACTOR_CLEAR = 1 << 19;          // Rule 506(d) disqualification cleared
 uint256 constant K_NON_US          = 1 << 20;          // Reg S (§6.5): the holder is not a U.S. person
 
+uint256 constant STATUS_KEYS = K_ACCREDITED | K_QP | K_QIB | K_BAD_ACTOR_CLEAR | K_NON_US;
+
 // SCOPE keys. A whitelist admits the holder to one SPV's offers (§16.2); a syndicate seats them in that
 // issuer's private circle (§4.1.3A). Separate grants an issuer makes for separate reasons, so neither key
 // ever satisfies the other, and each names the SPV it entitles in Credential.scope.
@@ -72,10 +74,17 @@ interface ILexChexBadge is IERC5484 {
     error LexChexBadge_BadAsserts();
     error LexChexBadge_MissingValue(uint256 key);
     error LexChexBadge_MissingScope();
+    error LexChexBadge_BoCountRequiresEntity();
+    error LexChexBadge_NoValidCredential();
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
     function mint(address to, Credential memory cred) external returns (uint256 tokenId);
     function void(uint256 tokenId, string memory reason) external;
+    /// @notice Voids `staleTokenId` and issues `cred` to the same holder in one call. How to retract a fact:
+    /// a new credential alone cannot, since the old one keeps answering until voided.
+    function supersede(uint256 staleTokenId, Credential memory cred, string memory reason)
+        external
+        returns (uint256 tokenId);
     /// @notice Permissionless keeper hook: evict the holder's expired credentials from the active set.
     function sweep(address holder) external;
     /// @notice Sweep several holders in one keeper transaction.

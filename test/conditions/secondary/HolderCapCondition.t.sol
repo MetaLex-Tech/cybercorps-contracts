@@ -5,7 +5,10 @@ import {K_BO_COUNT, K_INVESTOR_JURISDICTION, K_INVESTOR_TYPE, InvestorType}
     from "../../../src/interfaces/ILexChexBadge.sol";
 import {Credential} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
+import {ILedgerEntryToken} from "../../../src/interfaces/ILedgerEntryToken.sol";
 import {LedgerEntryToken} from "../../../src/LedgerEntryToken.sol";
+import {LeXcheXBadge} from "../../../src/creds/lexchexBadge.sol";
+import {SecurityClass, SecuritySeries} from "../../../src/CyberCorpConstants.sol";
 import {HolderCapCondition} from "../../../src/libs/conditions/secondary/HolderCapCondition.sol";
 import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
 
@@ -67,7 +70,7 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
 
     /// @dev Issues an accredited credential; the newest valid one governs the reads, so a later call in a
     /// test supersedes the setUp default (jurisdiction / beneficial-owner count).
-    function _credential(address to, string memory jurisdiction, uint32 boCount) internal {
+    function _credential(address to, string memory jurisdiction, uint32 boCount) internal returns (uint256) {
         Credential memory c;
         c.investorType = InvestorType.ENTITY;
         c.investorJurisdiction = jurisdiction;
@@ -75,7 +78,7 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
         // A value key may only be asserted with a non-empty value, so K_BO_COUNT is only added when non-zero.
         uint256 asserts = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION;
         if (boCount > 0) asserts |= K_BO_COUNT;
-        _mintCred(to, asserts, c);
+        return _mintCred(to, asserts, c);
     }
 
     function _credentialBuyer(string memory jurisdiction, uint32 boCount) internal {
@@ -250,5 +253,130 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
             holderCap.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId),
             "resynced tally blocks the breaching trade"
         );
+    }
+
+    // ── Audit findings ──────────────────────────────────────────────────────────
+
+    /// @dev A printer straight from the factory — no look-through badge wired.
+    function _unwiredPrinter() internal returns (address) {
+        return im.createCertPrinter(
+            new string[](0), "Bare", "BARE", "ipfs://bare",
+            SecurityClass.CommonStock, SecuritySeries.SeriesA, address(0), bytes("")
+        );
+    }
+
+    // H1 — with no badge wired, every holder is unknown. Unknown counts as one U.S. holder, so the
+    // U.S.-only subtotal tracks the population instead of sitting at zero and never filling the cap.
+    function test_Audit_H1_UnwiredPrinterCountsHoldersAsUs() public {
+        address bare = _unwiredPrinter();
+        assertEq(LedgerEntryToken(bare).lookThroughBadge(), address(0), "printer starts unwired");
+
+        for (uint256 i = 0; i < 5; i++) {
+            address h = makeAddr(string.concat("usHolder", vm.toString(i)));
+            _credential(h, "US", 10);
+            im.createCertAndAssign(bare, h, _certDetails(1));
+        }
+
+        assertEq(ILedgerEntryToken(bare).lookThroughHolderCount(), 5, "one holder each, no look-through");
+        assertEq(ILedgerEntryToken(bare).usLookThroughHolderCount(), 5, "unknown holders read U.S.");
+    }
+
+    // H2 — withdrawing an attestation says nothing about how many owners a holder has, so it must not shrink
+    // the tally. Only a fresh one revises the weight. resyncHolder is open to anyone, so this matters.
+    function test_Audit_H2_VoidingBoCredential_DoesNotFreeCapHeadroom() public {
+        uint256 boCred = _credential(incumbent, "KY", 90);
+        _makeHolder(incumbent); // seller(1) + incumbent(90) = 91
+        assertEq(printer.lookThroughHolderCount(), 91);
+
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C1, 91, false, false);
+        assertFalse(
+            holderCap.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId),
+            "91 + 1 > cap 91 is correctly blocked"
+        );
+
+        // The admin withdraws the attestation, meaning to tighten.
+        badge.void(boCred, "attestation withdrawn");
+        assertEq(uint256(badge.getBeneficialOwnerCount(incumbent)), 0, "badge reports the fact unestablished");
+
+        vm.prank(stranger);
+        LedgerEntryToken(address(printer)).resyncHolder(incumbent);
+        assertEq(printer.lookThroughHolderCount(), 91, "revocation did not shrink the tally");
+        assertFalse(
+            holderCap.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId),
+            "the blocked trade stays blocked"
+        );
+
+        // A fresh attestation still lowers the weight: the holder is not frozen, just not guessed at.
+        _credential(incumbent, "KY", 10);
+        LedgerEntryToken(address(printer)).resyncHolder(incumbent);
+        assertEq(printer.lookThroughHolderCount(), 11, "a new attestation does revise the weight");
+        assertTrue(holderCap.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId));
+    }
+
+    // H2b — expiry needs no admin action at all, so it must not shrink the tally either.
+    function test_Audit_H2b_ExpiredBoCredential_DoesNotFreeCapHeadroom() public {
+        Credential memory c;
+        c.investorType = InvestorType.ENTITY;
+        c.investorJurisdiction = "KY";
+        c.beneficialOwnerCount = 90;
+        c.expiryDate = uint64(block.timestamp + 1 days);
+        _mintCred(incumbent, K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_BO_COUNT, c);
+        _makeHolder(incumbent);
+        assertEq(printer.lookThroughHolderCount(), 91);
+
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(stranger);
+        LedgerEntryToken(address(printer)).resyncHolder(incumbent);
+        assertEq(printer.lookThroughHolderCount(), 91, "a lapsed attestation did not shrink the tally");
+    }
+
+    // M1 — the condition and the printer are wired to badges separately. Pointed at different ones, the cap
+    // would compare a buyer from one against holders from the other. Better to refuse than to guess.
+    function test_Audit_M1_DivergentBadgeWiringBlocks() public {
+        LeXcheXBadge other = LeXcheXBadge(
+            _proxy(address(new LeXcheXBadge()), abi.encodeCall(LeXcheXBadge.initialize, (address(auth))))
+        );
+        holderCap.updateBadge(address(other)); // printer still reads the base badge
+        holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C1, 100, false, true);
+
+        // U.S. on the badge the printer uses, foreign on the condition's — so the no-U.S. floor would
+        // otherwise admit a buyer the printer counts as U.S.
+        assertEq(badge.getInvestorJurisdiction(buyer), "US");
+        Credential memory foreign;
+        foreign.investorType = InvestorType.ENTITY;
+        foreign.investorJurisdiction = "KY";
+        other.mint(buyer, _withExpiry(foreign, K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION));
+
+        // One settlement, re-checked as the wiring changes (a second postOffer would collide on the salt).
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(
+            holderCap.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId),
+            "a cap counted from two registries is not a cap"
+        );
+
+        // Back on the printer's badge the answer means something again, and the buyer — U.S. there — is
+        // correctly refused by the floor.
+        holderCap.updateBadge(address(badge));
+        assertFalse(holderCap.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId));
+        holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C1, 100, false, false);
+        assertTrue(holderCap.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId));
+    }
+
+    // An unwired printer is a mismatch too: the buyer's look-through count would be weighed against holders
+    // counted without one.
+    function test_Audit_M1b_UnwiredPrinterBlocks() public {
+        address bare = _unwiredPrinter();
+        uint256 sellerCert = im.createCertAndAssign(bare, seller, _certDetails(UNITS));
+        bytes32 offerId = _postSellOn(bare, sellerCert);
+        bytes32 settlementId = _acceptSell(offerId);
+        assertFalse(holderCap.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId));
+    }
+
+    /// @dev Stamps a far expiry so a credential can be minted onto another badge directly.
+    function _withExpiry(Credential memory c, uint256 asserts) internal view returns (Credential memory) {
+        c.asserts = asserts;
+        c.expiryDate = uint64(block.timestamp + 3650 days);
+        return c;
     }
 }

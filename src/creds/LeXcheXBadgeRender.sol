@@ -63,13 +63,13 @@ library LeXcheXBadgeRender {
                             investorTypeLabel(cred.investorType),
                             '"},',
                             '{"trait_type": "Jurisdiction", "value": "',
-                            cred.investorJurisdiction,
+                            jsonEscape(cred.investorJurisdiction),
                             '"},',
                             bytes(cred.lookThroughJurisdiction).length > 0
                                 ? string(
                                     abi.encodePacked(
                                         '{"trait_type": "Regulatory Jurisdiction", "value": "',
-                                        cred.lookThroughJurisdiction,
+                                        jsonEscape(cred.lookThroughJurisdiction),
                                         '"},'
                                     )
                                 )
@@ -125,7 +125,7 @@ library LeXcheXBadgeRender {
                 '<rect width="100%" height="100%" fill="url(#grad1)" />',
                 '<text x="150" y="360" font-family="Georgia" font-size="30" fill="#f2f2f2" opacity=".6">JURISDICTION</text>',
                 '<text x="495" y="355" font-family="Georgia" font-size="30" fill="url(#textGrad)">',
-                cred.investorJurisdiction,
+                xmlEscape(cred.investorJurisdiction),
                 "</text>",
                 '<rect x="380" y="363" width="470px" height="5px" fill="#f2f2f2" opacity=".24"></rect>',
                 bytes(cred.lookThroughJurisdiction).length > 0
@@ -133,7 +133,7 @@ library LeXcheXBadgeRender {
                         abi.encodePacked(
                             '<text x="150" y="405" font-family="Georgia" font-size="26" fill="#f2f2f2" opacity=".6">REGULATORY</text>',
                             '<text x="495" y="405" font-family="Georgia" font-size="30" fill="url(#textGrad)">',
-                            cred.lookThroughJurisdiction,
+                            xmlEscape(cred.lookThroughJurisdiction),
                             "</text>"
                         )
                     )
@@ -174,6 +174,52 @@ library LeXcheXBadgeRender {
         );
     }
 
+    /// @dev Jurisdictions are typed in by an operator, so they are the only part of a credential that can
+    /// contain characters JSON reserves. Unescaped, a quote ends the string early and the rest reads as
+    /// further fields.
+    function jsonEscape(string memory value) internal pure returns (string memory) {
+        bytes memory b = bytes(value);
+        bytes memory out = new bytes(b.length * 2);
+        uint256 n;
+        for (uint256 i = 0; i < b.length; i++) {
+            bytes1 ch = b[i];
+            if (ch == '"' || ch == "\\") {
+                out[n++] = "\\";
+                out[n++] = ch;
+            } else if (uint8(ch) < 0x20) {
+                out[n++] = " "; // control characters are illegal raw in JSON
+            } else {
+                out[n++] = ch;
+            }
+        }
+        assembly { mstore(out, n) }
+        return string(out);
+    }
+
+    /// @dev The same value in the SVG, where the reserved characters are XML's instead.
+    function xmlEscape(string memory value) internal pure returns (string memory) {
+        bytes memory b = bytes(value);
+        bytes memory out = new bytes(b.length * 6);
+        uint256 n;
+        for (uint256 i = 0; i < b.length; i++) {
+            bytes1 ch = b[i];
+            if (ch == "&") n = appendBytes(out, n, "&amp;");
+            else if (ch == "<") n = appendBytes(out, n, "&lt;");
+            else if (ch == ">") n = appendBytes(out, n, "&gt;");
+            else if (ch == '"') n = appendBytes(out, n, "&quot;");
+            else if (ch == "'") n = appendBytes(out, n, "&apos;");
+            else out[n++] = ch;
+        }
+        assembly { mstore(out, n) }
+        return string(out);
+    }
+
+    function appendBytes(bytes memory out, uint256 n, string memory entity) private pure returns (uint256) {
+        bytes memory e = bytes(entity);
+        for (uint256 i = 0; i < e.length; i++) out[n + i] = e[i];
+        return n + e.length;
+    }
+
     /// @dev Empty for UNSET — a credential that doesn't assert K_INVESTOR_TYPE states no type.
     function investorTypeLabel(InvestorType investorType) internal pure returns (string memory) {
         if (investorType == InvestorType.INDIVIDUAL) return "Individual";
@@ -181,15 +227,32 @@ library LeXcheXBadgeRender {
         return "";
     }
 
+    /// @dev The expiry is the holder's record of when re-attestation is due, so it has to be the real date.
     function timestampToDate(uint256 timestamp) internal pure returns (string memory) {
-        uint256 day = ((timestamp / 86400) % 31) + 1;
-        uint256 month = ((timestamp / 2629743) % 12) + 1;
-        uint256 year = (timestamp / 31556926) + 1970;
+        (uint256 year, uint256 month, uint256 day) = civilFromDays(timestamp / 86400);
         return string(
             abi.encodePacked(
                 Strings.toString(month), "/", Strings.toString(day), "/", Strings.toString(year)
             )
         );
+    }
+
+    /// @dev Days since the epoch to a calendar date. Counts years from March so the leap day falls last and
+    /// month lengths repeat on a fixed pattern.
+    function civilFromDays(uint256 daysSinceEpoch)
+        internal
+        pure
+        returns (uint256 year, uint256 month, uint256 day)
+    {
+        uint256 z = daysSinceEpoch + 719468; // count from 0000-03-01
+        uint256 era = z / 146097; // 400-year cycle
+        uint256 doe = z % 146097; // day within it
+        uint256 yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; // year within it, 0-399
+        uint256 doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // day of the March-based year
+        uint256 mp = (5 * doy + 2) / 153; // month of it, 0-11
+        day = doy - (153 * mp + 2) / 5 + 1;
+        month = mp < 10 ? mp + 3 : mp - 9;
+        year = yoe + era * 400 + (month <= 2 ? 1 : 0); // Jan and Feb belong to the next calendar year
     }
 
     function bytes32ToHexString(bytes32 value) internal pure returns (string memory) {

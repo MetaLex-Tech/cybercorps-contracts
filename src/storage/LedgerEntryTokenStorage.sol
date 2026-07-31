@@ -427,23 +427,24 @@ library LedgerEntryTokenStorage {
         return s.securityStatus[tokenId] != SecurityStatus.Void;
     }
 
-    /// @dev Sample the look-through weight and US flag from the configured badge; if no badge is wired the
-    /// tally degrades to address-level (weight 1, non-US). A holder with no established BO count contributes
-    /// weight 1 (a single holder — the look-through exception), and LookThroughPolicy resolves unknown as U.S.
-    function _sample(CyberCertStorage storage s, address owner) private view returns (uint32 weight, bool isUS) {
+    /// @dev Read the holder's look-through facts off the badge. `bo == 0` means unknown, not zero owners —
+    /// callers decide what to do with it. No badge wired means everything is unknown, and unknown reads U.S.
+    function _sample(CyberCertStorage storage s, address owner) private view returns (uint32 bo, bool isUS) {
         address badge = s.lookThroughBadge;
-        if (badge == address(0)) return (1, false);
-        uint32 bo = ILexChexBadge(badge).getBeneficialOwnerCount(owner);
-        weight = bo > 0 ? bo : 1;
+        if (badge == address(0)) return (0, true);
+        bo = ILexChexBadge(badge).getBeneficialOwnerCount(owner);
         isUS = LookThroughPolicy.isUSInvestor(ILexChexBadge(badge), owner);
     }
 
     /// @dev Re-read the badge for a live holder and reconcile the totals by the delta, so
     /// `total == Σ holderAcct.weight` stays exact across BO-count or jurisdiction changes. No-op otherwise.
+    /// A lapsed or voided credential means the count is unknown, not lower, so the holder keeps the weight
+    /// they were booked at. Only a fresh attestation revises it. Otherwise retiring one would free cap room.
     function _resyncHolder(CyberCertStorage storage s, address owner) private {
         HolderAcct storage a = s.holderAcct[owner];
         if (a.liveLots == 0) return;
-        (uint32 newWeight, bool newIsUS) = _sample(s, owner);
+        (uint32 bo, bool newIsUS) = _sample(s, owner);
+        uint32 newWeight = bo > 0 ? bo : a.weight;
         s.lookThroughHolderCount = s.lookThroughHolderCount - a.weight + newWeight;
         uint256 usCount = s.usLookThroughHolderCount;
         if (a.isUS) usCount -= a.weight;
@@ -461,7 +462,8 @@ library LedgerEntryTokenStorage {
         s.liveCounted[tokenId] = true;
         HolderAcct storage a = s.holderAcct[owner];
         if (a.liveLots == 0) {
-            (uint32 weight, bool isUS) = _sample(s, owner);
+            (uint32 bo, bool isUS) = _sample(s, owner);
+            uint32 weight = bo > 0 ? bo : 1; // unknown: count as one holder
             a.liveLots = 1;
             a.weight = weight;
             a.isUS = isUS;

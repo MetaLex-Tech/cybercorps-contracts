@@ -22,6 +22,9 @@ import {USJurisdictionPolicy} from "../../policies/USJurisdictionPolicy.sol";
 /// | EMPTY                     | CLEARANCE |
 /// | US                        | PASS      |
 /// | non-US                    | CLEARANCE |
+///
+/// A U.S. acquirer still needs clearance if its physical or its look-through jurisdiction is on the GP's
+/// blocked list: CFIUS cares about who controls it, not where it is registered.
 contract CFIUSCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgAuthACL {
     error InvalidBadge();
     error InvalidBuyer();
@@ -35,8 +38,9 @@ contract CFIUSCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgA
     /// @notice The SPV's CFIUS sensitivity flag: TID U.S. business determination. When false the
     /// condition is dormant (always passes).
     bool public tidUsBusiness;
-    /// @notice Jurisdictions (country codes matching badge credential jurisdiction strings) that always
-    /// require clearance regardless of non-U.S.-person analysis
+    /// @notice Jurisdictions the GP treats as a blocked affiliation. Foreign acquirers already need clearance,
+    /// so this list is what reaches a U.S. one: it matches the look-through jurisdiction as well as the
+    /// physical, catching a U.S.-registered vehicle under foreign control.
     string[] public blockedJurisdictions;
 
     /// @notice GP-recorded CFIUS clearance attestations, per buyer
@@ -111,12 +115,19 @@ contract CFIUSCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgA
         string memory jurisdiction = badge.getInvestorJurisdiction(buyer);
         if (!USJurisdictionPolicy.isUS(jurisdiction)) return false;
 
-        // A U.S. buyer whose credential jurisdiction matches a blocked-affiliation entry still needs clearance
+        // A U.S. acquirer can still be foreign-controlled, and CFIUS cares about control. So the blocked list
+        // is matched against the look-through jurisdiction too, not just where the buyer is registered.
+        if (_isBlocked(jurisdiction)) return false;
+        return !_isBlocked(badge.getLookThroughJurisdiction(buyer));
+    }
+
+    function _isBlocked(string memory jurisdiction) private view returns (bool) {
+        if (bytes(jurisdiction).length == 0) return false;
         bytes32 j = keccak256(bytes(jurisdiction));
         for (uint256 i = 0; i < blockedJurisdictions.length; i++) {
-            if (keccak256(bytes(blockedJurisdictions[i])) == j) return false;
+            if (keccak256(bytes(blockedJurisdictions[i])) == j) return true;
         }
-        return true;
+        return false;
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}

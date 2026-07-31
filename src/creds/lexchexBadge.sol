@@ -48,8 +48,11 @@ import "../interfaces/ILexChexBadge.sol";
 /// Spec
 /// - A credential's `asserts` (K_* fact-keys) is the sole authority axis: a field answers a read only when
 ///   its key is asserted; VALUE keys require a non-empty field, SCOPE keys require `scope` (the SPV).
-/// - Credentials are IMMUTABLE once minted: supersede a fact by minting a newer credential (most-recent valid
+/// - Credentials are IMMUTABLE once minted: change a fact by minting a newer credential (most-recent valid
 ///   wins), and revoke by voiding. There is no in-place edit.
+/// - Changing a fact is not the same as retracting one. No credential can say a fact stopped being true, and
+///   one that just drops the key leaves the old credential answering. To retract, void the credential that
+///   carries the fact — `supersede` voids and re-issues in one call so half of it cannot be forgotten.
 /// - Compliance reads scan the holder's ACTIVE SET (non-voided, not-yet-swept credentials), so scan cost is
 ///   bounded rather than O(all-ever-minted): void() evicts at once; the permissionless sweep(holder) evicts
 ///   expired ones (reads are view and cannot evict), and sweepTokens(ids) drains a set in calldata-bounded
@@ -95,7 +98,8 @@ contract LeXcheXBadge is
 {
     uint256 public constant VERSION = 2;
 
-    // Upgrade notes: Reduced gap to account for new variables (50 - 1 = 49)
+    // Credential state lives in LeXcheXBadgeStorage's own slot; this only reserves room for future variables
+    // declared directly on the contract.
     uint256[49] private __gap;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -104,6 +108,7 @@ contract LeXcheXBadge is
     }
 
     function initialize(address _auth) public initializer {
+        __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
         __ERC721_init("LeXcheX Badge", "LXB");
     }
@@ -131,9 +136,23 @@ contract LeXcheXBadge is
         emit Issued(address(0), to, tokenId, BurnAuth.Neither); // tokens are never burnable
     }
 
+    /// @notice Replaces a credential: voids `staleTokenId` and issues `cred` to the same holder in one call.
+    /// @dev How to retract a fact. Minting a corrected credential is not enough — the old one keeps answering
+    /// until it is voided, so a holder who emigrates would keep their old U.S. state. Both steps happen here
+    /// so a correction cannot be issued half-finished.
+    function supersede(
+        uint256 staleTokenId,
+        Credential memory cred,
+        string memory reason
+    ) external onlyAdmin returns (uint256 tokenId) {
+        address holder = _requireOwned(staleTokenId);
+        void(staleTokenId, reason);
+        return mint(holder, cred);
+    }
+
     /// @notice Revocation: failed re-KYC, discovered bad-actor status, relocation, sanctions hits. The
     /// credential is retained (never burned) with the reason recorded, so the record survives for audit.
-    function void(uint256 tokenId, string memory reason) external onlyAdmin {
+    function void(uint256 tokenId, string memory reason) public onlyAdmin {
         Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
         if (cred.issuanceDate == 0) revert LexChexBadge_TokenDoesNotExist();
         address holder = _requireOwned(tokenId);
@@ -337,10 +356,16 @@ contract LeXcheXBadge is
         return LeXcheXBadgeStorage.getActiveTokens(owner);
     }
 
-    /// @notice First token ID owned by an address (v1 getAccreditationByOwner-style getter)
+    /// @notice v1-compatible read (getAccreditationByOwner-style): a valid credential of the owner, lowest
+    /// token id first. Voided and expired records are kept for audit but are not credentials, so an owner
+    /// left with only those has none.
     function getCredentialByOwner(address owner) public view returns (uint256) {
-        require(balanceOf(owner) > 0, "No tokens owned by this address");
-        return tokenOfOwnerByIndex(owner, 0);
+        uint256 balance = balanceOf(owner);
+        for (uint256 i = 0; i < balance; i++) {
+            uint256 tokenId = tokenOfOwnerByIndex(owner, i);
+            if (isValid(tokenId)) return tokenId;
+        }
+        revert LexChexBadge_NoValidCredential();
     }
 
     function getCredential(uint256 tokenId) public view returns (Credential memory) {
@@ -361,15 +386,15 @@ contract LeXcheXBadge is
     // Soulbound enforcement (§0.1)
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// @dev Reverts on any transfer where from != 0 && to != 0 (mint and burn only), identical to the
-    /// existing LexChex_SoulBound() pattern
+    /// @dev Issuance is the only move a credential makes: no transfer, and no burn either, since the record
+    /// must survive revocation and the sweeps read the holder from ownership. Checked here rather than left
+    /// to there being no burn function, so an upgrade that adds one cannot erase a credential.
     function _update(
         address to,
         uint256 tokenId,
         address auth
     ) internal virtual override returns (address) {
-        address from = _ownerOf(tokenId);
-        if (from != address(0) && to != address(0)) {
+        if (_ownerOf(tokenId) != address(0)) {
             revert LexChexBadge_SoulBound();
         }
         return super._update(to, tokenId, auth);
@@ -423,6 +448,11 @@ contract LeXcheXBadge is
         if ((a & K_LOOKTHROUGH_JURISDICTION) != 0 && bytes(cred.lookThroughJurisdiction).length == 0) revert LexChexBadge_MissingValue(K_LOOKTHROUGH_JURISDICTION);
         if ((a & K_US_STATE) != 0 && cred.usState == bytes2(0)) revert LexChexBadge_MissingValue(K_US_STATE);
         if ((a & K_BO_COUNT) != 0 && cred.beneficialOwnerCount == 0) revert LexChexBadge_MissingValue(K_BO_COUNT);
+        // Only an entity has beneficial owners, and the type must be asserted on the same credential to be
+        // authoritative. A count on a natural person would inflate the §3(c)(1)(A) tally.
+        if ((a & K_BO_COUNT) != 0 && ((a & K_INVESTOR_TYPE) == 0 || cred.investorType != InvestorType.ENTITY)) {
+            revert LexChexBadge_BoCountRequiresEntity();
+        }
         if ((a & K_DATA) != 0 && cred.data.length == 0) revert LexChexBadge_MissingValue(K_DATA);
         if ((a & SCOPED_KEYS) != 0 && cred.scope == address(0)) revert LexChexBadge_MissingScope();
     }

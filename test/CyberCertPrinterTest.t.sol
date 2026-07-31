@@ -1111,10 +1111,11 @@ contract CyberCertPrinterTest is Test {
         assertTrue(printer.isLegalHolder(investor));
     }
 
-    function test_LookThrough_NoBadgeDegradesToOne() public {
+    // With no badge wired every holder is unknown, and unknown counts as one U.S. holder.
+    function test_LookThrough_NoBadgeDegradesToOneUsHolder() public {
         _mintCert(1, investor, 100, bytes(""));
         assertEq(printer.lookThroughHolderCount(), 1);
-        assertEq(printer.usLookThroughHolderCount(), 0);
+        assertEq(printer.usLookThroughHolderCount(), 1);
     }
 
     function test_LookThrough_UsEntityFlowsThroughBothTotals() public {

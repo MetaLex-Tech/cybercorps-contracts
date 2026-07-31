@@ -929,7 +929,6 @@ contract LeXcheXBadgeTest is Test {
         uint256[] memory owned = badge.getTokenIdsByOwner(holder); // full enumeration, incl. expired
         assertEq(owned.length, 1);
         assertEq(owned[0], id);
-        assertEq(badge.getCredentialByOwner(holder), id);
         assertEq(badge.getCredential(id).usState, bytes2("CA")); // record intact despite eviction
     }
 
@@ -994,6 +993,78 @@ contract LeXcheXBadgeTest is Test {
         badge.transferFrom(holder, other, id);
     }
 
+    // L9 — nothing burns a credential today, but the rule is checked rather than assumed: the record must
+    // survive revocation, and the sweeps read the holder from ownership.
+    function test_Audit_L9_BurnIsRejectedEvenWithAnEntryPoint() public {
+        BurnableBadgeHarness harness = BurnableBadgeHarness(
+            address(
+                new ERC1967Proxy(
+                    address(new BurnableBadgeHarness()),
+                    abi.encodeCall(LeXcheXBadge.initialize, (address(new BorgAuth(owner))))
+                )
+            )
+        );
+        address holder = makeAddr("burnMe");
+        Credential memory c;
+        c.asserts = K_ACCREDITED;
+        c.expiryDate = uint64(block.timestamp + 3650 days);
+        vm.prank(owner);
+        uint256 id = harness.mint(holder, c);
+
+        vm.expectRevert(ILexChexBadge.LexChexBadge_SoulBound.selector);
+        harness.burn(id);
+        assertEq(harness.ownerOf(id), holder);
+    }
+
+    // ── Audit findings ────────────────────────────────────────────────────────
+
+    // L4 — only an entity has beneficial owners, so a count on a person would inflate the §3(c)(1)(A) tally.
+    // The type must be asserted on the same credential; setting the field alone does not make it official.
+    function test_Audit_L4_BeneficialOwnerCountRequiresAnAttestedEntity() public {
+        address to = makeAddr("boCountEntity");
+
+        Credential memory individual = _cred(K_INVESTOR_TYPE | K_BO_COUNT);
+        individual.investorType = InvestorType.INDIVIDUAL;
+        individual.beneficialOwnerCount = 5;
+        vm.prank(owner);
+        vm.expectRevert(ILexChexBadge.LexChexBadge_BoCountRequiresEntity.selector);
+        badge.mint(to, individual);
+
+        Credential memory unattested = _cred(K_BO_COUNT); // ENTITY in the field, key not asserted
+        unattested.investorType = InvestorType.ENTITY;
+        unattested.beneficialOwnerCount = 5;
+        vm.prank(owner);
+        vm.expectRevert(ILexChexBadge.LexChexBadge_BoCountRequiresEntity.selector);
+        badge.mint(to, unattested);
+
+        Credential memory entity = _cred(K_INVESTOR_TYPE | K_BO_COUNT);
+        entity.investorType = InvestorType.ENTITY;
+        entity.beneficialOwnerCount = 5;
+        _mint(to, entity);
+        assertEq(uint256(badge.getBeneficialOwnerCount(to)), 5);
+    }
+
+    // L7 — voided and expired records are kept for audit but are not credentials, so the read skips them and
+    // reports none when only those are left.
+    function test_Audit_L7_GetCredentialByOwnerSkipsRetiredRecords() public {
+        address holder = makeAddr("firstIsVoided");
+        uint256 revoked = _mint(holder, _kyc("US", "NY"));
+        uint256 live = _mint(holder, _kyc("US", "CA"));
+        vm.prank(owner);
+        badge.void(revoked, "revoked");
+
+        assertEq(badge.getCredentialByOwner(holder), live);
+        assertEq(badge.getTokenIdsByOwner(holder).length, 2); // both retained for audit
+
+        vm.prank(owner);
+        badge.void(live, "revoked too");
+        vm.expectRevert(ILexChexBadge.LexChexBadge_NoValidCredential.selector);
+        badge.getCredentialByOwner(holder);
+
+        vm.expectRevert(ILexChexBadge.LexChexBadge_NoValidCredential.selector);
+        badge.getCredentialByOwner(makeAddr("neverCredentialed"));
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     function _cred(uint256 asserts) internal view returns (Credential memory c) {
@@ -1038,6 +1109,14 @@ contract LeXcheXBadgeTest is Test {
         vm.prank(owner);
         vm.expectRevert(ILexChexBadge.LexChexBadge_MissingScope.selector);
         badge.mint(to, c);
+    }
+}
+
+/// @notice Stands in for an upgrade that adds a burn function, so the soulbound guard can be tested against
+/// a move nothing currently makes.
+contract BurnableBadgeHarness is LeXcheXBadge {
+    function burn(uint256 tokenId) external {
+        _burn(tokenId);
     }
 }
 

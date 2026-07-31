@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import {K_INVESTOR_JURISDICTION, K_INVESTOR_TYPE, K_US_STATE, InvestorType}
+import {ILexChexBadge, K_INVESTOR_JURISDICTION, K_INVESTOR_TYPE, K_US_STATE, InvestorType}
     from "../../../src/interfaces/ILexChexBadge.sol";
 import {Credential} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
@@ -192,5 +192,81 @@ contract USStateOfResidenceConditionTest is SecondaryConditionIntegrationBase {
         USStateOfResidenceCondition impl = new USStateOfResidenceCondition();
         vm.expectRevert(USStateOfResidenceCondition.InvalidBadge.selector);
         _proxy(address(impl), abi.encodeCall(USStateOfResidenceCondition.initialize, (address(auth), address(0))));
+    }
+
+    // ── Audit findings ──────────────────────────────────────────────────────────
+
+    // M2 — to retract a fact you have to void the credential carrying it. A corrected credential on its own
+    // is not enough: nothing can say the state stopped being true, so the old one keeps answering.
+    // `supersede` voids and re-issues together.
+    function test_Audit_M2_RelocationRetractsUsStateBySuperseding() public {
+        Credential memory ny;
+        ny.investorType = InvestorType.INDIVIDUAL;
+        ny.investorJurisdiction = "US";
+        ny.usState = "NY";
+        uint256 nyCred = _mintCred(buyer, K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_US_STATE, ny);
+
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_checkOn(offerId, settlementId), "NY is default-blocked");
+
+        // The correction alone changes the jurisdiction but cannot retract the state.
+        vm.warp(block.timestamp + 1 days);
+        _mintCredential("KY", bytes2(0));
+        assertEq(badge.getInvestorJurisdiction(buyer), "KY");
+        assertEq(badge.getUsState(buyer), bytes2("NY"), "the stale state still answers");
+        assertFalse(_checkOn(offerId, settlementId), "still blocked while the old record stands");
+
+        // Nor can it be re-asserted as empty: an asserted key must carry a value.
+        Credential memory cleared;
+        cleared.investorType = InvestorType.INDIVIDUAL;
+        cleared.investorJurisdiction = "KY";
+        vm.expectRevert(abi.encodeWithSelector(ILexChexBadge.LexChexBadge_MissingValue.selector, K_US_STATE));
+        _mintCred(buyer, K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_US_STATE, cleared);
+
+        // supersede voids the record carrying the state and issues the replacement in one call.
+        cleared.asserts = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION;
+        cleared.expiryDate = uint64(block.timestamp + 3650 days);
+        uint256 replacement = badge.supersede(nyCred, cleared, "relocated");
+
+        assertFalse(badge.isValid(nyCred), "the stale record is retired");
+        assertEq(badge.getCredential(nyCred).voided, "relocated"); // retained for audit, reason recorded
+        assertTrue(badge.isValid(replacement));
+        assertEq(badge.getUsState(buyer), bytes2(0), "the state is retracted");
+        assertEq(badge.getInvestorJurisdiction(buyer), "KY");
+        assertTrue(_checkOn(offerId, settlementId));
+    }
+
+    // supersede issues to the old credential's holder, so a correction cannot land on the wrong wallet.
+    function test_Supersede_IssuesToTheOriginalHolder() public {
+        Credential memory c;
+        c.investorType = InvestorType.INDIVIDUAL;
+        c.investorJurisdiction = "US";
+        c.usState = "CA";
+        uint256 stale = _mintCred(buyer, K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_US_STATE, c);
+
+        Credential memory next;
+        next.investorType = InvestorType.INDIVIDUAL;
+        next.investorJurisdiction = "US";
+        next.usState = "TX";
+        next.asserts = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_US_STATE;
+        next.expiryDate = uint64(block.timestamp + 3650 days);
+        uint256 replacement = badge.supersede(stale, next, "moved state");
+
+        assertEq(badge.ownerOf(replacement), buyer);
+        assertEq(badge.getUsState(buyer), bytes2("TX"));
+    }
+
+    function test_Supersede_ByStranger_Reverts() public {
+        Credential memory c;
+        c.investorType = InvestorType.INDIVIDUAL;
+        c.investorJurisdiction = "US";
+        uint256 stale = _mintCred(buyer, K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION, c);
+
+        Credential memory next = c;
+        next.asserts = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION;
+        next.expiryDate = uint64(block.timestamp + 3650 days);
+        vm.prank(stranger);
+        vm.expectRevert();
+        badge.supersede(stale, next, "nope");
     }
 }

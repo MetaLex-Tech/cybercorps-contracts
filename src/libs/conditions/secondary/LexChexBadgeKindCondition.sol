@@ -66,17 +66,23 @@ contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgrade
         _setParameters(_kindKey, _checkSeller);
     }
 
-    /// @dev Rejects a _kindKey the gate cannot enforce:
-    ///  - empty: matches every credential, so the gate becomes "holds any badge"
-    ///  - undefined bit: matches nothing, so every trade is blocked
-    ///  - a scoped key mixed with anything else: one entitlement per gate, checked against one SPV
     function _setParameters(uint256 _kindKey, bool _checkSeller) internal {
-        if (_kindKey == 0 || (_kindKey & ~ALL_KEYS) != 0) revert InvalidKindKey();
-        uint256 scoped = _kindKey & SCOPED_KEYS;
-        if (scoped != 0 && (scoped != _kindKey || (_kindKey & (_kindKey - 1)) != 0)) revert InvalidKindKey();
+        if (!_isGateable(_kindKey)) revert InvalidKindKey();
         kindKey = _kindKey;
         checkSeller = _checkSeller;
         emit ParametersUpdated(_kindKey, _checkSeller);
+    }
+
+    /// @dev Keys this gate can enforce: one or more status facts, or exactly one entitlement. The rest are
+    /// wiring slips —
+    ///  - empty: matches every credential, so the gate becomes "holds any badge"
+    ///  - a value key: asks if a fact was recorded, not if the party qualifies
+    ///  - an undefined bit: matches nothing, so every trade is blocked
+    ///  - status and entitlement mixed: no one credential answers both
+    function _isGateable(uint256 _kindKey) private pure returns (bool) {
+        uint256 scoped = _kindKey & SCOPED_KEYS;
+        if (scoped == 0) return _kindKey != 0 && (_kindKey & ~STATUS_KEYS) == 0;
+        return scoped == _kindKey && (_kindKey & (_kindKey - 1)) == 0;
     }
 
     function checkCondition(

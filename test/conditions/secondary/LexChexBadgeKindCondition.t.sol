@@ -1,7 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import {K_ACCREDITED, K_QP, K_QIB, K_SPV_WHITELIST, K_SYNDICATE} from "../../../src/interfaces/ILexChexBadge.sol";
+import {
+    K_ACCREDITED,
+    K_BO_COUNT,
+    K_INVESTOR_TYPE,
+    K_QP,
+    K_QIB,
+    K_SPV_WHITELIST,
+    K_SYNDICATE,
+    K_US_STATE
+} from "../../../src/interfaces/ILexChexBadge.sol";
 import {Credential} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
 import {LexChexBadgeKindCondition} from "../../../src/libs/conditions/secondary/LexChexBadgeKindCondition.sol";
@@ -207,5 +216,25 @@ contract LexChexBadgeKindConditionTest is SecondaryConditionIntegrationBase {
     function test_UpdateParameters_TwoScopedKeys_Reverts() public {
         vm.expectRevert(LexChexBadgeKindCondition.InvalidKindKey.selector);
         cond.updateParameters(K_SPV_WHITELIST | K_SYNDICATE, false);
+    }
+
+    // ── Audit findings ──────────────────────────────────────────────────────────
+
+    // M3 — a value key asks if a party recorded a fact, not if they qualify, so wiring one here would turn
+    // an accreditation gate into "has KYC". Only statuses and entitlements are things a gate can ask.
+    function test_Audit_M3_ValueKeyRejectedAsStatusGate() public {
+        vm.expectRevert(LexChexBadgeKindCondition.InvalidKindKey.selector);
+        cond.updateParameters(K_INVESTOR_TYPE, false);
+
+        vm.expectRevert(LexChexBadgeKindCondition.InvalidKindKey.selector);
+        cond.updateParameters(K_US_STATE, false);
+
+        // Nor hidden alongside a real status key.
+        vm.expectRevert(LexChexBadgeKindCondition.InvalidKindKey.selector);
+        cond.updateParameters(K_ACCREDITED | K_BO_COUNT, false);
+
+        // Two statuses together are still fine: one credential has to assert both.
+        cond.updateParameters(K_QP | K_QIB, false);
+        assertEq(cond.kindKey(), K_QP | K_QIB);
     }
 }

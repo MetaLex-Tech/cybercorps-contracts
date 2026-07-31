@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import {K_INVESTOR_JURISDICTION, K_INVESTOR_TYPE, InvestorType} from "../../../src/interfaces/ILexChexBadge.sol";
+import {K_INVESTOR_JURISDICTION, K_INVESTOR_TYPE, K_LOOKTHROUGH_JURISDICTION, InvestorType}
+    from "../../../src/interfaces/ILexChexBadge.sol";
 import {Credential} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
 import {CFIUSCondition} from "../../../src/libs/conditions/secondary/CFIUSCondition.sol";
@@ -23,6 +24,7 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 // | 5 | non-U.S. jurisdiction, no clearance             |  fail  | foreign acquirer, unreviewed     |
 // | 6 | non-U.S. person WITH recorded clearance         |  pass  | GP review cleared it             |
 // | 7 | U.S. buyer whose jurisdiction is blocked-listed |  fail  | blocked-affiliation, needs review|
+// |7b | U.S. buyer, blocked look-through jurisdiction   |  fail  | U.S.-registered, foreign control |
 //
 // Config/authorization
 // | # | case                          | expect              |
@@ -151,5 +153,39 @@ contract CFIUSConditionTest is SecondaryConditionIntegrationBase {
         _proxy(
             address(impl), abi.encodeCall(CFIUSCondition.initialize, (address(auth), address(0), true, new string[](0)))
         );
+    }
+
+    // ── Audit findings ──────────────────────────────────────────────────────────
+
+    // L3 — a foreign acquirer already needs clearance, so listing a foreign jurisdiction changed nothing.
+    // The list is for the U.S.-registered buyer under foreign control, so it reads the look-through too.
+    function test_Audit_L3_BlockedLookThroughJurisdictionNeedsClearance() public {
+        string[] memory blocked = new string[](1);
+        blocked[0] = "CN";
+        CFIUSCondition c = _deploy(true, blocked);
+
+        // A Delaware vehicle: U.S.-registered, so nationality alone clears it.
+        Credential memory usOnly;
+        usOnly.investorType = InvestorType.ENTITY;
+        usOnly.investorJurisdiction = "US";
+        _mintCred(buyer, K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION, usOnly);
+        assertTrue(c.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId));
+
+        // But its look-through puts control in a jurisdiction the GP treats as sensitive.
+        Credential memory controlled;
+        controlled.investorType = InvestorType.ENTITY;
+        controlled.investorJurisdiction = "US";
+        controlled.lookThroughJurisdiction = "CN";
+        _mintCred(
+            buyer, K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_LOOKTHROUGH_JURISDICTION, controlled
+        );
+        assertFalse(
+            c.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId),
+            "foreign control needs review even with a U.S. domicile"
+        );
+
+        // The GP's recorded review still settles it, as for anyone else.
+        c.setCfiusClearance(buyer, true);
+        assertTrue(c.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId));
     }
 }

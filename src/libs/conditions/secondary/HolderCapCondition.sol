@@ -116,6 +116,11 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
         bytes32 agreementId
     ) external view override returns (bool) {
         Offer memory offer = dealManager.getOffer(offerId);
+
+        // The buyer and the existing holders must be read off the same badge, or the cap counts two different
+        // populations. A mismatch is a wiring error, so block rather than answer from it.
+        if (ILedgerEntryToken(offer.certPrinter).lookThroughBadge() != address(badge)) return false;
+
         (, address buyer,) = _resolveParties(dealManager, offer, agreementId);
 
         // No acquirer yet (posting context) — the cap is evaluated at acceptance and finalization
