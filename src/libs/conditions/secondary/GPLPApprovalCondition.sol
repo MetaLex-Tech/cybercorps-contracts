@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
 
@@ -24,11 +24,15 @@ contract GPLPApprovalCondition is SecondaryTradingConditionBase, UUPSUpgradeable
     event DealApprovalUpdated(address indexed dealManager, bytes32 indexed dealId, bool approved, address indexed approver);
 
     /// @notice Per-DealManager authorized approver
-    mapping(address => address) public approvers;
-    // dealManager => dealId (offerId or settlementAgreementId) => approved
-    mapping(address => mapping(bytes32 => bool)) public dealApprovals;
+    struct GPLPApprovalStorage {
+        mapping(address => address) approvers;
+        mapping(address => mapping(bytes32 => bool)) dealApprovals;
+    }
 
-    uint256[48] private __gap;
+    bytes32 private constant STORAGE_POSITION = keccak256("metalex.condition.secondary.gp-lp-approval.storage.v1");
+    // dealManager => dealId (offerId or settlementAgreementId) => approved
+
+    // Upgrade notes: reduced gap to account for the contract's variables (50 - 2 = 48)
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -44,7 +48,7 @@ contract GPLPApprovalCondition is SecondaryTradingConditionBase, UUPSUpgradeable
     function setApprover(address dealManager, address approver) external {
         if (dealManager == address(0)) revert InvalidDealManager();
         _requireAuthOwner(dealManager);
-        approvers[dealManager] = approver;
+        _gpLpApprovalStorage().approvers[dealManager] = approver;
         emit ApproverUpdated(dealManager, approver);
     }
 
@@ -53,8 +57,9 @@ contract GPLPApprovalCondition is SecondaryTradingConditionBase, UUPSUpgradeable
     function setDealApproval(address dealManager, bytes32 dealId, bool approved) external {
         if (dealManager == address(0)) revert InvalidDealManager();
         if (dealId == bytes32(0)) revert InvalidDealId();
-        if (msg.sender != approvers[dealManager]) revert NotApprover();
-        dealApprovals[dealManager][dealId] = approved;
+        GPLPApprovalStorage storage $ = _gpLpApprovalStorage();
+        if (msg.sender != $.approvers[dealManager]) revert NotApprover();
+        $.dealApprovals[dealManager][dealId] = approved;
         emit DealApprovalUpdated(dealManager, dealId, approved, msg.sender);
     }
 
@@ -68,7 +73,25 @@ contract GPLPApprovalCondition is SecondaryTradingConditionBase, UUPSUpgradeable
         if (agreementId == bytes32(0)) return true;
 
         address dm = address(dealManager);
-        return dealApprovals[dm][offerId] || dealApprovals[dm][agreementId];
+        GPLPApprovalStorage storage $ = _gpLpApprovalStorage();
+        return $.dealApprovals[dm][offerId] || $.dealApprovals[dm][agreementId];
+    }
+
+    /// @notice The approver a DealManager has authorized
+    function approvers(address dealManager) public view returns (address) {
+        return _gpLpApprovalStorage().approvers[dealManager];
+    }
+
+    /// @notice Whether a deal has been approved
+    function dealApprovals(address dealManager, bytes32 dealId) public view returns (bool) {
+        return _gpLpApprovalStorage().dealApprovals[dealManager][dealId];
+    }
+
+    function _gpLpApprovalStorage() private pure returns (GPLPApprovalStorage storage $) {
+        bytes32 position = STORAGE_POSITION; // assembly cannot reference a computed constant directly
+        assembly {
+            $.slot := position
+        }
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}

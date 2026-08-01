@@ -23,6 +23,8 @@ import {USJurisdictionPolicy} from "./USJurisdictionPolicy.sol";
 library LookThroughPolicy {
     /// @notice True when the owner counts as a U.S. investor for the §3(c)(1)(A) look-through
     function isUSInvestor(ILexChexBadge badge, address owner) internal view returns (bool) {
+        // No registry means nothing is established about anyone, which reads U.S. like any other unknown
+        if (address(badge) == address(0)) return true;
         string memory regulatory = badge.getLookThroughJurisdiction(owner);
         string memory physical = badge.getInvestorJurisdiction(owner);
         // Unknown non-US status is treated as US to be conservative

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
 import "../../../interfaces/ICyberAgreementRegistry.sol";
@@ -18,9 +18,13 @@ contract AgreementSignedCondition is SecondaryTradingConditionBase, UUPSUpgradea
 
     event RegistryUpdated(address registry);
 
-    ICyberAgreementRegistry public registry;
+    struct AgreementSignedStorage {
+        ICyberAgreementRegistry registry;
+    }
 
-    uint256[49] private __gap;
+    bytes32 private constant STORAGE_POSITION = keccak256("metalex.condition.secondary.agreement-signed.storage.v1");
+
+    // Upgrade notes: reduced gap to account for the contract's variables (50 - 1 = 49)
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -31,13 +35,13 @@ contract AgreementSignedCondition is SecondaryTradingConditionBase, UUPSUpgradea
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
         if (_registry == address(0)) revert InvalidRegistry();
-        registry = ICyberAgreementRegistry(_registry);
+        _agreementSignedStorage().registry = ICyberAgreementRegistry(_registry);
         emit RegistryUpdated(_registry);
     }
 
     function updateRegistry(address _registry) external onlyAdmin {
         if (_registry == address(0)) revert InvalidRegistry();
-        registry = ICyberAgreementRegistry(_registry);
+        _agreementSignedStorage().registry = ICyberAgreementRegistry(_registry);
         emit RegistryUpdated(_registry);
     }
 
@@ -49,7 +53,19 @@ contract AgreementSignedCondition is SecondaryTradingConditionBase, UUPSUpgradea
     ) external view override returns (bool) {
         // Posting context: the settlement agreement does not exist yet
         if (agreementId == bytes32(0)) return true;
-        return registry.allPartiesSigned(agreementId);
+        return _agreementSignedStorage().registry.allPartiesSigned(agreementId);
+    }
+
+    /// @notice The registry the signature check reads
+    function registry() public view returns (ICyberAgreementRegistry) {
+        return _agreementSignedStorage().registry;
+    }
+
+    function _agreementSignedStorage() private pure returns (AgreementSignedStorage storage $) {
+        bytes32 position = STORAGE_POSITION; // assembly cannot reference a computed constant directly
+        assembly {
+            $.slot := position
+        }
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}

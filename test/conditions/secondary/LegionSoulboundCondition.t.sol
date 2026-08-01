@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import {K_INVESTOR_JURISDICTION, K_INVESTOR_TYPE, InvestorType} from "../../../src/interfaces/ILexChexBadge.sol";
 import {Credential} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
+import {BadgeScopedCondition} from "../../../src/libs/conditions/secondary/BadgeScopedCondition.sol";
 import {LegionSoulboundCondition} from "../../../src/libs/conditions/secondary/LegionSoulboundCondition.sol";
 import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
 
@@ -28,11 +29,12 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 // | 6 |     yes       | SELL posting  |    n/a     |     no      |  fail  | seller gated even at posting  |
 //
 // Config/authorization
-// | # | case                            | expect                |
-// |---|---------------------------------|-----------------------|
-// | 7 | initialize zero badge           | revert InvalidBadge   |
-// | 8 | initialize zero category        | revert InvalidCategory|
-// | 9 | updateConfig by stranger        | revert (not admin)    |
+// | #  | case                            | expect                |
+// |----|---------------------------------|-----------------------|
+// | 7  | initialize zero default badge   | revert InvalidBadge   |
+// | 8  | setConfig zero category         | revert InvalidCategory|
+// | 9  | setConfig by non-SPV-admin      | revert (not admin)    |
+// | 10 | SPV never configured            | fail — no circle named|
 // ─────────────────────────────────────────────────────────────────────────────
 
 contract LegionSoulboundConditionTest is SecondaryConditionIntegrationBase {
@@ -48,9 +50,10 @@ contract LegionSoulboundConditionTest is SecondaryConditionIntegrationBase {
         c = LegionSoulboundCondition(
             _proxy(
                 address(new LegionSoulboundCondition()),
-                abi.encodeCall(LegionSoulboundCondition.initialize, (address(auth), address(badge), CAT, applyToSeller))
+                abi.encodeCall(LegionSoulboundCondition.initialize, (address(auth), address(badge)))
             )
         );
+        c.setConfig(address(corp), CAT, applyToSeller);
     }
 
     function _grant(address who) internal {
@@ -110,26 +113,33 @@ contract LegionSoulboundConditionTest is SecondaryConditionIntegrationBase {
     // 7
     function test_Initialize_ZeroBadge_Reverts() public {
         LegionSoulboundCondition impl = new LegionSoulboundCondition();
-        vm.expectRevert(LegionSoulboundCondition.InvalidBadge.selector);
-        _proxy(
-            address(impl), abi.encodeCall(LegionSoulboundCondition.initialize, (address(auth), address(0), CAT, false))
-        );
+        vm.expectRevert(BadgeScopedCondition.InvalidBadge.selector);
+        _proxy(address(impl), abi.encodeCall(LegionSoulboundCondition.initialize, (address(auth), address(0))));
     }
 
     // 8
-    function test_Initialize_ZeroCategory_Reverts() public {
-        LegionSoulboundCondition impl = new LegionSoulboundCondition();
+    function test_SetConfig_ZeroCategory_Reverts() public {
         vm.expectRevert(LegionSoulboundCondition.InvalidCategory.selector);
-        _proxy(
-            address(impl),
-            abi.encodeCall(LegionSoulboundCondition.initialize, (address(auth), address(badge), bytes32(0), false))
-        );
+        legion.setConfig(address(corp), bytes32(0), false);
     }
 
     // 9
-    function test_UpdateConfig_ByStranger_Reverts() public {
+    function test_SetConfig_ByStranger_Reverts() public {
         vm.prank(stranger);
         vm.expectRevert();
-        legion.updateConfig(address(badge), CAT, true);
+        legion.setConfig(address(corp), CAT, true);
+    }
+
+    // 10 — silence is not a finding that no circle applies, so an unconfigured SPV admits nobody
+    function test_UnconfiguredSpv_Fails() public {
+        LegionSoulboundCondition c = LegionSoulboundCondition(
+            _proxy(
+                address(new LegionSoulboundCondition()),
+                abi.encodeCall(LegionSoulboundCondition.initialize, (address(auth), address(badge)))
+            )
+        );
+        _grant(buyer);
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_check(c, offerId, settlementId));
     }
 }

@@ -39,12 +39,12 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 // | 10 | usResidentOnlyCount, non-U.S. buyer             |  pass  | non-U.S. acquirer not counted         |
 // | 11 | usResidentOnlyCount, fresh U.S. buyer at cap    |  fail  | only U.S. residents counted, breaches |
 //
+// The credential registry is the printer's own, so there is no badge wiring here to get wrong.
+//
 // Config/authorization
 // | # | case                              | expect              |
 // |---|-----------------------------------|---------------------|
-// |12 | initialize zero badge             | revert InvalidBadge |
-// |13 | updateConfig by stranger          | revert (not admin)  |
-// |14 | updateBadge by stranger           | revert (not admin)  |
+// |12 | updateConfig by stranger          | revert (not admin)  |
 //
 // Operational staleness: a re-credential that changes an existing holder's BO count does not reach the
 // printer's cached tally until a keeper resync (15).
@@ -59,12 +59,10 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
         holderCap = HolderCapCondition(
             _proxy(
                 address(new HolderCapCondition()),
-                abi.encodeCall(
-                    HolderCapCondition.initialize,
-                    (address(auth), address(badge), HolderCapCondition.IcaException.SECTION_3C1, 100, false, false)
-                )
+                abi.encodeCall(HolderCapCondition.initialize, (address(auth)))
             )
         );
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 100, false, false);
         _credential(buyer, "US", 0);
     }
 
@@ -140,35 +138,35 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
 
     // 7
     function test_Section3c7_NoNumericCap_Passes() public {
-        holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C7, 0, false, false);
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C7, 0, false, false);
         _seedHolder("KY", 499); // tally 500, but cap 0 => no numeric cap
         assertTrue(_check());
     }
 
     // 8
     function test_BlockUsInvestors_UsBuyer_Fails() public {
-        holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C1, 100, false, true);
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 100, false, true);
         assertFalse(_check());
     }
 
     // 8a — the floor is absolute: it precedes the position-increase short-circuit, so an existing U.S.
     // holder cannot add to a position an offshore SPV would refuse them today.
     function test_BlockUsInvestors_ExistingUsHolder_Fails() public {
-        holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C1, 100, false, true);
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 100, false, true);
         _makeHolder(buyer);
         assertFalse(_check());
     }
 
     // 9
     function test_BlockUsInvestors_NonUsBuyer_Passes() public {
-        holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C1, 100, false, true);
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 100, false, true);
         _credentialBuyer("KY", 0);
         assertTrue(_check());
     }
 
     // 10
     function test_UsResidentOnlyCount_NonUsBuyer_NotCounted_Passes() public {
-        holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C1, 1, true, false);
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 1, true, false);
         _credentialBuyer("KY", 0);
         // Even with a "full" U.S. tally, a non-U.S. acquirer does not add to the U.S.-resident count.
         _seedHolder("US", 1);
@@ -177,7 +175,7 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
 
     // 11
     function test_UsResidentOnlyCount_UsBuyerBreaches_Fails() public {
-        holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C1, 1, true, false);
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 1, true, false);
         // The printer's U.S.-resident look-through tally already stands at the cap (= 1). A fresh U.S.
         // buyer would make 2 > cap 1.
         _seedHolder("US", 1);
@@ -187,30 +185,10 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
     // ── Config / authorization ──────────────────────────────────────────────────
 
     // 12
-    function test_Initialize_ZeroBadge_Reverts() public {
-        HolderCapCondition impl = new HolderCapCondition();
-        vm.expectRevert(HolderCapCondition.InvalidBadge.selector);
-        _proxy(
-            address(impl),
-            abi.encodeCall(
-                HolderCapCondition.initialize,
-                (address(auth), address(0), HolderCapCondition.IcaException.SECTION_3C1, 100, false, false)
-            )
-        );
-    }
-
-    // 13
     function test_UpdateConfig_ByStranger_Reverts() public {
         vm.prank(stranger);
         vm.expectRevert();
-        holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C7, 0, false, false);
-    }
-
-    // 14
-    function test_UpdateBadge_ByStranger_Reverts() public {
-        vm.prank(stranger);
-        vm.expectRevert();
-        holderCap.updateBadge(address(badge));
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C7, 0, false, false);
     }
 
     // ── Operational staleness ────────────────────────────────────────────────────
@@ -289,7 +267,7 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
         assertEq(printer.lookThroughHolderCount(), 91);
 
         (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
-        holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C1, 91, false, false);
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 91, false, false);
         assertFalse(
             holderCap.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId),
             "91 + 1 > cap 91 is correctly blocked"
@@ -331,45 +309,46 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
         assertEq(printer.lookThroughHolderCount(), 91, "a lapsed attestation did not shrink the tally");
     }
 
-    // M1 — the condition and the printer are wired to badges separately. Pointed at different ones, the cap
-    // would compare a buyer from one against holders from the other. Better to refuse than to guess.
-    function test_Audit_M1_DivergentBadgeWiringBlocks() public {
+    // M1 — the condition reads the printer's own badge, so there is no second wiring to drift. Credentials
+    // minted only on the badge the printer uses are the ones that count.
+    function test_Audit_M1_BadgeComesFromThePrinter() public {
         LeXcheXBadge other = LeXcheXBadge(
             _proxy(address(new LeXcheXBadge()), abi.encodeCall(LeXcheXBadge.initialize, (address(auth))))
         );
-        holderCap.updateBadge(address(other)); // printer still reads the base badge
-        holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C1, 100, false, true);
+        address bare = _unwiredPrinter();
+        LedgerEntryToken(bare).setLookThroughBadge(address(other));
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 100, false, true);
 
-        // U.S. on the badge the printer uses, foreign on the condition's — so the no-U.S. floor would
-        // otherwise admit a buyer the printer counts as U.S.
+        // The buyer is U.S. on the base badge but foreign on the one this printer uses, and the printer's
+        // answer is the one that governs — so the no-U.S. floor lets them through.
         assertEq(badge.getInvestorJurisdiction(buyer), "US");
         Credential memory foreign;
         foreign.investorType = InvestorType.ENTITY;
         foreign.investorJurisdiction = "KY";
         other.mint(buyer, _withExpiry(foreign, K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION));
 
-        // One settlement, re-checked as the wiring changes (a second postOffer would collide on the salt).
-        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
-        assertFalse(
-            holderCap.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId),
-            "a cap counted from two registries is not a cap"
-        );
-
-        // Back on the printer's badge the answer means something again, and the buyer — U.S. there — is
-        // correctly refused by the floor.
-        holderCap.updateBadge(address(badge));
-        assertFalse(holderCap.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId));
-        holderCap.updateConfig(HolderCapCondition.IcaException.SECTION_3C1, 100, false, false);
+        uint256 sellerCert = im.createCertAndAssign(bare, seller, _certDetails(UNITS));
+        bytes32 offerId = _postSellOn(bare, sellerCert);
+        bytes32 settlementId = _acceptSell(offerId);
         assertTrue(holderCap.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId));
     }
 
-    // An unwired printer is a mismatch too: the buyer's look-through count would be weighed against holders
-    // counted without one.
-    function test_Audit_M1b_UnwiredPrinterBlocks() public {
+    // An unwired printer knows nothing about anyone, so the buyer counts as one U.S. holder — the same
+    // reading its tally gives every existing holder.
+    function test_Audit_M1b_UnwiredPrinterCountsBuyerAsOneUsHolder() public {
         address bare = _unwiredPrinter();
         uint256 sellerCert = im.createCertAndAssign(bare, seller, _certDetails(UNITS));
         bytes32 offerId = _postSellOn(bare, sellerCert);
         bytes32 settlementId = _acceptSell(offerId);
+
+        // seller(1) + buyer(1) = 2, so a cap of 2 fits and a cap of 1 does not.
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 2, false, false);
+        assertTrue(holderCap.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId));
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 1, false, false);
+        assertFalse(holderCap.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId));
+
+        // And an unknown buyer reads U.S., so the no-U.S. floor refuses them.
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C7, 0, false, true);
         assertFalse(holderCap.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId));
     }
 
@@ -378,5 +357,25 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
         c.asserts = asserts;
         c.expiryDate = uint64(block.timestamp + 3650 days);
         return c;
+    }
+
+    // Attached but never configured: a zero cap is a real §3(c)(7) setting, so it cannot stand in for
+    // "nobody set this". Nothing passes until the GP states which exception applies.
+    function test_Audit_UnconfiguredSpv_Blocks() public {
+        HolderCapCondition fresh = HolderCapCondition(
+            _proxy(address(new HolderCapCondition()), abi.encodeCall(HolderCapCondition.initialize, (address(auth))))
+        );
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(fresh.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId));
+
+        // §3(c)(7) with no numeric cap is a configuration, and it passes.
+        fresh.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C7, 0, false, false);
+        assertTrue(fresh.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId));
+    }
+
+    function test_SetConfig_ByStranger_Reverts() public {
+        vm.prank(stranger);
+        vm.expectRevert();
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C7, 0, false, false);
     }
 }

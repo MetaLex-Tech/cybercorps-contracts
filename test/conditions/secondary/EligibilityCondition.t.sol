@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
 import {EligibilityCondition} from "../../../src/libs/conditions/secondary/EligibilityCondition.sol";
-import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
+import {SecondaryConditionIntegrationBase, SpvFixture} from "./SecondaryConditionIntegration.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EligibilityCondition — both parties must be admin-cleared to trade.
@@ -43,7 +43,7 @@ contract EligibilityConditionTest is SecondaryConditionIntegrationBase {
     }
 
     function _clear(address who, bool v) internal {
-        eligibility.setClearance(who, v);
+        eligibility.setClearance(address(corp), who, v);
     }
 
     function _check(bytes32 offerId, bytes32 agreementId) internal view returns (bool) {
@@ -94,13 +94,27 @@ contract EligibilityConditionTest is SecondaryConditionIntegrationBase {
     // 7
     function test_SetClearance_ZeroAccount_Reverts() public {
         vm.expectRevert(EligibilityCondition.InvalidAccount.selector);
-        eligibility.setClearance(address(0), true);
+        eligibility.setClearance(address(corp), address(0), true);
     }
 
     // 8
     function test_SetClearance_ByStranger_Reverts() public {
         vm.prank(stranger);
         vm.expectRevert();
-        eligibility.setClearance(buyer, true);
+        eligibility.setClearance(address(corp), buyer, true);
+    }
+
+    // A clearance answers for the SPV that granted it. One GP's review must not admit that party
+    // everywhere on the platform.
+    function test_Clearance_IsPerSpv() public {
+        SpvFixture otherSpv = new SpvFixture(address(auth));
+        _clear(seller, true);
+        _clear(buyer, true);
+
+        assertTrue(eligibility.cleared(address(corp), buyer));
+        assertFalse(eligibility.cleared(address(otherSpv), buyer), "clearance did not travel");
+
+        eligibility.setClearance(address(otherSpv), buyer, true);
+        assertTrue(eligibility.cleared(address(otherSpv), buyer));
     }
 }

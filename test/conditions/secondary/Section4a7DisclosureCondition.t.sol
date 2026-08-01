@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
 import {Section4a7DisclosureCondition} from "../../../src/libs/conditions/secondary/Section4a7DisclosureCondition.sol";
-import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
+import {SecondaryConditionIntegrationBase, SpvFixture} from "./SecondaryConditionIntegration.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Section4a7DisclosureCondition — §4(a)(7) information-delivery gate (two-part test).
@@ -63,7 +63,7 @@ contract Section4a7DisclosureConditionTest is SecondaryConditionIntegrationBase 
             _proxy(
                 address(new Section4a7DisclosureCondition()),
                 abi.encodeCall(
-                    Section4a7DisclosureCondition.initialize, (address(auth), address(registry), ACK, MAX_AGE)
+                    Section4a7DisclosureCondition.initialize, (address(auth), address(registry), MAX_AGE)
                 )
             )
         );
@@ -81,27 +81,27 @@ contract Section4a7DisclosureConditionTest is SecondaryConditionIntegrationBase 
 
     // 2
     function test_Posting_FreshPackage_Passes() public {
-        disc.setDisclosurePackage(address(corp), URI, uint64(NOW));
+        disc.setDisclosurePackage(address(corp), URI, uint64(NOW), ACK);
         assertTrue(_check(bytes32(0)));
     }
 
     // 3
     function test_Accepted_FreshAndAcked_Passes() public {
-        disc.setDisclosurePackage(address(corp), URI, uint64(NOW));
+        disc.setDisclosurePackage(address(corp), URI, uint64(NOW), ACK);
         bytes32 settlementId = _acceptSell(offerId, _one(ACK));
         assertTrue(_check(settlementId));
     }
 
     // 4
     function test_Accepted_FreshNoAck_Fails() public {
-        disc.setDisclosurePackage(address(corp), URI, uint64(NOW));
+        disc.setDisclosurePackage(address(corp), URI, uint64(NOW), ACK);
         bytes32 settlementId = _acceptSell(offerId);
         assertFalse(_check(settlementId));
     }
 
     // 5
     function test_Accepted_StalePackage_Fails() public {
-        disc.setDisclosurePackage(address(corp), URI, uint64(NOW - MAX_AGE - 1));
+        disc.setDisclosurePackage(address(corp), URI, uint64(NOW - MAX_AGE - 1), ACK);
         bytes32 settlementId = _acceptSell(offerId, _one(ACK));
         assertFalse(_check(settlementId));
     }
@@ -112,18 +112,14 @@ contract Section4a7DisclosureConditionTest is SecondaryConditionIntegrationBase 
         vm.expectRevert(Section4a7DisclosureCondition.InvalidRegistry.selector);
         _proxy(
             address(impl),
-            abi.encodeCall(Section4a7DisclosureCondition.initialize, (address(auth), address(0), ACK, MAX_AGE))
+            abi.encodeCall(Section4a7DisclosureCondition.initialize, (address(auth), address(0), MAX_AGE))
         );
     }
 
-    // 7
-    function test_Initialize_EmptyAck_Reverts() public {
-        Section4a7DisclosureCondition impl = new Section4a7DisclosureCondition();
+    // 7 — the acknowledgment string is the SPV's, so an empty one is rejected when it sets its package
+    function test_SetDisclosure_EmptyAck_Reverts() public {
         vm.expectRevert(Section4a7DisclosureCondition.InvalidAcknowledgment.selector);
-        _proxy(
-            address(impl),
-            abi.encodeCall(Section4a7DisclosureCondition.initialize, (address(auth), address(registry), "", MAX_AGE))
-        );
+        disc.setDisclosurePackage(address(corp), URI, uint64(NOW), "");
     }
 
     // 8
@@ -132,7 +128,7 @@ contract Section4a7DisclosureConditionTest is SecondaryConditionIntegrationBase 
         vm.expectRevert(Section4a7DisclosureCondition.InvalidMaxAge.selector);
         _proxy(
             address(impl),
-            abi.encodeCall(Section4a7DisclosureCondition.initialize, (address(auth), address(registry), ACK, 0))
+            abi.encodeCall(Section4a7DisclosureCondition.initialize, (address(auth), address(registry), 0))
         );
     }
 
@@ -140,6 +136,23 @@ contract Section4a7DisclosureConditionTest is SecondaryConditionIntegrationBase 
     function test_SetDisclosure_ByNonSpvAdmin_Reverts() public {
         vm.prank(stranger);
         vm.expectRevert();
-        disc.setDisclosurePackage(address(corp), URI, uint64(NOW));
+        disc.setDisclosurePackage(address(corp), URI, uint64(NOW), ACK);
+    }
+
+    // Spec §4.1.4 names the acknowledgment string as a per-SPV parameter, set under that SPV's own
+    // BorgAuth — each SPV's counsel words its receipt differently.
+    function test_AcknowledgmentValue_IsPerSpv() public {
+        SpvFixture otherSpv = new SpvFixture(address(auth));
+        disc.setDisclosurePackage(address(corp), URI, uint64(NOW), ACK);
+        disc.setDisclosurePackage(address(otherSpv), URI, uint64(NOW), "other wording");
+
+        string memory ours = disc.disclosures(address(corp)).acknowledgmentValue;
+        string memory theirs = disc.disclosures(address(otherSpv)).acknowledgmentValue;
+        assertEq(ours, ACK);
+        assertEq(theirs, "other wording");
+
+        // The buyer's acknowledgment is matched against this SPV's wording, not the other's.
+        bytes32 settlementId = _acceptSell(offerId, _one(ACK));
+        assertTrue(_check(settlementId));
     }
 }

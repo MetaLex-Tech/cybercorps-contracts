@@ -5,8 +5,9 @@ import {K_INVESTOR_JURISDICTION, K_INVESTOR_TYPE, K_LOOKTHROUGH_JURISDICTION, In
     from "../../../src/interfaces/ILexChexBadge.sol";
 import {Credential} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
+import {BadgeScopedCondition} from "../../../src/libs/conditions/secondary/BadgeScopedCondition.sol";
 import {CFIUSCondition} from "../../../src/libs/conditions/secondary/CFIUSCondition.sol";
-import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
+import {SecondaryConditionIntegrationBase, SpvFixture} from "./SecondaryConditionIntegration.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CFIUSCondition — FIRRMA gating for CFIUS-sensitive SPVs.
@@ -50,9 +51,11 @@ contract CFIUSConditionTest is SecondaryConditionIntegrationBase {
         c = CFIUSCondition(
             _proxy(
                 address(new CFIUSCondition()),
-                abi.encodeCall(CFIUSCondition.initialize, (address(auth), address(badge), tid, blocked))
+                abi.encodeCall(CFIUSCondition.initialize, (address(auth), address(badge)))
             )
         );
+        c.setTidUsBusiness(address(corp), tid);
+        if (blocked.length > 0) c.setBlockedJurisdictions(address(corp), blocked);
     }
 
     function _setJurisdiction(string memory j) internal {
@@ -74,7 +77,7 @@ contract CFIUSConditionTest is SecondaryConditionIntegrationBase {
 
     // 1
     function test_Dormant_Passes() public {
-        cfius.setTidUsBusiness(false);
+        cfius.setTidUsBusiness(address(corp), false);
         _setJurisdiction("KY");
         assertTrue(_check());
     }
@@ -104,7 +107,7 @@ contract CFIUSConditionTest is SecondaryConditionIntegrationBase {
     // 6
     function test_NonUsPerson_WithClearance_Passes() public {
         _markNonUsPerson();
-        cfius.setCfiusClearance(buyer, true);
+        cfius.setCfiusClearance(address(corp), buyer, true);
         assertTrue(_check());
     }
 
@@ -136,23 +139,21 @@ contract CFIUSConditionTest is SecondaryConditionIntegrationBase {
     // 8
     function test_SetClearance_ZeroBuyer_Reverts() public {
         vm.expectRevert(CFIUSCondition.InvalidBuyer.selector);
-        cfius.setCfiusClearance(address(0), true);
+        cfius.setCfiusClearance(address(corp), address(0), true);
     }
 
     // 9
     function test_SetClearance_ByStranger_Reverts() public {
         vm.prank(stranger);
         vm.expectRevert();
-        cfius.setCfiusClearance(buyer, true);
+        cfius.setCfiusClearance(address(corp), buyer, true);
     }
 
     // 10
     function test_Initialize_ZeroBadge_Reverts() public {
         CFIUSCondition impl = new CFIUSCondition();
-        vm.expectRevert(CFIUSCondition.InvalidBadge.selector);
-        _proxy(
-            address(impl), abi.encodeCall(CFIUSCondition.initialize, (address(auth), address(0), true, new string[](0)))
-        );
+        vm.expectRevert(BadgeScopedCondition.InvalidBadge.selector);
+        _proxy(address(impl), abi.encodeCall(CFIUSCondition.initialize, (address(auth), address(0))));
     }
 
     // ── Audit findings ──────────────────────────────────────────────────────────
@@ -185,7 +186,45 @@ contract CFIUSConditionTest is SecondaryConditionIntegrationBase {
         );
 
         // The GP's recorded review still settles it, as for anyone else.
-        c.setCfiusClearance(buyer, true);
+        c.setCfiusClearance(address(corp), buyer, true);
         assertTrue(c.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId));
+    }
+
+    // A CFIUS review is the GP's, for their own SPV. It must not clear that buyer elsewhere, and an SPV
+    // that never records a determination stays dormant.
+    function test_Config_AndClearance_ArePerSpv() public {
+        SpvFixture otherSpv = new SpvFixture(address(auth));
+        cfius.setCfiusClearance(address(corp), buyer, true);
+
+        assertTrue(cfius.cfiusCleared(address(corp), buyer));
+        assertFalse(cfius.cfiusCleared(address(otherSpv), buyer), "clearance did not travel");
+
+        assertTrue(cfius.tidUsBusiness(address(corp)));
+        assertFalse(cfius.tidUsBusiness(address(otherSpv)), "no determination recorded elsewhere");
+    }
+
+    // Attaching the condition says CFIUS reaches this SPV, so silence is not the fund exception. Only a
+    // recorded determination — either way — lets a trade through.
+    function test_UnconfiguredSpv_Blocks() public {
+        CFIUSCondition fresh = CFIUSCondition(
+            _proxy(
+                address(new CFIUSCondition()),
+                abi.encodeCall(CFIUSCondition.initialize, (address(auth), address(badge)))
+            )
+        );
+        assertFalse(fresh.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId));
+
+        // The GP records the fund exception: dormant, and it passes.
+        fresh.setTidUsBusiness(address(corp), false);
+        assertTrue(fresh.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId));
+    }
+
+    function test_Setters_ByStranger_Revert() public {
+        vm.startPrank(stranger);
+        vm.expectRevert();
+        cfius.setTidUsBusiness(address(corp), false);
+        vm.expectRevert();
+        cfius.setBlockedJurisdictions(address(corp), new string[](0));
+        vm.stopPrank();
     }
 }

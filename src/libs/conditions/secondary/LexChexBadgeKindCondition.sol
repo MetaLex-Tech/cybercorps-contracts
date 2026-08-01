@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
+import "./BadgeScopedCondition.sol";
 import "../../auth.sol";
 import "../../../interfaces/ILexChexBadge.sol";
 import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
@@ -24,18 +25,19 @@ import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
 ///
 /// The first four are statuses, which follow the party anywhere. The last two are entitlements granted per
 /// SPV, so they only count for the SPV the offer belongs to.
-contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BorgAuthACL {
-    error InvalidBadge();
+contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BadgeScopedCondition {
     error InvalidKindKey();
 
-    event BadgeUpdated(address badge);
     event ParametersUpdated(uint256 kindKey, bool checkSeller);
 
-    ILexChexBadge public badge;
-    uint256 public kindKey;
-    bool public checkSeller;
+    struct LexChexBadgeKindStorage {
+        uint256 kindKey;
+        bool checkSeller;
+    }
 
-    uint256[47] private __gap;
+    bytes32 private constant STORAGE_POSITION = keccak256("metalex.condition.secondary.lexchex-badge-kind.storage.v1");
+
+    // Upgrade notes: reduced gap to account for the contract's variables (50 - 2 = 48)
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -50,16 +52,8 @@ contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgrade
     ) public initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
-        if (_badge == address(0)) revert InvalidBadge();
-        badge = ILexChexBadge(_badge);
-        emit BadgeUpdated(_badge);
+        __BadgeScopedCondition_init(_badge);
         _setParameters(_kindKey, _checkSeller);
-    }
-
-    function updateBadge(address _badge) external onlyAdmin {
-        if (_badge == address(0)) revert InvalidBadge();
-        badge = ILexChexBadge(_badge);
-        emit BadgeUpdated(_badge);
     }
 
     function updateParameters(uint256 _kindKey, bool _checkSeller) external onlyAdmin {
@@ -68,8 +62,9 @@ contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgrade
 
     function _setParameters(uint256 _kindKey, bool _checkSeller) internal {
         if (!_isGateable(_kindKey)) revert InvalidKindKey();
-        kindKey = _kindKey;
-        checkSeller = _checkSeller;
+        LexChexBadgeKindStorage storage $ = _kindStorage();
+        $.kindKey = _kindKey;
+        $.checkSeller = _checkSeller;
         emit ParametersUpdated(_kindKey, _checkSeller);
     }
 
@@ -94,10 +89,11 @@ contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgrade
         Offer memory offer = dealManager.getOffer(offerId);
         (address seller, address buyer,) = _resolveParties(dealManager, offer, agreementId);
 
-        if (buyer != address(0) && !_holds(buyer, offer.spvAddress)) {
+        ILexChexBadge badge = badgeFor(offer.spvAddress);
+        if (buyer != address(0) && !_holds(badge, buyer, offer.spvAddress)) {
             return false;
         }
-        if (checkSeller && seller != address(0) && !_holds(seller, offer.spvAddress)) {
+        if (_kindStorage().checkSeller && seller != address(0) && !_holds(badge, seller, offer.spvAddress)) {
             return false;
         }
         return true;
@@ -105,10 +101,27 @@ contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgrade
 
     /// @dev A status follows the party anywhere. An entitlement is granted per SPV, so it only counts for the
     /// SPV this offer belongs to.
-    function _holds(address party, address spv) private view returns (bool) {
-        uint256 key = kindKey;
+    function _holds(ILexChexBadge badge, address party, address spv) private view returns (bool) {
+        uint256 key = _kindStorage().kindKey;
         if ((key & SCOPED_KEYS) != 0) return badge.hasValidScopedCredentialOf(party, key, spv);
         return badge.hasValidCredentialOf(party, key);
+    }
+
+    /// @notice The status fact-key or entitlement this gate requires
+    function kindKey() public view returns (uint256) {
+        return _kindStorage().kindKey;
+    }
+
+    /// @notice Whether the seller is gated too
+    function checkSeller() public view returns (bool) {
+        return _kindStorage().checkSeller;
+    }
+
+    function _kindStorage() private pure returns (LexChexBadgeKindStorage storage $) {
+        bytes32 position = STORAGE_POSITION; // assembly cannot reference a computed constant directly
+        assembly {
+            $.slot := position
+        }
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}

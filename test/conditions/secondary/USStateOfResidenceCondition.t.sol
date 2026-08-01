@@ -5,6 +5,7 @@ import {ILexChexBadge, K_INVESTOR_JURISDICTION, K_INVESTOR_TYPE, K_US_STATE, Inv
     from "../../../src/interfaces/ILexChexBadge.sol";
 import {Credential} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
+import {BadgeScopedCondition} from "../../../src/libs/conditions/secondary/BadgeScopedCondition.sol";
 import {USStateOfResidenceCondition} from "../../../src/libs/conditions/secondary/USStateOfResidenceCondition.sol";
 import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
 
@@ -190,7 +191,7 @@ contract USStateOfResidenceConditionTest is SecondaryConditionIntegrationBase {
     // 17
     function test_Initialize_ZeroBadge_Reverts() public {
         USStateOfResidenceCondition impl = new USStateOfResidenceCondition();
-        vm.expectRevert(USStateOfResidenceCondition.InvalidBadge.selector);
+        vm.expectRevert(BadgeScopedCondition.InvalidBadge.selector);
         _proxy(address(impl), abi.encodeCall(USStateOfResidenceCondition.initialize, (address(auth), address(0))));
     }
 

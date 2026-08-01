@@ -236,9 +236,13 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         vm.warp(500 days);
         _mintCred(seller, CAT_KYC, "US", CA);
         vm.startPrank(owner);
-        eligibility.setClearance(seller, true);
+        eligibility.setClearance(address(corp), seller, true);
         rule144Disclosure.setDisclosurePackage(address(corp), DISCLOSURE_URI, uint64(block.timestamp));
-        section4a7Disclosure.setDisclosurePackage(address(corp), DISCLOSURE_URI, uint64(block.timestamp));
+        section4a7Disclosure.setDisclosurePackage(
+            address(corp), DISCLOSURE_URI, uint64(block.timestamp), SECTION4A7_ACK
+        );
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, uint256(100), false, false);
+        legion.setConfig(address(corp), CAT_LEGION, false);
         vm.stopPrank();
     }
 
@@ -647,10 +651,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         holderCap = HolderCapCondition(
             _proxy(
                 address(new HolderCapCondition()),
-                abi.encodeCall(
-                    HolderCapCondition.initialize,
-                    (address(auth), address(badge), HolderCapCondition.IcaException.SECTION_3C1, uint256(100), false, false)
-                )
+                abi.encodeCall(HolderCapCondition.initialize, (address(auth)))
             )
         );
         usState = USStateOfResidenceCondition(
@@ -662,7 +663,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         legion = LegionSoulboundCondition(
             _proxy(
                 address(new LegionSoulboundCondition()),
-                abi.encodeCall(LegionSoulboundCondition.initialize, (address(auth), address(badge), CAT_LEGION, false))
+                abi.encodeCall(LegionSoulboundCondition.initialize, (address(auth), address(badge)))
             )
         );
         holdingPeriod = HoldingPeriodCondition(
@@ -691,7 +692,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 address(new Section4a7DisclosureCondition()),
                 abi.encodeCall(
                     Section4a7DisclosureCondition.initialize,
-                    (address(auth), address(registry), SECTION4A7_ACK, DISCLOSURE_MAX_AGE)
+                    (address(auth), address(registry), DISCLOSURE_MAX_AGE)
                 )
             )
         );
@@ -758,7 +759,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         _mintCred(buyer, CAT_KYC, jurisdiction, state);
         _mintCred(buyer, CAT_LEGION, jurisdiction, state);
         vm.prank(owner);
-        eligibility.setClearance(buyer, true);
+        eligibility.setClearance(address(corp), buyer, true);
 
         paymentToken.mint(buyer, CONSIDERATION * 10);
         vm.prank(buyer);

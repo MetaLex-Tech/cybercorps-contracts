@@ -12,7 +12,9 @@ import {
     K_US_STATE
 } from "../../../src/interfaces/ILexChexBadge.sol";
 import {Credential} from "../../../src/creds/storage/lexchexBadgeStorage.sol";
+import {LeXcheXBadge} from "../../../src/creds/lexchexBadge.sol";
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
+import {BadgeScopedCondition} from "../../../src/libs/conditions/secondary/BadgeScopedCondition.sol";
 import {LexChexBadgeKindCondition} from "../../../src/libs/conditions/secondary/LexChexBadgeKindCondition.sol";
 import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
 
@@ -55,6 +57,9 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 // | 14 | updateParameters undefined bit    | revert InvalidKindKey |
 // | 15 | updateParameters scoped + status  | revert InvalidKindKey |
 // | 16 | updateParameters two scoped keys  | revert InvalidKindKey |
+// | 17 | per-SPV badge override            | that SPV reads it     |
+// | 18 | badge setters by stranger / zero  | revert                |
+// | 19 | mixin state at its namespaced slot | condition slot 1 free |
 // ─────────────────────────────────────────────────────────────────────────────
 
 contract LexChexBadgeKindConditionTest is SecondaryConditionIntegrationBase {
@@ -168,7 +173,7 @@ contract LexChexBadgeKindConditionTest is SecondaryConditionIntegrationBase {
     // 10
     function test_Initialize_ZeroBadge_Reverts() public {
         LexChexBadgeKindCondition impl = new LexChexBadgeKindCondition();
-        vm.expectRevert(LexChexBadgeKindCondition.InvalidBadge.selector);
+        vm.expectRevert(BadgeScopedCondition.InvalidBadge.selector);
         _proxy(
             address(impl),
             abi.encodeCall(
@@ -236,5 +241,58 @@ contract LexChexBadgeKindConditionTest is SecondaryConditionIntegrationBase {
         // Two statuses together are still fine: one credential has to assert both.
         cond.updateParameters(K_QP | K_QIB, false);
         assertEq(cond.kindKey(), K_QP | K_QIB);
+    }
+
+    // ── Badge scoping ───────────────────────────────────────────────────────
+
+    // 17 — the default registry covers every SPV; an override replaces it for that SPV alone
+    function test_BadgeScope_OverrideGovernsThatSpv() public {
+        LeXcheXBadge other = LeXcheXBadge(
+            _proxy(address(new LeXcheXBadge()), abi.encodeCall(LeXcheXBadge.initialize, (address(auth))))
+        );
+        Credential memory c;
+        c.asserts = K_ACCREDITED;
+        c.expiryDate = uint64(block.timestamp + 3650 days);
+        other.mint(buyer, c); // accredited only on the override registry
+
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_check(cond, offerId, settlementId), "the default registry holds no such credential");
+
+        cond.setSpvBadge(address(corp), address(other));
+        assertTrue(_check(cond, offerId, settlementId), "the override governs this SPV");
+
+        cond.setSpvBadge(address(corp), address(0));
+        assertFalse(_check(cond, offerId, settlementId), "zero restores the default");
+    }
+
+    // 18 — the registry decides who is accredited, so only the platform admin may point it anywhere
+    function test_BadgeScope_SettersAreGuarded() public {
+        vm.prank(stranger);
+        vm.expectRevert();
+        cond.setSpvBadge(address(corp), address(badge));
+
+        vm.prank(stranger);
+        vm.expectRevert();
+        cond.updateDefaultBadge(address(badge));
+
+        vm.expectRevert(BadgeScopedCondition.InvalidBadge.selector);
+        cond.updateDefaultBadge(address(0));
+
+        vm.expectRevert(BadgeScopedCondition.InvalidBadgeSpv.selector);
+        cond.setSpvBadge(address(0), address(badge));
+    }
+
+    // 19 — the mixin and the condition each keep state at their own namespaced slot, so neither occupies
+    // the sequential layout and neither can shift the other.
+    function test_BadgeScope_StateLivesAtTheNamespacedSlot() public view {
+        bytes32 badgeSlot = keccak256("metalex.condition.secondary.badge-scoped.storage.v1");
+        assertEq(address(uint160(uint256(vm.load(address(cond), badgeSlot)))), address(badge), "default badge");
+
+        bytes32 kindSlot = keccak256("metalex.condition.secondary.lexchex-badge-kind.storage.v1");
+        assertEq(uint256(vm.load(address(cond), kindSlot)), K_ACCREDITED, "kindKey");
+
+        // Nothing sequential past AUTH, so there is no layout left to manage.
+        assertEq(uint256(vm.load(address(cond), bytes32(uint256(1)))), 0);
+        assertEq(uint256(vm.load(address(cond), bytes32(uint256(2)))), 0);
     }
 }
