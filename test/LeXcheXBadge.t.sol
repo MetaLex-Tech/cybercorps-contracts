@@ -2,30 +2,31 @@
 pragma solidity 0.8.28;
 
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {BorgAuth} from "../src/libs/auth.sol";
 import {LeXcheXBadge} from "../src/creds/lexchexBadge.sol";
-import {
-    ILexChexBadge,
-    K_INVESTOR_TYPE,
-    K_INVESTOR_JURISDICTION,
-    K_LOOKTHROUGH_JURISDICTION,
-    K_US_STATE,
-    K_BO_COUNT,
-    K_DATA,
-    K_ACCREDITED,
-    K_QP,
-    K_QIB,
-    K_BAD_ACTOR_CLEAR,
-    K_SPV_WHITELIST,
-    K_SYNDICATE,
-    K_NON_US,
-    PRESET_KYC_AML,
-    PRESET_ENTITY_LOOKTHROUGH,
-    InvestorType
-} from "../src/interfaces/ILexChexBadge.sol";
 import {Credential} from "../src/creds/storage/lexchexBadgeStorage.sol";
 import {IERC5484} from "../src/interfaces/IERC5484.sol";
+import {
+    ILexChexBadge,
+    InvestorType,
+    K_ACCREDITED,
+    K_BAD_ACTOR_CLEAR,
+    K_BO_COUNT,
+    K_DATA,
+    K_INVESTOR_JURISDICTION,
+    K_INVESTOR_TYPE,
+    K_LOOKTHROUGH_JURISDICTION,
+    K_NON_US,
+    K_QIB,
+    K_QP,
+    K_SPV_WHITELIST,
+    K_SYNDICATE,
+    K_US_STATE,
+    PRESET_ENTITY_LOOKTHROUGH,
+    PRESET_KYC_AML
+} from "../src/interfaces/ILexChexBadge.sol";
+import {BorgAuth} from "../src/libs/auth.sol";
 import {Test} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
 
 /// @notice Unit tests for the LeXcheXBadge credential reads — the credentialing layer every cyberTRADE
 /// compliance condition and the offer-visibility UI read from.
@@ -53,6 +54,7 @@ contract LeXcheXBadgeTest is Test {
     // Local copies of the emitted events (the indexer surface asserted by the event tests).
     event CredentialIssued(address indexed owner, uint256 indexed tokenId, Credential cred);
     event CredentialVoided(address indexed owner, uint256 indexed tokenId, string reason);
+    event CredentialSwept(address indexed owner, uint256 indexed tokenId);
     event Issued(address indexed from, address indexed to, uint256 indexed tokenId, IERC5484.BurnAuth burnAuth);
 
     address owner;
@@ -63,9 +65,7 @@ contract LeXcheXBadgeTest is Test {
         BorgAuth auth = new BorgAuth(owner);
         badge = LeXcheXBadge(
             address(
-                new ERC1967Proxy(
-                    address(new LeXcheXBadge()), abi.encodeCall(LeXcheXBadge.initialize, (address(auth)))
-                )
+                new ERC1967Proxy(address(new LeXcheXBadge()), abi.encodeCall(LeXcheXBadge.initialize, (address(auth))))
             )
         );
     }
@@ -75,7 +75,8 @@ contract LeXcheXBadgeTest is Test {
     // A holder with one live credential: every read resolves to that credential's facts.
     function test_SingleCredential_AllReadsResolve() public {
         address holder = makeAddr("holder");
-        Credential memory c = _cred(K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_LOOKTHROUGH_JURISDICTION | K_US_STATE | K_BO_COUNT);
+        Credential memory c =
+            _cred(K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_LOOKTHROUGH_JURISDICTION | K_US_STATE | K_BO_COUNT);
         c.investorType = InvestorType.ENTITY;
         c.investorJurisdiction = "US";
         c.lookThroughJurisdiction = "US";
@@ -411,7 +412,7 @@ contract LeXcheXBadgeTest is Test {
         c.scope = spvA;
         _mint(holder, c);
         assertTrue(badge.hasValidWhitelistFor(holder, spvA));
-        assertFalse(badge.hasValidWhitelistFor(holder, spvB));      // scope-specific
+        assertFalse(badge.hasValidWhitelistFor(holder, spvB)); // scope-specific
         assertFalse(badge.hasValidWhitelistFor(makeAddr("wl2"), spvA)); // holder-specific
     }
 
@@ -453,7 +454,7 @@ contract LeXcheXBadgeTest is Test {
         c.scope = spvA;
         _mint(holder, c);
         assertTrue(badge.hasValidSyndicateFor(holder, spvA));
-        assertFalse(badge.hasValidSyndicateFor(holder, spvB));          // scope-specific
+        assertFalse(badge.hasValidSyndicateFor(holder, spvB)); // scope-specific
         assertFalse(badge.hasValidSyndicateFor(makeAddr("syn2"), spvA)); // holder-specific
     }
 
@@ -522,7 +523,7 @@ contract LeXcheXBadgeTest is Test {
         uint256 id1 = _mint(holder, _kyc("US", "CA")); // long-lived
         Credential memory shortC = _kyc("US", "NY");
         shortC.expiryDate = uint64(block.timestamp + 2 days);
-        _mint(holder, shortC);                          // expires soon
+        _mint(holder, shortC); // expires soon
         uint256 id3 = _mint(holder, _cred(K_ACCREDITED));
         assertEq(badge.getActiveTokenIds(holder).length, 3);
 
@@ -532,7 +533,7 @@ contract LeXcheXBadgeTest is Test {
 
         vm.warp(block.timestamp + 3 days); // the short-lived cred expired
         assertEq(badge.getActiveTokenIds(holder).length, 2); // not yet swept
-        badge.sweep(holder);                                  // permissionless
+        badge.sweep(holder); // permissionless
         uint256[] memory active = badge.getActiveTokenIds(holder);
         assertEq(active.length, 1);
         assertEq(active[0], id1); // only the long-lived one remains
@@ -673,7 +674,9 @@ contract LeXcheXBadgeTest is Test {
             uint256[] memory active = badge.getActiveTokenIds(holder);
             uint256 size = active.length > 10 ? 10 : active.length;
             uint256[] memory batch = new uint256[](size);
-            for (uint256 i = 0; i < size; i++) batch[i] = active[i];
+            for (uint256 i = 0; i < size; i++) {
+                batch[i] = active[i];
+            }
             evicted += badge.sweepTokens(batch);
         }
 
@@ -888,8 +891,8 @@ contract LeXcheXBadgeTest is Test {
     function test_Void_LeavesAttestedFieldsUnchanged() public {
         address holder = makeAddr("frozen");
         Credential memory c = _cred(
-            K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_LOOKTHROUGH_JURISDICTION | K_US_STATE | K_BO_COUNT
-                | K_DATA | K_SPV_WHITELIST
+            K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_LOOKTHROUGH_JURISDICTION | K_US_STATE | K_BO_COUNT | K_DATA
+                | K_SPV_WHITELIST
         );
         c.investorType = InvestorType.ENTITY;
         c.investorJurisdiction = "KY";
@@ -1024,6 +1027,53 @@ contract LeXcheXBadgeTest is Test {
         emit CredentialVoided(holder, id, "sanctions hit");
         vm.prank(owner);
         badge.void(id, "sanctions hit");
+    }
+
+    // A sweep is the keeper's receipt: one log per credential it actually drops, and silence when it drops
+    // nothing. A transaction receipt can't carry sweepTokens' return value, so the logs are how a keeper
+    // confirms its own run did work.
+    function test_Sweep_EmitsCredentialSwept() public {
+        address holder = makeAddr("sweepEvent");
+        Credential memory short = _cred(K_ACCREDITED);
+        short.expiryDate = uint64(block.timestamp + 1 days);
+        uint256 expiring = _mint(holder, short);
+        _mint(holder, _kyc("US", "CA"));
+
+        // Nothing has expired, so there is nothing to report.
+        vm.recordLogs();
+        badge.sweep(holder);
+        assertEq(vm.getRecordedLogs().length, 0, "a sweep that drops nothing says nothing");
+
+        vm.warp(block.timestamp + 2 days);
+        vm.expectEmit(true, true, false, false, address(badge));
+        emit CredentialSwept(holder, expiring);
+        badge.sweep(holder);
+
+        // Repeating the sweep drops nothing, so it stays silent too.
+        vm.recordLogs();
+        badge.sweep(holder);
+        assertEq(vm.getRecordedLogs().length, 0, "already-dropped credentials are not re-reported");
+    }
+
+    function test_SweepTokens_EmitsCredentialSwept() public {
+        address holder = makeAddr("sweepTokensEvent");
+        Credential memory short = _cred(K_ACCREDITED);
+        short.expiryDate = uint64(block.timestamp + 1 days);
+        uint256 expiring = _mint(holder, short);
+        uint256 live = _mint(holder, _kyc("US", "CA"));
+
+        vm.warp(block.timestamp + 2 days);
+        uint256[] memory batch = new uint256[](2);
+        batch[0] = expiring;
+        batch[1] = live; // still good, so it is skipped and never reported
+
+        vm.recordLogs();
+        assertEq(badge.sweepTokens(batch), 1);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        assertEq(logs.length, 1, "one log for the one credential dropped");
+        assertEq(logs[0].topics[0], ILexChexBadge.CredentialSwept.selector, "CredentialSwept");
+        assertEq(address(uint160(uint256(logs[0].topics[1]))), holder, "holder");
+        assertEq(uint256(logs[0].topics[2]), expiring, "the expired id");
     }
 
     function test_BurnAuth_AlwaysNeither() public {
@@ -1207,9 +1257,7 @@ contract LeXcheXBadgeSweepGasTest is Test {
         BorgAuth auth = new BorgAuth(owner);
         badge = LeXcheXBadge(
             address(
-                new ERC1967Proxy(
-                    address(new LeXcheXBadge()), abi.encodeCall(LeXcheXBadge.initialize, (address(auth)))
-                )
+                new ERC1967Proxy(address(new LeXcheXBadge()), abi.encodeCall(LeXcheXBadge.initialize, (address(auth))))
             )
         );
     }
@@ -1236,9 +1284,10 @@ contract LeXcheXBadgeSweepGasTest is Test {
 
         uint256[] memory active = badge.getActiveTokenIds(holder);
         uint256[] memory batch = new uint256[](5);
-        for (uint256 i = 0; i < batch.length; i++) batch[i] = active[i];
-        (bool batchSwept,) =
-            address(badge).call{gas: cap}(abi.encodeWithSelector(badge.sweepTokens.selector, batch));
+        for (uint256 i = 0; i < batch.length; i++) {
+            batch[i] = active[i];
+        }
+        (bool batchSwept,) = address(badge).call{gas: cap}(abi.encodeWithSelector(badge.sweepTokens.selector, batch));
         assertTrue(batchSwept); // the bounded batch fits under the same cap
         assertEq(badge.getActiveTokenIds(holder).length, before - batch.length); // and its progress persisted
     }

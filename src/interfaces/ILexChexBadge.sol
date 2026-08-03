@@ -67,6 +67,10 @@ interface ILexChexBadge is IERC5484 {
     // Events (indexer surface: Ponder ingests these for /api/offers eligibility and the admin panel §8.7)
     event CredentialIssued(address indexed owner, uint256 indexed tokenId, Credential cred);
     event CredentialVoided(address indexed owner, uint256 indexed tokenId, string reason);
+    /// @notice A sweep dropped an expired credential from the holder's active set. Housekeeping, not a status
+    /// change: the credential stopped counting back at its expiryDate, which may be long before this event.
+    /// Read it to track active-set size (the keeper's workload) and to confirm a sweep transaction did work.
+    event CredentialSwept(address indexed owner, uint256 indexed tokenId);
 
     error LexChexBadge_SoulBound();
     error LexChexBadge_TokenDoesNotExist();

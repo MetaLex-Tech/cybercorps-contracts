@@ -177,6 +177,7 @@ contract LeXcheXBadge is
             Credential storage cred = LeXcheXBadgeStorage.getCredential(id);
             if (block.timestamp > cred.expiryDate) {
                 LeXcheXBadgeStorage.removeActive(holder, id, cred.categoryId); // swap-pop → re-check index i
+                emit CredentialSwept(holder, id);
             } else {
                 ++i;
             }
@@ -200,7 +201,8 @@ contract LeXcheXBadge is
     /// and suppress a compliance fact. The holder is derived from the token (soulbound and never burned, so
     /// ownership is authoritative) — a batch therefore cannot touch a set the token does not belong to.
     /// Unknown, unexpired and already-evicted ids are skipped so a stale batch stays harmless.
-    /// @return evicted How many of `tokenIds` this call actually removed from an active set.
+    /// @return evicted How many of `tokenIds` this call actually removed from an active set. A receipt cannot
+    /// carry a return value, so a keeper checking its own transaction reads the CredentialSwept logs instead.
     function sweepTokens(uint256[] calldata tokenIds) external returns (uint256 evicted) {
         for (uint256 i = 0; i < tokenIds.length; i++) {
             uint256 tokenId = tokenIds[i];
@@ -208,7 +210,10 @@ contract LeXcheXBadge is
             if (holder == address(0)) continue;
             Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
             if (block.timestamp <= cred.expiryDate) continue;
-            if (LeXcheXBadgeStorage.removeActive(holder, tokenId, cred.categoryId)) ++evicted;
+            if (LeXcheXBadgeStorage.removeActive(holder, tokenId, cred.categoryId)) {
+                ++evicted;
+                emit CredentialSwept(holder, tokenId);
+            }
         }
     }
 
