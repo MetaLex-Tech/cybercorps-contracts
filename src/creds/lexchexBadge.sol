@@ -155,6 +155,7 @@ contract LeXcheXBadge is
     /// @notice Revocation: failed re-KYC, discovered bad-actor status, relocation, sanctions hits. The
     /// credential is retained (never burned) with the reason recorded, so the record survives for audit.
     function void(uint256 tokenId, string memory reason) public onlyAdmin {
+        if (bytes(reason).length == 0) revert LexChexBadge_MissingVoidReason();
         Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
         if (cred.issuanceDate == 0) revert LexChexBadge_TokenDoesNotExist();
         address holder = _requireOwned(tokenId);

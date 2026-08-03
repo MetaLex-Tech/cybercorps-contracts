@@ -942,6 +942,34 @@ contract LeXcheXBadgeTest is Test {
         assertEq(badge.getUsState(holder), bytes2("CA")); // the older valid credential governs again
     }
 
+    // An empty reason is what marks a credential as NOT voided, so it cannot be used as one: it would evict the
+    // token from the active set while isValid() kept reporting it valid, and a second empty void would flip a
+    // recorded revocation back to valid.
+    function test_Void_EmptyReason_Reverts() public {
+        address holder = makeAddr("emptyReason");
+        uint256 id = _mint(holder, _kyc("US", "CA"));
+
+        vm.prank(owner);
+        vm.expectRevert(ILexChexBadge.LexChexBadge_MissingVoidReason.selector);
+        badge.void(id, "");
+
+        assertTrue(badge.isValid(id));
+        assertEq(badge.getActiveTokenIds(holder).length, 1);
+    }
+
+    function test_Supersede_EmptyReason_Reverts() public {
+        address holder = makeAddr("emptySupersede");
+        uint256 stale = _mint(holder, _kyc("US", "NY"));
+        Credential memory replacement = _kyc("US", "CA");
+
+        vm.prank(owner);
+        vm.expectRevert(ILexChexBadge.LexChexBadge_MissingVoidReason.selector);
+        badge.supersede(stale, replacement, "");
+
+        assertTrue(badge.isValid(stale));
+        assertEq(badge.getUsState(holder), bytes2("NY")); // neither half of the swap happened
+    }
+
     function test_Void_NonexistentToken_Reverts() public {
         vm.prank(owner);
         vm.expectRevert(ILexChexBadge.LexChexBadge_TokenDoesNotExist.selector);

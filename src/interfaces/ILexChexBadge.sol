@@ -74,6 +74,7 @@ interface ILexChexBadge is IERC5484 {
     error LexChexBadge_BadAsserts();
     error LexChexBadge_MissingValue(uint256 key);
     error LexChexBadge_MissingScope();
+    error LexChexBadge_MissingVoidReason();
     error LexChexBadge_BoCountRequiresEntity();
     error LexChexBadge_NoValidCredential();
 
