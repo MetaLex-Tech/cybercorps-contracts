@@ -7,8 +7,9 @@ import {LeXcheXBadgeRender} from "../src/creds/LeXcheXBadgeRender.sol";
 import {Credential} from "../src/creds/storage/lexchexBadgeStorage.sol";
 import {InvestorType} from "../src/interfaces/ILexChexBadge.sol";
 
-/// @notice Covers the lookThroughJurisdiction rendering added to LeXcheXBadgeRender: the tokenURI metadata
-/// trait and the SVG row are emitted only when the field is set, and never displace the physical jurisdiction.
+/// @notice Covers the operator-typed fields LeXcheXBadgeRender displays: lookThroughJurisdiction (metadata
+/// trait and SVG row emitted only when set, never displacing the physical jurisdiction) and investorName
+/// (named holder when set, investor type otherwise).
 contract LeXcheXBadgeRenderTest is Test {
     using stdJson for string;
 
@@ -48,6 +49,51 @@ contract LeXcheXBadgeRenderTest is Test {
         assertFalse(vm.contains(svg, "REGULATORY"), "svg reg row should be absent");
     }
 
+    // ── investorName ────────────────────────────────────────────────────────────
+
+    function test_TokenUri_IncludesName_WhenSet() public {
+        Credential memory c = _cred("");
+        c.investorName = "Acme Capital LLC";
+        (string memory json, string memory svg) = _decode(LeXcheXBadgeRender.tokenURI(1, c, true));
+
+        (bool found, string memory value) = _trait(json, "Name");
+        assertTrue(found, "name trait missing");
+        assertEq(value, "Acme Capital LLC");
+
+        // The named holder replaces the type label on the "HELD BY" line.
+        assertTrue(vm.contains(svg, "Acme Capital LLC"), "svg must show the name");
+    }
+
+    function test_TokenUri_OmitsName_WhenEmpty_AndSvgShowsType() public {
+        (string memory json, string memory svg) = _decode(LeXcheXBadgeRender.tokenURI(1, _cred(""), true));
+
+        (bool found,) = _trait(json, "Name");
+        assertFalse(found, "name trait should be absent");
+
+        // The type label keeps the "HELD BY" line from rendering blank.
+        (bool foundType, string memory typeValue) = _trait(json, "Investor Type");
+        assertTrue(foundType, "type trait missing");
+        assertEq(typeValue, "Entity");
+        assertTrue(vm.contains(svg, "Entity"), "svg must fall back to the type");
+    }
+
+    // Names are operator-typed too, so they carry the same injection risk as jurisdictions.
+    function test_NameIsEscaped_InJsonAndSvg() public {
+        Credential memory c = _cred("");
+        c.investorName = "Acme\", \"injected\": \"yes";
+        (string memory json, string memory svg) = _decode(LeXcheXBadgeRender.tokenURI(1, c, true));
+
+        (bool found, string memory value) = _trait(json, "Name");
+        assertTrue(found, "name trait missing");
+        assertEq(value, "Acme\", \"injected\": \"yes");
+        assertFalse(vm.keyExistsJson(json, ".attributes[0].injected"), "no field was injected");
+
+        c.investorName = "<script>&";
+        (, svg) = _decode(LeXcheXBadgeRender.tokenURI(1, c, true));
+        assertTrue(vm.contains(svg, "&lt;script&gt;&amp;"), "reserved characters must be escaped");
+        assertFalse(vm.contains(svg, "<script>"), "raw markup must not reach the image");
+    }
+
     // ── Audit findings ──────────────────────────────────────────────────────────
 
     // L1 — the expiry is the holder's record of when re-attestation is due, so it has to be the real date.
@@ -71,8 +117,8 @@ contract LeXcheXBadgeRenderTest is Test {
         return shown;
     }
 
-    // L2 — jurisdictions are typed in by an operator, the only part of a credential that can contain
-    // characters JSON reserves. A quote has to stay inside the value instead of ending it.
+    // L2 — jurisdictions are typed in by an operator, so they can contain characters JSON reserves. A quote
+    // has to stay inside the value instead of ending it.
     function test_Audit_L2_JurisdictionIsEscapedInJson() public {
         Credential memory c = _cred("");
         c.investorJurisdiction = "US\", \"injected\": \"yes";

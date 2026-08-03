@@ -59,6 +59,15 @@ library LeXcheXBadgeRender {
                             '"image": "data:image/svg+xml;base64,',
                             Base64.encode(bytes(image)),
                             '", "attributes": [',
+                            bytes(cred.investorName).length > 0
+                                ? string(
+                                    abi.encodePacked(
+                                        '{"trait_type": "Name", "value": "',
+                                        jsonEscape(cred.investorName),
+                                        '"},'
+                                    )
+                                )
+                                : "",
                             '{"trait_type": "Investor Type", "value": "',
                             investorTypeLabel(cred.investorType),
                             '"},',
@@ -119,7 +128,10 @@ library LeXcheXBadgeRender {
                 "</text>",
                 '<text x="500" y="226" text-anchor="middle" font-family="Georgia" font-size="25" fill="#f2f2f2">THIS SOULBOUND CREDENTIAL IS HELD BY</text>',
                 '<text x="500" y="266" text-anchor="middle" font-family="Georgia" font-size="25" fill="#f2f2f2">',
-                investorTypeLabel(cred.investorType),
+                // the name when the issuer recorded one, otherwise the type, so the line is never blank
+                bytes(cred.investorName).length > 0
+                    ? xmlEscape(cred.investorName)
+                    : investorTypeLabel(cred.investorType),
                 "</text>",
                 generateDefs(),
                 '<rect width="100%" height="100%" fill="url(#grad1)" />',
@@ -174,8 +186,8 @@ library LeXcheXBadgeRender {
         );
     }
 
-    /// @dev Jurisdictions are typed in by an operator, so they are the only part of a credential that can
-    /// contain characters JSON reserves. Unescaped, a quote ends the string early and the rest reads as
+    /// @dev Names and jurisdictions are typed in by an operator, so they are the parts of a credential that
+    /// can contain characters JSON reserves. Unescaped, a quote ends the string early and the rest reads as
     /// further fields.
     function jsonEscape(string memory value) internal pure returns (string memory) {
         bytes memory b = bytes(value);

@@ -29,6 +29,7 @@ import {InvestorType} from "../../interfaces/ILexChexBadge.sol";
 struct Credential {
     uint256 asserts;                    // K_* fact-keys this credential attests; the authority axis
     bytes32 categoryId;                 // free-form issuer label; off-chain meaning, never enforced on-chain
+    string investorName;                // who the credential names; display/audit only, no fact-key asserts it
     string investorJurisdiction;        // value for K_INVESTOR_JURISDICTION ("US"/"USA"/"United States" all read US)
     // value for K_LOOKTHROUGH_JURISDICTION — §3(c)(1)(A) ICA look-through classification, decoupled from the
     // physical investorJurisdiction: an offshore entity with any U.S. beneficial owner is treated as U.S. here
