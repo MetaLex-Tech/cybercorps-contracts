@@ -211,7 +211,7 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
         _credential(incumbent, "KY", 99);
 
         // The badge now reports 99, yet the printer's cached tally is still the pre-update snapshot (91).
-        assertEq(badge.getBeneficialOwnerCount(incumbent), 99, "badge reflects the re-credential");
+        assertEq(badge.getEffectiveBeneficialOwnerCount(incumbent), 99, "badge reflects the re-credential");
         assertEq(printer.lookThroughHolderCount(), 91, "printer tally is stale until a resync");
 
         // Fail-open: the stale base (91) + fresh U.S. buyer (+1) = 92 <= 100 is admitted, even though the true
@@ -275,7 +275,7 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
 
         // The admin withdraws the attestation, meaning to tighten.
         badge.void(boCred, "attestation withdrawn");
-        assertEq(uint256(badge.getBeneficialOwnerCount(incumbent)), 0, "badge reports the fact unestablished");
+        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(incumbent)), 0, "badge reports the fact unestablished");
 
         vm.prank(stranger);
         LedgerEntryToken(address(printer)).resyncHolder(incumbent);
@@ -307,6 +307,39 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
         vm.prank(stranger);
         LedgerEntryToken(address(printer)).resyncHolder(incumbent);
         assertEq(printer.lookThroughHolderCount(), 91, "a lapsed attestation did not shrink the tally");
+    }
+
+    // H2c — the flip side of H2: a recert to individual is a fresh fact, not a withdrawal, so it must revise
+    // the weight down. The badge answers 1 for an individual, so the resync sees a real count rather than the
+    // zero it would read from the retired K_BO_COUNT alone, and the freed cap room is genuine.
+    function test_Audit_H2c_IndividualRecert_ReleasesStaleEntityWeight() public {
+        uint256 entityCred = _credential(incumbent, "KY", 90);
+        _makeHolder(incumbent); // seller(1) + incumbent(90) = 91
+        assertEq(printer.lookThroughHolderCount(), 91);
+
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, 91, false, false);
+        assertFalse(
+            holderCap.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId),
+            "91 + 1 > cap 91 is correctly blocked"
+        );
+
+        // The incumbent turns out to be a natural person, not an entity.
+        Credential memory asIndividual;
+        asIndividual.investorType = InvestorType.INDIVIDUAL;
+        asIndividual.investorJurisdiction = "KY";
+        asIndividual.asserts = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION;
+        asIndividual.expiryDate = uint64(block.timestamp + 3650 days);
+        badge.supersede(entityCred, asIndividual, "recertified as individual");
+        assertEq(badge.getEffectiveBeneficialOwnerCount(incumbent), 1, "an individual is one beneficial owner");
+
+        vm.prank(stranger);
+        LedgerEntryToken(address(printer)).resyncHolder(incumbent);
+        assertEq(printer.lookThroughHolderCount(), 2, "seller(1) + incumbent(1); the stale 90 is released");
+        assertTrue(
+            holderCap.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, settlementId),
+            "the trade the stale weight was blocking now passes"
+        );
     }
 
     // M1 — the condition reads the printer's own badge, so there is no second wiring to drift. Credentials

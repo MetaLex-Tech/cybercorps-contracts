@@ -432,7 +432,7 @@ library LedgerEntryTokenStorage {
     function _sample(CyberCertStorage storage s, address owner) private view returns (uint32 bo, bool isUS) {
         address badge = s.lookThroughBadge;
         if (badge == address(0)) return (0, true);
-        bo = ILexChexBadge(badge).getBeneficialOwnerCount(owner);
+        bo = ILexChexBadge(badge).getEffectiveBeneficialOwnerCount(owner);
         isUS = LookThroughPolicy.isUSInvestor(ILexChexBadge(badge), owner);
     }
 

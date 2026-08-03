@@ -242,7 +242,7 @@ contract MockLookThroughBadge {
     function setBo(address a, uint32 c) external { bo[a] = c; }
     function setUs(address a, bool v) external { us[a] = v; }
 
-    function getBeneficialOwnerCount(address a) external view returns (uint32) { return bo[a]; }
+    function getEffectiveBeneficialOwnerCount(address a) external view returns (uint32) { return bo[a]; }
     function getInvestorJurisdiction(address a) external view returns (string memory) { return us[a] ? "US" : "KY"; }
     function getLookThroughJurisdiction(address) external pure returns (string memory) { return ""; }
 }

@@ -66,20 +66,22 @@ import "../interfaces/ILexChexBadge.sol";
 ///   fail open or closed — that direction is regime-specific and opposite between callers (an ICA look-through
 ///   wants unknown to read U.S.; a CFIUS screen wants unknown to read foreign), so each condition applies its
 ///   own rule to the raw value. See LookThroughPolicy for the §3(c)(1)(A) reading.
+/// - One getter is an exception: getEffectiveBeneficialOwnerCount() takes getInvestorType() into account because
+///   BO is undefined when investor is an individual
 ///
 /// Credential catalogue — what each fact carries and which body of law reads it. DO NOT cross-wire.
 ///
-/// | Fact-key                    | Read                       | Outcome domain              | Serves                    |
-/// |-----------------------------|----------------------------|-----------------------------|---------------------------|
-/// | K_INVESTOR_TYPE             | getInvestorType            | UNSET / INDIVIDUAL / ENTITY | —                         |
-/// | K_INVESTOR_JURISDICTION     | getInvestorJurisdiction    | EMPTY / country code        | CFIUS/FIRRMA; blue sky    |
-/// | K_LOOKTHROUGH_JURISDICTION  | getLookThroughJurisdiction | EMPTY / country code        | ICA §3(c)(1)(A)           |
-/// | K_US_STATE                  | getUsState                 | EMPTY / state code          | blue sky                  |
-/// | K_BO_COUNT                  | getBeneficialOwnerCount    | 0 / >0                      | ICA §3(c)(1)(A)           |
-/// | K_ACCREDITED / K_QP / K_QIB | hasValidCredentialOf       | absent / asserted           | Reg D; Rule 144A          |
-/// | K_NON_US                    | hasValidCredentialOf       | absent / asserted           | Reg S                     |
-/// | K_SPV_WHITELIST             | hasValidWhitelistFor       | absent / scoped to an SPV   | offer visibility (§16.2)  |
-/// | K_SYNDICATE                 | hasValidSyndicateFor       | absent / scoped to an SPV   | issuer circle (§4.1.3A)   |
+/// | Fact-key                     | Read                             | Outcome domain              | Serves                   |
+/// |------------------------------|----------------------------------|-----------------------------|--------------------------|
+/// | K_INVESTOR_TYPE              | getInvestorType                  | UNSET / INDIVIDUAL / ENTITY | —                        |
+/// | K_INVESTOR_JURISDICTION      | getInvestorJurisdiction          | EMPTY / country code        | CFIUS/FIRRMA; blue sky   |
+/// | K_LOOKTHROUGH_JURISDICTION   | getLookThroughJurisdiction       | EMPTY / country code        | ICA §3(c)(1)(A)          |
+/// | K_US_STATE                   | getUsState                       | EMPTY / state code          | blue sky                 |
+/// | K_BO_COUNT & K_INVESTOR_TYPE | getEffectiveBeneficialOwnerCount | 0 / >0                      | ICA §3(c)(1)(A)          |
+/// | K_ACCREDITED / K_QP / K_QIB  | hasValidCredentialOf             | absent / asserted           | Reg D; Rule 144A         |
+/// | K_NON_US                     | hasValidCredentialOf             | absent / asserted           | Reg S                    |
+/// | K_SPV_WHITELIST              | hasValidWhitelistFor             | absent / scoped to an SPV   | offer visibility (§16.2) |
+/// | K_SYNDICATE                  | hasValidSyndicateFor             | absent / scoped to an SPV   | issuer circle (§4.1.3A)  |
 ///
 /// Invariants
 /// - Tokens are deliberately NOT burnable — revocation is void-only, so every credential (voided, expired, or
@@ -284,9 +286,10 @@ contract LeXcheXBadge is
         return found ? LeXcheXBadgeStorage.getCredential(tokenId).usState : bytes2(0);
     }
 
-    /// @notice Entity beneficial-owner count for HolderCapCondition's §3(c)(1)(A) look-through; 0 when
-    /// unestablished (callers that look through decide how to treat a zero — e.g. count as one holder).
-    function getBeneficialOwnerCount(address owner) public view returns (uint32) {
+    /// @notice Beneficial-owner count for the §3(c)(1)(A) look-through; 0 when unestablished (callers decide
+    /// how to treat a zero — e.g. count as one holder).
+    function getEffectiveBeneficialOwnerCount(address owner) public view returns (uint32) {
+        if (getInvestorType(owner) == InvestorType.INDIVIDUAL) return 1;
         (uint256 tokenId, bool found) = _mostRecentValidWith(owner, K_BO_COUNT);
         return found ? LeXcheXBadgeStorage.getCredential(tokenId).beneficialOwnerCount : 0;
     }

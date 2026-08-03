@@ -85,7 +85,7 @@ contract LeXcheXBadgeTest is Test {
 
         assertEq(uint256(badge.getInvestorType(holder)), uint256(InvestorType.ENTITY));
         assertEq(badge.getUsState(holder), bytes2("CA"));
-        assertEq(uint256(badge.getBeneficialOwnerCount(holder)), 4);
+        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(holder)), 4);
         assertEq(badge.getInvestorJurisdiction(holder), "US");
         assertEq(badge.getLookThroughJurisdiction(holder), "US");
     }
@@ -154,19 +154,59 @@ contract LeXcheXBadgeTest is Test {
         assertEq(uint256(badge.getInvestorType(holder)), uint256(InvestorType.ENTITY)); // older valid governs
     }
 
-    // A newer credential that does not assert the look-through count cannot shadow an older one that does.
+    // A newer credential that is merely silent on the look-through count cannot shadow an older one that
+    // asserts it. Silence is not a retraction — supersede is (see the recert test below for contradiction).
     function test_AssertsAuthority_BoCountNotShadowed() public {
         address entity = makeAddr("entity");
-        Credential memory c = _cred(K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_BO_COUNT);
-        c.investorType = InvestorType.ENTITY;
-        c.investorJurisdiction = "US";
-        c.beneficialOwnerCount = 5;
-        _mint(entity, c); // older, asserts BO count
+        _mint(entity, _entityWithBoCount(5)); // older, asserts BO count
 
         vm.warp(block.timestamp + 1 days);
-        _mint(entity, _kyc("US", "CA")); // newer, does not assert BO count
+        Credential memory newer = _cred(K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION);
+        newer.investorType = InvestorType.ENTITY; // still an entity, just says nothing about the count
+        newer.investorJurisdiction = "US";
+        _mint(entity, newer);
 
-        assertEq(uint256(badge.getBeneficialOwnerCount(entity)), 5);
+        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(entity)), 5);
+    }
+
+    // An authoritative INDIVIDUAL is an established fact about beneficial ownership, not a silence: a natural
+    // person is one owner. Without this the printer's look-through tally keeps the stale entity count until the
+    // holder fully exits, since K_INVESTOR_TYPE is the only key the recert moves.
+    function test_EffectiveBoCount_IndividualRecertReadsOne() public {
+        address holder = makeAddr("recertified");
+        uint256 asEntity = _mint(holder, _entityWithBoCount(5));
+        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(holder)), 5);
+
+        // Supersede voids the entity credential outright: nothing asserts K_BO_COUNT any more.
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(owner);
+        badge.supersede(asEntity, _kyc("US", "CA"), "recertified as individual");
+        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(holder)), 1, "individual is one owner, not unknown");
+    }
+
+    // Same recert without voiding the old credential: it stays valid and still answers K_BO_COUNT, so the type
+    // must be read first or the stale 5 wins.
+    function test_EffectiveBoCount_IndividualOutranksUnvoidedEntityCount() public {
+        address holder = makeAddr("bothValid");
+        _mint(holder, _entityWithBoCount(5));
+
+        vm.warp(block.timestamp + 1 days);
+        _mint(holder, _kyc("US", "CA")); // newer, contradicts the entity classification
+
+        assertEq(uint256(badge.getInvestorType(holder)), uint256(InvestorType.INDIVIDUAL));
+        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(holder)), 1, "newer type governs the count");
+    }
+
+    // Nothing established stays 0 — the caller, not the badge, decides what an unknown count means.
+    function test_EffectiveBoCount_UnestablishedStaysZero() public {
+        address entityNoCount = makeAddr("entityNoCount");
+        Credential memory c = _cred(K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION);
+        c.investorType = InvestorType.ENTITY;
+        c.investorJurisdiction = "KY";
+        _mint(entityNoCount, c);
+
+        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(entityNoCount)), 0);
+        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(makeAddr("noCreds"))), 0);
     }
 
     // ── Validity gating ───────────────────────────────────────────────────────
@@ -206,7 +246,7 @@ contract LeXcheXBadgeTest is Test {
         address nobody = makeAddr("nobody");
         assertEq(uint256(badge.getInvestorType(nobody)), uint256(InvestorType.UNSET));
         assertEq(badge.getUsState(nobody), bytes2(0));
-        assertEq(uint256(badge.getBeneficialOwnerCount(nobody)), 0);
+        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(nobody)), 0);
         assertEq(badge.getInvestorJurisdiction(nobody), "");
         assertEq(badge.getLookThroughJurisdiction(nobody), "");
     }
@@ -799,7 +839,7 @@ contract LeXcheXBadgeTest is Test {
         lookThrough.beneficialOwnerCount = 3;
         _mint(feeder, lookThrough);
         assertEq(badge.getLookThroughJurisdiction(feeder), "US");
-        assertEq(uint256(badge.getBeneficialOwnerCount(feeder)), 3);
+        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(feeder)), 3);
 
         address bespoke = makeAddr("bespoke");
         address spv = makeAddr("spvBespoke");
@@ -1041,7 +1081,7 @@ contract LeXcheXBadgeTest is Test {
         entity.investorType = InvestorType.ENTITY;
         entity.beneficialOwnerCount = 5;
         _mint(to, entity);
-        assertEq(uint256(badge.getBeneficialOwnerCount(to)), 5);
+        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(to)), 5);
     }
 
     // L7 — voided and expired records are kept for audit but are not credentials, so the read skips them and
@@ -1080,6 +1120,14 @@ contract LeXcheXBadgeTest is Test {
         c.investorType = InvestorType.INDIVIDUAL;
         c.investorJurisdiction = jurisdiction;
         c.usState = state;
+    }
+
+    /// @dev Entity asserting a §3(c)(1)(A) look-through count.
+    function _entityWithBoCount(uint32 count) internal view returns (Credential memory c) {
+        c = _cred(K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_BO_COUNT);
+        c.investorType = InvestorType.ENTITY;
+        c.investorJurisdiction = "US";
+        c.beneficialOwnerCount = count;
     }
 
     function _jurisdiction(string memory j) internal view returns (Credential memory c) {

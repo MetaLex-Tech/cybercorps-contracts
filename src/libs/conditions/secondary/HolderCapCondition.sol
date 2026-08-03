@@ -150,7 +150,7 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
 
         // A credentialed entity BO count flows through instead of 1. `_validate` rejects an asserted count of
         // zero, so a zero read means no look-through credential — a single holder.
-        uint32 boCount = address(badge) == address(0) ? 0 : badge.getBeneficialOwnerCount(buyer);
+        uint32 boCount = address(badge) == address(0) ? 0 : badge.getEffectiveBeneficialOwnerCount(buyer);
         uint256 addition = boCount > 0 ? boCount : 1;
 
         return currentCount + addition <= config.cap;

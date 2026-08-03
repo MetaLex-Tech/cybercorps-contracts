@@ -111,7 +111,9 @@ interface ILexChexBadge is IERC5484 {
     /// @notice Individual vs. entity; UNSET when unestablished. Qualifies the §3(c)(1)(A) look-through count.
     function getInvestorType(address owner) external view returns (InvestorType);
     function getUsState(address owner) external view returns (bytes2);
-    function getBeneficialOwnerCount(address owner) external view returns (uint32);
+    /// @notice §3(c)(1)(A) look-through count; 0 when unestablished. An authoritative INDIVIDUAL reads 1 (a
+    /// natural person is one beneficial owner), so a zero here means no count is established, never "none".
+    function getEffectiveBeneficialOwnerCount(address owner) external view returns (uint32);
     /// @notice Generic programmable payload (bytes) the badge stores but never interprets; empty when none.
     function getData(address owner) external view returns (bytes memory);
     function getInvestorJurisdiction(address owner) external view returns (string memory);
