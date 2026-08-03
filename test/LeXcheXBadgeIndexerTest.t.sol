@@ -448,18 +448,19 @@ contract LeXcheXBadgeIndexerTest is Test {
 
     /// @dev Every read the conditions and the UI make against this holder, answered from the logs.
     function _assertHolderReconstructed(address holder) internal {
-        assertEq(uint256(_idxInvestorType(holder)), uint256(badge.getInvestorType(holder)), "getInvestorType");
-        assertEq(bytes32(_idxUsState(holder)), bytes32(badge.getUsState(holder)), "getUsState");
-        assertEq(
-            uint256(_idxBeneficialOwnerCount(holder)),
-            uint256(badge.getEffectiveBeneficialOwnerCount(holder)),
-            "getEffectiveBeneficialOwnerCount"
-        );
-        assertEq(_idxData(holder), badge.getData(holder), "getData");
-        assertEq(_idxInvestorJurisdiction(holder), badge.getInvestorJurisdiction(holder), "getInvestorJurisdiction");
-        assertEq(
-            _idxLookThroughJurisdiction(holder), badge.getLookThroughJurisdiction(holder), "getLookThroughJurisdiction"
-        );
+        (InvestorType investorType,) = badge.getInvestorType(holder);
+        (bytes2 usState,) = badge.getUsState(holder);
+        (uint32 boCount,) = badge.getEffectiveBeneficialOwnerCount(holder);
+        (bytes memory data,) = badge.getData(holder);
+        (string memory jurisdiction,) = badge.getInvestorJurisdiction(holder);
+        (string memory lookThrough,) = badge.getLookThroughJurisdiction(holder);
+
+        assertEq(uint256(_idxInvestorType(holder)), uint256(investorType), "getInvestorType");
+        assertEq(bytes32(_idxUsState(holder)), bytes32(usState), "getUsState");
+        assertEq(uint256(_idxBeneficialOwnerCount(holder)), uint256(boCount), "getEffectiveBeneficialOwnerCount");
+        assertEq(_idxData(holder), data, "getData");
+        assertEq(_idxInvestorJurisdiction(holder), jurisdiction, "getInvestorJurisdiction");
+        assertEq(_idxLookThroughJurisdiction(holder), lookThrough, "getLookThroughJurisdiction");
         assertEq(_idxHasValidLexCheX(holder), badge.hasValidLexCheX(holder), "hasValidLexCheX");
 
         for (uint256 i = 0; i < probeKeys.length; i++) {

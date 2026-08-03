@@ -46,6 +46,9 @@ import {Vm} from "forge-std/Vm.sol";
 ///  7. A value read for an unestablished fact returns the field's empty value. What that emptiness *means* is
 ///     each condition's decision, not the badge's.
 ///  8. Credentials are soulbound to the verified wallet: non-transferable, no delegation.
+///  9. A reading carries its own horizon: `validUntil` reports when the credential answering a fact expires,
+///     so a caller that caches an answer can tell when to stop trusting it. Expiry moves nothing on-chain,
+///     so without this a cache has no way to learn the fact behind it lapsed.
 ///
 /// What those facts mean for the §3(c)(1)(A) holder count is covered in LookThroughPolicy.t.sol.
 contract LeXcheXBadgeTest is Test {
@@ -84,11 +87,11 @@ contract LeXcheXBadgeTest is Test {
         c.beneficialOwnerCount = 4;
         _mint(holder, c);
 
-        assertEq(uint256(badge.getInvestorType(holder)), uint256(InvestorType.ENTITY));
-        assertEq(badge.getUsState(holder), bytes2("CA"));
-        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(holder)), 4);
-        assertEq(badge.getInvestorJurisdiction(holder), "US");
-        assertEq(badge.getLookThroughJurisdiction(holder), "US");
+        assertEq(uint256(_readInvestorType(holder)), uint256(InvestorType.ENTITY));
+        assertEq(_readUsState(holder), bytes2("CA"));
+        assertEq(uint256(_readBoCount(holder)), 4);
+        assertEq(_readJurisdiction(holder), "US");
+        assertEq(_readLookThrough(holder), "US");
     }
 
     // ── Recency & determinism ─────────────────────────────────────────────────
@@ -100,7 +103,7 @@ contract LeXcheXBadgeTest is Test {
         _mint(holder, _kyc("US", "NY")); // older
         vm.warp(block.timestamp + 30 days);
         _mint(holder, _kyc("US", "TX")); // newer
-        assertEq(badge.getUsState(holder), bytes2("TX"));
+        assertEq(_readUsState(holder), bytes2("TX"));
     }
 
     // Ties on issuanceDate (same block) resolve deterministically to the higher tokenId.
@@ -111,7 +114,7 @@ contract LeXcheXBadgeTest is Test {
 
         uint256[] memory ids = badge.getTokenIdsByOwner(holder);
         assertGt(ids[1], ids[0]);
-        assertEq(badge.getUsState(holder), bytes2("TX"));
+        assertEq(_readUsState(holder), bytes2("TX"));
     }
 
     // A newer credential that does NOT assert a fact cannot shadow an older one that does.
@@ -125,34 +128,34 @@ contract LeXcheXBadgeTest is Test {
         vm.warp(block.timestamp + 1 days);
         _mint(feeder, _jurisdiction("KY")); // newer, asserts jurisdiction only (not regulatory)
 
-        assertEq(badge.getLookThroughJurisdiction(feeder), "US"); // preserved: newer didn't assert it
+        assertEq(_readLookThrough(feeder), "US"); // preserved: newer didn't assert it
     }
 
     // Individual vs. entity resolves like any other value fact: UNSET when unestablished, superseded by a
     // newer asserting credential, never shadowed by a non-asserting one, and restored when the newer is voided.
     function test_GetInvestorType_ResolvesAndDefaultsUnset() public {
         address holder = makeAddr("investorType");
-        assertEq(uint256(badge.getInvestorType(holder)), uint256(InvestorType.UNSET));
+        assertEq(uint256(_readInvestorType(holder)), uint256(InvestorType.UNSET));
 
         Credential memory entity = _cred(K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION);
         entity.investorType = InvestorType.ENTITY;
         entity.investorJurisdiction = "KY";
         _mint(holder, entity);
-        assertEq(uint256(badge.getInvestorType(holder)), uint256(InvestorType.ENTITY));
+        assertEq(uint256(_readInvestorType(holder)), uint256(InvestorType.ENTITY));
 
         vm.warp(block.timestamp + 1 days);
         _mint(holder, _cred(K_ACCREDITED)); // newer, asserts no type
-        assertEq(uint256(badge.getInvestorType(holder)), uint256(InvestorType.ENTITY));
+        assertEq(uint256(_readInvestorType(holder)), uint256(InvestorType.ENTITY));
 
         vm.warp(block.timestamp + 1 days);
         Credential memory individual = _cred(K_INVESTOR_TYPE);
         individual.investorType = InvestorType.INDIVIDUAL;
         uint256 reclassified = _mint(holder, individual); // newer, asserts the type
-        assertEq(uint256(badge.getInvestorType(holder)), uint256(InvestorType.INDIVIDUAL));
+        assertEq(uint256(_readInvestorType(holder)), uint256(InvestorType.INDIVIDUAL));
 
         vm.prank(owner);
         badge.void(reclassified, "revoked");
-        assertEq(uint256(badge.getInvestorType(holder)), uint256(InvestorType.ENTITY)); // older valid governs
+        assertEq(uint256(_readInvestorType(holder)), uint256(InvestorType.ENTITY)); // older valid governs
     }
 
     // A newer credential that is merely silent on the look-through count cannot shadow an older one that
@@ -167,7 +170,7 @@ contract LeXcheXBadgeTest is Test {
         newer.investorJurisdiction = "US";
         _mint(entity, newer);
 
-        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(entity)), 5);
+        assertEq(uint256(_readBoCount(entity)), 5);
     }
 
     // An authoritative INDIVIDUAL is an established fact about beneficial ownership, not a silence: a natural
@@ -176,13 +179,13 @@ contract LeXcheXBadgeTest is Test {
     function test_EffectiveBoCount_IndividualRecertReadsOne() public {
         address holder = makeAddr("recertified");
         uint256 asEntity = _mint(holder, _entityWithBoCount(5));
-        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(holder)), 5);
+        assertEq(uint256(_readBoCount(holder)), 5);
 
         // Supersede voids the entity credential outright: nothing asserts K_BO_COUNT any more.
         vm.warp(block.timestamp + 1 days);
         vm.prank(owner);
         badge.supersede(asEntity, _kyc("US", "CA"), "recertified as individual");
-        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(holder)), 1, "individual is one owner, not unknown");
+        assertEq(uint256(_readBoCount(holder)), 1, "individual is one owner, not unknown");
     }
 
     // Same recert without voiding the old credential: it stays valid and still answers K_BO_COUNT, so the type
@@ -194,8 +197,8 @@ contract LeXcheXBadgeTest is Test {
         vm.warp(block.timestamp + 1 days);
         _mint(holder, _kyc("US", "CA")); // newer, contradicts the entity classification
 
-        assertEq(uint256(badge.getInvestorType(holder)), uint256(InvestorType.INDIVIDUAL));
-        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(holder)), 1, "newer type governs the count");
+        assertEq(uint256(_readInvestorType(holder)), uint256(InvestorType.INDIVIDUAL));
+        assertEq(uint256(_readBoCount(holder)), 1, "newer type governs the count");
     }
 
     // Nothing established stays 0 — the caller, not the badge, decides what an unknown count means.
@@ -206,8 +209,8 @@ contract LeXcheXBadgeTest is Test {
         c.investorJurisdiction = "KY";
         _mint(entityNoCount, c);
 
-        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(entityNoCount)), 0);
-        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(makeAddr("noCreds"))), 0);
+        assertEq(uint256(_readBoCount(entityNoCount)), 0);
+        assertEq(uint256(_readBoCount(makeAddr("noCreds"))), 0);
     }
 
     // ── Validity gating ───────────────────────────────────────────────────────
@@ -220,11 +223,11 @@ contract LeXcheXBadgeTest is Test {
         Credential memory shortLived = _kyc("US", "NY");
         shortLived.expiryDate = uint64(block.timestamp + 2 days);
         uint256 ny = _mint(holder, shortLived); // higher tokenId, state NY, expires at +2 days
-        assertEq(badge.getUsState(holder), bytes2("NY")); // NY wins the tie while valid
+        assertEq(_readUsState(holder), bytes2("NY")); // NY wins the tie while valid
 
         vm.warp(block.timestamp + 3 days); // NY expired, CA still valid
         assertFalse(badge.isValid(ny));
-        assertEq(badge.getUsState(holder), bytes2("CA"));
+        assertEq(_readUsState(holder), bytes2("CA"));
     }
 
     // Voided credentials are excluded; an older valid credential legitimately governs again.
@@ -238,18 +241,116 @@ contract LeXcheXBadgeTest is Test {
         vm.prank(owner);
         badge.void(ny, "revoked");
 
-        assertEq(badge.getUsState(holder), bytes2("CA"));
+        assertEq(_readUsState(holder), bytes2("CA"));
+    }
+
+    // ── Reading horizon: every getter reports when its answer lapses ───────────
+
+    // The expiry belongs to the same credential that supplied the value, so a cache can watch it.
+    function test_Horizon_MatchesAuthoritativeCredential() public {
+        address holder = makeAddr("until");
+        Credential memory c = _kyc("KY", bytes2("NY"));
+        c.expiryDate = uint64(block.timestamp + 30 days);
+        _mint(holder, c);
+
+        (string memory jurisdiction, uint64 jurisdictionExpiry) = badge.getInvestorJurisdiction(holder);
+        assertEq(jurisdiction, "KY");
+        assertEq(uint256(jurisdictionExpiry), uint256(c.expiryDate));
+
+        (bytes2 state, uint64 stateExpiry) = badge.getUsState(holder);
+        assertEq(state, bytes2("NY"));
+        assertEq(uint256(stateExpiry), uint256(c.expiryDate));
+    }
+
+    // Two facts from different credentials carry their own expiries, not a shared one.
+    function test_Horizon_IsPerFactNotPerHolder() public {
+        address holder = makeAddr("perFact");
+        Credential memory kyc = _kyc("KY", bytes2(0));
+        kyc.expiryDate = uint64(block.timestamp + 300 days);
+        _mint(holder, kyc);
+
+        Credential memory lookThrough = _cred(K_LOOKTHROUGH_JURISDICTION);
+        lookThrough.expiryDate = uint64(block.timestamp + 30 days);
+        lookThrough.lookThroughJurisdiction = "KY";
+        _mint(holder, lookThrough);
+
+        (, uint64 jurisdictionExpiry) = badge.getInvestorJurisdiction(holder);
+        (, uint64 lookThroughExpiry) = badge.getLookThroughJurisdiction(holder);
+        assertEq(uint256(jurisdictionExpiry), uint256(kyc.expiryDate));
+        assertEq(uint256(lookThroughExpiry), uint256(lookThrough.expiryDate));
+    }
+
+    // Recency governs the expiry too: a newer credential's horizon wins even when it is shorter.
+    function test_Horizon_FollowsRecencyNotLongestExpiry() public {
+        address holder = makeAddr("untilRecency");
+        Credential memory long_ = _kyc("KY", bytes2(0));
+        long_.expiryDate = uint64(block.timestamp + 300 days);
+        _mint(holder, long_);
+
+        vm.warp(block.timestamp + 1 days);
+        Credential memory short_ = _kyc("KY", bytes2(0));
+        short_.expiryDate = uint64(block.timestamp + 5 days);
+        _mint(holder, short_);
+
+        (, uint64 expiry) = badge.getInvestorJurisdiction(holder);
+        assertEq(uint256(expiry), uint256(short_.expiryDate));
+    }
+
+    // Once the newer one lapses the older one governs again, and the horizon moves with it.
+    function test_Horizon_FallsBackWhenNewerLapses() public {
+        address holder = makeAddr("untilFallback");
+        Credential memory long_ = _kyc("KY", bytes2(0));
+        long_.expiryDate = uint64(block.timestamp + 300 days);
+        _mint(holder, long_);
+
+        Credential memory short_ = _kyc("KY", bytes2(0));
+        short_.expiryDate = uint64(block.timestamp + 5 days);
+        _mint(holder, short_);
+
+        vm.warp(block.timestamp + 6 days);
+        (, uint64 expiry) = badge.getInvestorJurisdiction(holder);
+        assertEq(uint256(expiry), uint256(long_.expiryDate));
+    }
+
+    // An INDIVIDUAL's count of 1 comes off the investor-type credential, so it carries that expiry.
+    function test_Horizon_IndividualCountCarriesTypeExpiry() public {
+        address holder = makeAddr("individualHorizon");
+        Credential memory c = _kyc("US", bytes2(0));
+        c.expiryDate = uint64(block.timestamp + 45 days);
+        _mint(holder, c);
+
+        (uint32 count, uint64 expiry) = badge.getEffectiveBeneficialOwnerCount(holder);
+        assertEq(uint256(count), 1);
+        assertEq(uint256(expiry), uint256(c.expiryDate));
+    }
+
+    // No credential answering the fact reads 0, matching the empty-value convention of the getters.
+    function test_Horizon_UnansweredFactIsZero() public {
+        (string memory jurisdiction, uint64 expiry) = badge.getInvestorJurisdiction(makeAddr("nobody"));
+        assertEq(jurisdiction, "");
+        assertEq(uint256(expiry), 0);
+    }
+
+    // A voided credential stops answering, so nothing is left to watch.
+    function test_Horizon_VoidedIsZero() public {
+        address holder = makeAddr("untilVoided");
+        uint256 id = _mint(holder, _kyc("KY", bytes2(0)));
+
+        vm.prank(owner);
+        badge.void(id, "revoked");
+        (, uint64 expiry) = badge.getInvestorJurisdiction(holder);
+        assertEq(uint256(expiry), 0);
     }
 
     // ── Unknown reads as empty; the look-through is conservatively U.S. ────────────
 
     function test_NoCredential_ReturnsDefaults() public {
         address nobody = makeAddr("nobody");
-        assertEq(uint256(badge.getInvestorType(nobody)), uint256(InvestorType.UNSET));
-        assertEq(badge.getUsState(nobody), bytes2(0));
-        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(nobody)), 0);
-        assertEq(badge.getInvestorJurisdiction(nobody), "");
-        assertEq(badge.getLookThroughJurisdiction(nobody), "");
+        assertEq(uint256(_readInvestorType(nobody)), uint256(InvestorType.UNSET));
+        assertEq(_readUsState(nobody), bytes2(0));
+        assertEq(uint256(_readBoCount(nobody)), 0);
+        assertEq(_readJurisdiction(nobody), "");
+        assertEq(_readLookThrough(nobody), "");
     }
 
     // Immutability: a fact persists until the asserting credential is voided/expires. Minting a newer
@@ -260,12 +361,12 @@ contract LeXcheXBadgeTest is Test {
         vm.warp(block.timestamp + 1 days);
         _mint(holder, _jurisdiction("KY")); // relocates: newer jurisdiction, no state asserted
 
-        assertEq(badge.getInvestorJurisdiction(holder), "KY");
-        assertEq(badge.getUsState(holder), bytes2("NY")); // still NY: the newer cred didn't assert usState
+        assertEq(_readJurisdiction(holder), "KY");
+        assertEq(_readUsState(holder), bytes2("NY")); // still NY: the newer cred didn't assert usState
 
         vm.prank(owner);
         badge.void(nyId, "relocated");
-        assertEq(badge.getUsState(holder), bytes2(0)); // now cleared: no valid credential asserts usState
+        assertEq(_readUsState(holder), bytes2(0)); // now cleared: no valid credential asserts usState
     }
 
     // ── Existence / entitlement reads ─────────────────────────────────────────
@@ -280,7 +381,7 @@ contract LeXcheXBadgeTest is Test {
         assertTrue(badge.hasValidCredential(holder, LABEL_LEGION));
         assertFalse(badge.hasValidCredential(holder, keccak256("label.other")));
         assertFalse(badge.hasValidCredential(makeAddr("nobody2"), LABEL_LEGION));
-        assertEq(badge.getUsState(holder), bytes2("CA")); // facts resolve regardless of the label
+        assertEq(_readUsState(holder), bytes2("CA")); // facts resolve regardless of the label
     }
 
     // An unlabelled credential carries no label, so the empty label matches nothing — it is not a catch-all.
@@ -510,11 +611,11 @@ contract LeXcheXBadgeTest is Test {
     // K_DATA: a generic programmable bytes payload, resolved most-recent-valid like any value fact.
     function test_Data_ProgrammablePayload() public {
         address holder = makeAddr("data");
-        assertEq(badge.getData(holder), ""); // unknown → empty
+        assertEq(_readData(holder), ""); // unknown → empty
         Credential memory c = _cred(K_DATA);
         c.data = abi.encode(uint256(42), "hello");
         _mint(holder, c);
-        assertEq(badge.getData(holder), abi.encode(uint256(42), "hello"));
+        assertEq(_readData(holder), abi.encode(uint256(42), "hello"));
     }
 
     // Active set: void evicts at once; expiry needs a sweep; reads stay correct throughout.
@@ -538,7 +639,7 @@ contract LeXcheXBadgeTest is Test {
         assertEq(active.length, 1);
         assertEq(active[0], id1); // only the long-lived one remains
 
-        assertEq(badge.getUsState(holder), bytes2("CA")); // read still correct after eviction
+        assertEq(_readUsState(holder), bytes2("CA")); // read still correct after eviction
         assertFalse(badge.hasValidCredentialOf(holder, K_ACCREDITED)); // voided status gone
     }
 
@@ -700,7 +801,7 @@ contract LeXcheXBadgeTest is Test {
         uint256[] memory active = badge.getActiveTokenIds(holder);
         assertEq(active.length, 1);
         assertEq(active[0], live);
-        assertEq(badge.getUsState(holder), bytes2("CA")); // the fact still answers
+        assertEq(_readUsState(holder), bytes2("CA")); // the fact still answers
     }
 
     // sweepTokens derives each holder from its token, so one batch spanning two holders evicts from each
@@ -833,7 +934,7 @@ contract LeXcheXBadgeTest is Test {
         kyc.investorType = InvestorType.INDIVIDUAL;
         kyc.investorJurisdiction = "US";
         _mint(individual, kyc);
-        assertEq(badge.getInvestorJurisdiction(individual), "US");
+        assertEq(_readJurisdiction(individual), "US");
 
         address feeder = makeAddr("presetLookthrough");
         Credential memory lookThrough = _cred(PRESET_ENTITY_LOOKTHROUGH);
@@ -841,8 +942,8 @@ contract LeXcheXBadgeTest is Test {
         lookThrough.lookThroughJurisdiction = "US";
         lookThrough.beneficialOwnerCount = 3;
         _mint(feeder, lookThrough);
-        assertEq(badge.getLookThroughJurisdiction(feeder), "US");
-        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(feeder)), 3);
+        assertEq(_readLookThrough(feeder), "US");
+        assertEq(uint256(_readBoCount(feeder)), 3);
 
         address bespoke = makeAddr("bespoke");
         address spv = makeAddr("spvBespoke");
@@ -852,7 +953,7 @@ contract LeXcheXBadgeTest is Test {
         _mint(bespoke, composed);
         assertTrue(badge.hasValidCredentialOf(bespoke, K_QIB));
         assertTrue(badge.hasValidWhitelistFor(bespoke, spv));
-        assertEq(badge.getData(bespoke), hex"01");
+        assertEq(_readData(bespoke), hex"01");
     }
 
     // Every scoped key names the SPV it entitles; asserting one without a scope is a hollow entitlement.
@@ -942,7 +1043,7 @@ contract LeXcheXBadgeTest is Test {
 
         assertFalse(badge.isValid(ny));
         assertEq(badge.getActiveTokenIds(holder).length, 1);
-        assertEq(badge.getUsState(holder), bytes2("CA")); // the older valid credential governs again
+        assertEq(_readUsState(holder), bytes2("CA")); // the older valid credential governs again
     }
 
     // An empty reason is what marks a credential as NOT voided, so it cannot be used as one: it would evict the
@@ -970,7 +1071,7 @@ contract LeXcheXBadgeTest is Test {
         badge.supersede(stale, replacement, "");
 
         assertTrue(badge.isValid(stale));
-        assertEq(badge.getUsState(holder), bytes2("NY")); // neither half of the swap happened
+        assertEq(_readUsState(holder), bytes2("NY")); // neither half of the swap happened
     }
 
     function test_Void_NonexistentToken_Reverts() public {
@@ -989,7 +1090,7 @@ contract LeXcheXBadgeTest is Test {
 
         vm.warp(block.timestamp + 2 days);
         assertFalse(badge.isValid(id));
-        assertEq(badge.getUsState(holder), bytes2(0)); // fact no longer answered, still unswept
+        assertEq(_readUsState(holder), bytes2(0)); // fact no longer answered, still unswept
         assertFalse(badge.hasValidLexCheX(holder));
         assertEq(badge.getActiveTokenIds(holder).length, 1);
 
@@ -1099,7 +1200,7 @@ contract LeXcheXBadgeTest is Test {
 
         assertEq(address(uint160(uint256(vm.load(address(badge), implSlot)))), newImpl);
         assertTrue(badge.isValid(id)); // credential state survives
-        assertEq(badge.getUsState(holder), bytes2("CA"));
+        assertEq(_readUsState(holder), bytes2("CA"));
     }
 
     function test_Soulbound_TransferReverts() public {
@@ -1159,7 +1260,7 @@ contract LeXcheXBadgeTest is Test {
         entity.investorType = InvestorType.ENTITY;
         entity.beneficialOwnerCount = 5;
         _mint(to, entity);
-        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(to)), 5);
+        assertEq(uint256(_readBoCount(to)), 5);
     }
 
     // L7 — voided and expired records are kept for audit but are not credentials, so the read skips them and
@@ -1184,6 +1285,33 @@ contract LeXcheXBadgeTest is Test {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    // Value-only reads. Every getter returns (value, expiry); the expiry half is asserted on its own in the
+    // "reading horizon" section, so the rest of the suite reads through these.
+
+    function _readInvestorType(address o) internal view returns (InvestorType v) {
+        (v,) = badge.getInvestorType(o);
+    }
+
+    function _readUsState(address o) internal view returns (bytes2 v) {
+        (v,) = badge.getUsState(o);
+    }
+
+    function _readBoCount(address o) internal view returns (uint32 v) {
+        (v,) = badge.getEffectiveBeneficialOwnerCount(o);
+    }
+
+    function _readData(address o) internal view returns (bytes memory v) {
+        (v,) = badge.getData(o);
+    }
+
+    function _readJurisdiction(address o) internal view returns (string memory v) {
+        (v,) = badge.getInvestorJurisdiction(o);
+    }
+
+    function _readLookThrough(address o) internal view returns (string memory v) {
+        (v,) = badge.getLookThroughJurisdiction(o);
+    }
 
     function _cred(uint256 asserts) internal view returns (Credential memory c) {
         c.asserts = asserts;

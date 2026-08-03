@@ -113,17 +113,23 @@ interface ILexChexBadge is IERC5484 {
     function hasValidSyndicateFor(address owner, address spv) external view returns (bool);
 
     // ── Attribute getters (most recent valid credential asserting the fact; empty value when none) ──
+    /// Every value getter also returns `expiry`: when the credential answering the fact lapses, 0 when none
+    /// answers it. A caller reading live can ignore it — the value is already validity-filtered. A caller that
+    /// CACHES the value must keep it: expiry moves nothing on-chain, so there is no other way to learn the
+    /// fact behind a cached answer went stale.
+
     /// @notice Individual vs. entity; UNSET when unestablished. Qualifies the §3(c)(1)(A) look-through count.
-    function getInvestorType(address owner) external view returns (InvestorType);
-    function getUsState(address owner) external view returns (bytes2);
+    function getInvestorType(address owner) external view returns (InvestorType value, uint64 expiry);
+    function getUsState(address owner) external view returns (bytes2 value, uint64 expiry);
     /// @notice §3(c)(1)(A) look-through count; 0 when unestablished. An authoritative INDIVIDUAL reads 1 (a
     /// natural person is one beneficial owner), so a zero here means no count is established, never "none".
-    function getEffectiveBeneficialOwnerCount(address owner) external view returns (uint32);
+    /// That branch carries the investor-type credential's expiry, since that is what establishes the 1.
+    function getEffectiveBeneficialOwnerCount(address owner) external view returns (uint32 value, uint64 expiry);
     /// @notice Generic programmable payload (bytes) the badge stores but never interprets; empty when none.
-    function getData(address owner) external view returns (bytes memory);
-    function getInvestorJurisdiction(address owner) external view returns (string memory);
+    function getData(address owner) external view returns (bytes memory value, uint64 expiry);
+    function getInvestorJurisdiction(address owner) external view returns (string memory value, uint64 expiry);
     /// @notice §3(c)(1)(A) look-through classification; decoupled from investorJurisdiction.
-    function getLookThroughJurisdiction(address owner) external view returns (string memory);
+    function getLookThroughJurisdiction(address owner) external view returns (string memory value, uint64 expiry);
 
     /// @notice Seasoning reference (§11.1B): earliest valid issuance asserting `kindKey`; 0 when none.
     function earliestValidIssuance(address owner, uint256 kindKey) external view returns (uint64);

@@ -92,13 +92,13 @@ contract USStateOfResidenceCondition is SecondaryTradingConditionBase, UUPSUpgra
 
         // An acquirer with no recorded jurisdiction has not shown whether blue sky reaches the trade
         ILexChexBadge badge = badgeFor(offer.spvAddress);
-        string memory jurisdiction = badge.getInvestorJurisdiction(buyer);
+        (string memory jurisdiction,) = badge.getInvestorJurisdiction(buyer);
         if (bytes(jurisdiction).length == 0) return false;
 
         // No state recorded: a non-U.S. acquirer is out of blue-sky reach, but a U.S. one blocks rather than
         // passing silently — nothing forces the credential to carry a state, so passing would leave the
         // screen opt-in by the credentialed party
-        bytes2 state = badge.getUsState(buyer);
+        (bytes2 state,) = badge.getUsState(buyer);
         if (state == bytes2(0)) return !USJurisdictionPolicy.isUS(jurisdiction);
 
         // A recorded blocked state blocks whatever the jurisdiction says: a foreign domicile alongside a

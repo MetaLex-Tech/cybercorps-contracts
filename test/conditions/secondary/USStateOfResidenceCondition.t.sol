@@ -213,8 +213,10 @@ contract USStateOfResidenceConditionTest is SecondaryConditionIntegrationBase {
         // The correction alone changes the jurisdiction but cannot retract the state.
         vm.warp(block.timestamp + 1 days);
         _mintCredential("KY", bytes2(0));
-        assertEq(badge.getInvestorJurisdiction(buyer), "KY");
-        assertEq(badge.getUsState(buyer), bytes2("NY"), "the stale state still answers");
+        (string memory staleJurisdiction,) = badge.getInvestorJurisdiction(buyer);
+        (bytes2 staleState,) = badge.getUsState(buyer);
+        assertEq(staleJurisdiction, "KY");
+        assertEq(staleState, bytes2("NY"), "the stale state still answers");
         assertFalse(_checkOn(offerId, settlementId), "still blocked while the old record stands");
 
         // Nor can it be re-asserted as empty: an asserted key must carry a value.
@@ -232,8 +234,10 @@ contract USStateOfResidenceConditionTest is SecondaryConditionIntegrationBase {
         assertFalse(badge.isValid(nyCred), "the stale record is retired");
         assertEq(badge.getCredential(nyCred).voided, "relocated"); // retained for audit, reason recorded
         assertTrue(badge.isValid(replacement));
-        assertEq(badge.getUsState(buyer), bytes2(0), "the state is retracted");
-        assertEq(badge.getInvestorJurisdiction(buyer), "KY");
+        (bytes2 retractedState,) = badge.getUsState(buyer);
+        (string memory keptJurisdiction,) = badge.getInvestorJurisdiction(buyer);
+        assertEq(retractedState, bytes2(0), "the state is retracted");
+        assertEq(keptJurisdiction, "KY");
         assertTrue(_checkOn(offerId, settlementId));
     }
 
@@ -254,7 +258,8 @@ contract USStateOfResidenceConditionTest is SecondaryConditionIntegrationBase {
         uint256 replacement = badge.supersede(stale, next, "moved state");
 
         assertEq(badge.ownerOf(replacement), buyer);
-        assertEq(badge.getUsState(buyer), bytes2("TX"));
+        (bytes2 movedState,) = badge.getUsState(buyer);
+        assertEq(movedState, bytes2("TX"));
     }
 
     function test_Supersede_ByStranger_Reverts() public {

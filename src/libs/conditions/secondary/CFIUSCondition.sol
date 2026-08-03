@@ -125,13 +125,14 @@ contract CFIUSCondition is SecondaryTradingConditionBase, UUPSUpgradeable, Badge
         // Foreign acquirers require clearance, and an unestablished jurisdiction is empty — not U.S. — so it
         // falls the same way (fail closed for CFIUS)
         ILexChexBadge badge = badgeFor(offer.spvAddress);
-        string memory jurisdiction = badge.getInvestorJurisdiction(buyer);
+        (string memory jurisdiction,) = badge.getInvestorJurisdiction(buyer);
         if (!USJurisdictionPolicy.isUS(jurisdiction)) return false;
 
         // A U.S. acquirer can still be foreign-controlled, and CFIUS cares about control. So the blocked list
         // is matched against the look-through jurisdiction too, not just where the buyer is registered.
         if (_isBlocked(config, jurisdiction)) return false;
-        return !_isBlocked(config, badge.getLookThroughJurisdiction(buyer));
+        (string memory lookThrough,) = badge.getLookThroughJurisdiction(buyer);
+        return !_isBlocked(config, lookThrough);
     }
 
     function _isBlocked(SpvConfig storage config, string memory jurisdiction) private view returns (bool) {

@@ -281,45 +281,59 @@ contract LeXcheXBadge is
 
     /// @notice Individual vs. entity from the owner's authoritative credential; UNSET when unestablished. Only
     /// an entity can have beneficial owners to look through, so this qualifies the §3(c)(1)(A) count.
-    function getInvestorType(address owner) public view returns (InvestorType) {
+    function getInvestorType(address owner) public view returns (InvestorType value, uint64 expiry) {
         (uint256 tokenId, bool found) = _mostRecentValidWith(owner, K_INVESTOR_TYPE);
-        return found ? LeXcheXBadgeStorage.getCredential(tokenId).investorType : InvestorType.UNSET;
+        if (!found) return (InvestorType.UNSET, 0);
+        Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
+        return (cred.investorType, cred.expiryDate);
     }
 
     /// @notice U.S. state of residence/organization for USStateOfResidenceCondition; empty when unestablished.
-    function getUsState(address owner) public view returns (bytes2) {
+    function getUsState(address owner) public view returns (bytes2 value, uint64 expiry) {
         (uint256 tokenId, bool found) = _mostRecentValidWith(owner, K_US_STATE);
-        return found ? LeXcheXBadgeStorage.getCredential(tokenId).usState : bytes2(0);
+        if (!found) return (bytes2(0), 0);
+        Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
+        return (cred.usState, cred.expiryDate);
     }
 
     /// @notice Beneficial-owner count for the §3(c)(1)(A) look-through; 0 when unestablished (callers decide
     /// how to treat a zero — e.g. count as one holder).
-    function getEffectiveBeneficialOwnerCount(address owner) public view returns (uint32) {
-        if (getInvestorType(owner) == InvestorType.INDIVIDUAL) return 1;
+    /// @dev An INDIVIDUAL reads 1 off the investor-type credential without consulting K_BO_COUNT, so in that
+    /// branch the expiry is that credential's — the count lapses when the type behind it does.
+    function getEffectiveBeneficialOwnerCount(address owner) public view returns (uint32 value, uint64 expiry) {
+        (InvestorType investorType, uint64 typeExpiry) = getInvestorType(owner);
+        if (investorType == InvestorType.INDIVIDUAL) return (1, typeExpiry);
         (uint256 tokenId, bool found) = _mostRecentValidWith(owner, K_BO_COUNT);
-        return found ? LeXcheXBadgeStorage.getCredential(tokenId).beneficialOwnerCount : 0;
+        if (!found) return (0, 0);
+        Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
+        return (cred.beneficialOwnerCount, cred.expiryDate);
     }
 
     /// @notice Generic programmable payload from the owner's authoritative credential; empty when none. The
     /// badge never interprets it — downstream programs/conditions do, gated by K_DATA.
-    function getData(address owner) public view returns (bytes memory) {
+    function getData(address owner) public view returns (bytes memory value, uint64 expiry) {
         (uint256 tokenId, bool found) = _mostRecentValidWith(owner, K_DATA);
-        if (!found) return "";
-        return LeXcheXBadgeStorage.getCredential(tokenId).data;
+        if (!found) return ("", 0);
+        Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
+        return (cred.data, cred.expiryDate);
     }
 
     /// @notice Physical country jurisdiction from the owner's authoritative credential; empty when none.
-    function getInvestorJurisdiction(address owner) public view returns (string memory) {
+    function getInvestorJurisdiction(address owner) public view returns (string memory value, uint64 expiry) {
         (uint256 tokenId, bool found) = _mostRecentValidWith(owner, K_INVESTOR_JURISDICTION);
-        return found ? LeXcheXBadgeStorage.getCredential(tokenId).investorJurisdiction : "";
+        if (!found) return ("", 0);
+        Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
+        return (cred.investorJurisdiction, cred.expiryDate);
     }
 
     /// @notice §3(c)(1)(A) look-through classification from the owner's authoritative credential; empty when
     /// none. An offshore entity with any U.S. beneficial owner reads U.S. here (regulatory view) while its
     /// physical investorJurisdiction stays foreign for CFIUS/blue-sky. Decoupled from investorJurisdiction.
-    function getLookThroughJurisdiction(address owner) public view returns (string memory) {
+    function getLookThroughJurisdiction(address owner) public view returns (string memory value, uint64 expiry) {
         (uint256 tokenId, bool found) = _mostRecentValidWith(owner, K_LOOKTHROUGH_JURISDICTION);
-        return found ? LeXcheXBadgeStorage.getCredential(tokenId).lookThroughJurisdiction : "";
+        if (!found) return ("", 0);
+        Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
+        return (cred.lookThroughJurisdiction, cred.expiryDate);
     }
 
     /// @notice Seasoning reference for the UI (§11.1B): earliest valid issuance asserting `kindKey`; 0 when none.

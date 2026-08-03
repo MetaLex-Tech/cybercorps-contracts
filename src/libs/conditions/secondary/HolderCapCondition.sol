@@ -128,7 +128,7 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
         ILexChexBadge badge = ILexChexBadge(printer.lookThroughBadge());
 
         // The no-U.S.-investor floor is absolute — it precedes the cap and applies even to an existing holder
-        bool buyerIsUS = LookThroughPolicy.isUSInvestor(badge, buyer);
+        (bool buyerIsUS,) = LookThroughPolicy.isUSInvestor(badge, buyer);
         if (config.blockUsInvestors && buyerIsUS) return false;
 
         if (config.cap == 0) return true;
@@ -150,7 +150,8 @@ contract HolderCapCondition is SecondaryTradingConditionBase, UUPSUpgradeable, B
 
         // A credentialed entity BO count flows through instead of 1. `_validate` rejects an asserted count of
         // zero, so a zero read means no look-through credential — a single holder.
-        uint32 boCount = address(badge) == address(0) ? 0 : badge.getEffectiveBeneficialOwnerCount(buyer);
+        uint32 boCount;
+        if (address(badge) != address(0)) (boCount,) = badge.getEffectiveBeneficialOwnerCount(buyer);
         uint256 addition = boCount > 0 ? boCount : 1;
 
         return currentCount + addition <= config.cap;

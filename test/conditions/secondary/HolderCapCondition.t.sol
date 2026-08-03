@@ -211,7 +211,8 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
         _credential(incumbent, "KY", 99);
 
         // The badge now reports 99, yet the printer's cached tally is still the pre-update snapshot (91).
-        assertEq(badge.getEffectiveBeneficialOwnerCount(incumbent), 99, "badge reflects the re-credential");
+        (uint32 recredentialed,) = badge.getEffectiveBeneficialOwnerCount(incumbent);
+        assertEq(recredentialed, 99, "badge reflects the re-credential");
         assertEq(printer.lookThroughHolderCount(), 91, "printer tally is stale until a resync");
 
         // Fail-open: the stale base (91) + fresh U.S. buyer (+1) = 92 <= 100 is admitted, even though the true
@@ -275,7 +276,8 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
 
         // The admin withdraws the attestation, meaning to tighten.
         badge.void(boCred, "attestation withdrawn");
-        assertEq(uint256(badge.getEffectiveBeneficialOwnerCount(incumbent)), 0, "badge reports the fact unestablished");
+        (uint32 afterVoid,) = badge.getEffectiveBeneficialOwnerCount(incumbent);
+        assertEq(uint256(afterVoid), 0, "badge reports the fact unestablished");
 
         vm.prank(stranger);
         LedgerEntryToken(address(printer)).resyncHolder(incumbent);
@@ -331,7 +333,8 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
         asIndividual.asserts = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION;
         asIndividual.expiryDate = uint64(block.timestamp + 3650 days);
         badge.supersede(entityCred, asIndividual, "recertified as individual");
-        assertEq(badge.getEffectiveBeneficialOwnerCount(incumbent), 1, "an individual is one beneficial owner");
+        (uint32 asIndividualCount,) = badge.getEffectiveBeneficialOwnerCount(incumbent);
+        assertEq(asIndividualCount, 1, "an individual is one beneficial owner");
 
         vm.prank(stranger);
         LedgerEntryToken(address(printer)).resyncHolder(incumbent);
@@ -354,7 +357,8 @@ contract HolderCapConditionTest is SecondaryConditionIntegrationBase {
 
         // The buyer is U.S. on the base badge but foreign on the one this printer uses, and the printer's
         // answer is the one that governs — so the no-U.S. floor lets them through.
-        assertEq(badge.getInvestorJurisdiction(buyer), "US");
+        (string memory baseJurisdiction,) = badge.getInvestorJurisdiction(buyer);
+        assertEq(baseJurisdiction, "US");
         Credential memory foreign;
         foreign.investorType = InvestorType.ENTITY;
         foreign.investorJurisdiction = "KY";

@@ -207,6 +207,20 @@ contract CyberCertPrinterEnhanced is LedgerEntryToken {
     function debugSetEndorsementRequired(bool required) external {
         LedgerEntryTokenStorage.cyberCertStorage().endorsementRequired = required;
     }
+
+    /// @dev The non-US population behind the tally expiry; no production getter exposes it.
+    function debugNonUsHolderCount() external view returns (uint256) {
+        return LedgerEntryTokenStorage.cyberCertStorage().nonUsHolderCount;
+    }
+
+    /// @dev Rewind `owner`'s tally state to the shape a printer upgraded from before the expiry field
+    /// existed would have: the account keeps its weight and isUS, but every field added since reads zero.
+    function debugRewindToPreUpgrade(address owner) external {
+        LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();
+        s.holderAcct[owner].expiry = 0;
+        s.nonUsHolderCount = 0;
+        s.usTallyExpiry = 0;
+    }
 }
 
 contract MockFundInterestExtension is IFundInterestExtension {
@@ -238,13 +252,33 @@ contract MockNonFundExtension is ICertificateExtension {
 contract MockLookThroughBadge {
     mapping(address => uint32) internal bo;
     mapping(address => bool) internal us;
+    mapping(address => uint64) internal expiry;
+    mapping(address => uint64) internal boExpiry;
 
     function setBo(address a, uint32 c) external { bo[a] = c; }
     function setUs(address a, bool v) external { us[a] = v; }
+    function setExpiry(address a, uint64 t) external { expiry[a] = t; }
+    /// @dev Set apart from setExpiry so a test can prove the tally ignores the BO credential's own expiry.
+    function setBoExpiry(address a, uint64 t) external { boExpiry[a] = t; }
 
-    function getEffectiveBeneficialOwnerCount(address a) external view returns (uint32) { return bo[a]; }
-    function getInvestorJurisdiction(address a) external view returns (string memory) { return us[a] ? "US" : "KY"; }
-    function getLookThroughJurisdiction(address) external pure returns (string memory) { return ""; }
+    function getEffectiveBeneficialOwnerCount(address a) external view returns (uint32, uint64) {
+        return (bo[a], boExpiry[a] == 0 ? _expiry(a) : boExpiry[a]);
+    }
+
+    function getInvestorJurisdiction(address a) external view returns (string memory, uint64) {
+        return (us[a] ? "US" : "KY", _expiry(a));
+    }
+
+    /// @dev This mock answers the look-through classification from investorJurisdiction alone, so the
+    /// regulatory fact is always unestablished — and unestablished reads 0.
+    function getLookThroughJurisdiction(address) external pure returns (string memory, uint64) {
+        return ("", 0);
+    }
+
+    /// @dev Unset means a long-lived credential, not an unanswered fact — the mock always answers.
+    function _expiry(address a) private view returns (uint64) {
+        return expiry[a] == 0 ? uint64(block.timestamp + 3650 days) : expiry[a];
+    }
 }
 
 contract CyberCertPrinterTest is Test {
@@ -1237,6 +1271,396 @@ contract CyberCertPrinterTest is Test {
         printer.resyncHolders(owners);
         assertEq(printer.lookThroughHolderCount(), 5); // 1 + 4
         assertEq(printer.usLookThroughHolderCount(), 0);
+    }
+
+    // ───────────────── US subtotal expiry ─────────────────
+    // `usTallyExpiry` is a clock: trust the US subtotal until T. Below: when the clock gets set, when
+    // it fires, when it clears, how a keeper winds it back, and the bookkeeping edges.
+
+    // All-US holders set no clock. A US booking can only drift to non-US, which overstates. Nothing to watch.
+    function test_TallyExpiry_UsOnlyHoldersLeaveItUnset() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setUs(investor, true);
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.usTallyExpiry(), 0);
+    }
+
+    // Two non-US holders: the clock is set to whichever runs out first.
+    function test_TallyExpiry_TracksEarliestNonUsExpiry() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setExpiry(investor, uint64(block.timestamp + 30 days));
+        b.setBo(recipient, 2);
+        b.setExpiry(recipient, uint64(block.timestamp + 10 days));
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.usTallyExpiry(), uint64(block.timestamp + 30 days));
+
+        // The earlier of the two non-US holders sets the clock.
+        _mintCert(2, recipient, 100, bytes(""));
+        assertEq(printer.usTallyExpiry(), uint64(block.timestamp + 10 days));
+    }
+
+    // Past the clock, the US count reports the full holder count instead.
+    function test_TallyExpiry_LapsedNonUsCredentialFallsBackToFullCount() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3); // foreign, evidence expires in 10 days
+        b.setExpiry(investor, uint64(block.timestamp + 10 days));
+        b.setBo(recipient, 2);
+        b.setUs(recipient, true);
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, recipient, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 5);
+        assertEq(printer.usLookThroughHolderCount(), 2);
+
+        // Still inside the window: the precise subtotal stands.
+        vm.warp(block.timestamp + 9 days);
+        assertEq(printer.usLookThroughHolderCount(), 2);
+
+        // Past it, the investor's foreign evidence may have lapsed — and a lapsed fact reads US — so the
+        // subtotal falls back to the full count rather than understating the cap.
+        vm.warp(block.timestamp + 2 days);
+        assertEq(printer.usLookThroughHolderCount(), 5);
+        assertEq(printer.lookThroughHolderCount(), 5); // the total itself is unaffected
+    }
+
+    // Pass every non-US holder, sorted: the clock moves out and the count is precise again.
+    function test_TallyExpiry_ResyncCoveringEveryNonUsHolderRaisesIt() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setExpiry(investor, uint64(block.timestamp + 10 days));
+        b.setBo(recipient, 2);
+        b.setExpiry(recipient, uint64(block.timestamp + 20 days));
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, recipient, 100, bytes(""));
+
+        vm.warp(block.timestamp + 11 days);
+        assertEq(printer.usLookThroughHolderCount(), 5); // stale: falls back
+
+        // Investor re-credentialed with a later expiry; the keeper passes both non-US holders ascending.
+        b.setExpiry(investor, uint64(block.timestamp + 40 days));
+        address[] memory owners = _ascending(investor, recipient);
+        printer.resyncHolders(owners);
+
+        // The clock moves out to recipient's expiry (now the earliest) and precision comes back.
+        assertEq(printer.usTallyExpiry(), uint64(block.timestamp + 9 days));
+        assertEq(printer.usLookThroughHolderCount(), 0);
+    }
+
+    // Miss one holder: no proof the rest are fresh, so the clock stays.
+    function test_TallyExpiry_PartialResyncLeavesItStale() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setExpiry(investor, uint64(block.timestamp + 10 days));
+        b.setBo(recipient, 2);
+        b.setExpiry(recipient, uint64(block.timestamp + 10 days));
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, recipient, 100, bytes(""));
+
+        vm.warp(block.timestamp + 11 days);
+        b.setExpiry(investor, uint64(block.timestamp + 40 days));
+        b.setExpiry(recipient, uint64(block.timestamp + 40 days));
+
+        // Only one of the two non-US holders — no proof the other is fresh, so the clock stays put.
+        address[] memory owners = new address[](1);
+        owners[0] = investor;
+        printer.resyncHolders(owners);
+        assertEq(printer.usLookThroughHolderCount(), 5); // still falling back
+    }
+
+    // Right holders, wrong order: refused.
+    function test_TallyExpiry_UnorderedFullListLeavesItStale() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setExpiry(investor, uint64(block.timestamp + 10 days));
+        b.setBo(recipient, 2);
+        b.setExpiry(recipient, uint64(block.timestamp + 10 days));
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, recipient, 100, bytes(""));
+
+        vm.warp(block.timestamp + 11 days);
+        b.setExpiry(investor, uint64(block.timestamp + 40 days));
+        b.setExpiry(recipient, uint64(block.timestamp + 40 days));
+
+        // Descending order cannot rule out duplicates padding the count, so the raise is refused.
+        address[] memory ascending = _ascending(investor, recipient);
+        address[] memory owners = new address[](2);
+        owners[0] = ascending[1];
+        owners[1] = ascending[0];
+        printer.resyncHolders(owners);
+        assertEq(printer.usLookThroughHolderCount(), 5);
+    }
+
+    // Same holder twice to fake a full list: refused.
+    function test_TallyExpiry_DuplicatePaddingCannotForgeCoverage() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setExpiry(investor, uint64(block.timestamp + 10 days));
+        b.setBo(recipient, 2);
+        b.setExpiry(recipient, uint64(block.timestamp + 10 days));
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, recipient, 100, bytes(""));
+
+        vm.warp(block.timestamp + 11 days);
+        b.setExpiry(investor, uint64(block.timestamp + 40 days));
+
+        // Two entries, but the same holder twice: the ascending check rejects it.
+        address[] memory owners = new address[](2);
+        owners[0] = investor;
+        owners[1] = investor;
+        printer.resyncHolders(owners);
+        assertEq(printer.usLookThroughHolderCount(), 5);
+    }
+
+    // Last non-US holder sells out: clock removed.
+    function test_TallyExpiry_ClearsWhenLastNonUsHolderLeaves() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setExpiry(investor, uint64(block.timestamp + 10 days));
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.usTallyExpiry(), uint64(block.timestamp + 10 days));
+
+        _void(1); // last live lot gone
+        assertEq(printer.usTallyExpiry(), 0);
+        assertEq(printer.usLookThroughHolderCount(), 0);
+    }
+
+    // Last non-US holder re-credentials as US: clock removed.
+    function test_TallyExpiry_ClearsWhenLastNonUsHolderTurnsUs() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setExpiry(investor, uint64(block.timestamp + 10 days));
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+
+        b.setUs(investor, true);
+        printer.resyncHolder(investor);
+        assertEq(printer.usTallyExpiry(), 0);
+        assertEq(printer.usLookThroughHolderCount(), 3);
+    }
+
+    // No badge wired: no clock, ever.
+    function test_TallyExpiry_NoBadgeNeverGoesStale() public {
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.usTallyExpiry(), 0);
+        vm.warp(block.timestamp + 3650 days);
+        assertEq(printer.usLookThroughHolderCount(), 1);
+    }
+
+    // Precise one second before the clock, falls back on the exact second. The badge still counts a
+    // credential valid at exactly expiryDate, so this gives up a second early — the safe side.
+    function test_TallyExpiry_BoundaryIsInclusive() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        uint64 expiry = uint64(block.timestamp + 10 days);
+        b.setExpiry(investor, expiry);
+        b.setBo(recipient, 2);
+        b.setUs(recipient, true);
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, recipient, 100, bytes(""));
+
+        vm.warp(expiry - 1);
+        assertEq(printer.usLookThroughHolderCount(), 2, "still precise a second before");
+
+        vm.warp(expiry);
+        assertEq(printer.usLookThroughHolderCount(), 5, "falls back on the expiry second itself");
+    }
+
+    // A longer-lived holder joining later does not extend the clock — it only ever moves in.
+    function test_TallyExpiry_LaterHolderDoesNotPushItOut() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setExpiry(investor, uint64(block.timestamp + 10 days));
+        b.setBo(recipient, 2);
+        b.setExpiry(recipient, uint64(block.timestamp + 90 days));
+        _setBadge(b);
+
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.usTallyExpiry(), uint64(block.timestamp + 10 days));
+
+        _mintCert(2, recipient, 100, bytes("")); // later expiry, joins second
+        assertEq(printer.usTallyExpiry(), uint64(block.timestamp + 10 days), "earliest still governs");
+    }
+
+    // One of two non-US holders leaves: population drops, clock deliberately left alone. Re-deriving it
+    // needs a full recheck, which only resyncHolders can do.
+    function test_TallyExpiry_DepartureShrinksPopulationButKeepsExpiry() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setExpiry(investor, uint64(block.timestamp + 10 days));
+        b.setBo(recipient, 2);
+        b.setExpiry(recipient, uint64(block.timestamp + 90 days));
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, recipient, 100, bytes(""));
+        uint64 earliest = uint64(block.timestamp + 10 days);
+        assertEq(_nonUsHolders(), 2);
+
+        _void(1); // the earlier-expiring holder drops out
+        assertEq(_nonUsHolders(), 1, "population shrank");
+        assertEq(printer.usTallyExpiry(), earliest, "expiry stays put, conservatively");
+        assertEq(printer.usLookThroughHolderCount(), 0, "subtotal still precise while inside the window");
+    }
+
+    // Holder exits fully then returns: counted once, not twice.
+    function test_TallyExpiry_ReentryAfterFullExitRebooksCleanly() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setExpiry(investor, uint64(block.timestamp + 10 days));
+        _setBadge(b);
+
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(_nonUsHolders(), 1);
+
+        _void(1); // fully out
+        assertEq(_nonUsHolders(), 0);
+        assertEq(printer.usTallyExpiry(), 0);
+
+        _unvoid(1); // back in
+        assertEq(_nonUsHolders(), 1, "counted once, not twice");
+        assertEq(printer.usTallyExpiry(), uint64(block.timestamp + 10 days));
+        assertEq(printer.lookThroughHolderCount(), 3);
+    }
+
+    // A US holder's credential expiring tomorrow sets no clock at all.
+    function test_TallyExpiry_UsHolderCredentialExpiryIsIgnored() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 4);
+        b.setUs(investor, true);
+        b.setExpiry(investor, uint64(block.timestamp + 1 days));
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+
+        assertEq(printer.usTallyExpiry(), 0);
+        vm.warp(block.timestamp + 30 days);
+        assertEq(printer.usLookThroughHolderCount(), 4, "no fallback: nothing was ever at risk");
+    }
+
+    // Only the jurisdiction credential sets the clock, not the owner-count one.
+    function test_TallyExpiry_BoCredentialExpiryDoesNotDriveIt() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setExpiry(investor, uint64(block.timestamp + 90 days));   // jurisdiction evidence
+        b.setBoExpiry(investor, uint64(block.timestamp + 2 days));  // count evidence, much sooner
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+
+        assertEq(printer.usTallyExpiry(), uint64(block.timestamp + 90 days), "jurisdiction expiry governs");
+    }
+
+    // Resyncing one holder never moves the clock — it cannot speak for the rest. And a holder whose
+    // owner-count credential lapsed keeps their old weight.
+    function test_TallyExpiry_ResyncKeepsWeightAndDoesNotRelaxExpiry() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        uint64 original = uint64(block.timestamp + 10 days);
+        uint64 reattested = uint64(block.timestamp + 60 days);
+        b.setBo(investor, 6);
+        b.setExpiry(investor, original);
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        assertEq(printer.lookThroughHolderCount(), 6);
+
+        b.setBo(investor, 0);          // count no longer established
+        b.setExpiry(investor, reattested); // jurisdiction re-attested for longer
+        printer.resyncHolder(investor);
+
+        assertEq(printer.lookThroughHolderCount(), 6, "weight kept, not dropped to 1");
+        assertEq(printer.usTallyExpiry(), original, "a single resync never relaxes the tally expiry");
+
+        address[] memory owners = new address[](1);
+        owners[0] = investor;
+        printer.resyncHolders(owners); // the whole non-US population, so now it can move
+        assertEq(printer.usTallyExpiry(), reattested);
+        assertEq(printer.lookThroughHolderCount(), 6, "still sticky");
+    }
+
+    // A holder from before this feature existed is picked up on first resync, exactly once.
+    function test_TallyExpiry_LegacyAccountJoinsPopulationOnResync() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setExpiry(investor, uint64(block.timestamp + 10 days));
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+
+        // Rewind to the pre-upgrade shape: a non-US account with none of the fields added since.
+        CyberCertPrinterEnhanced(address(printer)).debugRewindToPreUpgrade(investor);
+        assertEq(_nonUsHolders(), 0);
+        assertEq(printer.usTallyExpiry(), 0);
+
+        printer.resyncHolder(investor);
+        assertEq(_nonUsHolders(), 1, "joined once");
+        assertEq(printer.usTallyExpiry(), uint64(block.timestamp + 10 days), "and brought its expiry with it");
+
+        printer.resyncHolder(investor); // already tracked; must not double-count
+        assertEq(_nonUsHolders(), 1);
+    }
+
+    // US holders and non-holders in the list are harmless; it still counts as complete.
+    function test_TallyExpiry_ResyncWithExtraAddressesStillCounts() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setExpiry(investor, uint64(block.timestamp + 10 days));
+        b.setBo(recipient, 2);
+        b.setUs(recipient, true); // U.S., never in the population
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        _mintCert(2, recipient, 100, bytes(""));
+
+        vm.warp(block.timestamp + 11 days);
+        assertEq(printer.usLookThroughHolderCount(), 5, "stale: falls back");
+
+        b.setExpiry(investor, uint64(block.timestamp + 40 days));
+        address[] memory owners = _sorted(investor, recipient, custodian); // custodian holds nothing
+        printer.resyncHolders(owners);
+
+        assertEq(printer.usTallyExpiry(), uint64(block.timestamp + 40 days), "raised off the one non-US holder");
+        assertEq(printer.usLookThroughHolderCount(), 2, "precise again");
+    }
+
+    // An empty list changes nothing.
+    function test_TallyExpiry_EmptyResyncIsNoop() public {
+        MockLookThroughBadge b = new MockLookThroughBadge();
+        b.setBo(investor, 3);
+        b.setExpiry(investor, uint64(block.timestamp + 10 days));
+        _setBadge(b);
+        _mintCert(1, investor, 100, bytes(""));
+        uint64 before = printer.usTallyExpiry();
+
+        printer.resyncHolders(new address[](0));
+        assertEq(printer.usTallyExpiry(), before);
+        assertEq(_nonUsHolders(), 1);
+    }
+
+    function _nonUsHolders() private view returns (uint256) {
+        return CyberCertPrinterEnhanced(address(printer)).debugNonUsHolderCount();
+    }
+
+    /// @dev resyncHolders requires ascending addresses; the two fixtures' relative order is not fixed.
+    function _ascending(address a, address c) private pure returns (address[] memory owners) {
+        owners = new address[](2);
+        (owners[0], owners[1]) = a < c ? (a, c) : (c, a);
+    }
+
+    /// @dev Insertion-sorted ascending list, for the resyncHolders ordering requirement.
+    function _sorted(address a, address b, address c) private pure returns (address[] memory owners) {
+        owners = new address[](3);
+        owners[0] = a;
+        owners[1] = b;
+        owners[2] = c;
+        for (uint256 i = 1; i < owners.length; i++) {
+            for (uint256 j = i; j > 0 && owners[j] < owners[j - 1]; j--) {
+                (owners[j], owners[j - 1]) = (owners[j - 1], owners[j]);
+            }
+        }
     }
 
     function test_LookThrough_ResyncNonUsToUsMovesIntoSubtotal() public {
