@@ -38,6 +38,7 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 // | 8 | initialize zero holding       | revert InvalidHoldingPeriod |
 // | 9 | updateHoldingPeriod zero      | revert InvalidHoldingPeriod |
 // |10 | updateHoldingPeriod stranger  | revert (not admin)          |
+// |11 | period slot reads 0           | fail closed                 |
 // ─────────────────────────────────────────────────────────────────────────────
 
 contract HoldingPeriodConditionTest is SecondaryConditionIntegrationBase {
@@ -141,5 +142,15 @@ contract HoldingPeriodConditionTest is SecondaryConditionIntegrationBase {
         vm.prank(stranger);
         vm.expectRevert();
         hold.updateHoldingPeriod(30 days);
+    }
+
+    // 11
+    // Both setters reject 0, so the only way the slot reads 0 is that nothing ever wrote it — a proxy left
+    // uninitialized, or one upgraded from a layout that kept the period somewhere else. Rule 144 has no
+    // zero hold, so 0 means unset, and unset must not wave every seasoned-looking lot through.
+    function test_UnconfiguredPeriod_FailsClosed() public {
+        vm.store(address(hold), keccak256("metalex.condition.secondary.holding-period.storage.v1"), bytes32(0));
+        assertEq(hold.holdingPeriod(), 0);
+        assertFalse(_sellPosting(uint64(NOW) - HOLD, 0));
     }
 }

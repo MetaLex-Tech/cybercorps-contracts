@@ -51,17 +51,26 @@ registry that judges its own parties. Every other condition reads no credential 
 
 ### Unconfigured SPVs
 
-Attaching a condition to an SPV is itself the statement that it applies there, so silence is never a
-finding:
+For most conditions, attaching one to an SPV is itself the statement that it applies there, so silence is
+never a finding. `USStateOfResidenceCondition` is the exception:
 
-| Condition                    | unconfigured | what is missing                                                                                         |
-|------------------------------|--------------|---------------------------------------------------------------------------------------------------------|
-| `CFIUSCondition`             | **blocks**   | no TID U.S. business determination; a recorded `tidUsBusiness = false` is the fund exception and passes |
-| `HolderCapCondition`         | **blocks**   | no ICA exception named — `cap == 0` is a real §3(c)(7) setting, so a `configured` flag keeps it apart   |
-| `RegSDistributionCompliance` | **blocks**   | no issuer category or compliance period — same `configured` flag                                        |
-| `LegionSoulboundCondition`   | **blocks**   | no circle named                                                                                         |
-| `EligibilityCondition`       | **blocks**   | that SPV has cleared nobody                                                                             |
-| `Rule144` / `Section4a7`     | **blocks**   | no disclosure package on record                                                                         |
+| Condition                     | unconfigured | what is missing                                                                                         |
+|-------------------------------|--------------|---------------------------------------------------------------------------------------------------------|
+| `CFIUSCondition`              | **blocks**   | no TID U.S. business determination; a recorded `tidUsBusiness = false` is the fund exception and passes |
+| `HolderCapCondition`          | **blocks**   | no ICA exception named — `cap == 0` is a real §3(c)(7) setting, so a `configured` flag keeps it apart   |
+| `RegSDistributionCompliance`  | **blocks**   | no issuer category or compliance period — same `configured` flag                                        |
+| `LegionSoulboundCondition`    | **blocks**   | no circle named                                                                                         |
+| `EligibilityCondition`        | **blocks**   | that SPV has cleared nobody                                                                             |
+| `Rule144` / `Section4a7`      | **blocks**   | no disclosure package on record                                                                         |
+| `USStateOfResidenceCondition` | **passes**   | nothing — it is a deny-list, so an empty one permits (NY still blocks by the Martin Act default)        |
+
+The deny-list is why it has no `configured` flag: an SPV that blocks only NY and one whose GP never
+touched it write identical state, so the flag would have nothing to key off. The screen still enforces
+its own reads — an acquirer with no recorded jurisdiction, or a U.S. one carrying no state, is refused.
+Deliberate: naming every state the SPV must avoid is the GP's call, not something the platform can default.
+
+Globally configured conditions follow the same rule as the per-SPV ones: `HoldingPeriodCondition` blocks
+when its period reads 0, since Rule 144 has no zero hold and both setters reject one.
 
 ---
 

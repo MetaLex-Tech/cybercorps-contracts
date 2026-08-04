@@ -70,7 +70,7 @@ contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgrade
 
     /// @dev Keys this gate can enforce: one or more status facts, or exactly one entitlement. The rest are
     /// wiring slips —
-    ///  - empty: matches every credential, so the gate becomes "holds any badge"
+    ///  - empty: the badge rejects an empty key, so every trade is blocked
     ///  - a value key: asks if a fact was recorded, not if the party qualifies
     ///  - an undefined bit: matches nothing, so every trade is blocked
     ///  - status and entitlement mixed: no one credential answers both

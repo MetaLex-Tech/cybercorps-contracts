@@ -83,7 +83,11 @@ contract HoldingPeriodCondition is SecondaryTradingConditionBase, UUPSUpgradeabl
             if (tackedFrom != 0 && tackedFrom < anchor) anchor = tackedFrom;
         }
 
-        return block.timestamp >= uint256(anchor) + _holdingPeriodStorage().holdingPeriod;
+        // Never configured. A zero hold is not a real Rule 144 setting, so it means unset, not "no wait".
+        uint256 period = _holdingPeriodStorage().holdingPeriod;
+        if (period == 0) return false;
+
+        return block.timestamp >= uint256(anchor) + period;
     }
 
     /// @notice Required hold in seconds
