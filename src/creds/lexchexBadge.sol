@@ -249,11 +249,24 @@ contract LeXcheXBadge is
         return false;
     }
 
-    /// @notice True when the owner holds a valid credential asserting `kindKey` (a K_* status/kind fact-key).
-    /// Serves the LexChex parameterizations (accredited / QP / QIB / bad-actor-clear / non-U.S. person).
+    /// @notice True when the owner's valid credentials TOGETHER assert every fact-key in `kindKey`. Serves the
+    /// LexChex parameterizations (accredited / QP / QIB / bad-actor-clear / non-U.S. person).
+    /// @dev A status fact does not contradict another, so two live credentials asserting different ones are both
+    /// true and a multi-key ask is answered from the whole active set. Requiring one credential to carry every
+    /// key would reject a holder whose facts arrived on separate attestations. Single-key asks read the same
+    /// either way. The empty key is rejected outright — a mask of nothing is trivially covered, and no credential
+    /// asserts nothing.
     function hasValidCredentialOf(address owner, uint256 kindKey) public view returns (bool) {
-        (, bool found) = _mostRecentValidWith(owner, kindKey);
-        return found;
+        if (kindKey == 0) return false;
+
+        uint256 covered;
+        uint256[] storage ids = LeXcheXBadgeStorage.getActiveTokens(owner);
+        for (uint256 i = 0; i < ids.length; i++) {
+            if (!isValid(ids[i])) continue;
+            covered |= LeXcheXBadgeStorage.getCredential(ids[i]).asserts;
+            if ((covered & kindKey) == kindKey) return true;
+        }
+        return false;
     }
 
     /// @notice True when the owner holds a valid credential granting scoped entitlement `scopeKey` for `spv`.
@@ -347,8 +360,13 @@ contract LeXcheXBadge is
         return (cred.zkpNationalityOut, cred.expiryDate);
     }
 
-    /// @notice Seasoning reference for the UI (§11.1B): earliest valid issuance asserting `kindKey`; 0 when none.
-    /// The seasoning policy (30 vs 45 days) stays at the UI layer; this only supplies the timestamp.
+    /// @notice Seasoning reference for the UI (§11.1B): the earliest ONE valid credential carrying all of
+    /// `kindKey` was issued; 0 when none does. The seasoning policy (30 vs 45 days) stays at the UI layer; this
+    /// only supplies the timestamp.
+    /// @dev Reads a multi-key ask differently from hasValidCredentialOf, on purpose. That one asks whether the
+    /// holder qualifies, which facts spread over separate credentials can answer. This asks how long something
+    /// has been true, and facts established on different dates have no one date to report — so it answers for a
+    /// single credential and reports 0 when none carries the whole set.
     function earliestValidIssuance(address owner, uint256 kindKey) public view returns (uint64) {
         if (kindKey == 0) return 0; // the empty key answers no fact; see _mostRecentValidWith
 

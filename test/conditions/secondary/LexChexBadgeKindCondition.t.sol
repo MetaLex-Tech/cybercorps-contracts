@@ -210,8 +210,8 @@ contract LexChexBadgeKindConditionTest is SecondaryConditionIntegrationBase {
         cond.updateParameters(1 << 200, false);
     }
 
-    // 15 — an entitlement is read against one SPV and a status is not, so no single credential can answer
-    // both halves of a mixed key
+    // 15 — an entitlement is read against one SPV and a status is not, so the two halves of a mixed key are
+    // answered by different badge reads and no single ask covers them
     function test_UpdateParameters_ScopedPlusStatus_Reverts() public {
         vm.expectRevert(LexChexBadgeKindCondition.InvalidKindKey.selector);
         cond.updateParameters(K_QP | K_SYNDICATE, false);
@@ -238,7 +238,7 @@ contract LexChexBadgeKindConditionTest is SecondaryConditionIntegrationBase {
         vm.expectRevert(LexChexBadgeKindCondition.InvalidKindKey.selector);
         cond.updateParameters(K_ACCREDITED | K_BO_COUNT, false);
 
-        // Two statuses together are still fine: one credential has to assert both.
+        // Two statuses together are still fine: the party's credentials have to cover both.
         cond.updateParameters(K_QP | K_QIB, false);
         assertEq(cond.kindKey(), K_QP | K_QIB);
     }

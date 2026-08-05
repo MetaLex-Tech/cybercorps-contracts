@@ -115,7 +115,8 @@ interface ILexChexBadge is IERC5484 {
     function isValid(uint256 tokenId) external view returns (bool);
     /// @notice True when the owner holds a valid credential carrying the free-form issuer label `categoryId`.
     function hasValidCredential(address owner, bytes32 categoryId) external view returns (bool);
-    /// @notice True when the owner holds a valid credential asserting `kindKey` (a K_* status/kind fact-key).
+    /// @notice True when the owner's valid credentials together assert every fact-key in `kindKey` (K_* status/
+    /// kind keys). Note they do not have to live in the same badge token.
     function hasValidCredentialOf(address owner, uint256 kindKey) external view returns (bool);
     /// @notice True when the owner holds a valid credential granting scoped entitlement `scopeKey` for `spv`.
     /// An entitlement granted for another SPV never answers here.
@@ -147,7 +148,8 @@ interface ILexChexBadge is IERC5484 {
     /// Membership is what a caller checks — see ZKPNationalityPolicy.
     function getZkpNationalityOut(address owner) external view returns (string[] memory value, uint64 expiry);
 
-    /// @notice Seasoning reference (§11.1B): earliest valid issuance asserting `kindKey`; 0 when none.
+    /// @notice Seasoning reference (§11.1B): when the earliest valid credential carrying ALL of `kindKey` was
+    /// issued. Note all kindKey specified must live on the same badge token to qualify
     function earliestValidIssuance(address owner, uint256 kindKey) external view returns (uint64);
 
     // ── Carried over from LeXcheX v1 ─────────────────────────────────────────

@@ -42,7 +42,6 @@ import {RegSDistributionComplianceCondition} from "../src/libs/conditions/second
 import {Rule144DisclosureCondition} from "../src/libs/conditions/secondary/Rule144DisclosureCondition.sol";
 import {Section4a7DisclosureCondition} from "../src/libs/conditions/secondary/Section4a7DisclosureCondition.sol";
 import {LegalOpinionCondition} from "../src/libs/conditions/secondary/LegalOpinionCondition.sol";
-import {AgreementSignedCondition} from "../src/libs/conditions/secondary/AgreementSignedCondition.sol";
 import {KillSwitchCondition} from "../src/libs/conditions/secondary/KillSwitchCondition.sol";
 import {TimeSettlementPeriodCondition} from "../src/libs/conditions/secondary/TimeSettlementPeriodCondition.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
@@ -138,7 +137,6 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     Rule144DisclosureCondition public rule144Disclosure;
     Section4a7DisclosureCondition public section4a7Disclosure;
     LegalOpinionCondition public legalOpinion;
-    AgreementSignedCondition public agreementSigned;
     KillSwitchCondition public killSwitch;
     TimeSettlementPeriodCondition public timeSettlement;
 
@@ -702,12 +700,6 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 abi.encodeCall(LegalOpinionCondition.initialize, (address(auth)))
             )
         );
-        agreementSigned = AgreementSignedCondition(
-            _proxy(
-                address(new AgreementSignedCondition()),
-                abi.encodeCall(AgreementSignedCondition.initialize, (address(auth), address(registry)))
-            )
-        );
         // Closing conditions are plain (non-proxied) singletons.
         metalexKillAdmin = makeAddr("metalexKillAdmin");
         legionKillAdmin = makeAddr("legionKillAdmin");
@@ -727,12 +719,11 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     /// @dev One call per list; the pathway calls also enable their pathway. This SPV supports all five.
     function _wireConditions() internal {
         // SPV-layer (every pathway).
-        address[] memory spv = new address[](5);
+        address[] memory spv = new address[](4);
         spv[0] = address(eligibility);
         spv[1] = address(holderCap);
         spv[2] = address(usState);
         spv[3] = address(legion);
-        spv[4] = address(agreementSigned);
 
         vm.startPrank(owner);
         dm.setSpvThresholdConditions(spv);
