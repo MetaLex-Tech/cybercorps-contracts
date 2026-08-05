@@ -21,6 +21,7 @@ import {
     K_SPV_WHITELIST,
     K_SYNDICATE,
     K_US_STATE,
+    K_ZKP_NATIONALITY_OUT,
     PRESET_ENTITY_LOOKTHROUGH,
     PRESET_KYC_AML
 } from "../src/interfaces/ILexChexBadge.sol";
@@ -904,12 +905,13 @@ contract LeXcheXBadgeTest is Test {
         _expectMissingValue(K_US_STATE);
         _expectMissingValue(K_BO_COUNT);
         _expectMissingValue(K_DATA);
+        _expectMissingValue(K_ZKP_NATIONALITY_OUT);
     }
 
     // `asserts` admits only defined K_* bits — an undefined bit would be an uninterpretable claim.
     function test_Mint_UnknownAssertBit_Reverts() public {
         address to = makeAddr("unknownBit");
-        Credential memory gapBit = _cred(1 << 6); // free bit reserved inside the VALUE block
+        Credential memory gapBit = _cred(1 << 7); // free bit reserved inside the VALUE block
         vm.prank(owner);
         vm.expectRevert(ILexChexBadge.LexChexBadge_BadAsserts.selector);
         badge.mint(to, gapBit);
@@ -920,7 +922,7 @@ contract LeXcheXBadgeTest is Test {
         badge.mint(to, aboveTop);
 
         Credential memory mixed = _kyc("US", "CA"); // otherwise-valid credential plus one unknown bit
-        mixed.asserts |= (1 << 6);
+        mixed.asserts |= (1 << 7);
         vm.prank(owner);
         vm.expectRevert(ILexChexBadge.LexChexBadge_BadAsserts.selector);
         badge.mint(to, mixed);

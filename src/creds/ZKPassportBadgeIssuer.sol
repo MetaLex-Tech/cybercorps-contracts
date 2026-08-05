@@ -1,0 +1,267 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+pragma solidity 0.8.28;
+
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "../libs/auth.sol";
+import "../interfaces/IZKPassportVerifier.sol";
+import "../interfaces/ILexChexBadge.sol";
+import {Credential} from "./storage/lexchexBadgeStorage.sol";
+
+/// @title  ZKPassportBadgeIssuer - mints LeXcheXBadge credentials from a ZKPassport proof
+/// @author MetaLeX Labs, Inc.
+/// @notice A wallet asks for a set of facts (e.g. "not a national of these countries") and submits
+/// a ZKPassport proof; this contract runs each fact's check and, if they pass, files the credential on the badge.
+/// It holds ADMIN_ROLE and calls badge.mint/supersede; the badge just stores facts and answers yes/no.
+/// @dev
+/// - Anyone can submit; the proof is bound to a wallet, so the credential always goes to that wallet.
+/// - Specify a set of fact-keys. _enforce runs the check each key needs; a key with no
+///   check can't be minted. Only K_ZKP_* keys are allowed, so this issuer can't assert unrelated keys.
+/// - No PII on-chain; the proof id is kept only as evidenceHash for audit.
+/// - Not a personhood check: same passport can be reused by multiple mints to different wallets.
+/// - Re-proving the same fact-set renews it in place (supersede); a holder can drop their own with void().
+///   Nothing is ever burned — old records stay for audit.
+contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
+    error InvalidVerifier();
+    error InvalidBadge();
+    error InvalidProof();
+    error InvalidScope();
+    error InvalidBoundChainId();
+    error InvalidFactKeys();
+    error UnverifiedFactKey();
+    error InvalidNationalityList();
+    error NationalityNotExcluded();
+    error InvalidMaxValidityPeriod();
+    error MaxValidityPeriodExceeded();
+    error ProofExpired();
+    error NoLiveCredential();
+
+    /// @dev Deterministic verifier address from ZKPassport docs.
+    address public constant DEFAULT_ZKPASSPORT_VERIFIER = 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8;
+
+    struct IssuerStorage {
+        IZKPassportVerifier verifier;
+        ILexChexBadge badge;
+        string expectedDomain;
+        string expectedScope;
+        mapping(uint256 => mapping(address => uint256)) current; // factKeys => wallet => tokenId+1 (current live credential)
+        uint256 maxValidityPeriod; // ceiling on how long a credential minted here may last
+    }
+
+    bytes32 private constant STORAGE_POSITION = keccak256("metalex.creds.zkpassport-badge-issuer.storage.v1");
+
+    event VerifierUpdated(address verifier);
+    event BadgeUpdated(address badge);
+    event CredentialProofMinted(
+        bytes32 indexed uniqueIdentifier, uint256 indexed factKeys, address indexed account, uint256 tokenId, uint64 expiresAt
+    );
+    event CredentialProofRenewed(
+        bytes32 indexed uniqueIdentifier, uint256 indexed factKeys, address indexed account, uint256 staleTokenId, uint256 tokenId, uint64 expiresAt
+    );
+    event CredentialSelfVoided(uint256 indexed factKeys, address indexed account, uint256 tokenId);
+    event MaxValidityPeriodUpdated(uint256 maxValidityPeriod);
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
+        address _auth,
+        address _badge,
+        string memory _expectedDomain,
+        string memory _expectedScope,
+        address _verifier,
+        uint256 _maxValidityPeriod
+    ) public initializer {
+        __UUPSUpgradeable_init();
+        __BorgAuthACL_init(_auth);
+
+        IssuerStorage storage $ = _issuerStorage();
+
+        if (_badge == address(0)) revert InvalidBadge();
+        $.badge = ILexChexBadge(_badge);
+        emit BadgeUpdated(_badge);
+
+        $.expectedDomain = _expectedDomain;
+        $.expectedScope = _expectedScope;
+
+        if (_maxValidityPeriod == 0) revert InvalidMaxValidityPeriod();
+        $.maxValidityPeriod = _maxValidityPeriod;
+        emit MaxValidityPeriodUpdated(_maxValidityPeriod);
+
+        address resolvedVerifier = _verifier == address(0) ? DEFAULT_ZKPASSPORT_VERIFIER : _verifier;
+        if (resolvedVerifier == address(0)) revert InvalidVerifier();
+        $.verifier = IZKPassportVerifier(resolvedVerifier);
+        emit VerifierUpdated(resolvedVerifier);
+    }
+
+    // ── Admin config ─────────────────────────────────────────────────────────
+
+    function updateVerifier(address _verifier) external onlyAdmin {
+        if (_verifier == address(0)) revert InvalidVerifier();
+        _issuerStorage().verifier = IZKPassportVerifier(_verifier);
+        emit VerifierUpdated(_verifier);
+    }
+
+    function updateBadge(address _badge) external onlyAdmin {
+        if (_badge == address(0)) revert InvalidBadge();
+        _issuerStorage().badge = ILexChexBadge(_badge);
+        emit BadgeUpdated(_badge);
+    }
+
+    function updateMaxValidityPeriod(uint256 _maxValidityPeriod) external onlyAdmin {
+        if (_maxValidityPeriod == 0) revert InvalidMaxValidityPeriod();
+        _issuerStorage().maxValidityPeriod = _maxValidityPeriod;
+        emit MaxValidityPeriodUpdated(_maxValidityPeriod);
+    }
+
+    // ── Issuance ─────────────────────────────────────────────────────────────
+
+    /// @notice Mint a fact-set that does NOT include K_ZKP_NATIONALITY_OUT (which needs a country list).
+    function submitProofAndMint(ProofVerificationParams calldata params, uint256 factKeys)
+        external
+        returns (uint256 tokenId)
+    {
+        return _submit(params, factKeys, new string[](0));
+    }
+
+    /// @notice Mint a fact-set including K_ZKP_NATIONALITY_OUT: `zkpNationalityOut` is the country codes the proof
+    /// must verify the holder is excluded from, recorded on the credential.
+    function submitProofAndMint(ProofVerificationParams calldata params, uint256 factKeys, string[] calldata zkpNationalityOut)
+        external
+        returns (uint256 tokenId)
+    {
+        return _submit(params, factKeys, zkpNationalityOut);
+    }
+
+    /// @dev Verify a ZKPassport proof and mint (or renew) `factKeys` to the proof-bound wallet. Submittable by
+    /// anyone: the credential goes to the bound sender, not the caller.
+    function _submit(ProofVerificationParams calldata params, uint256 factKeys, string[] memory zkpNationalityOut)
+        internal
+        returns (uint256 tokenId)
+    {
+        // ZK-provenance keys only, so this issuer can never assert a manual-KYC key.
+        if (factKeys == 0 || (factKeys & ~ZKP_KEYS) != 0) revert InvalidFactKeys();
+        // The country list is required iff the nationality fact is requested, and forbidden otherwise.
+        if ((factKeys & K_ZKP_NATIONALITY_OUT != 0) != (zkpNationalityOut.length != 0)) revert InvalidNationalityList();
+
+        IssuerStorage storage $ = _issuerStorage();
+
+        (bool verified, bytes32 uniqueIdentifier, IZKPassportHelper helper) = $.verifier.verify(params);
+        if (!verified || address(helper) == address(0)) revert InvalidProof();
+
+        if (!helper.verifyScopes(params.proofVerificationData.publicInputs, $.expectedDomain, $.expectedScope)) {
+            revert InvalidScope();
+        }
+
+        BoundData memory boundData = helper.getBoundData(params.committedInputs);
+        if (boundData.chainId != block.chainid) revert InvalidBoundChainId();
+        address account = boundData.senderAddress;
+
+        uint256 proofTimestamp = helper.getProofTimestamp(params.proofVerificationData.publicInputs);
+
+        // Every requested fact must have its check pass, or we refuse to mint it (also blocks a fact-key with no
+        // matching check).
+        if (_enforce(factKeys, helper, params, proofTimestamp, zkpNationalityOut) != factKeys) revert UnverifiedFactKey();
+
+        // The proof does not cover validityPeriodInSeconds — the submitter just types it in and does not need a new proof
+        // to verify whatever it says. Without a cap a holder could hand themselves a credential that never needs
+        // re-proving. Checked before the addition so an absurd period can't overflow instead.
+        uint256 validityPeriod = params.serviceConfig.validityPeriodInSeconds;
+        uint256 maxPeriod = $.maxValidityPeriod;
+        if (validityPeriod > maxPeriod) revert MaxValidityPeriodExceeded();
+
+        // The badge requires a strictly-future expiry (mint reverts on expiry <= now). Cap the date as well: the
+        // proof's own timestamp could sit in the future.
+        uint256 expiresAt = proofTimestamp + validityPeriod;
+        if (expiresAt <= block.timestamp) revert ProofExpired();
+        if (expiresAt > block.timestamp + maxPeriod) revert MaxValidityPeriodExceeded();
+
+        // Predicate-only, immutable credential; VALUE fields empty except the recorded exclusion list. The
+        // uniqueIdentifier is kept solely as an audit anchor, not asserted as a readable fact.
+        Credential memory cred;
+        cred.asserts = factKeys;
+        cred.categoryId = bytes32(factKeys);        // free-form label mirrors the fact-set
+        cred.evidenceHash = uniqueIdentifier;       // audit anchor tying the credential to its proof
+        cred.expiryDate = uint64(expiresAt);
+        if (factKeys & K_ZKP_NATIONALITY_OUT != 0) cred.zkpNationalityOut = zkpNationalityOut;
+
+        ILexChexBadge badge = $.badge;
+        uint256 stored = $.current[factKeys][account];
+        if (stored != 0) {
+            uint256 staleId = stored - 1;
+            // Renew the live credential in one call (void + re-mint) so the active set stays lean. A stale
+            // credential that is already voided/expired is not superseded — just replaced by a fresh mint.
+            if (badge.isValid(staleId)) {
+                tokenId = badge.supersede(staleId, cred, "zkpassport-renewal");
+                $.current[factKeys][account] = tokenId + 1;
+                emit CredentialProofRenewed(uniqueIdentifier, factKeys, account, staleId, tokenId, uint64(expiresAt));
+                return tokenId;
+            }
+        }
+
+        tokenId = badge.mint(account, cred);
+        $.current[factKeys][account] = tokenId + 1;
+        emit CredentialProofMinted(uniqueIdentifier, factKeys, account, tokenId, uint64(expiresAt));
+    }
+
+    /// @notice Drop your own credential for `factKeys`. Self-service: no admin needed, and you can only void your
+    /// own (the credential minted to msg.sender). The record is retained on the badge for audit.
+    function void(uint256 factKeys) external {
+        IssuerStorage storage $ = _issuerStorage();
+        uint256 stored = $.current[factKeys][msg.sender];
+        if (stored == 0) revert NoLiveCredential();
+        uint256 tokenId = stored - 1;
+        if (!$.badge.isValid(tokenId)) revert NoLiveCredential();
+
+        $.current[factKeys][msg.sender] = 0;
+        $.badge.void(tokenId, "self-void");
+        emit CredentialSelfVoided(factKeys, msg.sender, tokenId);
+    }
+
+    /// @dev Thin, overridable check layer: run the check each requested fact-key needs and return the mask
+    /// actually checked. _submit reverts unless that covers `factKeys`, so a fact is never minted without its
+    /// check. Override to change a check or teach the issuer a new K_ZKP_* key.
+    function _enforce(
+        uint256 factKeys,
+        IZKPassportHelper helper,
+        ProofVerificationParams calldata params,
+        uint256 proofTimestamp,
+        string[] memory zkpNationalityOut
+    ) internal view virtual returns (uint256 verifiedKeys) {
+        if (factKeys & K_ZKP_NATIONALITY_OUT != 0) {
+            if (!helper.isNationalityOut(zkpNationalityOut, params.committedInputs)) revert NationalityNotExcluded();
+            verifiedKeys |= K_ZKP_NATIONALITY_OUT;
+        }
+        if (factKeys & K_ZKP_BAD_ACTOR_CLEAR != 0) {
+            helper.enforceSanctionsRoot(proofTimestamp, true, params.committedInputs); // strict
+            verifiedKeys |= K_ZKP_BAD_ACTOR_CLEAR;
+        }
+    }
+
+    // ── Reads ────────────────────────────────────────────────────────────────
+
+    function verifier() external view returns (IZKPassportVerifier) { return _issuerStorage().verifier; }
+    function badge() external view returns (ILexChexBadge) { return _issuerStorage().badge; }
+    function expectedDomain() external view returns (string memory) { return _issuerStorage().expectedDomain; }
+    function expectedScope() external view returns (string memory) { return _issuerStorage().expectedScope; }
+    function maxValidityPeriod() external view returns (uint256) { return _issuerStorage().maxValidityPeriod; }
+
+    /// @notice The current credential this issuer tracks for (fact-set, wallet), if any. `exists` only reports
+    /// that a credential was issued here — call badge.isValid to learn whether it is still live.
+    function currentTokenOf(uint256 factKeys, address wallet) external view returns (uint256 tokenId, bool exists) {
+        uint256 stored = _issuerStorage().current[factKeys][wallet];
+        if (stored == 0) return (0, false);
+        return (stored - 1, true);
+    }
+
+    function _issuerStorage() private pure returns (IssuerStorage storage $) {
+        bytes32 position = STORAGE_POSITION;
+        assembly {
+            $.slot := position
+        }
+    }
+
+    function _authorizeUpgrade(address) internal override onlyOwner {}
+}

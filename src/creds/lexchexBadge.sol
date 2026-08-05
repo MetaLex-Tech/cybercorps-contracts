@@ -80,6 +80,8 @@ import "../interfaces/ILexChexBadge.sol";
 /// | K_BO_COUNT & K_INVESTOR_TYPE | getEffectiveBeneficialOwnerCount | 0 / >0                      | ICA §3(c)(1)(A)          |
 /// | K_ACCREDITED / K_QP / K_QIB  | hasValidCredentialOf             | absent / asserted           | Reg D; Rule 144A         |
 /// | K_NON_US                     | hasValidCredentialOf             | absent / asserted           | Reg S                    |
+/// | K_ZKP_NATIONALITY_OUT        | getZkpNationalityOut             | EMPTY / country codes       | Reg S — ZK proof         |
+/// | K_ZKP_BAD_ACTOR_CLEAR        | hasValidCredentialOf             | absent / asserted           | 506(d) — ZK proof        |
 /// | K_SPV_WHITELIST              | hasValidWhitelistFor             | absent / scoped to an SPV   | offer visibility (§16.2) |
 /// | K_SYNDICATE                  | hasValidSyndicateFor             | absent / scoped to an SPV   | issuer circle (§4.1.3A)  |
 ///
@@ -336,6 +338,15 @@ contract LeXcheXBadge is
         return (cred.lookThroughJurisdiction, cred.expiryDate);
     }
 
+    /// @notice Country codes the owner was proven (via ZKPassport) NOT to be a national of; empty when none. The
+    /// badge reports the raw list — membership ("is X excluded?") is the caller's check (see ZKPNationalityPolicy).
+    function getZkpNationalityOut(address owner) public view returns (string[] memory value, uint64 expiry) {
+        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, K_ZKP_NATIONALITY_OUT);
+        if (!found) return (new string[](0), 0);
+        Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
+        return (cred.zkpNationalityOut, cred.expiryDate);
+    }
+
     /// @notice Seasoning reference for the UI (§11.1B): earliest valid issuance asserting `kindKey`; 0 when none.
     /// The seasoning policy (30 vs 45 days) stays at the UI layer; this only supplies the timestamp.
     function earliestValidIssuance(address owner, uint256 kindKey) public view returns (uint64) {
@@ -477,6 +488,7 @@ contract LeXcheXBadge is
             revert LexChexBadge_BoCountRequiresEntity();
         }
         if ((a & K_DATA) != 0 && cred.data.length == 0) revert LexChexBadge_MissingValue(K_DATA);
+        if ((a & K_ZKP_NATIONALITY_OUT) != 0 && cred.zkpNationalityOut.length == 0) revert LexChexBadge_MissingValue(K_ZKP_NATIONALITY_OUT);
         if ((a & SCOPED_KEYS) != 0 && cred.scope == address(0)) revert LexChexBadge_MissingScope();
     }
 

@@ -46,6 +46,7 @@ struct Credential {
     bytes32 evidenceHash;               // hash of the offchain diligence record (audit anchor)
     bytes data;                         // value for K_DATA — generic programmable payload; the badge stores it
                                         // but never interprets it (downstream programs read it via getData)
+    string[] zkpNationalityOut;         // value for K_ZKP_NATIONALITY_OUT — country codes proven excluded (ZK)
 }
 
 /// @title LeXcheXBadgeStorage - namespaced storage for the LeXcheXBadge credential registry

@@ -153,6 +153,22 @@ contract NonUSNationalityConditionForkTest is Test {
         assertTrue(condition.checkCondition(address(manager), bytes4(0), abi.encode(agreementId)));
     }
 
+    /// @notice `serviceConfig.validityPeriodInSeconds` is NOT committed to the proof — it is calldata the submitter
+    /// picks, and the verifier accepts the same proof bytes whatever it says. `maxValidityPeriod` is therefore the
+    /// only thing stopping a holder from granting themselves eligibility that never needs re-attesting.
+    function test_RevertIf_SubmitterInflatesValidityPeriod() public {
+        uint256 signedTimestamp = 1772783327;
+        (ProofVerificationParams memory params, address account) = NonUSNationalityConditionHelper.parseProofFromJson("test/res/sample-non-us-sanctioned-countries-sanctioned-list-proof-call.json");
+
+        params.serviceConfig.validityPeriodInSeconds = MAX_VALIDITY_PERIOD + 1 days; // the only edit
+
+        vm.warp(signedTimestamp);
+        vm.prank(account);
+        vm.expectRevert(NonUSNationalityCondition.MaxValidityPeriodExceeded.selector);
+        condition.submitProof(params, false);
+        assertEq(condition.proofExpiry(account), 0, "no eligibility cached");
+    }
+
     /// @notice Real proof of non-FRA nationality should not pass since we want non-US + non-sanctioned proof
     function test_RevertIf_RealProofInvalid() public {
         // Assume the sample data is signed for Sepolia (included in committedInputs)

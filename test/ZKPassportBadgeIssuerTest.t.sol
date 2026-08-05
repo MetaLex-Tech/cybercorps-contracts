@@ -1,0 +1,699 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+pragma solidity 0.8.28;
+
+import {Test} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {BorgAuth} from "../src/libs/auth.sol";
+import {LeXcheXBadge} from "../src/creds/lexchexBadge.sol";
+import {ZKPassportBadgeIssuer} from "../src/creds/ZKPassportBadgeIssuer.sol";
+import {ZKPNationalityPolicy} from "../src/libs/policies/ZKPNationalityPolicy.sol";
+import {Credential} from "../src/creds/storage/lexchexBadgeStorage.sol";
+import {
+    ILexChexBadge,
+    ALL_KEYS,
+    K_BAD_ACTOR_CLEAR,
+    K_INVESTOR_TYPE,
+    K_NON_US,
+    K_SPV_WHITELIST,
+    K_ZKP_BAD_ACTOR_CLEAR,
+    K_ZKP_NATIONALITY_OUT
+} from "../src/interfaces/ILexChexBadge.sol";
+import {
+    BoundData,
+    IZKPassportHelper,
+    IZKPassportVerifier,
+    ProofVerificationData,
+    ProofVerificationParams,
+    ServiceConfig
+} from "../src/interfaces/IZKPassportVerifier.sol";
+
+// Mock ZKPassport verifier/helper — the one legitimate mock (external protocol, not in this repo).
+// Encoding conventions mirror NonUSNationalityConditionTest and are mock-only.
+contract MockZKPassportHelper is IZKPassportHelper {
+    bool public shouldRejectNationality;
+    bool public shouldRevertSanctions;
+
+    error SanctionsCheckFailed();
+
+    function setShouldRejectNationality(bool _v) external { shouldRejectNationality = _v; }
+    function setShouldRevertSanctions(bool _v) external { shouldRevertSanctions = _v; }
+
+    function verifyScopes(bytes32[] calldata publicInputs, string calldata domain, string calldata scope)
+        external
+        pure
+        returns (bool)
+    {
+        return publicInputs[0] == keccak256(bytes(domain)) && publicInputs[1] == keccak256(bytes(scope));
+    }
+
+    function getBoundData(bytes calldata committedInputs) external pure returns (BoundData memory) {
+        return abi.decode(committedInputs, (BoundData));
+    }
+
+    function getProofTimestamp(bytes32[] calldata publicInputs) external pure returns (uint256) {
+        return uint256(publicInputs[2]);
+    }
+
+    function isNationalityOut(string[] memory, bytes calldata) external view returns (bool) {
+        return !shouldRejectNationality;
+    }
+
+    function enforceSanctionsRoot(uint256, bool, bytes calldata) external view {
+        if (shouldRevertSanctions) revert SanctionsCheckFailed();
+    }
+}
+
+contract MockZKPassportVerifier is IZKPassportVerifier {
+    bool public shouldVerify = true;
+    bool public shouldReturnZeroHelper;
+    IZKPassportHelper public helperContract;
+    bytes32 public uniqueId = keccak256("passport-A");
+
+    function setHelper(address _h) external { helperContract = IZKPassportHelper(_h); }
+    function setShouldVerify(bool _v) external { shouldVerify = _v; }
+    function setShouldReturnZeroHelper(bool _v) external { shouldReturnZeroHelper = _v; }
+    function setUniqueId(bytes32 _id) external { uniqueId = _id; }
+
+    function verify(ProofVerificationParams calldata) external returns (bool, bytes32, IZKPassportHelper) {
+        if (!shouldVerify) return (false, bytes32(0), IZKPassportHelper(address(0)));
+        if (shouldReturnZeroHelper) return (true, uniqueId, IZKPassportHelper(address(0)));
+        return (true, uniqueId, helperContract);
+    }
+}
+
+/// @notice Behavioural coverage for proof-gated identity credentialing: turning a ZKPassport proof over a
+/// government document into a soulbound LeXcheXBadge credential, instead of an operator vouching by trust. The
+/// suite guards the legal / economic intent, not the mechanics:
+///
+///  A. Self-sovereign onboarding. A real person credentials themselves from their own passport; the credential is
+///     time-bounded so standing must be re-attested.
+///  B. Identity vests in the person, not the submitter. The credential accrues to the wallet the person proved
+///     control of; a relayer may pay gas but can neither capture nor redirect it.
+///  C. No personhood notary. A person with several wallets is simply several holders — the issuer never links or
+///     collapses wallets to one human, exactly as any non-ZKPassport wallet is treated.
+///  D. You get what you prove. A fact-set (a combination of K_ZKP_* keys) is only minted if every fact's check
+///     passes; the nationality fact records WHICH countries were proven excluded; renewing replaces the live
+///     credential in place (supersede); a holder can drop their own with void().
+///  E. A refusal follows the person, not the wallet. Someone sanctioned, or who can't prove their nationality is
+///     outside the excluded list, is refused every time — a fresh wallet doesn't help, because the check is against
+///     the passport proof, not the address. Nor can a proof made for another app, chain, or moment be reused here.
+///  F. Provenance is kept separate. The issuer mints ZK-provenance facts only (K_ZKP_*) and can never assert a
+///     manual-KYC key, so each downstream condition decides on its own whether to trust a ZKPassport attestation.
+///  G. Governance owns the wiring. Only admins change verifier/badge; only the owner can evolve the contract.
+///
+/// Scenario matrix (topic → intent it protects → expected):
+///
+///  Issuance, value-fact & recipient binding (A, B, D)
+///   • HappyPath_NationalityOut ........... eligible person gets a credential recording the proven exclusion set .. issue, list readable
+///   • RecipientIsBoundSender ............. credential vests in the identity-holder, never the gas-paying relayer .. issue to holder
+///   • CombinedFacts_OneCredential ........ one credential can carry several facts, satisfying an AND-check ........ issue, single token
+///
+///  Membership read (D)
+///   • Policy_Excludes .................... ZKPNationalityPolicy answers "is X in the proven exclusion set?" ...... true / false
+///
+///  Kinds & wallets (C)
+///   • DifferentFacts_SameWallet .......... a wallet may hold distinct facts (nationality-out + bad-actor-clear) .. both issue
+///   • DifferentWallet_SamePassport ....... wallets are independent holders; never collapsed to one human ......... both issue, unlinked
+///
+///  Lifecycle — renewal & revocation (A, D)
+///   • Renewal_Supersedes_NoDuplicate ..... re-proving the same fact-set replaces the live credential ............. one live credential
+///   • Renewal_ReplacesExclusionList ...... a renewal replaces the proven country set; it never accumulates ....... old country no longer excluded
+///   • Renewal_WithDifferentPassport ...... standing is wallet-scoped, so a new document just re-anchors evidence . one live credential
+///   • OverlappingFactSets_Independently .. a credential is tracked per fact-SET, so overlapping sets coexist ..... both live
+///   • Expired_ThenResubmit_FreshMint ..... nothing live to replace, so a lapsed credential is not superseded ..... new credential
+///   • Void_SelfService ................... a holder can drop their own credential without an admin ............... void
+///   • Void_ThenReMint .................... a voided credential does not block a later fresh proof ................ new credential
+///   • Void_AnotherHoldersCredential / Twice / AfterAdminVoidedOnBadge / ManualFactKeySpaceIsEmpty ... only your own
+///     live credential is droppable, and liveness is re-checked on the badge, not assumed from bookkeeping ....... refuse
+///   • CurrentTokenOf_ReportsIssuance ..... the issuer's tracking is not a liveness answer ....................... exists, not valid
+///   • ValidityPeriod_WithinCap ........... a period inside the cap is honoured as submitted .................... issue
+///   • ValidityPeriod_ExceedsCap / AbsurdValues / FutureProofTimestamp ... the submitted validity period is not
+///     covered by the proof, so the cap is what keeps a credential re-attestable (see the fork suite) .......... refuse
+///   • UpdateMaxValidityPeriod_AdminCanRetune / Unauthorized / Zero / Initialize_Zero ... the cap is admin-tunable
+///     and never absent .......................................................................................... issue / refuse
+///
+///  Eligibility gating — a refusal follows the person (E)
+///   • NationalityRejected ................ a holder who can't prove the exclusion is refused .................... refuse
+///   • SanctionsFail ...................... sanctioned persons refused; upstream reason surfaced verbatim ........ refuse
+///   • InvalidProof / InvalidScope / BoundChainIdMismatch / ProofExpired ... only an authentic, in-scope, in-time, on-chain proof qualifies ... refuse
+///
+///  Provenance, inputs & governance (F, G)
+///   • Mint_RejectsManualKey / ZeroFactKeys ..... only ZK-provenance fact-sets are mintable, never a manual key .. refuse
+///   • Mint_*SneakedIn (manual key beside a ZK key, the manual bad-actor twin, a scope key, a VALUE key, an
+///     undefined bit, EveryKeyGrab) ............. a foreign key never rides in on a legitimate one; a mixed
+///     request is refused whole, never part-minted, and leaves no credential or tracked entry ................... refuse
+///   • Mint_FactKeysScreenedBeforeProof ......... the fact-set is judged on its own terms, before the proof ..... refuse
+///   • Mint_*ViaNationalityOverload ............. the second overload carries the same screen .................... refuse
+///   • NationalityKey_WithoutList / ListWithoutKey / CombinedFacts_WithoutList ... the country list is required
+///     iff the nationality fact is asked, combined fact-sets included ............................................ refuse
+///   • UpdateVerifier_Unauthorized / Upgrade_Unauthorized / Initialize_ZeroBadge ... only the right role acts ..... refuse
+contract ZKPassportBadgeIssuerTest is Test {
+    string internal constant DOMAIN = "app.example";
+    string internal constant SCOPE = "identity";
+    uint256 internal constant MAX_VALIDITY = 365 days;
+
+    uint256 internal constant FK_NAT_OUT = K_ZKP_NATIONALITY_OUT;
+    uint256 internal constant FK_BAD_ACTOR = K_ZKP_BAD_ACTOR_CLEAR;
+    uint256 internal constant FK_BOTH = K_ZKP_NATIONALITY_OUT | K_ZKP_BAD_ACTOR_CLEAR;
+
+    BorgAuth internal auth;
+    LeXcheXBadge internal badge;
+    ZKPassportBadgeIssuer internal issuer;
+    MockZKPassportHelper internal helper;
+    MockZKPassportVerifier internal verifier;
+
+    address internal alice = address(0xA11CE);
+    address internal aliceWallet2 = address(0xA11CE2);
+    address internal relayer = address(0xCAFE);
+
+    function setUp() public {
+        auth = new BorgAuth(address(this));
+
+        badge = LeXcheXBadge(
+            address(new ERC1967Proxy(address(new LeXcheXBadge()), abi.encodeCall(LeXcheXBadge.initialize, (address(auth)))))
+        );
+
+        helper = new MockZKPassportHelper();
+        verifier = new MockZKPassportVerifier();
+        verifier.setHelper(address(helper));
+
+        issuer = ZKPassportBadgeIssuer(
+            address(
+                new ERC1967Proxy(
+                    address(new ZKPassportBadgeIssuer()),
+                    abi.encodeCall(
+                        ZKPassportBadgeIssuer.initialize,
+                        (address(auth), address(badge), DOMAIN, SCOPE, address(verifier), MAX_VALIDITY)
+                    )
+                )
+            )
+        );
+
+        // The issuer mints on the badge — it needs ADMIN_ROLE on the shared BorgAuth.
+        auth.updateRole(address(issuer), auth.ADMIN_ROLE());
+    }
+
+    // ── Happy path, value-fact & recipient binding ───────────────────────────
+
+    function test_Mint_HappyPath_NationalityOut_RecordsExclusionList() public {
+        vm.warp(1000);
+        uint256 tokenId = issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        assertTrue(badge.isValid(tokenId));
+        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+        assertFalse(badge.hasValidCredentialOf(alice, K_NON_US), "manual key deliberately not satisfied");
+
+        (string[] memory list, uint64 expiry) = badge.getZkpNationalityOut(alice);
+        assertEq(list.length, 1);
+        assertEq(list[0], "USA");
+        assertEq(uint256(expiry), 1000 + 1 days);
+        assertEq(badge.getCredential(tokenId).evidenceHash, verifier.uniqueId(), "uid retained only as audit anchor");
+    }
+
+    function test_Mint_RecipientIsBoundSender_NotMsgSender() public {
+        vm.prank(relayer);
+        uint256 tokenId = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+        assertEq(badge.getCredentialByOwner(alice), tokenId);
+        assertEq(badge.balanceOf(relayer), 0);
+    }
+
+    function test_CombinedFacts_OneCredential_SatisfiesAndCheck() public {
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_BOTH, _excluded("USA"));
+
+        assertEq(badge.getActiveTokenIds(alice).length, 1, "one credential carries both facts");
+        assertTrue(badge.hasValidCredentialOf(alice, FK_BOTH));
+        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_BAD_ACTOR_CLEAR));
+    }
+
+    // ── Membership read via the policy library ───────────────────────────────
+
+    function test_Policy_Excludes_MembershipCheck() public {
+        string[] memory codes = new string[](2);
+        codes[0] = "USA";
+        codes[1] = "IRN";
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, codes);
+
+        (bool exUsa,) = ZKPNationalityPolicy.excludes(badge, alice, "USA");
+        (bool exIrn,) = ZKPNationalityPolicy.excludes(badge, alice, "IRN");
+        (bool exCan,) = ZKPNationalityPolicy.excludes(badge, alice, "CAN");
+        assertTrue(exUsa);
+        assertTrue(exIrn);
+        assertFalse(exCan, "a country not in the proven set is not excluded");
+
+        (bool exOther,) = ZKPNationalityPolicy.excludes(badge, aliceWallet2, "USA");
+        assertFalse(exOther, "a wallet with no credential excludes nothing");
+    }
+
+    // ── Kinds & wallets (no personhood notary) ───────────────────────────────
+
+    function test_DifferentFacts_SameWallet_MintsSeparateCredentials() public {
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_BAD_ACTOR);
+
+        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_BAD_ACTOR_CLEAR));
+        assertEq(badge.getActiveTokenIds(alice).length, 2);
+    }
+
+    function test_SamePassport_SameFacts_DifferentWallet_IndependentHolders() public {
+        uint256 id1 = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+        uint256 id2 = issuer.submitProofAndMint(_params(aliceWallet2, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        assertTrue(id1 != id2);
+        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+        assertTrue(badge.hasValidCredentialOf(aliceWallet2, K_ZKP_NATIONALITY_OUT));
+    }
+
+    // ── Lifecycle: renewal supersedes, void does not block re-mint ───────────
+
+    function test_Renewal_Supersedes_NoDuplicate() public {
+        vm.warp(1000);
+        uint256 first = issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        vm.warp(1000 + 100);
+        uint256 renewed = issuer.submitProofAndMint(_params(alice, 1000 + 100, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        assertTrue(renewed != first, "supersede issues a new immutable credential");
+        assertFalse(badge.isValid(first), "old credential is voided");
+        assertTrue(badge.isValid(renewed));
+        assertEq(badge.getActiveTokenIds(alice).length, 1, "no stacking of the same fact-set");
+        assertEq(uint256(badge.getCredential(renewed).expiryDate), 1000 + 100 + 1 days);
+    }
+
+    function test_Void_SelfService_HolderDropsOwnCredential() public {
+        uint256 tokenId = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+
+        vm.prank(alice);
+        issuer.void(FK_NAT_OUT);
+        assertFalse(badge.isValid(tokenId));
+        assertFalse(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+
+        uint256 fresh = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+        assertTrue(fresh != tokenId);
+        assertTrue(badge.isValid(fresh));
+    }
+
+    function test_Void_ThenReMint_IssuesFresh() public {
+        uint256 tokenId = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        badge.void(tokenId, "compliance review");
+        assertFalse(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+
+        uint256 fresh = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+        assertTrue(fresh != tokenId);
+        assertTrue(badge.isValid(fresh));
+    }
+
+    function test_Revert_Void_NoLiveCredential() public {
+        vm.prank(alice);
+        vm.expectRevert(ZKPassportBadgeIssuer.NoLiveCredential.selector);
+        issuer.void(FK_NAT_OUT);
+    }
+
+    // void() drops your own standing and nobody else's — otherwise anyone could strip a holder's eligibility.
+    function test_Revert_Void_AnotherHoldersCredential() public {
+        uint256 tokenId = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        vm.prank(aliceWallet2);
+        vm.expectRevert(ZKPassportBadgeIssuer.NoLiveCredential.selector);
+        issuer.void(FK_NAT_OUT);
+
+        assertTrue(badge.isValid(tokenId), "a stranger's call leaves the credential standing");
+        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+    }
+
+    function test_Revert_Void_Twice() public {
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        vm.startPrank(alice);
+        issuer.void(FK_NAT_OUT);
+        vm.expectRevert(ZKPassportBadgeIssuer.NoLiveCredential.selector);
+        issuer.void(FK_NAT_OUT);
+        vm.stopPrank();
+    }
+
+    // Already voided on the badge by an admin: the issuer still tracks the id, so void() must re-check liveness
+    // rather than trust its own bookkeeping.
+    function test_Revert_Void_AfterAdminVoidedOnBadge() public {
+        uint256 tokenId = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+        badge.void(tokenId, "compliance review");
+
+        vm.prank(alice);
+        vm.expectRevert(ZKPassportBadgeIssuer.NoLiveCredential.selector);
+        issuer.void(FK_NAT_OUT);
+    }
+
+    // void() takes a raw fact-set and never validates it. Nothing can be voided in a key space this issuer cannot
+    // mint into, because only a mint records a tracked credential.
+    function test_Revert_Void_ManualFactKeySpaceIsEmpty() public {
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        vm.startPrank(alice);
+        vm.expectRevert(ZKPassportBadgeIssuer.NoLiveCredential.selector);
+        issuer.void(K_NON_US);
+        vm.expectRevert(ZKPassportBadgeIssuer.NoLiveCredential.selector);
+        issuer.void(0);
+        vm.stopPrank();
+    }
+
+    // A live credential is tracked per FACT-SET, not per fact. Asking for the nationality fact alone and again as
+    // part of a combined set yields two credentials that both answer it, and renewing one leaves the other alone.
+    function test_OverlappingFactSets_TrackedIndependently() public {
+        uint256 natOnly = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+        uint256 both = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_BOTH, _excluded("IRN"));
+
+        assertTrue(badge.isValid(natOnly), "the combined set does not supersede the narrower one");
+        assertTrue(badge.isValid(both));
+        assertEq(badge.getActiveTokenIds(alice).length, 2);
+
+        // Dropping one fact-set leaves the fact standing on the other.
+        vm.prank(alice);
+        issuer.void(FK_NAT_OUT);
+        assertFalse(badge.isValid(natOnly));
+        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT), "still answered by the combined credential");
+    }
+
+    // Renewal REPLACES the exclusion set; it does not accumulate. A country proven excluded last time stops being
+    // excluded unless it is proven again.
+    function test_Renewal_ReplacesExclusionList_DoesNotAccumulate() public {
+        vm.warp(1000);
+        issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, _excluded("USA"));
+        (bool usaBefore,) = ZKPNationalityPolicy.excludes(badge, alice, "USA");
+        assertTrue(usaBefore);
+
+        vm.warp(1100);
+        issuer.submitProofAndMint(_params(alice, 1100, 1 days), FK_NAT_OUT, _excluded("IRN"));
+
+        (bool usaAfter,) = ZKPNationalityPolicy.excludes(badge, alice, "USA");
+        (bool irnAfter,) = ZKPNationalityPolicy.excludes(badge, alice, "IRN");
+        assertFalse(usaAfter, "the superseded list is gone, not merged");
+        assertTrue(irnAfter);
+    }
+
+    // An expired credential is not superseded — there is nothing live to replace, so the holder simply gets a
+    // fresh one and the lapsed record stays on-chain for audit.
+    function test_Expired_ThenResubmit_FreshMint() public {
+        vm.warp(1000);
+        uint256 first = issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        vm.warp(1000 + 1 days + 1);
+        assertFalse(badge.isValid(first), "lapsed");
+
+        uint256 fresh = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+        assertTrue(fresh != first);
+        assertTrue(badge.isValid(fresh));
+
+        (uint256 tracked, bool exists) = issuer.currentTokenOf(FK_NAT_OUT, alice);
+        assertTrue(exists);
+        assertEq(tracked, fresh, "tracking moves to the live credential");
+    }
+
+    // Standing is wallet-scoped, not passport-scoped: re-proving with a different document renews the same
+    // credential slot and re-anchors the audit trail to the new proof.
+    function test_Renewal_WithDifferentPassport_SwapsEvidenceAnchor() public {
+        vm.warp(1000);
+        uint256 first = issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        verifier.setUniqueId(keccak256("passport-B"));
+        vm.warp(1100);
+        uint256 renewed = issuer.submitProofAndMint(_params(alice, 1100, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        assertFalse(badge.isValid(first));
+        assertEq(badge.getCredential(renewed).evidenceHash, keccak256("passport-B"));
+        assertEq(badge.getActiveTokenIds(alice).length, 1);
+    }
+
+    // `exists` reports only that this issuer minted here — it is not a liveness answer, exactly as documented.
+    function test_CurrentTokenOf_ReportsIssuance_NotLiveness() public {
+        uint256 tokenId = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+        badge.void(tokenId, "compliance review");
+
+        (uint256 tracked, bool exists) = issuer.currentTokenOf(FK_NAT_OUT, alice);
+        assertTrue(exists, "still tracked");
+        assertEq(tracked, tokenId);
+        assertFalse(badge.isValid(tracked), "but not live: callers must ask the badge");
+    }
+
+    // ── Eligibility gating ───────────────────────────────────────────────────
+
+    function test_Revert_NationalityRejected() public {
+        helper.setShouldRejectNationality(true);
+        vm.expectRevert(ZKPassportBadgeIssuer.NationalityNotExcluded.selector);
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+    }
+
+    function test_Revert_SanctionsFail_SurfacedVerbatim() public {
+        helper.setShouldRevertSanctions(true);
+        vm.expectRevert(MockZKPassportHelper.SanctionsCheckFailed.selector);
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_BAD_ACTOR);
+    }
+
+    function test_Revert_InvalidProof_VerificationFailed() public {
+        verifier.setShouldVerify(false);
+        vm.expectRevert(ZKPassportBadgeIssuer.InvalidProof.selector);
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_BAD_ACTOR);
+    }
+
+    function test_Revert_InvalidProof_ZeroHelper() public {
+        verifier.setShouldReturnZeroHelper(true);
+        vm.expectRevert(ZKPassportBadgeIssuer.InvalidProof.selector);
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_BAD_ACTOR);
+    }
+
+    function test_Revert_InvalidScope() public {
+        ProofVerificationParams memory p = _params(alice, block.timestamp, 1 days);
+        p.proofVerificationData.publicInputs[1] = keccak256("wrong-scope");
+        vm.expectRevert(ZKPassportBadgeIssuer.InvalidScope.selector);
+        issuer.submitProofAndMint(p, FK_BAD_ACTOR);
+    }
+
+    function test_Revert_BoundChainIdMismatch() public {
+        ProofVerificationParams memory p = _params(alice, block.timestamp, 1 days);
+        p.committedInputs = abi.encode(BoundData({senderAddress: alice, chainId: block.chainid + 1, customData: ""}));
+        vm.expectRevert(ZKPassportBadgeIssuer.InvalidBoundChainId.selector);
+        issuer.submitProofAndMint(p, FK_BAD_ACTOR);
+    }
+
+    function test_Revert_ProofExpired() public {
+        vm.warp(3 days);
+        vm.expectRevert(ZKPassportBadgeIssuer.ProofExpired.selector);
+        issuer.submitProofAndMint(_params(alice, block.timestamp - 2 days, 1 days), FK_BAD_ACTOR);
+    }
+
+    // The submitter names the validity period and the proof does not cover it, so the cap is what keeps a
+    // credential re-attestable. A period within the cap is honoured as asked.
+    function test_ValidityPeriod_WithinCap_SetsLifetime() public {
+        vm.warp(1000);
+        uint256 tokenId = issuer.submitProofAndMint(_params(alice, 1000, MAX_VALIDITY), FK_BAD_ACTOR);
+        assertEq(uint256(badge.getCredential(tokenId).expiryDate), 1000 + MAX_VALIDITY);
+    }
+
+    function test_Revert_ValidityPeriod_ExceedsCap() public {
+        vm.warp(1000);
+        vm.expectRevert(ZKPassportBadgeIssuer.MaxValidityPeriodExceeded.selector);
+        issuer.submitProofAndMint(_params(alice, 1000, MAX_VALIDITY + 1), FK_BAD_ACTOR);
+    }
+
+    // A period large enough to overflow the addition, or to wrap the badge's uint64 expiry, is refused by the cap
+    // before the arithmetic runs — so it fails as an over-long request, not as a panic.
+    function test_Revert_ValidityPeriod_AbsurdValuesHitTheCapFirst() public {
+        vm.warp(1000);
+        ProofVerificationParams memory wraps = _params(alice, 1000, 1 << 64);
+        vm.expectRevert(ZKPassportBadgeIssuer.MaxValidityPeriodExceeded.selector);
+        issuer.submitProofAndMint(wraps, FK_BAD_ACTOR);
+
+        ProofVerificationParams memory overflows = _params(alice, 1000, type(uint256).max);
+        vm.expectRevert(ZKPassportBadgeIssuer.MaxValidityPeriodExceeded.selector);
+        issuer.submitProofAndMint(overflows, FK_BAD_ACTOR);
+    }
+
+    // A proof timestamp in the future would push the expiry past the cap even with an in-range period, so the
+    // resulting date is bounded too.
+    function test_Revert_FutureProofTimestamp_PushesExpiryPastCap() public {
+        vm.warp(1000);
+        vm.expectRevert(ZKPassportBadgeIssuer.MaxValidityPeriodExceeded.selector);
+        issuer.submitProofAndMint(_params(alice, 1000 + 10 days, MAX_VALIDITY), FK_BAD_ACTOR);
+    }
+
+    function test_UpdateMaxValidityPeriod_AdminCanRetune() public {
+        vm.warp(1000);
+        issuer.updateMaxValidityPeriod(2 days);
+
+        vm.expectRevert(ZKPassportBadgeIssuer.MaxValidityPeriodExceeded.selector);
+        issuer.submitProofAndMint(_params(alice, 1000, 3 days), FK_BAD_ACTOR);
+
+        uint256 tokenId = issuer.submitProofAndMint(_params(alice, 1000, 2 days), FK_BAD_ACTOR);
+        assertEq(uint256(badge.getCredential(tokenId).expiryDate), 1000 + 2 days);
+    }
+
+    function test_Revert_UpdateMaxValidityPeriod_Unauthorized() public {
+        vm.prank(address(0xBEEF));
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, uint256(98), address(0xBEEF)));
+        issuer.updateMaxValidityPeriod(1 days);
+    }
+
+    function test_Revert_UpdateMaxValidityPeriod_Zero() public {
+        vm.expectRevert(ZKPassportBadgeIssuer.InvalidMaxValidityPeriod.selector);
+        issuer.updateMaxValidityPeriod(0);
+    }
+
+    function test_Revert_Initialize_ZeroMaxValidityPeriod() public {
+        address impl = address(new ZKPassportBadgeIssuer());
+        bytes memory initData = abi.encodeCall(
+            ZKPassportBadgeIssuer.initialize,
+            (address(auth), address(badge), DOMAIN, SCOPE, address(verifier), 0)
+        );
+        vm.expectRevert(ZKPassportBadgeIssuer.InvalidMaxValidityPeriod.selector);
+        new ERC1967Proxy(impl, initData);
+    }
+
+    // ── Provenance, inputs & governance ──────────────────────────────────────
+
+    function test_Revert_Mint_RejectsManualKey() public {
+        vm.expectRevert(ZKPassportBadgeIssuer.InvalidFactKeys.selector);
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), K_NON_US);
+    }
+
+    function test_Revert_Mint_ZeroFactKeys() public {
+        vm.expectRevert(ZKPassportBadgeIssuer.InvalidFactKeys.selector);
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), 0);
+    }
+
+    // A lone manual key is the obvious attempt; the dangerous one rides along with a key this issuer really can
+    // mint, hoping the legitimate half carries the passenger through. Every mixed request is refused whole — the
+    // issuer never mints "the part it was allowed to", so a ZKPassport proof can never end up backing a fact that
+    // operator diligence is supposed to establish.
+    function test_Revert_Mint_ManualKeySneakedInAlongsideZkpKey() public {
+        _expectFactKeysRefused(FK_NAT_OUT | K_NON_US, _excluded("USA"));
+    }
+
+    // The closest call: manual and ZK bad-actor ask the same question, differing only in who vouched. Asking for
+    // both would let a ZK proof mint the manually-attested twin.
+    function test_Revert_Mint_ManualBadActorSneakedInBesideItsZkTwin() public {
+        _expectFactKeysRefused(FK_BAD_ACTOR | K_BAD_ACTOR_CLEAR, _empty());
+    }
+
+    // A scope key entitles the holder to one SPV's offers. It is an issuer's grant, never something a passport
+    // proves, and the credential carries no scope — so it must die at the fact-key gate.
+    function test_Revert_Mint_ScopeKeySneakedIn() public {
+        _expectFactKeysRefused(FK_BAD_ACTOR | K_SPV_WHITELIST, _empty());
+    }
+
+    // A VALUE key would need a payload this issuer never collects; sneaking one in would file a hollow fact.
+    function test_Revert_Mint_ValueKeySneakedIn() public {
+        _expectFactKeysRefused(FK_NAT_OUT | K_INVESTOR_TYPE, _excluded("USA"));
+    }
+
+    // An undefined bit is an uninterpretable claim, and the whole-mask grabs are the lazy version of the same try.
+    function test_Revert_Mint_UndefinedBitSneakedIn() public {
+        _expectFactKeysRefused(FK_BAD_ACTOR | (1 << 7), _empty());
+    }
+
+    function test_Revert_Mint_EveryKeyGrab() public {
+        _expectFactKeysRefused(ALL_KEYS, _excluded("USA"));
+        _expectFactKeysRefused(type(uint256).max, _excluded("USA"));
+    }
+
+    // The fact-key screen runs before the proof is consulted, so a bad fact-set is refused on its own terms rather
+    // than incidentally, by whatever the proof happens to fail on first.
+    function test_Revert_Mint_FactKeysScreenedBeforeProof() public {
+        verifier.setShouldVerify(false);
+        ProofVerificationParams memory p = _params(alice, block.timestamp, 1 days);
+        vm.expectRevert(ZKPassportBadgeIssuer.InvalidFactKeys.selector);
+        issuer.submitProofAndMint(p, FK_BAD_ACTOR | K_NON_US);
+    }
+
+    // The nationality overload takes a second argument, so it must carry the same screen and not become the soft way in.
+    function test_Revert_Mint_ManualKeySneakedInViaNationalityOverload() public {
+        ProofVerificationParams memory p = _params(alice, block.timestamp, 1 days);
+        string[] memory list = _excluded("USA");
+        vm.expectRevert(ZKPassportBadgeIssuer.InvalidFactKeys.selector);
+        issuer.submitProofAndMint(p, FK_NAT_OUT | K_NON_US, list);
+    }
+
+    // The combined fact-set still asks for the nationality fact, so it still owes a country list.
+    function test_Revert_CombinedFacts_WithoutList() public {
+        vm.expectRevert(ZKPassportBadgeIssuer.InvalidNationalityList.selector);
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_BOTH);
+    }
+
+    function test_Revert_NationalityKey_WithoutList() public {
+        // The nationality fact needs a country list — the 2-arg overload (empty list) must refuse it.
+        vm.expectRevert(ZKPassportBadgeIssuer.InvalidNationalityList.selector);
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT);
+    }
+
+    function test_Revert_NationalityList_WithoutKey() public {
+        // A list supplied for a fact-set that doesn't ask for the nationality fact is a mismatch.
+        vm.expectRevert(ZKPassportBadgeIssuer.InvalidNationalityList.selector);
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_BAD_ACTOR, _excluded("USA"));
+    }
+
+    function test_Revert_UpdateVerifier_Unauthorized() public {
+        vm.prank(address(0xBEEF));
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, uint256(98), address(0xBEEF)));
+        issuer.updateVerifier(address(0x1234));
+    }
+
+    function test_Revert_Upgrade_Unauthorized() public {
+        address newImpl = address(new ZKPassportBadgeIssuer());
+        vm.prank(address(0xDEAD));
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, uint256(99), address(0xDEAD)));
+        issuer.upgradeToAndCall(newImpl, "");
+    }
+
+    function test_Revert_Initialize_ZeroBadge() public {
+        address impl = address(new ZKPassportBadgeIssuer());
+        bytes memory initData = abi.encodeCall(
+            ZKPassportBadgeIssuer.initialize,
+            (address(auth), address(0), DOMAIN, SCOPE, address(verifier), MAX_VALIDITY)
+        );
+        vm.expectRevert(ZKPassportBadgeIssuer.InvalidBadge.selector);
+        new ERC1967Proxy(impl, initData);
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    function _excluded(string memory code) internal pure returns (string[] memory a) {
+        a = new string[](1);
+        a[0] = code;
+    }
+
+    function _empty() internal pure returns (string[] memory) {
+        return new string[](0);
+    }
+
+    /// @dev Asserts `factKeys` is refused and that the attempt left nothing behind — no credential on the badge
+    /// and no tracked entry, so a rejected request can never be mistaken later for a granted one.
+    function _expectFactKeysRefused(uint256 factKeys, string[] memory list) internal {
+        ProofVerificationParams memory p = _params(alice, block.timestamp, 1 days);
+        uint256 balanceBefore = badge.balanceOf(alice);
+
+        vm.expectRevert(ZKPassportBadgeIssuer.InvalidFactKeys.selector);
+        if (list.length == 0) issuer.submitProofAndMint(p, factKeys);
+        else issuer.submitProofAndMint(p, factKeys, list);
+
+        assertEq(badge.balanceOf(alice), balanceBefore, "no credential minted");
+        (, bool exists) = issuer.currentTokenOf(factKeys, alice);
+        assertFalse(exists, "no tracked entry");
+    }
+
+    function _params(address sender, uint256 proofTimestamp, uint256 validityPeriod)
+        internal
+        view
+        returns (ProofVerificationParams memory)
+    {
+        bytes32[] memory pubs = new bytes32[](3);
+        pubs[0] = keccak256(bytes(DOMAIN));
+        pubs[1] = keccak256(bytes(SCOPE));
+        pubs[2] = bytes32(proofTimestamp);
+        return ProofVerificationParams({
+            version: bytes32(0),
+            proofVerificationData: ProofVerificationData({vkeyHash: bytes32(0), proof: "", publicInputs: pubs}),
+            committedInputs: abi.encode(BoundData({senderAddress: sender, chainId: block.chainid, customData: ""})),
+            serviceConfig: ServiceConfig({validityPeriodInSeconds: validityPeriod, domain: DOMAIN, scope: SCOPE, devMode: false})
+        });
+    }
+}
