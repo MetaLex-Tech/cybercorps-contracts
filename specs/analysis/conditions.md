@@ -207,8 +207,6 @@ automatically.
 | `GPLPApprovalCondition`       | Optional; only if governing documents require per-deal approval             | Authorized approver address (GP, managing member, or delegated compliance officer)                                                                                                                  |
 | `QMSModeCondition`            | Optional; per-SPV opt-in for §1.7704-1(g) QMS safe harbor                   | Frequency cap value (counsel-determined per SPV); listing timestamp stored at `postOffer`                                                                                                           |
 
-> Note: `AgreementSignedCondition` was previously listed in this baseline set but has been dropped.
-
 #### Layer 1 — Exemption-specific (§5) (individual `DealManager`, selected at `postOffer`)
 
 Condition contract addresses are registered in the DealManager (or a shared registry) at protocol initialization. At
