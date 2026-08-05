@@ -431,11 +431,19 @@ contract LeXcheXBadgeTest is Test {
         assertTrue(badge.hasValidCredentialOf(holder, K_QIB));
         assertTrue(badge.hasValidCredentialOf(holder, K_BAD_ACTOR_CLEAR));
         assertFalse(badge.hasValidCredentialOf(holder, K_ACCREDITED));
-        assertFalse(badge.hasValidCredentialOf(holder, K_QP | K_QIB)); // no one credential asserts both
+        // Both statuses are true of this holder, so both count — it does not matter that they were attested
+        // separately. A key the holder has no credential for still fails the ask.
+        assertTrue(badge.hasValidCredentialOf(holder, K_QP | K_QIB));
+        assertFalse(badge.hasValidCredentialOf(holder, K_QP | K_ACCREDITED));
 
         address both = makeAddr("qpAndQib");
         _mint(both, _cred(K_QP | K_QIB));
         assertTrue(badge.hasValidCredentialOf(both, K_QP | K_QIB));
+
+        // Seasoning does NOT assemble a combination the same way: no one credential carries both, so there is
+        // no single date to report. See earliestValidIssuance.
+        assertEq(uint256(badge.earliestValidIssuance(holder, K_QP | K_QIB)), 0);
+        assertGt(uint256(badge.earliestValidIssuance(both, K_QP | K_QIB)), 0);
     }
 
     function test_HasValidCredentialOf_EmptyKeyIsRejected() public {

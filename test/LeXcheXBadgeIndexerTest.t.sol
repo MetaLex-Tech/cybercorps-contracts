@@ -133,7 +133,10 @@ contract LeXcheXBadgeIndexerTest is Test {
             K_BAD_ACTOR_CLEAR,
             K_NON_US,
             K_SPV_WHITELIST,
-            K_SYNDICATE
+            K_SYNDICATE,
+            // A combination, probed because the two reads answer it differently: eligibility adds credentials
+            // up, seasoning needs one credential carrying the whole set.
+            K_ACCREDITED | K_QP
         ];
         probeSpvs = [spvA, spvB];
         // bytes32(0) is probed on purpose: an unlabelled credential is not in the on-chain label index, so no
@@ -310,8 +313,20 @@ contract LeXcheXBadgeIndexerTest is Test {
         }
     }
 
-    function _idxHasValidCredentialOf(address holder, uint256 key) internal view returns (bool found) {
-        (, found) = _idxMostRecentValidWith(holder, key);
+    /// @dev Mirrors the contract: the holder's valid credentials TOGETHER have to cover `key`, so statuses
+    /// attested on separate credentials still add up. Not built on _idxMostRecentValidWith — that one picks a
+    /// single credential, which would force every key onto one of them.
+    function _idxHasValidCredentialOf(address holder, uint256 key) internal view returns (bool) {
+        if (key == 0) return false;
+
+        uint256 covered;
+        uint256[] storage ids = idxHolderTokens[holder];
+        for (uint256 i = 0; i < ids.length; i++) {
+            if (!_idxIsValid(ids[i])) continue;
+            covered |= idxCreds[ids[i]].cred.asserts;
+            if ((covered & key) == key) return true;
+        }
+        return false;
     }
 
     function _idxHasValidScopedCredentialOf(address holder, uint256 scopeKey, address spv)
@@ -630,6 +645,32 @@ contract LeXcheXBadgeIndexerTest is Test {
         assertEq(bytes32(_idxUsState(alice)), bytes32(bytes2("CA")), "the newer badge's state wins");
         assertEq(_idxLookThroughJurisdiction(alice), "US", "the newer badge didn't mention this, so US stands");
         assertEq(_idxInvestorJurisdiction(alice), "DE", "same age, so the later token id wins");
+    }
+
+    // Someone can qualify on two counts without one badge saying both — the accredited badge and the QP badge
+    // are separate pieces of paper. Eligibility adds them up; the seasoning date cannot, because two badges
+    // issued on different days give no one date to report. The indexer has to answer both the same way.
+    function test_Indexer_SeparateStatusBadges_AddUpForEligibilityNotSeasoning() public {
+        vm.recordLogs();
+        _mint(alice, _cred(K_ACCREDITED));
+        vm.warp(block.timestamp + 5 days);
+        _mint(alice, _cred(K_QP));
+        _index(vm.getRecordedLogs());
+
+        _assertRegistryReconstructed();
+        assertTrue(_idxHasValidCredentialOf(alice, K_ACCREDITED | K_QP), "two badges, both count");
+        assertEq(uint256(_idxEarliestValidIssuance(alice, K_ACCREDITED | K_QP)), 0, "no one badge says both");
+
+        // One badge saying both does have a date, and it is that badge's.
+        vm.recordLogs();
+        uint256 combined = _mint(bob, _cred(K_ACCREDITED | K_QP));
+        _index(vm.getRecordedLogs());
+
+        _assertRegistryReconstructed();
+        assertEq(
+            uint256(_idxEarliestValidIssuance(bob, K_ACCREDITED | K_QP)),
+            uint256(badge.getCredential(combined).issuanceDate)
+        );
     }
 
     // A badge going out of date is not a transaction, so nothing is logged when it happens. The indexer wrote
