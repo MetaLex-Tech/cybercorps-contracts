@@ -44,7 +44,7 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
         ILexChexBadge badge;
         string expectedDomain;
         string expectedScope;
-        mapping(uint256 => mapping(address => uint256)) current; // factKeys => wallet => tokenId+1 (current live credential)
+        mapping(address => mapping(uint256 => mapping(address => uint256))) current; // badge => factKeys => wallet => tokenId+1
         uint256 maxValidityPeriod; // ceiling on how long a credential minted here may last
     }
 
@@ -104,6 +104,7 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
         emit VerifierUpdated(_verifier);
     }
 
+    /// @dev Tracked ids are per badge, so switching swaps the whole set — see _tracked.
     function updateBadge(address _badge) external onlyAdmin {
         if (_badge == address(0)) revert InvalidBadge();
         _issuerStorage().badge = ILexChexBadge(_badge);
@@ -187,22 +188,23 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
         cred.expiryDate = uint64(expiresAt);
         if (factKeys & K_ZKP_NATIONALITY_OUT != 0) cred.zkpNationalityOut = zkpNationalityOut;
 
-        ILexChexBadge badge = $.badge;
-        uint256 stored = $.current[factKeys][account];
+        ILexChexBadge badgeContract = $.badge;
+        mapping(uint256 => mapping(address => uint256)) storage tracked = _tracked($);
+        uint256 stored = tracked[factKeys][account];
         if (stored != 0) {
             uint256 staleId = stored - 1;
             // Renew the live credential in one call (void + re-mint) so the active set stays lean. A stale
             // credential that is already voided/expired is not superseded — just replaced by a fresh mint.
-            if (badge.isValid(staleId)) {
-                tokenId = badge.supersede(staleId, cred, "zkpassport-renewal");
-                $.current[factKeys][account] = tokenId + 1;
+            if (badgeContract.isValid(staleId)) {
+                tokenId = badgeContract.supersede(staleId, cred, "zkpassport-renewal");
+                tracked[factKeys][account] = tokenId + 1;
                 emit CredentialProofRenewed(uniqueIdentifier, factKeys, account, staleId, tokenId, uint64(expiresAt));
                 return tokenId;
             }
         }
 
-        tokenId = badge.mint(account, cred);
-        $.current[factKeys][account] = tokenId + 1;
+        tokenId = badgeContract.mint(account, cred);
+        tracked[factKeys][account] = tokenId + 1;
         emit CredentialProofMinted(uniqueIdentifier, factKeys, account, tokenId, uint64(expiresAt));
     }
 
@@ -210,12 +212,13 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
     /// own (the credential minted to msg.sender). The record is retained on the badge for audit.
     function void(uint256 factKeys) external {
         IssuerStorage storage $ = _issuerStorage();
-        uint256 stored = $.current[factKeys][msg.sender];
+        mapping(uint256 => mapping(address => uint256)) storage tracked = _tracked($);
+        uint256 stored = tracked[factKeys][msg.sender];
         if (stored == 0) revert NoLiveCredential();
         uint256 tokenId = stored - 1;
         if (!$.badge.isValid(tokenId)) revert NoLiveCredential();
 
-        $.current[factKeys][msg.sender] = 0;
+        tracked[factKeys][msg.sender] = 0;
         $.badge.void(tokenId, "self-void");
         emit CredentialSelfVoided(factKeys, msg.sender, tokenId);
     }
@@ -248,12 +251,23 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
     function expectedScope() external view returns (string memory) { return _issuerStorage().expectedScope; }
     function maxValidityPeriod() external view returns (uint256) { return _issuerStorage().maxValidityPeriod; }
 
-    /// @notice The current credential this issuer tracks for (fact-set, wallet), if any. `exists` only reports
-    /// that a credential was issued here — call badge.isValid to learn whether it is still live.
+    /// @notice The current credential this issuer tracks for (fact-set, wallet) on the badge in use, if any.
+    /// `exists` only reports that a credential was issued here — call badge.isValid to learn whether it is still
+    /// live.
     function currentTokenOf(uint256 factKeys, address wallet) external view returns (uint256 tokenId, bool exists) {
-        uint256 stored = _issuerStorage().current[factKeys][wallet];
+        uint256 stored = _tracked(_issuerStorage())[factKeys][wallet];
         if (stored == 0) return (0, false);
         return (stored - 1, true);
+    }
+
+    /// @dev Every badge numbers its tokens from 0. Keying by badge stops a badge swap from pointing a saved id
+    /// at a stranger's credential.
+    function _tracked(IssuerStorage storage $)
+        private
+        view
+        returns (mapping(uint256 => mapping(address => uint256)) storage)
+    {
+        return $.current[address($.badge)];
     }
 
     function _issuerStorage() private pure returns (IssuerStorage storage $) {

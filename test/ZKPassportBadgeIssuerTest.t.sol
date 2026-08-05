@@ -100,6 +100,7 @@ contract MockZKPassportVerifier is IZKPassportVerifier {
 ///  F. Provenance is kept separate. The issuer mints ZK-provenance facts only (K_ZKP_*) and can never assert a
 ///     manual-KYC key, so each downstream condition decides on its own whether to trust a ZKPassport attestation.
 ///  G. Governance owns the wiring. Only admins change verifier/badge; only the owner can evolve the contract.
+///     Rewiring never hands one holder's standing to another.
 ///
 /// Scenario matrix (topic → intent it protects → expected):
 ///
@@ -126,6 +127,8 @@ contract MockZKPassportVerifier is IZKPassportVerifier {
 ///   • Void_AnotherHoldersCredential / Twice / AfterAdminVoidedOnBadge / ManualFactKeySpaceIsEmpty ... only your own
 ///     live credential is droppable, and liveness is re-checked on the badge, not assumed from bookkeeping ....... refuse
 ///   • CurrentTokenOf_ReportsIssuance ..... the issuer's tracking is not a liveness answer ....................... exists, not valid
+///   • BadgeRotation_SelfVoid / Renewal / TrackingIsPerBadge ... a saved id only means anything on the badge that
+///     minted it, so swapping badges never lets one holder touch another's ................. refuse / fresh mint
 ///   • ValidityPeriod_WithinCap ........... a period inside the cap is honoured as submitted .................... issue
 ///   • ValidityPeriod_ExceedsCap / AbsurdValues / FutureProofTimestamp ... the submitted validity period is not
 ///     covered by the proof, so the cap is what keeps a credential re-attestable (see the fork suite) .......... refuse
@@ -164,6 +167,7 @@ contract ZKPassportBadgeIssuerTest is Test {
 
     address internal alice = address(0xA11CE);
     address internal aliceWallet2 = address(0xA11CE2);
+    address internal bob = address(0xB0B);
     address internal relayer = address(0xCAFE);
 
     function setUp() public {
@@ -434,6 +438,61 @@ contract ZKPassportBadgeIssuerTest is Test {
         assertTrue(exists, "still tracked");
         assertEq(tracked, tokenId);
         assertFalse(badge.isValid(tracked), "but not live: callers must ask the badge");
+    }
+
+    // ── Badge rotation: tracked ids belong to the badge that issued them ─────
+
+    // Ids restart at 0 on each badge, so alice's saved id is bob's credential on the new one. She can't void it.
+    function test_BadgeRotation_SelfVoid_CannotReachAnotherHoldersCredential() public {
+        (LeXcheXBadge other, uint256 collidingId) = _rotateOntoCollidingBadge();
+
+        vm.prank(alice);
+        vm.expectRevert(ZKPassportBadgeIssuer.NoLiveCredential.selector);
+        issuer.void(FK_NAT_OUT);
+
+        assertTrue(other.isValid(collidingId), "the stranger's credential is untouched");
+    }
+
+    // Same collision on the renewal path: nothing is tracked on the new badge, so it mints alice a fresh one
+    // instead of taking over bob's token.
+    function test_BadgeRotation_Renewal_FreshMintsToTheProvenWallet() public {
+        (LeXcheXBadge other, uint256 collidingId) = _rotateOntoCollidingBadge();
+
+        uint256 minted = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        assertTrue(other.isValid(collidingId), "the stranger's credential is untouched");
+        assertEq(other.ownerOf(minted), alice, "the credential vests in the proven wallet");
+        assertTrue(other.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+    }
+
+    // Rotating away doesn't wipe the old badge's records, so rotating back finds them intact.
+    function test_BadgeRotation_TrackingIsPerBadge_AndSurvivesRotatingBack() public {
+        (, uint256 collidingId) = _rotateOntoCollidingBadge();
+
+        (, bool existsOnOther) = issuer.currentTokenOf(FK_NAT_OUT, alice);
+        assertFalse(existsOnOther, "nothing was issued to alice on the new badge");
+
+        issuer.updateBadge(address(badge));
+        (uint256 tracked, bool exists) = issuer.currentTokenOf(FK_NAT_OUT, alice);
+        assertTrue(exists);
+        assertEq(tracked, collidingId, "the original badge's record is intact");
+    }
+
+    /// @dev Give alice a credential, then point the issuer at a new badge where bob already holds that same id.
+    function _rotateOntoCollidingBadge() internal returns (LeXcheXBadge other, uint256 collidingId) {
+        uint256 aliceId = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        other = LeXcheXBadge(
+            address(new ERC1967Proxy(address(new LeXcheXBadge()), abi.encodeCall(LeXcheXBadge.initialize, (address(auth)))))
+        );
+
+        Credential memory cred;
+        cred.asserts = K_NON_US; // an unrelated manual-KYC credential, nothing to do with ZKPassport
+        cred.expiryDate = uint64(block.timestamp + 30 days);
+        collidingId = other.mint(bob, cred);
+        assertEq(collidingId, aliceId, "the ids collide, which is the whole hazard");
+
+        issuer.updateBadge(address(other));
     }
 
     // ── Eligibility gating ───────────────────────────────────────────────────
