@@ -34,6 +34,7 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
     error InvalidMaxValidityPeriod();
     error MaxValidityPeriodExceeded();
     error ProofExpired();
+    error StaleProof();
     error NoLiveCredential();
 
     /// @dev Deterministic verifier address from ZKPassport docs.
@@ -46,6 +47,7 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
         string expectedScope;
         mapping(address => mapping(uint256 => mapping(address => uint256))) current; // badge => factKeys => wallet => tokenId+1
         uint256 maxValidityPeriod; // ceiling on how long a credential minted here may last
+        mapping(address => uint256) lastProofTimestamp; // wallet => newest proof timestamp already used
     }
 
     bytes32 private constant STORAGE_POSITION = keccak256("metalex.creds.zkpassport-badge-issuer.storage.v1");
@@ -162,6 +164,12 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         uint256 proofTimestamp = helper.getProofTimestamp(params.proofVerificationData.publicInputs);
 
+        // A wallet's proofs only move forward in time. Anyone can submit and the same calldata verifies over and
+        // over, so without this a bystander could replay an old proof to bring back a credential the holder self-
+        // voided or an admin revoked. Re-standing needs a new proof, which is checked against today's facts.
+        if (proofTimestamp <= $.lastProofTimestamp[account]) revert StaleProof();
+        $.lastProofTimestamp[account] = proofTimestamp;
+
         // Every requested fact must have its check pass, or we refuse to mint it (also blocks a fact-key with no
         // matching check).
         if (_enforce(factKeys, helper, params, proofTimestamp, zkpNationalityOut) != factKeys) revert UnverifiedFactKey();
@@ -250,6 +258,11 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
     function expectedDomain() external view returns (string memory) { return _issuerStorage().expectedDomain; }
     function expectedScope() external view returns (string memory) { return _issuerStorage().expectedScope; }
     function maxValidityPeriod() external view returns (uint256) { return _issuerStorage().maxValidityPeriod; }
+
+    /// @notice Timestamp of the newest proof already used for `wallet`. The next one must be newer than this.
+    function lastProofTimestampOf(address wallet) external view returns (uint256) {
+        return _issuerStorage().lastProofTimestamp[wallet];
+    }
 
     /// @notice The current credential this issuer tracks for (fact-set, wallet) on the badge in use, if any.
     /// `exists` only reports that a credential was issued here — call badge.isValid to learn whether it is still

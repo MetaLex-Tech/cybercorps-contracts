@@ -135,6 +135,12 @@ contract MockZKPassportVerifier is IZKPassportVerifier {
 ///   • UpdateMaxValidityPeriod_AdminCanRetune / Unauthorized / Zero / Initialize_Zero ... the cap is admin-tunable
 ///     and never absent .......................................................................................... issue / refuse
 ///
+///  Proof reuse — a spent proof is never replayable (E)
+///   • Replay_AfterSelfVoid ............... a bystander can't undo the holder's own drop with old calldata ..... refuse
+///   • Replay_AfterAdminVoidedOnBadge ..... nor undo a compliance revocation ................................... refuse
+///   • Replay_CannotExtendLiveCredential .. nor stretch a live credential by re-declaring a longer period ...... refuse
+///   • OlderProof_AfterNewerOneUsed ....... standing only moves forward, so an older proof is refused too ...... refuse
+///
 ///  Eligibility gating — a refusal follows the person (E)
 ///   • NationalityRejected ................ a holder who can't prove the exclusion is refused .................... refuse
 ///   • SanctionsFail ...................... sanctioned persons refused; upstream reason surfaced verbatim ........ refuse
@@ -251,15 +257,21 @@ contract ZKPassportBadgeIssuerTest is Test {
 
     // ── Kinds & wallets (no personhood notary) ───────────────────────────────
 
+    // A second fact-set needs a second proof: one proof is good for one mint.
     function test_DifferentFacts_SameWallet_MintsSeparateCredentials() public {
-        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
-        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_BAD_ACTOR);
+        vm.warp(1000);
+        issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        vm.warp(1100);
+        issuer.submitProofAndMint(_params(alice, 1100, 1 days), FK_BAD_ACTOR);
 
         assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
         assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_BAD_ACTOR_CLEAR));
         assertEq(badge.getActiveTokenIds(alice).length, 2);
     }
 
+    // Also pins that proof reuse is judged per wallet, not per passport: two proofs made at the same moment from
+    // one document both stand, because neither wallet has spent a proof before.
     function test_SamePassport_SameFacts_DifferentWallet_IndependentHolders() public {
         uint256 id1 = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
         uint256 id2 = issuer.submitProofAndMint(_params(aliceWallet2, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
@@ -286,7 +298,8 @@ contract ZKPassportBadgeIssuerTest is Test {
     }
 
     function test_Void_SelfService_HolderDropsOwnCredential() public {
-        uint256 tokenId = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+        vm.warp(1000);
+        uint256 tokenId = issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, _excluded("USA"));
         assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
 
         vm.prank(alice);
@@ -294,18 +307,22 @@ contract ZKPassportBadgeIssuerTest is Test {
         assertFalse(badge.isValid(tokenId));
         assertFalse(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
 
-        uint256 fresh = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+        // Coming back is the holder's own call, and it takes a new proof.
+        vm.warp(1100);
+        uint256 fresh = issuer.submitProofAndMint(_params(alice, 1100, 1 days), FK_NAT_OUT, _excluded("USA"));
         assertTrue(fresh != tokenId);
         assertTrue(badge.isValid(fresh));
     }
 
     function test_Void_ThenReMint_IssuesFresh() public {
-        uint256 tokenId = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+        vm.warp(1000);
+        uint256 tokenId = issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, _excluded("USA"));
 
         badge.void(tokenId, "compliance review");
         assertFalse(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
 
-        uint256 fresh = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+        vm.warp(1100);
+        uint256 fresh = issuer.submitProofAndMint(_params(alice, 1100, 1 days), FK_NAT_OUT, _excluded("USA"));
         assertTrue(fresh != tokenId);
         assertTrue(badge.isValid(fresh));
     }
@@ -365,8 +382,11 @@ contract ZKPassportBadgeIssuerTest is Test {
     // A live credential is tracked per FACT-SET, not per fact. Asking for the nationality fact alone and again as
     // part of a combined set yields two credentials that both answer it, and renewing one leaves the other alone.
     function test_OverlappingFactSets_TrackedIndependently() public {
-        uint256 natOnly = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
-        uint256 both = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_BOTH, _excluded("IRN"));
+        vm.warp(1000);
+        uint256 natOnly = issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        vm.warp(1100);
+        uint256 both = issuer.submitProofAndMint(_params(alice, 1100, 1 days), FK_BOTH, _excluded("IRN"));
 
         assertTrue(badge.isValid(natOnly), "the combined set does not supersede the narrower one");
         assertTrue(badge.isValid(both));
@@ -440,6 +460,76 @@ contract ZKPassportBadgeIssuerTest is Test {
         assertFalse(badge.isValid(tracked), "but not live: callers must ask the badge");
     }
 
+    // ── Proof reuse ──────────────────────────────────────────────────────────
+
+    // Dropping a credential has to mean something. The proof verifies just as well the second time and anyone may
+    // submit, so without a check a bystander could replay the holder's own calldata and put the credential back.
+    function test_Revert_Replay_AfterSelfVoid() public {
+        vm.warp(1000);
+        ProofVerificationParams memory p = _params(alice, 1000, 1 days);
+        string[] memory list = _excluded("USA");
+        issuer.submitProofAndMint(p, FK_NAT_OUT, list);
+
+        vm.prank(alice);
+        issuer.void(FK_NAT_OUT);
+
+        vm.warp(1100);
+        vm.prank(relayer);
+        vm.expectRevert(ZKPassportBadgeIssuer.StaleProof.selector);
+        issuer.submitProofAndMint(p, FK_NAT_OUT, list);
+
+        assertFalse(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT), "the drop stands");
+    }
+
+    // The same replay against an admin's revocation, which matters more: the sanctions check is anchored to the
+    // proof's own timestamp, so an old proof re-passes it. A fresh proof is what gets judged on today's list.
+    function test_Revert_Replay_AfterAdminVoidedOnBadge() public {
+        vm.warp(1000);
+        ProofVerificationParams memory p = _params(alice, 1000, 1 days);
+        string[] memory list = _excluded("USA");
+        uint256 tokenId = issuer.submitProofAndMint(p, FK_NAT_OUT, list);
+
+        badge.void(tokenId, "sanctions hit");
+
+        vm.warp(1100);
+        vm.prank(relayer);
+        vm.expectRevert(ZKPassportBadgeIssuer.StaleProof.selector);
+        issuer.submitProofAndMint(p, FK_NAT_OUT, list);
+
+        assertFalse(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT), "the revocation stands");
+    }
+
+    // Nothing to undo here — the credential is live. The proof doesn't cover the validity period, so a replayer
+    // could otherwise re-submit it at the cap and hand the holder far longer standing than they asked for.
+    function test_Revert_Replay_CannotExtendLiveCredential() public {
+        vm.warp(1000);
+        uint256 tokenId = issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        ProofVerificationParams memory stretched = _params(alice, 1000, MAX_VALIDITY);
+        string[] memory list = _excluded("USA");
+
+        vm.warp(1100);
+        vm.prank(relayer);
+        vm.expectRevert(ZKPassportBadgeIssuer.StaleProof.selector);
+        issuer.submitProofAndMint(stretched, FK_NAT_OUT, list);
+
+        assertEq(uint256(badge.getCredential(tokenId).expiryDate), 1000 + 1 days, "lifetime unchanged");
+    }
+
+    // Not only the identical call: a wallet's proofs move forward, so any proof older than the one already spent
+    // is refused — including a genuine one that was never submitted.
+    function test_Revert_OlderProof_AfterNewerOneUsed() public {
+        vm.warp(1000);
+        ProofVerificationParams memory older = _params(alice, 900, 1 days);
+        string[] memory list = _excluded("USA");
+
+        issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, list);
+        assertEq(issuer.lastProofTimestampOf(alice), 1000);
+
+        vm.expectRevert(ZKPassportBadgeIssuer.StaleProof.selector);
+        issuer.submitProofAndMint(older, FK_NAT_OUT, list);
+    }
+
     // ── Badge rotation: tracked ids belong to the badge that issued them ─────
 
     // Ids restart at 0 on each badge, so alice's saved id is bob's credential on the new one. She can't void it.
@@ -458,6 +548,8 @@ contract ZKPassportBadgeIssuerTest is Test {
     function test_BadgeRotation_Renewal_FreshMintsToTheProvenWallet() public {
         (LeXcheXBadge other, uint256 collidingId) = _rotateOntoCollidingBadge();
 
+        // Rotating badges is no excuse to reuse the proof spent on the old one.
+        vm.warp(block.timestamp + 100);
         uint256 minted = issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
 
         assertTrue(other.isValid(collidingId), "the stranger's credential is untouched");
