@@ -124,6 +124,10 @@ contract MockZKPassportVerifier is IZKPassportVerifier {
 ///   • Expired_ThenResubmit_FreshMint ..... nothing live to replace, so a lapsed credential is not superseded ..... new credential
 ///   • Void_SelfService ................... a holder can drop their own credential without an admin ............... void
 ///   • Void_ThenReMint .................... a voided credential does not block a later fresh proof ................ new credential
+///   • AdminVoid_RevokesAnyHoldersCredential ... an admin revokes anyone's, with a reason, and the floor moves ... void
+///   • AdminVoid_ProofMadeAfterwards ...... a revocation is no ban: re-prove on today's facts ................. new credential
+///   • AdminVoid_Unauthorized / EmptyReason / NoLiveCredential ... only an admin, always with a reason, and only
+///     against something live .................................................................................. refuse
 ///   • Void_AnotherHoldersCredential / Twice / AfterAdminVoidedOnBadge / ManualFactKeySpaceIsEmpty ... only your own
 ///     live credential is droppable, and liveness is re-checked on the badge, not assumed from bookkeeping ....... refuse
 ///   • CurrentTokenOf_ReportsIssuance ..... the issuer's tracking is not a liveness answer ....................... exists, not valid
@@ -140,6 +144,9 @@ contract MockZKPassportVerifier is IZKPassportVerifier {
 ///   • Replay_AfterAdminVoidedOnBadge ..... nor undo a compliance revocation ................................... refuse
 ///   • Replay_CannotExtendLiveCredential .. nor stretch a live credential by re-declaring a longer period ...... refuse
 ///   • OlderProof_AfterNewerOneUsed ....... standing only moves forward, so an older proof is refused too ...... refuse
+///   • ProofMadeBeforeSelfVoid ............ nor undo a drop with a proof made before it but never submitted ... refuse
+///   • Void_FloorAppliesToTheWalletsOtherFactSets ... the drop's floor is per wallet, covering every fact-set .. refuse
+///   • Void_ProofMadeAfterwards ........... but the floor is no lockout: anything proven after the drop mints .. new credential
 ///
 ///  Eligibility gating — a refusal follows the person (E)
 ///   • NationalityRejected ................ a holder who can't prove the exclusion is refused .................... refuse
@@ -366,6 +373,66 @@ contract ZKPassportBadgeIssuerTest is Test {
         issuer.void(FK_NAT_OUT);
     }
 
+    // Revoking through the issuer is what an admin should reach for: it drops the credential AND sets the floor,
+    // so the holder can't put it straight back with a proof made before the revoke.
+    function test_AdminVoid_RevokesAnyHoldersCredential_AndSetsFloor() public {
+        vm.warp(1000);
+        string[] memory list = _excluded("USA");
+        uint256 tokenId = issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, list);
+        ProofVerificationParams memory unsubmitted = _params(alice, 1500, 1 days);
+
+        vm.warp(2000);
+        issuer.void(FK_NAT_OUT, alice, "sanctions hit");
+
+        assertFalse(badge.isValid(tokenId));
+        assertFalse(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+        assertEq(badge.getCredential(tokenId).voided, "sanctions hit", "the admin's reason is what the badge records");
+        assertEq(issuer.lastProofTimestampOf(alice), 2000, "the revoke moved the floor to now");
+
+        (, bool exists) = issuer.currentTokenOf(FK_NAT_OUT, alice);
+        assertFalse(exists, "no longer tracked");
+
+        vm.prank(relayer);
+        vm.expectRevert(ZKPassportBadgeIssuer.StaleProof.selector);
+        issuer.submitProofAndMint(unsubmitted, FK_NAT_OUT, list);
+    }
+
+    // The floor is not a ban: the holder can prove themselves again on today's facts.
+    function test_AdminVoid_ProofMadeAfterwards_StillMints() public {
+        vm.warp(1000);
+        issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        vm.warp(2000);
+        issuer.void(FK_NAT_OUT, alice, "compliance review");
+
+        uint256 fresh = issuer.submitProofAndMint(_params(alice, 2001, 1 days), FK_NAT_OUT, _excluded("USA"));
+        assertTrue(badge.isValid(fresh));
+    }
+
+    // Only an admin revokes someone else's — otherwise anyone could strip a holder's eligibility.
+    function test_Revert_AdminVoid_Unauthorized() public {
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, uint256(98), bob));
+        issuer.void(FK_NAT_OUT, alice, "not yours to revoke");
+
+        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+    }
+
+    // The badge refuses an unexplained void, so a revocation always leaves a reason on the record.
+    function test_Revert_AdminVoid_EmptyReason() public {
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        vm.expectRevert(ILexChexBadge.LexChexBadge_MissingVoidReason.selector);
+        issuer.void(FK_NAT_OUT, alice, "");
+    }
+
+    function test_Revert_AdminVoid_NoLiveCredential() public {
+        vm.expectRevert(ZKPassportBadgeIssuer.NoLiveCredential.selector);
+        issuer.void(FK_NAT_OUT, alice, "nothing to revoke");
+    }
+
     // void() takes a raw fact-set and never validates it. Nothing can be voided in a key space this issuer cannot
     // mint into, because only a mint records a tracked credential.
     function test_Revert_Void_ManualFactKeySpaceIsEmpty() public {
@@ -514,6 +581,59 @@ contract ZKPassportBadgeIssuerTest is Test {
         issuer.submitProofAndMint(stretched, FK_NAT_OUT, list);
 
         assertEq(uint256(badge.getCredential(tokenId).expiryDate), 1000 + 1 days, "lifetime unchanged");
+    }
+
+    // The timestamp check alone only stops proofs older than the last one SUBMITTED. A proof the holder made but
+    // never submitted sits above that mark, so without a floor at void time it would still put the credential
+    // back — and its checks would be judged at its own older timestamp. void() raises the floor to now.
+    function test_Revert_ProofMadeBeforeSelfVoid_CannotUndoIt() public {
+        vm.warp(1000);
+        string[] memory list = _excluded("USA");
+        issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, list);
+
+        // Made while the credential stood, never submitted: newer than the spent proof, older than the drop.
+        ProofVerificationParams memory unsubmitted = _params(alice, 1500, 1 days);
+
+        vm.warp(2000);
+        vm.prank(alice);
+        issuer.void(FK_NAT_OUT);
+        assertEq(issuer.lastProofTimestampOf(alice), 2000, "the drop moved the floor to now");
+
+        // Not expiry doing the work: 1500 + 1 days is still in the future.
+        vm.prank(relayer);
+        vm.expectRevert(ZKPassportBadgeIssuer.StaleProof.selector);
+        issuer.submitProofAndMint(unsubmitted, FK_NAT_OUT, list);
+
+        assertFalse(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT), "the drop stands");
+    }
+
+    // The floor is not a lockout — anything proven after the drop is fine.
+    function test_Void_ProofMadeAfterwards_StillMints() public {
+        vm.warp(1000);
+        issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, _excluded("USA"));
+
+        vm.warp(2000);
+        vm.prank(alice);
+        issuer.void(FK_NAT_OUT);
+
+        uint256 fresh = issuer.submitProofAndMint(_params(alice, 2001, 1 days), FK_NAT_OUT, _excluded("USA"));
+        assertTrue(badge.isValid(fresh));
+        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+    }
+
+    // The floor is per WALLET, not per fact-set: dropping one fact-set also refuses older proofs for the others.
+    // Coarser than it needs to be, but it reuses the one mark a wallet already has.
+    function test_Void_FloorAppliesToTheWalletsOtherFactSets() public {
+        vm.warp(1000);
+        issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, _excluded("USA"));
+        ProofVerificationParams memory unsubmitted = _params(alice, 1500, 1 days);
+
+        vm.warp(2000);
+        vm.prank(alice);
+        issuer.void(FK_NAT_OUT);
+
+        vm.expectRevert(ZKPassportBadgeIssuer.StaleProof.selector);
+        issuer.submitProofAndMint(unsubmitted, FK_BAD_ACTOR);
     }
 
     // Not only the identical call: a wallet's proofs move forward, so any proof older than the one already spent

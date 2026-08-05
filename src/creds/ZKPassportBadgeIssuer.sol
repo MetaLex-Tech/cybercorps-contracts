@@ -19,8 +19,8 @@ import {Credential} from "./storage/lexchexBadgeStorage.sol";
 ///   check can't be minted. Only K_ZKP_* keys are allowed, so this issuer can't assert unrelated keys.
 /// - No PII on-chain; the proof id is kept only as evidenceHash for audit.
 /// - Not a personhood check: same passport can be reused by multiple mints to different wallets.
-/// - Re-proving the same fact-set renews it in place (supersede); a holder can drop their own with void().
-///   Nothing is ever burned — old records stay for audit.
+/// - Re-proving the same fact-set renews it in place (supersede); a holder can drop their own with void(), and an
+///   admin can revoke anyone's with the three-argument void(). Nothing is ever burned — old records stay for audit.
 contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
     error InvalidVerifier();
     error InvalidBadge();
@@ -47,7 +47,7 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
         string expectedScope;
         mapping(address => mapping(uint256 => mapping(address => uint256))) current; // badge => factKeys => wallet => tokenId+1
         uint256 maxValidityPeriod; // ceiling on how long a credential minted here may last
-        mapping(address => uint256) lastProofTimestamp; // wallet => newest proof timestamp already used
+        mapping(address => uint256) lastProofTimestamp; // wallet => proofs must be newer than this
     }
 
     bytes32 private constant STORAGE_POSITION = keccak256("metalex.creds.zkpassport-badge-issuer.storage.v1");
@@ -61,6 +61,7 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
         bytes32 indexed uniqueIdentifier, uint256 indexed factKeys, address indexed account, uint256 staleTokenId, uint256 tokenId, uint64 expiresAt
     );
     event CredentialSelfVoided(uint256 indexed factKeys, address indexed account, uint256 tokenId);
+    event CredentialRevoked(uint256 indexed factKeys, address indexed account, uint256 tokenId, string reason);
     event MaxValidityPeriodUpdated(uint256 maxValidityPeriod);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -166,7 +167,9 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
 
         // A wallet's proofs only move forward in time. Anyone can submit and the same calldata verifies over and
         // over, so without this a bystander could replay an old proof to bring back a credential the holder self-
-        // voided or an admin revoked. Re-standing needs a new proof, which is checked against today's facts.
+        // voided or an admin revoked. Either void() pushes this floor to now, so proofs made before the drop are
+        // refused too and re-standing needs a fresh proof, checked against today's facts. Note this only covers
+        // drops made here — voiding on the badge directly sets no floor.
         if (proofTimestamp <= $.lastProofTimestamp[account]) revert StaleProof();
         $.lastProofTimestamp[account] = proofTimestamp;
 
@@ -219,16 +222,33 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
     /// @notice Drop your own credential for `factKeys`. Self-service: no admin needed, and you can only void your
     /// own (the credential minted to msg.sender). The record is retained on the badge for audit.
     function void(uint256 factKeys) external {
+        uint256 tokenId = _void(factKeys, msg.sender, "self-void");
+        emit CredentialSelfVoided(factKeys, msg.sender, tokenId);
+    }
+
+    /// @notice Admin revocation of anyone's `factKeys` credential — failed re-check, a sanctions hit, whatever
+    /// `reason` records. Revoke here rather than on the badge: this is what sets the freshness floor, so a proof
+    /// made before the revoke can't be used to mint the credential straight back.
+    function void(uint256 factKeys, address account, string calldata reason) external onlyAdmin {
+        uint256 tokenId = _void(factKeys, account, reason);
+        emit CredentialRevoked(factKeys, account, tokenId, reason);
+    }
+
+    /// @dev Drop `account`'s tracked credential for `factKeys` and raise their freshness floor to now, so a proof
+    /// made before this can't put it back. Only proofs never submitted could do that, but a drop should mean
+    /// something. The floor is per wallet, so it also blocks older proofs for that wallet's other fact-sets.
+    function _void(uint256 factKeys, address account, string memory reason) internal returns (uint256 tokenId) {
         IssuerStorage storage $ = _issuerStorage();
         mapping(uint256 => mapping(address => uint256)) storage tracked = _tracked($);
-        uint256 stored = tracked[factKeys][msg.sender];
+        uint256 stored = tracked[factKeys][account];
         if (stored == 0) revert NoLiveCredential();
-        uint256 tokenId = stored - 1;
+        tokenId = stored - 1;
         if (!$.badge.isValid(tokenId)) revert NoLiveCredential();
 
-        tracked[factKeys][msg.sender] = 0;
-        $.badge.void(tokenId, "self-void");
-        emit CredentialSelfVoided(factKeys, msg.sender, tokenId);
+        tracked[factKeys][account] = 0;
+        if (block.timestamp > $.lastProofTimestamp[account]) $.lastProofTimestamp[account] = block.timestamp;
+
+        $.badge.void(tokenId, reason);
     }
 
     /// @dev Thin, overridable check layer: run the check each requested fact-key needs and return the mask
@@ -259,7 +279,8 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
     function expectedScope() external view returns (string memory) { return _issuerStorage().expectedScope; }
     function maxValidityPeriod() external view returns (uint256) { return _issuerStorage().maxValidityPeriod; }
 
-    /// @notice Timestamp of the newest proof already used for `wallet`. The next one must be newer than this.
+    /// @notice The next proof for `wallet` must be newer than this. Set by the newest proof already used, and
+    /// raised to the time of the wallet's last void().
     function lastProofTimestampOf(address wallet) external view returns (uint256) {
         return _issuerStorage().lastProofTimestamp[wallet];
     }

@@ -7,7 +7,7 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import {LeXcheXBadge} from "../src/creds/lexchexBadge.sol";
 import {ZKPassportBadgeIssuer} from "../src/creds/ZKPassportBadgeIssuer.sol";
 import {K_ZKP_NATIONALITY_OUT} from "../src/interfaces/ILexChexBadge.sol";
-import {IZKPassportVerifier, ProofVerificationParams} from "../src/interfaces/IZKPassportVerifier.sol";
+import {IZKPassportHelper, IZKPassportVerifier, ProofVerificationParams} from "../src/interfaces/IZKPassportVerifier.sol";
 import {NonUSNationalityConditionHelper} from "./NonUSNationalityConditionForkTest.t.sol";
 
 /// @notice Real-proof coverage for ZKPassportBadgeIssuer against the deployed ZKPassport verifier.
@@ -64,6 +64,24 @@ contract ZKPassportBadgeIssuerForkTest is Test {
             )
         );
         auth.updateRole(address(issuer), auth.ADMIN_ROLE());
+    }
+
+    /// @notice The country list IS bound to the proof, unlike the validity period. A submitter cannot pass a
+    /// shorter list to record a weaker exclusion set than the holder proved — the verifier wants the same list the
+    /// proof committed to, so a subset is refused just like a stranger's list would be.
+    function test_CountryListIsBoundToTheProof() public {
+        (ProofVerificationParams memory params,) = NonUSNationalityConditionHelper.parseProofFromJson(PROOF);
+        vm.warp(SIGNED_TS);
+
+        string[] memory shortened = new string[](1);
+        shortened[0] = "USA"; // a real member of the proven set, but only one of the nine
+
+        (,, IZKPassportHelper helper) = IZKPassportVerifier(REAL_VERIFIER).verify(params);
+        assertTrue(helper.isNationalityOut(excludedCountries, params.committedInputs), "the proven list passes");
+        assertFalse(helper.isNationalityOut(shortened, params.committedInputs), "a subset does not");
+
+        vm.expectRevert(ZKPassportBadgeIssuer.NationalityNotExcluded.selector);
+        issuer.submitProofAndMint(params, K_ZKP_NATIONALITY_OUT, shortened);
     }
 
     /// @notice A real proof mints the nationality-exclusion credential, expiring per the declared validity period.
