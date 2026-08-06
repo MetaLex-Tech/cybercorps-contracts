@@ -4,33 +4,24 @@ pragma solidity 0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 import {LeXcheXBadgeRender} from "../src/creds/LeXcheXBadgeRender.sol";
-import {Credential, CredentialCategory, CategoryKind} from "../src/creds/storage/lexchexBadgeStorage.sol";
-import {IERC5484} from "../src/interfaces/IERC5484.sol";
+import {Credential} from "../src/creds/storage/lexchexBadgeStorage.sol";
+import {InvestorType} from "../src/interfaces/ILexChexBadge.sol";
 
-/// @notice Covers the regulatoryJurisdiction rendering added to LeXcheXBadgeRender: the tokenURI metadata
-/// trait and the SVG row are emitted only when the field is set, and never displace the physical jurisdiction.
+/// @notice Covers the operator-typed fields LeXcheXBadgeRender displays: lookThroughJurisdiction (metadata
+/// trait and SVG row emitted only when set, never displacing the physical jurisdiction) and investorName
+/// (named holder when set, investor type otherwise).
 contract LeXcheXBadgeRenderTest is Test {
     using stdJson for string;
 
     function _cred(string memory regulatory) internal pure returns (Credential memory c) {
-        c.investorName = "Acme Feeder LP";
-        c.investorType = "Fund";
+        c.investorType = InvestorType.ENTITY;
         c.investorJurisdiction = "KY";
-        c.regulatoryJurisdiction = regulatory;
+        c.lookThroughJurisdiction = regulatory;
         c.expiryDate = 1_893_456_000;
     }
 
-    function _cat() internal pure returns (CredentialCategory memory c) {
-        c.name = "Accredited";
-        c.description = "desc";
-        c.kind = CategoryKind.ACCREDITED_INVESTOR;
-        c.burnAuth = IERC5484.BurnAuth.OwnerOnly;
-        c.exists = true;
-        c.active = true;
-    }
-
     function test_TokenUri_IncludesRegulatoryJurisdiction_WhenSet() public {
-        (string memory json, string memory svg) = _decode(LeXcheXBadgeRender.tokenURI(1, _cred("US"), _cat(), true));
+        (string memory json, string memory svg) = _decode(LeXcheXBadgeRender.tokenURI(1, _cred("US"), true));
 
         (bool foundReg, string memory regValue) = _trait(json, "Regulatory Jurisdiction");
         assertTrue(foundReg, "reg trait missing");
@@ -45,7 +36,7 @@ contract LeXcheXBadgeRenderTest is Test {
     }
 
     function test_TokenUri_OmitsRegulatoryJurisdiction_WhenEmpty() public {
-        (string memory json, string memory svg) = _decode(LeXcheXBadgeRender.tokenURI(1, _cred(""), _cat(), true));
+        (string memory json, string memory svg) = _decode(LeXcheXBadgeRender.tokenURI(1, _cred(""), true));
 
         (bool foundReg,) = _trait(json, "Regulatory Jurisdiction");
         assertFalse(foundReg, "reg trait should be absent");
@@ -56,6 +47,96 @@ contract LeXcheXBadgeRenderTest is Test {
         assertEq(jxValue, "KY");
 
         assertFalse(vm.contains(svg, "REGULATORY"), "svg reg row should be absent");
+    }
+
+    // ── investorName ────────────────────────────────────────────────────────────
+
+    function test_TokenUri_IncludesName_WhenSet() public {
+        Credential memory c = _cred("");
+        c.investorName = "Acme Capital LLC";
+        (string memory json, string memory svg) = _decode(LeXcheXBadgeRender.tokenURI(1, c, true));
+
+        (bool found, string memory value) = _trait(json, "Name");
+        assertTrue(found, "name trait missing");
+        assertEq(value, "Acme Capital LLC");
+
+        // The named holder replaces the type label on the "HELD BY" line.
+        assertTrue(vm.contains(svg, "Acme Capital LLC"), "svg must show the name");
+    }
+
+    function test_TokenUri_OmitsName_WhenEmpty_AndSvgShowsType() public {
+        (string memory json, string memory svg) = _decode(LeXcheXBadgeRender.tokenURI(1, _cred(""), true));
+
+        (bool found,) = _trait(json, "Name");
+        assertFalse(found, "name trait should be absent");
+
+        // The type label keeps the "HELD BY" line from rendering blank.
+        (bool foundType, string memory typeValue) = _trait(json, "Investor Type");
+        assertTrue(foundType, "type trait missing");
+        assertEq(typeValue, "Entity");
+        assertTrue(vm.contains(svg, "Entity"), "svg must fall back to the type");
+    }
+
+    // Names are operator-typed too, so they carry the same injection risk as jurisdictions.
+    function test_NameIsEscaped_InJsonAndSvg() public {
+        Credential memory c = _cred("");
+        c.investorName = "Acme\", \"injected\": \"yes";
+        (string memory json, string memory svg) = _decode(LeXcheXBadgeRender.tokenURI(1, c, true));
+
+        (bool found, string memory value) = _trait(json, "Name");
+        assertTrue(found, "name trait missing");
+        assertEq(value, "Acme\", \"injected\": \"yes");
+        assertFalse(vm.keyExistsJson(json, ".attributes[0].injected"), "no field was injected");
+
+        c.investorName = "<script>&";
+        (, svg) = _decode(LeXcheXBadgeRender.tokenURI(1, c, true));
+        assertTrue(vm.contains(svg, "&lt;script&gt;&amp;"), "reserved characters must be escaped");
+        assertFalse(vm.contains(svg, "<script>"), "raw markup must not reach the image");
+    }
+
+    // ── Audit findings ──────────────────────────────────────────────────────────
+
+    // L1 — the expiry is the holder's record of when re-attestation is due, so it has to be the real date.
+    // Covers a leap day, both sides of a month boundary, and a year end.
+    function test_Audit_L1_ExpiryRendersTheRealCalendarDate() public {
+        assertEq(_expiryShown(1_767_225_600), "1/1/2026");   // 2026-01-01
+        assertEq(_expiryShown(1_772_323_200), "3/1/2026");   // 2026-03-01, the day after a 28-day February
+        assertEq(_expiryShown(1_772_236_800), "2/28/2026");  // 2026-02-28
+        assertEq(_expiryShown(1_709_164_800), "2/29/2024");  // 2024-02-29, a leap day
+        assertEq(_expiryShown(1_798_675_200), "12/31/2026"); // 2026-12-31
+        assertEq(_expiryShown(1_893_456_000), "1/1/2030");   // the fixture's default expiry
+    }
+
+    /// @dev Renders a credential expiring at `ts` and reads the Expiry trait back.
+    function _expiryShown(uint64 ts) internal view returns (string memory) {
+        Credential memory c = _cred("");
+        c.expiryDate = ts;
+        (string memory json,) = _decode(LeXcheXBadgeRender.tokenURI(1, c, true));
+        (bool found, string memory shown) = _trait(json, "Expiry");
+        assertTrue(found, "expiry trait missing");
+        return shown;
+    }
+
+    // L2 — jurisdictions are typed in by an operator, so they can contain characters JSON reserves. A quote
+    // has to stay inside the value instead of ending it.
+    function test_Audit_L2_JurisdictionIsEscapedInJson() public {
+        Credential memory c = _cred("");
+        c.investorJurisdiction = "US\", \"injected\": \"yes";
+        (string memory json,) = _decode(LeXcheXBadgeRender.tokenURI(1, c, true));
+
+        // The whole value stays one string, and no extra field appears next to it.
+        assertEq(json.readString(".attributes[1].value"), "US\", \"injected\": \"yes");
+        assertFalse(vm.keyExistsJson(json, ".attributes[1].injected"), "no field was injected");
+    }
+
+    // The same value in the SVG, where the reserved characters are XML's instead.
+    function test_Audit_L2_JurisdictionIsEscapedInSvg() public {
+        Credential memory c = _cred("<script>&");
+        c.investorJurisdiction = "KY";
+        (, string memory svg) = _decode(LeXcheXBadgeRender.tokenURI(1, c, true));
+
+        assertTrue(vm.contains(svg, "&lt;script&gt;&amp;"), "reserved characters must be escaped");
+        assertFalse(vm.contains(svg, "<script>"), "raw markup must not reach the image");
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

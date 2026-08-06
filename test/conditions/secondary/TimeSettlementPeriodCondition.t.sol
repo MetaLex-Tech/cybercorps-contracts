@@ -2,9 +2,8 @@
 pragma solidity 0.8.28;
 
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
-import {SecondaryEscrow} from "../../../src/interfaces/ISecondaryTradeStorage.sol";
 import {TimeSettlementPeriodCondition} from "../../../src/libs/conditions/secondary/TimeSettlementPeriodCondition.sol";
-import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
+import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TimeSettlementPeriodCondition — minimum delay between acceptance and finalization (closing).
@@ -14,7 +13,11 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // timer the keeper waits on. Default 24h from acceptance; per-DealManager overrides. The delay is
 // measured from the escrow's stamped acceptedAt.
 //
-// Scenario × outcome (default delay 24h; acceptance at A, window 7d, expiry = A + 7d)
+// Real integration: acceptedAt is stamped by a real acceptOffer, so we warp to the acceptance time A
+// before accepting; the settlement window is set on the real DealManager. finalizableAt reads the real
+// escrow's acceptedAt.
+//
+// Scenario × outcome (default delay 24h; acceptance at A, window 7d)
 // | #  | scenario                                     | expect | rationale                          |
 // |----|----------------------------------------------|:------:|------------------------------------|
 // | 1  | posting (no settlement id)                   |  pass  | silent, evaluated at finalize      |
@@ -24,10 +27,6 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // | 5  | delay override 2d: at A + 24h                |  fail  | longer window not yet elapsed      |
 // | 6  | delay override 2d: at A + 2d                 |  pass  | overridden window elapsed          |
 // | 7  | override back to 0 restores default          |  pass  | 0 == DEFAULT_DELAY                 |
-//
-// Settlement-window changes must not move an in-flight lot's delay (acceptedAt is stamped per lot)
-// | #  | scenario                                     | expect | rationale                          |
-// |----|----------------------------------------------|:------:|------------------------------------|
 // | 10 | window enlarged after acceptance              |  fail  | delay not shortened retroactively  |
 // | 11 | window shrunk after acceptance               |  pass  | delay not extended, lot not stranded |
 // | 12 | window set absurdly large                    |  pass  | no underflow in finalizableAt      |
@@ -42,28 +41,30 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // | 15 | override 0 when default >= window        | revert DelayExceedsSettlementWindow |
 // ─────────────────────────────────────────────────────────────────────────────
 
-contract TimeSettlementPeriodConditionTest is SecondaryConditionTestBase {
+contract TimeSettlementPeriodConditionTest is SecondaryConditionIntegrationBase {
     TimeSettlementPeriodCondition internal timing;
     uint256 internal constant A = 100 days; // acceptance timestamp
     uint256 internal constant WINDOW = 7 days;
 
+    bytes32 internal offerId;
+    bytes32 internal agreementId;
+
     function setUp() public {
-        _setUpBase();
+        _setUpIntegration();
         timing = new TimeSettlementPeriodCondition();
         dm.setSettlementWindow(WINDOW);
-        SecondaryEscrow memory e = _sellEscrow();
-        e.acceptedAt = A; // acceptOffer stamps acceptedAt = now, expiry = now + window
-        e.expiry = A + WINDOW;
-        dm.setEscrow(AGREEMENT_ID, e);
+        // Accept at A so the real escrow stamps acceptedAt = A, expiry = A + WINDOW.
+        vm.warp(A);
+        (offerId, agreementId) = _postAndAcceptSell();
     }
 
     function _check() internal view returns (bool) {
-        return timing.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, AGREEMENT_ID);
+        return timing.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, agreementId);
     }
 
     // 1
     function test_Posting_Silent_Passes() public view {
-        assertTrue(timing.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, bytes32(0)));
+        assertTrue(timing.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, bytes32(0)));
     }
 
     // 2
@@ -80,7 +81,7 @@ contract TimeSettlementPeriodConditionTest is SecondaryConditionTestBase {
 
     // 4
     function test_FinalizableAt_MatchesDefault() public view {
-        assertEq(timing.finalizableAt(IDealManager(address(dm)), AGREEMENT_ID), A + timing.DEFAULT_DELAY());
+        assertEq(timing.finalizableAt(IDealManager(address(dm)), agreementId), A + timing.DEFAULT_DELAY());
     }
 
     // 5
@@ -119,43 +120,41 @@ contract TimeSettlementPeriodConditionTest is SecondaryConditionTestBase {
         timing.setDelayOverride(address(dm), 1 days);
     }
 
-    // 10 — enlarging the window used to slide the reconstructed acceptance backwards, erasing the delay
+    // 10 — enlarging the window must not slide the reconstructed acceptance backwards, erasing the delay
     function test_WindowEnlargedAfterAcceptance_DelayUnchanged() public {
-        uint256 expected = timing.finalizableAt(IDealManager(address(dm)), AGREEMENT_ID);
+        uint256 expected = timing.finalizableAt(IDealManager(address(dm)), agreementId);
         dm.setSettlementWindow(WINDOW + 2 days);
-        assertEq(timing.finalizableAt(IDealManager(address(dm)), AGREEMENT_ID), expected);
+        assertEq(timing.finalizableAt(IDealManager(address(dm)), agreementId), expected);
         vm.warp(A + timing.DEFAULT_DELAY() - 1);
         assertFalse(_check());
         vm.warp(A + timing.DEFAULT_DELAY());
         assertTrue(_check());
     }
 
-    // 11 — shrinking the window used to push the delay past the lot's expiry, stranding it
+    // 11 — shrinking the window must not push the delay past the lot's expiry, stranding it
     function test_WindowShrunkAfterAcceptance_DelayUnchanged() public {
-        uint256 expected = timing.finalizableAt(IDealManager(address(dm)), AGREEMENT_ID);
+        uint256 expected = timing.finalizableAt(IDealManager(address(dm)), agreementId);
         dm.setSettlementWindow(2 days);
-        assertEq(timing.finalizableAt(IDealManager(address(dm)), AGREEMENT_ID), expected);
+        assertEq(timing.finalizableAt(IDealManager(address(dm)), agreementId), expected);
         vm.warp(A + timing.DEFAULT_DELAY());
         assertTrue(_check());
     }
 
-    // 12 — a window above the expiry timestamp used to underflow the reconstruction
+    // 12 — a window above the acceptance timestamp must not underflow the reconstruction
     function test_WindowLargerThanExpiry_NoUnderflow() public {
         dm.setSettlementWindow(A + WINDOW + 1 days);
-        assertEq(timing.finalizableAt(IDealManager(address(dm)), AGREEMENT_ID), A + timing.DEFAULT_DELAY());
+        assertEq(timing.finalizableAt(IDealManager(address(dm)), agreementId), A + timing.DEFAULT_DELAY());
     }
 
-    // 13
+    // 13 — two lots accepted at different times keep their own acceptedAt basis
     function test_LotsAcceptedUnderDifferentWindows_KeepOwnBasis() public {
-        bytes32 secondId = keccak256("settlement.2");
+        uint256 secondTokenId = _newSellerCert();
         uint256 secondAcceptedAt = A + 3 days;
         dm.setSettlementWindow(2 days);
-        SecondaryEscrow memory e = _sellEscrow();
-        e.acceptedAt = secondAcceptedAt;
-        e.expiry = secondAcceptedAt + 2 days;
-        dm.setEscrow(secondId, e);
+        vm.warp(secondAcceptedAt);
+        (, bytes32 secondId) = _postAndAcceptSellToken(secondTokenId, uint256(keccak256("secondLot")));
 
-        assertEq(timing.finalizableAt(IDealManager(address(dm)), AGREEMENT_ID), A + timing.DEFAULT_DELAY());
+        assertEq(timing.finalizableAt(IDealManager(address(dm)), agreementId), A + timing.DEFAULT_DELAY());
         assertEq(
             timing.finalizableAt(IDealManager(address(dm)), secondId),
             secondAcceptedAt + timing.DEFAULT_DELAY()

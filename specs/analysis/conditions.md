@@ -13,30 +13,64 @@ The `offerAgreementId` is a stable DealManager-internal key that is constant acr
 of the same offer (one offer → many settlement agreements). Threshold conditions always refer to the
 offer; closing conditions receive `abi.encode(settlementAgreementId)` and refer to the specific lot.
 
-| Condition                              | Stage         | Parties            | Offer fields used                                                                                                              |
-|----------------------------------------|---------------|--------------------|--------------------------------------------------------------------------------------------------------------------------------|
-| `EligibilityCondition`                 | threshold     | buyer + seller     | `offeror`, buyer via `settlementAgreementIds`                                                                                  |
-| `AccreditedInvestorCondition`          | threshold     | buyer              | buyer via `settlementAgreementIds`                                                                                             |
-| `QualifiedPurchaserCondition`          | threshold     | buyer + seller     | `offeror`, buyer via `settlementAgreementIds`                                                                                  |
-| `QualifiedInstitutionalBuyerCondition` | threshold     | buyer              | buyer via `settlementAgreementIds`                                                                                             |
-| `NonUSNationalityCondition`            | threshold     | buyer              | buyer via `settlementAgreementIds`                                                                                             |
-| `USStateOfResidenceCondition`          | threshold     | buyer              | buyer via `settlementAgreementIds`, `spvAddress`                                                                               |
-| `LegionSoulboundCondition`             | threshold     | buyer + seller     | `offeror`, buyer via `settlementAgreementIds`                                                                                  |
-| ~~`AgreementSignedCondition`~~         | ~~threshold~~ | ~~buyer + seller~~ | _(dropped — agreement creation is deferred to acceptOffer; signing IS acceptance, so checking "is it signed" is tautological)_ |
-| `Section4a7DisclosureCondition`        | threshold     | buyer              | buyer via `settlementAgreementIds`, `spvAddress`                                                                               |
-| `HoldingPeriodCondition`               | threshold     | seller             | `offeror`, `certPrinter`, `tokenId`                                                                                            |
-| `Rule144DisclosureCondition`           | threshold     | —                  | `spvAddress`                                                                                                                   |
-| `LegalOpinionCondition`                | threshold     | —                  | `spvAddress`                                                                                                                   |
-| `RegSDistributionComplianceCondition`  | threshold     | buyer              | `counterparty`, `spvAddress`                                                                                                   |
-| `HolderCapCondition` — §3(c)(1)        | threshold     | buyer              | `counterparty`, `spvAddress`                                                                                                   |
-| `HolderCapCondition` — §3(c)(1)(C)     | threshold     | buyer              | `counterparty`, `spvAddress`                                                                                                   |
-| `HolderCapCondition` — Touche Remnant  | threshold     | buyer              | `counterparty`, `spvAddress`                                                                                                   |
-| `CFIUSCondition`                       | threshold     | buyer              | `counterparty`, `spvAddress`                                                                                                   |
-| `GPLPApprovalCondition`                | threshold     | —                  | `spvAddress`                                                                                                                   |
-| `GPConsentCondition`                   | threshold     | —                  | `spvAddress`                                                                                                                   |
-| `QMSModeCondition`                     | threshold     | —                  | `spvAddress`                                                                                                                   |
-| `KillSwitchCondition`                  | closing       | —                  | _(no Offer lookup; checks kill-switch state)_                                                                                  |
-| `TimeSettlementPeriodCondition`        | closing       | —                  | _(no Offer lookup; checks settlement timestamp)_                                                                               |
+One row per condition contract; the spec names that are parameterizations of one contract are listed
+under it. Every condition is a shared singleton — see `Config scope` for what each keys its settings by.
+
+| Condition                             | Stage     | Parties          | Deployment scope                 | Upgradeable | Badge             | Admin scope       | Config scope            | Offer fields used                                                         |
+|---------------------------------------|-----------|------------------|----------------------------------|-------------|-------------------|-------------------|-------------------------|---------------------------------------------------------------------------|
+| `EligibilityCondition`                | threshold | buyer + seller   | shared                           | UUPS        | —                 | SPV               | per-SPV, per-party      | `offeror`, buyer via `settlementAgreementIds`                             |
+| `LexChexBadgeKindCondition`           | threshold | buyer (+ seller) | shared, one per parameterization | UUPS        | default + per-SPV | platform          | global                  | `offeror`, buyer via `settlementAgreementIds`, `spvAddress` (scoped keys) |
+| `USStateOfResidenceCondition`         | threshold | buyer            | shared                           | UUPS        | default + per-SPV | SPV + platform    | per-SPV                 | buyer via `settlementAgreementIds`, `spvAddress`                          |
+| `LegionSoulboundCondition`            | threshold | buyer + seller   | shared                           | UUPS        | default + per-SPV | SPV + platform    | per-SPV                 | `offeror`, buyer via `settlementAgreementIds`, `spvAddress`               |
+| `HolderCapCondition`                  | threshold | buyer            | shared                           | UUPS        | printer           | SPV               | per-SPV                 | `counterparty`, `spvAddress`, `certPrinter`                               |
+| `CFIUSCondition`                      | threshold | buyer            | shared                           | UUPS        | default + per-SPV | SPV + platform    | per-SPV                 | `counterparty`, `spvAddress`                                              |
+| `Section4a7DisclosureCondition`       | threshold | buyer            | shared                           | UUPS        | —                 | SPV + platform    | per-SPV + global        | buyer via `settlementAgreementIds`, `spvAddress`                          |
+| `Rule144DisclosureCondition`          | threshold | —                | shared                           | UUPS        | —                 | SPV + platform    | per-SPV + global        | `spvAddress`                                                              |
+| `HoldingPeriodCondition`              | threshold | seller           | shared                           | UUPS        | —                 | platform          | global                  | `offeror`, `certPrinter`, `tokenId`                                       |
+| `LegalOpinionCondition`               | threshold | —                | shared                           | UUPS        | —                 | SPV + DealManager | per-SPV + per-DM        | `spvAddress`, DealManager address                                         |
+| `RegSDistributionComplianceCondition` | threshold | buyer            | shared                           | UUPS        | —                 | SPV               | per-SPV                 | `counterparty`, `spvAddress`, `certPrinter`                               |
+| `GPLPApprovalCondition`               | threshold | —                | shared                           | UUPS        | —                 | DealManager owner | per-DM                  | `spvAddress`, DealManager address                                         |
+| `GPConsentCondition`                  | threshold | —                | _not implemented_                | —           | —                 | —                 | —                       | `spvAddress`                                                              |
+| `QMSModeCondition`                    | threshold | —                | _not implemented_                | —           | —                 | —                 | —                       | `spvAddress`                                                              |
+| `KillSwitchCondition`                 | closing   | —                | shared                           | **no**      | —                 | two fixed keys    | global + per-settlement | _(no Offer lookup; checks kill-switch state)_                             |
+| `TimeSettlementPeriodCondition`       | closing   | —                | shared                           | **no**      | —                 | DealManager owner | per-DM                  | _(no Offer lookup; checks settlement timestamp)_                          |
+
+`LexChexBadgeKindCondition` is deployed once per parameterization and shared across all SPVs:
+`AccreditedInvestorCondition` (`K_ACCREDITED`, buyer), `QualifiedPurchaserCondition` (`K_QP`, buyer +
+seller), `QualifiedInstitutionalBuyerCondition` (`K_QIB`, buyer), `NonUSNationalityCondition`
+(`K_NON_US`, buyer), plus the SPV-scoped entitlements (`K_SPV_WHITELIST`, `K_SYNDICATE`).
+`HolderCapCondition` covers §3(c)(1), §3(c)(1)(C) and Touche Remnant through its per-SPV config.
+
+**Badge** — `printer` = read from `offer.certPrinter.lookThroughBadge()`, which is the only registry that
+can be weighed against the printer's own holder tally. `default + per-SPV` = a platform-set `defaultBadge`
+(non-zero at `initialize`) with an optional per-SPV override, both admin-set; the SPV cannot pick the
+registry that judges its own parties. Every other condition reads no credential at all.
+
+**Admin scope** — `platform` = `onlyAdmin` on the shared BorgAuth; `SPV` = `_requireAuthAdmin(offer.spvAddress)`;
+`DealManager` = gated on that DealManager's own BorgAuth.
+
+### Unconfigured SPVs
+
+For most conditions, attaching one to an SPV is itself the statement that it applies there, so silence is
+never a finding. `USStateOfResidenceCondition` is the exception:
+
+| Condition                     | unconfigured | what is missing                                                                                         |
+|-------------------------------|--------------|---------------------------------------------------------------------------------------------------------|
+| `CFIUSCondition`              | **blocks**   | no TID U.S. business determination; a recorded `tidUsBusiness = false` is the fund exception and passes |
+| `HolderCapCondition`          | **blocks**   | no ICA exception named — `cap == 0` is a real §3(c)(7) setting, so a `configured` flag keeps it apart   |
+| `RegSDistributionCompliance`  | **blocks**   | no issuer category or compliance period — same `configured` flag                                        |
+| `LegionSoulboundCondition`    | **blocks**   | no circle named                                                                                         |
+| `EligibilityCondition`        | **blocks**   | that SPV has cleared nobody                                                                             |
+| `Rule144` / `Section4a7`      | **blocks**   | no disclosure package on record                                                                         |
+| `USStateOfResidenceCondition` | **passes**   | nothing — it is a deny-list, so an empty one permits (NY still blocks by the Martin Act default)        |
+
+The deny-list is why it has no `configured` flag: an SPV that blocks only NY and one whose GP never
+touched it write identical state, so the flag would have nothing to key off. The screen still enforces
+its own reads — an acquirer with no recorded jurisdiction, or a U.S. one carrying no state, is refused.
+Deliberate: naming every state the SPV must avoid is the GP's call, not something the platform can default.
+
+Globally configured conditions follow the same rule as the per-SPV ones: `HoldingPeriodCondition` blocks
+when its period reads 0, since Rule 144 has no zero hold and both setters reject one.
 
 ---
 
@@ -152,7 +186,7 @@ order fund-specific (Layer 2) ++ exemption-specific (Layer 1) and snapshotted on
 
 | Layer                             | Where configured                  | When                                                                                                          | Conditions                                                                                                                                                                                                                                                  |
 |-----------------------------------|-----------------------------------|---------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Layer 2 — Fund-specific (§6)      | Individual `DealManager`          | SPV onboarding; applies to every offer for the SPV                                                            | `EligibilityCondition`, `USStateOfResidenceCondition`, `HolderCapCondition`, `QualifiedPurchaserCondition`, `CFIUSCondition`, `LegionSoulboundCondition`, `GPLPApprovalCondition`, `QMSModeCondition`                      |
+| Layer 2 — Fund-specific (§6)      | Individual `DealManager`          | SPV onboarding; applies to every offer for the SPV                                                            | `EligibilityCondition`, `USStateOfResidenceCondition`, `HolderCapCondition`, `QualifiedPurchaserCondition`, `CFIUSCondition`, `LegionSoulboundCondition`, `GPLPApprovalCondition`, `QMSModeCondition`                                                       |
 | Layer 1 — Exemption-specific (§5) | Individual `DealManager` registry | Protocol initialization (addresses registered); selected per-offer at `postOffer` based on `exemptionPathway` | `HoldingPeriodCondition`, `Rule144DisclosureCondition`, `AccreditedInvestorCondition`, `Section4a7DisclosureCondition`, `LegalOpinionCondition`, `QualifiedInstitutionalBuyerCondition`, `NonUSNationalityCondition`, `RegSDistributionComplianceCondition` |
 
 #### Layer 2 — Fund-specific (§6) (individual `DealManager`, configured at SPV onboarding)
@@ -162,18 +196,16 @@ applicable to the SPV are added. §7.2 classifies the baseline buyer-credential 
 fund-specific, so each SPV must register them explicitly — there is no platform-wide tier that injects them
 automatically.
 
-| Condition                     | When present                                                                 | Parameterization                                                                                                                                                                                    |
-|-------------------------------|------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `EligibilityCondition`        | All SPVs / all paths; admin-cleared flag per party (KYC/AML, tax, ERISA, …)  | None                                                                                                                                                                                                |
-| `USStateOfResidenceCondition` | All SPVs                                                                     | Issuer-configurable blocked-states list; **New York is on the default blocked-states list** for every SPV that has not registered under NY Martin Act Article 23-A, regardless of exemption pathway |
-| `HolderCapCondition`          | All SPVs                                                                     | ICA exception (`§3(c)(1)`, `§3(c)(1)(C)`, or `§3(c)(7)`); SPV domicile (for Touche Remnant U.S.-resident-only count); cap (100 / 250 / none)                                                        |
-| `QualifiedPurchaserCondition` | §3(c)(7) funds only                                                          | Parameterizes `LexChexCondition` for QP `investorType`                                                                                                                                              |
-| `CFIUSCondition`              | SPVs that do not satisfy the FIRRMA §800.307 fund exception                  | SPV CFIUS sensitivity flag; blocked jurisdictions                                                                                                                                                   |
-| `LegionSoulboundCondition`    | Optional; GP-configurable                                                    | Soulbound credential category/tier required of buyer (and optionally seller)                                                                                                                        |
-| `GPLPApprovalCondition`       | Optional; only if governing documents require per-deal approval              | Authorized approver address (GP, managing member, or delegated compliance officer)                                                                                                                  |
-| `QMSModeCondition`            | Optional; per-SPV opt-in for §1.7704-1(g) QMS safe harbor                    | Frequency cap value (counsel-determined per SPV); listing timestamp stored at `postOffer`                                                                                                           |
-
-> Note: `AgreementSignedCondition` was previously listed in this baseline set but has been dropped.
+| Condition                     | When present                                                                | Parameterization                                                                                                                                                                                    |
+|-------------------------------|-----------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `EligibilityCondition`        | All SPVs / all paths; admin-cleared flag per party (KYC/AML, tax, ERISA, …) | None                                                                                                                                                                                                |
+| `USStateOfResidenceCondition` | All SPVs                                                                    | Issuer-configurable blocked-states list; **New York is on the default blocked-states list** for every SPV that has not registered under NY Martin Act Article 23-A, regardless of exemption pathway |
+| `HolderCapCondition`          | All SPVs                                                                    | ICA exception (`§3(c)(1)`, `§3(c)(1)(C)`, or `§3(c)(7)`); SPV domicile (for Touche Remnant U.S.-resident-only count); cap (100 / 250 / none)                                                        |
+| `QualifiedPurchaserCondition` | §3(c)(7) funds only                                                         | Parameterizes `LexChexBadgeKindCondition` with `kindKey = K_QP`, buyer + seller                                                                                                                     |
+| `CFIUSCondition`              | SPVs that do not satisfy the FIRRMA §800.307 fund exception                 | SPV CFIUS sensitivity flag; blocked jurisdictions                                                                                                                                                   |
+| `LegionSoulboundCondition`    | Optional; GP-configurable                                                   | Soulbound credential category/tier required of buyer (and optionally seller)                                                                                                                        |
+| `GPLPApprovalCondition`       | Optional; only if governing documents require per-deal approval             | Authorized approver address (GP, managing member, or delegated compliance officer)                                                                                                                  |
+| `QMSModeCondition`            | Optional; per-SPV opt-in for §1.7704-1(g) QMS safe harbor                   | Frequency cap value (counsel-determined per SPV); listing timestamp stored at `postOffer`                                                                                                           |
 
 #### Layer 1 — Exemption-specific (§5) (individual `DealManager`, selected at `postOffer`)
 
@@ -194,8 +226,8 @@ threshold-condition array for that offer's `agreementId`. The same condition ins
 
 ### Deployment responsibility
 
-| Scope                                                             | Who                                     | When                                                                     |
-|-------------------------------------------------------------------|-----------------------------------------|--------------------------------------------------------------------------|
-| Layer 1 (exemption-specific) condition addresses                  | MetaLeX                                 | Protocol initialization                                                  |
-| `KillSwitchCondition` + `TimeSettlementPeriodCondition` (closing) | MetaLeX                                 | Protocol initialization; MetaLeX + Legion admin roles assigned at deploy |
-| Layer 2 (fund-specific) conditions                                | MetaLeX or Legion via factory contracts | SPV onboarding                                                           |
+| Scope                                                             | Who     | When                                                                                 |
+|-------------------------------------------------------------------|---------|--------------------------------------------------------------------------------------|
+| Layer 1 (exemption-specific) condition addresses                  | MetaLeX | Protocol initialization                                                              |
+| `KillSwitchCondition` + `TimeSettlementPeriodCondition` (closing) | MetaLeX | Protocol initialization; MetaLeX + Legion admin roles assigned at deploy             |
+| Layer 2 (fund-specific) conditions                                | MetaLeX | Protocol initialization; MetaLeX or Legion configures each SPV's entry at onboarding |

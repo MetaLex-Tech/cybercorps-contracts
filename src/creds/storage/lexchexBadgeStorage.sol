@@ -21,66 +21,31 @@ All rights reserved.*/
 
 pragma solidity 0.8.28;
 
-import "../../interfaces/IERC5484.sol";
+// The K_* fact-keys, presets, events and errors are declared in ILexChexBadge.sol so every reader shares them.
+import {InvestorType} from "../../interfaces/ILexChexBadge.sol";
 
-/// @notice Kind of credential a category attests to. Conditions filter on this without hardcoding
-/// category ids (see ILexChexBadge.hasValidCredentialOfKind).
-enum CategoryKind {
-    KYC_AML,
-    ACCREDITED_INVESTOR,
-    QUALIFIED_PURCHASER,
-    QIB,
-    NON_US_PERSON,
-    BAD_ACTOR_CLEAR,
-    SPV_WHITELIST,
-    SYNDICATE,
-    CUSTOM
-}
-
-// Attribute bitmask flags, shared by CredentialCategory.governedAttributes and the badge's attribute reads.
-// Masks compose (AND): ATTR_US_STATE | ATTR_BO_COUNT selects a credential authoritative for both.
-uint256 constant ATTR_INVESTOR_JURISDICTION = 1 << 0;   // physical investorJurisdiction
-uint256 constant ATTR_REGULATORY_JURISDICTION = 1 << 1; // §3(c)(1)(A) look-through classification
-uint256 constant ATTR_US_STATE = 1 << 2;                // U.S. state of residence/organization
-uint256 constant ATTR_BO_COUNT = 1 << 3;                // entity §3(c)(1)(A) look-through count
-
-/// @notice Issuer-defined credential category (schema) keyed by a bytes32 categoryId.
-struct CredentialCategory {
-    string name;                        // human-readable category name (rendered as certificate title)
-    string description;                 // rendered in tokenURI metadata
-    CategoryKind kind;
-    uint64 defaultValidityDuration;     // seconds; drives expiryDate at mint when the credential's own is unset
-
-    // §4.1.3A pre-mint enforcement
-    bool requiresUsState;               // credential must carry usState when the holder is US-jurisdiction
-    bool requiresBeneficialOwnerCount;  // entity credentials must carry the §3(c)(1)(A) look-through count
-    bool requiresEvidenceHash;          // credential must anchor an offchain diligence record
-
-    IERC5484.BurnAuth burnAuth;         // per-category ERC-5484 burn auth (OwnerOnly default, IssuerOnly for whitelists)
-    address scope;                      // SPV cyberCORP address for SPV_WHITELIST / SYNDICATE; zero otherwise
-    bool active;                        // false = retired: no new issuance, outstanding credentials unaffected
-    bool exists;
-    // Which attributes this category is authoritative for (ATTR_* bitmask); an entitlement-only category
-    // (whitelist/syndicate) governs nothing and never moves the attribute reads.
-    uint256 governedAttributes;
-}
-
-/// @notice Per-token credential record; superset of the legacy LeXcheX Accreditation so v1 semantics carry over.
+/// @notice Per-token credential record. Immutable once minted (revoke by voiding, never by editing or burning).
+/// `asserts` is the sole source of truth: a field is authoritative only when its key is asserted.
 struct Credential {
-    bytes32 categoryId;                 // links to the category registry
-    string investorName;
-    string investorType;                // Individual / entity subtype; conditions filter on it
-    string investorJurisdiction;        // country jurisdiction (ISO 3166-1 alpha-2 recommended, "US" for U.S.)
-    bytes2 usState;                     // §4.1.3A: U.S. state of residence/organization; zero for non-U.S. holders
-    uint32 beneficialOwnerCount;        // §4.1.3A: entity holders only; §3(c)(1)(A) look-through count
-    uint64 issuanceDate;                // validity anchor; also the seasoning reference (§11.1B)
+    uint256 asserts;                    // K_* fact-keys this credential attests; the authority axis
+    bytes32 categoryId;                 // free-form issuer label; off-chain meaning, never enforced on-chain
+    string investorName;                // who the credential names; display/audit only, no fact-key asserts it
+    string investorJurisdiction;        // value for K_INVESTOR_JURISDICTION ("US"/"USA"/"United States" all read US)
+    // value for K_LOOKTHROUGH_JURISDICTION — §3(c)(1)(A) ICA look-through classification, decoupled from the
+    // physical investorJurisdiction: an offshore entity with any U.S. beneficial owner is treated as U.S. here
+    // (regulatory point of view) even though its domicile stays foreign for CFIUS / blue-sky purposes.
+    string lookThroughJurisdiction;
+    InvestorType investorType;          // value for K_INVESTOR_TYPE
+    bytes2 usState;                     // value for K_US_STATE
+    uint32 beneficialOwnerCount;        // value for K_BO_COUNT
+    address scope;                      // SPV entitled by a scoped credential (K_SPV_WHITELIST / K_SYNDICATE)
+    uint64 issuanceDate;                // mint time; recency key (max) and §11.1B seasoning reference (min); immutable
     uint64 expiryDate;                  // isValid fails after it
     string voided;                      // non-empty = voided, with reason
     bytes32 agreementId;                // CyberAgreementRegistry attestation underlying the credential
     bytes32 evidenceHash;               // hash of the offchain diligence record (audit anchor)
-    bytes extensionData;                // forward-compatible blob for future attributes
-    string regulatoryJurisdiction;      // §3(c)(1)(A) look-through classification, decoupled from physical investorJurisdiction (an entity with any U.S. beneficial owner is classified "US"); empty => falls back to investorJurisdiction
-    uint64 lastUpdated;                 // last record mutation (mint/recertify/attribute edit/void); recency key for _mostRecentValidWith, distinct from the issuanceDate seasoning anchor
+    bytes data;                         // value for K_DATA — generic programmable payload; the badge stores it
+                                        // but never interprets it (downstream programs read it via getData)
 }
 
 /// @title LeXcheXBadgeStorage - namespaced storage for the LeXcheXBadge credential registry
@@ -89,10 +54,16 @@ library LeXcheXBadgeStorage {
     bytes32 constant STORAGE_POSITION = keccak256("metalex.lexchexbadge.storage.v1");
 
     struct LeXcheXBadgeData {
-        mapping(uint256 => Credential) credentials;         // per-token records
-        mapping(bytes32 => CredentialCategory) categories;  // category registry
-        bytes32[] categoryIds;                              // enumeration of registered categories
+        mapping(uint256 => Credential) credentials;         // per-token records (append-only; never deleted)
         uint256 supply;                                     // next token id / total minted
+        // Active set = the holder's non-voided, not-yet-swept credentials. Compliance reads scan THIS (bounded)
+        // instead of the full ERC-721 enumeration; void() evicts at once and sweep() evicts expired. Soulbound +
+        // never-burned ⇒ the holder is stable, so a per-holder list + 1-based position index gives O(1) swap-pop.
+        mapping(address => uint256[]) activeTokens;         // holder => active token ids
+        mapping(uint256 => uint256) activePos;              // id => 1-based idx in activeTokens[holder]; 0 = inactive
+        // categoryId label index, kept active-only in lockstep with activeTokens (hasValidCredential scans it).
+        mapping(address => mapping(bytes32 => uint256[])) labelTokens; // holder => categoryId => active token ids
+        mapping(uint256 => uint256) labelPos;               // id => 1-based idx in labelTokens[holder][categoryId]
     }
 
     function badgeStorage() internal pure returns (LeXcheXBadgeData storage s) {
@@ -112,26 +83,50 @@ library LeXcheXBadgeStorage {
         badgeStorage().credentials[tokenId] = cred;
     }
 
-    function deleteCredential(uint256 tokenId) internal {
-        delete badgeStorage().credentials[tokenId];
+    // ── Active set + categoryId label index (both active-only) ─────────────────
+
+    function getActiveTokens(address holder) internal view returns (uint256[] storage) {
+        return badgeStorage().activeTokens[holder];
     }
 
-    // ── Categories ───────────────────────────────────────────────────────────
-
-    function getCategory(bytes32 categoryId) internal view returns (CredentialCategory storage) {
-        return badgeStorage().categories[categoryId];
+    function getLabelTokens(address holder, bytes32 categoryId) internal view returns (uint256[] storage) {
+        return badgeStorage().labelTokens[holder][categoryId];
     }
 
-    function setCategory(bytes32 categoryId, CredentialCategory memory category) internal {
+    /// @dev Track a freshly-minted token in the holder's active set (and label index when categoryId is set).
+    function addActive(address holder, uint256 tokenId, bytes32 categoryId) internal {
         LeXcheXBadgeData storage s = badgeStorage();
-        if (!s.categories[categoryId].exists) {
-            s.categoryIds.push(categoryId);
+        s.activeTokens[holder].push(tokenId);
+        s.activePos[tokenId] = s.activeTokens[holder].length;
+        if (categoryId != bytes32(0)) {
+            s.labelTokens[holder][categoryId].push(tokenId);
+            s.labelPos[tokenId] = s.labelTokens[holder][categoryId].length;
         }
-        s.categories[categoryId] = category;
     }
 
-    function getCategoryIds() internal view returns (bytes32[] memory) {
-        return badgeStorage().categoryIds;
+    /// @dev Evict a voided/expired token from the active set and label index. Idempotent (no-op if absent).
+    /// `holder` MUST be the token's owner — `activePos` is a global id→index map, so a mismatched pair would
+    /// index into the wrong holder's array. Callers derive it from ownership, never from an argument.
+    /// @return removed True when the token was still in the active set, so callers can count real evictions.
+    function removeActive(address holder, uint256 tokenId, bytes32 categoryId) internal returns (bool removed) {
+        LeXcheXBadgeData storage s = badgeStorage();
+        removed = _swapPop(s.activeTokens[holder], s.activePos, tokenId);
+        if (categoryId != bytes32(0)) _swapPop(s.labelTokens[holder][categoryId], s.labelPos, tokenId);
+    }
+
+    function _swapPop(uint256[] storage arr, mapping(uint256 => uint256) storage pos, uint256 tokenId)
+        private
+        returns (bool)
+    {
+        uint256 p = pos[tokenId];
+        if (p == 0) return false;
+        uint256 i = p - 1;
+        uint256 lastId = arr[arr.length - 1];
+        arr[i] = lastId;
+        pos[lastId] = i + 1;
+        arr.pop();
+        pos[tokenId] = 0;
+        return true;
     }
 
     // ── Supply ───────────────────────────────────────────────────────────────

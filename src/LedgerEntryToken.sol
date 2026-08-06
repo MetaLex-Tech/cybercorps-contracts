@@ -398,9 +398,17 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         return LedgerEntryTokenStorage.getLookThroughHolderCount();
     }
 
-    /// @notice The U.S.-resident subset of `lookThroughHolderCount` (Touche Remnant counting).
+    /// @notice The U.S.-resident subset of `lookThroughHolderCount` (Touche Remnant counting). Past
+    /// `usTallyExpiry` this reports the full look-through count instead, because a non-US booking may
+    /// have lapsed into US unobserved.
     function usLookThroughHolderCount() external view returns (uint256) {
         return LedgerEntryTokenStorage.getUsLookThroughHolderCount();
+    }
+
+    /// @notice When the U.S. subtotal stops being trusted: the earliest credential expiry among holders
+    /// booked non-US, or 0 when none constrains it. Keepers resync those holders before it passes.
+    function usTallyExpiry() external view returns (uint64) {
+        return LedgerEntryTokenStorage.getUsTallyExpiry();
     }
 
     /// @notice True when `owner` currently holds at least one live (non-void) lot of record.

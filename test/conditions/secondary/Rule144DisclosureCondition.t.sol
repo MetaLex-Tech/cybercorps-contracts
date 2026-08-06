@@ -2,9 +2,8 @@
 pragma solidity 0.8.28;
 
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
-import {Offer, SecondaryEscrow} from "../../../src/interfaces/ISecondaryTradeStorage.sol";
 import {Rule144DisclosureCondition} from "../../../src/libs/conditions/secondary/Rule144DisclosureCondition.sol";
-import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
+import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Rule144DisclosureCondition — current public information gate for Rule 144 trades.
@@ -13,6 +12,9 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // issuer. The SPV records a disclosure package (URI + as-of date); the gate fails when the record is
 // missing or older than the freshness policy (e.g. balance sheet > 16 months). SPV-wide: no party
 // lookup, enforced at posting, acceptance, and finalize alike.
+//
+// Real integration: the disclosure package is keyed by the SPV (offer.spvAddress = corp); the offer /
+// accepted settlement are real.
 //
 // Scenario × outcome (freshness policy = 480 days)
 // | # | scenario                                     | expect | rationale                        |
@@ -33,14 +35,15 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // |10 | initialize zero maxAge            | revert InvalidMaxAge   |
 // ─────────────────────────────────────────────────────────────────────────────
 
-contract Rule144DisclosureConditionTest is SecondaryConditionTestBase {
+contract Rule144DisclosureConditionTest is SecondaryConditionIntegrationBase {
     Rule144DisclosureCondition internal disc;
     uint256 internal constant MAX_AGE = 480 days;
     uint256 internal constant NOW = 500 days;
     string internal constant URI = "ipfs://144-package";
+    bytes32 internal offerId;
 
     function setUp() public {
-        _setUpBase();
+        _setUpIntegration();
         vm.warp(NOW);
         disc = Rule144DisclosureCondition(
             _proxy(
@@ -48,11 +51,11 @@ contract Rule144DisclosureConditionTest is SecondaryConditionTestBase {
                 abi.encodeCall(Rule144DisclosureCondition.initialize, (address(auth), MAX_AGE))
             )
         );
-        dm.setOffer(OFFER_ID, _sellOffer());
+        offerId = _postSell();
     }
 
     function _check(bytes32 agreementId) internal view returns (bool) {
-        return disc.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, agreementId);
+        return disc.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, agreementId);
     }
 
     // 1
@@ -62,27 +65,27 @@ contract Rule144DisclosureConditionTest is SecondaryConditionTestBase {
 
     // 2
     function test_FreshRecord_Passes() public {
-        disc.setDisclosurePackage(address(dm), URI, uint64(NOW));
+        disc.setDisclosurePackage(address(corp), URI, uint64(NOW));
         assertTrue(_check(bytes32(0)));
     }
 
     // 3
     function test_AtFreshnessBoundary_Passes() public {
-        disc.setDisclosurePackage(address(dm), URI, uint64(NOW - MAX_AGE));
+        disc.setDisclosurePackage(address(corp), URI, uint64(NOW - MAX_AGE));
         assertTrue(_check(bytes32(0)));
     }
 
     // 4
     function test_StaleByOneSecond_Fails() public {
-        disc.setDisclosurePackage(address(dm), URI, uint64(NOW - MAX_AGE - 1));
+        disc.setDisclosurePackage(address(corp), URI, uint64(NOW - MAX_AGE - 1));
         assertFalse(_check(bytes32(0)));
     }
 
     // 5
     function test_FreshRecord_AcceptanceContext_Passes() public {
-        disc.setDisclosurePackage(address(dm), URI, uint64(NOW));
-        dm.setEscrow(AGREEMENT_ID, _sellEscrow());
-        assertTrue(_check(AGREEMENT_ID));
+        disc.setDisclosurePackage(address(corp), URI, uint64(NOW));
+        bytes32 settlementId = _acceptSell(offerId);
+        assertTrue(_check(settlementId));
     }
 
     // 6
@@ -94,20 +97,20 @@ contract Rule144DisclosureConditionTest is SecondaryConditionTestBase {
     // 7
     function test_SetDisclosure_ZeroAsOf_Reverts() public {
         vm.expectRevert(Rule144DisclosureCondition.InvalidTimestamp.selector);
-        disc.setDisclosurePackage(address(dm), URI, 0);
+        disc.setDisclosurePackage(address(corp), URI, 0);
     }
 
     // 8
     function test_SetDisclosure_FutureAsOf_Reverts() public {
         vm.expectRevert(Rule144DisclosureCondition.InvalidTimestamp.selector);
-        disc.setDisclosurePackage(address(dm), URI, uint64(NOW + 1));
+        disc.setDisclosurePackage(address(corp), URI, uint64(NOW + 1));
     }
 
     // 9
     function test_SetDisclosure_ByNonSpvAdmin_Reverts() public {
         vm.prank(stranger);
         vm.expectRevert();
-        disc.setDisclosurePackage(address(dm), URI, uint64(NOW));
+        disc.setDisclosurePackage(address(corp), URI, uint64(NOW));
     }
 
     // 10

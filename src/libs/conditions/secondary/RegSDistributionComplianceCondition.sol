@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
 import {ILedgerEntryToken} from "../../../interfaces/ILedgerEntryToken.sol";
@@ -27,9 +27,13 @@ contract RegSDistributionComplianceCondition is SecondaryTradingConditionBase, U
     event RegSConfigUpdated(address indexed spv, uint8 issuerCategory, uint64 compliancePeriod);
 
     /// @notice Per-SPV (cyberCORP address) Reg S parameterization
-    mapping(address => RegSConfig) public regSConfigs;
+    struct RegSStorage {
+        mapping(address => RegSConfig) regSConfigs;
+    }
 
-    uint256[49] private __gap;
+    bytes32 private constant STORAGE_POSITION = keccak256("metalex.condition.secondary.reg-s-distribution-compliance.storage.v1");
+
+    // Upgrade notes: reduced gap to account for the contract's variables (50 - 1 = 49)
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -46,7 +50,7 @@ contract RegSDistributionComplianceCondition is SecondaryTradingConditionBase, U
         if (spv == address(0)) revert InvalidSpv();
         if (issuerCategory == 0 || issuerCategory > 3) revert InvalidCategory();
         _requireAuthAdmin(spv);
-        regSConfigs[spv] = RegSConfig({
+        _regSStorage().regSConfigs[spv] = RegSConfig({
             issuerCategory: issuerCategory,
             compliancePeriod: compliancePeriod,
             configured: true
@@ -63,7 +67,7 @@ contract RegSDistributionComplianceCondition is SecondaryTradingConditionBase, U
         Offer memory offer = dealManager.getOffer(offerId);
 
         // A Reg S resale from an unconfigured SPV fails closed
-        RegSConfig memory config = regSConfigs[offer.spvAddress];
+        RegSConfig memory config = _regSStorage().regSConfigs[offer.spvAddress];
         if (!config.configured) return false;
 
         // A buy offer at posting has no seller (and no token) yet: the period is verified at acceptance
@@ -76,6 +80,18 @@ contract RegSDistributionComplianceCondition is SecondaryTradingConditionBase, U
         if (acquisition == 0) return false;
 
         return block.timestamp >= uint256(acquisition) + config.compliancePeriod;
+    }
+
+    /// @notice An SPV's Reg S configuration
+    function regSConfigs(address spv) public view returns (RegSConfig memory) {
+        return _regSStorage().regSConfigs[spv];
+    }
+
+    function _regSStorage() private pure returns (RegSStorage storage $) {
+        bytes32 position = STORAGE_POSITION; // assembly cannot reference a computed constant directly
+        assembly {
+            $.slot := position
+        }
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}

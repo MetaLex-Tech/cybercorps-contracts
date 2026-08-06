@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
 import {FUND_INTEREST_EXTENSION_TYPE} from "../../../storage/extensions/FundInterestExtension.sol";
@@ -25,10 +25,13 @@ contract HoldingPeriodCondition is SecondaryTradingConditionBase, UUPSUpgradeabl
 
     event HoldingPeriodUpdated(uint256 holdingPeriod);
 
-    /// @notice Required hold in seconds (default 365 days: Rule 144(d) for non-reporting issuers)
-    uint256 public holdingPeriod;
+    struct HoldingPeriodStorage {
+        uint256 holdingPeriod;
+    }
 
-    uint256[49] private __gap;
+    bytes32 private constant STORAGE_POSITION = keccak256("metalex.condition.secondary.holding-period.storage.v1");
+
+    // Upgrade notes: reduced gap to account for the contract's variables (50 - 1 = 49)
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -39,13 +42,13 @@ contract HoldingPeriodCondition is SecondaryTradingConditionBase, UUPSUpgradeabl
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
         if (_holdingPeriod == 0) revert InvalidHoldingPeriod();
-        holdingPeriod = _holdingPeriod;
+        _holdingPeriodStorage().holdingPeriod = _holdingPeriod;
         emit HoldingPeriodUpdated(_holdingPeriod);
     }
 
     function updateHoldingPeriod(uint256 _holdingPeriod) external onlyAdmin {
         if (_holdingPeriod == 0) revert InvalidHoldingPeriod();
-        holdingPeriod = _holdingPeriod;
+        _holdingPeriodStorage().holdingPeriod = _holdingPeriod;
         emit HoldingPeriodUpdated(_holdingPeriod);
     }
 
@@ -80,7 +83,23 @@ contract HoldingPeriodCondition is SecondaryTradingConditionBase, UUPSUpgradeabl
             if (tackedFrom != 0 && tackedFrom < anchor) anchor = tackedFrom;
         }
 
-        return block.timestamp >= uint256(anchor) + holdingPeriod;
+        // Never configured. A zero hold is not a real Rule 144 setting, so it means unset, not "no wait".
+        uint256 period = _holdingPeriodStorage().holdingPeriod;
+        if (period == 0) return false;
+
+        return block.timestamp >= uint256(anchor) + period;
+    }
+
+    /// @notice Required hold in seconds
+    function holdingPeriod() public view returns (uint256) {
+        return _holdingPeriodStorage().holdingPeriod;
+    }
+
+    function _holdingPeriodStorage() private pure returns (HoldingPeriodStorage storage $) {
+        bytes32 position = STORAGE_POSITION; // assembly cannot reference a computed constant directly
+        assembly {
+            $.slot := position
+        }
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}

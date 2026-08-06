@@ -2,11 +2,11 @@
 pragma solidity 0.8.28;
 
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
-import {Offer, OfferSide, SecondaryEscrow} from "../../../src/interfaces/ISecondaryTradeStorage.sol";
+import {LedgerEntryToken} from "../../../src/LedgerEntryToken.sol";
 import {
     RegSDistributionComplianceCondition
 } from "../../../src/libs/conditions/secondary/RegSDistributionComplianceCondition.sol";
-import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
+import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RegSDistributionComplianceCondition — Regulation S distribution compliance period.
@@ -15,6 +15,10 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // have elapsed since the interest was acquired. The period is a per-SPV parameter encoded by counsel
 // (issuer category 1/2/3). An unconfigured SPV fails closed; a missing acquisition anchor fails
 // closed; a buy offer at posting has no seller yet and is verified at acceptance.
+//
+// Real integration: the config is keyed by the SPV (offer.spvAddress = corp); the seller lot's base
+// acquisition timestamp is set via the real printer's admin override and the lot offered through a real
+// postOffer.
 //
 // Scenario × outcome (compliance period = 365 days)
 // | # | scenario                                         | expect | rationale                       |
@@ -34,13 +38,13 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // | 9 | setRegSConfig by non-SPV-admin    | revert (not admin)    |
 // ─────────────────────────────────────────────────────────────────────────────
 
-contract RegSDistributionComplianceConditionTest is SecondaryConditionTestBase {
+contract RegSDistributionComplianceConditionTest is SecondaryConditionIntegrationBase {
     RegSDistributionComplianceCondition internal regS;
     uint64 internal constant PERIOD = 365 days;
     uint256 internal constant NOW = 500 days;
 
     function setUp() public {
-        _setUpBase();
+        _setUpIntegration();
         vm.warp(NOW);
         regS = RegSDistributionComplianceCondition(
             _proxy(
@@ -51,13 +55,13 @@ contract RegSDistributionComplianceConditionTest is SecondaryConditionTestBase {
     }
 
     function _configure() internal {
-        regS.setRegSConfig(address(dm), 3, PERIOD);
+        regS.setRegSConfig(address(corp), 3, PERIOD);
     }
 
     function _sellPosting(uint64 anchor) internal returns (bool) {
-        cert.setAcquisitionTimestamp(1, anchor);
-        dm.setOffer(OFFER_ID, _sellOffer());
-        return regS.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, bytes32(0));
+        LedgerEntryToken(address(printer)).setAcquisitionTimestamp(sellerTokenId, anchor);
+        bytes32 offerId = _postSell();
+        return regS.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, bytes32(0));
     }
 
     // 1
@@ -68,8 +72,7 @@ contract RegSDistributionComplianceConditionTest is SecondaryConditionTestBase {
     // 2
     function test_Configured_NoRecord_FailsClosed() public {
         _configure();
-        dm.setOffer(OFFER_ID, _sellOffer());
-        assertFalse(regS.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, bytes32(0)));
+        assertFalse(_sellPosting(0));
     }
 
     // 3
@@ -87,11 +90,8 @@ contract RegSDistributionComplianceConditionTest is SecondaryConditionTestBase {
     // 5
     function test_Configured_BuyPosting_Passes() public {
         _configure();
-        Offer memory o = _sellOffer();
-        o.side = OfferSide.BUY;
-        o.tokenId = 0;
-        dm.setOffer(OFFER_ID, o);
-        assertTrue(regS.checkCondition(IDealManager(address(dm)), bytes4(0), OFFER_ID, bytes32(0)));
+        bytes32 offerId = _postBuy();
+        assertTrue(regS.checkCondition(IDealManager(address(dm)), bytes4(0), offerId, bytes32(0)));
     }
 
     // 6
@@ -103,19 +103,19 @@ contract RegSDistributionComplianceConditionTest is SecondaryConditionTestBase {
     // 7
     function test_SetRegSConfig_CategoryZero_Reverts() public {
         vm.expectRevert(RegSDistributionComplianceCondition.InvalidCategory.selector);
-        regS.setRegSConfig(address(dm), 0, PERIOD);
+        regS.setRegSConfig(address(corp), 0, PERIOD);
     }
 
     // 8
     function test_SetRegSConfig_CategoryFour_Reverts() public {
         vm.expectRevert(RegSDistributionComplianceCondition.InvalidCategory.selector);
-        regS.setRegSConfig(address(dm), 4, PERIOD);
+        regS.setRegSConfig(address(corp), 4, PERIOD);
     }
 
     // 9
     function test_SetRegSConfig_ByNonSpvAdmin_Reverts() public {
         vm.prank(stranger);
         vm.expectRevert();
-        regS.setRegSConfig(address(dm), 3, PERIOD);
+        regS.setRegSConfig(address(corp), 3, PERIOD);
     }
 }

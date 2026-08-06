@@ -54,11 +54,46 @@ import "../interfaces/ICyberCorp.sol";
 import "../interfaces/IIssuanceManager.sol";
 import {BorgAuth} from "../libs/auth.sol";
 import {ILexChexBadge} from "../interfaces/ILexChexBadge.sol";
+import {LookThroughPolicy} from "../libs/policies/LookThroughPolicy.sol";
 import "../interfaces/IUriBuilder.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
 import "./extensions/ICertificateExtension.sol";
 import {FUND_INTEREST_EXTENSION_TYPE} from "./extensions/FundInterestExtension.sol";
 
+/// @title  LedgerEntryTokenStorage - namespaced storage and the printer logic that runs by delegatecall
+/// @author MetaLeX Labs, Inc.
+///
+/// @dev ── How the §3(c)(1)(A) look-through holder tally works ────────────────────────────────────────
+///
+/// HolderCapCondition needs to know how many U.S. holders there are, cheaply. Walking every holder and
+/// calling the badge on each check would be too slow, so the printer keeps running totals and updates them
+/// whenever something changes.
+///
+/// The pieces:
+///  - Per holder (`HolderAcct`): how many live lots they hold, their weight (beneficial-owner count, at
+///    least 1), whether they are U.S., and when that U.S. answer expires.
+///  - Two totals: `lookThroughHolderCount` (everyone) and `usLookThroughHolderCount` (the U.S. subset).
+///  - One `usTallyExpiry`: the soonest any non-U.S. holder's evidence runs out.
+///
+/// The rule everything serves: each total equals the sum of the per-holder accounts. Every function in the
+/// tally section exists to keep that true.
+///
+/// Three things can happen to a holder:
+///  - gets their first lot  → `_countLot`     → book them, then resync to apply the badge reading
+///  - gets another lot      → `_resyncHolder` → re-read the badge, swap old contribution for new
+///  - loses their last lot  → `_uncountLot`   → subtract, delete the account
+///
+/// Two rules that look inconsistent, on purpose:
+///  - Weight is sticky. If the badge stops answering (`bo == 0`) the holder keeps the weight they had. A
+///    withdrawn credential means "we do not know", not "fewer owners" — otherwise letting a credential
+///    lapse would free up cap room.
+///  - U.S.-ness is not sticky. It is recomputed every time, because unknown reads U.S., and that is the
+///    safe direction.
+///
+/// Why the expiry exists: a credential can lapse with no transaction, so a holder booked non-U.S. quietly
+/// becomes U.S. and nothing on-chain notices. Past `usTallyExpiry`, `getUsLookThroughHolderCount` stops
+/// trusting the U.S. subtotal and reports the full count instead. `nonUsHolderCount` is there only so
+/// `resyncHolders` can prove it rechecked every non-U.S. holder before pushing that expiry back out.
 library LedgerEntryTokenStorage {
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.cert.printer.storage.v1");
@@ -72,6 +107,9 @@ library LedgerEntryTokenStorage {
         uint32 liveLots; // live (non-void) lots held of record; holder is live iff > 0
         uint32 weight;   // look-through weight currently accumulated into the totals (max(boCount,1))
         bool isUS;       // whether this holder's weight is currently accumulated into the US subtotal
+        // When `isUS` stops being trustworthy — the earliest expiry behind a non-US reading; 0 when it
+        // never does, which covers a US reading and an account booked before this field existed.
+        uint64 expiry;
     }
 
     // Main storage layout struct
@@ -127,6 +165,10 @@ library LedgerEntryTokenStorage {
         uint256 lookThroughHolderCount;        // Σ holderAcct.weight over all live holders
         uint256 usLookThroughHolderCount;      // Σ holderAcct.weight over US-resident live holders (subset)
         address lookThroughBadge;              // ILexChexBadge sampled for look-through weight + US residency
+        // When the US subtotal stops being trusted: the earliest expiry among live holders booked non-US,
+        // 0 when none constrains it. Past it, at least one non-US booking may have lapsed into US, so the
+        // subtotal can no longer be trusted. Only resyncHolders can push it out. See _trackNonUs.
+        uint64 usTallyExpiry;              // packs into lookThroughBadge's slot, so nothing below shifts
 
         // Series-scope extension data: the printer itself is the series scope, so this is a singleton
         // (vs the per-token `certificateDetails[].extensionData`). Both payloads are decoded/rendered by
@@ -134,6 +176,9 @@ library LedgerEntryTokenStorage {
         // sections). The class-level counterpart lives on the IssuanceManager (SecurityClassInfo registry
         // + printerClassIds).
         bytes seriesData;
+
+        // Appended after seriesData to keep the slots above unchanged for already-deployed printers.
+        uint256 nonUsHolderCount;              // live holders booked non-US; drives the tally expiry above
     }
 
     // Returns the storage layout
@@ -418,7 +463,7 @@ library LedgerEntryTokenStorage {
         }
     }
 
-    // ── §3(c)(1)(A) look-through holder tally ────────────────────────────────────────────────────────
+    // ── §3(c)(1)(A) look-through holder tally (see the library natspec for how it fits together) ─────
 
     /// @dev A lot counts toward its owner's holder weight iff it is not voided (freshly-minted lots are
     /// Unassigned, which is live). Burned tokens never reach here — they are uncounted at burn.
@@ -426,49 +471,85 @@ library LedgerEntryTokenStorage {
         return s.securityStatus[tokenId] != SecurityStatus.Void;
     }
 
-    /// @dev Sample the look-through weight and US flag from the configured badge; if no badge is wired the
-    /// tally degrades to address-level (weight 1, non-US).
-    function _sample(CyberCertStorage storage s, address owner) private view returns (uint32 weight, bool isUS) {
+    /// @dev Read the holder's look-through facts off the badge. `bo == 0` means unknown, not zero owners —
+    /// callers decide what to do with it. No badge wired means everything is unknown, and unknown reads U.S.
+    /// `expiry` is when the `isUS` reading stops being trustworthy, 0 when it never does.
+    function _sample(CyberCertStorage storage s, address owner)
+        private
+        view
+        returns (uint32 bo, bool isUS, uint64 expiry)
+    {
         address badge = s.lookThroughBadge;
-        if (badge == address(0)) return (1, false);
-        uint32 bo = ILexChexBadge(badge).getBeneficialOwnerCount(owner);
-        weight = bo > 0 ? bo : 1;
-        isUS = ILexChexBadge(badge).isUSInvestor(owner);
+        if (badge == address(0)) return (0, true, 0);
+        // The count's own expiry is ignored on purpose: a lapsed credential means the count is unknown, not
+        // lower, so the holder keeps the weight they were booked at. See _resyncHolder.
+        (bo,) = ILexChexBadge(badge).getEffectiveBeneficialOwnerCount(owner);
+        (isUS, expiry) = LookThroughPolicy.isUSInvestor(ILexChexBadge(badge), owner);
+    }
+
+    /// @dev Keep the non-US population and the tally expiry in step after a holder is booked or rebooked.
+    /// Pulls the expiry in to the earliest among non-US holders; only resyncHolders can push it back out,
+    /// since that is the one path that can prove every non-US holder was rechecked.
+    function _trackNonUs(CyberCertStorage storage s, bool wasNonUs, bool isNonUs, uint64 expiry) private {
+        if (wasNonUs != isNonUs) {
+            if (isNonUs) s.nonUsHolderCount += 1;
+            else s.nonUsHolderCount -= 1;
+        }
+        if (isNonUs && (s.usTallyExpiry == 0 || expiry < s.usTallyExpiry)) {
+            s.usTallyExpiry = expiry;
+        }
+        // Nothing left that can lapse, so clear the expiry rather than leave a false alarm standing
+        if (s.nonUsHolderCount == 0) s.usTallyExpiry = 0;
+    }
+
+    /// @dev Whether this account is currently counted in `nonUsHolderCount`. A non-US booking always carries
+    /// an expiry, so a zero one here can only be an account booked before this field existed — never
+    /// counted, and it joins on its first resync.
+    function _isTrackedNonUs(HolderAcct storage a) private view returns (bool) {
+        return a.expiry != 0 && !a.isUS;
     }
 
     /// @dev Re-read the badge for a live holder and reconcile the totals by the delta, so
     /// `total == Σ holderAcct.weight` stays exact across BO-count or jurisdiction changes. No-op otherwise.
+    /// A lapsed or voided credential means the count is unknown, not lower, so the holder keeps the weight
+    /// they were booked at. Only a fresh attestation revises it. Otherwise retiring one would free cap room.
     function _resyncHolder(CyberCertStorage storage s, address owner) private {
         HolderAcct storage a = s.holderAcct[owner];
         if (a.liveLots == 0) return;
-        (uint32 newWeight, bool newIsUS) = _sample(s, owner);
+        (uint32 bo, bool newIsUS, uint64 expiry) = _sample(s, owner);
+        uint32 newWeight = bo > 0 ? bo : a.weight;
         s.lookThroughHolderCount = s.lookThroughHolderCount - a.weight + newWeight;
         uint256 usCount = s.usLookThroughHolderCount;
         if (a.isUS) usCount -= a.weight;
         if (newIsUS) usCount += newWeight;
         s.usLookThroughHolderCount = usCount;
+        bool wasNonUs = _isTrackedNonUs(a);
         a.weight = newWeight;
         a.isUS = newIsUS;
+        a.expiry = expiry;
+        _trackNonUs(s, wasNonUs, !newIsUS, expiry);
     }
 
-    /// @dev Mark tokenId as a live lot for `owner`. On the owner's 0→1 transition, sample and add their
-    /// weight to the totals; a further acquisition resyncs their (possibly re-credentialed) weight.
+    /// @dev Mark tokenId as a live lot for `owner`, then let _resyncHolder apply the badge reading — one
+    /// sampling path for both a new holder and a further acquisition.
     /// Idempotent via `liveCounted`; no-op for the zero address or a voided token.
     function _countLot(CyberCertStorage storage s, uint256 tokenId, address owner) private {
         if (owner == address(0) || s.liveCounted[tokenId] || !_isLive(s, tokenId)) return;
         s.liveCounted[tokenId] = true;
         HolderAcct storage a = s.holderAcct[owner];
         if (a.liveLots == 0) {
-            (uint32 weight, bool isUS) = _sample(s, owner);
+            // Book a new holder as one unknown U.S. holder, updating account and totals together so the
+            // resync below has a consistent base to apply its delta against. That seed is exactly what an
+            // uncredentialed holder should be, so for them the resync changes nothing.
             a.liveLots = 1;
-            a.weight = weight;
-            a.isUS = isUS;
-            s.lookThroughHolderCount += weight;
-            if (isUS) s.usLookThroughHolderCount += weight;
+            a.weight = 1;
+            a.isUS = true;
+            s.lookThroughHolderCount += 1;
+            s.usLookThroughHolderCount += 1;
         } else {
             a.liveLots += 1;
-            _resyncHolder(s, owner);
         }
+        _resyncHolder(s, owner);
     }
 
     /// @dev Un-mark tokenId as a live lot for `owner`. On the owner's 1→0 transition, subtract their stored
@@ -482,6 +563,7 @@ library LedgerEntryTokenStorage {
         if (a.liveLots == 0) {
             s.lookThroughHolderCount -= a.weight;
             if (a.isUS) s.usLookThroughHolderCount -= a.weight;
+            _trackNonUs(s, _isTrackedNonUs(a), false, 0);
             delete s.holderAcct[owner];
         }
     }
@@ -504,9 +586,28 @@ library LedgerEntryTokenStorage {
         _resyncHolder(cyberCertStorage(), owner);
     }
 
+    /// @dev The keeper path back to a precise US subtotal. Pass every live holder currently booked non-US,
+    /// in ascending order; covering all of them means the earliest expiry seen here is the real one, so it
+    /// can be pushed out. Ascending order is what rules out duplicates padding the count. A partial or
+    /// unordered list still resyncs each holder, it just leaves the tally expiry where it was.
     function resyncHolders(address[] calldata owners) external {
         CyberCertStorage storage s = cyberCertStorage();
-        for (uint256 i = 0; i < owners.length; i++) _resyncHolder(s, owners[i]);
+        uint64 earliest;
+        uint256 covered;
+        address prev;
+        bool ascending = true;
+        for (uint256 i = 0; i < owners.length; i++) {
+            address owner = owners[i];
+            if (owner <= prev) ascending = false;
+            prev = owner;
+            _resyncHolder(s, owner);
+            HolderAcct storage a = s.holderAcct[owner];
+            if (a.liveLots > 0 && !a.isUS) {
+                covered += 1;
+                if (earliest == 0 || a.expiry < earliest) earliest = a.expiry;
+            }
+        }
+        if (ascending && covered == s.nonUsHolderCount && covered > 0) s.usTallyExpiry = earliest;
     }
 
     /// @dev One-time/idempotent backfill for printers upgraded to add the look-through tally: count each
@@ -563,8 +664,19 @@ library LedgerEntryTokenStorage {
         return cyberCertStorage().lookThroughHolderCount;
     }
 
+    /// @dev Past the tally expiry at least one holder booked non-US may have lapsed into US without any
+    /// transaction to notice, so the subtotal would understate. Fall back to the full look-through count —
+    /// the same unknown-reads-US reading the policy applies everywhere else. A keeper restores precision
+    /// by resyncing the non-US holders.
     function getUsLookThroughHolderCount() internal view returns (uint256) {
-        return cyberCertStorage().usLookThroughHolderCount;
+        CyberCertStorage storage s = cyberCertStorage();
+        uint64 expiry = s.usTallyExpiry;
+        if (expiry == 0 || block.timestamp < expiry) return s.usLookThroughHolderCount;
+        return s.lookThroughHolderCount;
+    }
+
+    function getUsTallyExpiry() internal view returns (uint64) {
+        return cyberCertStorage().usTallyExpiry;
     }
 
     function isLegalHolder(address owner) internal view returns (bool) {

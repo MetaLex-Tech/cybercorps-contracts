@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 import {IDealManager} from "../../../src/interfaces/IDealManager.sol";
 import {KillSwitchCondition} from "../../../src/libs/conditions/secondary/KillSwitchCondition.sol";
-import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
+import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration.sol";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // KillSwitchCondition — finalization kill switch (closing condition).
@@ -40,15 +40,19 @@ import {SecondaryConditionTestBase} from "./SecondaryConditionMocks.sol";
 // | 21 | settlement propose lower while not killed             | revert NotKilled             |
 // ─────────────────────────────────────────────────────────────────────────────
 
-contract KillSwitchConditionTest is SecondaryConditionTestBase {
+contract KillSwitchConditionTest is SecondaryConditionIntegrationBase {
     KillSwitchCondition internal kill;
     address internal metalex = makeAddr("metalexAdmin");
     address internal legion = makeAddr("legionAdmin");
 
+    // The kill switch is a standalone closing condition keyed only by settlement id; it never reads the
+    // offer/escrow, so these ids are plain keys.
+    bytes32 internal constant OFFER_ID = keccak256("offer");
+    bytes32 internal constant AGREEMENT_ID = keccak256("settlement");
     bytes32 internal constant AGREEMENT_ID_2 = keccak256("settlement.other");
 
     function setUp() public {
-        _setUpBase();
+        _setUpIntegration();
         kill = new KillSwitchCondition(metalex, legion);
     }
 

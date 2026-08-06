@@ -282,6 +282,7 @@ interface ILedgerEntryToken is IERC721 {
     // §3(c)(1)(A) look-through holder tally (maintained incrementally; read O(1))
     function lookThroughHolderCount() external view returns (uint256);
     function usLookThroughHolderCount() external view returns (uint256);
+    function usTallyExpiry() external view returns (uint64);
     function isLegalHolder(address owner) external view returns (bool); // note the distinction vs legal owner: a legal holder must have live lots
     function lookThroughBadge() external view returns (address);
     function setLookThroughBadge(address badge) external;

@@ -16,13 +16,9 @@ import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC5484} from "../src/interfaces/IERC5484.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {LeXcheXBadge} from "../src/creds/lexchexBadge.sol";
-import {
-    CategoryKind,
-    Credential,
-    CredentialCategory,
-    ATTR_INVESTOR_JURISDICTION,
-    ATTR_US_STATE
-} from "../src/creds/storage/lexchexBadgeStorage.sol";
+import {K_INVESTOR_TYPE, K_INVESTOR_JURISDICTION, K_US_STATE, K_ACCREDITED, K_QIB, K_NON_US, InvestorType}
+    from "../src/interfaces/ILexChexBadge.sol";
+import {Credential} from "../src/creds/storage/lexchexBadgeStorage.sol";
 import {FundInterestData} from "../src/storage/extensions/FundInterestExtension.sol";
 import {
     AcceptOfferParams,
@@ -46,7 +42,6 @@ import {RegSDistributionComplianceCondition} from "../src/libs/conditions/second
 import {Rule144DisclosureCondition} from "../src/libs/conditions/secondary/Rule144DisclosureCondition.sol";
 import {Section4a7DisclosureCondition} from "../src/libs/conditions/secondary/Section4a7DisclosureCondition.sol";
 import {LegalOpinionCondition} from "../src/libs/conditions/secondary/LegalOpinionCondition.sol";
-import {AgreementSignedCondition} from "../src/libs/conditions/secondary/AgreementSignedCondition.sol";
 import {KillSwitchCondition} from "../src/libs/conditions/secondary/KillSwitchCondition.sol";
 import {TimeSettlementPeriodCondition} from "../src/libs/conditions/secondary/TimeSettlementPeriodCondition.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
@@ -142,7 +137,6 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     Rule144DisclosureCondition public rule144Disclosure;
     Section4a7DisclosureCondition public section4a7Disclosure;
     LegalOpinionCondition public legalOpinion;
-    AgreementSignedCondition public agreementSigned;
     KillSwitchCondition public killSwitch;
     TimeSettlementPeriodCondition public timeSettlement;
 
@@ -230,6 +224,8 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 bytes("")
             )
         );
+        // The printer's tally and HolderCapCondition must read the same badge.
+        LedgerEntryToken(address(certPrinter)).setLookThroughBadge(address(badge));
         sellerTokenId = im.createCertAndAssign(address(certPrinter), seller, _sellerCertDetails());
         vm.stopPrank();
 
@@ -238,9 +234,13 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         vm.warp(500 days);
         _mintCred(seller, CAT_KYC, "US", CA);
         vm.startPrank(owner);
-        eligibility.setClearance(seller, true);
+        eligibility.setClearance(address(corp), seller, true);
         rule144Disclosure.setDisclosurePackage(address(corp), DISCLOSURE_URI, uint64(block.timestamp));
-        section4a7Disclosure.setDisclosurePackage(address(corp), DISCLOSURE_URI, uint64(block.timestamp));
+        section4a7Disclosure.setDisclosurePackage(
+            address(corp), DISCLOSURE_URI, uint64(block.timestamp), SECTION4A7_ACK
+        );
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, uint256(100), false, false);
+        legion.setConfig(address(corp), CAT_LEGION, false);
         vm.stopPrank();
     }
 
@@ -477,6 +477,22 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         dm.acceptOffer(a);
     }
 
+    // Reg S turns on the attested fact, not on the buyer's recorded country: a foreign buyer whose
+    // credential never asserts K_NON_US is refused the pathway.
+    function test_RevertIf_RegulationS_BuyerNotAttestedNonUsPerson() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.regs.unattested");
+        _commonBuyerSetup(buyer, "KY", bytes2(0)); // KYC only — jurisdiction KY, no K_NON_US
+
+        bytes32 offerId = _postSellOffer(ExemptionPathway.REGULATION_S, uint256(keccak256("regs.unattested")));
+        AcceptOfferParams memory a = _sellAcceptParams(offerId, buyer, buyerKey, ExemptionPathway.REGULATION_S, UNITS);
+
+        vm.prank(buyer);
+        vm.expectRevert(
+            abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, address(nonUsPerson))
+        );
+        dm.acceptOffer(a);
+    }
+
     function test_RevertIf_UnpinnedOffer_BuyerElectsNoPathway() public {
         (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.nopathway");
         _commonBuyerSetup(buyer, "US", CA);
@@ -624,11 +640,6 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 )
             )
         );
-        _createCategory(CAT_KYC, CategoryKind.KYC_AML);
-        _createCategory(CAT_ACCREDITED, CategoryKind.ACCREDITED_INVESTOR);
-        _createCategory(CAT_QIB, CategoryKind.QIB);
-        _createCategory(CAT_NONUS, CategoryKind.NON_US_PERSON);
-        _createCategory(CAT_LEGION, CategoryKind.CUSTOM);
     }
 
     function _deployConditions() internal {
@@ -638,10 +649,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         holderCap = HolderCapCondition(
             _proxy(
                 address(new HolderCapCondition()),
-                abi.encodeCall(
-                    HolderCapCondition.initialize,
-                    (address(auth), address(badge), HolderCapCondition.IcaException.SECTION_3C1, uint256(100), false, false)
-                )
+                abi.encodeCall(HolderCapCondition.initialize, (address(auth)))
             )
         );
         usState = USStateOfResidenceCondition(
@@ -653,7 +661,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         legion = LegionSoulboundCondition(
             _proxy(
                 address(new LegionSoulboundCondition()),
-                abi.encodeCall(LegionSoulboundCondition.initialize, (address(auth), address(badge), CAT_LEGION, false))
+                abi.encodeCall(LegionSoulboundCondition.initialize, (address(auth), address(badge)))
             )
         );
         holdingPeriod = HoldingPeriodCondition(
@@ -662,9 +670,9 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 abi.encodeCall(HoldingPeriodCondition.initialize, (address(auth), uint256(HOLD)))
             )
         );
-        accredited = _deployKindCondition(CategoryKind.ACCREDITED_INVESTOR);
-        qib = _deployKindCondition(CategoryKind.QIB);
-        nonUsPerson = _deployKindCondition(CategoryKind.NON_US_PERSON);
+        accredited = _deployKindCondition(K_ACCREDITED);
+        qib = _deployKindCondition(K_QIB);
+        nonUsPerson = _deployKindCondition(K_NON_US);
         regS = RegSDistributionComplianceCondition(
             _proxy(
                 address(new RegSDistributionComplianceCondition()),
@@ -682,7 +690,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 address(new Section4a7DisclosureCondition()),
                 abi.encodeCall(
                     Section4a7DisclosureCondition.initialize,
-                    (address(auth), address(registry), SECTION4A7_ACK, DISCLOSURE_MAX_AGE)
+                    (address(auth), address(registry), DISCLOSURE_MAX_AGE)
                 )
             )
         );
@@ -692,12 +700,6 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 abi.encodeCall(LegalOpinionCondition.initialize, (address(auth)))
             )
         );
-        agreementSigned = AgreementSignedCondition(
-            _proxy(
-                address(new AgreementSignedCondition()),
-                abi.encodeCall(AgreementSignedCondition.initialize, (address(auth), address(registry)))
-            )
-        );
         // Closing conditions are plain (non-proxied) singletons.
         metalexKillAdmin = makeAddr("metalexKillAdmin");
         legionKillAdmin = makeAddr("legionKillAdmin");
@@ -705,11 +707,11 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         timeSettlement = new TimeSettlementPeriodCondition();
     }
 
-    function _deployKindCondition(CategoryKind kind) internal returns (LexChexBadgeKindCondition) {
+    function _deployKindCondition(uint256 kindKey) internal returns (LexChexBadgeKindCondition) {
         return LexChexBadgeKindCondition(
             _proxy(
                 address(new LexChexBadgeKindCondition()),
-                abi.encodeCall(LexChexBadgeKindCondition.initialize, (address(auth), address(badge), kind, "", false))
+                abi.encodeCall(LexChexBadgeKindCondition.initialize, (address(auth), address(badge), kindKey, false))
             )
         );
     }
@@ -717,12 +719,11 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     /// @dev One call per list; the pathway calls also enable their pathway. This SPV supports all five.
     function _wireConditions() internal {
         // SPV-layer (every pathway).
-        address[] memory spv = new address[](5);
+        address[] memory spv = new address[](4);
         spv[0] = address(eligibility);
         spv[1] = address(holderCap);
         spv[2] = address(usState);
         spv[3] = address(legion);
-        spv[4] = address(agreementSigned);
 
         vm.startPrank(owner);
         dm.setSpvThresholdConditions(spv);
@@ -749,52 +750,33 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         _mintCred(buyer, CAT_KYC, jurisdiction, state);
         _mintCred(buyer, CAT_LEGION, jurisdiction, state);
         vm.prank(owner);
-        eligibility.setClearance(buyer, true);
+        eligibility.setClearance(address(corp), buyer, true);
 
         paymentToken.mint(buyer, CONSIDERATION * 10);
         vm.prank(buyer);
         paymentToken.approve(address(dm), type(uint256).max);
     }
 
-    function _createCategory(bytes32 id, CategoryKind kind) internal {
-        bool isAnchor = kind == CategoryKind.KYC_AML; // KYC is the residence/identity anchor for these tests
-        CredentialCategory memory c = CredentialCategory({
-            name: "cat",
-            description: "",
-            kind: kind,
-            defaultValidityDuration: 3650 days,
-            requiresUsState: false,
-            requiresBeneficialOwnerCount: false,
-            requiresEvidenceHash: false,
-            burnAuth: IERC5484.BurnAuth.OwnerOnly,
-            scope: address(0),
-            active: true,
-            exists: true,
-            governedAttributes: isAnchor ? (ATTR_INVESTOR_JURISDICTION | ATTR_US_STATE) : 0
-        });
-        vm.prank(owner);
-        badge.createCategory(id, c);
-    }
-
+    /// @dev Mints a credential whose facts follow the categoryId's role: CAT_KYC carries the residence anchor
+    /// (jurisdiction + state), CAT_ACCREDITED / CAT_QIB / CAT_NONUS assert the corresponding status fact-key,
+    /// and every categoryId is also written as the free-form label so the Legion issuer-tier gate matches.
     function _mintCred(address to, bytes32 categoryId, string memory jurisdiction, bytes2 state) internal {
-        Credential memory cred = Credential({
-            categoryId: categoryId,
-            investorName: "Inv",
-            investorType: "Individual",
-            investorJurisdiction: jurisdiction,
-            usState: state,
-            beneficialOwnerCount: 0,
-            issuanceDate: 0,
-            expiryDate: 0,
-            voided: "",
-            agreementId: bytes32(0),
-            evidenceHash: bytes32(0),
-            extensionData: "",
-            regulatoryJurisdiction: "",
-            lastUpdated: 0
-        });
+        Credential memory cred;
+        cred.categoryId = categoryId; // free-form label (the Legion tier gate matches on it)
+        cred.investorType = InvestorType.INDIVIDUAL;
+        cred.investorJurisdiction = jurisdiction;
+        cred.usState = state;
+        cred.expiryDate = uint64(block.timestamp + 3650 days);
+
+        uint256 asserts = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION;
+        if (state != bytes2(0)) asserts |= K_US_STATE;
+        if (categoryId == CAT_ACCREDITED) asserts |= K_ACCREDITED;
+        else if (categoryId == CAT_QIB) asserts |= K_QIB;
+        else if (categoryId == CAT_NONUS) asserts |= K_NON_US;
+        cred.asserts = asserts;
+
         vm.prank(owner);
-        badge.mint(to, categoryId, cred);
+        badge.mint(to, cred);
     }
 
     function _sellerCertDetails() internal view returns (CertificateDetails memory) {

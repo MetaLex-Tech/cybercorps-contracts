@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SecondaryTradingConditionBase.sol";
 import "../../auth.sol";
 import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
@@ -39,14 +39,15 @@ contract LegalOpinionCondition is SecondaryTradingConditionBase, UUPSUpgradeable
     event GPSignOffRevoked(address indexed dealManager, bytes32 indexed dealId, address indexed approver);
     event OpinionSubmitted(address indexed dealManager, bytes32 indexed dealId, bytes32 opinionHash, string uri, address indexed submitter);
 
-    /// @notice Per-SPV (cyberCORP address) mechanism selection; EITHER (enum zero) when unconfigured
-    mapping(address => OpinionMechanism) public mechanisms;
-    // dealManager => dealId (offerId or settlementAgreementId) => GP sign-off recorded
-    mapping(address => mapping(bytes32 => bool)) public gpSignOffs;
-    // dealManager => dealId (offerId or settlementAgreementId) => formal opinion record
-    mapping(address => mapping(bytes32 => OpinionRecord)) public opinions;
+    struct LegalOpinionStorage {
+        mapping(address => OpinionMechanism) mechanisms;
+        mapping(address => mapping(bytes32 => bool)) gpSignOffs;
+        mapping(address => mapping(bytes32 => OpinionRecord)) opinions;
+    }
 
-    uint256[47] private __gap;
+    bytes32 private constant STORAGE_POSITION = keccak256("metalex.condition.secondary.legal-opinion.storage.v1");
+
+    // Upgrade notes: reduced gap to account for the contract's variables (50 - 3 = 47)
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -62,7 +63,7 @@ contract LegalOpinionCondition is SecondaryTradingConditionBase, UUPSUpgradeable
     function setMechanism(address spv, OpinionMechanism mechanism) external {
         if (spv == address(0)) revert InvalidSpv();
         _requireAuthAdmin(spv);
-        mechanisms[spv] = mechanism;
+        _legalOpinionStorage().mechanisms[spv] = mechanism;
         emit MechanismUpdated(spv, mechanism);
     }
 
@@ -72,7 +73,7 @@ contract LegalOpinionCondition is SecondaryTradingConditionBase, UUPSUpgradeable
         if (dealManager == address(0)) revert InvalidDealManager();
         if (dealId == bytes32(0)) revert InvalidDealId();
         _requireAuthAdmin(dealManager);
-        gpSignOffs[dealManager][dealId] = true;
+        _legalOpinionStorage().gpSignOffs[dealManager][dealId] = true;
         emit GPSignOffRecorded(dealManager, dealId, msg.sender);
     }
 
@@ -81,7 +82,7 @@ contract LegalOpinionCondition is SecondaryTradingConditionBase, UUPSUpgradeable
     function revokeGPSignOff(address dealManager, bytes32 dealId) external {
         if (dealManager == address(0)) revert InvalidDealManager();
         _requireAuthAdmin(dealManager);
-        gpSignOffs[dealManager][dealId] = false;
+        _legalOpinionStorage().gpSignOffs[dealManager][dealId] = false;
         emit GPSignOffRevoked(dealManager, dealId, msg.sender);
     }
 
@@ -92,7 +93,7 @@ contract LegalOpinionCondition is SecondaryTradingConditionBase, UUPSUpgradeable
         if (dealId == bytes32(0)) revert InvalidDealId();
         if (opinionHash == bytes32(0)) revert InvalidOpinionHash();
         _requireAuthAdmin(dealManager);
-        opinions[dealManager][dealId] = OpinionRecord({
+        _legalOpinionStorage().opinions[dealManager][dealId] = OpinionRecord({
             opinionHash: opinionHash,
             uri: uri,
             submitter: msg.sender,
@@ -103,14 +104,15 @@ contract LegalOpinionCondition is SecondaryTradingConditionBase, UUPSUpgradeable
 
     /// @notice Whether a satisfying assurance record exists for the deal under the SPV's mechanism
     function hasAssurance(address spv, address dealManager, bytes32 offerId, bytes32 agreementId) public view returns (bool) {
-        OpinionMechanism mechanism = mechanisms[spv];
+        LegalOpinionStorage storage $ = _legalOpinionStorage();
+        OpinionMechanism mechanism = $.mechanisms[spv];
         if (mechanism != OpinionMechanism.FORMAL_OPINION) {
-            if (gpSignOffs[dealManager][offerId]) return true;
-            if (agreementId != bytes32(0) && gpSignOffs[dealManager][agreementId]) return true;
+            if ($.gpSignOffs[dealManager][offerId]) return true;
+            if (agreementId != bytes32(0) && $.gpSignOffs[dealManager][agreementId]) return true;
         }
         if (mechanism != OpinionMechanism.GP_SIGNOFF) {
-            if (opinions[dealManager][offerId].opinionHash != bytes32(0)) return true;
-            if (agreementId != bytes32(0) && opinions[dealManager][agreementId].opinionHash != bytes32(0)) return true;
+            if ($.opinions[dealManager][offerId].opinionHash != bytes32(0)) return true;
+            if (agreementId != bytes32(0) && $.opinions[dealManager][agreementId].opinionHash != bytes32(0)) return true;
         }
         return false;
     }
@@ -126,6 +128,28 @@ contract LegalOpinionCondition is SecondaryTradingConditionBase, UUPSUpgradeable
 
         Offer memory offer = dealManager.getOffer(offerId);
         return hasAssurance(offer.spvAddress, address(dealManager), offerId, agreementId);
+    }
+
+    /// @notice An SPV's chosen assurance mechanism
+    function mechanisms(address spv) public view returns (OpinionMechanism) {
+        return _legalOpinionStorage().mechanisms[spv];
+    }
+
+    /// @notice Whether a GP sign-off is on record for a deal
+    function gpSignOffs(address dealManager, bytes32 dealId) public view returns (bool) {
+        return _legalOpinionStorage().gpSignOffs[dealManager][dealId];
+    }
+
+    /// @notice The formal opinion on record for a deal
+    function opinions(address dealManager, bytes32 dealId) public view returns (OpinionRecord memory) {
+        return _legalOpinionStorage().opinions[dealManager][dealId];
+    }
+
+    function _legalOpinionStorage() private pure returns (LegalOpinionStorage storage $) {
+        bytes32 position = STORAGE_POSITION; // assembly cannot reference a computed constant directly
+        assembly {
+            $.slot := position
+        }
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
