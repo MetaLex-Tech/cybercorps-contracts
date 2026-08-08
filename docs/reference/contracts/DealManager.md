@@ -91,14 +91,18 @@ function acceptOffer(AcceptOfferParams params) external returns (bytes32 settlem
 function cancelOffer(bytes32 offerId) external;
 function finalizeSecondaryTradeAgreement(bytes32 agreementId) external;
 function voidSecondaryTradeAgreement(bytes32 agreementId, address signer, bytes signature) external;
+function voidSecondaryTradeAgreement(bytes32 agreementId, address signer, bytes signature, uint256 nonce, bytes authSig) external;
 function voidExpiredSecondaryTradeAgreement(bytes32 agreementId, address signer, bytes signature) external;
 function syncVoidedSecondaryTradeAgreement(bytes32 agreementId) external;
 ```
 
-`postOffer`, `acceptOffer`, `cancelOffer`, and `voidSecondaryTradeAgreement`
-each have a relayer overload taking `(…, address forAddr, uint256 nonce,
-bytes sig)` where `sig` is the user's EIP-712 authorization — so a relayer
-can submit on a user's behalf.
+`postOffer`, `acceptOffer`, and `cancelOffer` each have a relayer overload
+taking `(…, address forAddr, uint256 nonce, bytes sig)` where `sig` is the
+user's EIP-712 authorization — so a relayer can submit on a user's behalf.
+`voidSecondaryTradeAgreement`'s relayed overload has a different shape (see
+above): `(agreementId, signer, voidSignature, nonce, authSig)` — the
+registry void signature and the relayer-authorization signature are
+separate, with `signer` as the authorized party.
 
 * **Offers.** `PostOfferParams` covers both sides (`OfferSide.SELL` /
   `BUY`): the printer and token id, units, payment token and consideration,

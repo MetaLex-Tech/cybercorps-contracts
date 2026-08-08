@@ -36,8 +36,10 @@ manager contracts — `IssuanceManager`, `DealManager`, `RoundManager` — not
 directly to `LedgerEntryToken` / `CyberScrip` (those are mostly
 `onlyIssuanceManager`, with some admin-gated exceptions on the cert
 printer). The DealManager's secondary-trade entry points (`postOffer`,
-`acceptOffer`, `cancelOffer`, `voidSecondaryTradeAgreement`) each have a
-relayed overload `(…, forAddr, nonce, sig)` for gasless UX.
+`acceptOffer`, `cancelOffer`) each have a relayed overload
+`(…, forAddr, nonce, sig)` for gasless UX; `voidSecondaryTradeAgreement`'s
+relayed form differs — `(agreementId, signer, voidSignature, nonce,
+authSig)`.
 
 ## EIP-712 signatures
 
