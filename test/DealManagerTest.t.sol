@@ -906,6 +906,37 @@ contract DealManagerTest is Test {
         CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]); // burned token should revert on ownerOf
     }
 
+    /// @notice Regression: expiry == 0 means no deadline, so a zero-expiry deal must never be
+    /// void-expirable. Before the zero guard, voidExpiredDeal treated it as already expired and tore
+    /// down the escrow while the registry (post its own zero-expiry void fix) kept the agreement live,
+    /// splitting the legal agreement state from the asset/refund state.
+    function test_RevertIf_VoidExpiredDeal_ZeroExpiry() public {
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        vm.prank(owner);
+        (bytes32 agreementId, ) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            uint256(keccak256("DealManagerTest.ZeroExpiryDeal")),
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // conditions
+            bytes32(0), // secretHash
+            0 // expiry: no deadline
+        );
+
+        vm.expectRevert(IDealManagerStorage.DealNotExpired.selector);
+        dm.voidExpiredDeal(agreementId, companyOwner, "");
+    }
+
     function test_RevertIf_RevokeDeal_UnknownDeal() public {
         vm.prank(alice);
         vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);

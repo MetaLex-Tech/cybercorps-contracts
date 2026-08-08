@@ -313,7 +313,10 @@ library DealManagerStorage {
 
         address registry = LexScrowStorage.getDealRegistry();
         Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
-        if (block.timestamp <= deal.expiry) revert IDealManagerStorage.DealNotExpired();
+        // expiry == 0 means no deadline (mirrors the registry's void semantics): such deals never
+        // expire, so treating zero as expired here would tear down the escrow while the registry
+        // agreement stays live — voiding them requires signToVoid (unanimous) instead.
+        if (deal.expiry == 0 || block.timestamp <= deal.expiry) revert IDealManagerStorage.DealNotExpired();
         ICyberAgreementRegistry(registry).voidContractFor(agreementId, signer, signature);
         _voidCorpCerts(deal);
         if (deal.status == EscrowStatus.PAID)
