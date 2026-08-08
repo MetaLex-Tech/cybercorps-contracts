@@ -1333,6 +1333,15 @@ library IssuanceManagerStorage {
         );
     }
 
+    function executeSetScripMaxHolderCount(
+        address certAddress,
+        uint256 maxHolders
+    ) external {
+        ICyberScrip(_getScripifiedCertOrRevert(certAddress)).setMaxHolderCount(
+            maxHolders
+        );
+    }
+
     function executeForceScripTransfer(
         address certAddress,
         address from,

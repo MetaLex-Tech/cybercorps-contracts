@@ -675,6 +675,16 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         );
     }
 
+    function setScripMaxHolderCount(
+        address certAddress,
+        uint256 maxHolders
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeSetScripMaxHolderCount(
+            certAddress,
+            maxHolders
+        );
+    }
+
     function forceScripTransfer(
         address certAddress,
         address from,

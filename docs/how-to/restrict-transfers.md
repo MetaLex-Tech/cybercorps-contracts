@@ -60,8 +60,11 @@ the exercise functions, the disables are `onlyIssuanceManager`.
 
 ## Holder cap
 
-`CyberScrip.setMaxHolderCount(n)` caps the holder count (`0` = unlimited);
-transfers that would exceed it revert `HolderLimitExceeded`.
+`IssuanceManager.setScripMaxHolderCount(certAddress, n)` (admin-gated) caps
+the scrip's holder count (`0` = unlimited); transfers that would exceed it
+revert `HolderLimitExceeded`. The underlying setter,
+`CyberScrip.setMaxHolderCount(n)`, is `onlyIssuanceManager` like the other
+compliance functions.
 
 ## Related
 

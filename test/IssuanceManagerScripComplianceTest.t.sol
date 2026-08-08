@@ -45,6 +45,8 @@ contract MockCertPrinterBasic {
 contract IssuanceManagerScripComplianceTest is Test {
     bytes32 private constant SALT = keccak256("IssuanceManagerScripComplianceTest");
 
+    event MaxHolderCountUpdated(uint256 maxHolderCount);
+
     IssuanceManager public issuanceManager;
     IssuanceManagerFactory public imFactory;
     BorgAuth public auth;
@@ -167,6 +169,48 @@ contract IssuanceManagerScripComplianceTest is Test {
         );
         scrip.transfer(user2, 1 ether);
         vm.stopPrank();
+    }
+
+    function test_setScripMaxHolderCount_capIsEnforced() public {
+        // user1 is the sole holder after setUp
+        vm.prank(admin);
+        vm.expectEmit(true, true, true, true);
+        emit MaxHolderCountUpdated(1);
+        issuanceManager.setScripMaxHolderCount(address(cert), 1);
+        assertEq(scrip.maxHolderCount(), 1);
+
+        // a partial transfer would create a second holder
+        vm.prank(user1);
+        vm.expectRevert(abi.encodeWithSignature("HolderLimitExceeded(uint256)", 1));
+        scrip.transfer(user2, 1 ether);
+
+        // raising the cap through the same path lifts the restriction
+        vm.prank(admin);
+        issuanceManager.setScripMaxHolderCount(address(cert), 2);
+
+        vm.prank(user1);
+        scrip.transfer(user2, 1 ether);
+        assertEq(scrip.balanceOf(user2), 1 ether);
+    }
+
+    function test_setScripMaxHolderCount_onlyAdmin() public {
+        uint256 adminRole = auth.ADMIN_ROLE();
+
+        vm.prank(user1);
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "BorgAuth_NotAuthorized(uint256,address)",
+                adminRole,
+                user1
+            )
+        );
+        issuanceManager.setScripMaxHolderCount(address(cert), 1);
+    }
+
+    function test_setScripMaxHolderCount_revertsForUnscripifiedCert() public {
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSignature("ScripifiedCertNotAllowed()"));
+        issuanceManager.setScripMaxHolderCount(makeAddr("notACert"), 1);
     }
 
     function test_forceScripTransfer_ignoresHookAndFreeze() public {
