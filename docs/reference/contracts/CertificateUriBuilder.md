@@ -36,9 +36,11 @@ configured on the IssuanceManager, which assembles a
   fragment (`CyberCorp.getExtensionURI`), the cert-level fragment
   (`ICertificateExtension.getExtensionURI(details.extensionData)`), and the
   series-level fragment (`ICertificateExtensionV3.getSeriesExtensionURI`
-  over the printer's `seriesData`, when the extension supports it) — each
-  guarded with `try/catch` so legacy printers and V1/V2 extensions keep
-  rendering,
+  over the printer's `seriesData`, when the extension supports it). The
+  corp- and series-level calls are `try/catch`-guarded so legacy printers
+  and V1/V2 extensions keep rendering; the cert-level call is made
+  directly, so a reverting certificate extension reverts the whole
+  `tokenURI` call,
 * the `endorsementHistory` array and `currentOwner`,
 * the `restrictiveLegends` array — structured `RestrictiveLegend` records;
   plain-string legacy legends are converted via
