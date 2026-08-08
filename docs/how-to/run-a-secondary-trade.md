@@ -39,7 +39,7 @@ bytes32 offerId = dealManager.postOffer(PostOfferParams({
     side:                     OfferSide.SELL,
     certPrinter:              certPrinter,   // the security being sold
     tokenId:                  tokenId,       // seller's cert (0 for BUY offers)
-    units:                    10_000,
+    units:                    10_000e18,     // 10,000 shares (units are 18-decimal)
     paymentToken:             USDC,
     consideration:            200_000e6,     // total for all offered units
     exemptionPathway:         ExemptionPathway.NONE, // NONE = each buyer elects
@@ -74,7 +74,7 @@ import {AcceptOfferParams} from "src/interfaces/ISecondaryTradeStorage.sol";
 
 bytes32 settlementAgreementId = dealManager.acceptOffer(AcceptOfferParams({
     offerId:             offerId,
-    units:               4_000,                      // partial fills allowed
+    units:               4_000e18,                   // 4,000 shares — partial fills allowed
     exemptionPathway:    ExemptionPathway.RULE_144,  // buyer's election (sell offers)
     buyerName:           "Bob Buyer",
     buyerHostingMode:    HostingMode.DIRECT,
@@ -121,11 +121,13 @@ minting the buyer's cert with the seller's endorsement attached.
 
 ## Relayer support
 
-`postOffer`, `cancelOffer`, `acceptOffer`, and
-`voidSecondaryTradeAgreement` each have a relayed overload
+`postOffer`, `cancelOffer`, and `acceptOffer` each have a relayed overload
 `(…, address forAddr, uint256 nonce, bytes sig)` where `sig` is `forAddr`'s
 EIP-712 authorization over the call parameters and nonce — so end users can
-trade gaslessly.
+trade gaslessly. `voidSecondaryTradeAgreement`'s relayed overload is
+different: `(agreementId, signer, voidSignature, nonce, authSig)` — the
+registry void signature plus a separate relayer-authorization signature,
+with `signer` as the authorized party.
 
 ## Bespoke deals
 

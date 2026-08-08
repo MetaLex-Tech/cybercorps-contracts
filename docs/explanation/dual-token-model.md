@@ -64,7 +64,7 @@ that matters legally, because that is where the register changes.
 
 ### Partial scripification
 
-A holder of 1,000,000 units can scripify 250,000 to trade and keep 750,000
+A holder of 1,000,000 shares can scripify 250,000 to trade and keep 750,000
 on the cert. The cert remains active with the reduced unit count. An
 ERC-4626-style pool inside the `IssuanceManager` tracks each certificate's
 scripified units as vault positions, so that de-scripification withdraws

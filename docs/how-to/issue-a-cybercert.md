@@ -39,7 +39,7 @@ CertificateDetails memory details = CertificateDetails({
     signingOfficerTitle:                 "Chief Executive Officer",
     investmentAmountUSD:                 2_500_000e18,
     issuerUSDValuationAtTimeOfInvestment: 20_000_000e18,
-    unitsRepresented:                    1_000_000,
+    unitsRepresented:                    1_000_000e18, // 1,000,000 shares (18-decimal)
     legalDetails:                        "Series A Preferred",
     extensionData:                       abi.encode(/* per the extension */)
 });

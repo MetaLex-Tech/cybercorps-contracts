@@ -93,7 +93,7 @@ CertificateDetails memory details = CertificateDetails({
     signingOfficerTitle:                 "Chief Executive Officer",
     investmentAmountUSD:                 0,
     issuerUSDValuationAtTimeOfInvestment: 0,
-    unitsRepresented:                    8_000_000,
+    unitsRepresented:                    8_000_000e18, // 8,000,000 shares (18-decimal)
     legalDetails:                        "Founder common stock",
     extensionData:                       ""   // ABI-encoded per the extension
 });
