@@ -83,8 +83,20 @@ officer (level 200) can call it; most other `CyberCorp` functions are
 
 ## A note on `onlyIssuanceManager`
 
-`CyberScrip`, `LedgerEntryToken` (formerly `CyberCertPrinter`), and
-`CyberShares` gate their mutating functions with `onlyIssuanceManager` — a
-check that `msg.sender` *is* the IssuanceManager contract, **not** a
-BorgAuth role check. End users act through the IssuanceManager, which
-itself is authorised via BorgAuth.
+`CyberScrip` and `CyberShares` gate their mutating functions with
+`onlyIssuanceManager` — a check that `msg.sender` *is* the IssuanceManager
+contract, **not** a BorgAuth role check. End users act through the
+IssuanceManager, which itself is authorised via BorgAuth.
+
+`LedgerEntryToken` (formerly `CyberCertPrinter`) has **two** surfaces:
+
+* **Strictly `onlyIssuanceManager`** — minting and assignment
+  (`createCert*` / `safeMintAndAssign`), `updateCertificateDetails`,
+  `setExtension`, and `updateIssuanceManager`.
+* **`onlyIssuanceManagerOrAdmin`** — the administrative surface, callable
+  directly on the printer by a BorgAuth `ADMIN_ROLE` (98) holder (the
+  modifier resolves the IssuanceManager's `AUTH()` and checks the role):
+  restriction hooks, transferability toggles, default/per-cert legends,
+  `voidCert`/`unvoidCert`, `addIssuerSignature` and `endorseCertificate`,
+  issue/acquisition timestamps (and the tacking anchor), reserved units,
+  `setSeriesData`, and the look-through badge.
