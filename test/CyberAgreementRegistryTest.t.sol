@@ -490,12 +490,27 @@ contract CyberAgreementRegistryTest is Test {
     /// @notice A zero-expiry agreement is still voidable once ALL parties have requested it
     function test_voidContract_ZeroExpiry_VoidedWhenAllPartiesRequest() public {
         uint256 salt = uint256(keccak256("test_voidContract_ZeroExpiry_VoidedWhenAllPartiesRequest"));
-        bytes32 agreementId = _createAliceSignedAgreement(salt, 0);
+        vm.prank(alice);
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            salt,
+            testGlobalValues,
+            testParties,
+            testPartyValues,
+            "",
+            makeAddr("finalizer"), // nonzero finalizer so full signatures do not auto-finalize
+            0 // expiry: no deadline
+        );
 
-        _requestVoid(agreementId, bob, bobPrivateKey);
-        assertFalse(registry.isVoided(agreementId), "first void request alone must not void");
+        // Both sign so numSignatures > 1. With only the proposer signed, the proposer branch voids on
+        // alice's request alone and this never exercises unanimity.
+        _signAs(agreementId, testPartyValues[0], alice, alicePrivateKey, false);
+        _signAs(agreementId, testPartyValues[1], bob, bobPrivateKey, false);
 
         _requestVoid(agreementId, alice, alicePrivateKey);
+        assertFalse(registry.isVoided(agreementId), "first void request alone must not void");
+
+        _requestVoid(agreementId, bob, bobPrivateKey);
         assertTrue(registry.isVoided(agreementId), "unanimous void requests must void the zero-expiry agreement");
     }
 
