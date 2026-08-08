@@ -6,8 +6,8 @@ option, or any [supported security type](../reference/security-types.md).
 ## Prerequisites
 
 * A cyberCORP and its `issuanceManager` address.
-* A `CyberCertPrinter` for the security class (create one with
-  `createCertPrinter` if needed).
+* A cert printer (a `LedgerEntryToken` instance, formerly `CyberCertPrinter`)
+  for the security class (create one with `createCertPrinter` if needed).
 
 ## 1. (If needed) create the certificate printer
 
@@ -21,23 +21,25 @@ address printer = IIssuanceManager(issuanceManager).createCertPrinter(
     "ipfs://acme-cert-art",        // certificate URI
     SecurityClass.PreferredStock,
     SecuritySeries.SeriesA,
-    SHARE_EXTENSION_ADDR           // certificate extension
+    SHARE_EXTENSION_ADDR,          // certificate extension
+    ""                             // seriesData — extension-encoded
+                                   // series-scope payload; "" if none
 );
 ```
 
 ## 2. Build the `CertificateDetails`
 
-From [`CyberCertPrinterStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/storage/CyberCertPrinterStorage.sol):
+From [`ILedgerEntryToken.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/interfaces/ILedgerEntryToken.sol):
 
 ```solidity
-import {CertificateDetails} from "src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "src/interfaces/ILedgerEntryToken.sol";
 
 CertificateDetails memory details = CertificateDetails({
     signingOfficerName:                  "Jane Founder",
     signingOfficerTitle:                 "Chief Executive Officer",
     investmentAmountUSD:                 2_500_000e18,
     issuerUSDValuationAtTimeOfInvestment: 20_000_000e18,
-    unitsRepresented:                    1_000_000,
+    unitsRepresented:                    1_000_000e18, // 1,000,000 shares (18-decimal)
     legalDetails:                        "Series A Preferred",
     extensionData:                       abi.encode(/* per the extension */)
 });
@@ -49,8 +51,8 @@ CertificateDetails memory details = CertificateDetails({
 |---|---|
 | `createCert(certAddress, to, details)` | Mint without setting a registered owner. |
 | `createCertAndAssign(certAddress, investor, details)` | Mint and record the registered owner. |
-| `createCertAndAssignWithName(...)` | As above, plus a holder name and an endorsement signature. |
-| `createCertSignAndAssign(...)` | As above, plus a registry/agreement reference. |
+| `createCertAndAssignWithName(certAddress, investor, details, investorName, endorsementSignature, timestamp)` | As above, plus a holder name, an endorsement signature, and its timestamp. |
+| `createCertSignAndAssign(certAddress, investor, details, endorsementSignature, registry, agreementId, investorName)` | As above, plus a registry/agreement reference. |
 
 ```solidity
 uint256 tokenId = IIssuanceManager(issuanceManager).createCertAndAssign(
@@ -60,11 +62,17 @@ uint256 tokenId = IIssuanceManager(issuanceManager).createCertAndAssign(
 
 ## Other operations
 
-* **Endorse:** `endorseCertificate(certAddress, tokenId, endorser, signature, agreementId)`.
-* **Officer signature:** `addOfficerSignature(certAddress, tokenId, signature)`.
-* **Void / unvoid:** `voidCertificate` / `unvoidCertificate`.
+Cert-level operations were moved off the IssuanceManager onto the cert
+printer itself (`LedgerEntryToken`), callable by the IssuanceManager or a
+BorgAuth admin:
+
+* **Endorse:** `endorseCertificate(tokenId, endorser, signature, agreementId)`
+  on the printer (assembles the endorsement onchain); the registered owner
+  can also call `addEndorsement(tokenId, endorsement)` directly.
+* **Issuer signature:** `addIssuerSignature(tokenId, signature)`.
+* **Void / unvoid:** `voidCert(tokenId)` / `unvoidCert(tokenId)`.
 
 ## Related
 
 * [IssuanceManager](../reference/contracts/IssuanceManager.md),
-  [CyberCertPrinter](../reference/contracts/CyberCertPrinter.md).
+  [LedgerEntryToken](../reference/contracts/LedgerEntryToken.md).

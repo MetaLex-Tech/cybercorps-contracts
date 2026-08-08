@@ -56,10 +56,16 @@ Round memory round = RoundLib.draft()
 `RoundType.FCFS` accepts EOIs first-come; `RoundType.FounderApproved`
 requires the officer to allocate each one.
 
+The `escrowedSignature` is the `authorityOfficer`'s EIP-712 signature over
+the round's economic parameters (the `EscrowedSignatureData` struct in
+[`RoundManagerStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/storage/RoundManagerStorage.sol)).
+`createRound` recomputes the hash from the draft and reverts
+`InvalidEscrowedSignature` if it does not verify.
+
 ## 2. Create the round
 
-`createRound` also creates a `CyberCertPrinter` for each `CyberCertData`
-entry you pass.
+`createRound` also creates a cert printer (`LedgerEntryToken`) for each
+`CyberCertData` entry you pass.
 
 ```solidity
 import {CyberCertData} from "src/storage/RoundManagerStorage.sol";
@@ -73,6 +79,7 @@ certData[0] = CyberCertData({
     securityClass:  SecurityClass.SAFE,
     securitySeries: SecuritySeries.NA,
     extension:      SAFE_EXTENSION_ADDR,
+    seriesData:     "",       // series-scope payload encoded by `extension`
     defaultLegend:  legend
 });
 
@@ -81,7 +88,7 @@ bytes32 roundId = IRoundManager(roundManager).createRound(round, certData);
 
 ## 3. Investor submits an EOI
 
-The investor signs the round's agreement (EIP-712) off-chain and submits an
+The investor signs the round's agreement (EIP-712) offchain and submits an
 `EOI` struct ([`RoundManagerStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/storage/RoundManagerStorage.sol)):
 
 ```solidity

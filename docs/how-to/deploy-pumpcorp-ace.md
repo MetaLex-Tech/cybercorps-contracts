@@ -16,7 +16,12 @@ tokens and leave holding ACE SAFEs.
 
 `PumpCorpFactory` builds on the same primitives as `CyberCorpFactory`:
 it deploys a cyberCORP suite configured for an ACE offering and creates the
-round. The flow then mirrors a standard cyberRAISE round:
+round. Its main entry points are `deployCyberCorp` (suite only),
+`deployCyberCorpAndCreateOffer`, and `deployCyberCorpAndCreateRoundFor`,
+which deploys the suite **and** creates the round in one transaction —
+validating that the round's party values match the officer and verifying
+the officer's escrowed EIP-712 signature over the round parameters. The
+flow then mirrors a standard cyberRAISE round:
 
 1. Deploy the PumpCorp through `PumpCorpFactory`, supplying the offering
    parameters (pricing, cap, the agreement template, and a non-US /
@@ -26,9 +31,12 @@ round. The flow then mirrors a standard cyberRAISE round:
 3. On allocation, each investor receives an ACE SAFE cyberCERT (its security
    series is `SecuritySeries.ACE`).
 
-> `PumpCorpFactory`'s exact constructor and `deploy*` parameters are not
-> reproduced here — consult the contract source, which is the authoritative
-> reference for the current ACE deployment shape.
+> The `deploy*` parameter lists are long and not reproduced here — consult
+> the contract source and the deploy scripts
+> ([`script/deploy-pump-factory.s.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/script/deploy-pump-factory.s.sol),
+> [`script/deploy-pump-factory-full-lifecycle.s.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/script/deploy-pump-factory-full-lifecycle.s.sol)),
+> which are the authoritative reference for the current ACE deployment
+> shape.
 
 ## Related
 

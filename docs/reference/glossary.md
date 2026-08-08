@@ -8,14 +8,15 @@ and `ACESAFEExtension`.
 **BorgAuth** — MetaLeX's role-based access control framework. See
 [borg-core](https://github.com/MetaLex-Tech/borg-core).
 
-**cyberCERT** — A *Ledger Entry Token* (ERC-721). One token = one entry on a
-cyberCORP's register of holders.
+**cyberCERT** — A *Ledger Entry Token* (ERC-721), minted by the
+`LedgerEntryToken` contract (formerly `CyberCertPrinter`). One token = one
+entry on a cyberCORP's register of holders.
 
 **cyberCORP** — An onchain legal entity that issues legally constitutive
 digital securities through this protocol.
 
 **cyberRAISE** — Onchain primary fundraising. Implemented via `RoundManager`,
-`DealManager`, and `LeXscroWLite`.
+`DealManager`, and the LeXscroW escrow subsystem (`LexScrowStorage`).
 
 **cyberSCRIP** — The ERC-20 fungible form of a cyberCORP security, minted
 from a cyberCERT via `scripifyCert` and convertible back. Itself a security
@@ -25,7 +26,8 @@ in scrip form (e.g., DGCL §155).
 `CyberAgreementRegistry`.
 
 **cyberTRADE** — Post-negotiation settlement for secondary trades of private
-securities. Settles via `DealManager` + `LeXscroWLite`.
+securities. Settles via the `DealManager` offer/acceptance flow (with an
+elected exemption pathway) and the LeXscroW escrow subsystem.
 
 **Constitutive tokenization** — Token issuance where the chain *is* the
 official register, not a pointer to one. Contrast with pointer tokenization.
@@ -40,10 +42,22 @@ changing event (transfer, conversion, restriction change).
 investor declares intent to participate in a cyberRAISE round on stated
 terms.
 
+**Exemption pathway** — The securities-law exemption a secondary trade
+settles under (`RULE_144`, `SECTION_4A7`, `SECTION_4A1HALF`, `RULE_144A`,
+or `REGULATION_S`), elected per trade and enforced by
+per-pathway [condition](conditions.md) sets on the `DealManager`.
+
 **LeXcheX** — MetaLeX's onchain accreditation / KYC-AML credential system.
 Soulbound, wallet-bound NFT credentials.
 
-**LeXscroWLite** — The atomic deal-closing escrow contract.
+**LeXcheXBadge** — The unified soulbound credential registry (LeXcheX v2,
+`src/creds/lexchexBadge.sol`): fact-keyed credential attributes with
+expiries, read by the badge-scoped secondary-trading
+[conditions](conditions.md).
+
+**LeXscroWLite** — The atomic deal-closing escrow subsystem. Now implemented
+as the `LexScrowStorage` library linked into `DealManager` (formerly a
+standalone contract).
 
 **LiquiLeX** — AMM-native secondary liquidity for cyberSCRIPs, using
 Uniswap v4 pools and the `MetalexIssuerFeeHook`.
