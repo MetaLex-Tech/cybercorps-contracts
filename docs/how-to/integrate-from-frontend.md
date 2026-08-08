@@ -52,7 +52,8 @@ resolve to a registry contract identified by a `bytes32` id.
 
 `tokenURI(tokenId)` on the cert printer returns a base64 `data:` JSON whose
 `image` is an onchain-rendered SVG. Decode the JSON, then render the SVG.
-(`tokenURIJson(tokenId)` returns the JSON un-encoded.)
+(There is no un-encoded JSON getter on the printer — base64-decode the
+`data:` payload for the raw JSON.)
 
 ## ABIs
 

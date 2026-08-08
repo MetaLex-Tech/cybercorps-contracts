@@ -15,8 +15,12 @@ solicitation. The protocol supports Reg D via:
 * `LexChexCondition` accreditation-credential checks (`hasValidLexCheX`) at
   issuance, deal close, and de-scripification.
 * Reg D agreement templates (`MetaLeX cyberSAFE US style Reg D`, etc.).
-* Holder caps (scrip-side `setMaxHolderCount` enforcement and onchain
-  holder-count views for 12(g) threshold monitoring).
+* Holder-cap tooling: `HolderCapCondition` gates secondary trades against
+  look-through holder limits, and onchain holder-count views support 12(g)
+  threshold monitoring. (`CyberScrip` also carries a transfer-enforced
+  `maxHolderCount`, but its setter is not currently reachable in
+  production — see
+  [Restrict cyberSCRIP transfers](../how-to/restrict-transfers.md).)
 
 ### Reg S (offers to non-US persons)
 

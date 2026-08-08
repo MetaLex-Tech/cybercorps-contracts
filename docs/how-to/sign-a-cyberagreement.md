@@ -76,7 +76,9 @@ ICyberAgreementRegistry(registry).finalizeContract(contractId);
 `voidContractFor(contractId, party, signature)` records a party's void
 request (EIP-712-signed, or submitted by the finalizer). The contract voids
 when all parties request it, when it has expired, or when the first party
-requests it while only one signature has been collected.
+requests it while only one signature has been collected. Caveat: an
+agreement created with `expiry == 0` (no deadline) counts as expired for
+this check, so any single party's void request voids it immediately.
 
 ## Checking status
 

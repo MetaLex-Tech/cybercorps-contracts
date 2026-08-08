@@ -51,7 +51,10 @@ Frozen accounts (when `canFreeze`) revert `AccountFrozen`.
 ## Holder cap
 
 `setMaxHolderCount(uint256)` sets a maximum holder count (`0` = unlimited).
-Transfers that would exceed it revert `HolderLimitExceeded`.
+Transfers that would exceed it revert `HolderLimitExceeded`. Note: the
+setter is `onlyIssuanceManager`, and the IssuanceManager currently exposes
+no wrapper that calls it — so on production deployments the cap remains at
+its default `0` (unlimited).
 
 ## Views
 

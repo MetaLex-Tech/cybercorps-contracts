@@ -93,8 +93,10 @@ open LiquiLeX pools.
 
 ## Holder caps
 
-On the scrip side, `CyberScrip.setMaxHolderCount(n)` enforces a hard cap on
-every transfer, with an onchain `holderCount` for monitoring. On the
+On the scrip side, `CyberScrip` can enforce a hard `maxHolderCount` cap on
+every transfer, with an onchain `holderCount` for monitoring — though its
+setter is `onlyIssuanceManager` and the IssuanceManager exposes no wrapper
+for it today, so the cap is not yet configurable in production. On the
 register side, `HolderCapCondition` gates secondary trades against
 Investment Company Act §3(c)(1) / §3(c)(7)-style limits, counting
 credentialed beneficial owners look-through rather than wallets — an
