@@ -4,8 +4,13 @@ In this tutorial you deploy a new cyberCORP, create a certificate printer for
 its Common Stock, and issue the first cyberCERT to a founder.
 
 At the end you will have a `CyberCorp` and its suite (`IssuanceManager`,
-`DealManager`, `RoundManager`, plus a `BorgAuth` ACL), one `CyberCertPrinter`
-for Common Stock, and one cyberCERT held by the founder.
+`DealManager`, `RoundManager`, plus a `BorgAuth` ACL), one certificate
+printer for Common Stock, and one cyberCERT held by the founder.
+
+> **Naming note:** the certificate printer contract is now called
+> `LedgerEntryToken` in the source (formerly `CyberCertPrinter`). The rename
+> is source-level only — the ABI and storage layout are unchanged, and the
+> docs still say "cert printer" for the deployed instances.
 
 > Code here is **illustrative of the flow** and uses the real contract
 > signatures from `cybercorps-contracts` (`develop`). Confirm structs and
@@ -52,7 +57,8 @@ IssuanceManager / DealManager / RoundManager role `99`. See
 
 ## 2. Create a Common Stock certificate printer
 
-The `IssuanceManager` creates one `CyberCertPrinter` per security class.
+The `IssuanceManager` creates one cert printer (`LedgerEntryToken`) per
+security series.
 
 ```solidity
 import {SecurityClass, SecuritySeries} from "src/CyberCorpConstants.sol";
@@ -67,7 +73,9 @@ address commonPrinter = IIssuanceManager(issuanceManager).createCertPrinter(
     "ipfs://acme-cert-art",       // certificate URI
     SecurityClass.CommonStock,
     SecuritySeries.NA,
-    SHARE_EXTENSION_ADDR          // certificate extension for this class
+    SHARE_EXTENSION_ADDR,         // certificate extension for this series
+    ""                            // seriesData — extension-encoded series-scope
+                                  // payload; empty when the extension has none
 );
 ```
 
@@ -75,10 +83,10 @@ address commonPrinter = IIssuanceManager(issuanceManager).createCertPrinter(
 
 Mint a cyberCERT to the founder with `createCertAndAssign`. The metadata is a
 `CertificateDetails` struct (defined in
-[`CyberCertPrinterStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/storage/CyberCertPrinterStorage.sol)).
+[`ILedgerEntryToken.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/interfaces/ILedgerEntryToken.sol)).
 
 ```solidity
-import {CertificateDetails} from "src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "src/interfaces/ILedgerEntryToken.sol";
 
 CertificateDetails memory details = CertificateDetails({
     signingOfficerName:                  "Jane Founder",
@@ -105,7 +113,7 @@ signature — see [IssuanceManager](../reference/contracts/IssuanceManager.md).)
 ## 4. Inspect the register
 
 ```solidity
-CyberCertPrinter printer = CyberCertPrinter(commonPrinter);
+LedgerEntryToken printer = LedgerEntryToken(commonPrinter);
 
 string  memory uri        = printer.tokenURI(tokenId);     // onchain JSON + SVG
 address         tokenHolder = printer.ownerOf(tokenId);     // ERC-721 holder
@@ -126,4 +134,4 @@ registered owner of record. They are kept distinct on purpose — see
 
 * [Run a cyberRAISE round](run-a-cyberraise-round.md).
 * Reference: [IssuanceManager](../reference/contracts/IssuanceManager.md),
-  [CyberCertPrinter](../reference/contracts/CyberCertPrinter.md).
+  [LedgerEntryToken](../reference/contracts/LedgerEntryToken.md).

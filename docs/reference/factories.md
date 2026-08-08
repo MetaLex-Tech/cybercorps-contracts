@@ -33,7 +33,15 @@ function deployAndInitializeRoundManager(bytes32 salt, address cyberCorp) public
 4. Emits `CyberCorpDeployed`.
 
 The `deployCyberCorpAndCreate*` variants additionally create cert printers
-and open a deal or a round in the same transaction.
+and open a deal or a round in the same transaction. Their `CyberCertData`
+struct carries, per printer, the security class/series, the certificate
+[extension](extensions.md) contract, and an extension-encoded `seriesData`
+payload (series-scope terms; see `ICertificateExtensionV3`).
+
+`deployAndInitializeRoundManager(salt, cyberCorp)` is public so a
+`RoundManager` can be retrofitted onto an existing cyberCORP that predates
+rounds (the corp must authorise it itself; see also
+`src/helpers/RoundManagerUpgradeHelper.sol`).
 
 Setters (`onlyOwner`): `setStable`, `setIssuanceManagerFactory`,
 `setCyberCorpSingleFactory`, `setCyberAgreementFactory`,
@@ -46,7 +54,7 @@ Setters (`onlyOwner`): `setStable`, `setIssuanceManagerFactory`,
 | Factory | Deploys |
 |---|---|
 | `CyberCorpSingleFactory` | the `CyberCorp` proxy; holds the reference implementation that gates `CyberCorp` upgrades. |
-| `IssuanceManagerFactory` | the `IssuanceManager` (and its `CyberCertPrinter` / `CyberScrip` beacons). |
+| `IssuanceManagerFactory` | the `IssuanceManager`; holds the `LedgerEntryToken` (cert printer) and `CyberScrip` reference implementations that the IssuanceManager's own beacons point at. |
 | `DealManagerFactory` | the `DealManager`. |
 | `RoundManagerFactory` | the `RoundManager`. |
 

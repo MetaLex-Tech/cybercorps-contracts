@@ -14,7 +14,7 @@ need the `issuanceManager` address.
 
 ## 1. Deploy a CyberScrip for the printer
 
-A CyberScrip is deployed per CyberCertPrinter via `deployCyberScrip`. This
+A CyberScrip is deployed per cert printer via `deployCyberScrip`. This
 is also where you set the scrip ratio, conversion conditions, and which
 compliance powers exist.
 
@@ -24,8 +24,8 @@ address cyberScrip = IIssuanceManager(issuanceManager).deployCyberScrip(
     typeRestrictionHooks,   // ITransferRestrictionHook[]
     certToScripConditions,  // ICondition[] gating scripification
     scripToCertConditions,  // ICondition[] gating de-scripification
-    1e18,                   // scripToCertMinimum
-    1,                      // scripRatioNumerator
+    1e18,                   // scripToCertMinimum (in scrip, i.e. 1 unit here)
+    1e18,                   // scripRatioNumerator
     1,                      // scripRatioDenominator
     new uint256[](0),       // scripifyWhitelistIds
     false,                  // scripifyWhitelistEnabled
@@ -35,7 +35,15 @@ address cyberScrip = IIssuanceManager(issuanceManager).deployCyberScrip(
 );
 ```
 
+Scrip minted = units × `scripRatioNumerator / scripRatioDenominator`. The
+cyberSCRIP ERC-20 uses 18 decimals, so a `1e18 : 1` ratio makes one cert
+unit read as one whole scrip token in wallets. (The deploy call is
+`onlyOwner` — an officer runs it.)
+
 ## 2. Scripify part of the cert
+
+Alice — the cert's registered owner — calls `scripifyCert` herself
+(`legalOwnerOf` is checked against the caller):
 
 ```solidity
 IIssuanceManager(issuanceManager).scripifyCert(
@@ -47,7 +55,8 @@ IIssuanceManager(issuanceManager).scripifyCert(
 ```
 
 This reduces the cert's `unitsRepresented`, records the scripified units in
-the scrip pool, and mints cyberSCRIP to Alice (scaled by the scrip ratio).
+the scrip pool, and mints cyberSCRIP to Alice (1_000_000e18 at the `1e18:1`
+ratio above). Units reserved for pending deals cannot be scripified.
 The cyberSCRIP is the *same security in fungible form* — see
 [the dual-token model](../explanation/dual-token-model.md).
 
@@ -77,6 +86,8 @@ IIssuanceManager(issuanceManager).setRecertificationApproval(
 
 ## 5. Convert scrip back to a cyberCERT
 
+Bob presents his cyberSCRIP:
+
 ```solidity
 IIssuanceManager(issuanceManager).convertScripToCert(
     commonPrinter,   // certAddress
@@ -85,9 +96,14 @@ IIssuanceManager(issuanceManager).convertScripToCert(
 ```
 
 This burns Bob's cyberSCRIP, withdraws the units from the scrip pool, and —
-using the approved metadata — puts Bob on the register. An
-`IssuerApprovalRecertificationCondition` among the `scripToCertConditions`
-is what enforces the approval requirement for new holders.
+using the approved metadata — puts Bob on the register. The approval
+requirement for new holders is enforced by the conversion flow itself: if
+the caller holds no active cert on that printer, the call reverts
+`RecertificationApprovalRequired` unless an officer approval from step 4 is
+on file. (If the caller already has an active cert, the units are added to
+it instead.) An `IssuerApprovalRecertificationCondition` can additionally be
+included among the `scripToCertConditions` as an opt-in, admin-managed
+approval list.
 
 ## What you just did
 

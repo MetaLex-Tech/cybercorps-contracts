@@ -1,7 +1,8 @@
 # CyberScrip
 
 The ERC-20 fungible form of a cyberCORP security. One CyberScrip is deployed
-per CyberCertPrinter, via `IssuanceManager.deployCyberScrip`.
+per [LedgerEntryToken](LedgerEntryToken.md) printer, via
+`IssuanceManager.deployCyberScrip`.
 
 * **Source:** [`src/CyberScrip.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/CyberScrip.sol)
 * **Inherits:** `ERC20Upgradeable`, `BorgAuthACL`
@@ -32,6 +33,13 @@ CyberScrip supports **three** compliance powers. There is **no blocklist**.
 Each `disable*` function is irreversible — once a power is disabled it cannot
 be re-enabled. A power can only be exercised while its `can*` flag is true;
 otherwise the call reverts `ComplianceFeatureDisabled`.
+
+Since every one of these functions is `onlyIssuanceManager`, officers and
+admins exercise them through the IssuanceManager's wrappers
+(`forceScripTransfer`, `forceScripBurn`, `setScripFrozen`,
+`setScripRestrictionHooks`, `disableScripForceTransfer` /
+`disableScripForceBurn` / `disableScripFreeze`) — see
+[IssuanceManager](IssuanceManager.md).
 
 ## Transfer restrictions
 

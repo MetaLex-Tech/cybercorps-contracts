@@ -83,7 +83,8 @@ officer (level 200) can call it; most other `CyberCorp` functions are
 
 ## A note on `onlyIssuanceManager`
 
-`CyberScrip`, `CyberCertPrinter`, and `CyberShares` gate their mutating
-functions with `onlyIssuanceManager` — a check that `msg.sender` *is* the
-IssuanceManager contract, **not** a BorgAuth role check. End users act
-through the IssuanceManager, which itself is authorised via BorgAuth.
+`CyberScrip`, `LedgerEntryToken` (formerly `CyberCertPrinter`), and
+`CyberShares` gate their mutating functions with `onlyIssuanceManager` — a
+check that `msg.sender` *is* the IssuanceManager contract, **not** a
+BorgAuth role check. End users act through the IssuanceManager, which
+itself is authorised via BorgAuth.

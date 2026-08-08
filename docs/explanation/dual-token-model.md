@@ -8,15 +8,19 @@ resolves the tension between **legal fidelity** and **DeFi composability**.
 ### cyberCERT (ERC-721) — the register
 
 Each cyberCERT is a single entry on the cyberCORP's onchain register of
-holders, encoding everything that the relevant governing law requires:
-holder name, unit count, class / series, restriction legends, endorsement
-history, authorized signatures, acquisition price, and the governing
-agreement URI.
+holders — minted by the `LedgerEntryToken` contract (formerly
+`CyberCertPrinter`) — encoding everything that the relevant governing law
+requires: holder name, unit count, class / series, restriction legends,
+endorsement history, authorized signatures, acquisition price, and the
+governing agreement URI.
 
 Crucially, **NFT transfer alone does not change registered ownership.**
-Metadata must be explicitly mutated through `IssuanceManager`. This
-maintains the distinction between *token possession* and *registered
-ownership* that corporate, LLC, partnership, and fund law require.
+The register tracks a legal owner of record distinct from the ERC-721
+possessor, and only the holder of record (or the `IssuanceManager` acting
+as registrar on the owner's signature) can endorse a certificate over —
+possession alone never carries endorsement authority. This maintains the
+distinction between *token possession* and *registered ownership* that
+corporate, LLC, partnership, and fund law require.
 
 ### cyberSCRIP (ERC-20) — the trading form
 
@@ -61,10 +65,10 @@ that matters legally, because that is where the register changes.
 ### Partial scripification
 
 A holder of 1,000,000 units can scripify 250,000 to trade and keep 750,000
-on the cert. The cert remains active with the reduced unit count. The
-Scripified Share Pool (an ERC-4626-style vault inside the `IssuanceManager`)
-tracks each registered holder's scripified balance so that de-scripification
-withdraws proportionally.
+on the cert. The cert remains active with the reduced unit count. An
+ERC-4626-style pool inside the `IssuanceManager` tracks each certificate's
+scripified units as vault positions, so that de-scripification withdraws
+proportionally against the pool.
 
 ## What it isn't
 

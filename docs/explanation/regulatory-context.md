@@ -12,10 +12,11 @@ The standard exemption for unregistered US private placements. Imposes
 accreditation requirements (Rule 506(b)/(c)) and limits on general
 solicitation. The protocol supports Reg D via:
 
-* `lexchexCondition` with `hasAccreditation` checks at issuance, deal close,
-  and de-scripification.
+* `LexChexCondition` accreditation-credential checks (`hasValidLexCheX`) at
+  issuance, deal close, and de-scripification.
 * Reg D agreement templates (`MetaLeX cyberSAFE US style Reg D`, etc.).
-* Holder caps (12(g) threshold monitoring via `setMaxHolders`).
+* Holder caps (scrip-side `setMaxHolderCount` enforcement and onchain
+  holder-count views for 12(g) threshold monitoring).
 
 ### Reg S (offers to non-US persons)
 
@@ -25,6 +26,14 @@ The extraterritorial-offering exemption. The protocol supports Reg S via:
 * Reg S agreement templates.
 * Optional whitelisted-pool or open-pool LiquiLeX models with the
   appropriate gate.
+
+### Secondary resales
+
+Secondary trades settle under an exemption pathway elected by the buyer at
+acceptance — Rule 144, §4(a)(7), §4(a)(1½), Rule 144A, or Reg S — each
+wired to its own condition set (holding periods, disclosure, distribution
+compliance, buyer eligibility, and jurisdictional screens). Issuers enable
+only the pathways they support; an unconfigured pathway blocks trades.
 
 ### Tokenized securities — SEC January 2026 Joint Staff Statement
 

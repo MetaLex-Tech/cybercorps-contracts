@@ -11,9 +11,9 @@ monorepo.
 **What it is.** Onchain primary fundraising. Issuers configure rounds with
 raise caps, ticket sizes, pricing, payment tokens (typically USDC), security
 types (SAFE, SAFT, SAFTE, equity rounds), and round modes (first-come or
-admission-based). Investors submit EIP-712-signed Expressions of Interest,
-funds are escrowed in `LeXscroWLite`, and close mints the corresponding
-cyberCERTs.
+founder-approved). Investors submit EIP-712-signed Expressions of Interest,
+funds are held by the LeXscroW escrow logic embedded in the round and deal
+managers, and close mints the corresponding cyberCERTs.
 
 **Contracts:** [`RoundManager`](../reference/contracts/RoundManager.md),
 [`DealManager`](../reference/contracts/DealManager.md),
@@ -36,8 +36,11 @@ settlement.
 **Two settlement paths:**
 
 * **Registered ledger path** — edits to the existing cyberCERT (or
-  burn-and-mint with new metadata) under issuer approval, with full holder
-  cap, accreditation, qualified-purchaser, and jurisdiction gating.
+  burn-and-mint with new metadata) under issuer approval, with the buyer
+  electing an exemption pathway (Rule 144, §4(a)(7), §4(a)(1½), Rule 144A,
+  or Reg S) and the trade gated by that pathway's conditions — holder caps,
+  accreditation, qualified-purchaser status, holding periods, and
+  jurisdiction screens.
 * **Scrip path** — settlement at the cyberSCRIP layer with deferred
   de-scripification, including the AMM-native variant powered by LiquiLeX.
 
@@ -76,9 +79,11 @@ a lighter zkPassport gate at the swap layer).
 ## cyberSign
 
 **What it is.** Cybernetic legal-agreement execution. Templates registered
-in `CyberAgreementRegistry`, parties countersign onchain via EIP-712, and
-execution is anchored to cyberCERTs and deal records. Unbundled from
-cyberRAISE: usable as a standalone signing layer for any legal instrument.
+in `CyberAgreementRegistry` — registration is permissionless, and standalone
+agreements create their templates just-in-time — parties countersign onchain
+via EIP-712, and execution is anchored to cyberCERTs and deal records.
+Unbundled from cyberRAISE: usable as a standalone signing layer for any
+legal instrument.
 
 **Contracts:**
 [`CyberAgreementRegistry`](../reference/contracts/CyberAgreementRegistry.md).
@@ -108,7 +113,9 @@ futarchy oracle.
 ## LeXcheX
 
 Onchain accreditation / KYC-AML credentials. Soulbound, wallet-bound NFT
-certificates.
+certificates, now joined by the unified `LeXcheXBadge` credential registry
+(LeXcheX v2) covering accreditation, qualified-purchaser and QIB status,
+jurisdiction and beneficial-owner attestations, and per-issuer whitelists.
 
 **Contracts:**
 [`LexChex / LexChexMinter`](../reference/contracts/LexChex.md).
@@ -125,7 +132,7 @@ at lexchex.metalex.tech, with an oracle service at
 * **`apps/notifier`** — event-driven notifications (round close, deal
   ready, registration approval needed).
 * **`apps/snapshot-executor`** — executes Snapshot governance outcomes
-  on-chain where they affect a cyberCORP's authority.
+  onchain where they affect a cyberCORP's authority.
 * **`apps/landing`** — the marketing landing page.
 
 ## Build your own
