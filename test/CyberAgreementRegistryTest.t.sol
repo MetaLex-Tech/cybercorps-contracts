@@ -519,6 +519,107 @@ contract CyberAgreementRegistryTest is Test {
         assertTrue(registry.isVoided(agreementId), "expired agreement must be voidable by a single party");
     }
 
+    /// @notice Regression: unanimity must count allocated (nonzero) party slots. An open zero-expiry
+    /// agreement [alice, bob, address(0)] would otherwise be permanently un-voidable: the zero slot can
+    /// never submit a void request, so voidRequestedBy.length could never reach parties.length, the
+    /// proposer branch fails once numSignatures > 1, and the expired branch never applies.
+    function test_voidContract_ZeroExpiry_OpenSlot_UnanimousAllocatedPartiesVoid() public {
+        uint256 salt = uint256(keccak256("test_voidContract_ZeroExpiry_OpenSlot_UnanimousAllocatedPartiesVoid"));
+
+        address[] memory parties = new address[](3);
+        parties[0] = alice;
+        parties[1] = bob;
+        // parties[2] left as address(0): open slot
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = testPartyValues[0];
+        partyValues[1] = testPartyValues[1];
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            salt,
+            testGlobalValues,
+            parties,
+            partyValues,
+            "",
+            address(0), // finalizer undefined
+            0 // expiry: no deadline
+        );
+
+        _signAs(agreementId, testPartyValues[0], alice, alicePrivateKey, false);
+        _signAs(agreementId, testPartyValues[1], bob, bobPrivateKey, false);
+
+        _requestVoid(agreementId, alice, alicePrivateKey);
+        assertFalse(registry.isVoided(agreementId), "one of two allocated parties must not void alone");
+
+        _requestVoid(agreementId, bob, bobPrivateKey);
+        assertTrue(registry.isVoided(agreementId), "all allocated parties requesting must void despite the open slot");
+    }
+
+    /// @notice Once an open slot is filled, the new party's void request is required too
+    function test_voidContract_ZeroExpiry_FilledSlotRaisesUnanimityBar() public {
+        uint256 salt = uint256(keccak256("test_voidContract_ZeroExpiry_FilledSlotRaisesUnanimityBar"));
+
+        address[] memory parties = new address[](3);
+        parties[0] = alice;
+        parties[1] = bob;
+        // parties[2] left as address(0): open slot
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = testPartyValues[0];
+        partyValues[1] = testPartyValues[1];
+
+        string[] memory chadValues = new string[](2);
+        chadValues[0] = "Chad";
+        chadValues[1] = "Test title 3";
+
+        vm.prank(alice);
+        bytes32 agreementId = registry.createContract(
+            testTemplateId,
+            salt,
+            testGlobalValues,
+            parties,
+            partyValues,
+            "",
+            makeAddr("finalizer"), // nonzero finalizer so full signatures do not auto-finalize
+            0 // expiry: no deadline
+        );
+
+        _signAs(agreementId, testPartyValues[0], alice, alicePrivateKey, false);
+        _signAs(agreementId, testPartyValues[1], bob, bobPrivateKey, false);
+        _signAs(agreementId, chadValues, chad, chadPrivateKey, true); // chad fills the open slot
+
+        _requestVoid(agreementId, alice, alicePrivateKey);
+        _requestVoid(agreementId, bob, bobPrivateKey);
+        assertFalse(registry.isVoided(agreementId), "two of three allocated parties must not void");
+
+        _requestVoid(agreementId, chad, chadPrivateKey);
+        assertTrue(registry.isVoided(agreementId), "all three allocated parties requesting must void");
+    }
+
+    /// @notice Signs `agreementId` as `signer` with matching party values
+    function _signAs(
+        bytes32 agreementId,
+        string[] memory partyValues,
+        address signer,
+        uint256 signerPrivateKey,
+        bool fillUnallocated
+    ) private {
+        bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
+            vm,
+            registry.DOMAIN_SEPARATOR(),
+            registry.SIGNATUREDATA_TYPEHASH(),
+            agreementId,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields,
+            testGlobalValues,
+            partyValues,
+            signerPrivateKey
+        );
+        vm.prank(signer);
+        registry.signContract(agreementId, partyValues, signature, fillUnallocated, "");
+    }
+
     /// @notice Creates a standalone two-party (alice, bob) agreement signed only by alice (the proposer)
     function _createAliceSignedAgreement(uint256 salt, uint256 expiry) private returns (bytes32 agreementId) {
         bytes32 expectedAgreementId = keccak256(abi.encode(

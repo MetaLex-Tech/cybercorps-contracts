@@ -662,12 +662,20 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         agreementData.voidRequestedBy.push(party);
         emit VoidRequested(contractId, party);
 
+        // Unanimity is measured against allocated (nonzero) party slots: unfilled address(0)
+        // slots in open agreements can never submit a void request (isParty rejects them), so
+        // requiring raw parties.length would leave a no-deadline open agreement un-voidable
+        // even with every actual party's consent. parties[0] is enforced nonzero at creation,
+        // so allocatedParties >= 1 and equality implies at least one request.
+        uint256 allocatedParties = 0;
+        for (uint256 i = 0; i < agreementData.parties.length; i++) {
+            if (agreementData.parties[i] != address(0)) allocatedParties++;
+        }
+
         if (agreementData.expiry > 0 && agreementData.expiry < block.timestamp) {
             agreementData.voided = true;
         } else if (
-            agreementData.voidRequestedBy.length ==
-            agreementData.parties.length &&
-            agreementData.voidRequestedBy.length > 0
+            agreementData.voidRequestedBy.length == allocatedParties
         ) {
             agreementData.voided = true;
         } else if (
