@@ -662,7 +662,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         agreementData.voidRequestedBy.push(party);
         emit VoidRequested(contractId, party);
 
-        if (agreementData.expiry < block.timestamp) {
+        if (agreementData.expiry > 0 && agreementData.expiry < block.timestamp) {
             agreementData.voided = true;
         } else if (
             agreementData.voidRequestedBy.length ==

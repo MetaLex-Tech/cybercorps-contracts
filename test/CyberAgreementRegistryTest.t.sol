@@ -475,6 +475,104 @@ contract CyberAgreementRegistryTest is Test {
         vm.stopPrank();
     }
 
+    /// @notice Regression: expiry == 0 means "no deadline", so a zero-expiry agreement must NOT be
+    /// voidable by a single non-proposer party. Before the `expiry > 0` guard in `voidContractFor()`,
+    /// `expiry < block.timestamp` was always true for expiry == 0 and the first void request from any
+    /// party instantly voided the agreement.
+    function test_voidContract_ZeroExpiry_NotVoidableBySingleParty() public {
+        uint256 salt = uint256(keccak256("test_voidContract_ZeroExpiry_NotVoidableBySingleParty"));
+        bytes32 agreementId = _createAliceSignedAgreement(salt, 0);
+
+        _requestVoid(agreementId, bob, bobPrivateKey);
+        assertFalse(registry.isVoided(agreementId), "zero-expiry agreement must not be voided by a single non-proposer request");
+    }
+
+    /// @notice A zero-expiry agreement is still voidable once ALL parties have requested it
+    function test_voidContract_ZeroExpiry_VoidedWhenAllPartiesRequest() public {
+        uint256 salt = uint256(keccak256("test_voidContract_ZeroExpiry_VoidedWhenAllPartiesRequest"));
+        bytes32 agreementId = _createAliceSignedAgreement(salt, 0);
+
+        _requestVoid(agreementId, bob, bobPrivateKey);
+        assertFalse(registry.isVoided(agreementId), "first void request alone must not void");
+
+        _requestVoid(agreementId, alice, alicePrivateKey);
+        assertTrue(registry.isVoided(agreementId), "unanimous void requests must void the zero-expiry agreement");
+    }
+
+    /// @notice A zero-expiry agreement is still voidable by the proposer while they are the sole signer
+    function test_voidContract_ZeroExpiry_ProposerOnlySignerCanVoid() public {
+        uint256 salt = uint256(keccak256("test_voidContract_ZeroExpiry_ProposerOnlySignerCanVoid"));
+        bytes32 agreementId = _createAliceSignedAgreement(salt, 0);
+
+        _requestVoid(agreementId, alice, alicePrivateKey);
+        assertTrue(registry.isVoided(agreementId), "proposer as sole signer must still be able to void");
+    }
+
+    /// @notice A genuinely expired agreement (nonzero expiry in the past) is voidable by a single party
+    function test_voidContract_Expired_VoidableBySingleParty() public {
+        uint256 salt = uint256(keccak256("test_voidContract_Expired_VoidableBySingleParty"));
+        bytes32 agreementId = _createAliceSignedAgreement(salt, block.timestamp + 10);
+
+        vm.warp(block.timestamp + 11);
+
+        _requestVoid(agreementId, bob, bobPrivateKey);
+        assertTrue(registry.isVoided(agreementId), "expired agreement must be voidable by a single party");
+    }
+
+    /// @notice Creates a standalone two-party (alice, bob) agreement signed only by alice (the proposer)
+    function _createAliceSignedAgreement(uint256 salt, uint256 expiry) private returns (bytes32 agreementId) {
+        bytes32 expectedAgreementId = keccak256(abi.encode(
+            expectedStandaloneTemplateId,
+            salt,
+            testGlobalValues,
+            testParties,
+            bytes32(0),
+            address(0)));
+
+        vm.startPrank(alice);
+        agreementId = registry.createStandaloneContractAndSign(
+            testTitle,
+            testLegalContractUri,
+            testGlobalFields,
+            testPartyFields,
+            salt,
+            testGlobalValues,
+            testParties,
+            testPartyValues,
+            expiry,
+            CyberAgreementUtils.signAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.SIGNATUREDATA_TYPEHASH(),
+                expectedAgreementId,
+                testLegalContractUri,
+                testGlobalFields,
+                testPartyFields,
+                testGlobalValues,
+                testPartyValues[0],
+                alicePrivateKey
+            )
+        );
+        vm.stopPrank();
+        assertTrue(registry.hasSigned(agreementId, alice), "alice should have signed now");
+    }
+
+    /// @notice Submits a signed void request for `party`
+    function _requestVoid(bytes32 agreementId, address party, uint256 partyPrivateKey) private {
+        registry.voidContractFor(
+            agreementId,
+            party,
+            CyberAgreementUtils.signVoidAgreementTypedData(
+                vm,
+                registry.DOMAIN_SEPARATOR(),
+                registry.VOIDSIGNATUREDATA_TYPEHASH(),
+                agreementId,
+                party,
+                partyPrivateKey
+            )
+        );
+    }
+
     /// @notice A signer should be able to delegate to a third-party for signing (ex. multisig delegates to EOA)
     function test_setDelegation() public {
         uint256 salt = uint256(keccak256("test_setDelegation"));
