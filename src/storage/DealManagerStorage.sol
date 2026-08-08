@@ -228,7 +228,8 @@ library DealManagerStorage {
         if(ICyberAgreementRegistry(registry).isFinalized(agreementId)) revert LexScrowStorage.DealAlreadyFinalized();
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
         if(escrow.status != EscrowStatus.PENDING) revert IDealManagerStorage.DealNotPending();
-        if(escrow.expiry < block.timestamp) revert LexScrowStorage.DealExpired();
+        // expiry == 0 means no deadline (same rule as the registry and voidExpiredDeal)
+        if(escrow.expiry > 0 && escrow.expiry < block.timestamp) revert LexScrowStorage.DealExpired();
 
         string[] storage counterPartyCheck = getCounterPartyValues(agreementId);
         if(counterPartyCheck.length > 0) {
