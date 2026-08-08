@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import "forge-std/Test.sol";
 import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
+import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
@@ -191,6 +192,12 @@ contract IssuanceManagerScripComplianceTest is Test {
         vm.prank(user1);
         scrip.transfer(user2, 1 ether);
         assertEq(scrip.balanceOf(user2), 1 ether);
+    }
+
+    function test_setScripMaxHolderCount_callableViaInterface() public {
+        vm.prank(admin);
+        IIssuanceManager(address(issuanceManager)).setScripMaxHolderCount(address(cert), 5);
+        assertEq(scrip.maxHolderCount(), 5);
     }
 
     function test_setScripMaxHolderCount_onlyAdmin() public {

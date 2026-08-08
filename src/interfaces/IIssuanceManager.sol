@@ -287,6 +287,42 @@ interface IIssuanceManager {
         uint256 amount
     ) external;
 
+    // Scrip compliance controls
+    function setScripRestrictionHooks(
+        address certAddress,
+        ITransferRestrictionHook[] memory hooks
+    ) external;
+
+    function disableScripForceTransfer(address certAddress) external;
+
+    function disableScripForceBurn(address certAddress) external;
+
+    function disableScripFreeze(address certAddress) external;
+
+    function setScripFrozen(
+        address certAddress,
+        address account,
+        bool isFrozen
+    ) external;
+
+    function setScripMaxHolderCount(
+        address certAddress,
+        uint256 maxHolders
+    ) external;
+
+    function forceScripTransfer(
+        address certAddress,
+        address from,
+        address to,
+        uint256 amount
+    ) external;
+
+    function forceScripBurn(
+        address certAddress,
+        address account,
+        uint256 amount
+    ) external;
+
     // Class-level LET designations (classIds start at 1; 0 = unclassified)
     event SecurityClassDefined(
         uint256 indexed classId,
