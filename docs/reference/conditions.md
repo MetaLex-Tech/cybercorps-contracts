@@ -92,7 +92,7 @@ BorgAuth admin:
 | Condition | Purpose |
 |---|---|
 | **EligibilityCondition** | Both parties must be admin-cleared to trade; catch-all backing offchain eligibility checks (replaced the former KYCAML / TaxInfo / ERISA conditions). |
-| **HoldingPeriodCondition** | Rule 144 holding-period verification (reads the fund-interest acquisition/tacking dates). |
+| **HoldingPeriodCondition** | Rule 144 holding-period verification. Anchors on the printer's base `acquisitionTimestamp(tokenId)` (no record = fail closed — backfill imported certs), extended earlier only by the fund-interest extension's `tackedFromAcquisitionDate` when 144(d)(3) tacking is asserted. |
 | **Rule144DisclosureCondition** | Rule 144(c)(2) current-public-information gate with a freshness policy. |
 | **Section4a7DisclosureCondition** | §4(a)(7) information-delivery gate. |
 | **LegalOpinionCondition** | §4(a)(1½) GP / issuer-counsel assurance gate. |
@@ -104,7 +104,7 @@ BorgAuth admin:
 | **LegionSoulboundCondition** | Issuer-specific credential category/tier gate (e.g. syndicate circle membership). |
 | **GPLPApprovalCondition** | Per-deal GP/LP manual approval gate. |
 | **KillSwitchCondition** | Finalization kill switch held jointly by two independent admins (closing condition). |
-| **TimeSettlementPeriodCondition** | Minimum delay between acceptance and finalization (default 24 h; closing condition attached platform-wide). |
+| **TimeSettlementPeriodCondition** | Minimum delay between acceptance and finalization (default 24 h, per-DealManager overrides). A closing condition an admin must opt into via `setClosingConditions` — nothing installs it by default. |
 
 The credential-reading conditions inherit `BadgeScopedCondition`, which
 selects which credential registry judges an SPV's parties (a platform

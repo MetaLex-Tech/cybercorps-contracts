@@ -92,7 +92,7 @@ function getData(address owner) external view returns (bytes value, uint64 expir
 function earliestValidIssuance(address owner, uint256 kindKey) external view returns (uint64);
 
 function getTokenIdsByOwner(address owner) external view returns (uint256[]); // full audit history
-function getActiveTokenIds(address owner) external view returns (uint256[]);  // active set only
+function getActiveTokenIds(address owner) external view returns (uint256[]);  // non-voided, not-yet-swept — may include expired; check isValid per id
 function getCredential(uint256 tokenId) external view returns (Credential);
 function getCredentialByOwner(address owner) external view returns (uint256);
 ```
@@ -110,10 +110,13 @@ Key semantics:
   `bytes2(0)`) rather than reverting when no valid credential asserts the
   fact. Empty is reported, never interpreted: each downstream condition
   decides whether an unknown fails open or closed.
-* **Bounded active set.** Compliance reads scan the holder's active
-  (non-voided, unexpired) credentials only. `void` evicts immediately; the
-  permissionless `sweep*` keeper hooks evict expired credentials
-  (`sweepTokens` in calldata-bounded batches). The full ERC-721 enumeration
+* **Bounded active set.** Compliance reads scan the holder's active set —
+  non-voided, not-yet-swept entries. `void` evicts immediately, but expiry
+  eviction is deferred: an expired credential stays in the set (and in
+  `getActiveTokenIds`) until a permissionless `sweep*` keeper call evicts
+  it (`sweepTokens` in calldata-bounded batches). Validity-sensitive reads
+  check expiry per credential, but clients consuming `getActiveTokenIds`
+  must apply `isValid` per id. The full ERC-721 enumeration
   is retained for audit.
 
 **Events:** `CredentialIssued`, `CredentialVoided`, `CredentialSwept`
