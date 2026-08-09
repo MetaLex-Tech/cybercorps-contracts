@@ -23,6 +23,9 @@ entity.
 | `upgradeFactory` | `address` | Factory whose reference implementation gates upgrades. |
 | `companyOfficers` | `CompanyOfficer[]` | Officers (`{eoa, name, contact, title}`). |
 | `escrowedOfficerSignatures` | `bytes[]` | Reusable pre-authorised officer signatures. |
+| `extension` | `address` | Optional corp-level extension contract that interprets `extensionData`. |
+| `extensionType` | `bytes32` | Type selector for the active extension schema. |
+| `extensionData` | `bytes` | Raw extension payload interpreted by the active extension contract. |
 
 ## Functions
 
@@ -47,24 +50,46 @@ function addEscrowedOfficerSignature(bytes signature) external;             // o
 function setEscrowedOfficerSignature(uint256 index, bytes signature) external; // onlyRole(200)
 function getEscrowedOfficerSignature(uint256 index) external view returns (bytes);
 function getEscrowedOfficerSignatureCount() external view returns (uint256);
+
+function setExtension(address _extension, bytes32 _extensionType) external; // onlyOwner
+function setExtensionData(bytes _extensionData) external;                   // onlyOwner
+function clearExtension() external;                                         // onlyOwner
+function getExtensionURI() external view returns (string);
 ```
 
 `addOfficer` also grants the officer's `eoa` BorgAuth role `200`;
-`removeOfficer` / `removeOfficerAt` set it back to `0`. See
-[Access control](../access-control.md).
+`removeOfficer` / `removeOfficerAt` set it back to `0`.
+`isCyberCORPOfficer` reports whether an address holds a role at or above
+`OWNER_ROLE` (99). See [Access control](../access-control.md).
+
+## Corp-level extension
+
+`setExtension` installs an `ICyberCorpExtension` contract plus a schema
+selector; the contract must report `supportsExtensionType(_extensionType)` or
+the call reverts `ExtensionTypeNotSupported`. Setting or replacing the
+extension clears any stored `extensionData`; `setExtensionData` then stores
+the payload (reverting `ExtensionNotConfigured` if no extension is set).
+`getExtensionURI` returns the extension-rendered JSON fragment for the
+current payload — the
+[CertificateUriBuilder](CertificateUriBuilder.md) appends it to every
+cyberCERT's metadata.
 
 ## Events
 
 `CyberCORPDetailsUpdated`, `OfficerAdded`, `OfficerRemoved`,
 `CompanyPayableUpdated`, `EscrowedOfficerSignatureAdded`,
-`EscrowedOfficerSignatureUpdated`.
+`EscrowedOfficerSignatureUpdated`, `CyberCORPExtensionSet`,
+`CyberCORPExtensionDataUpdated`.
 
 ## Errors
 
-`NotRefImplementation`, `SignatureRequired`, `InvalidEscrowSignatureIndex`.
+`NotRefImplementation`, `SignatureRequired`, `InvalidEscrowSignatureIndex`,
+`InvalidExtension`, `ExtensionTypeNotSupported`, `ExtensionNotConfigured`.
 
 ## Upgrades
 
 `_authorizeUpgrade` is `onlyOwner` **and** requires the new implementation to
 equal `ICyberCorpSingleFactory(upgradeFactory).getRefImplementation()` —
-otherwise it reverts `NotRefImplementation`. See [Upgrade model](../upgrade-model.md).
+otherwise it reverts `NotRefImplementation`. The constructor calls
+`_disableInitializers()`, so the implementation contract itself can never be
+initialised. See [Upgrade model](../upgrade-model.md).

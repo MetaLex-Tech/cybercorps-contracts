@@ -1,3 +1,7 @@
+---
+description: What the cyberCORPs apps do and which one you need
+---
+
 # Using the cyberCORPs apps
 
 This part of the documentation is for the people who **use** the MetaLeX
@@ -18,9 +22,9 @@ once and they appear everywhere.
 
 | App | Address | What you do there |
 |---|---|---|
-| [**cyberCORPs app**](mainframe.md) | `cybercorps.metalex.tech` | Create your company; issue and manage its securities, register of holders, and scrip. Home of the **Mainframe**. |
+| [**cyberCORPs app**](mainframe.md) | `cybercorps.metalex.tech` | Create your company; run its cap table, board, grants, and register of holders; issue and manage its securities and scrip. Home of the **Mainframe**. |
 | [**cyberRAISE**](cyberraise.md) | `cyberraise.metalex.tech` | Run fundraising rounds, and invest in them. **Rounds are created and configured here.** |
-| [**ACE**](ace.md) | `ace.metalex.tech` | Token-community fundraising — raises denominated in a community token. Currently early-access. |
+| [**ACE**](ace.md) | inside cyberRAISE | Token-community fundraising — raises denominated in a community token. (Old `ace.metalex.tech` links redirect to cyberRAISE.) |
 | [**LeXcheX**](lexchex.md) | `lexchex.metalex.tech` | Prove accredited-investor status. |
 | [**Your profile**](profile.md) | `profile.metalex.tech` | Your MetaLeX identity, accreditation status, and signing delegation. |
 
@@ -50,6 +54,11 @@ Two more surfaces are covered separately:
    round are desktop-only flows.
 4. **Nothing else** — there is no separate account. Your wallet is your
    identity.
+
+On cost: forming a cyberCORP, signing with cyberSign, and manual securities
+issuance on the Mainframe are free (gas aside). MetaLeX charges a **0.3%
+fee on funds an issuer claims from a cyberRAISE round** — investors pay
+nothing.
 
 ## Signing in
 

@@ -44,10 +44,11 @@ and how to use it.
 | Guide | For |
 |---|---|
 | [Using the cyberCORPs apps](webapp/README.md) | Everyone — start here. |
-| [The Mainframe](webapp/mainframe.md) | Issuers managing their cyberCORP. |
+| [The cyberCORPs app](webapp/mainframe.md) | Issuers managing their cyberCORP. |
 | [cyberRAISE](webapp/cyberraise.md) | Issuers raising capital; investors funding rounds. |
 | [ACE](webapp/ace.md) | Token communities converting to equity; investors. |
 | [LeXcheX](webapp/lexchex.md) | Anyone who needs to prove accredited-investor status. |
+| [Your profile](webapp/profile.md) | Everyone — identity, wallets, and entities. |
 | [MetaDAO](webapp/metadao.md) | Participants in futarchy-governed entities. |
 
 ## The two-minute version
@@ -61,7 +62,7 @@ and how to use it.
    minted from a cyberCERT and convertible back.
 4. A growing **application stack** runs on this single contract suite —
    **cyberRAISE**, **cyberTRADE**, **ACE**, **LiquiLeX**, **cyberSign** — all
-   surfaced through the cyberCORPs **Mainframe**. Part 2 explains how to use
+   surfaced through the **cyberCORPs app**. Part 2 explains how to use
    them.
 
 ## Protocol repository

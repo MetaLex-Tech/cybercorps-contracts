@@ -1,3 +1,7 @@
+---
+description: "Where compliance runs: conditions, credentials, and the register boundary"
+---
+
 # Compliance architecture
 
 The protocol does not bake any specific compliance regime into the
@@ -12,8 +16,10 @@ screening, etc.).
 ### 1. `ICondition` everywhere
 
 Every state transition that matters legally — issuance, scripification,
-de-scripification, deal close, round acceptance — accepts an `ICondition`.
-The condition is evaluated at the moment of state change.
+de-scripification, deal close, round acceptance, secondary-trade posting and
+settlement — accepts a condition contract (`ICondition`, or its strongly
+typed secondary-trading variant). The condition is evaluated at the moment
+of state change.
 
 This means you can express:
 
@@ -23,6 +29,15 @@ This means you can express:
 * "This transaction must occur after our SEC Form D filing block."
 
 …and any composition of the above.
+
+Secondary trades get the most developed treatment: a buyer elects an
+**exemption pathway** (Rule 144, §4(a)(7), §4(a)(1½), Rule 144A, or Reg S)
+when accepting an offer, and the trade runs the condition set wired to that
+pathway — holding-period, disclosure, distribution-compliance,
+eligibility, holder-cap, state-of-residence, and CFIUS-style
+blocked-jurisdiction checks all live in this family — alongside any
+issuer-wide conditions. An unconfigured pathway blocks trades rather than
+admitting them unchecked.
 
 ### 2. The de-scripification boundary
 
@@ -47,7 +62,17 @@ LeXcheX is the protocol's accreditation and KYC-AML credential layer (see
 [`LexChex`](../reference/contracts/LexChex.md)). Credentials are soulbound
 NFTs minted to a wallet after the holder completes onboarding (questionnaire,
 portfolio valuation, agreement countersigning). The credentials can be
-checked by `lexchexCondition` anywhere in the protocol.
+checked by `LexChexCondition` (`hasValidLexCheX`) anywhere in the protocol.
+
+The second-generation registry, `LeXcheXBadge`, unifies all credentialing
+into one soulbound contract: KYC/AML, accredited-investor,
+qualified-purchaser, and QIB status, non-US status, investor jurisdiction
+and US state of residence, entity beneficial-owner counts for look-through
+accounting, and per-issuer whitelist and syndicate entitlements. Badge
+credentials are immutable once minted — facts change by minting a newer
+credential and revocation is void-only, so every credential remains onchain
+for audit — and every read returns the credential's expiry alongside its
+value. The secondary-trading conditions read this registry.
 
 For onchain wealth-based accreditation ("my $5M ETH portfolio makes me
 qualified"), see the reference UI at
@@ -72,10 +97,17 @@ open LiquiLeX pools.
 
 ## Holder caps
 
-`CyberCertPrinter.setMaxHolders(n)` and `CyberScrip.setMaxHolders(n)` let
-you monitor and enforce 12(g) thresholds (US) and their analogues. The
-Mainframe UI surfaces these alongside the holder lists for proactive
-management.
+On the scrip side, `CyberScrip` can enforce a hard `maxHolderCount` cap on
+every transfer, with an onchain `holderCount` for monitoring — though its
+setter is `onlyIssuanceManager` and the IssuanceManager exposes no wrapper
+for it today, so the cap is not yet configurable in production. On the
+register side, `HolderCapCondition` gates secondary trades against
+Investment Company Act §3(c)(1) / §3(c)(7)-style limits, counting
+credentialed beneficial owners look-through rather than wallets — an
+unattested acquirer conservatively counts as US. The cert register's
+holder-count views also support 12(g) threshold monitoring (US) and its
+analogues, and the Mainframe UI surfaces these alongside the holder lists
+for proactive management.
 
 ## See also
 

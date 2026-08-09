@@ -1,3 +1,7 @@
+---
+description: Install transfer-restriction hooks and compliance powers on cyberSCRIP
+---
+
 # Restrict cyberSCRIP transfers
 
 cyberSCRIP is an ERC-20. You can restrict it with transfer-restriction hooks,
@@ -9,7 +13,7 @@ Hooks implement `ITransferRestrictionHook`; CyberScrip runs every installed
 hook on each transfer. See [Hooks](../reference/hooks.md).
 
 Hooks are set initially when the scrip is deployed (`typeRestrictionHooks`
-argument of `deployCyberScrip`) and can be changed afterward through the
+argument of `deployCyberScrip`) and can be replaced afterward through the
 IssuanceManager:
 
 ```solidity
@@ -19,11 +23,15 @@ address cyberScrip = IIssuanceManager(issuanceManager).deployCyberScrip(
     typeRestrictionHooks,   // ITransferRestrictionHook[]
     /* ...remaining args... */
 );
+
+// later (BorgAuth admin) — replaces the whole hook set
+IIssuanceManager(issuanceManager).setScripRestrictionHooks(certAddress, newHooks);
 ```
 
-On the `CyberCertPrinter` itself, the IssuanceManager can also set hooks for
-cyberCERT transfers: `setRestrictionHook(certAddress, id, hook)` and
-`setGlobalRestrictionHook(certAddress, hook)`.
+The cert printer (`LedgerEntryToken`) has its own hooks for cyberCERT
+transfers, set on the printer itself by the IssuanceManager or a BorgAuth
+admin: `setRestrictionHook(id, hook)` (per token) and
+`setGlobalRestrictionHook(hook)`.
 
 Implementations in
 [`src/hooks/transfer/`](https://github.com/MetaLex-Tech/cybercorps-contracts/tree/develop/src/hooks/transfer):

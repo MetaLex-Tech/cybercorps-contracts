@@ -1,3 +1,7 @@
+---
+description: "Learn the protocol by doing: incorporate, raise, and trade on a test network"
+---
+
 # Tutorials
 
 Tutorials are learning-oriented. Each one walks you, hand-in-hand, through a

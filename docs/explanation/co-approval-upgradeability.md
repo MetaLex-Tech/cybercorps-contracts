@@ -14,7 +14,8 @@ Each cyberCORP's top-level contracts (`CyberCorp`, `IssuanceManager`,
 
 1. `impl` must be a MetaLeX-published reference implementation (tracked on
    the relevant factory via `setRefImplementation` / variants).
-2. The caller must hold the issuer's `UPGRADE_AUTHORITY` BorgAuth role.
+2. The caller must hold the issuer's BorgAuth owner role (`OWNER_ROLE`) —
+   the upgrade entry points are `onlyOwner`.
 
 Neither condition is sufficient alone:
 
@@ -34,14 +35,16 @@ Neither condition is sufficient alone:
 
 ## Beacons for downstream instances
 
-`CyberCertPrinter` and `CyberScrip` instances use beacon proxies pointing at
-beacons **owned by the IssuanceManager itself**. When the IssuanceManager's
-officer upgrades the beacon, every printer/scrip instance under that
-IssuanceManager moves together — which is what you usually want, since they
-share storage layout and behavioural assumptions.
+`LedgerEntryToken` (formerly `CyberCertPrinter`) and `CyberScrip` instances
+use beacon proxies pointing at beacons **owned by the IssuanceManager
+itself**. When the issuer's owner upgrades the beacon through the
+IssuanceManager, every printer/scrip instance under that IssuanceManager
+moves together — which is what you usually want, since they share storage
+layout and behavioural assumptions.
 
-The same co-approval invariant applies: the beacon will only accept
-implementations registered on the factory.
+The same co-approval invariant applies: the beacon upgrade functions will
+only accept the corresponding reference implementation registered on the
+factory.
 
 ## Legacy paths
 

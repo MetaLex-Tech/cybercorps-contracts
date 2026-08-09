@@ -1,3 +1,7 @@
+---
+description: Why the protocol is designed the way it is
+---
+
 # Explanation
 
 Explanation is understanding-oriented. The other three quadrants tell you

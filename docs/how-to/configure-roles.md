@@ -1,3 +1,7 @@
+---
+description: Grant and revoke BorgAuth authority levels on a cyberCORP suite
+---
+
 # Configure BorgAuth roles
 
 Authority on a cyberCORP is held in its **BorgAuth** ACL. Roles are numeric
@@ -8,6 +12,7 @@ levels in a hierarchy — see [Access control](../reference/access-control.md).
 | Level | Meaning |
 |---|---|
 | `99` (`OWNER_ROLE`) | Owner. Can grant/revoke roles. Held by the suite's manager contracts. |
+| `98` (`ADMIN_ROLE`) | Admin. Gates operational functions (e.g. scrip compliance actions, hook updates). Any level `≥ 98` passes. |
 | `200` | Company officer. Set for an officer's address; `200 ≥ 99`, so officers also pass `onlyOwner`. |
 | `0` | No authority. |
 
