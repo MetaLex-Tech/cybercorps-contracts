@@ -17,15 +17,12 @@ The flow at a glance:
 flowchart TD
     A["Officer builds the Round<br/>draft · setTickets · setAgreement"] --> B["createRound<br/>(officer's escrowed EIP-712 signature)"]
     B --> C["Round live"]
-    C --> D["Investor submits EOI<br/>conditions checked · payment escrowed"]
+    C --> D["Investor submits EOI<br/>payment escrowed (not yet gated)"]
     D --> E{Round type}
-    E -- "FCFS" --> F["Instant allocation"]
-    E -- "FounderApproved" --> G["Officer allocates"]
+    E -- "FCFS — automatic,<br/>same transaction" --> G["Allocation<br/>conditions checked here · cyberCERT issued ·<br/>agreement executed with the escrowed officer signature ·<br/>escrow finalized — payment released to the issuer"]
+    E -- "FounderApproved —<br/>officer calls allocate" --> G
     D -. "rejected / recalled after expiry" .-> R["Refund to investor"]
-    F --> H["cyberCERT issued · agreement executed<br/>with the escrowed officer signature"]
-    G --> H
-    H --> I["Round closes<br/>closeRoundNow or endTime"]
-    I --> J["Issuer claims proceeds"]
+    G --> I["Round closes<br/>closeRoundNow or endTime"]
 ```
 
 ## Prerequisites
