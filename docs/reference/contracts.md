@@ -18,7 +18,7 @@ flowchart TD
     F --> DM["DealManager<br/>(deals + secondary offers)"]
     F --> RM["RoundManager<br/>(fundraising rounds)"]
     IM -- "one per security class / series" --> LET["LedgerEntryToken printers<br/>(cyberCERTs, ERC-721)"]
-    IM -- "one per printer" --> SCRIP["CyberScrip<br/>(ERC-20 scrip)"]
+    IM -. "optional — deployCyberScrip,<br/>at most one per printer" .-> SCRIP["CyberScrip<br/>(ERC-20 scrip)"]
     DM --- REG["CyberAgreementRegistry<br/>(templates + signed agreements)"]
     RM --- REG
     AUTH -. "authorises" .-> IM
