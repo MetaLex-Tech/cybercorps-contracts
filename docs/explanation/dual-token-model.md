@@ -64,8 +64,10 @@ flowchart LR
     SCRIP -- "convertScripToCert(amount)<br/>scrip-to-cert conditions ·<br/>recertification approval for new holders" --> CERT
 ```
 
-The register only changes at the two conversion edges — that is where
-compliance runs.
+Within the scrip lifecycle, the register only changes at the two conversion
+edges — that is where its compliance runs. (Primary issuance, secondary
+settlements, endorsements, and voids change the register through their own
+gated flows.)
 
 ## Why this works
 
