@@ -1,3 +1,7 @@
+---
+description: "Certificate and corp extensions: per-security-type data and JSON rendering"
+---
+
 # Certificate extensions
 
 Extensions are pluggable metadata contracts. Each `LedgerEntryToken` cert

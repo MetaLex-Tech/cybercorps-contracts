@@ -1,3 +1,7 @@
+---
+description: "cyberCERT and cyberSCRIP: one security in register form and trading form"
+---
+
 # The dual-token model
 
 The protocol's defining architectural innovation is a dual-token model that
@@ -45,6 +49,23 @@ specific cyberCERT on the authoritative register.
   not need to be registered as a holder of record at that moment.
 * Both are the same security in different forms, with bidirectional
   conversion always available.
+
+```mermaid
+flowchart LR
+    subgraph REG["The register — legal ownership"]
+        CERT["cyberCERT (ERC-721)<br/>holder of record · units · legends"]
+    end
+    subgraph DEFI["DeFi layer — possession"]
+        SCRIP["cyberSCRIP (ERC-20)<br/>fungible, composable"]
+        POOL["AMMs · lending · collateral"]
+    end
+    CERT -- "scripifyCert(units)<br/>cert-to-scrip conditions" --> SCRIP
+    SCRIP <--> POOL
+    SCRIP -- "convertScripToCert(amount)<br/>scrip-to-cert conditions ·<br/>recertification approval for new holders" --> CERT
+```
+
+The register only changes at the two conversion edges — that is where
+compliance runs.
 
 ## Why this works
 

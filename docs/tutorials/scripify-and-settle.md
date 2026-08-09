@@ -1,3 +1,7 @@
+---
+description: Make part of a cyberCERT tradable as cyberSCRIP, trade it, and recertify the buyer
+---
+
 # Tutorial: Scripify and settle a secondary trade
 
 In this tutorial you make part of a cyberCERT tradable as fungible
@@ -36,11 +40,16 @@ address cyberScrip = IIssuanceManager(issuanceManager).deployCyberScrip(
 ```
 
 Scrip minted = units × `scripRatioNumerator / scripRatioDenominator`, with
-no implicit rescaling. Certificate `unitsRepresented` is 18-decimal fixed
-point (one share = `1e18` units) and cyberSCRIP is an 18-decimal ERC-20, so
-the `1 : 1` ratio makes one share's worth of cert units read as one whole
-scrip token in wallets. (The deploy call is `onlyOwner` — an officer runs
-it.)
+no implicit rescaling, so the `1 : 1` ratio makes one share's worth of cert
+units read as one whole scrip token in wallets. (The deploy call is
+`onlyOwner` — an officer runs it.)
+
+{% hint style="warning" %}
+All certificate unit quantities are **18-decimal fixed point** — one share
+= `1e18` units — and cyberSCRIP is an 18-decimal ERC-20. Passing raw share
+counts (e.g. `1_000_000` instead of `1_000_000e18`) under-scales by a
+factor of 10¹⁸.
+{% endhint %}
 
 ## 2. Scripify part of the cert
 

@@ -1,3 +1,7 @@
+---
+description: Post, accept, and finalize a secondary offer under an elected exemption pathway
+---
+
 # Run a secondary trade
 
 Secondary trades settle through a cyberCORP's **`DealManager`**, which since
@@ -11,6 +15,23 @@ fills, and every settlement is pinned to a securities-law **exemption
 pathway** (`ExemptionPathway`: `RULE_144`, `SECTION_4A7`, `SECTION_4A1HALF`,
 `RULE_144A`, `REGULATION_S`) elected by the buyer. Structs are in
 [`ISecondaryTradeStorage.sol`](https://github.com/MetaLex-Tech/cybercorps-contracts/blob/develop/src/interfaces/ISecondaryTradeStorage.sol).
+
+```mermaid
+sequenceDiagram
+    participant S as Seller
+    participant DM as DealManager
+    participant B as Buyer
+    participant IM as IssuanceManager
+    S->>DM: postOffer (SELL)
+    Note over DM: units reserved on the seller's cert
+    B->>DM: acceptOffer (full or partial)
+    Note over DM: buyer elects exemption pathway ·<br/>pathway + SPV conditions checked ·<br/>payment escrowed · settlement agreement fully signed
+    B->>DM: finalizeSecondaryTradeAgreement
+    Note over DM: closing + pathway conditions re-checked at settlement
+    DM->>IM: secondaryTransfer
+    IM-->>B: units onto the buyer's cert
+    DM-->>S: payment, minus fee split
+```
 
 ## 0. One-time configuration (owner/admin)
 
@@ -58,6 +79,12 @@ bytes32 offerId = dealManager.postOffer(PostOfferParams({
     adminMultisig:            address(0)
 }));
 ```
+
+{% hint style="warning" %}
+`units` is **18-decimal fixed point** (one share = `1e18`), while
+`consideration` is denominated in the payment token's own decimals
+(USDC = 6). Mixing these up misprices the offer by orders of magnitude.
+{% endhint %}
 
 * **SELL** offers require the caller to be the cert's registered owner; the
   offered units are reserved on the cert (they cannot be scripified or

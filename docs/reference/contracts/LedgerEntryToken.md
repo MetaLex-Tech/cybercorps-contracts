@@ -1,3 +1,7 @@
+---
+description: The ERC-721 register of cyberCERTs (formerly CyberCertPrinter)
+---
+
 # LedgerEntryToken (formerly CyberCertPrinter)
 
 The ERC-721 contract for one security series' cyberCERTs (Ledger Entry

@@ -1,3 +1,7 @@
+---
+description: Task-oriented recipes for operating a cyberCORP onchain
+---
+
 # How-to Guides
 
 How-to guides are recipes. They assume you already know roughly what you are

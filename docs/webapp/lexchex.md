@@ -1,3 +1,7 @@
+---
+description: Prove accredited-investor status onchain without revealing balances
+---
+
 # LeXcheX — get accredited
 
 Many private investment rounds are open only to **accredited investors**.

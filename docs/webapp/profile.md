@@ -1,3 +1,7 @@
+---
+description: Your identity, wallets, visibility settings, and notifications
+---
+
 # Your profile
 
 Your **profile** (`profile.metalex.tech`) is your MetaLeX identity. It is

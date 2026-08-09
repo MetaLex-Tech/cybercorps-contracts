@@ -1,3 +1,7 @@
+---
+description: Install transfer-restriction hooks and compliance powers on cyberSCRIP
+---
+
 # Restrict cyberSCRIP transfers
 
 cyberSCRIP is an ERC-20. You can restrict it with transfer-restriction hooks,
@@ -66,10 +70,16 @@ Once disabled, a power cannot be re-enabled; exercising it afterward reverts
 ## Holder cap
 
 `CyberScrip` enforces `maxHolderCount` (`0` = unlimited); transfers that
-would exceed it revert `HolderLimitExceeded`. Note the setter
-(`setMaxHolderCount`) is `onlyIssuanceManager` and the IssuanceManager
-currently exposes no wrapper for it, so in practice the cap is fixed unless
-set through an upgrade or future entry point. For holder-count limits on
+would exceed it revert `HolderLimitExceeded`.
+
+{% hint style="warning" %}
+The setter (`setMaxHolderCount`) is `onlyIssuanceManager` and the
+IssuanceManager currently exposes **no wrapper** for it — so on production
+deployments the cap stays at its default `0` (unlimited) and cannot be
+relied on for compliance until the wiring ships.
+{% endhint %}
+
+For holder-count limits on
 secondary trades, see `HolderCapCondition` in
 [`src/libs/conditions/secondary/`](https://github.com/MetaLex-Tech/cybercorps-contracts/tree/develop/src/libs/conditions/secondary).
 

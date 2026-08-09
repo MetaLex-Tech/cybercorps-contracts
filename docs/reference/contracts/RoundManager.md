@@ -1,3 +1,7 @@
+---
+description: Multi-investor fundraising rounds with escrowed officer signatures
+---
+
 # RoundManager
 
 Runs multi-investor primary fundraising rounds for a cyberCORP. Rounds are

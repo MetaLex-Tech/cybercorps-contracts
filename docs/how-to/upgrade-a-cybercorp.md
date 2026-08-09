@@ -1,3 +1,7 @@
+---
+description: Upgrade the UUPS core suite and beacon-proxied printers
+---
+
 # Upgrade a cyberCORP
 
 All contracts use UUPS upgradeable proxies (with beacon proxies for

@@ -1,3 +1,7 @@
+---
+description: Token-community equity conversion rounds inside cyberRAISE
+---
+
 # ACE — token-community raises
 
 **ACE** is MetaLeX's fundraising product for token communities. An ACE raise

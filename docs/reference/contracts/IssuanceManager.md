@@ -1,3 +1,7 @@
+---
+description: "The issuance authority: printers, cyberCERTs, scrip, security classes, secondary transfers"
+---
+
 # IssuanceManager
 
 The issuance authority for a cyberCORP. It creates LedgerEntryToken printers,

@@ -117,11 +117,14 @@ function finalizeContract(bytes32 contractId) external; // onlyFinalizerIfSet
   has expired, or when the proposing party (index 0) voids while still the
   only signer. The finalizer may submit void requests without a signature;
   anyone else needs the party's EIP-712 `VoidSignatureData` signature.
-  Finalized contracts cannot be voided. **Zero-expiry caveat**: the expiry
-  check here has no nonzero guard (unlike signing/finalization), so an
-  agreement created with `expiry == 0` ("no deadline") satisfies the
-  expired branch immediately — the first valid void request voids it
-  unilaterally.
+  Finalized contracts cannot be voided.
+
+{% hint style="warning" %}
+**Zero-expiry caveat**: the void path's expiry check has no nonzero guard
+(unlike signing/finalization), so an agreement created with `expiry == 0`
+("no deadline") satisfies the expired branch immediately — the first valid
+void request voids it unilaterally.
+{% endhint %}
 
 ## Events
 

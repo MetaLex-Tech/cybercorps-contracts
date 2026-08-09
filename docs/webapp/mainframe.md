@@ -1,3 +1,7 @@
+---
+description: "Create and run a company: cap table, board, issuance, grants, and cyberSign"
+---
+
 # The cyberCORPs app — manage your company
 
 The **cyberCORPs app** (`cybercorps.metalex.tech`) is where a company is

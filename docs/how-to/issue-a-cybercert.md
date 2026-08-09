@@ -1,3 +1,7 @@
+---
+description: Create a security-class printer and issue certificates under it
+---
+
 # Issue a cyberCERT
 
 This is how you mint a new register entry on a cyberCORP — stock, a SAFE, an
@@ -44,6 +48,12 @@ CertificateDetails memory details = CertificateDetails({
     extensionData:                       abi.encode(/* per the extension */)
 });
 ```
+
+{% hint style="warning" %}
+`unitsRepresented`, `investmentAmountUSD`, and
+`issuerUSDValuationAtTimeOfInvestment` are all **18-decimal fixed point**:
+one share (or one dollar) = `1e18`.
+{% endhint %}
 
 ## 3. Mint
 

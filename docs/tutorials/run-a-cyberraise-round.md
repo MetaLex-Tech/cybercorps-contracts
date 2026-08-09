@@ -1,3 +1,7 @@
+---
+description: Create a SAFE round, take an investor EOI, allocate it, and close the round
+---
+
 # Tutorial: Run a cyberRAISE round
 
 In this tutorial you create a SAFE round on a cyberCORP's `RoundManager`,
@@ -6,6 +10,23 @@ take an investor's Expression of Interest, allocate it, and close the round.
 > Code here is **illustrative of the flow**, using the real signatures and
 > structs from `cybercorps-contracts` (`develop`). The `Round` and `EOI`
 > structs are large — check the source for every field.
+
+The flow at a glance:
+
+```mermaid
+flowchart TD
+    A["Officer builds the Round<br/>draft · setTickets · setAgreement"] --> B["createRound<br/>(officer's escrowed EIP-712 signature)"]
+    B --> C["Round live"]
+    C --> D["Investor submits EOI<br/>conditions checked · payment escrowed"]
+    D --> E{Round type}
+    E -- "FCFS" --> F["Instant allocation"]
+    E -- "FounderApproved" --> G["Officer allocates"]
+    D -. "rejected / recalled after expiry" .-> R["Refund to investor"]
+    F --> H["cyberCERT issued · agreement executed<br/>with the escrowed officer signature"]
+    G --> H
+    H --> I["Round closes<br/>closeRoundNow or endTime"]
+    I --> J["Issuer claims proceeds"]
+```
 
 ## Prerequisites
 
