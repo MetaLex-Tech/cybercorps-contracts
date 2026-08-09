@@ -21,7 +21,8 @@ flowchart TD
     D --> E{Round type}
     E -- "FCFS — automatic,<br/>same transaction" --> G["Allocation<br/>conditions checked here · cyberCERT issued ·<br/>agreement executed with the escrowed officer signature ·<br/>escrow finalized — payment released to the issuer"]
     E -- "FounderApproved —<br/>officer calls allocate" --> G
-    D -. "rejected / recalled after expiry" .-> R["Refund to investor"]
+    D -. "officer rejects<br/>(any time before allocation)" .-> R["Refund to investor"]
+    D -. "investor recalls<br/>(after EOI expiry or round end)" .-> R
     G --> I["Round closes<br/>closeRoundNow or endTime"]
 ```
 
