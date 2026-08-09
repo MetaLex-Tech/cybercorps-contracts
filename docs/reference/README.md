@@ -1,3 +1,7 @@
+---
+description: "The dry facts: contract APIs, roles, events, and deployments"
+---
+
 # Reference
 
 Reference is information-oriented: dry, neutral, and complete. Use it to look

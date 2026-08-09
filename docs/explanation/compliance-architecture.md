@@ -1,3 +1,7 @@
+---
+description: "Where compliance runs: conditions, credentials, and the register boundary"
+---
+
 # Compliance architecture
 
 The protocol does not bake any specific compliance regime into the

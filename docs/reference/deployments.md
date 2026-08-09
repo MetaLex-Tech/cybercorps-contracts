@@ -1,3 +1,7 @@
+---
+description: Deployed addresses and versions per chain
+---
+
 # Deployments
 
 Canonical contract addresses, by chain.

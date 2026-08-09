@@ -1,3 +1,7 @@
+---
+description: What the cyberCORPs apps do and which one you need
+---
+
 # Using the cyberCORPs apps
 
 This part of the documentation is for the people who **use** the MetaLeX

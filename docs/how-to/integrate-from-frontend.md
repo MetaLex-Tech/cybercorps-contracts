@@ -1,3 +1,7 @@
+---
+description: Wire a dApp frontend to the cyberCORPs contracts
+---
+
 # Integrate from a frontend
 
 This guide covers calling the protocol from a TypeScript / React app. The

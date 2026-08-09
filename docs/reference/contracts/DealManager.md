@@ -1,3 +1,7 @@
+---
+description: Deal lifecycle and the secondary-trading venue with settlement escrow
+---
+
 # DealManager
 
 Manages the lifecycle of deals for a cyberCORP — primary issuance deals

@@ -1,3 +1,7 @@
+---
+description: Form a futarchy-governed MetaDAO entity
+---
+
 # MetaDAO — entity formation
 
 The **MetaDAO** page is a narrow, single-purpose integration: it forms the

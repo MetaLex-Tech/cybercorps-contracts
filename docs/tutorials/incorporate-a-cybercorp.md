@@ -1,3 +1,7 @@
+---
+description: Deploy a cyberCORP suite, create a security class, and issue the first cyberCERT
+---
+
 # Tutorial: Incorporate a cyberCORP
 
 In this tutorial you deploy a new cyberCORP, create a certificate printer for

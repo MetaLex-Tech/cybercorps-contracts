@@ -1,3 +1,7 @@
+---
+description: Grant and revoke BorgAuth authority levels on a cyberCORP suite
+---
+
 # Configure BorgAuth roles
 
 Authority on a cyberCORP is held in its **BorgAuth** ACL. Roles are numeric

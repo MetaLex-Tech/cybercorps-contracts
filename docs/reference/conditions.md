@@ -1,3 +1,7 @@
+---
+description: Condition contracts that gate state transitions, including the secondary-trading family
+---
+
 # Conditions
 
 A **condition** is a contract that gates state transitions — issuance,

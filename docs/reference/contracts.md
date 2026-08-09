@@ -1,3 +1,7 @@
+---
+description: What each core contract does and how the suite fits together
+---
+
 # Core contracts
 
 Contract roles, as implemented in
@@ -5,6 +9,22 @@ Contract roles, as implemented in
 (`develop`). Each core contract carries its own `DEPLOY_VERSION` constant
 (currently `"4"` for most, `"4.1"` for IssuanceManager, `"4.0.1"` for
 DealManager) — see the individual pages.
+
+```mermaid
+flowchart TD
+    F["CyberCorpFactory"] --> AUTH["BorgAuth<br/>(numeric-level authority)"]
+    F --> CORP["CyberCorp<br/>(the onchain entity)"]
+    F --> IM["IssuanceManager"]
+    F --> DM["DealManager<br/>(deals + secondary offers)"]
+    F --> RM["RoundManager<br/>(fundraising rounds)"]
+    IM -- "each printer represents<br/>a security class / series" --> LET["LedgerEntryToken printers<br/>(cyberCERTs, ERC-721)"]
+    IM -. "optional — deployCyberScrip,<br/>at most one per printer" .-> SCRIP["CyberScrip<br/>(ERC-20 scrip)"]
+    DM --- REG["CyberAgreementRegistry<br/>(templates + signed agreements)"]
+    RM --- REG
+    AUTH -. "authorises" .-> IM
+    AUTH -. "authorises" .-> DM
+    AUTH -. "authorises" .-> RM
+```
 
 | Contract | Role |
 |---|---|

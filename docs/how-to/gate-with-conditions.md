@@ -1,3 +1,7 @@
+---
+description: Attach condition contracts to issuance, deals, rounds, and secondary settlement
+---
+
 # Gate state transitions with conditions
 
 A **condition** is a contract implementing `ICondition`. Conditions gate

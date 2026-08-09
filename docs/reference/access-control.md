@@ -1,3 +1,7 @@
+---
+description: BorgAuth numeric authority levels and who can call what
+---
+
 # Access control (BorgAuth)
 
 All access control in the protocol runs through **BorgAuth** — a single ACL

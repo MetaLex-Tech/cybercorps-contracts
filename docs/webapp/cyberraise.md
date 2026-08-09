@@ -1,3 +1,7 @@
+---
+description: Raise capital or invest in rounds, from draft to settlement
+---
+
 # cyberRAISE — raising and investing
 
 **cyberRAISE** (`cyberraise.metalex.tech`) is the fundraising app. Companies
