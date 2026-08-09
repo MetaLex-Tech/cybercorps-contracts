@@ -84,8 +84,11 @@ requests it while only one signature has been collected.
 
 {% hint style="warning" %}
 An agreement created with `expiry == 0` (no deadline) counts as **expired**
-for this check, so any single party's void request voids it immediately. If
-you need unanimous-void semantics, set a real expiry.
+for this check, so any single party's void request voids it immediately.
+Setting a future expiry restores unanimous-void semantics only **until that
+expiry passes** — an unfinalized agreement past its expiry is again voidable
+by a single party's request. (And independent of expiry, the proposing
+party can void unilaterally while it is the only signer.)
 {% endhint %}
 
 ## Checking status
