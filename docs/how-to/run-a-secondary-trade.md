@@ -27,10 +27,10 @@ sequenceDiagram
     B->>DM: acceptOffer (full or partial)
     Note over DM: buyer elects exemption pathway ·<br/>pathway + SPV conditions checked ·<br/>payment escrowed · settlement agreement fully signed
     B->>DM: finalizeSecondaryTradeAgreement
-    Note over DM: closing + pathway conditions re-checked at settlement
+    Note over DM: SPV + pathway + closing conditions<br/>re-checked at settlement
+    DM-->>S: seller proceeds paid · fees distributed
     DM->>IM: secondaryTransfer
     IM-->>B: units onto the buyer's cert
-    DM-->>S: payment, minus fee split
 ```
 
 ## 0. One-time configuration (owner/admin)
