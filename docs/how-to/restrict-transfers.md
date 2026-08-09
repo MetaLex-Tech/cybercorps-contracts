@@ -42,29 +42,28 @@ booleans of `deployCyberScrip`:
 
 There is **no blocklist** — only force transfer, force burn, and freeze.
 
-| Power | Exercised via (on CyberScrip) |
-|---|---|
+| Power          | Exercised via (on CyberScrip)     |
+|----------------|-----------------------------------|
 | Force transfer | `forceTransfer(from, to, amount)` |
-| Force burn | `forceBurn(account, amount)` |
-| Freeze | `setFrozen(account, isFrozen)` |
+| Force burn     | `forceBurn(account, amount)`      |
+| Freeze         | `setFrozen(account, isFrozen)`    |
 
-These functions are `onlyIssuanceManager`, so they are driven through the
-cyberCORP's IssuanceManager.
+An admin calls the scrip directly — the compliance functions are
+`onlyIssuanceManagerOrAdmin`. Force burn is the exception: it also withdraws
+the matching backing units from the cert's vault, so it is managed by IssuanceManager.
 
 ## Permanently disabling a power
 
 Each power has a one-way disable on CyberScrip — `disableForceTransfer()`,
 `disableForceBurn()`, `disableFreeze()`. Once disabled, a power cannot be
-re-enabled; exercising it afterward reverts `ComplianceFeatureDisabled`. Like
-the exercise functions, the disables are `onlyIssuanceManager`.
+re-enabled; exercising it afterward reverts `ComplianceFeatureDisabled`.
+Like the other controls, the disables are `onlyIssuanceManagerOrAdmin`.
 
 ## Holder cap
 
-`IssuanceManager.setScripMaxHolderCount(certAddress, n)` (admin-gated) caps
-the scrip's holder count (`0` = unlimited); transfers that would exceed it
-revert `HolderLimitExceeded`. The underlying setter,
-`CyberScrip.setMaxHolderCount(n)`, is `onlyIssuanceManager` like the other
-compliance functions.
+`CyberScrip.setMaxHolderCount(n)` caps the holder count (`0` = unlimited);
+transfers that would exceed it revert `HolderLimitExceeded`. Like the other
+reversible controls it is `onlyIssuanceManagerOrAdmin`.
 
 ## Related
 

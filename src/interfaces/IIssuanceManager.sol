@@ -287,36 +287,8 @@ interface IIssuanceManager {
         uint256 amount
     ) external;
 
-    // Scrip compliance controls
-    function setScripRestrictionHooks(
-        address certAddress,
-        ITransferRestrictionHook[] memory hooks
-    ) external;
-
-    function disableScripForceTransfer(address certAddress) external;
-
-    function disableScripForceBurn(address certAddress) external;
-
-    function disableScripFreeze(address certAddress) external;
-
-    function setScripFrozen(
-        address certAddress,
-        address account,
-        bool isFrozen
-    ) external;
-
-    function setScripMaxHolderCount(
-        address certAddress,
-        uint256 maxHolders
-    ) external;
-
-    function forceScripTransfer(
-        address certAddress,
-        address from,
-        address to,
-        uint256 amount
-    ) external;
-
+    // Unlike other CyberScrip compliance controls, this one must be called by IssuanceManager due to
+    // its reliance on internal states.
     function forceScripBurn(
         address certAddress,
         address account,

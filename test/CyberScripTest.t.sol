@@ -12,6 +12,7 @@ contract CyberScripTest is Test {
     address public certPrinter;
     address public issuanceManager;
     address public owner;
+    BorgAuth public auth;
     address public user1;
     address public user2;
     MockTransferHook public mockHook;
@@ -35,7 +36,7 @@ contract CyberScripTest is Test {
         hooks[0] = ITransferRestrictionHook(address(mockHook));
         bytes32 salt = keccak256("CyberScripTest");
         //deploy auth
-        address auth = address(new BorgAuth{salt: salt}(owner));
+        auth = new BorgAuth{salt: salt}(owner);
 
         // Deploy CyberScrip (testable)
         cyberScrip = TestableCyberScrip(address(
@@ -43,7 +44,7 @@ contract CyberScripTest is Test {
                 address(new TestableCyberScrip()),
                 abi.encodeWithSelector(
                     CyberScrip.initialize.selector,
-                    auth,
+                    address(auth),
                     certPrinter,
                     issuanceManager,
                     "Test CyberScrip",
@@ -243,25 +244,43 @@ contract CyberScripTest is Test {
         assertEq(cyberScrip.balanceOf(user1), 950 ether);
     }
 
-    function test_OnlyIssuanceManagerGuard_ComplianceFunctions() public {
-        // Non-issuance manager cannot call these
+    function test_ComplianceGuards_RejectUnprivilegedCaller() public {
+        bytes memory notAdmin = abi.encodeWithSignature(
+            "BorgAuth_NotAuthorized(uint256,address)",
+            auth.ADMIN_ROLE(),
+            user1
+        );
+        // user1 is neither the issuance manager nor an admin
         vm.startPrank(user1);
-        vm.expectRevert(abi.encodeWithSignature("NotIssuanceManager()"));
+        vm.expectRevert(notAdmin);
         cyberScrip.setFrozen(user2, true);
 
-        vm.expectRevert(abi.encodeWithSignature("NotIssuanceManager()"));
+        vm.expectRevert(notAdmin);
         cyberScrip.forceTransfer(user1, user2, 1 ether);
 
+        // forceBurn stays manager-only: the manager also unwinds the cert's backing vault
         vm.expectRevert(abi.encodeWithSignature("NotIssuanceManager()"));
         cyberScrip.forceBurn(user1, 1 ether);
 
-        vm.expectRevert(abi.encodeWithSignature("NotIssuanceManager()"));
+        vm.expectRevert(notAdmin);
         cyberScrip.disableFreeze();
-        vm.expectRevert(abi.encodeWithSignature("NotIssuanceManager()"));
+        vm.expectRevert(notAdmin);
         cyberScrip.disableForceTransfer();
-        vm.expectRevert(abi.encodeWithSignature("NotIssuanceManager()"));
+        vm.expectRevert(notAdmin);
         cyberScrip.disableForceBurn();
         vm.stopPrank();
+    }
+
+    function test_ComplianceGuards_AdminCanUseOneWayDisables() public {
+        address adminOnly = makeAddr("adminOnly");
+        auth.updateRole(adminOnly, auth.ADMIN_ROLE());
+
+        vm.startPrank(adminOnly);
+        cyberScrip.setFrozen(user2, true);
+        cyberScrip.disableFreeze();
+        vm.stopPrank();
+
+        assertFalse(cyberScrip.canFreeze());
     }
 
     // ------------------------
@@ -558,12 +577,17 @@ contract CyberScripTest is Test {
         vm.stopPrank();
     }
 
-    function test_RevertWhen_NonIssuanceManagerUpdatesHooks() public {
+    function test_RevertWhen_UnprivilegedCallerUpdatesHooks() public {
         ITransferRestrictionHook[] memory newHooks = new ITransferRestrictionHook[](1);
         newHooks[0] = ITransferRestrictionHook(address(mockHook));
+        bytes memory notAdmin = abi.encodeWithSignature(
+            "BorgAuth_NotAuthorized(uint256,address)",
+            auth.ADMIN_ROLE(),
+            user1
+        );
 
         vm.startPrank(user1);
-        vm.expectRevert(abi.encodeWithSignature("NotIssuanceManager()"));
+        vm.expectRevert(notAdmin);
         cyberScrip.setRestrictionHook(newHooks);
         vm.stopPrank();
     }
