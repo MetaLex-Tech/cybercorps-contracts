@@ -28,10 +28,13 @@ complete the free **Authenticate** signature. Holders don't see this
 screen; they get their own scoped view, covered in
 [For holders: your securities](holders.md).
 
-Officer names and holder identities stored on certificates are encrypted;
-the app decrypts them for you server-side during assembly. A name it
+Holder identities on certificates are encrypted when that choice was
+made at issuance (it is optional; see
+[the certificate page](holders.md#the-certificate-page)). For encrypted
+names, the app decrypts server-side during assembly, and a name it
 cannot decrypt renders as a scrambled placeholder rather than leaking
-ciphertext.
+ciphertext. A name issued in plaintext, and signing-officer names in
+general, live in the certificate's public metadata regardless.
 
 ## How to read the table
 
