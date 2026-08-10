@@ -79,16 +79,16 @@ ICyberAgreementRegistry(registry).finalizeContract(contractId);
 
 `voidContractFor(contractId, party, signature)` records a party's void
 request (EIP-712-signed, or submitted by the finalizer). The contract voids
-when all parties request it, when it has expired, or when the first party
-requests it while only one signature has been collected.
+when every allocated party requests it (unfilled open slots don't count
+toward unanimity), when its nonzero expiry has passed, or when the first
+party requests it while only one signature has been collected.
 
-{% hint style="warning" %}
-An agreement created with `expiry == 0` (no deadline) counts as **expired**
-for this check, so any single party's void request voids it immediately.
-Setting a future expiry restores unanimous-void semantics only **until that
-expiry passes** — an unfinalized agreement past its expiry is again voidable
-by a single party's request. (And independent of expiry, the proposing
-party can void unilaterally while it is the only signer.)
+{% hint style="info" %}
+An agreement created with `expiry == 0` has **no deadline**: it never counts
+as expired, so it voids only by unanimous request (or by the proposer while
+it is the only signer). With a nonzero expiry, unanimous-void semantics hold
+only **until that expiry passes** — an unfinalized agreement past its expiry
+is voidable by a single party's request.
 {% endhint %}
 
 ## Checking status

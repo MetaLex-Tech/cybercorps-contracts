@@ -113,17 +113,20 @@ function finalizeContract(bytes32 contractId) external; // onlyFinalizerIfSet
   With no finalizer set, the contract auto-finalizes at that point;
   otherwise the finalizer calls `finalizeContract`.
 * `voidContractFor` records a party's void request (event `VoidRequested`).
-  The contract becomes voided when **all** parties have requested, when it
-  has expired, or when the proposing party (index 0) voids while still the
-  only signer. The finalizer may submit void requests without a signature;
-  anyone else needs the party's EIP-712 `VoidSignatureData` signature.
-  Finalized contracts cannot be voided.
+  The contract becomes voided when every **allocated** party has requested
+  (unfilled `address(0)` slots in an open agreement cannot request, so they
+  don't count toward unanimity — though a party who fills a slot must then
+  also request), when its nonzero expiry has passed, or when the proposing
+  party (index 0) voids while still the only signer. The finalizer may
+  submit void requests without a signature; anyone else needs the party's
+  EIP-712 `VoidSignatureData` signature. Finalized contracts cannot be
+  voided.
 
-{% hint style="warning" %}
-**Zero-expiry caveat**: the void path's expiry check has no nonzero guard
-(unlike signing/finalization), so an agreement created with `expiry == 0`
-("no deadline") satisfies the expired branch immediately — the first valid
-void request voids it unilaterally.
+{% hint style="info" %}
+`expiry == 0` means **no deadline**, in the void path just as in signing and
+finalization: the expired branch never applies, so a zero-expiry agreement
+voids only by unanimous request of its allocated parties (or by the
+proposer while sole signer).
 {% endhint %}
 
 ## Events

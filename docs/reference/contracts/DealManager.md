@@ -76,6 +76,9 @@ defaultLegend}`.
 * `expiry` and `secretHash` support timed and secret-gated deals;
   `voidExpiredDeal` cleans up expired deals, and `refundVoidedDeal` releases
   escrowed payment when an agreement was voided directly in the registry.
+  `expiry == 0` means **no deadline**: such a deal can pay and finalize at
+  any time, is never void-expirable, and unwinds only via `signToVoid`
+  (all parties) or `revokeDeal` while pending.
 * On `finalizeDeal` the deal's certificate effects (mint/assign/endorse) are
   applied via the IssuanceManager, and escrowed payment (less the platform
   fee — see `computeFee` / `getPlatformPayable`) is released.
