@@ -22,7 +22,13 @@ navigates its areas:
 * **cyberSign** — sign and countersign the company's legal agreements (opens
   MetaLeX's standalone signing app).
 
-Hovering a sidebar item shows a short description of the area.
+Hovering a sidebar item shows a short description of the area. The three
+largest areas have their own guides: [the cap table](captable.md),
+[token grants and onchain vesting](grants.md), and
+[the boardRoom](boardroom.md). This page covers company creation, the
+Mainframe, and how the areas fit together.
+
+![The cyberCORPs app start screen](../.gitbook/assets/webapp/cybercorps-home.png)
 
 > **Fundraising rounds are not here.** Rounds are created and run in
 > [cyberRAISE](cyberraise.md). The cyberCORPs app is about the company
@@ -44,9 +50,13 @@ legal entity** (a real company — a Delaware corp, an LLC, etc.).
 
 A cyberCORP is best understood as a *digital twin* of your real company.
 
+![The onboarding question](../.gitbook/assets/webapp/cybercorps-onboarding.png)
+
 ### Create your cyberCORP
 
 Creation is a three-step wizard. Your progress is saved as you go.
+
+![Step 1 of the wizard: Network & Treasury Setup](../.gitbook/assets/webapp/cybercorps-create-network.png)
 
 **Step 1 — Network:**
 
@@ -115,26 +125,20 @@ The **incorporation** area is the company's onchain formation record:
 * **Incorporate another cyberCORP** — starts the creation wizard again for a
   second company.
 
+It is described alongside the boardRoom in
+[The boardRoom and incorporation records](boardroom.md#the-incorporation-page).
+
 ## boardRoom
 
-The **boardRoom** is the corporate-authority hub:
+The **boardRoom** is the corporate-authority hub: the officer roster, the
+board of directors, the company payment destination, governance documents,
+and **board approvals** — written consents of the board that can gate
+specific securities issuances. It also holds the **Transfer cyberCORP**
+hand-over flow and a preview of the coming BORG board multisig.
 
-* **Corporate authority** — the officer roster, the board of directors
-  (directors are drawn from the officers, with a **Chair** badge for the
-  chair), and the **company payment destination** — the treasury address
-  that receives company payments, changeable here by the owner (an onchain
-  transaction with a confirm step). A **Transfer cyberCORP** button hands
-  owner/admin control of the company to another address.
-* **Governance documents** — the company's onchain governance agreements.
-* **Board approvals** — board consents. **New board consent** starts a
-  consent that officers sign in cyberSign; **Upload signed approval**
-  records a consent that was executed outside cyberSign as an uploaded PDF.
-  A consent can cover specific securities issuances — a covered issuance is
-  then blocked until its consent is fully executed.
-* **Agreement templates** — the standard agreement templates the company
-  uses, each checked against the onchain registry.
-* **Board multisig** — a preview of a future BORG-based board multisig; not
-  yet deployed.
+The full guide, including how directors are seated, how consents route for
+signature, and what goes to public IPFS, is
+[The boardRoom and incorporation records](boardroom.md).
 
 ## The Mainframe — your equity hub
 
@@ -274,72 +278,35 @@ The holder is then put on the register.
 
 The **capTable** area (in beta) is the company's unified capitalization
 workspace: offchain positions you record by hand or import, and the
-tokenized certificates from the Mainframe, side by side in one ledger.
+tokenized certificates from the Mainframe, side by side in one ledger,
+with an AI-assisted import for bringing in a cap table from any format.
+Modeling and compliance tooling (round modeling, exit waterfall, §219
+lists, 409A / Rule 701 / 3921 / 83(b) records) lives alongside it.
 
-Five tabs organize the views:
-
-* **Ledger** — the cap table itself, grouped into **Equity**,
-  **Convertibles**, and **Token instruments**, with a collapsed **History**
-  section for voided, terminated, tokenized, exercised, and converted
-  positions. Summary statistics and a capitalization donut sit above it.
-* **Token cap table** — the company token's holders and instruments.
-* **Model a round** — pro-forma round modeling: enter a hypothetical
-  raise and see dilution, with saved scenarios and side-by-side comparison.
-* **Exit waterfall** — model how exit proceeds distribute across the stack.
-* **Class terms** — per-class economic terms (preferences, discounts, etc.)
-  used by the modeling tools.
-
-The toolbar covers day-to-day registrar work: **+ Add Stakeholder** and
-**+ Add Position** record offchain entries; **Import (.csv / .xlsx / OCF)**
-brings in an existing cap table (blank templates are downloadable);
-**Export** produces .csv, .xlsx, or OCF files; **Link Wallets** attaches
-wallets to stakeholders; **Invitations** manages stakeholder onboarding
-links; **§219 List** produces a stockholder list; and **Reset Ledger**
-clears the offchain ledger (with a confirmation). Compliance aids get their
-own panels: **409A / FMV** reports, **Rule 701** tracking, **Option
-Exercises / 3921**, and **83(b)** elections.
-
-### Securities status
-
-The **Securities status** page (reached from the cap table, the Mainframe,
-or grants) is the officer work queue: **drafts** waiting to be issued,
-positions **awaiting signature**, **awaiting acceptance**, and **awaiting
-settlement** — each row carrying the action that un-sticks it.
+Two guides cover it: [The cap table](captable.md) for the ledger,
+importing, and tokenizing, and
+[Cap-table records, modeling and compliance](captable-tools.md) for the
+tools.
 
 ## Grants
 
-The **grants** area manages equity awards to service providers — stock that
-vests over time, escrowed onchain as scrip and signed in cyberSign. Three
-award types are supported:
+The **grants** area manages equity awards to service providers — options,
+RSUs, and restricted stock that vest over time, escrowed onchain as scrip
+so the chain enforces the schedule. Recipients get their own **My grants**
+view with sign, claim, and exercise actions, no company login needed.
 
-* **RSU / vesting** — shares vest over time, no purchase price;
-* **stock options** — the grantee pays the strike price (in USDC) to
-  exercise vested shares;
-* **restricted stock** — the company can repurchase *unvested* shares after
-  termination.
-
-The lifecycle runs **Reserve → Grant → Sign → Escrow → Vest**: first
-**Reserve shares** (issue shares to the company and scripify them, so
-grants have scrip to escrow), then create a **New grant** (recipient,
-award type, units, vesting start/end, and an optional cliff), have the
-recipient sign (optional — a consent can also be uploaded), after which the
-escrow funds automatically and vesting accrues onchain.
-
-Recipients have their own **My grants** page: one card per live award, with
-sign, exercise, and claim actions and a live vesting readout — no company
-login needed.
+The full guide is [Token grants and onchain vesting](grants.md).
 
 ## For stakeholders: invitations and My holdings
 
 Companies onboard their stakeholders with **invitation links** (managed
-from the cap table's **Invitations** panel). Opening an invite link walks
-the stakeholder through three steps — **connect or create a wallet**,
-**verify wallet control** (a free signature), **open your holdings** — and
-attaches their wallet to their positions.
+from the cap table's **Invitations** panel). Claiming one attaches the
+stakeholder's wallet to their record and opens **My holdings** — their
+scoped portal of positions, certificates, documents, and grants.
 
-**My holdings** is the resulting stakeholder portal: for each company, the
-stakeholder's ledger positions, onchain certificates, documents, and
-grants, readable with just a wallet.
+The holder's side of the app — My holdings, the certificate page, and
+transfers, scripify, and de-scripify from the portfolio — is
+[For holders: your securities](holders.md).
 
 ## Admin
 
