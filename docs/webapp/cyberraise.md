@@ -52,7 +52,9 @@ cloud** for a shareable link.
   accredited via [LeXcheX](lexchex.md)), or **Publicly or Privately
   Advertised — U.S. Excluded** (a Regulation S round: participants prove
   non-U.S.-person status with a passport scan in the zkPassport mobile app,
-  unless you manually approve them as an exception). The Reg S option is
+  unless you manually approve them as an exception — the how-to, and a
+  caution about override scope, is
+  [zkPassport overrides](ace.md#zkpassport-overrides)). The Reg S option is
   not available on every network.
 * **Admission mode** — **First-Come, First-Served** (offers are accepted
   automatically in order, funds escrowed immediately, until the round

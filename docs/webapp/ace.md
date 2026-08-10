@@ -59,11 +59,19 @@ for individually negotiated tickets (Reg D or Reg S).
 
 ### zkPassport overrides
 
-If an ACE round restricts investment to non-U.S. persons, founders can
-manually approve a verified investor as an exception: enter their
-**investor wallet** and **Add override** (an onchain transaction; removing
-one is too). The page lists active overrides with when and by whom they
-were added.
+If a round restricts investment to non-U.S. persons, founders can
+manually approve a verified investor as an exception. This applies to
+any of your rounds carrying the non-U.S. condition, ACE or otherwise;
+the **Manage zkPassport Overrides** button on the round's management
+view opens the page. Enter the **investor wallet** and **Add override**
+(an onchain transaction; removing one is too). The page lists active
+overrides with when and by whom they were added.
+
+One caution: an override is granted against your company's round
+manager, not against the single round you opened it from. It satisfies
+the non-U.S. check on **every** round of yours that shares the
+condition, so grant one only to an investor you would except from all
+of them.
 
 ## For investors: taking part
 
