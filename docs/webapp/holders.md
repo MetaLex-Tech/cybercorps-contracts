@@ -62,10 +62,14 @@ restrictive legends, and the rendered certificate itself, in the style
 of an engraved stock certificate, signed by the company's officers. A
 voided cert is stamped VOIDED across its face.
 
-The page is public by URL, but holder names are not: an encrypted name
-shows as a masked value with a "sign in to decrypt" affordance, and it
-decrypts only for the parties to the deal (and the issuer). Sign in
-with the wallet that holds the cert to see your own name.
+The page is public by URL. Whether your name is too depends on the
+choice made at issuance: encryption is optional, chosen in the privacy
+settings when you invest or by the issuer when issuing by hand. An
+encrypted name shows as a masked value with a "sign in to decrypt"
+affordance and decrypts only for the parties to the deal and the
+issuer (sign in with the wallet that holds the cert to see your own).
+A name issued unencrypted appears in plaintext on the certificate and
+in its public metadata, and no sign-in gate protects it.
 
 ## Your portfolio: the actions
 
