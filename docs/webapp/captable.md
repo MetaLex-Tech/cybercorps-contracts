@@ -118,8 +118,10 @@ form covers the full range of instruments:
   token-instrument terms (claim, amount, unlock schedule);
 * a **federal exemption** tag (Rule 701 entries feed the disclosure
   monitor), transfer-restriction chips, a paper certificate reference,
-  notes, and attached PDFs (stored privately; only corp owners and the
-  position's holder can open them).
+  notes, and attached PDFs. Uploads are stored privately: corp owners
+  can always open them, and the position's holder can too once you
+  enable the position-documents disclosure in the
+  [holder portal settings](#inviting-a-stakeholder-to-the-holder-portal).
 
 **Save as draft** stages a position that counts toward nothing until you
 issue it from the [Securities status](#securities-status) queues.

@@ -134,9 +134,12 @@ in cyberSign. It is also where "Incorporate another cyberCORP" lives.
 * **Titles carry meaning.** The board roster and consent routing key
   off the word "Director" in officer titles, so title people
   deliberately.
-* **Consents are public documents.** Names and unit counts in a consent
-  PDF are visible to anyone once on IPFS. If that's a problem for a
-  particular issuance, take the approval outside cyberSign and record
-  it as external.
+* **Consents are public documents.** Both paths publish the PDF to
+  public IPFS — cyberSign consents and uploaded external approvals
+  alike — so names and unit counts are visible to anyone. If that
+  disclosure is unacceptable for a particular issuance, keep the
+  approval in your minute book rather than recording it in the app;
+  the issuance flow lets you issue a position with no linked consent
+  as an explicit choice.
 * **Everything mutating here is a transaction** except the external
   upload; message signatures are free.
