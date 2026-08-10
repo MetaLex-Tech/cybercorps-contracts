@@ -21,6 +21,8 @@ A profile is **optional but recommended**. You can also stay anonymous.
 
 Prefer not to? **Stay Anon for now** skips the whole step.
 
+![Profile onboarding](../.gitbook/assets/webapp/profile-onboarding.png)
+
 If you were onboarded as a stakeholder through a company's invitation
 link, your name pre-fills from the stakeholder record — and starts visible
 only to companies you hold with, until you choose to make it public.
@@ -31,7 +33,10 @@ Your profile page (*Account Profile*) is a public-facing card showing your
 picture, name, bio, social links, your **LeXcheX accreditation status**,
 and — under Address / Multisigs tabs — your wallet address and any
 multisigs. If you are a founder, your founder title (e.g. “Founder of …”)
-is derived from your cyberCORPs onchain and shown automatically.
+is derived from your cyberCORPs onchain and shown automatically. Your own
+profile also shows a public **platform activity** card — your cyberCORPs
+and how long you've been cybernetic if you're a founder, your closed
+investments if you're an investor.
 
 To edit it, sign in (**auth to edit profile**), then open the edit form:
 

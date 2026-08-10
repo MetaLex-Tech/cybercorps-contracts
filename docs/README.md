@@ -45,6 +45,11 @@ and how to use it.
 |---|---|
 | [Using the cyberCORPs apps](webapp/README.md) | Everyone — start here. |
 | [The cyberCORPs app](webapp/mainframe.md) | Issuers managing their cyberCORP. |
+| [The cap table](webapp/captable.md) | Issuers running the register — tokenized and offchain positions, AI-assisted import. |
+| [Cap-table records, modeling and compliance](webapp/captable-tools.md) | Issuers — §219 lists, 409A / 701 / 3921 / 83(b), round and exit modeling. |
+| [Token grants and onchain vesting](webapp/grants.md) | Issuers granting equity awards; recipients vesting them. |
+| [The boardRoom and incorporation records](webapp/boardroom.md) | Officers and directors — consents, authority, formation record. |
+| [For holders: your securities](webapp/holders.md) | Stakeholders and investors holding MetaLeX-issued securities. |
 | [cyberRAISE](webapp/cyberraise.md) | Issuers raising capital; investors funding rounds. |
 | [ACE](webapp/ace.md) | Token communities converting to equity; investors. |
 | [LeXcheX](webapp/lexchex.md) | Anyone who needs to prove accredited-investor status. |

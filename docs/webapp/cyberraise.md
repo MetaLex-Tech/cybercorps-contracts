@@ -11,6 +11,8 @@ cyberRAISE.**
 
 This page has two halves: issuers first, then investors.
 
+![cyberRAISE](../.gitbook/assets/webapp/cyberraise-home.png)
+
 ---
 
 ## For issuers: running a raise
@@ -32,6 +34,8 @@ are deployed together at the end.
 * **Structured Round** — an automated round with **standardized terms for
   all investors**: a target raise, min/max ticket sizes, and escrowed
   investor bids. Can be public or private.
+
+![The raise-structure choice](../.gitbook/assets/webapp/start-raise.png)
 
 ### Configuring a structured round
 
@@ -152,6 +156,14 @@ Browse **Public Rounds** (the marketplace) — searchable, split into **Open
 Rounds** and **Past Rounds**. Only publicly advertised rounds appear here.
 Private rounds are reached through a link the issuer shares with you.
 
+![The public-rounds marketplace](../.gitbook/assets/webapp/public-rounds.png)
+
+Opening a round shows its detail page: the company, the security and
+series, the round's terms and progress, its eligibility badges, and the
+**Invest** or **Express Interest** call to action.
+
+![A round's public detail page](../.gitbook/assets/webapp/round-detail.png)
+
 If you don't hold a valid [LeXcheX](lexchex.md) accreditation, the list
 shows an **“I am investing as:”** card — toggle between *an individual* and
 *a legal entity* — explaining the paths to accreditation: LeXcheX
@@ -163,7 +175,14 @@ non-U.S. passport scan via zkPassport.
 ### Express interest
 
 The *Express Interest* screen (titled *Invest in …* on first-come rounds)
-has the form on one side and the legal agreement on the other. You provide:
+has the form on one side and the legal agreement on the other. On first
+visit it opens with a plain-language notice that this is a legally binding
+investment, issued as a tokenized security and countersigned by the
+company.
+
+![The invest screen, with the deal notice and the agreement alongside](../.gitbook/assets/webapp/express-interest.png)
+
+You provide:
 
 * **Your investor details** — name, contact, investor type, and (if not an
   individual) jurisdiction of formation. These pre-fill from your
@@ -206,7 +225,8 @@ you hold (**Owned Securities**), and any scrip (**Owned Scrips**) —
 checkboxes reveal voided, expired, and rejected entries. If an EOI
 expires unanswered, **Recall** returns your escrowed funds. From the
 portfolio you can also scripify a certificate, transfer certificates and
-scrip, and request re-certification.
+scrip, and request re-certification — those actions are walked through in
+[For holders: your securities](holders.md).
 
 ## The MetaLeX console (staff)
 
@@ -217,9 +237,10 @@ across every cyberCORP and chain — with search, filters, and sortable
 columns (cyberCORP, round, type, chain, created, participations, progress,
 status). Opening a raise shows its full terms, documents, and
 participations, including each participation's **signed legal document**
-with its parties and signature status. A **Round templates** page is where
-staff register and approve the custom round templates that then appear in
-an issuer's ticket-type step.
+with its parties and signature status. A **cyberCERTs** explorer lists
+every issued certificate across the platform, grouped by company. A
+**Round templates** page is where staff register and approve the custom
+round templates that then appear in an issuer's ticket-type step.
 
 Nothing in the console mutates a raise — it is an inspection surface.
 

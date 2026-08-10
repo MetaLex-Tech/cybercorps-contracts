@@ -69,6 +69,11 @@
 
 * [Using the cyberCORPs apps](webapp/README.md)
 * [The cyberCORPs app — manage your company](webapp/mainframe.md)
+  * [The cap table](webapp/captable.md)
+  * [Cap-table records, modeling and compliance](webapp/captable-tools.md)
+  * [Token grants and onchain vesting](webapp/grants.md)
+  * [The boardRoom and incorporation records](webapp/boardroom.md)
+* [For holders: your securities](webapp/holders.md)
 * [cyberRAISE — raising and investing](webapp/cyberraise.md)
 * [ACE — token-community raises](webapp/ace.md)
 * [LeXcheX — get accredited](webapp/lexchex.md)

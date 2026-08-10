@@ -18,6 +18,8 @@ before you can invest. The cyberRAISE public-rounds list and your
 Getting a credential is a quick process; afterwards, any round that
 requires it can verify you automatically.
 
+![LeXcheX](../.gitbook/assets/webapp/lexchex-home.png)
+
 ## What the credential is
 
 A LeXcheX credential is a **non-transferable certificate bound to your

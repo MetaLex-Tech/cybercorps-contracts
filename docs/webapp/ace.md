@@ -88,11 +88,43 @@ were added.
 4. **Bridge if needed.** Solana-token ACE rounds are funded in a
    Base-wrapped version of the token. If your Base balance is short, an
    in-page bridge card walks you through connecting a **Solana wallet**
-   and bridging — you'll need a little SOL (about 0.01) for bridge fees,
-   and the cross-chain confirmations take extra time. Standalone
-   *bridge to / from Solana* pages are also available.
+   and bridging. See [the Solana bridge](#the-solana-bridge) below.
 5. **Track your holdings.** Your ACE SAFEs appear in the cyberRAISE
    **Portfolio** alongside any other investments.
+
+## The Solana bridge
+
+A Solana-token ACE raise runs on Base, so the community token moves
+between the two chains over the **Base ↔ Solana native bridge**.
+Standalone *Bridge to Solana* and *Bridge from Solana* pages handle each
+direction (a header toggle switches between them), and the same
+Solana-to-Base flow is embedded in the invest form for investors whose
+Base balance is short.
+
+You'll need both wallets connected — your Solana wallet and your EVM
+wallet — and a little SOL (about 0.01) for account rent and relay fees,
+separate from the token you're bridging. Each bridge action asks you to
+accept the Terms of Service before signing.
+
+**Solana → Base** is one signature: a single Solana transaction sends the
+token into the bridge and pays for relay, then the page watches Base
+until the wrapped token arrives in your wallet (it allows up to ten
+minutes, though it's usually much faster).
+
+**Base → Solana** takes three actions, spread over the bridge's
+validation cycle:
+
+1. **Bridge** — a Base transaction locks the wrapped token for your
+   Solana address. The transaction hash is written into the page URL, so
+   you can close the tab and resume later; a "past transfers" list
+   re-enters any transfer mid-flight.
+2. **Prove** — after validators post the checkpoint to Solana (about 20
+   minutes), a Solana transaction proves your message.
+3. **Claim** — a final Solana transaction releases the token, creating
+   your token account if needed.
+
+Neither page charges a protocol fee; the costs are Base gas, Solana
+fees, and rent.
 
 ## Under the hood
 
