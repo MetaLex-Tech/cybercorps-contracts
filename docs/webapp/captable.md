@@ -40,9 +40,13 @@ record is definitive:
 
 * **⛓ tokenized** — the position is an onchain cyberCERT. The chain is the
   system of record; the ledger row just mirrors it.
-* **📄 offchain** — the position lives on the offchain stock ledger, which
-  is definitive for un-tokenized holdings. The badge links to the first
-  attached document.
+* **📄 offchain** — the position lives on the offchain stock ledger,
+  which is the company's record of un-tokenized holdings, in the role a
+  traditional stock ledger plays. Recording a row documents an issuance
+  rather than effecting one: the corporate authorization behind it (a
+  [board consent](boardroom.md#board-approvals), for instance) must
+  still exist, and once the position is tokenized the chain takes over
+  as the register. The badge links to the first attached document.
 * **≈ tokenized (scrips)** — a *beneficial* claim derived from a
   cyberSCRIP balance. Scrips are fungible tokens, and holding them is an
   economic position without being registered stock.
