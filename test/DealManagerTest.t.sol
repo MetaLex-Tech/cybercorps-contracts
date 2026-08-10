@@ -906,6 +906,90 @@ contract DealManagerTest is Test {
         CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]); // burned token should revert on ownerOf
     }
 
+    /// @notice Regression: expiry == 0 means no deadline, so a zero-expiry deal must never be
+    /// void-expirable. Before the zero guard, voidExpiredDeal treated it as already expired and tore
+    /// down the escrow while the registry (post its own zero-expiry void fix) kept the agreement live,
+    /// splitting the legal agreement state from the asset/refund state.
+    function test_RevertIf_VoidExpiredDeal_ZeroExpiry() public {
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        vm.prank(owner);
+        (bytes32 agreementId, ) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            uint256(keccak256("DealManagerTest.ZeroExpiryDeal")),
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // conditions
+            bytes32(0), // secretHash
+            0 // expiry: no deadline
+        );
+
+        vm.expectRevert(IDealManagerStorage.DealNotExpired.selector);
+        dm.voidExpiredDeal(agreementId, companyOwner, "");
+    }
+
+    /// @notice Regression: expiry == 0 means no deadline, so a zero-expiry deal must be able to settle
+    /// through the normal payment + finalization path, even long after proposal. Before the zero guards
+    /// in signDealAndPay and finalizeEscrow, such a deal was purported-valid but could never complete.
+    function test_PaymentFlow_ZeroExpiryDealSettles() public {
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        vm.prank(owner);
+        (bytes32 agreementId, uint256[] memory certIds) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            uint256(keccak256("DealManagerTest.ZeroExpirySettles")),
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // conditions
+            bytes32(0), // secretHash
+            0 // expiry: no deadline
+        );
+
+        // A no-deadline deal settles even long after proposal
+        vm.warp(block.timestamp + 365 days);
+
+        uint256 companyBalanceBefore = paymentToken.balanceOf(companyPayable);
+
+        vm.prank(alice);
+        dm.signDealAndPay(
+            alice, // signer
+            agreementId,
+            GOOD_SIGNATURE, // signature
+            new string[](0), // partyValues
+            false, // _fillUnallocated
+            "Alice",
+            ""
+        );
+
+        vm.prank(alice);
+        dm.finalizeDeal(agreementId);
+
+        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), alice, "Alice should receive Corp Certificate");
+        assertEq(
+            paymentToken.balanceOf(companyPayable),
+            companyBalanceBefore + 10 ether,
+            "Company should receive payment tokens"
+        );
+    }
+
     function test_RevertIf_RevokeDeal_UnknownDeal() public {
         vm.prank(alice);
         vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);

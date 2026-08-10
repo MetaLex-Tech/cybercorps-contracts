@@ -180,7 +180,7 @@ library LexScrowStorage {
     /// @param counterParty Counterparty/buyer address
     /// @param corpAssets Assets the company will deliver upon finalization
     /// @param buyerAssets Assets the counterparty will deliver into escrow
-    /// @param expiry Unix timestamp after which the deal is considered expired
+    /// @param expiry Unix timestamp after which the deal is considered expired (0 = no deadline)
     function createEscrow(bytes32 agreementId, address counterParty, Token[] memory corpAssets, Token[] memory buyerAssets, uint256 expiry) public {
         bytes memory blankSignature = abi.encodePacked(bytes32(0));
         Escrow memory newEscrow = Escrow({
@@ -309,7 +309,8 @@ library LexScrowStorage {
         Escrow storage escrow = getEscrow(agreementId);
 
         // Check: Check all conditions before proceeding
-        if(block.timestamp > escrow.expiry) revert DealExpired();
+        // expiry == 0 means no deadline (same rule as the registry and voidExpiredDeal)
+        if(escrow.expiry > 0 && block.timestamp > escrow.expiry) revert DealExpired();
         if(escrow.status != EscrowStatus.PAID) revert EscrowNotPaid();
 
         // Effect: Update state before external calls

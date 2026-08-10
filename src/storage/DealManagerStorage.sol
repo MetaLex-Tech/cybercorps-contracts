@@ -228,7 +228,8 @@ library DealManagerStorage {
         if(ICyberAgreementRegistry(registry).isFinalized(agreementId)) revert LexScrowStorage.DealAlreadyFinalized();
         Escrow storage escrow = LexScrowStorage.getEscrow(agreementId);
         if(escrow.status != EscrowStatus.PENDING) revert IDealManagerStorage.DealNotPending();
-        if(escrow.expiry < block.timestamp) revert LexScrowStorage.DealExpired();
+        // expiry == 0 means no deadline (same rule as the registry and voidExpiredDeal)
+        if(escrow.expiry > 0 && escrow.expiry < block.timestamp) revert LexScrowStorage.DealExpired();
 
         string[] storage counterPartyCheck = getCounterPartyValues(agreementId);
         if(counterPartyCheck.length > 0) {
@@ -313,7 +314,10 @@ library DealManagerStorage {
 
         address registry = LexScrowStorage.getDealRegistry();
         Escrow storage deal = LexScrowStorage.getEscrow(agreementId);
-        if (block.timestamp <= deal.expiry) revert IDealManagerStorage.DealNotExpired();
+        // expiry == 0 means no deadline (mirrors the registry's void semantics): such deals never
+        // expire, so treating zero as expired here would tear down the escrow while the registry
+        // agreement stays live — voiding them requires signToVoid (unanimous) instead.
+        if (deal.expiry == 0 || block.timestamp <= deal.expiry) revert IDealManagerStorage.DealNotExpired();
         ICyberAgreementRegistry(registry).voidContractFor(agreementId, signer, signature);
         _voidCorpCerts(deal);
         if (deal.status == EscrowStatus.PAID)
