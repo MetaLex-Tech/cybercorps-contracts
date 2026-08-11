@@ -134,34 +134,6 @@ library IssuanceManagerStorage {
         uint256 newTotalNominalShares
     );
 
-    function executeMigrateClassTermsControllers(
-        address[] calldata certAddresses,
-        address controller,
-        bytes[] calldata extensionData
-    ) external {
-        if (certAddresses.length != extensionData.length) {
-            revert ClassTermsMigrationLengthMismatch();
-        }
-        for (uint256 i = 0; i < certAddresses.length; ++i) {
-            address certAddress = certAddresses[i];
-            ILedgerEntryToken printer = ILedgerEntryToken(certAddress);
-            address currentExtension = printer.getExtension(0);
-            if (currentExtension != controller) {
-                (bool isController,) =
-                    currentExtension.staticcall(abi.encodeCall(IShareClassTermsController.getClassTerms, (certAddress)));
-                if (currentExtension.code.length != 0 && isController) {
-                    revert ClassTermsControllerAlreadyInstalled();
-                }
-                printer.setExtension(0, controller);
-            }
-            IShareClassTermsController(controller).configureClassTerms(certAddress, extensionData[i]);
-        }
-    }
-
-    function executeAmendClassTerms(address certAddress, bytes calldata extensionData) external {
-        address controller = ILedgerEntryToken(certAddress).getExtension(0);
-        IShareClassTermsController(controller).amendClassTerms(certAddress, extensionData);
-    }
     event ScripAddedToExistingCert(
         address indexed certAddress,
         address indexed user,
@@ -343,54 +315,9 @@ library IssuanceManagerStorage {
         }
     }
 
-    // Class-level LET designations. Mutators are external (delegatecalled) to keep IssuanceManager itself
-    // under the EIP-170 size limit; wrappers there enforce access control before delegating here.
-
-    /// @notice Registers a new class; classIds are sequential starting at 1 (0 = unclassified).
-    function executeDefineSecurityClass(
-        SecurityClass classType,
-        string memory documentURI,
-        address dataExtension,
-        bytes memory classData
-    ) external returns (uint256 classId) {
-        IssuanceManagerData storage s = issuanceManagerStorage();
-        if (s.classIdByType[classType] != 0) revert SecurityClassAlreadyDefined();
-        classId = ++s.securityClassCount;
-        s.securityClasses[classId] = SecurityClassInfo(classType, documentURI, dataExtension, classData);
-        s.classIdByType[classType] = classId;
-        emit SecurityClassDefined(classId, classType, documentURI, dataExtension);
-    }
-
-    function executeUpdateSecurityClass(
-        uint256 classId,
-        SecurityClass classType,
-        string memory documentURI,
-        address dataExtension,
-        bytes memory classData
-    ) external {
-        IssuanceManagerData storage s = issuanceManagerStorage();
-        if (classId == 0 || classId > s.securityClassCount) revert ClassDoesNotExist();
-        // Re-index classIdByType when the type changes, otherwise the reverse index keeps pointing at the
-        // old type and the new type reads as undefined, letting a second class be created for it.
-        SecurityClass oldType = s.securityClasses[classId].classType;
-        if (classType != oldType) {
-            if (s.classIdByType[classType] != 0) revert SecurityClassAlreadyDefined();
-            delete s.classIdByType[oldType];
-            s.classIdByType[classType] = classId;
-        }
-        s.securityClasses[classId] = SecurityClassInfo(classType, documentURI, dataExtension, classData);
-        emit SecurityClassUpdated(classId, classType, documentURI, dataExtension);
-    }
-
-    /// @notice Assigns a printer (the series scope) to a class; classId 0 clears the assignment.
-    /// Also the backfill path for printers created before the class registry existed.
-    function executeSetPrinterClass(address printer, uint256 classId) external {
-        IssuanceManagerData storage s = issuanceManagerStorage();
-        if (!isPrinter(printer)) revert NotAPrinter();
-        if (classId > s.securityClassCount) revert ClassDoesNotExist();
-        s.printerClassIds[printer] = classId;
-        emit PrinterClassAssigned(printer, classId);
-    }
+    // Class-level LET designation MUTATORS and class-terms controller administration live in
+    // IssuanceManagerClassStorage: this library crossed EIP-170 at the develop merge, and those
+    // are the cold owner-gated entry points. Same delegatecall context, same namespaced slot.
 
     function getSecurityClass(uint256 classId) internal view returns (SecurityClassInfo storage) {
         return issuanceManagerStorage().securityClasses[classId];
@@ -1340,19 +1267,9 @@ library IssuanceManagerStorage {
         }
     }
 
-    function _releaseCertificateUnits(address certAddress, uint256 tokenId) private {
-        address controller = _shareClassTermsController(certAddress);
-        if (controller != address(0)) {
-            IShareClassTermsController(controller).releaseCertificateUnits(certAddress, tokenId);
-        }
-    }
-
-    function _restoreCertificateUnits(address certAddress, uint256 tokenId) private {
-        address controller = _shareClassTermsController(certAddress);
-        if (controller != address(0)) {
-            IShareClassTermsController(controller).restoreCertificateUnits(certAddress, tokenId);
-        }
-    }
+    // Void/unvoid accounting is wired at the token itself (LedgerEntryTokenStorage
+    // .syncClassTermsOnVoidStatus), so every caller — this manager, the DealManager's
+    // teardown, or an admin driving the token directly — hits the controller.
 
     function _releaseScripUnits(address certAddress, uint256 units) private {
         address controller = _shareClassTermsController(certAddress);

@@ -12,6 +12,7 @@ import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {IssuanceManagerStorage} from "../src/storage/IssuanceManagerStorage.sol";
+import {IssuanceManagerClassStorage} from "../src/storage/IssuanceManagerClassStorage.sol";
 import {ShareClassTermsController} from "../src/storage/extensions/ShareClassTermsController.sol";
 import {
     CertificateData,
@@ -28,7 +29,7 @@ import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
 
 contract ClassTermsMigrationHarness {
     function migrate(address[] calldata certPrinters, address controller, bytes[] calldata extensionData) external {
-        IssuanceManagerStorage.executeMigrateClassTermsControllers(certPrinters, controller, extensionData);
+        IssuanceManagerClassStorage.executeMigrateClassTermsControllers(certPrinters, controller, extensionData);
     }
 }
 
@@ -112,14 +113,13 @@ contract CyberCertPrinterClassTermsTest is Test {
     }
 
     // Develop's LedgerEntryToken has no burn: voided lots stay on the ledger, so the
-    // lifecycle to maintain is void/unvoid only.
+    // lifecycle to maintain is void/unvoid only. The token syncs the controller itself —
+    // no manual accounting call accompanies voidCert/unvoidCert.
     function test_VoidUnvoidMaintainsIssuedUnits() public {
         _mint(0, address(0xA11CE), _details(_terms("Common", 10), 6));
-        controller.releaseCertificateUnits(address(printer), 0);
         printer.voidCert(0);
         assertEq(_issuedUnits(), 0);
 
-        controller.restoreCertificateUnits(address(printer), 0);
         printer.unvoidCert(0);
         assertEq(_issuedUnits(), 6);
     }
@@ -136,10 +136,8 @@ contract CyberCertPrinterClassTermsTest is Test {
 
         // Voiding releases only the ACTIVE units (4): the 2 scripified units are still a
         // circulating ERC20 and stay counted, or the class could issue past its cap.
-        controller.releaseCertificateUnits(address(printer), 0);
         printer.voidCert(0);
         assertEq(_issuedUnits(), 2);
-        controller.restoreCertificateUnits(address(printer), 0);
         printer.unvoidCert(0);
         assertEq(_issuedUnits(), 6);
     }
@@ -153,7 +151,6 @@ contract CyberCertPrinterClassTermsTest is Test {
         controller.accountCertificateUpdate(address(printer), 0, details.extensionData, details.unitsRepresented, false);
         printer.updateCertificateDetails(0, details);
 
-        controller.releaseCertificateUnits(address(printer), 0);
         printer.voidCert(0);
         assertEq(_issuedUnits(), 2, "scrip units survive their certificate's void");
 
@@ -181,9 +178,7 @@ contract CyberCertPrinterClassTermsTest is Test {
         assertEq(_issuedUnits(), 6);
 
         // Void/unvoid of a pre-amendment certificate also still works.
-        controller.releaseCertificateUnits(address(printer), 0);
         printer.voidCert(0);
-        controller.restoreCertificateUnits(address(printer), 0);
         printer.unvoidCert(0);
         assertEq(_issuedUnits(), 6);
 

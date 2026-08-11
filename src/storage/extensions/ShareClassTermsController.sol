@@ -238,7 +238,9 @@ contract ShareClassTermsController is
 
     function _requireAuthorizedControllerCall(address certPrinter) private view {
         ILedgerEntryToken printer = ILedgerEntryToken(certPrinter);
-        if (printer.issuanceManager() != msg.sender) {
+        // The printer itself is an authorized caller: its void/unvoid path syncs the accounting
+        // directly (LedgerEntryTokenStorage.syncClassTermsOnVoidStatus), whoever drove the void.
+        if (msg.sender != certPrinter && printer.issuanceManager() != msg.sender) {
             revert NotPrinterIssuanceManager();
         }
         if (printer.getExtension(0) != address(this)) {

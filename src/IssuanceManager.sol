@@ -51,6 +51,7 @@ import "./interfaces/ICertificateConverter.sol";
 import "./interfaces/IIssuanceManagerFactory.sol";
 import "./interfaces/IShareClassTermsController.sol";
 import "./storage/IssuanceManagerStorage.sol";
+import "./storage/IssuanceManagerClassStorage.sol";
 
 /// @title IssuanceManager
 /// @notice Manages the issuance and lifecycle of digital certificates representing securities and more
@@ -232,7 +233,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         bytes memory _classData
     ) external onlyOwner returns (uint256 classId) {
         return
-            IssuanceManagerStorage.executeDefineSecurityClass(
+            IssuanceManagerClassStorage.executeDefineSecurityClass(
                 _classType,
                 _documentURI,
                 _dataExtension,
@@ -249,7 +250,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         address _dataExtension,
         bytes memory _classData
     ) external onlyOwner {
-        IssuanceManagerStorage.executeUpdateSecurityClass(
+        IssuanceManagerClassStorage.executeUpdateSecurityClass(
             _classId,
             _classType,
             _documentURI,
@@ -261,7 +262,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     /// @notice Assigns a certificate printer (the series scope) to a class; 0 clears the assignment
     /// @dev Only callable by owner; also the backfill path for pre-existing printers
     function setPrinterClass(address _printer, uint256 _classId) external onlyOwner {
-        IssuanceManagerStorage.executeSetPrinterClass(_printer, _classId);
+        IssuanceManagerClassStorage.executeSetPrinterClass(_printer, _classId);
     }
 
     /// @notice Gets a class designation by ID
@@ -312,12 +313,12 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         address controller,
         bytes[] calldata extensionData
     ) external onlyOwner {
-        IssuanceManagerStorage.executeMigrateClassTermsControllers(certAddresses, controller, extensionData);
+        IssuanceManagerClassStorage.executeMigrateClassTermsControllers(certAddresses, controller, extensionData);
     }
 
     /// @notice Applies an authorized amendment to a share class's terms.
     function amendClassTerms(address certAddress, bytes calldata extensionData) external onlyOwner {
-        IssuanceManagerStorage.executeAmendClassTerms(certAddress, extensionData);
+        IssuanceManagerClassStorage.executeAmendClassTerms(certAddress, extensionData);
     }
 
     /// @notice Creates a new certificate

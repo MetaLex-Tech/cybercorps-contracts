@@ -296,6 +296,8 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     // look-through holder tally: a fully-voided lot no longer counts its owner as a live holder, so the
     // tally is decremented via `recordVoidLegalOwner` (after the status flip).
     function voidCert(uint256 tokenId) external onlyIssuanceManagerOrAdmin {
+        // Class-terms accounting runs first: it reads the pre-void active units (P1 review fix)
+        LedgerEntryTokenStorage.syncClassTermsOnVoidStatus(tokenId, true);
         LedgerEntryTokenStorage.setSecurityStatus(tokenId, SecurityStatus.Void);
         LedgerEntryTokenStorage.recordVoidLegalOwner(tokenId);
         emit ILedgerEntryToken.CertificateVoided(tokenId, block.timestamp);
@@ -305,6 +307,9 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     // so `recordUnvoidLegalOwner` runs after the status is set back to Assigned.
     function unvoidCert(uint256 tokenId) external onlyIssuanceManagerOrAdmin {
         if (!_exists(tokenId)) revert ILedgerEntryToken.TokenDoesNotExist();
+        // Class-terms accounting runs first (lot must still read voided); a restore that would
+        // breach authorizedShares reverts the unvoid rather than bypassing the cap
+        LedgerEntryTokenStorage.syncClassTermsOnVoidStatus(tokenId, false);
         LedgerEntryTokenStorage.setSecurityStatus(tokenId, SecurityStatus.Assigned);
         LedgerEntryTokenStorage.recordUnvoidLegalOwner(tokenId);
         emit ILedgerEntryToken.CertificateUnvoided(tokenId, block.timestamp);
