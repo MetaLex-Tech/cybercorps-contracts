@@ -1,0 +1,35 @@
+# Tells the webapp repo that the GitBook changed.
+#
+# GAIBE (the in-app assistant) compiles docs/ into its system prompt at build
+# time, so docs only reach users after the webapp re-imports them and
+# redeploys. This dispatch triggers that repo's "Refresh GAIBE knowledge"
+# workflow, which opens a PR there; a human still merges and promotes it.
+#
+# Requires a repo secret WEBAPP_DISPATCH_TOKEN with actions:write on
+# MetaLex-Tech/metalex-webapp. If the dispatch fails or the secret is missing,
+# the webapp workflow's nightly schedule picks the change up anyway - this
+# only makes it prompt.
+
+name: Notify GAIBE of docs changes
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - "docs/**"
+  workflow_dispatch:
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger the webapp knowledge refresh
+        env:
+          GH_TOKEN: ${{ secrets.WEBAPP_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api /repos/MetaLex-Tech/metalex-webapp/dispatches \
+            --method POST \
+            --field event_type=gitbook-updated \
+            --field "client_payload[sha]=$GITHUB_SHA"
