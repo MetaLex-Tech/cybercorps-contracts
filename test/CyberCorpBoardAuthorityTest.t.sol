@@ -130,6 +130,26 @@ contract CyberCorpBoardAuthorityTest is Test {
         vm.stopPrank();
     }
 
+    function test_ManagerSwapRotatesAuthRoles() public {
+        address oldManager = address(0x501);
+        address newManager = address(0x502);
+        vm.startPrank(founder);
+        corp.setDealManager(oldManager);
+        assertEq(auth.userRoles(oldManager), auth.OWNER_ROLE(), "manager not granted on set");
+
+        // Replacing the manager revokes the superseded address and privileges the new one:
+        // the role-manager lock makes this corp the only possible role mutator.
+        corp.setDealManager(newManager);
+        assertEq(auth.userRoles(oldManager), 0, "superseded manager keeps privilege");
+        assertEq(auth.userRoles(newManager), auth.OWNER_ROLE(), "replacement not privileged");
+
+        // An address still referenced by another manager slot keeps its role.
+        corp.setRoundManager(newManager);
+        corp.setDealManager(address(0x503));
+        assertEq(auth.userRoles(newManager), auth.OWNER_ROLE(), "shared manager lost its role");
+        vm.stopPrank();
+    }
+
     function test_StockholderAdapterCanExecuteBoardReplacement() public {
         BoardAuthorityAdapterMock adapter =
             new BoardAuthorityAdapterMock();

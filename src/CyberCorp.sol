@@ -241,14 +241,18 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     function setIssuanceManager(
         address _issuanceManager
     ) external onlyBoardAuthority {
+        address previous = issuanceManager;
         issuanceManager = _issuanceManager;
+        _rotateManagerRole(previous, _issuanceManager);
     }
 
     /// @notice Updates the deal manager address
     /// @dev Only callable by owner
     /// @param _dealManager New deal manager contract address
     function setDealManager(address _dealManager) external onlyBoardAuthority {
+        address previous = dealManager;
         dealManager = _dealManager;
+        _rotateManagerRole(previous, _dealManager);
     }
 
     /// @notice Updates the round manager address
@@ -257,7 +261,32 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     function setRoundManager(
         address _roundManager
     ) external onlyBoardAuthority {
+        address previous = roundManager;
         roundManager = _roundManager;
+        _rotateManagerRole(previous, _roundManager);
+    }
+
+    /// @dev On a corp that is BorgAuth's role manager, swapping a manager pointer must rotate
+    ///      the AUTH role with it: the factory granted the original managers OWNER_ROLE and then
+    ///      irreversibly locked role mutation to this corp, so without rotation a replacement
+    ///      manager cannot make owner-gated cross-manager calls while the superseded one stays
+    ///      privileged forever. Runs after the pointer update so the still-referenced check sees
+    ///      the new state — an address that still serves as another manager keeps its role
+    ///      (tests and early corps have pointed two slots at one contract). Legacy corps without
+    ///      the role-manager lock keep their historical behavior: BorgAuth's owner rotates roles
+    ///      directly.
+    function _rotateManagerRole(address previousManager, address newManager) private {
+        if (AUTH.roleManager() != address(this)) return;
+        if (previousManager == newManager) return;
+        if (
+            previousManager != address(0) && previousManager != issuanceManager
+                && previousManager != dealManager && previousManager != roundManager
+        ) {
+            AUTH.updateRole(previousManager, 0);
+        }
+        if (newManager != address(0)) {
+            AUTH.updateRole(newManager, AUTH.OWNER_ROLE());
+        }
     }
 
     /// @notice Checks if an address belongs to a company officer
