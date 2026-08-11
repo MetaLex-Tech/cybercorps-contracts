@@ -360,10 +360,12 @@ contract CyberCorpUpgradeabilityForkTest is Test {
         // require company owner approval, MetaLeX is not able to unilaterally upgrading them and
         // perform arbitrary operations
 
-        // Upgrade CyberCorp beacon to a corrupted implementation
+        // Upgrade CyberCorp beacon to a corrupted implementation. The corp is freshly deployed and
+        // board-governed, so its upgrade gate demands BOARD_ROLE (P1), not OWNER_ROLE — the rug
+        // still fails, one governance level higher.
         address rugImpl = address(new RugImplemantation());
         cyberCorpSingleFactory.setRefImplementation(rugImpl);
-        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, BorgAuth(corpAuthAddr).OWNER_ROLE(), metalex));
+        vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, BorgAuth(corpAuthAddr).BOARD_ROLE(), metalex));
         CyberCorp(cyberCorpAddr).upgradeToAndCall(rugImpl, "");
         assertNotEq(cyberCorpAddr.getErc1967Implementation(), rugImpl);
 
