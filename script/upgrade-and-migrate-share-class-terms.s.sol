@@ -55,23 +55,46 @@ contract UpgradeAndMigrateShareClassTermsScript is Script {
             revert("Target is not the IssuanceManager factory reference");
         }
 
+        // A legacy printer with no active certificate (never issued, or every lot voided) has no
+        // source to derive terms from — yet the completeness scan below rightly refuses to let it
+        // be omitted, and the bare 4.2 acceptance refuses the corp. For those printers, pass
+        // type(uint256).max as the SOURCE_TOKEN_IDS entry and supply the reconciled terms bytes
+        // directly via comma-delimited SOURCELESS_TERMS (consumed in printer order). Supplied
+        // terms carry the same reconciliation duty as a source certificate: charter/class
+        // authority evidence per the runbook.
+        bytes[] memory sourcelessTerms = vm.envOr("SOURCELESS_TERMS", ",", new bytes[](0));
+        uint256 sourcelessUsed = 0;
+
         bytes[] memory extensionData = new bytes[](printers.length);
         for (uint256 i = 0; i < printers.length; ++i) {
             LedgerEntryToken printer = LedgerEntryToken(printers[i]);
             if (printer.issuanceManager() != issuanceManagerAddress) {
                 revert("Printer belongs to a different IssuanceManager");
             }
-            if (printer.isVoided(sourceTokenIds[i])) {
-                revert("Source certificate is voided");
-            }
             (,,,, bool alreadyConfigured) = controller.getClassTerms(printers[i]);
             if (alreadyConfigured) revert("Class terms already configured");
 
+            if (sourceTokenIds[i] == type(uint256).max) {
+                if (sourcelessUsed >= sourcelessTerms.length) {
+                    revert("SOURCELESS_TERMS entry missing for sourceless printer");
+                }
+                bytes memory supplied = sourcelessTerms[sourcelessUsed++];
+                if (supplied.length == 0) revert("Empty SOURCELESS_TERMS entry");
+                extensionData[i] = supplied;
+                continue;
+            }
+
+            if (printer.isVoided(sourceTokenIds[i])) {
+                revert("Source certificate is voided");
+            }
             CertificateDetails memory source = printer.getActiveCertificateDetails(sourceTokenIds[i]);
             if (source.extensionData.length == 0) {
                 revert("Source certificate has no extension data");
             }
             extensionData[i] = source.extensionData;
+        }
+        if (sourcelessUsed != sourcelessTerms.length) {
+            revert("Unconsumed SOURCELESS_TERMS entries");
         }
 
         // Completeness check: validating only the supplied array is not enough. 4.2 fails closed

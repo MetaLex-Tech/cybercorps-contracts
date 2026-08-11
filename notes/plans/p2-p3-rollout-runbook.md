@@ -105,8 +105,13 @@ accounting. Use
 - `ISSUANCE_MANAGER`;
 - `ISSUANCE_MANAGER_IMPLEMENTATION` (which must already be the factory reference);
 - `SHARE_CLASS_TERMS_CONTROLLER`;
-- comma-delimited `CERT_PRINTERS`; and
-- matching comma-delimited `SOURCE_TOKEN_IDS`.
+- comma-delimited `CERT_PRINTERS`;
+- matching comma-delimited `SOURCE_TOKEN_IDS` — for a printer with no active
+  certificate (never issued, or every lot voided), pass the sentinel
+  `type(uint256).max` here; and
+- `SOURCELESS_TERMS` (comma-delimited terms bytes, consumed in printer order)
+  for each sentinel entry. Supplied terms carry the same reconciliation duty
+  as a source certificate: charter/class-authority evidence per printer.
 
 The script submits one owner transaction:
 
