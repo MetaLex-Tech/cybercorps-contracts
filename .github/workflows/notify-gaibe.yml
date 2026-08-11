@@ -5,10 +5,15 @@
 # redeploys. This dispatch triggers that repo's "Refresh GAIBE knowledge"
 # workflow, which opens a PR there; a human still merges and promotes it.
 #
-# Requires a repo secret WEBAPP_DISPATCH_TOKEN with actions:write on
-# MetaLex-Tech/metalex-webapp. If the dispatch fails or the secret is missing,
-# the webapp workflow's nightly schedule picks the change up anyway - this
-# only makes it prompt.
+# Requires a repo secret WEBAPP_DISPATCH_TOKEN scoped to
+# MetaLex-Tech/metalex-webapp with Actions: write (fine-grained) - nothing
+# else. Note the endpoint: this fires the workflow-dispatch API rather than
+# repository_dispatch, because repository_dispatch needs Contents: write,
+# which would also let anything holding this secret push code to the webapp
+# repo. Triggering a workflow is all this needs to do.
+#
+# If the dispatch fails or the secret is missing, the webapp workflow's
+# nightly schedule picks the change up anyway - this only makes it prompt.
 
 name: Notify GAIBE of docs changes
 
@@ -29,7 +34,11 @@ jobs:
           GH_TOKEN: ${{ secrets.WEBAPP_DISPATCH_TOKEN }}
         run: |
           set -euo pipefail
-          gh api /repos/MetaLex-Tech/metalex-webapp/dispatches \
+          echo "Docs changed at $GITHUB_SHA - triggering the webapp knowledge refresh."
+          # ref=develop is the webapp's default branch, where the workflow
+          # lives. It re-imports from that branch's head regardless, so there
+          # is nothing to pass through: its workflow_dispatch takes no inputs,
+          # and sending an undeclared one is a 422.
+          gh api /repos/MetaLex-Tech/metalex-webapp/actions/workflows/gaibe-knowledge-refresh.yml/dispatches \
             --method POST \
-            --field event_type=gitbook-updated \
-            --field "client_payload[sha]=$GITHUB_SHA"
+            --field ref=develop
