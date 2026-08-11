@@ -330,6 +330,7 @@ library DealManagerStorage {
 
     /// @notice Revokes a pending deal
     /// @dev Access modifiers (if any) are carried by the DealManager wrapper that delegatecalls here.
+    /// TODO(#142): see test_RevokeDeal_VoidingRevokeStrandsEscrowAndCert
     function revokeDeal(bytes32 agreementId, address signer, bytes memory signature) public {
         if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
         if(msg.sender != signer) revert IDealManagerStorage.CounterPartyValueMismatch();
@@ -367,6 +368,7 @@ library DealManagerStorage {
 
     /// @notice Refund a voided deal
     /// @dev nonReentrant is carried by the DealManager wrapper that delegatecalls here.
+    /// TODO(#142): see test_RevertIf_RefundVoidedDeal_PendingDeal
     function refundVoidedDeal(bytes32 agreementId) public {
         if (!LexScrowStorage.hasPrimaryEscrow(agreementId)) revert LexScrowStorage.DealDoesNotExist();
         _voidCorpCerts(LexScrowStorage.getEscrow(agreementId));
