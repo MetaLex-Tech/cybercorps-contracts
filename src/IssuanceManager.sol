@@ -653,6 +653,13 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         return IssuanceManagerStorage.getCertScripifiedStatus(certAddress, id);
     }
 
+    /// @notice Total unit-denominated assets in a printer's scripified-units vault.
+    /// @dev The exact aggregate: per-certificate claims each round down against the pool, so
+    /// summing them can undercount a diluted vault — migration snapshots must use this instead.
+    function getScripVaultAssets(address certAddress) external view returns (uint256 totalAssetsWad) {
+        (totalAssetsWad,) = IssuanceManagerStorage.getCertScripUnitVault(certAddress);
+    }
+
     /// @notice `totalTrackedScrip` is CyberScrip `totalSupply`. Second value is vault price per
     ///         nominal share: `totalAssetsWad * 1e27 / totalNominalShares` (ray), or 0 if empty.
     function getScripPoolTotals(address certAddress)

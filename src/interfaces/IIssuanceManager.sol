@@ -233,6 +233,8 @@ interface IIssuanceManager {
         view
         returns (bool isScripified, uint256 scripifiedUnits, uint256 maxUnitsRepresented);
 
+    function getScripVaultAssets(address certAddress) external view returns (uint256 totalAssetsWad);
+
     function getScripPoolAmountById(address certAddress, uint256 id) external view returns (uint256);
 
     function getScripPoolSharesById(address certAddress, uint256 id) external view returns (uint256);

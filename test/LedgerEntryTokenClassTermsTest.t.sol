@@ -31,6 +31,10 @@ contract ClassTermsMigrationHarness {
     function migrate(address[] calldata certPrinters, address controller, bytes[] calldata extensionData) external {
         IssuanceManagerClassStorage.executeMigrateClassTermsControllers(certPrinters, controller, extensionData);
     }
+
+    function getScripVaultAssets(address) external pure returns (uint256) {
+        return 0;
+    }
 }
 
 contract CyberCertPrinterClassTermsTest is Test {
@@ -40,6 +44,7 @@ contract CyberCertPrinterClassTermsTest is Test {
     ShareExtension internal shareExtension;
     ShareClassTermsController internal controller;
     mapping(uint256 => uint256) internal scripifiedUnits;
+    uint256 internal vaultAssets;
 
     function setUp() public {
         shareExtension = new ShareExtension();
@@ -92,6 +97,23 @@ contract CyberCertPrinterClassTermsTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(ShareClassTermsController.AuthorizedSharesExceeded.selector, 10, 11));
         CertificateDetails memory overCap = _details(_terms("Common", 10), 5);
+        controller.accountNewIssuance(address(printer), overCap.extensionData, overCap.unitsRepresented, true);
+    }
+
+    function test_ConfigureCountsScripVaultAggregateOnce() public {
+        // A diluted vault's per-certificate claims each round down and can sum below the pool's
+        // actual assets; the migration snapshot must take the manager's exact aggregate instead,
+        // or issuedUnits seeds low and later issuance breaches the cap.
+        CertificateDetails memory details = _details(_terms("Common", 10), 6);
+        printer.safeMint(0, address(0xA11CE), details);
+        vaultAssets = 3;
+
+        controller.configureClassTerms(address(printer), _extensionData(_terms("Common", 10)));
+        assertEq(_issuedUnits(), 9, "vault aggregate not counted once at configure");
+
+        // The remaining headroom is enforced against the aggregate-inclusive count.
+        vm.expectRevert(abi.encodeWithSelector(ShareClassTermsController.AuthorizedSharesExceeded.selector, 10, 11));
+        CertificateDetails memory overCap = _details(_terms("Common", 10), 2);
         controller.accountNewIssuance(address(printer), overCap.extensionData, overCap.unitsRepresented, true);
     }
 
@@ -374,6 +396,10 @@ contract CyberCertPrinterClassTermsTest is Test {
     {
         units = scripifiedUnits[tokenId];
         return (units > 0, units, units);
+    }
+
+    function getScripVaultAssets(address) external view returns (uint256) {
+        return vaultAssets;
     }
 
     function companyName() external pure returns (string memory) {

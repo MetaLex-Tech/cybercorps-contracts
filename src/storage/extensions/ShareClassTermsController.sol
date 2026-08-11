@@ -283,15 +283,16 @@ contract ShareClassTermsController is
         for (uint256 i = 0; i < supply; ++i) {
             uint256 tokenId = printer.tokenByIndex(i);
             if (!printer.isVoided(tokenId)) {
-                outstandingUnits += _effectiveUnits(
-                    certPrinter, tokenId, printer.getActiveCertificateDetails(tokenId).unitsRepresented
-                );
-            } else {
-                // A voided certificate's scrip stays in circulation, so its scripified units are
-                // still outstanding against the cap even though its active units are gone.
-                outstandingUnits += _effectiveUnits(certPrinter, tokenId, 0);
+                outstandingUnits += printer.getActiveCertificateDetails(tokenId).unitsRepresented;
             }
         }
+        // Count the scrip vault ONCE, from the manager's exact aggregate. Per-certificate claims
+        // each round down against the pool, so summing them undercounts a vault diluted by a
+        // socialized withdrawal (e.g. forceScripBurn) and would seed issuedUnits below the actual
+        // outstanding amount — letting later issuance breach authorizedShares. The aggregate also
+        // captures voided certificates' still-circulating scrip without per-lot special-casing.
+        outstandingUnits +=
+            IIssuanceManager(ILedgerEntryToken(certPrinter).issuanceManager()).getScripVaultAssets(certPrinter);
     }
 
     function _effectiveUnits(address certPrinter, uint256 tokenId, uint256 activeUnits) private view returns (uint256) {

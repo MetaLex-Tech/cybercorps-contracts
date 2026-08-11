@@ -405,9 +405,9 @@ contract ParentCoFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
         BorgAuth(authAddress).updateRole(roundManagerAddress, 99);
         if (activateGovernance) {
             // Revoke this factory's deploy-time owner role before activation; the corp claims the
-        // one-way role-manager lock itself inside activateBoardGovernance (it holds role 200),
-        // so the upgradeable factory retains no cross-corp privilege on the new auth.
-        BorgAuth(authAddress).zeroOwner();
+            // one-way role-manager lock itself inside activateBoardGovernance (it holds role 200),
+            // so the upgradeable factory retains no cross-corp privilege on the new auth.
+            BorgAuth(authAddress).zeroOwner();
             ICyberCorp(cyberCorpAddress).activateBoardGovernance();
         }
 
