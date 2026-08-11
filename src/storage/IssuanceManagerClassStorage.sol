@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.28;
 
+import "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "../CyberCorpConstants.sol";
 import "../interfaces/IIssuanceManager.sol";
+import "../interfaces/IIssuanceManagerFactory.sol";
 import "../interfaces/ILedgerEntryToken.sol";
 import "../interfaces/IShareClassTermsController.sol";
 import "./IssuanceManagerStorage.sol";
@@ -70,6 +72,24 @@ library IssuanceManagerClassStorage {
     ) external {
         if (certAddresses.length != extensionData.length) {
             revert IssuanceManagerStorage.ClassTermsMigrationLengthMismatch();
+        }
+        // The class-terms accounting for void/unvoid lives in the LedgerEntryToken implementation
+        // (syncClassTermsOnVoidStatus), so migrating a printer to the controller without also
+        // moving it onto the current implementation would leave direct voids, unvoids, and the
+        // DealManager's teardown silently skipping the controller. The printer beacon is owned by
+        // this manager and shared by its printers; syncing it to the factory's published reference
+        // inside the same transaction keeps the migration atomic: manager implementation, printer
+        // implementation, and every controller install land or revert together.
+        // Guarded for harness/standalone contexts where the manager storage carries no factory or
+        // beacon; a production manager always has both from initialize.
+        address upgradeFactory = IssuanceManagerStorage.getUpgradeFactory();
+        UpgradeableBeacon printerBeacon = IssuanceManagerStorage.getCyberCertPrinterBeacon();
+        if (upgradeFactory != address(0) && address(printerBeacon) != address(0)) {
+            address printerRefImpl =
+                IIssuanceManagerFactory(upgradeFactory).getCyberCertPrinterRefImplementation();
+            if (printerBeacon.implementation() != printerRefImpl) {
+                printerBeacon.upgradeTo(printerRefImpl);
+            }
         }
         for (uint256 i = 0; i < certAddresses.length; ++i) {
             address certAddress = certAddresses[i];

@@ -1068,6 +1068,13 @@ library IssuanceManagerStorage {
         ICyberScrip(scripifiedCert).burnFrom(account, amount);
 
         if (selection.foundActive) {
+            // KNOWN OPEN DESIGN ITEM (P2 follow-up, from Codex review on PR #144): scrip is one
+            // fungible ERC20 per printer with no terms provenance. When class terms have been
+            // amended and old- and new-term certificates coexist, this fold-into-first-active-cert
+            // redemption can move units across terms snapshots, changing their economic rights.
+            // Resolving it needs an amendment policy decision (segregate scrip by snapshot, scope
+            // recert targets to matching terms, or declare scrip redeems at canonical terms) —
+            // tracked in notes/plans/protocol-improvement-plan.md.
             CertificateDetails memory activeDetails = certificate.getActiveCertificateDetails(selection.activeTokenId);
             activeDetails.unitsRepresented = activeDetails.unitsRepresented + units;
             _updateCertificateDetailsPreservingIssuedUnits(certificate, selection.activeTokenId, activeDetails);

@@ -182,6 +182,15 @@ fields), but left the storage model per-certificate and `authorizedShares` unenf
   deliberately deferred to its own change rather than landed inside the PR #144 merge. Until it
   lands, cap enforcement for a stock printer is only as strong as its creation path installing a
   controller (`createCertPrinterWithClassTerms` or migration).
+- **Open item (2026-08-11, from Codex review on PR #144):** scrip has no terms provenance. It is
+  one fungible ERC20 per printer, but after an amendment old- and new-term certificates coexist
+  (snapshots are deliberately grandfathered), and recertification folds redeemed units into the
+  holder's first active certificate regardless of which snapshot the scrip was minted from —
+  units can cross terms snapshots and change economic rights. This needs an explicit amendment
+  policy decision before real amended-and-scripified classes exist: segregate scrip by terms
+  snapshot, restrict recert targets to terms-matching certificates, forbid scripification in
+  mixed-terms classes, or declare that scripified units always redeem at canonical terms. A
+  policy choice with legal consequences — decide before, not in, the implementing PR.
 - `amendClassTerms` supports authorized corporate amendments but refuses to reduce authorization
   below issued units.
 - The first in-printer implementation was rejected after size verification: it made
