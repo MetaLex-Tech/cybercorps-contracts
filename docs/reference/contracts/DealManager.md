@@ -101,13 +101,27 @@ the entry points is how much DealManager-side teardown follows.
   still-pending deal (it reverts `DealNotPending` otherwise) and performs no
   teardown of its own, so a request that tips the agreement into voided — the
   sole-signer proposer, say — leaves the escrow `PENDING` and its certificates
-  live. Another allocated party's `signToVoid` is what cleans that up
-  afterwards.
+  live. Only an allocated party who has **not** already requested the void can
+  catch the escrow up afterwards, by calling `signToVoid`.
 * Requests may also go straight to the registry, bypassing the DealManager
   entirely. The escrow then lags the agreement until `refundVoidedDeal` syncs
   it, which voids the corp certificates and refunds — but only for a `PAID`
   escrow (`voidAndRefund` reverts `EscrowNotPaid` on a `PENDING` one, so an
-  unpaid deal voided this way still needs a party's `signToVoid`).
+  unpaid deal voided this way still needs an un-requested party's
+  `signToVoid`).
+
+{% hint style="warning" %}
+Route unwinds through `signToVoid`. Because `voidContractFor` rejects a
+repeat requester, teardown can only be driven by an allocated party who has
+not yet requested the void — so a zero-expiry deal whose agreement reaches
+voided with no such party left has **no recovery call at all**. That is the
+case for a one-party deal revoked by its proposer, and for any deal where
+every allocated party requested through `revokeDeal` or the registry:
+`signToVoid` reverts `ContractAlreadyVoided`, `refundVoidedDeal` reverts
+`EscrowNotPaid` on the `PENDING` escrow, `voidExpiredDeal` reverts
+`DealNotExpired`, and `finalizeDeal` reverts `DealVoided`. The escrow is
+stranded at `PENDING` with its corp certificates still live.
+{% endhint %}
 
 ## Secondary trading
 
