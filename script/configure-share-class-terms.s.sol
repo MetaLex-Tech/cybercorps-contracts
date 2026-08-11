@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.28;
 
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IShareClassTermsController} from "../src/interfaces/IShareClassTermsController.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {Script, console2} from "forge-std/Script.sol";
 
 /// @notice One-shot migration for an existing share printer.
@@ -20,7 +20,7 @@ contract ConfigureShareClassTermsScript is Script {
         address controllerAddress = vm.envAddress("SHARE_CLASS_TERMS_CONTROLLER");
         uint256 sourceTokenId = vm.envUint("SOURCE_TOKEN_ID");
 
-        CyberCertPrinter printer = CyberCertPrinter(printerAddress);
+        LedgerEntryToken printer = LedgerEntryToken(printerAddress);
         IssuanceManager issuanceManager = IssuanceManager(printer.issuanceManager());
         IShareClassTermsController controller = IShareClassTermsController(controllerAddress);
         BorgAuth auth = BorgAuth(address(issuanceManager.AUTH()));

@@ -151,8 +151,8 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     {
         __BorgAuthACL_init(_auth);
 
-        // Create beacons for CyberCertPrinter and CyberScrip
-        // Unlike IssuanceManager which is individually upgradeable, CyberCertPrinter and CyberScrip deployments are
+        // Create beacons for LedgerEntryToken and CyberScrip
+        // Unlike IssuanceManager which is individually upgradeable, LedgerEntryToken and CyberScrip deployments are
         // beacon proxies because they are managed by the same company owner and are expected to
         // share the same implementation or upgraded to a new version all at the same time.
         // Maintenance-wise, since IssuanceManager itself is upgradeable, we don't need to worry about beacon ownership transfers
@@ -382,7 +382,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
          uint256 tokenId,
          CertificateDetails memory _details
      ) external onlyAdmin {
-         ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+         ILedgerEntryToken certificate = ILedgerEntryToken(certAddress);
          certificate.updateCertificateDetails(tokenId, _details);
      }*/
 

@@ -4,13 +4,13 @@ pragma solidity 0.8.28;
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Test} from "forge-std/Test.sol";
 
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {IssuanceManagerStorage} from "../src/storage/IssuanceManagerStorage.sol";
 import {ShareClassTermsController} from "../src/storage/extensions/ShareClassTermsController.sol";
 import {
@@ -35,7 +35,7 @@ contract ClassTermsMigrationHarness {
 contract CyberCertPrinterClassTermsTest is Test {
     using ERC1967ProxyLib for address;
 
-    CyberCertPrinter internal printer;
+    LedgerEntryToken internal printer;
     ShareExtension internal shareExtension;
     ShareClassTermsController internal controller;
     mapping(uint256 => uint256) internal scripifiedUnits;
@@ -52,14 +52,14 @@ contract CyberCertPrinterClassTermsTest is Test {
                 )
             )
         );
-        CyberCertPrinter implementation = new CyberCertPrinter();
+        LedgerEntryToken implementation = new LedgerEntryToken();
         string[] memory legends = new string[](0);
-        printer = CyberCertPrinter(
+        printer = LedgerEntryToken(
             address(
                 new ERC1967Proxy(
                     address(implementation),
                     abi.encodeCall(
-                        CyberCertPrinter.initialize,
+                        LedgerEntryToken.initialize,
                         (
                             legends,
                             "Common Stock",
@@ -164,8 +164,8 @@ contract CyberCertPrinterClassTermsTest is Test {
 
     function test_MigrationIsAtomicAndInstalledControllerCannotBeReplaced() public {
         ClassTermsMigrationHarness harness = new ClassTermsMigrationHarness();
-        CyberCertPrinter firstLegacyPrinter = _deployPrinter(address(harness), address(shareExtension));
-        CyberCertPrinter secondLegacyPrinter = _deployPrinter(address(harness), address(shareExtension));
+        LedgerEntryToken firstLegacyPrinter = _deployPrinter(address(harness), address(shareExtension));
+        LedgerEntryToken secondLegacyPrinter = _deployPrinter(address(harness), address(shareExtension));
         ShareClassTermsController firstController = _deployController();
 
         address[] memory printers = new address[](2);
@@ -235,7 +235,7 @@ contract CyberCertPrinterClassTermsTest is Test {
                         (
                             address(upgradeAuth),
                             address(initialImplementation),
-                            address(new CyberCertPrinter()),
+                            address(new LedgerEntryToken()),
                             address(new CyberScrip())
                         )
                     )
@@ -279,8 +279,8 @@ contract CyberCertPrinterClassTermsTest is Test {
         manager.upgradeToAndCall(address(newImplementation), invalidMigrationCall);
 
         assertEq(address(manager).getErc1967Implementation(), oldImplementation);
-        assertEq(CyberCertPrinter(printers[0]).getExtension(0), address(shareExtension));
-        assertEq(CyberCertPrinter(printers[1]).getExtension(0), address(shareExtension));
+        assertEq(LedgerEntryToken(printers[0]).getExtension(0), address(shareExtension));
+        assertEq(LedgerEntryToken(printers[1]).getExtension(0), address(shareExtension));
 
         extensionData[1] = _extensionData(_terms("Legacy Preferred", 200));
         bytes memory migrationCall = abi.encodeCall(
@@ -289,8 +289,8 @@ contract CyberCertPrinterClassTermsTest is Test {
         manager.upgradeToAndCall(address(newImplementation), migrationCall);
 
         assertEq(address(manager).getErc1967Implementation(), address(newImplementation));
-        assertEq(CyberCertPrinter(printers[0]).getExtension(0), address(upgradeController));
-        assertEq(CyberCertPrinter(printers[1]).getExtension(0), address(upgradeController));
+        assertEq(LedgerEntryToken(printers[0]).getExtension(0), address(upgradeController));
+        assertEq(LedgerEntryToken(printers[1]).getExtension(0), address(upgradeController));
         (,, uint256 firstAuthorized,, bool firstConfigured) = upgradeController.getClassTerms(printers[0]);
         (,, uint256 secondAuthorized,, bool secondConfigured) = upgradeController.getClassTerms(printers[1]);
         assertTrue(firstConfigured);
@@ -340,16 +340,16 @@ contract CyberCertPrinterClassTermsTest is Test {
 
     function _deployPrinter(address issuanceManager, address extension)
         internal
-        returns (CyberCertPrinter deployedPrinter)
+        returns (LedgerEntryToken deployedPrinter)
     {
-        CyberCertPrinter implementation = new CyberCertPrinter();
+        LedgerEntryToken implementation = new LedgerEntryToken();
         string[] memory legends = new string[](0);
-        deployedPrinter = CyberCertPrinter(
+        deployedPrinter = LedgerEntryToken(
             address(
                 new ERC1967Proxy(
                     address(implementation),
                     abi.encodeCall(
-                        CyberCertPrinter.initialize,
+                        LedgerEntryToken.initialize,
                         (
                             legends,
                             "Common Stock",

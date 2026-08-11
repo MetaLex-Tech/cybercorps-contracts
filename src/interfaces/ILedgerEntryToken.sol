@@ -45,7 +45,7 @@ import "../CyberCorpConstants.sol";
 import "./IIssuanceManager.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
-interface ICyberCertPrinter is IERC721 {
+interface ILedgerEntryToken is IERC721 {
     function initialize(
         string[] memory defaultLegend,
         string memory name,

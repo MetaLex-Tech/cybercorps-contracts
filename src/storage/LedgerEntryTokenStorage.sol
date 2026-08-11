@@ -73,7 +73,7 @@ struct OwnerDetails {
     address ownerAddress;
 }
 
-library CyberCertPrinterStorage {
+library LedgerEntryTokenStorage {
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.cert.printer.storage.v1");
 
@@ -112,7 +112,7 @@ library CyberCertPrinterStorage {
 
     // URI storage functionality
     function tokenURI(uint256 tokenId) external view returns (string memory) {
-        CyberCertPrinterStorage.CyberCertStorage storage s = cyberCertStorage();
+        LedgerEntryTokenStorage.CyberCertStorage storage s = cyberCertStorage();
         string[] memory certLegend = s.certLegend[tokenId];
         ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
         CertificateDetails memory effectiveDetails = getCertificateDetails(tokenId);

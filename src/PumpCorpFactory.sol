@@ -54,9 +54,9 @@ import "./interfaces/IDealManagerFactory.sol";
 import "./interfaces/IDealManager.sol";
 import "./interfaces/IRoundManagerFactory.sol";
 import {IRoundManager as IRoundManagerInterface} from "./interfaces/IRoundManager.sol";
-import "./interfaces/ICyberCertPrinter.sol";
+import "./interfaces/ILedgerEntryToken.sol";
 import "./CyberCorpConstants.sol";
-import "./storage/CyberCertPrinterStorage.sol";
+import "./storage/LedgerEntryTokenStorage.sol";
 import {CyberCertData as RM_CyberCertData} from "./storage/RoundManagerStorage.sol";
 import {Round, RoundType, RoundLib} from "./libs/RoundLib.sol";
 
@@ -467,7 +467,7 @@ contract PumpCorpFactory is UUPSUpgradeable, BorgAuthACL {
         certPrinterAddress = new address[](_certData.length);
 
         for (uint256 i = 0; i < _certData.length; i++) {
-            ICyberCertPrinter certPrinter = ICyberCertPrinter(
+            ILedgerEntryToken certPrinter = ILedgerEntryToken(
                 IIssuanceManager(issuanceManagerAddress).createCertPrinter(
                     _certData[i].defaultLegend,
                     string.concat(companyName, " ", _certData[i].name),

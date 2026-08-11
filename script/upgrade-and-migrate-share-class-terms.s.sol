@@ -3,12 +3,12 @@ pragma solidity ^0.8.28;
 
 import {Script, console2} from "forge-std/Script.sol";
 
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IIssuanceManagerFactory} from "../src/interfaces/IIssuanceManagerFactory.sol";
 import {IShareClassTermsController} from "../src/interfaces/IShareClassTermsController.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 
 /// @notice Upgrades one corp's IssuanceManager and migrates every supplied
 ///         share printer in the same transaction.
@@ -56,7 +56,7 @@ contract UpgradeAndMigrateShareClassTermsScript is Script {
 
         bytes[] memory extensionData = new bytes[](printers.length);
         for (uint256 i = 0; i < printers.length; ++i) {
-            CyberCertPrinter printer = CyberCertPrinter(printers[i]);
+            LedgerEntryToken printer = LedgerEntryToken(printers[i]);
             if (printer.issuanceManager() != issuanceManagerAddress) {
                 revert("Printer belongs to a different IssuanceManager");
             }
@@ -82,7 +82,7 @@ contract UpgradeAndMigrateShareClassTermsScript is Script {
 
         vm.assertEq(issuanceManager.DEPLOY_VERSION(), "4.2", "IssuanceManager version mismatch");
         for (uint256 i = 0; i < printers.length; ++i) {
-            CyberCertPrinter printer = CyberCertPrinter(printers[i]);
+            LedgerEntryToken printer = LedgerEntryToken(printers[i]);
             vm.assertEq(printer.getExtension(0), controllerAddress, "Printer controller mismatch");
             (, bytes32 termsHash, uint256 authorizedShares, uint256 issuedUnits, bool configured) =
                 controller.getClassTerms(printers[i]);

@@ -3,16 +3,16 @@ pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-import "../../interfaces/ICyberCertPrinter.sol";
+import "../../interfaces/ILedgerEntryToken.sol";
 import "../../interfaces/IIssuanceManager.sol";
 import "../../interfaces/IShareClassTermsController.sol";
 import "../../interfaces/IShareClassTermsExtension.sol";
 import "../../libs/auth.sol";
-import "../CyberCertPrinterStorage.sol";
+import "../LedgerEntryTokenStorage.sol";
 import "./ICertificateExtension.sol";
 
 /// @notice Share extension facade and canonical class-terms accounting controller.
-/// @dev CyberCertPrinter v4 is already at the EIP-170 size ceiling. This contract
+/// @dev LedgerEntryToken v4 is already at the EIP-170 size ceiling. This contract
 ///      keeps enforcement in a separately upgradeable component while the
 ///      IssuanceManager remains the only mutating path into a printer.
 contract ShareClassTermsController is
@@ -113,7 +113,7 @@ contract ShareClassTermsController is
             state.termsHash,
             authorizedShares,
             issuedUnits,
-            ICyberCertPrinter(certPrinter).totalSupply() != 0
+            ILedgerEntryToken(certPrinter).totalSupply() != 0
         );
     }
 
@@ -142,7 +142,7 @@ contract ShareClassTermsController is
         ClassTermsState storage state = classTerms[certPrinter];
 
         if (!state.configured) {
-            if (ICyberCertPrinter(certPrinter).totalSupply() != 0) {
+            if (ILedgerEntryToken(certPrinter).totalSupply() != 0) {
                 revert ClassTermsNotConfigured();
             }
             (bytes memory termsData, uint256 authorizedShares) = _readClassTerms(extensionData);
@@ -169,7 +169,7 @@ contract ShareClassTermsController is
         if (!state.configured) revert ClassTermsNotConfigured();
         _validateClassTerms(state, extensionData);
 
-        ICyberCertPrinter printer = ICyberCertPrinter(certPrinter);
+        ILedgerEntryToken printer = ILedgerEntryToken(certPrinter);
         if (!changesIssuedUnits || printer.isVoided(tokenId)) return;
 
         uint256 oldUnits =
@@ -187,7 +187,7 @@ contract ShareClassTermsController is
         ClassTermsState storage state = classTerms[certPrinter];
         if (!state.configured) revert ClassTermsNotConfigured();
 
-        ICyberCertPrinter printer = ICyberCertPrinter(certPrinter);
+        ILedgerEntryToken printer = ILedgerEntryToken(certPrinter);
         if (printer.isVoided(tokenId)) revert CertificateAlreadyVoided();
         state.issuedUnits -= _effectiveUnits(
             certPrinter, tokenId, printer.getActiveCertificateDetails(tokenId).unitsRepresented
@@ -199,7 +199,7 @@ contract ShareClassTermsController is
         ClassTermsState storage state = classTerms[certPrinter];
         if (!state.configured) revert ClassTermsNotConfigured();
 
-        ICyberCertPrinter printer = ICyberCertPrinter(certPrinter);
+        ILedgerEntryToken printer = ILedgerEntryToken(certPrinter);
         if (!printer.isVoided(tokenId)) revert CertificateNotVoided();
         CertificateDetails memory details = printer.getActiveCertificateDetails(tokenId);
         _validateClassTerms(state, details.extensionData);
@@ -223,7 +223,7 @@ contract ShareClassTermsController is
     }
 
     function _requireAuthorizedControllerCall(address certPrinter) private view {
-        ICyberCertPrinter printer = ICyberCertPrinter(certPrinter);
+        ILedgerEntryToken printer = ILedgerEntryToken(certPrinter);
         if (printer.issuanceManager() != msg.sender) {
             revert NotPrinterIssuanceManager();
         }
@@ -233,7 +233,7 @@ contract ShareClassTermsController is
     }
 
     function _calculateOutstandingUnits(address certPrinter) private view returns (uint256 outstandingUnits) {
-        ICyberCertPrinter printer = ICyberCertPrinter(certPrinter);
+        ILedgerEntryToken printer = ILedgerEntryToken(certPrinter);
         uint256 supply = printer.totalSupply();
         for (uint256 i = 0; i < supply; ++i) {
             uint256 tokenId = printer.tokenByIndex(i);
@@ -246,7 +246,7 @@ contract ShareClassTermsController is
     }
 
     function _effectiveUnits(address certPrinter, uint256 tokenId, uint256 activeUnits) private view returns (uint256) {
-        address issuanceManager = ICyberCertPrinter(certPrinter).issuanceManager();
+        address issuanceManager = ILedgerEntryToken(certPrinter).issuanceManager();
         (, uint256 scripifiedUnits,) = IIssuanceManager(issuanceManager).getCertScripifiedStatus(certPrinter, tokenId);
         return activeUnits + scripifiedUnits;
     }

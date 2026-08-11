@@ -42,13 +42,13 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "../interfaces/ICondition.sol";
-import "../interfaces/ICyberCertPrinter.sol";
+import "../interfaces/ILedgerEntryToken.sol";
 import "../interfaces/ICyberCorp.sol";
 import "../interfaces/ICyberScrip.sol";
 import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/IShareClassTermsController.sol";
 import "../interfaces/ITransferRestrictionHook.sol";
-import "./CyberCertPrinterStorage.sol";
+import "./LedgerEntryTokenStorage.sol";
 import "./extensions/ICertificateExtension.sol";
 import "openzeppelin-contracts/proxy/beacon/BeaconProxy.sol";
 import "openzeppelin-contracts/proxy/beacon/UpgradeableBeacon.sol";
@@ -139,7 +139,7 @@ library IssuanceManagerStorage {
         }
         for (uint256 i = 0; i < certAddresses.length; ++i) {
             address certAddress = certAddresses[i];
-            ICyberCertPrinter printer = ICyberCertPrinter(certAddress);
+            ILedgerEntryToken printer = ILedgerEntryToken(certAddress);
             address currentExtension = printer.getExtension(0);
             if (currentExtension != controller) {
                 (bool isController,) =
@@ -154,7 +154,7 @@ library IssuanceManagerStorage {
     }
 
     function executeAmendClassTerms(address certAddress, bytes calldata extensionData) external {
-        address controller = ICyberCertPrinter(certAddress).getExtension(0);
+        address controller = ILedgerEntryToken(certAddress).getExtension(0);
         IShareClassTermsController(controller).amendClassTerms(certAddress, extensionData);
     }
     event ScripAddedToExistingCert(
@@ -502,7 +502,7 @@ library IssuanceManagerStorage {
         bytes32 salt = keccak256(abi.encodePacked(getPrinters().length, address(this)));
         newCert = Create2.deploy(0, salt, _getBytecodeCertPrinter());
         addPrinter(newCert);
-        ICyberCertPrinter(newCert)
+        ILedgerEntryToken(newCert)
             .initialize(ledger, name, ticker, certificateUri, address(this), securityType, securitySeries, extension);
         emit CertPrinterCreated(newCert, getCORP(), ledger, name, ticker, securityType, securitySeries, certificateUri);
     }
@@ -511,7 +511,7 @@ library IssuanceManagerStorage {
         external
         returns (uint256 id)
     {
-        ICyberCertPrinter cert = ICyberCertPrinter(certAddress);
+        ILedgerEntryToken cert = ILedgerEntryToken(certAddress);
         _accountNewIssuance(certAddress, details, true);
         uint256 tokenId = cert.totalSupply();
         id = cert.safeMint(tokenId, to, details);
@@ -526,7 +526,7 @@ library IssuanceManagerStorage {
         CertificateDetails memory details
     ) external {
         _accountCertificateUpdate(certAddress, tokenId, details, true);
-        ICyberCertPrinter(certAddress).assignCert(from, tokenId, investor, details);
+        ILedgerEntryToken(certAddress).assignCert(from, tokenId, investor, details);
     }
 
     function executeCreateCertAndAssign(
@@ -537,7 +537,7 @@ library IssuanceManagerStorage {
         bytes memory endorsementSignature,
         uint256 timestamp
     ) external returns (uint256 tokenId) {
-        ICyberCertPrinter cert;
+        ILedgerEntryToken cert;
         (cert, tokenId) = _mintAssignedCert(certAddress, investor, details, investorName);
 
         Endorsement memory newEndorsement = Endorsement({
@@ -572,7 +572,7 @@ library IssuanceManagerStorage {
         bytes32 agreementId,
         string memory investorName
     ) external returns (uint256 tokenId) {
-        ICyberCertPrinter cert;
+        ILedgerEntryToken cert;
         (cert, tokenId) = _mintAssignedCert(certAddress, investor, details, investorName);
 
         Endorsement memory newEndorsement = Endorsement({
@@ -600,7 +600,7 @@ library IssuanceManagerStorage {
 
     function executeAddIssuerSignature(address certAddress, uint256 tokenId, bytes memory signature) external {
         if (signature.length == 0) revert SignatureRequired();
-        ICyberCertPrinter(certAddress).addIssuerSignature(tokenId, signature);
+        ILedgerEntryToken(certAddress).addIssuerSignature(tokenId, signature);
     }
 
     function executeEndorseCertificate(
@@ -619,33 +619,33 @@ library IssuanceManagerStorage {
             endorsee: address(0),
             endorseeName: ""
         });
-        ICyberCertPrinter(certAddress).addEndorsement(tokenId, newEndorsement);
+        ILedgerEntryToken(certAddress).addEndorsement(tokenId, newEndorsement);
     }
 
     function executeVoidCertificate(address certAddress, uint256 tokenId) external {
         _releaseCertificateUnits(certAddress, tokenId);
-        ICyberCertPrinter(certAddress).voidCert(tokenId);
+        ILedgerEntryToken(certAddress).voidCert(tokenId);
     }
 
     function executeUnvoidCertificate(address certAddress, uint256 tokenId) external {
         _restoreCertificateUnits(certAddress, tokenId);
-        ICyberCertPrinter(certAddress).unvoidCert(tokenId);
+        ILedgerEntryToken(certAddress).unvoidCert(tokenId);
     }
 
     function executeSetGlobalTransferable(address certAddress, bool transferable) external {
-        ICyberCertPrinter(certAddress).setGlobalTransferable(transferable);
+        ILedgerEntryToken(certAddress).setGlobalTransferable(transferable);
     }
 
     function executeSetRestrictionHook(address certAddress, uint256 id, address hookAddress) external {
-        ICyberCertPrinter(certAddress).setRestrictionHook(id, hookAddress);
+        ILedgerEntryToken(certAddress).setRestrictionHook(id, hookAddress);
     }
 
     function executeSetGlobalRestrictionHook(address certAddress, address hookAddress) external {
-        ICyberCertPrinter(certAddress).setGlobalRestrictionHook(hookAddress);
+        ILedgerEntryToken(certAddress).setGlobalRestrictionHook(hookAddress);
     }
 
     function executeSetTokenTransferable(address certAddress, uint256 tokenId, bool value) external {
-        ICyberCertPrinter(certAddress).setTokenTransferable(tokenId, value);
+        ILedgerEntryToken(certAddress).setTokenTransferable(tokenId, value);
     }
 
     function executeSetScripRatio(address certAddress, uint256 numerator, uint256 denominator) external {
@@ -671,19 +671,19 @@ library IssuanceManagerStorage {
     }
 
     function executeAddDefaultLegend(address certAddress, string memory newLegend) external {
-        ICyberCertPrinter(certAddress).addDefaultLegend(newLegend);
+        ILedgerEntryToken(certAddress).addDefaultLegend(newLegend);
     }
 
     function executeRemoveDefaultLegendAt(address certAddress, uint256 index) external {
-        ICyberCertPrinter(certAddress).removeDefaultLegendAt(index);
+        ILedgerEntryToken(certAddress).removeDefaultLegendAt(index);
     }
 
     function executeAddCertLegend(address certAddress, uint256 tokenId, string memory newLegend) external {
-        ICyberCertPrinter(certAddress).addCertLegend(tokenId, newLegend);
+        ILedgerEntryToken(certAddress).addCertLegend(tokenId, newLegend);
     }
 
     function executeRemoveCertLegendAt(address certAddress, uint256 tokenId, uint256 index) external {
-        ICyberCertPrinter(certAddress).removeCertLegendAt(tokenId, index);
+        ILedgerEntryToken(certAddress).removeCertLegendAt(tokenId, index);
     }
 
     function executeDeployCyberScrip(
@@ -722,8 +722,8 @@ library IssuanceManagerStorage {
                 auth,
                 certAddress,
                 address(this),
-                string(abi.encodePacked("scrip", ICyberCertPrinter(certAddress).name())),
-                string(abi.encodePacked("scrip", ICyberCertPrinter(certAddress).symbol())),
+                string(abi.encodePacked("scrip", ILedgerEntryToken(certAddress).name())),
+                string(abi.encodePacked("scrip", ILedgerEntryToken(certAddress).symbol())),
                 typeRestrictionHooks,
                 enableForceTransfer,
                 enableForceBurn,
@@ -768,7 +768,7 @@ library IssuanceManagerStorage {
             }
         }
 
-        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        ILedgerEntryToken certificate = ILedgerEntryToken(certAddress);
         if (certificate.isVoided(id)) revert CertificateVoided();
         if (certificate.legalOwnerOf(id) != account) revert NotLegalOwner();
 
@@ -830,7 +830,7 @@ library IssuanceManagerStorage {
             }
         }
 
-        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        ILedgerEntryToken certificate = ILedgerEntryToken(certAddress);
         RecertSelection memory selection = _selectRecertToken(certAddress, account);
         bool requiresApproval = !selection.foundActive;
         RecertificationApproval memory approval;
@@ -995,7 +995,7 @@ library IssuanceManagerStorage {
         view
         returns (RecertSelection memory selection)
     {
-        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        ILedgerEntryToken certificate = ILedgerEntryToken(certAddress);
         uint256 ownedBalance = certificate.balanceOf(account);
 
         for (uint256 i = 0; i < ownedBalance; i++) {
@@ -1013,9 +1013,9 @@ library IssuanceManagerStorage {
         address investor,
         CertificateDetails memory details,
         string memory investorName
-    ) internal returns (ICyberCertPrinter cert, uint256 tokenId) {
+    ) internal returns (ILedgerEntryToken cert, uint256 tokenId) {
         _requireCompanyDetailsSet();
-        cert = ICyberCertPrinter(certAddress);
+        cert = ILedgerEntryToken(certAddress);
         _accountNewIssuance(certAddress, details, true);
         tokenId = cert.totalSupply();
         cert.safeMintAndAssign(investor, tokenId, details, investorName);
@@ -1027,9 +1027,9 @@ library IssuanceManagerStorage {
         address investor,
         CertificateDetails memory details,
         string memory investorName
-    ) internal returns (ICyberCertPrinter cert, uint256 tokenId) {
+    ) internal returns (ILedgerEntryToken cert, uint256 tokenId) {
         _requireCompanyDetailsSet();
-        cert = ICyberCertPrinter(certAddress);
+        cert = ILedgerEntryToken(certAddress);
         _accountNewIssuance(certAddress, details, false);
         tokenId = cert.totalSupply();
         cert.safeMintAndAssign(investor, tokenId, details, investorName);
@@ -1037,7 +1037,7 @@ library IssuanceManagerStorage {
     }
 
     function _updateCertificateDetailsPreservingIssuedUnits(
-        ICyberCertPrinter certificate,
+        ILedgerEntryToken certificate,
         uint256 tokenId,
         CertificateDetails memory details
     ) internal {
@@ -1086,10 +1086,10 @@ library IssuanceManagerStorage {
 
     function _shareClassTermsController(address certAddress) private view returns (address extension) {
         // Older test/non-printer integrations predate the extension getter and
-        // are not share printers. A real legacy CyberCertPrinter does expose
+        // are not share printers. A real legacy LedgerEntryToken does expose
         // this getter; if its extension advertises SHARE but lacks controller
         // hooks, the subsequent lifecycle call still fails closed.
-        try ICyberCertPrinter(certAddress).getExtension(0) returns (address foundExtension) {
+        try ILedgerEntryToken(certAddress).getExtension(0) returns (address foundExtension) {
             extension = foundExtension;
         } catch {
             return address(0);
@@ -1224,7 +1224,7 @@ library IssuanceManagerStorage {
     }
 
     function _zeroAllVaultNominals(address certAddress) internal {
-        ICyberCertPrinter certificate = ICyberCertPrinter(certAddress);
+        ILedgerEntryToken certificate = ILedgerEntryToken(certAddress);
         uint256 supply = certificate.totalSupply();
         for (uint256 i = 0; i < supply; i++) {
             uint256 tokenId = certificate.tokenByIndex(i);

@@ -42,7 +42,7 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "../CyberCorpConstants.sol";
-import "../storage/CyberCertPrinterStorage.sol";
+import "../storage/LedgerEntryTokenStorage.sol";
 import "./ICondition.sol";
 import "./ICyberCorp.sol";
 import "./ITransferRestrictionHook.sol";

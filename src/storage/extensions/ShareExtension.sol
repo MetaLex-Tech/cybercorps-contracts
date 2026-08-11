@@ -248,7 +248,7 @@ contract ShareExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     }
 
     /// @notice Returns the canonical class-level portion of share extension data.
-    /// @dev CyberCertPrinter hashes `termsData` and stores it once per printer.
+    /// @dev LedgerEntryToken hashes `termsData` and stores it once per printer.
     ///      CertificateData and the variable-length rights/history arrays remain
     ///      certificate-specific and are intentionally excluded.
     function getSeriesTermsData(

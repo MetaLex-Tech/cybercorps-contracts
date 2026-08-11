@@ -51,7 +51,7 @@ import "./interfaces/ICyberCorp.sol";
 import "./interfaces/IDealManagerFactory.sol";
 import "./interfaces/IDealManager.sol";
 import "./interfaces/ICyberCorpSingleFactory.sol";
-import "./interfaces/ICyberCertPrinter.sol";
+import "./interfaces/ILedgerEntryToken.sol";
 import "./interfaces/ICyberAgreementRegistry.sol";
 import {IRoundManager as IRoundManagerInterface} from "./interfaces/IRoundManager.sol";
 import {Round, RoundType} from "./libs/RoundLib.sol";
@@ -355,7 +355,7 @@ contract CyberCorpFactory is UUPSUpgradeable, BorgAuthACL {
         certPrinterAddress = new address[](_certData.length);
 
         for (uint256 i = 0; i < _certData.length; i++) {
-            ICyberCertPrinter certPrinter = ICyberCertPrinter(
+            ILedgerEntryToken certPrinter = ILedgerEntryToken(
                 IIssuanceManager(issuanceManagerAddress).createCertPrinter(
                     _certData[i].defaultLegend,
                     string.concat(companyName, " ", _certData[i].name),
