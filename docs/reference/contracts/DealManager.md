@@ -107,9 +107,11 @@ the entry points is how much DealManager-side teardown follows.
   It reverts `DealNotVoided` while the agreement is still live, and
   `DealVoided` once the escrow is already synced.
 
-Whichever entry point a party uses, a void request that succeeds registry-side
-always tears the DealManager escrow down with it — there is no path that
-leaves certificates live against a voided agreement.
+The DealManager entry points tear the escrow down in the same call; a direct
+registry void does not touch the DealManager, so the certificates stay live
+and the escrow stays `PENDING` or `PAID` until someone calls
+`refundVoidedDeal`. What holds on every route is that the teardown is always
+reachable: no voided agreement can leave its escrow permanently stranded.
 
 ## Secondary trading
 
