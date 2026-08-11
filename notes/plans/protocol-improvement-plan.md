@@ -154,8 +154,10 @@ fields), but left the storage model per-certificate and `authorizedShares` unenf
 
 - `ShareClassTermsController`, a UUPS extension facade, stores each printer's canonical
   `SeriesTerms` bytes/hash, authorized shares, issued units, and configured flag. It delegates
-  rendering/parsing to the existing `ShareExtension`, so `CyberCertPrinter` remains at deploy
-  version 4 with no storage or beacon upgrade.
+  rendering/parsing to the existing `ShareExtension`. _(Updated at the develop merge: the
+  LedgerEntryToken implementation now carries the void/unvoid accounting hook
+  `syncClassTermsOnVoidStatus` — no storage change — and the per-corp migration syncs the
+  printer beacon to the factory's published reference in the same transaction.)_
 - `ShareExtension.getSeriesTermsData` extracts exactly `SeriesTerms`. The controller validates
   every later share mint/update against the canonical hash; `CertificateData`, restrictions,
   triggers, and split history remain certificate-specific.

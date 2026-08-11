@@ -7,8 +7,12 @@ This runbook coordinates:
 
 - **P2:** upgraded `ShareExtension` parsing, the externalized
   `ShareClassTermsController`, IssuanceManager 4.2 lifecycle enforcement,
-  canonical class terms, and authorized-share caps. `CyberCertPrinter` remains
-  version 4; there is no printer storage or beacon upgrade.
+  canonical class terms, and authorized-share caps. The LedgerEntryToken
+  implementation is updated (void/unvoid accounting hook,
+  `syncClassTermsOnVoidStatus`) with **no storage change**; the per-corp
+  migration syncs each printer beacon to the factory's published reference in
+  the same transaction, so the updated reference must be published first (see
+  global step 4).
 - **P3:** CyberAgreementRegistry 3.3 content-addressed public template creation
   plus the matching webapp ABI/call site.
 
@@ -66,7 +70,17 @@ external controller.
    `SHARE_EXTENSION_RENDERER`.
 3. Deploy and set the IssuanceManager 4.2 reference with
    `script/upgrade-issuance-manager-ref.s.sol`.
-4. Upgrade CyberAgreementRegistry to 3.3 with
+4. Deploy and publish the updated LedgerEntryToken reference implementation on
+   the IssuanceManager factory **before any per-corp migration**. The
+   void/unvoid class-terms accounting (`syncClassTermsOnVoidStatus`) exists
+   only in the updated token implementation, and the atomic migration syncs
+   each corp's printer beacon **to whatever reference the factory publishes**.
+   Migrating while the factory still points at the legacy implementation
+   leaves direct voids, unvoids, and DealManager teardown skipping the
+   controller, so `issuedUnits` goes stale on exactly the corps the migration
+   was meant to protect. Storage layout is unchanged — the update adds the
+   sync hook, no printer storage or reinitialization.
+5. Upgrade CyberAgreementRegistry to 3.3 with
    `script/upgrade-cyber-agreement-registry.s.sol` and
    `CYBER_AGREEMENT_REGISTRY`.
 
@@ -74,12 +88,12 @@ Read back and archive:
 
 - controller proxy, implementation, auth, renderer, and `SHARE` support;
 - factory reference and `IssuanceManager(ref).DEPLOY_VERSION() == "4.2"`;
+- the factory's LedgerEntryToken reference: confirm it is the updated
+  implementation (carries `syncClassTermsOnVoidStatus`) before step 4 of the
+  per-corp section runs anywhere;
 - renderer proxy state and terms-extractor behavior; and
 - registry implementation/version plus a known pre-existing template and
   agreement before and after upgrade.
-
-Do not deploy or set a CyberCertPrinter v5 reference. P2 does not change the
-printer implementation or its beacon.
 
 ## 4. Per-corp atomic upgrade and migration
 
