@@ -150,6 +150,27 @@ contract CyberCorpBoardAuthorityTest is Test {
         vm.stopPrank();
     }
 
+    function test_ManagerRotationPreservesRosterRoles() public {
+        vm.startPrank(founder);
+        // The sole director points a manager slot at themselves: granting must not demote the
+        // Board seat (BorgAuth stores one role per user, and 300 already clears the 99 gate).
+        corp.setDealManager(founder);
+        assertEq(auth.userRoles(founder), auth.BOARD_ROLE(), "sole director demoted by self-set");
+
+        // Replacing them restores the roster-derived role, not zero.
+        corp.setDealManager(address(0x601));
+        assertEq(auth.userRoles(founder), auth.BOARD_ROLE(), "director role not restored on swap");
+
+        // Same for an officer serving as a manager.
+        corp.addOfficer(_officer(officer));
+        assertEq(auth.userRoles(officer), auth.OFFICER_ROLE());
+        corp.setRoundManager(officer);
+        assertEq(auth.userRoles(officer), auth.OFFICER_ROLE(), "officer demoted while manager");
+        corp.setRoundManager(address(0x602));
+        assertEq(auth.userRoles(officer), auth.OFFICER_ROLE(), "officer role not restored");
+        vm.stopPrank();
+    }
+
     function test_StockholderAdapterCanExecuteBoardReplacement() public {
         BoardAuthorityAdapterMock adapter =
             new BoardAuthorityAdapterMock();

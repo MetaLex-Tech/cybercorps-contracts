@@ -123,7 +123,9 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     error LastOfficer();
     error LastDirector();
 
-    modifier onlyBoardAuthority() {
+    /// @dev Modifier bodies are inlined at every use site; sharing one private function keeps
+    /// this contract under the EIP-170 runtime size limit (same pattern as IssuanceManager).
+    function _requireBoardAuthority() private view {
         if (boardGovernanceEnforced) {
             AUTH.onlyRole(AUTH.BOARD_ROLE(), msg.sender);
         } else {
@@ -131,14 +133,22 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
             // enforcement by the app or plans.
             AUTH.onlyRole(AUTH.OWNER_ROLE(), msg.sender);
         }
-        _;
     }
 
-    modifier onlyEnforcedBoard() {
+    function _requireEnforcedBoard() private view {
         if (!boardGovernanceEnforced) {
             revert BoardGovernanceNotEnforced();
         }
         AUTH.onlyRole(AUTH.BOARD_ROLE(), msg.sender);
+    }
+
+    modifier onlyBoardAuthority() {
+        _requireBoardAuthority();
+        _;
+    }
+
+    modifier onlyEnforcedBoard() {
+        _requireEnforcedBoard();
         _;
     }
 
@@ -282,9 +292,20 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
             previousManager != address(0) && previousManager != issuanceManager
                 && previousManager != dealManager && previousManager != roundManager
         ) {
-            AUTH.updateRole(previousManager, 0);
+            // Restore the roster-derived role rather than zeroing: a superseded manager address
+            // that also holds a director or officer seat keeps that seat's authority.
+            AUTH.updateRole(
+                previousManager,
+                boardMembers[previousManager]
+                    ? AUTH.BOARD_ROLE()
+                    : officerMembers[previousManager] ? AUTH.OFFICER_ROLE() : 0
+            );
         }
-        if (newManager != address(0)) {
+        // Grant only when the address does not already satisfy the owner threshold. BorgAuth
+        // stores a single role per user and officers (200) / directors (300) already clear the
+        // numeric owner gate (99), so overwriting would demote a roster seat — a sole director
+        // pointing a manager slot at themselves must not lose Board authority.
+        if (newManager != address(0) && AUTH.userRoles(newManager) < AUTH.OWNER_ROLE()) {
             AUTH.updateRole(newManager, AUTH.OWNER_ROLE());
         }
     }
@@ -475,7 +496,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     function setExtension(
         address _extension,
         bytes32 _extensionType
-    ) external onlyOwner {
+    ) external onlyBoardAuthority {
         if (_extension == address(0)) {
             if (_extensionType != bytes32(0)) revert InvalidExtension();
             extension = address(0);
@@ -499,14 +520,14 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     }
 
     /// @notice Update the raw extension payload for the active CyberCorp extension
-    function setExtensionData(bytes calldata _extensionData) external onlyOwner {
+    function setExtensionData(bytes calldata _extensionData) external onlyBoardAuthority {
         if (extension == address(0)) revert ExtensionNotConfigured();
         extensionData = _extensionData;
         emit CyberCORPExtensionDataUpdated(extensionType, _extensionData);
     }
 
     /// @notice Clear the active CyberCorp extension and any stored extension data
-    function clearExtension() external onlyOwner {
+    function clearExtension() external onlyBoardAuthority {
         extension = address(0);
         extensionType = bytes32(0);
         delete extensionData;
