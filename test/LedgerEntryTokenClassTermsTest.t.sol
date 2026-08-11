@@ -164,6 +164,27 @@ contract CyberCertPrinterClassTermsTest is Test {
         assertEq(_issuedUnits(), 0);
     }
 
+    function test_AmendedTermsDoNotBlockSecondaryTransferOfOldLots() public {
+        CertificateDetails memory details = _details(_terms("Common", 10), 6);
+        _mint(0, address(0xA11CE), details);
+
+        controller.amendClassTerms(address(printer), _extensionData(_terms("Common Amended", 20)));
+
+        // Settlement decrements the seller lot, then books the buyer's replacement lot carrying
+        // the seller's PRE-AMENDMENT snapshot. accountNewIssuance would reject that snapshot;
+        // the transfer-specific entry accepts it against the seller lot and stays units-neutral.
+        details.unitsRepresented = 4;
+        controller.accountCertificateUpdate(address(printer), 0, details.extensionData, details.unitsRepresented, true);
+        printer.updateCertificateDetails(0, details);
+        controller.accountTransferMint(address(printer), 0, details.extensionData, 2);
+        assertEq(_issuedUnits(), 6, "secondary transfer is issued-units neutral");
+
+        // Terms matching neither canonical nor the seller lot's snapshot still revert.
+        vm.expectRevert(ShareClassTermsController.ClassTermsMismatch.selector);
+        CertificateDetails memory foreign = _details(_terms("Something Else", 20), 2);
+        controller.accountTransferMint(address(printer), 0, foreign.extensionData, 2);
+    }
+
     function test_AmendedTermsDoNotBrickExistingCertificates() public {
         CertificateDetails memory details = _details(_terms("Common", 10), 6);
         _mint(0, address(0xA11CE), details);

@@ -27,6 +27,9 @@ interface IShareClassTermsController {
 
     function releaseScripUnits(address certPrinter, uint256 units) external;
 
+    function accountTransferMint(address certPrinter, uint256 fromTokenId, bytes calldata extensionData, uint256 units)
+        external;
+
     function getClassTerms(address certPrinter)
         external
         view

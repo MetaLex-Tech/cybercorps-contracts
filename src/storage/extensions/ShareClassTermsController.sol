@@ -157,6 +157,27 @@ contract ShareClassTermsController is
         }
     }
 
+    /// @notice Books the buyer's replacement lot at secondary settlement.
+    /// @dev The buyer inherits the seller's terms snapshot: a transfer passes title to shares
+    ///      issued under their original terms, it is not a re-issuance under amended ones. So the
+    ///      lot's terms must match the canonical hash or the SELLER lot's current snapshot, and
+    ///      anything else is a mismatch. Units are cap-checked on increase; the seller-side
+    ///      decrement booked in the same transaction keeps the trade issued-units neutral.
+    function accountTransferMint(
+        address certPrinter,
+        uint256 fromTokenId,
+        bytes calldata extensionData,
+        uint256 units
+    ) external override {
+        _requireAuthorizedControllerCall(certPrinter);
+        ClassTermsState storage state = classTerms[certPrinter];
+        if (!state.configured) revert ClassTermsNotConfigured();
+        _validateClassTermsForUpdate(
+            state, extensionData, ILedgerEntryToken(certPrinter).getActiveCertificateDetails(fromTokenId).extensionData
+        );
+        _increaseIssuedUnits(state, units);
+    }
+
     function accountCertificateUpdate(
         address certPrinter,
         uint256 tokenId,

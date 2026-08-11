@@ -818,7 +818,12 @@ library IssuanceManagerStorage {
             legalDetails: sellerDetails.legalDetails,
             extensionData: sellerDetails.extensionData
         });
-        (, buyerTokenId) = _mintAssignedCert(certPrinter, custodian, buyer, buyerDetails, buyerName);
+        // Transfer-specific accounting: the buyer's lot carries the seller's terms snapshot, which
+        // may predate an amendment — accountTransferMint validates against that snapshot (or the
+        // canonical terms) where accountNewIssuance would reject it, and books the +units that the
+        // seller-side decrement above offsets.
+        _accountTransferMint(certPrinter, tokenId, buyerDetails.extensionData, units);
+        (, buyerTokenId) = _mintAssignedCertUnaccounted(certPrinter, custodian, buyer, buyerDetails, buyerName);
         uint256 buyerUnitsAfter = units; // absolute post-mutation balance on the buyer token, reported in the event
 
         // (d) Mirror the seller's endorsement onto the buyer's token: both tokens carry the identical
@@ -1211,9 +1216,25 @@ library IssuanceManagerStorage {
         internal
         returns (ILedgerEntryToken cert, uint256 tokenId)
     {
+        _accountNewIssuance(certAddress, details, true);
+        return _mintAssignedCertUnaccounted(certAddress, to, owner, details, ownerName);
+    }
+
+    /// @dev Mint without class-terms accounting — for the secondary-transfer path, whose
+    ///      accounting is transfer-specific (accountTransferMint validates against the seller
+    ///      lot's snapshot, since the buyer inherits pre-amendment terms).
+    function _mintAssignedCertUnaccounted(
+        address certAddress,
+        address to,
+        address owner,
+        CertificateDetails memory details,
+        string memory ownerName
+    )
+        internal
+        returns (ILedgerEntryToken cert, uint256 tokenId)
+    {
         _requireCompanyDetailsSet();
         cert = ILedgerEntryToken(certAddress);
-        _accountNewIssuance(certAddress, details, true);
         tokenId = cert.totalSupply();
         cert.safeMintAndAssign(to, owner, tokenId, details, ownerName);
         _emitCertificateCreated(tokenId, certAddress, details);
@@ -1275,6 +1296,15 @@ library IssuanceManagerStorage {
         address controller = _shareClassTermsController(certAddress);
         if (controller != address(0)) {
             IShareClassTermsController(controller).releaseScripUnits(certAddress, units);
+        }
+    }
+
+    function _accountTransferMint(address certAddress, uint256 fromTokenId, bytes memory extensionData, uint256 units)
+        private
+    {
+        address controller = _shareClassTermsController(certAddress);
+        if (controller != address(0)) {
+            IShareClassTermsController(controller).accountTransferMint(certAddress, fromTokenId, extensionData, units);
         }
     }
 
