@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {LeXcheXBadge} from "../src/creds/lexchexBadge.sol";
 import {Credential} from "../src/creds/storage/lexchexBadgeStorage.sol";
+import {ICredentialQueryHook} from "../src/interfaces/ICredentialQueryHook.sol";
 import {IERC5484} from "../src/interfaces/IERC5484.sol";
 import {
     ILexChexBadge,
@@ -52,20 +53,25 @@ import {Vm} from "forge-std/Vm.sol";
 ///
 /// What those facts mean for the §3(c)(1)(A) holder count is covered in LookThroughPolicy.t.sol.
 contract LeXcheXBadgeTest is Test {
-    bytes32 constant LABEL_LEGION = keccak256("label.legion");
-
     // Local copies of the emitted events (the indexer surface asserted by the event tests).
     event CredentialIssued(address indexed owner, uint256 indexed tokenId, Credential cred);
     event CredentialVoided(address indexed owner, uint256 indexed tokenId, string reason);
     event CredentialSwept(address indexed owner, uint256 indexed tokenId);
     event Issued(address indexed from, address indexed to, uint256 indexed tokenId, IERC5484.BurnAuth burnAuth);
 
+    // Legion's tier ids. Only the hook knows what these mean; the badge stores 32 opaque bytes.
+    bytes32 constant TIER1 = keccak256("legion.tier.1");
+    bytes32 constant TIER2 = keccak256("legion.tier.2");
+    bytes32 constant TIER3 = keccak256("legion.tier.3");
+
     address owner;
+    BorgAuth auth;
     LeXcheXBadge badge;
+    TierQueryHook tierHook; // one deployment; every tier question is a payload (see _tierHook)
 
     function setUp() public {
         owner = makeAddr("owner");
-        BorgAuth auth = new BorgAuth(owner);
+        auth = new BorgAuth(owner);
         badge = LeXcheXBadge(
             address(
                 new ERC1967Proxy(address(new LeXcheXBadge()), abi.encodeCall(LeXcheXBadge.initialize, (address(auth))))
@@ -371,46 +377,6 @@ contract LeXcheXBadgeTest is Test {
 
     // ── Existence / entitlement reads ─────────────────────────────────────────
 
-    // hasValidCredential matches the free-form issuer label verbatim. The label is never interpreted: it
-    // neither gates nor shadows the credential's fact reads.
-    function test_HasValidCredential_LabelMatch() public {
-        address holder = makeAddr("legion");
-        Credential memory c = _kyc("US", "CA");
-        c.categoryId = LABEL_LEGION;
-        _mint(holder, c);
-        assertTrue(badge.hasValidCredential(holder, LABEL_LEGION));
-        assertFalse(badge.hasValidCredential(holder, keccak256("label.other")));
-        assertFalse(badge.hasValidCredential(makeAddr("nobody2"), LABEL_LEGION));
-        assertEq(_readUsState(holder), bytes2("CA")); // facts resolve regardless of the label
-    }
-
-    // An unlabelled credential carries no label, so the empty label matches nothing — it is not a catch-all.
-    function test_HasValidCredential_UnlabelledMatchesNoLabel() public {
-        address holder = makeAddr("unlabelled");
-        _mint(holder, _kyc("US", "CA")); // categoryId left zero
-        assertFalse(badge.hasValidCredential(holder, bytes32(0)));
-        assertFalse(badge.hasValidCredential(holder, LABEL_LEGION));
-        assertTrue(badge.hasValidLexCheX(holder)); // still a valid credential, just not label-addressable
-    }
-
-    function test_HasValidCredential_DeniedWhenExpiredOrVoided() public {
-        address expired = makeAddr("exp");
-        Credential memory shortLived = _kyc("US", "CA");
-        shortLived.categoryId = LABEL_LEGION;
-        shortLived.expiryDate = uint64(block.timestamp + 1 days);
-        _mint(expired, shortLived);
-        vm.warp(block.timestamp + 2 days);
-        assertFalse(badge.hasValidCredential(expired, LABEL_LEGION));
-
-        address voided = makeAddr("vd");
-        Credential memory c = _kyc("US", "CA");
-        c.categoryId = LABEL_LEGION;
-        uint256 id = _mint(voided, c);
-        vm.prank(owner);
-        badge.void(id, "revoked");
-        assertFalse(badge.hasValidCredential(voided, LABEL_LEGION));
-    }
-
     // hasValidCredentialOf resolves a status fact-key: the asserted key admits, another is rejected.
     function test_HasValidCredentialOf_StatusKey() public {
         address holder = makeAddr("acc");
@@ -446,12 +412,19 @@ contract LeXcheXBadgeTest is Test {
         assertGt(uint256(badge.earliestValidIssuance(both, K_QP | K_QIB)), 0);
     }
 
-    function test_HasValidCredentialOf_EmptyKeyIsRejected() public {
+    // A key of nothing with no hook and no issuer list filters nothing, so it would quietly mean "holds any
+    // credential at all". That is hasValidLexCheX's job, and asking it this way is a wiring slip — rejected so
+    // a blank parameterization cannot fail open.
+    function test_HasValidCredentialOf_EmptyQueryIsRejected() public {
         address holder = makeAddr("emptyKey");
         _mint(holder, _cred(K_ACCREDITED));
         assertTrue(badge.hasValidLexCheX(holder)); // the holder does have an active badge
-        assertFalse(badge.hasValidCredentialOf(holder, 0)); // but no credential asserts nothing
-        assertEq(uint256(badge.earliestValidIssuance(holder, 0)), 0);
+
+        vm.expectRevert(ILexChexBadge.LexChexBadge_EmptyQuery.selector);
+        badge.hasValidCredentialOf(holder, 0);
+
+        vm.expectRevert(ILexChexBadge.LexChexBadge_EmptyQuery.selector);
+        badge.earliestValidIssuance(holder, 0);
     }
 
     // A status gate closes on expiry and on void, the same way a value fact does.
@@ -676,27 +649,6 @@ contract LeXcheXBadgeTest is Test {
         assertFalse(badge.hasValidCredentialOf(holder, K_BAD_ACTOR_CLEAR));
     }
 
-    // The categoryId label index is evicted in lockstep with the active set: voiding one labelled credential
-    // must leave the holder's other credential under that label findable.
-    function test_ActiveSet_LabelIndexEvictedInLockstep() public {
-        address holder = makeAddr("labelIdx");
-        Credential memory first = _kyc("US", "CA");
-        first.categoryId = LABEL_LEGION;
-        Credential memory second = _kyc("US", "NY");
-        second.categoryId = LABEL_LEGION;
-        uint256 id1 = _mint(holder, first);
-        uint256 id2 = _mint(holder, second);
-
-        vm.prank(owner);
-        badge.void(id1, "superseded"); // head of the label index; id2 swaps into its slot
-        assertTrue(badge.hasValidCredential(holder, LABEL_LEGION));
-
-        vm.prank(owner);
-        badge.void(id2, "revoked");
-        assertFalse(badge.hasValidCredential(holder, LABEL_LEGION));
-        assertEq(badge.getActiveTokenIds(holder).length, 0);
-    }
-
     // sweep evicts only what has expired, is safe to repeat, and is a no-op for an uncredentialed holder.
     function test_Sweep_EvictsOnlyExpired_AndIsIdempotent() public {
         address holder = makeAddr("sweeper");
@@ -887,9 +839,517 @@ contract LeXcheXBadgeTest is Test {
         assertEq(uint256(badge.earliestValidIssuance(holder, K_ACCREDITED)), uint256(t0));
     }
 
+    // ── Issuing authority ─────────────────────────────────────────────────────
+    // One badge can host more than one credentialing operator. Mint rights alone are not authority: each
+    // delegate is granted a set of facts it may assert, every credential records who issued it, and a reader
+    // can insist on the issuer it trusts. Without this, letting a second operator issue anything would mean
+    // trusting it for everything.
+
+    // A delegate writes only what it was granted. It holds mint rights, so nothing but the mask stops it
+    // asserting a fact that belongs to another operator.
+    function test_IssuerKeys_DelegateLimitedToGrantedKeys() public {
+        address legion = _delegateIssuer("legion", K_SYNDICATE);
+        address holder = makeAddr("member");
+
+        Credential memory seat = _cred(K_SYNDICATE);
+        seat.scope = makeAddr("spvA");
+        _mintAs(legion, holder, seat);
+        assertTrue(badge.hasValidCredentialOf(holder, K_SYNDICATE, seat.scope));
+
+        Credential memory accredited = _cred(K_ACCREDITED);
+        vm.prank(legion);
+        vm.expectRevert(
+            abi.encodeWithSelector(ILexChexBadge.LexChexBadge_KeysNotAuthorized.selector, legion, K_ACCREDITED)
+        );
+        badge.mint(holder, accredited);
+    }
+
+    function test_IssuerKeys_GrantAloneAuthorizesIssuing() public {
+        address legion = _delegateIssuer("legionNoRole", K_ACCREDITED);
+        assertEq(auth.userRoles(legion), 0, "issues with no BorgAuth role at all");
+        _mintAs(legion, makeAddr("granted"), _cred(K_ACCREDITED));
+
+        address nobody = makeAddr("ungranted");
+        Credential memory c = _cred(K_ACCREDITED);
+        address holder = makeAddr("wouldBeAccredited");
+        vm.prank(nobody);
+        vm.expectRevert(
+            abi.encodeWithSelector(ILexChexBadge.LexChexBadge_KeysNotAuthorized.selector, nobody, K_ACCREDITED)
+        );
+        badge.mint(holder, c);
+    }
+
+    // mint records the issuer; that record is what a filtered read later consults.
+    function test_Mint_RecordsIssuer() public {
+        address legion = _delegateIssuer("legionRec", K_ACCREDITED);
+        uint256 id = _mintAs(legion, makeAddr("recorded"), _cred(K_ACCREDITED));
+        assertEq(badge.getCredential(id).issuer, legion);
+    }
+
+    // Admins run the deployment, so they issue anything without a grant.
+    function test_Mint_AdminNeedsNoGrant() public {
+        address operator = makeAddr("operator");
+        vm.prank(owner);
+        auth.updateRole(operator, 98);
+
+        assertEq(badge.issuerKeys(operator), 0);
+        uint256 id = _mintAs(operator, makeAddr("byAdmin"), _cred(K_ACCREDITED));
+        assertEq(badge.getCredential(id).issuer, operator);
+    }
+
+    // A delegate revokes only its own work. Otherwise the mask would bound what it can write but not what it
+    // can destroy, and one operator could wipe another's credentials.
+    function test_Void_DelegateCannotVoidAnotherIssuersCredential() public {
+        address legion = _delegateIssuer("legionVoid", K_SYNDICATE);
+        address holder = makeAddr("crossVoid");
+        uint256 ownerIssued = _mint(holder, _cred(K_ACCREDITED));
+
+        vm.prank(legion);
+        vm.expectRevert(abi.encodeWithSignature("BorgAuth_NotAuthorized(uint256,address)", uint256(98), legion));
+        badge.void(ownerIssued, "not yours");
+        assertTrue(badge.isValid(ownerIssued));
+
+        Credential memory seat = _cred(K_SYNDICATE);
+        seat.scope = makeAddr("spvB");
+        uint256 own = _mintAs(legion, holder, seat);
+        vm.prank(legion);
+        badge.void(own, "left the circle");
+        assertFalse(badge.isValid(own));
+    }
+
+    // The owner can still void a delegate's credential — the lever for an issuer that goes rogue.
+    function test_Void_OwnerCanVoidDelegatesCredential() public {
+        address legion = _delegateIssuer("legionRogue", K_SYNDICATE);
+        Credential memory seat = _cred(K_SYNDICATE);
+        seat.scope = makeAddr("spvC");
+        uint256 id = _mintAs(legion, makeAddr("ownerVoid"), seat);
+
+        vm.prank(owner);
+        badge.void(id, "issuer compromised");
+        assertFalse(badge.isValid(id));
+    }
+
+    // A filtered read takes only the issuer it names; the unfiltered read still takes either.
+    function test_IssuerFilter_NarrowsAStatusFact() public {
+        address legion = _delegateIssuer("legionFilter", K_ACCREDITED);
+        address holder = makeAddr("filtered");
+        _mintAs(legion, holder, _cred(K_ACCREDITED));
+
+        assertTrue(badge.hasValidCredentialOf(holder, K_ACCREDITED));
+        assertTrue(badge.hasValidCredentialOf(holder, K_ACCREDITED, _issuers(legion)));
+        assertFalse(badge.hasValidCredentialOf(holder, K_ACCREDITED, _issuers(owner)));
+    }
+
+    // An entitlement answers for the SPV it names AND the operator who granted it, so one operator's seat in
+    // an SPV does not clear a gate that takes another operator's word for that same SPV.
+    function test_IssuerFilter_NarrowsAScopedSeat() public {
+        address legion = _delegateIssuer("legionScoped", K_SYNDICATE);
+        address spv = makeAddr("spvShared");
+        address holder = makeAddr("twoCircles");
+
+        Credential memory ownerSeat = _cred(K_SYNDICATE);
+        ownerSeat.scope = spv;
+        _mint(holder, ownerSeat);
+        assertTrue(badge.hasValidCredentialOf(holder, K_SYNDICATE, spv));
+        assertFalse(badge.hasValidCredentialOf(holder, K_SYNDICATE, _issuers(legion), spv, address(0), ""));
+
+        Credential memory legionSeat = _cred(K_SYNDICATE);
+        legionSeat.scope = spv;
+        _mintAs(legion, holder, legionSeat);
+        assertTrue(badge.hasValidCredentialOf(holder, K_SYNDICATE, _issuers(legion), spv, address(0), ""));
+    }
+
+    // ── Query hooks: questions the fact-key vocabulary cannot ask ─────────────
+    // The badge picks the eligible credentials (valid, in the active set) and the resolution; a caller-supplied
+    // hook decides what counts as a match. That is how `data` becomes queryable without the badge learning any
+    // issuer's schema.
+
+    // The case that broke the earlier design: Alice holds tier1 AND tier2 at the same time and both are true,
+    // so both queries must say yes. Any read that picked one credential would have thrown a true answer away.
+    function test_Hook_ConcurrentTiersBothMatch() public {
+        address legion = _delegateIssuer("legionTiers", K_SYNDICATE | K_DATA);
+        address spv = makeAddr("spvTiers");
+        address alice = makeAddr("alice");
+
+        _seat(legion, alice, spv, abi.encode(TIER1));
+        vm.warp(block.timestamp + 30 days);
+        _seat(legion, alice, spv, abi.encode(TIER2));
+
+        assertTrue(
+            badge.hasValidCredentialOf(alice, 0, new address[](0), address(0), _tierHook(), _tier(spv, legion, TIER1)),
+            "older tier still true"
+        );
+        assertTrue(
+            badge.hasValidCredentialOf(alice, 0, new address[](0), address(0), _tierHook(), _tier(spv, legion, TIER2)),
+            "newer tier true too"
+        );
+        assertFalse(
+            badge.hasValidCredentialOf(alice, 0, new address[](0), address(0), _tierHook(), _tier(spv, legion, TIER3)),
+            "a tier she was never given"
+        );
+    }
+
+    // The hook sees the whole credential, so the SPV and the issuer are part of its test — a seat in another
+    // SPV, or the same tier from a rival operator, is not a match.
+    function test_Hook_TierIsScopedAndIssuerBound() public {
+        address legion = _delegateIssuer("legionBound", K_SYNDICATE | K_DATA);
+        address rival = _delegateIssuer("rivalBound", K_SYNDICATE | K_DATA);
+        address spv = makeAddr("spvBound");
+        address holder = makeAddr("boundHolder");
+
+        _seat(legion, holder, makeAddr("otherSpv"), abi.encode(TIER2)); // right tier, wrong SPV
+        _seat(rival, holder, spv, abi.encode(TIER2)); // right tier and SPV, wrong issuer
+
+        assertFalse(badge.hasValidCredentialOf(holder, 0, new address[](0), address(0), _tierHook(), _tier(spv, legion, TIER2)));
+        assertTrue(
+            badge.hasValidCredentialOf(holder, 0, new address[](0), address(0), _tierHook(), _tier(spv, rival, TIER2)),
+            "it is the rival's tier"
+        );
+    }
+
+    // Validity stays the badge's decision: a voided credential never reaches the hook, so even a hook that
+    // accepts everything cannot resurrect it.
+    function test_Hook_NeverSeesVoidedOrExpired() public {
+        address legion = _delegateIssuer("legionVoided", K_SYNDICATE | K_DATA);
+        address spv = makeAddr("spvVoided");
+        address holder = makeAddr("revoked");
+        uint256 id = _seat(legion, holder, spv, abi.encode(TIER1));
+
+        address anything = address(new AlwaysMatchHook());
+        assertTrue(badge.hasValidCredentialOf(holder, 0, new address[](0), address(0), anything, ""));
+
+        vm.prank(legion);
+        badge.void(id, "left the circle");
+        assertFalse(
+            badge.hasValidCredentialOf(holder, 0, new address[](0), address(0), anything, ""),
+            "voided is not eligible, whatever the hook says"
+        );
+    }
+
+    // The two resolutions answer differently on the same data, on purpose. Membership wants every match;
+    // recency wants the one that supersedes.
+    function test_Hook_AnyMatchVersusMostRecent() public {
+        address legion = _delegateIssuer("legionBoth", K_SYNDICATE | K_DATA);
+        address spv = makeAddr("spvBoth");
+        address holder = makeAddr("bothWays");
+
+        uint256 older = _seat(legion, holder, spv, abi.encode(TIER1));
+        vm.warp(block.timestamp + 30 days);
+        uint256 newer = _seat(legion, holder, spv, abi.encode(TIER2));
+
+        address anySeat = address(new AlwaysMatchHook());
+        (uint256 id, bool found) = badge.getMostRecentValidWith(holder, 0, new address[](0), address(0), anySeat, "");
+        assertTrue(found);
+        assertEq(id, newer, "recency picks the latest");
+        assertTrue(
+            badge.hasValidCredentialOf(holder, 0, new address[](0), address(0), _tierHook(), _tier(spv, legion, TIER1)),
+            "which the older one still is"
+        );
+        assertTrue(badge.isValid(older));
+    }
+
+    // The fact-key resolution, exposed. Same answer the value getters resolve to, so a caller can reach the
+    // credential instead of just the field.
+    function test_GetMostRecentValidWith_MatchesTheValueGetter() public {
+        address holder = makeAddr("relocating");
+        _mint(holder, _kyc("US", "NY"));
+        vm.warp(block.timestamp + 30 days);
+        uint256 tx_ = _mint(holder, _kyc("US", "TX"));
+
+        (uint256 id, bool found) = badge.getMostRecentValidWith(holder, K_US_STATE);
+        assertTrue(found);
+        assertEq(id, tx_);
+        assertEq(_readUsState(holder), bytes2("TX"));
+    }
+
+    // Either filter on its own is a real question; neither is a wiring slip. A hook with no key is the whole
+    // point of the hook, so it must not be caught by the empty-query guard.
+    function test_Hook_AloneIsAValidQueryButNeitherIsNot() public {
+        address legion = _delegateIssuer("legionAlone", K_SYNDICATE | K_DATA);
+        address spv = makeAddr("spvAlone");
+        address holder = makeAddr("hookOnly");
+        _seat(legion, holder, spv, abi.encode(TIER1));
+
+        assertTrue(
+            badge.hasValidCredentialOf(holder, 0, new address[](0), address(0), _tierHook(), _tier(spv, legion, TIER1)),
+            "key 0 + hook is fine"
+        );
+        assertTrue(badge.hasValidCredentialOf(holder, K_SYNDICATE), "key alone is fine");
+
+        vm.expectRevert(ILexChexBadge.LexChexBadge_EmptyQuery.selector);
+        badge.hasValidCredentialOf(holder, 0, new address[](0), address(0), address(0), "");
+
+        vm.expectRevert(ILexChexBadge.LexChexBadge_EmptyQuery.selector);
+        badge.getMostRecentValidWith(holder, 0, new address[](0), address(0), address(0), "");
+    }
+
+    // Seasoning asked the same way membership is: how long has she been tier1, not how long she has been in
+    // the circle. The later tier2 seat is a different fact and must not move the tier1 clock.
+    function test_Hook_SeasoningIsPerTier() public {
+        address legion = _delegateIssuer("legionSeason", K_SYNDICATE | K_DATA);
+        address spv = makeAddr("spvSeason");
+        address alice = makeAddr("aliceSeason");
+
+        uint256 seat1 = _seat(legion, alice, spv, abi.encode(TIER1));
+        vm.warp(block.timestamp + 90 days);
+        uint256 seat2 = _seat(legion, alice, spv, abi.encode(TIER2));
+
+        // Read the dates off the credentials rather than the test's own clock, which vm.warp does not move.
+        uint256 tier1At = uint256(badge.getCredential(seat1).issuanceDate);
+        uint256 tier2At = uint256(badge.getCredential(seat2).issuanceDate);
+        assertGt(tier2At, tier1At, "the second seat is the later one");
+
+        assertEq(
+            uint256(badge.earliestValidIssuance(alice, 0, new address[](0), address(0), _tierHook(), _tier(spv, legion, TIER1))),
+            tier1At,
+            "tier1"
+        );
+        assertEq(
+            uint256(badge.earliestValidIssuance(alice, 0, new address[](0), address(0), _tierHook(), _tier(spv, legion, TIER2))),
+            tier2At,
+            "tier2"
+        );
+        // Without the hook the question is just "in the circle", which she has been since the first seat.
+        assertEq(uint256(badge.earliestValidIssuance(alice, K_SYNDICATE)), tier1At, "circle since tier1");
+        assertEq(
+            uint256(badge.earliestValidIssuance(alice, 0, new address[](0), address(0), _tierHook(), _tier(spv, legion, TIER3))),
+            0,
+            "never held"
+        );
+    }
+
+    // All four filters on one call, which is the point of the combined form: the right fact, from the right
+    // operator, for the right SPV, at the right tier. Dropping any one of them lets a near-miss through.
+    function test_AllFiltersCompose() public {
+        address legion = _delegateIssuer("legionAll", K_SYNDICATE | K_DATA);
+        address rival = _delegateIssuer("rivalAll", K_SYNDICATE | K_DATA);
+        address spv = makeAddr("spvAll");
+        address other = makeAddr("spvOther");
+        address holder = makeAddr("nearMisses");
+
+        _seat(rival, holder, spv, abi.encode(TIER2)); // wrong issuer
+        _seat(legion, holder, other, abi.encode(TIER2)); // wrong SPV
+        _seat(legion, holder, spv, abi.encode(TIER1)); // wrong tier
+        assertFalse(
+            badge.hasValidCredentialOf(holder, K_SYNDICATE, _issuers(legion), spv, _tierHook(), _tier(spv, legion, TIER2)),
+            "three near misses, no match"
+        );
+
+        _seat(legion, holder, spv, abi.encode(TIER2)); // all four line up
+        assertTrue(
+            badge.hasValidCredentialOf(holder, K_SYNDICATE, _issuers(legion), spv, _tierHook(), _tier(spv, legion, TIER2))
+        );
+    }
+
+    // The two filters compose: the key narrows to credentials carrying the fact, the hook to those its schema
+    // accepts, and a credential has to clear both.
+    function test_Hook_KeyAndHookBothApply() public {
+        address legion = _delegateIssuer("legionBoth2", K_SYNDICATE | K_DATA | K_ACCREDITED);
+        address spv = makeAddr("spvCompose");
+        address holder = makeAddr("composed");
+        _seat(legion, holder, spv, abi.encode(TIER1));
+
+        bytes memory tier1 = _tier(spv, legion, TIER1);
+        assertTrue(badge.hasValidCredentialOf(holder, K_SYNDICATE, new address[](0), address(0), _tierHook(), tier1));
+        // The seat clears the hook but does not carry K_ACCREDITED, and no other credential does either.
+        assertFalse(badge.hasValidCredentialOf(holder, K_ACCREDITED, new address[](0), address(0), _tierHook(), tier1));
+    }
+
+    // A multi-bit scoped ask needs every bit covered, and the credentials scoped to that SPV add up to cover
+    // them. One seat alone does not answer for both.
+    function test_ScopedFilter_MultiKeyAddsUpWithinOneSpv() public {
+        address spv = makeAddr("spvMultiKey");
+        address holder = makeAddr("bothSeats");
+        uint256 both = K_SPV_WHITELIST | K_SYNDICATE;
+
+        _mint(holder, _scoped(K_SPV_WHITELIST, spv));
+        assertFalse(badge.hasValidCredentialOf(holder, both, spv), "whitelist alone does not cover both");
+
+        _mint(holder, _scoped(K_SYNDICATE, spv));
+        assertTrue(badge.hasValidCredentialOf(holder, both, spv), "the two seats together do");
+    }
+
+    // Keys only add up within the scope asked for: a seat in another SPV contributes nothing.
+    function test_ScopedFilter_MultiKeyDoesNotAddUpAcrossSpvs() public {
+        address spvA = makeAddr("spvSplitA");
+        address spvB = makeAddr("spvSplitB");
+        address holder = makeAddr("splitSeats");
+
+        _mint(holder, _scoped(K_SPV_WHITELIST, spvA));
+        _mint(holder, _scoped(K_SYNDICATE, spvB));
+        assertFalse(badge.hasValidCredentialOf(holder, K_SPV_WHITELIST | K_SYNDICATE, spvA));
+        assertFalse(badge.hasValidCredentialOf(holder, K_SPV_WHITELIST | K_SYNDICATE, spvB));
+    }
+
+    // The recency read takes the issuer filter too: the newest credential overall is skipped when a rival
+    // issued it.
+    function test_GetMostRecentValidWith_RespectsIssuerFilter() public {
+        address legion = _delegateIssuer("legionRecent", K_ACCREDITED);
+        address rival = _delegateIssuer("rivalRecent", K_ACCREDITED);
+        address holder = makeAddr("recentFiltered");
+
+        uint256 legionId = _mintAs(legion, holder, _cred(K_ACCREDITED));
+        vm.warp(block.timestamp + 30 days);
+        uint256 rivalId = _mintAs(rival, holder, _cred(K_ACCREDITED));
+
+        (uint256 anyIssuer,) = badge.getMostRecentValidWith(holder, K_ACCREDITED);
+        assertEq(anyIssuer, rivalId, "newest overall");
+        (uint256 fromLegion, bool found) = badge.getMostRecentValidWith(holder, K_ACCREDITED, _issuers(legion));
+        assertTrue(found);
+        assertEq(fromLegion, legionId, "newest of Legion's");
+    }
+
+    // And the scope filter: the newest seat in another SPV does not answer for this one.
+    function test_GetMostRecentValidWith_RespectsScopeFilter() public {
+        address spvA = makeAddr("spvRecentA");
+        address spvB = makeAddr("spvRecentB");
+        address holder = makeAddr("recentScoped");
+
+        uint256 seatA = _mint(holder, _scoped(K_SYNDICATE, spvA));
+        vm.warp(block.timestamp + 30 days);
+        _mint(holder, _scoped(K_SYNDICATE, spvB));
+
+        (uint256 id, bool found) = badge.getMostRecentValidWith(holder, K_SYNDICATE, spvA);
+        assertTrue(found);
+        assertEq(id, seatA);
+    }
+
+    // Seasoning takes the same filters: how long in THIS SPV's circle, on THIS issuer's word.
+    function test_EarliestValidIssuance_RespectsIssuerAndScope() public {
+        address legion = _delegateIssuer("legionSeason2", K_SYNDICATE);
+        address spvA = makeAddr("spvSeasonA");
+        address spvB = makeAddr("spvSeasonB");
+        address holder = makeAddr("seasonFiltered");
+
+        Credential memory early = _scoped(K_SYNDICATE, spvB); // earlier, but another SPV
+        uint256 earlyId = _mintAs(legion, holder, early);
+        vm.warp(block.timestamp + 60 days);
+        uint256 lateId = _mintAs(legion, holder, _scoped(K_SYNDICATE, spvA));
+
+        uint256 earlyAt = uint256(badge.getCredential(earlyId).issuanceDate);
+        uint256 lateAt = uint256(badge.getCredential(lateId).issuanceDate);
+        assertGt(lateAt, earlyAt);
+
+        assertEq(uint256(badge.earliestValidIssuance(holder, K_SYNDICATE)), earlyAt, "unfiltered takes the earliest");
+        assertEq(
+            uint256(badge.earliestValidIssuance(holder, K_SYNDICATE, new address[](0), spvA, address(0), "")),
+            lateAt,
+            "spvA's circle started later"
+        );
+        assertEq(
+            uint256(
+                badge.earliestValidIssuance(holder, K_SYNDICATE, _issuers(makeAddr("nobody")), address(0), address(0), "")
+            ),
+            0,
+            "no seat from that issuer"
+        );
+    }
+
+    // An expired credential is out of the query before the hook runs, the same as a voided one.
+    function test_Hook_NeverSeesExpired() public {
+        address legion = _delegateIssuer("legionExpiring", K_SYNDICATE | K_DATA);
+        address spv = makeAddr("spvExpiring");
+        address holder = makeAddr("lapsed");
+
+        Credential memory c = _cred(K_SYNDICATE | K_DATA);
+        c.scope = spv;
+        c.data = abi.encode(TIER1);
+        c.expiryDate = uint64(block.timestamp + 1 days);
+        _mintAs(legion, holder, c);
+
+        address anything = address(new AlwaysMatchHook());
+        assertTrue(badge.hasValidCredentialOf(holder, 0, new address[](0), address(0), anything, ""));
+
+        vm.warp(block.timestamp + 2 days);
+        assertFalse(badge.hasValidCredentialOf(holder, 0, new address[](0), address(0), anything, ""));
+    }
+
+    // The badge hands the hook the holder, the token id, that token's record, and the caller's payload
+    // verbatim — the payload is what the hook is told, so it has to arrive byte for byte.
+    function test_Hook_ReceivesOwnerTokenIdCredentialAndPayload() public {
+        address legion = _delegateIssuer("legionArgs", K_SYNDICATE | K_DATA);
+        address spv = makeAddr("spvArgs");
+        address holder = makeAddr("argsHolder");
+        uint256 id = _seat(legion, holder, spv, abi.encode(TIER1));
+
+        address checker = address(new ArgCheckHook());
+        bytes memory right = abi.encode(holder, id, "carried through untouched");
+        assertTrue(badge.hasValidCredentialOf(holder, 0, new address[](0), address(0), checker, right));
+
+        bytes memory wrongToken = abi.encode(holder, id + 1, "carried through untouched");
+        assertFalse(badge.hasValidCredentialOf(holder, 0, new address[](0), address(0), checker, wrongToken));
+
+        bytes memory wrongNote = abi.encode(holder, id, "mangled");
+        assertFalse(badge.hasValidCredentialOf(holder, 0, new address[](0), address(0), checker, wrongNote));
+    }
+
+    // The hook is code the caller chose, so its revert is the caller's problem: the read reverts with it
+    // rather than reading false.
+    function test_Hook_RevertPropagates() public {
+        address legion = _delegateIssuer("legionReverting", K_SYNDICATE | K_DATA);
+        address spv = makeAddr("spvReverting");
+        address holder = makeAddr("revertHolder");
+        _seat(legion, holder, spv, abi.encode(TIER1));
+
+        address boom = address(new RevertingHook());
+        vm.expectRevert(RevertingHook.HookFailed.selector);
+        badge.hasValidCredentialOf(holder, 0, new address[](0), address(0), boom, "");
+    }
+
+    // An empty list accepts any issuer, so a caller that does not care reads exactly as before.
+    function test_IssuerFilter_EmptyListAcceptsAnyIssuer() public {
+        address legion = _delegateIssuer("legionAny", K_ACCREDITED);
+        address holder = makeAddr("anyIssuer");
+        _mintAs(legion, holder, _cred(K_ACCREDITED));
+        assertTrue(badge.hasValidCredentialOf(holder, K_ACCREDITED, new address[](0)));
+    }
+
+    // Admins hand out authority — they already assert everything themselves, so delegating gives away nothing
+    // they lack. A delegate holds no role, so it cannot pass its own grant on to anyone else.
+    function test_SetIssuerKeys_AdminGrantsButDelegateCannotReDelegate() public {
+        address operator = makeAddr("operatorGrant");
+        vm.prank(owner);
+        auth.updateRole(operator, 98);
+
+        address legion = makeAddr("legionGrantee");
+        vm.prank(operator);
+        badge.setIssuerKeys(legion, K_SYNDICATE);
+        assertEq(badge.issuerKeys(legion), K_SYNDICATE);
+
+        address downstream = makeAddr("downstream");
+        vm.prank(legion);
+        vm.expectRevert(abi.encodeWithSignature("BorgAuth_NotAuthorized(uint256,address)", uint256(98), legion));
+        badge.setIssuerKeys(downstream, K_SYNDICATE);
+    }
+
+    // A grant is not tied to the admin that made it: revoking that admin leaves the delegate issuing, so
+    // offboarding an admin means clearing what it delegated too.
+    function test_SetIssuerKeys_GrantOutlivesTheGrantingAdmin() public {
+        address operator = makeAddr("operatorLeaving");
+        vm.prank(owner);
+        auth.updateRole(operator, 98);
+        vm.prank(operator);
+        badge.setIssuerKeys(makeAddr("legionSurvivor"), K_ACCREDITED);
+
+        vm.prank(owner);
+        auth.updateRole(operator, 0); // admin offboarded
+
+        address legion = makeAddr("legionSurvivor");
+        assertEq(badge.issuerKeys(legion), K_ACCREDITED, "the grant did not lapse with its granter");
+        _mintAs(legion, makeAddr("stillCredentialed"), _cred(K_ACCREDITED));
+    }
+
+    // An undefined bit is a wiring slip, not a new fact to grant.
+    function test_SetIssuerKeys_RejectsUnknownBits() public {
+        vm.prank(owner);
+        vm.expectRevert(ILexChexBadge.LexChexBadge_BadAsserts.selector);
+        badge.setIssuerKeys(makeAddr("badGrant"), 1 << 60);
+    }
+
     // ── Mint validation & lifecycle ───────────────────────────────────────────
 
-    function test_Mint_OnlyAdmin() public {
+    // Issuing is gated on the grant, so a caller with neither grant nor role gets nowhere.
+    function test_Mint_UngrantedCallerRejected() public {
         vm.prank(makeAddr("stranger"));
         vm.expectRevert();
         badge.mint(makeAddr("to"), _kyc("US", "CA"));
@@ -1010,7 +1470,6 @@ contract LeXcheXBadgeTest is Test {
         c.beneficialOwnerCount = 9;
         c.data = abi.encode("payload");
         c.scope = makeAddr("spvFrozen");
-        c.categoryId = LABEL_LEGION;
         c.agreementId = keccak256("agreement");
         c.evidenceHash = keccak256("evidence");
         uint256 id = _mint(holder, c);
@@ -1030,7 +1489,7 @@ contract LeXcheXBadgeTest is Test {
         assertEq(uint256(afterVoid.beneficialOwnerCount), uint256(beforeVoid.beneficialOwnerCount));
         assertEq(afterVoid.data, beforeVoid.data);
         assertEq(afterVoid.scope, beforeVoid.scope);
-        assertEq(afterVoid.categoryId, beforeVoid.categoryId);
+        assertEq(afterVoid.issuer, beforeVoid.issuer);
         assertEq(afterVoid.agreementId, beforeVoid.agreementId);
         assertEq(afterVoid.evidenceHash, beforeVoid.evidenceHash);
         assertEq(uint256(afterVoid.issuanceDate), uint256(beforeVoid.issuanceDate));
@@ -1118,7 +1577,9 @@ contract LeXcheXBadgeTest is Test {
         address holder = makeAddr("mintEvent");
         Credential memory c = _kyc("US", "CA");
         uint256 expectedId = badge.totalSupply();
-        c.issuanceDate = uint64(block.timestamp); // stamped by mint; mirrored here for the record comparison
+        // stamped by mint; mirrored here for the record comparison
+        c.issuanceDate = uint64(block.timestamp);
+        c.issuer = owner;
 
         vm.expectEmit(true, true, false, true, address(badge));
         emit CredentialIssued(holder, expectedId, c);
@@ -1355,6 +1816,49 @@ contract LeXcheXBadgeTest is Test {
         return badge.mint(to, c);
     }
 
+    /// @dev A second operator on the same badge. The grant is all it gets — deliberately no BorgAuth role, so
+    /// these tests also pin that issuing needs none.
+    function _delegateIssuer(string memory name, uint256 keys) internal returns (address issuer) {
+        issuer = makeAddr(name);
+        vm.prank(owner);
+        badge.setIssuerKeys(issuer, keys);
+    }
+
+    function _mintAs(address issuer, address to, Credential memory c) internal returns (uint256) {
+        vm.prank(issuer);
+        return badge.mint(to, c);
+    }
+
+    /// @dev The one tier hook every query in this suite goes through; the question travels in the payload.
+    function _tierHook() internal returns (address) {
+        if (address(tierHook) == address(0)) tierHook = new TierQueryHook();
+        return address(tierHook);
+    }
+
+    /// @dev The question `_tierHook` answers: whose seats, in which SPV, at which tier.
+    function _tier(address spv, address issuer, bytes32 tierId) internal pure returns (bytes memory) {
+        return abi.encode(spv, issuer, tierId);
+    }
+
+    /// @dev A scoped entitlement naming `spv`.
+    function _scoped(uint256 scopeKey, address spv) internal view returns (Credential memory c) {
+        c = _cred(scopeKey);
+        c.scope = spv;
+    }
+
+    /// @dev A seat in `issuer`'s circle for `spv`, carrying `tier` as its programmable payload.
+    function _seat(address issuer, address holder, address spv, bytes memory tier) internal returns (uint256) {
+        Credential memory c = _cred(K_SYNDICATE | K_DATA);
+        c.scope = spv;
+        c.data = tier;
+        return _mintAs(issuer, holder, c);
+    }
+
+    function _issuers(address a) internal pure returns (address[] memory out) {
+        out = new address[](1);
+        out[0] = a;
+    }
+
     /// @dev Asserts `key` alone, leaving every value field empty, and expects the mint to be rejected.
     function _expectMissingValue(uint256 key) internal {
         address to = makeAddr("missingValue");
@@ -1371,6 +1875,54 @@ contract LeXcheXBadgeTest is Test {
         vm.prank(owner);
         vm.expectRevert(ILexChexBadge.LexChexBadge_MissingScope.selector);
         badge.mint(to, c);
+    }
+}
+
+/// @notice Legion's tier schema, which lives here rather than in the badge: `Credential.data` is
+/// abi.encode(bytes32 tierId). The hook owns the encoding, so the badge never learns what a tier is.
+contract TierQueryHook is ICredentialQueryHook {
+    function matchesCredential(address, uint256, Credential calldata cred, bytes calldata hookData)
+        external
+        pure
+        returns (bool)
+    {
+        (address spv, address issuer, bytes32 tierId) = abi.decode(hookData, (address, address, bytes32));
+        if ((cred.asserts & K_SYNDICATE) == 0 || cred.scope != spv || cred.issuer != issuer) return false;
+        // The badge does not validate the payload's shape, so a malformed blob must read as "no match" rather
+        // than revert the whole query.
+        if (cred.data.length != 32) return false;
+        return abi.decode(cred.data, (bytes32)) == tierId;
+    }
+}
+
+/// @notice Accepts every credential it is shown, so a test can tell what the BADGE filtered out before the
+/// hook ever ran.
+contract AlwaysMatchHook is ICredentialQueryHook {
+    function matchesCredential(address, uint256, Credential calldata, bytes calldata) external pure returns (bool) {
+        return true;
+    }
+}
+
+/// @notice Matches only if holder, token id and payload all arrived intact.
+contract ArgCheckHook is ICredentialQueryHook {
+    function matchesCredential(address owner, uint256 tokenId, Credential calldata cred, bytes calldata hookData)
+        external
+        pure
+        returns (bool)
+    {
+        (address expectedOwner, uint256 expectedTokenId, string memory note) =
+            abi.decode(hookData, (address, uint256, string));
+        return owner == expectedOwner && tokenId == expectedTokenId && cred.issuanceDate != 0
+            && keccak256(bytes(note)) == keccak256("carried through untouched");
+    }
+}
+
+/// @notice A hook that fails, standing in for one that is buggy or hostile.
+contract RevertingHook is ICredentialQueryHook {
+    error HookFailed();
+
+    function matchesCredential(address, uint256, Credential calldata, bytes calldata) external pure returns (bool) {
+        revert HookFailed();
     }
 }
 
@@ -1428,3 +1980,4 @@ contract LeXcheXBadgeSweepGasTest is Test {
         assertEq(badge.getActiveTokenIds(holder).length, before - batch.length); // and its progress persisted
     }
 }
+

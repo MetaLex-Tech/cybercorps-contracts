@@ -90,9 +90,6 @@ contract LeXcheXBadgeIndexerTest is Test {
     // Chain fixtures
     // ─────────────────────────────────────────────────────────────────────────
 
-    bytes32 constant LABEL_LEGION = keccak256("label.legion");
-    bytes32 constant LABEL_TIER2 = keccak256("label.tier2");
-
     address owner;
     address alice;
     address bob;
@@ -100,11 +97,10 @@ contract LeXcheXBadgeIndexerTest is Test {
     address spvB;
     LeXcheXBadge badge;
 
-    // What every holder assertion probes: each fact-key on its own, each SPV, each label. Kept at contract
-    // level so the assertion helpers stay single-argument.
+    // What every holder assertion probes: each fact-key on its own, and each SPV. Kept at contract level so
+    // the assertion helpers stay single-argument.
     uint256[] internal probeKeys;
     address[] internal probeSpvs;
-    bytes32[] internal probeLabels;
 
     function setUp() public {
         owner = makeAddr("owner");
@@ -139,9 +135,6 @@ contract LeXcheXBadgeIndexerTest is Test {
             K_ACCREDITED | K_QP
         ];
         probeSpvs = [spvA, spvB];
-        // bytes32(0) is probed on purpose: an unlabelled credential is not in the on-chain label index, so no
-        // label read may answer for it.
-        probeLabels = [LABEL_LEGION, LABEL_TIER2, bytes32(0)];
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -155,14 +148,13 @@ contract LeXcheXBadgeIndexerTest is Test {
         c.evidenceHash = keccak256(abi.encodePacked("evidence", asserts, block.timestamp));
     }
 
-    /// @dev Individual with a physical jurisdiction and U.S. state, under an issuer label.
-    function _kyc(string memory jurisdiction, bytes2 state, bytes32 label) internal view returns (Credential memory c) {
+    /// @dev Individual with a physical jurisdiction and U.S. state.
+    function _kyc(string memory jurisdiction, bytes2 state) internal view returns (Credential memory c) {
         c = _cred(K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_US_STATE);
         c.investorType = InvestorType.INDIVIDUAL;
         c.investorName = "Alice Individual";
         c.investorJurisdiction = jurisdiction;
         c.usState = state;
-        c.categoryId = label;
     }
 
     /// @dev Entity feeder: physical domicile and §3(c)(1)(A) look-through classification kept separate.
@@ -342,17 +334,6 @@ contract LeXcheXBadgeIndexerTest is Test {
         return false;
     }
 
-    /// @dev The zero label is not written to the on-chain label index, so an unlabelled credential is never
-    /// findable by label. Mirrored here, or the indexer would answer for records the chain cannot see.
-    function _idxHasValidCredential(address holder, bytes32 label) internal view returns (bool) {
-        if (label == bytes32(0)) return false;
-        uint256[] storage ids = idxHolderTokens[holder];
-        for (uint256 i = 0; i < ids.length; i++) {
-            if (idxCreds[ids[i]].cred.categoryId == label && _idxIsValid(ids[i])) return true;
-        }
-        return false;
-    }
-
     function _idxInvestorType(address holder) internal view returns (InvestorType) {
         (uint256 tokenId, bool found) = _idxMostRecentValidWith(holder, K_INVESTOR_TYPE);
         return found ? idxCreds[tokenId].cred.investorType : InvestorType.UNSET;
@@ -437,7 +418,7 @@ contract LeXcheXBadgeIndexerTest is Test {
         Credential memory c = badge.getCredential(tokenId);
         assertTrue(i.exists, "credential reconstructed from logs");
         assertEq(i.cred.asserts, c.asserts, "asserts");
-        assertEq(i.cred.categoryId, c.categoryId, "categoryId");
+        assertEq(i.cred.issuer, c.issuer, "issuer");
         assertEq(i.cred.investorName, c.investorName, "investorName");
         assertEq(i.cred.investorJurisdiction, c.investorJurisdiction, "investorJurisdiction");
         assertEq(i.cred.lookThroughJurisdiction, c.lookThroughJurisdiction, "lookThroughJurisdiction");
@@ -502,13 +483,6 @@ contract LeXcheXBadgeIndexerTest is Test {
                 "hasValidSyndicateFor"
             );
         }
-        for (uint256 i = 0; i < probeLabels.length; i++) {
-            bytes32 label = probeLabels[i];
-            assertEq(
-                _idxHasValidCredential(holder, label), badge.hasValidCredential(holder, label), "hasValidCredential"
-            );
-        }
-
         // ERC-721 enumeration is the full audit record: every credential ever issued to the holder, in mint
         // order, voided and expired ones included.
         uint256[] memory chainTokens = badge.getTokenIdsByOwner(holder);
@@ -573,10 +547,8 @@ contract LeXcheXBadgeIndexerTest is Test {
         vm.recordLogs();
 
         // Alice: a person, KYC'd, lives in NY. Plus a second badge saying she's accredited.
-        uint256 aliceNy = _mint(alice, _kyc("US", "NY", LABEL_LEGION));
-        Credential memory accredited = _cred(K_ACCREDITED);
-        accredited.categoryId = LABEL_TIER2;
-        _mint(alice, accredited);
+        uint256 aliceNy = _mint(alice, _kyc("US", "NY"));
+        _mint(alice, _cred(K_ACCREDITED));
 
         // Bob: a company registered offshore that still counts as U.S. for fund-size rules. Plus access to
         // spvA, a blob of data the badge just carries around, and a QP badge that expires in 10 days.
@@ -590,7 +562,7 @@ contract LeXcheXBadgeIndexerTest is Test {
         vm.warp(block.timestamp + 30 days);
         // Alice moves to TX. supersede kills the NY badge and mints the TX one in one go.
         vm.prank(owner);
-        uint256 aliceTx = badge.supersede(aliceNy, _kyc("US", "TX", LABEL_LEGION), "relocated to TX");
+        uint256 aliceTx = badge.supersede(aliceNy, _kyc("US", "TX"), "relocated to TX");
         // Bob's access to spvA is pulled.
         vm.prank(owner);
         badge.void(bobWhitelist, "delisted");
@@ -606,7 +578,7 @@ contract LeXcheXBadgeIndexerTest is Test {
         assertEq(bytes32(_idxUsState(alice)), bytes32(bytes2("TX")), "she reads as TX now, not NY");
         assertEq(idxCreds[aliceNy].cred.voided, "relocated to TX", "the dead badge is kept, with its reason");
         assertEq(idxCreds[aliceTx].cred.investorName, "Alice Individual", "her name came through in the log");
-        assertTrue(_idxHasValidCredential(alice, LABEL_TIER2), "her other badge still works");
+        assertTrue(_idxHasValidCredentialOf(alice, K_ACCREDITED), "her other badge still works");
 
         assertEq(_idxLookThroughJurisdiction(bob), "US", "counts as U.S. for fund-size rules");
         assertEq(_idxInvestorJurisdiction(bob), "KY", "but is still registered offshore");
@@ -633,7 +605,7 @@ contract LeXcheXBadgeIndexerTest is Test {
 
         vm.warp(block.timestamp + 1 days);
         // A day later: new badge, moved to CA. It says nothing about the fund-size classification.
-        _mint(alice, _kyc("KY", "CA", LABEL_LEGION));
+        _mint(alice, _kyc("KY", "CA"));
         // Two more in the same block as that one, so all three are the same age.
         uint256 tieLoser = _mint(alice, _jurisdictionOnly("FR"));
         uint256 tieWinner = _mint(alice, _jurisdictionOnly("DE"));
@@ -679,7 +651,7 @@ contract LeXcheXBadgeIndexerTest is Test {
     function test_Indexer_Expiry_ReDerivedWithoutAnyEvent() public {
         vm.recordLogs();
         _mint(alice, _expiring(K_ACCREDITED, 10 days));
-        _mint(alice, _kyc("US", "CA", LABEL_LEGION));
+        _mint(alice, _kyc("US", "CA"));
         _index(vm.getRecordedLogs());
 
         _assertRegistryReconstructed();
@@ -704,7 +676,7 @@ contract LeXcheXBadgeIndexerTest is Test {
     function test_Indexer_Sweep_LogsEachDropAndChangesNoAnswer() public {
         vm.recordLogs();
         uint256 lapsing = _mint(alice, _expiring(K_ACCREDITED, 10 days));
-        _mint(alice, _kyc("US", "CA", LABEL_LEGION));
+        _mint(alice, _kyc("US", "CA"));
         _index(vm.getRecordedLogs());
 
         vm.warp(block.timestamp + 11 days);
@@ -771,10 +743,10 @@ contract LeXcheXBadgeIndexerTest is Test {
     // one mint per badge, never a transfer to someone else, and cancelled badges still in the holder's list.
     function test_Indexer_AppendOnlyRegistry_FromLogsAlone() public {
         vm.recordLogs();
-        uint256 first = _mint(alice, _kyc("US", "NY", LABEL_LEGION));
+        uint256 first = _mint(alice, _kyc("US", "NY"));
         _mint(alice, _cred(K_ACCREDITED));
         vm.prank(owner);
-        uint256 replacement = badge.supersede(first, _kyc("US", "TX", LABEL_LEGION), "relocated to TX");
+        uint256 replacement = badge.supersede(first, _kyc("US", "TX"), "relocated to TX");
         _index(vm.getRecordedLogs());
 
         _assertRegistryReconstructed();

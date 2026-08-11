@@ -16,8 +16,16 @@ import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC5484} from "../src/interfaces/IERC5484.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {LeXcheXBadge} from "../src/creds/lexchexBadge.sol";
-import {K_INVESTOR_TYPE, K_INVESTOR_JURISDICTION, K_US_STATE, K_ACCREDITED, K_QIB, K_NON_US, InvestorType}
-    from "../src/interfaces/ILexChexBadge.sol";
+import {
+    K_INVESTOR_TYPE,
+    K_INVESTOR_JURISDICTION,
+    K_US_STATE,
+    K_ACCREDITED,
+    K_QIB,
+    K_NON_US,
+    K_SYNDICATE,
+    InvestorType
+} from "../src/interfaces/ILexChexBadge.sol";
 import {Credential} from "../src/creds/storage/lexchexBadgeStorage.sol";
 import {FundInterestData} from "../src/storage/extensions/FundInterestExtension.sol";
 import {
@@ -35,7 +43,6 @@ import {
 import {EligibilityCondition} from "../src/libs/conditions/secondary/EligibilityCondition.sol";
 import {HolderCapCondition} from "../src/libs/conditions/secondary/HolderCapCondition.sol";
 import {USStateOfResidenceCondition} from "../src/libs/conditions/secondary/USStateOfResidenceCondition.sol";
-import {LegionSoulboundCondition} from "../src/libs/conditions/secondary/LegionSoulboundCondition.sol";
 import {HoldingPeriodCondition} from "../src/libs/conditions/secondary/HoldingPeriodCondition.sol";
 import {LexChexBadgeKindCondition} from "../src/libs/conditions/secondary/LexChexBadgeKindCondition.sol";
 import {RegSDistributionComplianceCondition} from "../src/libs/conditions/secondary/RegSDistributionComplianceCondition.sol";
@@ -100,7 +107,6 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     bytes32 constant CAT_ACCREDITED = keccak256("cat.accredited");
     bytes32 constant CAT_QIB = keccak256("cat.qib");
     bytes32 constant CAT_NONUS = keccak256("cat.nonus");
-    bytes32 constant CAT_LEGION = keccak256("cat.legion");
 
     bytes2 constant CA = "CA";
 
@@ -113,6 +119,9 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     address public seller;
     uint256 public sellerKey;
     address public keeper;
+    // A second credentialing operator on the same badge, granted K_SYNDICATE and no BorgAuth role. Its
+    // credentials are what the circle gate accepts; an identical one from anyone else does not clear it.
+    address public legionIssuer;
 
     SecERC20Mock public paymentToken;
     BorgAuth public auth;
@@ -128,7 +137,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     EligibilityCondition public eligibility;
     HolderCapCondition public holderCap;
     USStateOfResidenceCondition public usState;
-    LegionSoulboundCondition public legion;
+    LexChexBadgeKindCondition public legion;
     HoldingPeriodCondition public holdingPeriod;
     LexChexBadgeKindCondition public accredited;
     LexChexBadgeKindCondition public qib;
@@ -149,6 +158,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         (owner, ownerKey) = makeAddrAndKey("owner");
         (seller, sellerKey) = makeAddrAndKey("seller");
         keeper = makeAddr("keeper");
+        legionIssuer = makeAddr("legion.issuer");
 
         paymentToken = new SecERC20Mock();
         auth = new BorgAuth(owner);
@@ -200,7 +210,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         vm.prank(owner);
         auth.updateRole(address(dm), 99);
 
-        _deployBadgeAndCategories();
+        _deployBadge();
         _deployConditions();
         _wireConditions();
 
@@ -236,7 +246,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         vm.startPrank(owner);
         eligibility.setClearance(address(corp), seller, true);
         holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, uint256(100), false, false);
-        legion.setConfig(address(corp), CAT_LEGION, false);
+        legion.updateIssuers(_list(legionIssuer));
         vm.stopPrank();
         _setRule144Info(true);
         _setSection4a7Package(true);
@@ -1059,7 +1069,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     // Setup helpers
     // ─────────────────────────────────────────────────────────────────────────
 
-    function _deployBadgeAndCategories() internal {
+    function _deployBadge() internal {
         badge = LeXcheXBadge(
             address(
                 new ERC1967Proxy(
@@ -1068,6 +1078,10 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 )
             )
         );
+        // Legion issues on the shared badge, trusted for circle seats only. The grant is all it gets: no
+        // BorgAuth role, so it picks up none of the admin power this auth carries over the rest of the stack.
+        vm.prank(owner);
+        badge.setIssuerKeys(legionIssuer, K_SYNDICATE);
     }
 
     function _deployConditions() internal {
@@ -1086,10 +1100,12 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 abi.encodeCall(USStateOfResidenceCondition.initialize, (address(auth), address(badge)))
             )
         );
-        legion = LegionSoulboundCondition(
+        legion = LexChexBadgeKindCondition(
             _proxy(
-                address(new LegionSoulboundCondition()),
-                abi.encodeCall(LegionSoulboundCondition.initialize, (address(auth), address(badge)))
+                address(new LexChexBadgeKindCondition()),
+                abi.encodeCall(
+                    LexChexBadgeKindCondition.initialize, (address(auth), address(badge), K_SYNDICATE, false)
+                )
             )
         );
         holdingPeriod = HoldingPeriodCondition(
@@ -1176,7 +1192,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
 
     function _commonBuyerSetup(address buyer, string memory jurisdiction, bytes2 state) internal {
         _mintCred(buyer, CAT_KYC, jurisdiction, state);
-        _mintCred(buyer, CAT_LEGION, jurisdiction, state);
+        _mintSyndicate(buyer);
         vm.prank(owner);
         eligibility.setClearance(address(corp), buyer, true);
 
@@ -1185,20 +1201,19 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         paymentToken.approve(address(dm), type(uint256).max);
     }
 
-    /// @dev Mints a credential whose facts follow the categoryId's role: CAT_KYC carries the residence anchor
-    /// (jurisdiction + state), CAT_ACCREDITED / CAT_QIB / CAT_NONUS assert the corresponding status fact-key,
-    /// and every categoryId is also written as the free-form label so the Legion issuer-tier gate matches.
+    /// @dev Mints a credential whose facts follow `cat`: CAT_KYC carries the residence anchor (jurisdiction +
+    /// state), CAT_ACCREDITED / CAT_QIB / CAT_NONUS assert the matching status fact-key. `cat` is a test-local
+    /// way to name a profile — the badge has no such notion.
     // TODO make it closer to real-world scenarios
-    function _mintCred(address to, bytes32 categoryId, string memory jurisdiction, bytes2 state) internal {
-        _mintCred(to, categoryId, jurisdiction, state, uint64(block.timestamp + 3650 days));
+    function _mintCred(address to, bytes32 cat, string memory jurisdiction, bytes2 state) internal {
+        _mintCred(to, cat, jurisdiction, state, uint64(block.timestamp + 3650 days));
     }
 
     /// @dev Overload for tests that need a credential to lapse mid-trade.
-    function _mintCred(address to, bytes32 categoryId, string memory jurisdiction, bytes2 state, uint64 expiry)
+    function _mintCred(address to, bytes32 cat, string memory jurisdiction, bytes2 state, uint64 expiry)
         internal
     {
         Credential memory cred;
-        cred.categoryId = categoryId; // free-form label (the Legion tier gate matches on it)
         cred.investorType = InvestorType.INDIVIDUAL;
         cred.investorJurisdiction = jurisdiction;
         cred.usState = state;
@@ -1206,12 +1221,24 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
 
         uint256 asserts = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION;
         if (state != bytes2(0)) asserts |= K_US_STATE;
-        if (categoryId == CAT_ACCREDITED) asserts |= K_ACCREDITED;
-        else if (categoryId == CAT_QIB) asserts |= K_QIB;
-        else if (categoryId == CAT_NONUS) asserts |= K_NON_US;
+        if (cat == CAT_ACCREDITED) asserts |= K_ACCREDITED;
+        else if (cat == CAT_QIB) asserts |= K_QIB;
+        else if (cat == CAT_NONUS) asserts |= K_NON_US;
         cred.asserts = asserts;
 
         vm.prank(owner);
+        badge.mint(to, cred);
+    }
+
+    /// @dev A seat in Legion's circle for this SPV. Minted by Legion rather than the owner, because the gate
+    /// takes only Legion's word for who is in the circle.
+    function _mintSyndicate(address to) internal {
+        Credential memory cred;
+        cred.asserts = K_SYNDICATE;
+        cred.scope = address(corp);
+        cred.expiryDate = uint64(block.timestamp + 3650 days);
+
+        vm.prank(legionIssuer);
         badge.mint(to, cred);
     }
 

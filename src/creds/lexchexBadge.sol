@@ -34,6 +34,7 @@ import "./LeXcheXBadgeRender.sol";
 import "../libs/auth.sol";
 import "../interfaces/IERC5484.sol";
 import "../interfaces/ILexChexBadge.sol";
+import "../interfaces/ICredentialQueryHook.sol";
 
 /// @title  LeXcheXBadge - Unified Soulbound Credential Contract (LeXcheX v2)
 /// @author MetaLeX Labs, Inc.
@@ -48,6 +49,8 @@ import "../interfaces/ILexChexBadge.sol";
 /// Spec
 /// - A credential's `asserts` (K_* fact-keys) is the sole authority axis: a field answers a read only when
 ///   its key is asserted; VALUE keys require a non-empty field, SCOPE keys require `scope` (the SPV).
+/// - `scope` narrows a credential to one SPV. Any key may carry one and every read can filter on it; for SCOPE
+///   keys it is mandatory.
 /// - Credentials are IMMUTABLE once minted: change a fact by minting a newer credential (most-recent valid
 ///   wins), and revoke by voiding. There is no in-place edit.
 /// - Changing a fact is not the same as retracting one. No credential can say a fact stopped being true, and
@@ -84,10 +87,12 @@ import "../interfaces/ILexChexBadge.sol";
 /// | K_SYNDICATE                  | hasValidSyndicateFor             | absent / scoped to an SPV   | issuer circle (§4.1.3A)  |
 ///
 /// Invariants
+/// - Issuing authority is per-key: `issuerKeys` is the entire grant, so a delegated issuer needs no BorgAuth
+///   role and picks up none of the admin power a shared auth would carry with it. `mint` records who issued,
+///   and an issuer voids only its own work. So one deployment can host several operators, and a reader can
+///   tell whose word a fact rests on. Admins run the deployment and issue anything.
 /// - Tokens are deliberately NOT burnable — revocation is void-only, so every credential (voided, expired, or
 ///   superseded) is retained on-chain for audit. Void is one-way.
-/// - `categoryId` is a free-form issuer label carried for off-chain bookkeeping, never interpreted on-chain
-///   (category schemas live off-chain, not in this contract).
 /// - `data` is a generic programmable payload gated by
 ///   K_DATA that the badge stores but never interprets — downstream programs read the authoritative value via
 ///   getData.
@@ -116,22 +121,52 @@ contract LeXcheXBadge is
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Issuing authority — who may assert which facts
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice Sets the complete set of fact-keys `issuer` may assert; pass 0 to stop it issuing entirely.
+    function setIssuerKeys(address issuer, uint256 keys) external onlyAdmin {
+        if (keys & ~ALL_KEYS != 0) revert LexChexBadge_BadAsserts();
+        LeXcheXBadgeStorage.badgeStorage().issuerKeys[issuer] = keys;
+        emit IssuerKeysUpdated(issuer, keys);
+    }
+
+    /// @notice The fact-keys `issuer` was granted; 0 means it cannot mint. Admins run the deployment and are
+    /// not listed — read this as the authority of every issuer other than the operator itself.
+    function issuerKeys(address issuer) public view returns (uint256) {
+        return LeXcheXBadgeStorage.badgeStorage().issuerKeys[issuer];
+    }
+
+    /// @dev Non-reverting ADMIN_ROLE test. Mirrors BorgAuth's hierarchy (roles at or above the level pass)
+    function _isAdmin(address user) internal view returns (bool) {
+        return AUTH.userRoles(user) >= AUTH.ADMIN_ROLE();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Lifecycle entry points (§0.5) — append-only; never edited or burned
     // ─────────────────────────────────────────────────────────────────────────
 
     /// @notice Issues an immutable credential. Validates that every asserted fact-key carries its value (or
-    /// scope), stamps issuanceDate, and requires a future expiry. To change a fact later, mint a newer
-    /// credential asserting the changed key (most-recent valid wins); to revoke, void.
-    function mint(address to, Credential memory cred) public onlyAdmin returns (uint256 tokenId) {
+    /// scope), checks the caller may assert those keys, stamps issuer and issuanceDate, and requires a future
+    /// expiry. To change a fact later, mint a newer credential asserting the changed key (most-recent valid
+    /// wins); to revoke, void.
+    function mint(address to, Credential memory cred) public returns (uint256 tokenId) {
         _validate(cred);
+        // The grant IS the authority to issue — no role needed on top, so a delegated issuer can be given one
+        // without any of the admin power that a shared BorgAuth would carry with it. A caller with no grant
+        // has an empty mask and fails here. Admins run the deployment, so they issue anything.
+        uint256 allowed = _isAdmin(msg.sender) ? ALL_KEYS : issuerKeys(msg.sender);
+        uint256 unauthorized = cred.asserts & ~allowed;
+        if (unauthorized != 0) revert LexChexBadge_KeysNotAuthorized(msg.sender, unauthorized);
         if (cred.expiryDate <= block.timestamp) revert LexChexBadge_InvalidExpiry();
+        cred.issuer = msg.sender;
         cred.issuanceDate = uint64(block.timestamp);
         cred.voided = "";
 
         tokenId = LeXcheXBadgeStorage.getSupply();
         _mint(to, tokenId);
         LeXcheXBadgeStorage.setCredential(tokenId, cred);
-        LeXcheXBadgeStorage.addActive(to, tokenId, cred.categoryId);
+        LeXcheXBadgeStorage.addActive(to, tokenId);
         LeXcheXBadgeStorage.incrementSupply();
 
         emit CredentialIssued(to, tokenId, cred);
@@ -142,11 +177,10 @@ contract LeXcheXBadge is
     /// @dev How to retract a fact. Minting a corrected credential is not enough — the old one keeps answering
     /// until it is voided, so a holder who emigrates would keep their old U.S. state. Both steps happen here
     /// so a correction cannot be issued half-finished.
-    function supersede(
-        uint256 staleTokenId,
-        Credential memory cred,
-        string memory reason
-    ) external onlyAdmin returns (uint256 tokenId) {
+    function supersede(uint256 staleTokenId, Credential memory cred, string memory reason)
+        external
+        returns (uint256 tokenId)
+    {
         address holder = _requireOwned(staleTokenId);
         void(staleTokenId, reason);
         return mint(holder, cred);
@@ -154,13 +188,17 @@ contract LeXcheXBadge is
 
     /// @notice Revocation: failed re-KYC, discovered bad-actor status, relocation, sanctions hits. The
     /// credential is retained (never burned) with the reason recorded, so the record survives for audit.
-    function void(uint256 tokenId, string memory reason) public onlyAdmin {
+    function void(uint256 tokenId, string memory reason) public {
         if (bytes(reason).length == 0) revert LexChexBadge_MissingVoidReason();
         Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
         if (cred.issuanceDate == 0) revert LexChexBadge_TokenDoesNotExist();
+        // An issuer revokes only its own credentials, or per-key authority would stop a delegated operator
+        // writing facts but not destroying everyone else's. An admin can void anything, for a rogue issuer.
+        // No grant is required to revoke, so an issuer cut off from minting can still clean up its own work.
+        if (cred.issuer != msg.sender) AUTH.onlyRole(AUTH.ADMIN_ROLE(), msg.sender);
         address holder = _requireOwned(tokenId);
         cred.voided = reason;
-        LeXcheXBadgeStorage.removeActive(holder, tokenId, cred.categoryId); // evict from the active set at once
+        LeXcheXBadgeStorage.removeActive(holder, tokenId); // evict from the active set at once
         emit CredentialVoided(holder, tokenId, reason);
     }
 
@@ -176,7 +214,7 @@ contract LeXcheXBadge is
             uint256 id = ids[i];
             Credential storage cred = LeXcheXBadgeStorage.getCredential(id);
             if (block.timestamp > cred.expiryDate) {
-                LeXcheXBadgeStorage.removeActive(holder, id, cred.categoryId); // swap-pop → re-check index i
+                LeXcheXBadgeStorage.removeActive(holder, id); // swap-pop → re-check index i
                 emit CredentialSwept(holder, id);
             } else {
                 ++i;
@@ -210,7 +248,7 @@ contract LeXcheXBadge is
             if (holder == address(0)) continue;
             Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
             if (block.timestamp <= cred.expiryDate) continue;
-            if (LeXcheXBadgeStorage.removeActive(holder, tokenId, cred.categoryId)) {
+            if (LeXcheXBadgeStorage.removeActive(holder, tokenId)) {
                 ++evicted;
                 emit CredentialSwept(holder, tokenId);
             }
@@ -236,66 +274,125 @@ contract LeXcheXBadge is
         return true;
     }
 
-    /// @notice True when the owner holds a valid credential carrying the free-form issuer label `categoryId`.
-    /// The label is never interpreted by this contract; this is a plain match for issuer-tier gates (e.g.
-    /// Legion custom tiers) that live outside the K_* fact-keys. Index-backed: scans only same-label tokens.
-    function hasValidCredential(address owner, bytes32 categoryId) public view returns (bool) {
-        uint256[] storage ids = LeXcheXBadgeStorage.getLabelTokens(owner, categoryId);
-        for (uint256 i = 0; i < ids.length; i++) {
-            if (isValid(ids[i])) return true;
-        }
-        return false;
-    }
+    // Every read below walks the holder's active set with the same four filters, each off by default:
+    //   kindKey  fact-keys to cover; 0 asks for none (useful for custom queries with hook)
+    //   issuers  filter by issuers; empty accepts any
+    //   scope    the SPV an entitlement must name; empty accepts any
+    //   hook     ICredentialQueryHook injecting custom query logic
+    //   hookData hook-specific payload
+    // A shortcut is the full form with the rest left empty. All four filters empty reverts
 
-    /// @notice True when the owner's valid credentials TOGETHER assert every fact-key in `kindKey`. Serves the
-    /// LexChex parameterizations (accredited / QP / QIB / bad-actor-clear / non-U.S. person).
-    /// @dev A status fact does not contradict another, so two live credentials asserting different ones are both
-    /// true and a multi-key ask is answered from the whole active set. Requiring one credential to carry every
-    /// key would reject a holder whose facts arrived on separate attestations. Single-key asks read the same
-    /// either way. The empty key is rejected outright — a mask of nothing is trivially covered, and no credential
-    /// asserts nothing.
-    function hasValidCredentialOf(address owner, uint256 kindKey) public view returns (bool) {
-        if (kindKey == 0) return false;
+    /// @notice True when the owner's valid credentials TOGETHER cover `kindKey`, counting only those that clear
+    /// the issuer, scope and hook filters.
+    /// @dev Keys add up across credentials, so facts attested separately still qualify the holder. The filters
+    /// apply per credential: one that clears them all answers, which keeps a holder who is two things at once
+    /// (two tiers, two seats) true for both.
+    function hasValidCredentialOf(
+        address owner,
+        uint256 kindKey,
+        address[] memory issuers,
+        address scope,
+        address hook,
+        bytes memory hookData
+    ) public view returns (bool) {
+        _requireQuery(kindKey, issuers, scope, hook);
 
         uint256 covered;
         uint256[] storage ids = LeXcheXBadgeStorage.getActiveTokens(owner);
         for (uint256 i = 0; i < ids.length; i++) {
-            if (!isValid(ids[i])) continue;
+            if (!_eligible(owner, ids[i], issuers, scope, hook, hookData)) continue;
+            if (kindKey == 0) return true;
             covered |= LeXcheXBadgeStorage.getCredential(ids[i]).asserts;
             if ((covered & kindKey) == kindKey) return true;
         }
         return false;
     }
 
-    /// @notice True when the owner holds a valid credential granting scoped entitlement `scopeKey` for `spv`.
-    /// An entitlement answers only for the SPV it names, so one SPV's membership never leaks to another. Any
-    /// valid credential carrying the key and scope admits — a second grant of the same entitlement says the
-    /// same thing, so there is no recency contest. Scans the (bounded) active set.
-    function hasValidScopedCredentialOf(address owner, uint256 scopeKey, address spv) public view returns (bool) {
+    /// @notice Shortcut: a plain fact-key ask.
+    function hasValidCredentialOf(address owner, uint256 kindKey) public view returns (bool) {
+        return hasValidCredentialOf(owner, kindKey, new address[](0), address(0), address(0), "");
+    }
+
+    /// @notice Shortcut: only credentials from an issuer in `issuers` count.
+    function hasValidCredentialOf(address owner, uint256 kindKey, address[] memory issuers) public view returns (bool) {
+        return hasValidCredentialOf(owner, kindKey, issuers, address(0), address(0), "");
+    }
+
+    /// @notice Shortcut: only credentials naming `scope`, so an entitlement answers for its own SPV.
+    function hasValidCredentialOf(address owner, uint256 kindKey, address scope) public view returns (bool) {
+        return hasValidCredentialOf(owner, kindKey, new address[](0), scope, address(0), "");
+    }
+
+    /// @notice The owner's authoritative credential: the most recent valid one that covers `kindKey` on its own
+    /// and clears every filter. The resolution every value getter runs, exposed for callers that want the
+    /// credential itself.
+    /// @dev Use this when the matches contradict each other, like two credentials naming different U.S. states.
+    /// For membership use hasValidCredentialOf. `kindKey` is tested per credential here: one record has to
+    /// carry the whole set.
+    function getMostRecentValidWith(
+        address owner,
+        uint256 kindKey,
+        address[] memory issuers,
+        address scope,
+        address hook,
+        bytes memory hookData
+    ) public view returns (uint256 tokenId, bool found) {
+        _requireQuery(kindKey, issuers, scope, hook);
+
+        uint64 latest = 0;
         uint256[] storage ids = LeXcheXBadgeStorage.getActiveTokens(owner);
         for (uint256 i = 0; i < ids.length; i++) {
-            Credential storage cred = LeXcheXBadgeStorage.getCredential(ids[i]);
-            if ((cred.asserts & scopeKey) != 0 && cred.scope == spv && isValid(ids[i])) return true;
+            uint256 candidate = ids[i];
+            if (!_eligible(owner, candidate, issuers, scope, hook, hookData)) continue;
+            Credential storage cred = LeXcheXBadgeStorage.getCredential(candidate);
+            if (!_covers(cred, kindKey)) continue;
+            if (!found || cred.issuanceDate > latest || (cred.issuanceDate == latest && candidate > tokenId)) {
+                latest = cred.issuanceDate;
+                tokenId = candidate;
+                found = true;
+            }
         }
-        return false;
+    }
+
+    /// @notice Shortcut: a plain fact-key ask.
+    function getMostRecentValidWith(address owner, uint256 kindKey) public view returns (uint256 tokenId, bool found) {
+        return getMostRecentValidWith(owner, kindKey, new address[](0), address(0), address(0), "");
+    }
+
+    /// @notice Shortcut: only credentials from an issuer in `issuers` count.
+    function getMostRecentValidWith(address owner, uint256 kindKey, address[] memory issuers)
+        public
+        view
+        returns (uint256 tokenId, bool found)
+    {
+        return getMostRecentValidWith(owner, kindKey, issuers, address(0), address(0), "");
+    }
+
+    /// @notice Shortcut: only credentials naming `scope`.
+    function getMostRecentValidWith(address owner, uint256 kindKey, address scope)
+        public
+        view
+        returns (uint256 tokenId, bool found)
+    {
+        return getMostRecentValidWith(owner, kindKey, new address[](0), scope, address(0), "");
     }
 
     /// @notice Admission to one SPV's offers: backs per-SPV offer-visibility entitlements (§16.2) and any
     /// onchain issuer gating.
     function hasValidWhitelistFor(address owner, address spv) public view returns (bool) {
-        return hasValidScopedCredentialOf(owner, K_SPV_WHITELIST, spv);
+        return hasValidCredentialOf(owner, K_SPV_WHITELIST, spv);
     }
 
     /// @notice A seat in the issuer's private circle within one SPV (§4.1.3A). Read apart from the whitelist
     /// so an issuer can restrict a trade to the circle without admission to the SPV standing in for it.
     function hasValidSyndicateFor(address owner, address spv) public view returns (bool) {
-        return hasValidScopedCredentialOf(owner, K_SYNDICATE, spv);
+        return hasValidCredentialOf(owner, K_SYNDICATE, spv);
     }
 
-    /// @notice Individual vs. entity from the owner's authoritative credential; UNSET when unestablished. Only
-    /// an entity can have beneficial owners to look through, so this qualifies the §3(c)(1)(A) count.
+    /// @notice Individual vs. entity; UNSET when unestablished. Only an entity can have beneficial owners to
+    /// look through, so this qualifies the §3(c)(1)(A) count.
     function getInvestorType(address owner) public view returns (InvestorType value, uint64 expiry) {
-        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, K_INVESTOR_TYPE);
+        (uint256 tokenId, bool found) = getMostRecentValidWith(owner, K_INVESTOR_TYPE);
         if (!found) return (InvestorType.UNSET, 0);
         Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
         return (cred.investorType, cred.expiryDate);
@@ -303,7 +400,7 @@ contract LeXcheXBadge is
 
     /// @notice U.S. state of residence/organization for USStateOfResidenceCondition; empty when unestablished.
     function getUsState(address owner) public view returns (bytes2 value, uint64 expiry) {
-        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, K_US_STATE);
+        (uint256 tokenId, bool found) = getMostRecentValidWith(owner, K_US_STATE);
         if (!found) return (bytes2(0), 0);
         Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
         return (cred.usState, cred.expiryDate);
@@ -316,64 +413,75 @@ contract LeXcheXBadge is
     function getEffectiveBeneficialOwnerCount(address owner) public view returns (uint32 value, uint64 expiry) {
         (InvestorType investorType, uint64 typeExpiry) = getInvestorType(owner);
         if (investorType == InvestorType.INDIVIDUAL) return (1, typeExpiry);
-        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, K_BO_COUNT);
+        (uint256 tokenId, bool found) = getMostRecentValidWith(owner, K_BO_COUNT);
         if (!found) return (0, 0);
         Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
         return (cred.beneficialOwnerCount, cred.expiryDate);
     }
 
-    /// @notice Generic programmable payload from the owner's authoritative credential; empty when none. The
-    /// badge never interprets it — downstream programs/conditions do, gated by K_DATA.
+    /// @notice Generic programmable payload; empty when none. The badge never interprets it — downstream
+    /// programs/conditions do, gated by K_DATA.
     function getData(address owner) public view returns (bytes memory value, uint64 expiry) {
-        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, K_DATA);
+        (uint256 tokenId, bool found) = getMostRecentValidWith(owner, K_DATA);
         if (!found) return ("", 0);
         Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
         return (cred.data, cred.expiryDate);
     }
 
-    /// @notice Physical country jurisdiction from the owner's authoritative credential; empty when none.
+    /// @notice Physical country jurisdiction; empty when none.
     function getInvestorJurisdiction(address owner) public view returns (string memory value, uint64 expiry) {
-        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, K_INVESTOR_JURISDICTION);
+        (uint256 tokenId, bool found) = getMostRecentValidWith(owner, K_INVESTOR_JURISDICTION);
         if (!found) return ("", 0);
         Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
         return (cred.investorJurisdiction, cred.expiryDate);
     }
 
-    /// @notice §3(c)(1)(A) look-through classification from the owner's authoritative credential; empty when
-    /// none. An offshore entity with any U.S. beneficial owner reads U.S. here (regulatory view) while its
-    /// physical investorJurisdiction stays foreign for CFIUS/blue-sky. Decoupled from investorJurisdiction.
+    /// @notice §3(c)(1)(A) look-through classification; empty when none. An offshore entity with any U.S.
+    /// beneficial owner reads U.S. here (regulatory view) while its physical investorJurisdiction stays
+    /// foreign for CFIUS/blue-sky. Decoupled from investorJurisdiction.
     function getLookThroughJurisdiction(address owner) public view returns (string memory value, uint64 expiry) {
-        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, K_LOOKTHROUGH_JURISDICTION);
+        (uint256 tokenId, bool found) = getMostRecentValidWith(owner, K_LOOKTHROUGH_JURISDICTION);
         if (!found) return ("", 0);
         Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
         return (cred.lookThroughJurisdiction, cred.expiryDate);
     }
 
-    /// @notice Seasoning reference for the UI (§11.1B): the earliest ONE valid credential carrying all of
-    /// `kindKey` was issued; 0 when none does. The seasoning policy (30 vs 45 days) stays at the UI layer; this
-    /// only supplies the timestamp.
-    /// @dev Reads a multi-key ask differently from hasValidCredentialOf, on purpose. That one asks whether the
-    /// holder qualifies, which facts spread over separate credentials can answer. This asks how long something
-    /// has been true, and facts established on different dates have no one date to report — so it answers for a
-    /// single credential and reports 0 when none carries the whole set.
-    function earliestValidIssuance(address owner, uint256 kindKey) public view returns (uint64) {
-        if (kindKey == 0) return 0; // the empty key answers no fact; see _mostRecentValidWith
+    /// @notice Seasoning reference for the UI (§11.1B): when the earliest matching valid credential was issued;
+    /// 0 when none matches. The 30-vs-45-day policy stays at the UI layer; this supplies the timestamp.
+    /// @dev Takes the same filters as the reads above, so a tier's seasoning is asked the same way its
+    /// membership is. `kindKey` is tested per credential: how long something has been true is one record's
+    /// date.
+    function earliestValidIssuance(
+        address owner,
+        uint256 kindKey,
+        address[] memory issuers,
+        address scope,
+        address hook,
+        bytes memory hookData
+    ) public view returns (uint64) {
+        _requireQuery(kindKey, issuers, scope, hook);
 
         uint64 earliest = 0;
         uint256[] storage ids = LeXcheXBadgeStorage.getActiveTokens(owner);
         for (uint256 i = 0; i < ids.length; i++) {
             uint256 tokenId = ids[i];
-            if (!isValid(tokenId)) continue;
+            if (!_eligible(owner, tokenId, issuers, scope, hook, hookData)) continue;
             Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
-            if ((cred.asserts & kindKey) != kindKey) continue;
+            if (!_covers(cred, kindKey)) continue;
             if (earliest == 0 || cred.issuanceDate < earliest) earliest = cred.issuanceDate;
         }
         return earliest;
     }
 
+    /// @notice Shortcut: a plain fact-key ask.
+    function earliestValidIssuance(address owner, uint256 kindKey) public view returns (uint64) {
+        return earliestValidIssuance(owner, kindKey, new address[](0), address(0), address(0), "");
+    }
+
     // ── Carried over from LeXcheX v1 (interface-compatible reads, §0.10) ─────
 
     /// @notice v1-compatible read: true when the owner holds any valid credential (scans the active set)
+    // TODO should integrate v1 LexCheX as another issuer instead
     function hasValidLexCheX(address owner) public view returns (bool) {
         uint256[] storage ids = LeXcheXBadgeStorage.getActiveTokens(owner);
         for (uint256 i = 0; i < ids.length; i++) {
@@ -455,27 +563,45 @@ contract LeXcheXBadge is
     // Internals
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// @dev The owner's authoritative credential for `key`: the most recent (by issuanceDate — a superseding
-    /// credential wins; ties → higher tokenId) valid credential that asserts every requested fact-key, so an
-    /// unrelated credential can neither answer the fact nor shadow one that does. Scans the (bounded) active set;
-    /// expired-but-not-yet-swept entries are skipped by isValid.
-    function _mostRecentValidWith(address owner, uint256 key) internal view returns (uint256 tokenId, bool found) {
-        // reject empty key early
-        if (key == 0) return (0, false);
+    /// @dev Per-credential eligibility shared by every read: valid, right scope, accepted issuer, accepted by
+    /// the hook.
+    /// Note it does not check the fact-key because its callers treat it differently.
+    function _eligible(
+        address owner,
+        uint256 tokenId,
+        address[] memory issuers,
+        address scope,
+        address hook,
+        bytes memory hookData
+    ) private view returns (bool) {
+        if (!isValid(tokenId)) return false;
+        Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
+        if (scope != address(0) && cred.scope != scope) return false;
+        if (!_fromIssuer(cred, issuers)) return false;
+        if (hook == address(0)) return true;
+        return ICredentialQueryHook(hook).matchesCredential(owner, tokenId, cred, hookData);
+    }
 
-        uint64 latest = 0;
-        uint256[] storage ids = LeXcheXBadgeStorage.getActiveTokens(owner);
-        for (uint256 i = 0; i < ids.length; i++) {
-            uint256 candidate = ids[i];
-            if (!isValid(candidate)) continue;
-            Credential storage cred = LeXcheXBadgeStorage.getCredential(candidate);
-            if ((cred.asserts & key) != key) continue; // asserts every requested key
-            if (!found || cred.issuanceDate > latest || (cred.issuanceDate == latest && candidate > tokenId)) {
-                latest = cred.issuanceDate;
-                tokenId = candidate;
-                found = true;
-            }
+    /// @dev One credential carries the whole key set. A key of 0 asks for no fact, so everything covers it.
+    function _covers(Credential storage cred, uint256 key) private view returns (bool) {
+        return key == 0 || (cred.asserts & key) == key;
+    }
+
+    /// @dev Every filter empty would answer "holds any valid credential", which hasValidLexCheX already does.
+    /// Reverting keeps a blank parameterization from quietly admitting everyone.
+    function _requireQuery(uint256 kindKey, address[] memory issuers, address scope, address hook) private pure {
+        if (kindKey == 0 && issuers.length == 0 && scope == address(0) && hook == address(0)) {
+            revert LexChexBadge_EmptyQuery();
         }
+    }
+
+    /// @dev True when `cred` came from an issuer the caller accepts; an empty list accepts any.
+    function _fromIssuer(Credential storage cred, address[] memory issuers) internal view returns (bool) {
+        if (issuers.length == 0) return true;
+        for (uint256 i = 0; i < issuers.length; i++) {
+            if (cred.issuer == issuers[i]) return true;
+        }
+        return false;
     }
 
     /// @dev `asserts` is the sole source of truth: reject empty/unknown bits, require a value for each asserted
