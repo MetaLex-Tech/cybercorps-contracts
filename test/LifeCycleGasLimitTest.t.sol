@@ -407,6 +407,7 @@ contract LifeCycleGasLimitTest is Test {
             securityClass: SecurityClass.PreferredStock,
             securitySeries: SecuritySeries.SeriesSeed,
             extension: address(shareClassTermsController),
+            seriesData: bytes(""),
             defaultLegend: legend
         });
     }
@@ -507,8 +508,10 @@ contract LifeCycleGasLimitTest is Test {
             globalValues,
             partyValues,
             officer,
-            investorKey
-        );
+            investorKey,
+            rmAddr,
+            block.timestamp + 7 days,
+            bytes32(0));
 
         usdc.mint(investor, EOI_AMOUNT * 2);
         vm.prank(investor);

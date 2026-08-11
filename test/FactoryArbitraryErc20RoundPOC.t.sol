@@ -99,6 +99,7 @@ contract FactoryArbitraryErc20RoundPOCTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesSeed,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegend
         });
 
@@ -197,8 +198,10 @@ contract FactoryArbitraryErc20RoundPOCTest is Test {
             globalValues,
             partyValues,
             companyOfficer.eoa,
-            investorPk
-        );
+            investorPk,
+            roundManagerAddr,
+            block.timestamp + 7 days,
+            bytes32(0));
 
         EOI memory eoi = EOI({
             name: "Investor",

@@ -68,7 +68,8 @@ contract CyberCertPrinterClassTermsTest is Test {
                             address(this),
                             SecurityClass.CommonStock,
                             SecuritySeries.NA,
-                            address(controller)
+                            address(controller),
+                            bytes("")
                         )
                     )
                 )
@@ -110,7 +111,9 @@ contract CyberCertPrinterClassTermsTest is Test {
         controller.accountNewIssuance(address(printer), mismatch.extensionData, mismatch.unitsRepresented, true);
     }
 
-    function test_VoidUnvoidAndBurnMaintainIssuedUnits() public {
+    // Develop's LedgerEntryToken has no burn: voided lots stay on the ledger, so the
+    // lifecycle to maintain is void/unvoid only.
+    function test_VoidUnvoidMaintainsIssuedUnits() public {
         _mint(0, address(0xA11CE), _details(_terms("Common", 10), 6));
         controller.releaseCertificateUnits(address(printer), 0);
         printer.voidCert(0);
@@ -119,10 +122,6 @@ contract CyberCertPrinterClassTermsTest is Test {
         controller.restoreCertificateUnits(address(printer), 0);
         printer.unvoidCert(0);
         assertEq(_issuedUnits(), 6);
-
-        controller.releaseCertificateUnits(address(printer), 0);
-        printer.burn(0);
-        assertEq(_issuedUnits(), 0);
     }
 
     function test_ScripRepresentationChangesDoNotDoubleCount() public {
@@ -254,7 +253,8 @@ contract CyberCertPrinterClassTermsTest is Test {
             "ipfs://common",
             SecurityClass.CommonStock,
             SecuritySeries.NA,
-            address(shareExtension)
+            address(shareExtension),
+            bytes("")
         );
         printers[1] = manager.createCertPrinter(
             legends,
@@ -263,7 +263,8 @@ contract CyberCertPrinterClassTermsTest is Test {
             "ipfs://preferred",
             SecurityClass.PreferredStock,
             SecuritySeries.SeriesA,
-            address(shareExtension)
+            address(shareExtension),
+            bytes("")
         );
 
         bytes[] memory extensionData = new bytes[](2);
@@ -358,7 +359,8 @@ contract CyberCertPrinterClassTermsTest is Test {
                             issuanceManager,
                             SecurityClass.CommonStock,
                             SecuritySeries.NA,
-                            extension
+                            extension,
+                            bytes("")
                         )
                     )
                 )

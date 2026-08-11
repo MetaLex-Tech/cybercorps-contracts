@@ -6,6 +6,10 @@ import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {IERC721} from "openzeppelin-contracts/token/ERC721/IERC721.sol";
 
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
+import {
+    ILegacyCyberCorpFactory,
+    LegacyCyberCertData
+} from "./libs/LegacyCyberCorpFactory.sol";
 import {DeploymentConstants} from "../script/libs/DeploymentConstants.sol";
 
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
@@ -17,19 +21,20 @@ import {RoundManager} from "../src/RoundManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
+import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {Round, RoundLib} from "../src/libs/RoundLib.sol";
 import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
-import {ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
+import {ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
 import {ICyberScrip} from "../src/interfaces/ICyberScrip.sol";
 import {IssuerApprovalRecertificationCondition} from "../src/libs/conditions/IssuerApprovalRecertificationCondition.sol";
 import {
     CertificateDetails,
     Endorsement
-} from "../src/storage/CyberCertPrinterStorage.sol";
+} from "../src/storage/LedgerEntryTokenStorage.sol";
 
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
@@ -73,7 +78,7 @@ contract SelectorCondition is ICondition {
 
 struct PoolAccountingFixture {
     IssuanceManager issuanceManager;
-    ICyberCertPrinter certPrinter;
+    ILedgerEntryToken certPrinter;
     address scrip;
     address thirdHolder;
     address newInvestor;
@@ -142,6 +147,8 @@ contract CyberScripUpgradeForkTest is Test {
             deployment.issuanceManagerFactory
         );
 
+        CyberAgreementUtils.upgradeRegistry(vm, address(registry), METALEX_SAFE);
+
         address stable = corpFactory.stable();
         assertTrue(stable != address(0), "stable token not configured");
 
@@ -178,8 +185,8 @@ contract CyberScripUpgradeForkTest is Test {
         uint256 valuation = 5_000_000e18;
 
         // 1) Pre-upgrade: issuerA deploys corp stack and creates a deal via factory.
-        CyberCorpFactory.CyberCertData[] memory offerCertData = new CyberCorpFactory.CyberCertData[](1);
-        offerCertData[0] = CyberCorpFactory.CyberCertData({
+        LegacyCyberCertData[] memory offerCertData = new LegacyCyberCertData[](1);
+        offerCertData[0] = LegacyCyberCertData({
             name: "SAFE",
             symbol: "SAFE",
             uri: "ipfs://safe-cert",
@@ -203,8 +210,10 @@ contract CyberScripUpgradeForkTest is Test {
             offerGlobalValues,
             offerPartyValues[0],
             offerParties,
-            issuerAPk
-        );
+            issuerAPk,
+            dmFactory.computeDealManagerAddress(keccak256(abi.encodePacked(userSalt))),
+            block.timestamp + 7 days,
+            bytes32(0));
 
         CertificateDetails[] memory offerDetails = new CertificateDetails[](1);
         offerDetails[0] = CertificateDetails({
@@ -232,7 +241,7 @@ contract CyberScripUpgradeForkTest is Test {
             ,
             ,
             preUpgradeCertIds
-        ) = corpFactory.deployCyberCorpAndCreateOffer(
+        ) = ILegacyCyberCorpFactory(address(corpFactory)).deployCyberCorpAndCreateOffer(
             userSalt,
             "Issuer A Corp",
             "Limited Liability Company",
@@ -264,6 +273,7 @@ contract CyberScripUpgradeForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesA,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: new string[](0)
         });
 
@@ -353,8 +363,10 @@ contract CyberScripUpgradeForkTest is Test {
             globalValues,
             investorPartyValues,
             issuerA,
-            investorPk
-        );
+            investorPk,
+            roundManagerAddr,
+            eoi.expiry,
+            bytes32(0));
 
         vm.prank(investor);
         RoundManager(roundManagerAddr).submitEOI(
@@ -401,7 +413,7 @@ contract CyberScripUpgradeForkTest is Test {
             false
         );
 
-        uint256 fullCertUnits = ICyberCertPrinter(certPrinter)
+        uint256 fullCertUnits = ILedgerEntryToken(certPrinter)
             .getCertificateDetails(0)
             .unitsRepresented;
         assertGt(fullCertUnits, 0, "certificate should have units");
@@ -430,7 +442,7 @@ contract CyberScripUpgradeForkTest is Test {
             1,
             "investor should hold recertified cert"
         );
-        uint256 recertifiedTokenId = ICyberCertPrinter(certPrinter).tokenOfOwnerByIndex(
+        uint256 recertifiedTokenId = ILedgerEntryToken(certPrinter).tokenOfOwnerByIndex(
             investor,
             0
         );
@@ -445,7 +457,7 @@ contract CyberScripUpgradeForkTest is Test {
 
     function test_PostUpgrade_ConversionLifecycleAndRuntimeUpdates() public {
         IssuanceManager issuanceManager = _setupUpgradedIssuanceManager();
-        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+        ILedgerEntryToken certPrinter = _deployPrinterAfterUpgrade(
             issuanceManager,
             "Lifecycle Cert",
             "LCERT"
@@ -517,7 +529,7 @@ contract CyberScripUpgradeForkTest is Test {
 
     function test_PostUpgrade_ScripifyUsesLegalOwner() public {
         IssuanceManager issuanceManager = _setupUpgradedIssuanceManager();
-        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+        ILedgerEntryToken certPrinter = _deployPrinterAfterUpgrade(
             issuanceManager,
             "Legal Owner Cert",
             "LOCERT"
@@ -530,7 +542,7 @@ contract CyberScripUpgradeForkTest is Test {
         );
 
         vm.prank(companyOwner);
-        issuanceManager.setGlobalTransferable(address(certPrinter), true);
+        certPrinter.setGlobalTransferable(true);
 
         vm.prank(companyOwner);
         address scrip = issuanceManager.deployCyberScrip(
@@ -568,7 +580,7 @@ contract CyberScripUpgradeForkTest is Test {
 
     function test_PostUpgrade_ConversionGatesAndConditions() public {
         IssuanceManager issuanceManager = _setupUpgradedIssuanceManager();
-        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+        ILedgerEntryToken certPrinter = _deployPrinterAfterUpgrade(
             issuanceManager,
             "Guard Cert",
             "GCERT"
@@ -631,7 +643,7 @@ contract CyberScripUpgradeForkTest is Test {
 
     function test_PostUpgrade_ReformsVoidedPath() public {
         IssuanceManager issuanceManager = _setupUpgradedIssuanceManager();
-        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+        ILedgerEntryToken certPrinter = _deployPrinterAfterUpgrade(
             issuanceManager,
             "Voided Cert",
             "VCERT"
@@ -664,7 +676,7 @@ contract CyberScripUpgradeForkTest is Test {
         assertEq(ICyberScrip(scrip).balanceOf(investor), 20);
 
         vm.prank(companyOwner);
-        issuanceManager.voidCertificate(address(certPrinter), certId);
+        certPrinter.voidCert(certId);
         assertTrue(certPrinter.isVoided(certId));
 
         _approveRecertification(issuanceManager, address(certPrinter), investor);
@@ -683,7 +695,7 @@ contract CyberScripUpgradeForkTest is Test {
 
     function test_PostUpgrade_ForceBurnReducesPoolTotals() public {
         IssuanceManager issuanceManager = _setupUpgradedIssuanceManager();
-        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+        ILedgerEntryToken certPrinter = _deployPrinterAfterUpgrade(
             issuanceManager,
             "Force Burn Cert",
             "FBCERT"
@@ -851,7 +863,7 @@ contract CyberScripUpgradeForkTest is Test {
 
     function test_PostUpgrade_RequiresIssuerApprovalCondition() public {
         IssuanceManager issuanceManager = _setupUpgradedIssuanceManager();
-        ICyberCertPrinter certPrinter = _deployPrinterAfterUpgrade(
+        ILedgerEntryToken certPrinter = _deployPrinterAfterUpgrade(
             issuanceManager,
             "Approval Cert",
             "APPR"
@@ -971,8 +983,9 @@ contract CyberScripUpgradeForkTest is Test {
         address newIssuanceManagerImpl = address(new IssuanceManager());
         address newDealManagerImpl = address(new DealManager());
         address newRoundManagerImpl = address(new RoundManager());
-        address newCertPrinterImpl = address(new CyberCertPrinter());
+        address newCertPrinterImpl = address(new LedgerEntryToken());
         address newScripImpl = address(new CyberScrip());
+        address newUriBuilderImpl = address(new CertificateUriBuilder());
 
         vm.startPrank(METALEX_SAFE);
         corpSingleFactory.setRefImplementation(newCyberCorpImpl);
@@ -981,6 +994,7 @@ contract CyberScripUpgradeForkTest is Test {
         rmFactory.setRefImplementation(newRoundManagerImpl);
         imFactory.setCyberCertPrinterRefImplementation(newCertPrinterImpl);
         imFactory.setCyberScripRefImplementation(newScripImpl);
+        IUUPS(deployment.uriBuilder).upgradeToAndCall(newUriBuilderImpl, "");
         vm.stopPrank();
 
         assertEq(
@@ -1006,7 +1020,7 @@ contract CyberScripUpgradeForkTest is Test {
         assertEq(
             imFactory.getCyberCertPrinterRefImplementation(),
             newCertPrinterImpl,
-            "CyberCertPrinter factory ref implementation mismatch"
+            "LedgerEntryToken factory ref implementation mismatch"
         );
         assertEq(
             imFactory.getCyberScripRefImplementation(),
@@ -1062,7 +1076,7 @@ contract CyberScripUpgradeForkTest is Test {
         assertEq(
             issuanceManager.getCertPrinterBeaconImplementation(),
             newCertPrinterImpl,
-            "CyberCertPrinter beacon implementation not upgraded"
+            "LedgerEntryToken beacon implementation not upgraded"
         );
         assertEq(
             issuanceManager.getScripBeaconImplementation(),
@@ -1096,7 +1110,7 @@ contract CyberScripUpgradeForkTest is Test {
         CompanyOfficer memory officer,
         string[] memory legalDetails,
         bytes[] memory extensionData,
-        CyberCertData[] memory certData,
+        LegacyCyberCertData[] memory certData,
         bytes32 templateId,
         address stable,
         uint256 pricePerUnit,
@@ -1121,7 +1135,7 @@ contract CyberScripUpgradeForkTest is Test {
     {
         vm.prank(companyOwner);
         return
-            corpFactory.deployCyberCorpAndCreateRound(
+            ILegacyCyberCorpFactory(address(corpFactory)).deployCyberCorpAndCreateRound(
                 userSalt,
                 SecuritySeries.SeriesA,
                 "CyberCorp Upgrade Test",
@@ -1227,7 +1241,10 @@ contract CyberScripUpgradeForkTest is Test {
         string[] memory globalValues,
         string[] memory partyValues,
         address authorityOfficer,
-        uint256 signerPrivKey
+        uint256 signerPrivKey,
+        address finalizer,
+        uint256 expiry,
+        bytes32 secretHash
     ) internal view returns (bytes memory) {
         (
             string memory legalUri,
@@ -1240,7 +1257,7 @@ contract CyberScripUpgradeForkTest is Test {
         parties[0] = authorityOfficer;
         parties[1] = signer;
         bytes32 contractId = keccak256(
-            abi.encode(templateId, salt, globalValues, parties)
+            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer)
         );
         return
             CyberAgreementUtils.signAgreementTypedData(
@@ -1264,7 +1281,10 @@ contract CyberScripUpgradeForkTest is Test {
         string[] memory globalValues,
         string[] memory partyValues,
         address[] memory parties,
-        uint256 signerPrivKey
+        uint256 signerPrivKey,
+        address finalizer,
+        uint256 expiry,
+        bytes32 secretHash
     ) internal view returns (bytes memory) {
         (
             string memory legalUri,
@@ -1273,7 +1293,7 @@ contract CyberScripUpgradeForkTest is Test {
             string[] memory partyFields
         ) = registry.getTemplateDetails(templateId);
         bytes32 contractId = keccak256(
-            abi.encode(templateId, salt, globalValues, parties)
+            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer)
         );
         return
             CyberAgreementUtils.signAgreementTypedData(
@@ -1294,7 +1314,7 @@ contract CyberScripUpgradeForkTest is Test {
         address certPrinter,
         uint256 tokenId
     ) internal view returns (string memory) {
-        return ICyberCertPrinter(certPrinter).tokenURI(tokenId);
+        return ILedgerEntryToken(certPrinter).tokenURI(tokenId);
     }
 
     function _emptyLex() internal pure returns (LexChexDetails memory) {
@@ -1435,8 +1455,8 @@ contract CyberScripUpgradeForkTest is Test {
             corpSingleFactory.computeCyberCorpSingleAddress(corpSalt)
         );
 
-        CyberCertData[] memory certData = new CyberCertData[](1);
-        certData[0] = CyberCertData({
+        LegacyCyberCertData[] memory certData = new LegacyCyberCertData[](1);
+        certData[0] = LegacyCyberCertData({
             name: "SAFE",
             symbol: "SAFE",
             uri: "ipfs://safe-cert",
@@ -1490,9 +1510,9 @@ contract CyberScripUpgradeForkTest is Test {
         IssuanceManager issuanceManager,
         string memory name,
         string memory symbol
-    ) internal returns (ICyberCertPrinter certPrinter) {
+    ) internal returns (ILedgerEntryToken certPrinter) {
         vm.prank(companyOwner);
-        certPrinter = ICyberCertPrinter(
+        certPrinter = ILedgerEntryToken(
             issuanceManager.createCertPrinter(
                 new string[](0),
                 name,
@@ -1500,14 +1520,15 @@ contract CyberScripUpgradeForkTest is Test {
                 "uri://cert",
                 SecurityClass.CommonStock,
                 SecuritySeries.SeriesA,
-                address(0)
+                address(0),
+                bytes("")
             )
         );
     }
 
     function _mintCertAfterUpgrade(
         IssuanceManager issuanceManager,
-        ICyberCertPrinter certPrinter,
+        ILedgerEntryToken certPrinter,
         address to,
         uint256 units
     ) internal returns (uint256 tokenId) {
@@ -1536,10 +1557,10 @@ contract CyberScripUpgradeForkTest is Test {
         vm.prank(to);
         certPrinter.addEndorsement(tokenId, selfEndorsement);
         vm.prank(companyOwner);
-        issuanceManager.setTokenTransferable(address(certPrinter), tokenId, true);
+        certPrinter.setTokenTransferable(tokenId, true);
         vm.prank(to);
         certPrinter.safeTransferFrom(to, to, tokenId);
         vm.prank(companyOwner);
-        issuanceManager.setTokenTransferable(address(certPrinter), tokenId, false);
+        certPrinter.setTokenTransferable(tokenId, false);
     }
 }

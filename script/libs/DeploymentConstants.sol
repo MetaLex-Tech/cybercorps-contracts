@@ -22,6 +22,7 @@ library DeploymentConstants {
         address uriBuilder;
         address lexchexAuth;
         address lexchex;
+        address lexchexBadge;
         address lexchexMinter;
         address lexchexCondition;
         address zkpassportCondition;
@@ -58,6 +59,7 @@ library DeploymentConstants {
                     uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
                     lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
                     lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
+                    lexchexBadge: address(0), // TODO: not yet deployed on any chain
                     lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: 0xd91a24Ac7D2981c6d660EDEe05Aec22eA5B95E95 // difference from production chains
@@ -76,6 +78,7 @@ library DeploymentConstants {
                     uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
                     lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
                     lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
+                    lexchexBadge: address(0), // TODO: not yet deployed on any chain
                     lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: address(0) // no ZKPassport Verifier available
@@ -94,6 +97,7 @@ library DeploymentConstants {
                     uriBuilder: 0x5500c095ea7dE6F8a5E15949e24B80604cc670A3,
                     lexchexAuth: 0xeAdeaD5C4A6747D4959489742c143bCDb95a01c2,
                     lexchex: 0xc8db0c3f47656aee725b0AD1835F9A3FbD0a0b62,
+                    lexchexBadge: address(0), // TODO: not yet deployed on any chain
                     lexchexMinter: 0x0dD1a2a89eC172ac322B6a7a6c869180CBD0F960,
                     lexchexCondition: 0x4a08547d57C8d01e59bA8F884aB90CEe0d6d5b42,
                     zkpassportCondition: 0xe71fE689bFAA4939A760EDF7e07f44372a43932A

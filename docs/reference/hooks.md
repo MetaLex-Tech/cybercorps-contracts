@@ -18,12 +18,13 @@ interface ITransferRestrictionHook {
 }
 ```
 
-Both `CyberCertPrinter` and `CyberScrip` consult these hooks on transfer:
+Both `LedgerEntryToken` (the cert printer, formerly `CyberCertPrinter`) and
+`CyberScrip` consult these hooks on transfer:
 
 * `CyberScrip` holds an **array** of hooks (`setRestrictionHook`); every
   hook must allow the transfer or it reverts `RestrictedTransfer(reason)`.
-* `CyberCertPrinter` holds per-id hooks (`setRestrictionHook(id, hook)`) and
-  a `globalRestrictionHook` (`setGlobalRestrictionHook`).
+* `LedgerEntryToken` holds per-id hooks (`setRestrictionHook(id, hook)`)
+  and a `globalRestrictionHook` (`setGlobalRestrictionHook`).
 
 ### Implementations
 
@@ -45,5 +46,14 @@ In [`src/hooks/transfer/`](https://github.com/MetaLex-Tech/cybercorps-contracts/
 In [`src/hooks/uniswap/`](https://github.com/MetaLex-Tech/cybercorps-contracts/tree/develop/src/hooks/uniswap).
 A Uniswap v4 hook for **LiquiLeX** AMM pools that splits swap fees between
 MetaLeX and the issuer, so a cyberSCRIP / stablecoin pool pays the issuer
-onchain on every trade. See the source for its exact configuration and the
-hook-address requirements Uniswap v4 imposes.
+onchain on every trade.
+
+* Per-pool configuration via `setPoolConfig` (`onlyAdmin`): a
+  `PoolFeeConfig` with the MetaLeX and issuer recipients, `metalexFeeBps` /
+  `issuerFeeBps` (their sum capped at 10 000 bps), and an `enabled` flag.
+* Registers `beforeSwap`/`afterSwap` permissions with return deltas and
+  handles **all four swap flows**: exact-input swaps are charged in
+  `beforeSwap`, exact-output swaps in `afterSwap`, in both directions
+  (`zeroForOne` and `oneForZero`).
+
+See the source for the hook-address requirements Uniswap v4 imposes.

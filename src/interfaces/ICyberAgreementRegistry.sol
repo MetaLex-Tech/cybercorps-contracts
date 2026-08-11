@@ -194,4 +194,5 @@ interface ICyberAgreementRegistry {
     function isFinalized(bytes32 contractId) external view returns (bool);
 
     function allPartiesFinalized(bytes32 contractId) external view returns (bool);
+
 }

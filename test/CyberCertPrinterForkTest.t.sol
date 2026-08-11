@@ -3,19 +3,19 @@ pragma solidity ^0.8.28;
 
 import "forge-std/Test.sol";
 import {IERC721Enumerable} from "openzeppelin-contracts/token/ERC721/extensions/IERC721Enumerable.sol";
-import {ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
+import {ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IIssuanceManagerFactory} from "../src/interfaces/IIssuanceManagerFactory.sol";
 import {SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 
 contract CyberCertPrinterAdhocTest is Test {
     // Fill these in with real values before running locally/CI
     string internal constant RPC_ENV_VAR = "FORK_RPC_URL"; // e.g. BASE_SEPOLIA_RPC_URL
     address internal constant ISSUANCE_MANAGER_OWNER = address(0); // company owner on target chain
 
-    // Add one or more existing CyberCertPrinter addresses to validate on fork
+    // Add one or more existing LedgerEntryToken addresses to validate on fork
     address[] internal certPrinters = new address[](0);
 
     function setUp() public {
@@ -53,19 +53,19 @@ contract CyberCertPrinterAdhocTest is Test {
     }
 
     function _snapshot(address printerAddr) internal view returns (PrinterSnapshot memory s) {
-        ICyberCertPrinter printer = ICyberCertPrinter(printerAddr);
+        ILedgerEntryToken printer = ILedgerEntryToken(printerAddr);
 
-        s.issuanceManager = CyberCertPrinter(printerAddr).issuanceManager();
-        s.securityType = CyberCertPrinter(printerAddr).securityType();
-        s.securitySeries = CyberCertPrinter(printerAddr).securitySeries();
-        s.certificateUri = CyberCertPrinter(printerAddr).certificateUri();
-        s.transferable = CyberCertPrinter(printerAddr).transferable();
-        s.endorsementRequired = CyberCertPrinter(printerAddr).endorsementRequired();
-        s.defaultLegendHash = _hashStringArray(CyberCertPrinter(printerAddr).defaultLegend());
+        s.issuanceManager = LedgerEntryToken(printerAddr).issuanceManager();
+        s.securityType = LedgerEntryToken(printerAddr).securityType();
+        s.securitySeries = LedgerEntryToken(printerAddr).securitySeries();
+        s.certificateUri = LedgerEntryToken(printerAddr).certificateUri();
+        s.transferable = LedgerEntryToken(printerAddr).transferable();
+        s.endorsementRequired = LedgerEntryToken(printerAddr).endorsementRequired();
+        s.defaultLegendHash = _hashStringArray(LedgerEntryToken(printerAddr).defaultLegend());
 
 
         uint256 supply = 0;
-        // totalSupply is part of the ICyberCertPrinter interface
+        // totalSupply is part of the ILedgerEntryToken interface
         try printer.totalSupply() returns (uint256 ts) {
             supply = ts;
         } catch {}
@@ -115,7 +115,7 @@ contract CyberCertPrinterAdhocTest is Test {
     function test_PrinterBeaconMatchesFactoryRefImplementation() public {
         for (uint256 i = 0; i < certPrinters.length; i++) {
             address printer = certPrinters[i];
-            address im = CyberCertPrinter(printer).issuanceManager();
+            address im = LedgerEntryToken(printer).issuanceManager();
             address upgradeFactory = IIssuanceManager(im).getUpgradeFactory();
 
             address beaconImpl = IIssuanceManager(im).getCertPrinterBeaconImplementation();

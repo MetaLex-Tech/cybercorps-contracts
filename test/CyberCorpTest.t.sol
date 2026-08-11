@@ -43,7 +43,8 @@ pragma solidity ^0.8.18;
 
 import {Test, console} from "forge-std/Test.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
-import {CyberCertPrinter, Endorsement} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken, Endorsement} from "../src/LedgerEntryToken.sol";
+import {ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory, IssuanceManager} from "../src/IssuanceManagerFactory.sol";
@@ -53,18 +54,21 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
+import {IDealManagerStorage} from "../src/interfaces/IDealManagerStorage.sol";
+import {ILexScrowStorage} from "../src/interfaces/ILexScrowStorage.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
-import {CompanyOfficer} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
+import {CompanyOfficer} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {ToggleTransferHook} from "../src/hooks/transfer/ToggleTransferHook.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
 import "@openzeppelin/contracts/utils/Create2.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {DealManager} from "../src/DealManager.sol";
+import {DealManagerStorage} from "../src/storage/DealManagerStorage.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {Escrow} from "../src/storage/LexScrowStorage.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
@@ -74,7 +78,7 @@ import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {SAFTEExtension, SAFTEData} from "../src/storage/extensions/SAFTEExtension.sol";
 import {LeXcheX} from "../src/creds/lexchex.sol";
 import {LeXcheXMinter} from "../src/creds/lexchexMinter.sol";
-import {LexScroWLite} from "../src/libs/LexScroWLite.sol";
+import {LexScrowStorage} from "../src/storage/LexScrowStorage.sol";
 import {LexChexCondition} from "../src/libs/conditions/lexchexCondition.sol";
 import {LeXcheXUtils} from "./libs/LeXcheXUtils.sol";
 import {Accreditation} from "../src/creds/storage/lexchexStorage.sol";
@@ -134,6 +138,7 @@ contract CyberCorpForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: _dataDefaultString
         });
         certData = new CyberCorpFactory.CyberCertData[](1);
@@ -164,7 +169,7 @@ contract CyberCorpForkTest is Test {
         //auth.initialize();
 
         address issuanceManagerImplementation = address(new IssuanceManager{salt: salt}());
-        address cyberCertPrinterImplementation = address(new CyberCertPrinter{salt: salt}());
+        address cyberCertPrinterImplementation = address(new LedgerEntryToken{salt: salt}());
         address cyberScripImplementation = address(new CyberScrip{salt: salt}());
         address issuanceManagerFactory = address(
             new ERC1967Proxy{salt: salt}(
@@ -326,6 +331,35 @@ contract CyberCorpForkTest is Test {
         vm.stopPrank();
     }
 
+    /// @dev Mirrors createContract's contractId preimage for agreements created through
+    /// deployCyberCorpAndCreateOffer. The finalizer is the DealManager the factory is about to
+    /// deploy, so predict its CREATE2 address from the corp salt. `expiry` is not part of the id.
+    function _expectedAgreementId(
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        bytes32 secretHash
+    ) internal view returns (bytes32) {
+        address dealManager = DealManagerFactory(cyberCorpFactory.dealManagerFactory())
+            .computeDealManagerAddress(keccak256(abi.encodePacked(salt)));
+        return _expectedAgreementId(templateId, salt, globalValues, parties, secretHash, dealManager);
+    }
+
+    /// @dev Same preimage, for flows where the finalizing DealManager already exists.
+    function _expectedAgreementId(
+        bytes32 templateId,
+        uint256 salt,
+        string[] memory globalValues,
+        address[] memory parties,
+        bytes32 secretHash,
+        address finalizer
+    ) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer)
+        );
+    }
+
     function testOffer() public {
         CertificateDetails[] memory _details = new CertificateDetails[](1);
         CertificateDetails memory _detailsA = CertificateDetails({
@@ -356,14 +390,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -450,14 +477,7 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Counter Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -597,14 +617,7 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Counter Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -651,6 +664,7 @@ contract CyberCorpForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegends[0]
         });
 
@@ -661,6 +675,7 @@ contract CyberCorpForkTest is Test {
             securityClass: SecurityClass.TokenWarrant,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegends[1]
         });
 
@@ -731,10 +746,10 @@ contract CyberCorpForkTest is Test {
         );
         vm.stopPrank();
         console.log("tokens received:");
-        string memory contractURI = CyberCertPrinter(cyberCertPrinterAddr[0])
+        string memory contractURI = LedgerEntryToken(cyberCertPrinterAddr[0])
             .tokenURI(certIds[0]);
         console.log(contractURI);
-        string memory contractURI2 = CyberCertPrinter(cyberCertPrinterAddr[1])
+        string memory contractURI2 = LedgerEntryToken(cyberCertPrinterAddr[1])
             .tokenURI(certIds[1]);
         console.log(contractURI2);
     }
@@ -769,14 +784,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -853,8 +861,10 @@ contract CyberCorpForkTest is Test {
         vm.startPrank(testAddress);
         BorgAuth auth = new BorgAuth(testAddress);
         // auth.initialize();
-        CyberAgreementRegistry registrya = new CyberAgreementRegistry();
-        registrya.initialize(address(auth));
+        CyberAgreementRegistry registrya = CyberAgreementRegistry(address(new ERC1967Proxy(
+            address(new CyberAgreementRegistry()),
+            abi.encodeWithSelector(CyberAgreementRegistry.initialize.selector, address(auth))
+        )));
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
         string[] memory partyFields = new string[](1);
@@ -888,14 +898,7 @@ contract CyberCorpForkTest is Test {
             block.timestamp + 1000000
         );
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0), address(testAddress));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -985,14 +988,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -1118,14 +1114,7 @@ contract CyberCorpForkTest is Test {
         // Create secret hash from "passphrase"
         bytes32 secretHash = keccak256(abi.encodePacked("passphrase"));
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, secretHash);
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -1254,14 +1243,7 @@ contract CyberCorpForkTest is Test {
         // Create secret hash from "passphrase"
         bytes32 secretHash = keccak256(abi.encode("passphrase"));
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -1411,14 +1393,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -1516,14 +1491,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -1611,7 +1579,7 @@ contract CyberCorpForkTest is Test {
         vm.stopPrank();
 
         // Try to revoke after payment - should fail
-        vm.expectRevert(DealManager.CounterPartyValueMismatch.selector);
+        vm.expectRevert(IDealManagerStorage.CounterPartyValueMismatch.selector);
         IDealManager(dealManagerAddr).revokeDeal(id, testAddress, signature);
         vm.stopPrank();
     }
@@ -1651,14 +1619,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -1756,14 +1717,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -1864,14 +1818,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -1917,8 +1864,9 @@ contract CyberCorpForkTest is Test {
             block.timestamp + 1000000
         );
 
-        // Try to finalize without payment - should fail
-        vm.expectRevert(LexScroWLite.DealNotPaid.selector);
+        // Try to finalize without payment - should fail. parties[1] is address(0) and never signs,
+        // so the all-parties-signed check fires before the unpaid-escrow check.
+        vm.expectRevert(LexScrowStorage.DealNotFullySigned.selector);
         IDealManager(dealManagerAddr).finalizeDeal(id);
         vm.stopPrank();
     }
@@ -1958,14 +1906,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -2087,14 +2028,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -2179,8 +2113,9 @@ contract CyberCorpForkTest is Test {
             ""
         );
 
-        // Try to finalize again - should fail
-        vm.expectRevert(LexScroWLite.DealNotPaid.selector);
+        // Try to finalize again - should fail. The deal is already finalized in the registry,
+        // so the already-finalized check fires before the unpaid-escrow check.
+        vm.expectRevert(LexScrowStorage.DealAlreadyFinalized.selector);
         IDealManager(dealManagerAddr).finalizeDeal(id);
         vm.stopPrank();
     }
@@ -2220,14 +2155,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -2321,7 +2249,7 @@ contract CyberCorpForkTest is Test {
         );
 
         // Try to void after finalization - should fail
-        vm.expectRevert(DealManager.DealNotExpired.selector);
+        vm.expectRevert(IDealManagerStorage.DealNotExpired.selector);
         IDealManager(dealManagerAddr).voidExpiredDeal(
             id,
             testAddress,
@@ -2367,14 +2295,7 @@ contract CyberCorpForkTest is Test {
 
         bytes32 secretHash = keccak256(abi.encodePacked("passphrase"));
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, secretHash);
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -2498,14 +2419,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory signature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -2584,7 +2498,7 @@ contract CyberCorpForkTest is Test {
         );
 
         // Try to sign expired contract - should fail
-        vm.expectRevert(LexScroWLite.DealExpired.selector);
+        vm.expectRevert(LexScrowStorage.DealExpired.selector);
         IDealManager(dealManagerAddr).signDealAndPay(
             newPartyAddr,
             id,
@@ -2658,14 +2572,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0][3] = "Limited Liability Company";
         partyValues[0][4] = "Delaware";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(2)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(2)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -2690,6 +2597,7 @@ contract CyberCorpForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegend
         });
 
@@ -2768,18 +2676,18 @@ contract CyberCorpForkTest is Test {
         );
         vm.stopPrank();
         vm.warp(block.timestamp + 3000000);
-                string memory endorseeName = CyberCertPrinter(cyberCertPrinterAddr[0]).getEndorsementHistory(0, 0).endorseeName;
+                string memory endorseeName = LedgerEntryToken(cyberCertPrinterAddr[0]).getEndorsementHistory(0, 0).endorseeName;
         console.log("endorsee name:", endorseeName);
        // console.log("printer addr length:", cyberCertPrinterAddr.length);
 
         //print endorsee name
 
 
-        string memory certificateUri = CyberCertPrinter(cyberCertPrinterAddr[0])
+        string memory certificateUri = LedgerEntryToken(cyberCertPrinterAddr[0])
             .tokenURI(0);
         console.log(certificateUri);
 
-        /*string memory certificateUriJson = CyberCertPrinter(cyberCertPrinterAddr[0])
+        /*string memory certificateUriJson = LedgerEntryToken(cyberCertPrinterAddr[0])
             .tokenURIJson(0);
         console.log(certificateUriJson);*/
 
@@ -2789,7 +2697,7 @@ contract CyberCorpForkTest is Test {
         // Try to transfer without making transferable and without endorsement - should revert
         vm.startPrank(newPartyAddr);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(cyberCertPrinterAddr[0]).transferFrom(
+        LedgerEntryToken(cyberCertPrinterAddr[0]).transferFrom(
             newPartyAddr,
             newRecipient,
             0
@@ -2798,7 +2706,7 @@ contract CyberCorpForkTest is Test {
 
         // Make the certificate transferable
         vm.startPrank(issuanceManager);
-        CyberCertPrinter(cyberCertPrinterAddr[0]).setGlobalTransferable(true);
+        LedgerEntryToken(cyberCertPrinterAddr[0]).setGlobalTransferable(true);
         vm.stopPrank();
 
         // Create and add endorsement
@@ -2812,13 +2720,13 @@ contract CyberCorpForkTest is Test {
             registry: address(0),
             endorseeName: "New Owner"
         });
-        CyberCertPrinter(cyberCertPrinterAddr[0]).addEndorsement(
+        LedgerEntryToken(cyberCertPrinterAddr[0]).addEndorsement(
             0,
             endorsement
         );
 
         // Now transfer should succeed
-        CyberCertPrinter(cyberCertPrinterAddr[0]).transferFrom(
+        LedgerEntryToken(cyberCertPrinterAddr[0]).transferFrom(
             newPartyAddr,
             newRecipient,
             0
@@ -2826,7 +2734,7 @@ contract CyberCorpForkTest is Test {
 
         // Verify the transfer was successful
         assertEq(
-            CyberCertPrinter(cyberCertPrinterAddr[0]).ownerOf(0),
+            LedgerEntryToken(cyberCertPrinterAddr[0]).ownerOf(0),
             newRecipient
         );
         vm.stopPrank();
@@ -2912,14 +2820,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0][3] = "Limited Liability Company";
         partyValues[0][4] = "Delaware";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(2)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(2)), block.timestamp, globalValues, parties, bytes32(0));
 
         address[] memory extensions = new address[](1);
         extensions[0] = warrantExtension;
@@ -3013,7 +2914,7 @@ contract CyberCorpForkTest is Test {
         );
         vm.stopPrank();
         console.log("printer addr length:", cyberCertPrinterAddr.length);
-        string memory certificateUri = CyberCertPrinter(cyberCertPrinterAddr[0])
+        string memory certificateUri = LedgerEntryToken(cyberCertPrinterAddr[0])
             .tokenURI(0);
         console.log(certificateUri);
 
@@ -3023,7 +2924,7 @@ contract CyberCorpForkTest is Test {
         // Try to transfer without making transferable and without endorsement - should revert
         vm.startPrank(newPartyAddr);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(cyberCertPrinterAddr[0]).transferFrom(
+        LedgerEntryToken(cyberCertPrinterAddr[0]).transferFrom(
             newPartyAddr,
             newRecipient,
             0
@@ -3032,7 +2933,7 @@ contract CyberCorpForkTest is Test {
 
         // Make the certificate transferable
         vm.startPrank(issuanceManager);
-        CyberCertPrinter(cyberCertPrinterAddr[0]).setGlobalTransferable(true);
+        LedgerEntryToken(cyberCertPrinterAddr[0]).setGlobalTransferable(true);
         vm.stopPrank();
 
         // Create and add endorsement
@@ -3046,13 +2947,13 @@ contract CyberCorpForkTest is Test {
             registry: address(0),
             endorseeName: "New Owner"
         });
-        CyberCertPrinter(cyberCertPrinterAddr[0]).addEndorsement(
+        LedgerEntryToken(cyberCertPrinterAddr[0]).addEndorsement(
             0,
             endorsement
         );
 
         // Now transfer should succeed
-        CyberCertPrinter(cyberCertPrinterAddr[0]).transferFrom(
+        LedgerEntryToken(cyberCertPrinterAddr[0]).transferFrom(
             newPartyAddr,
             newRecipient,
             0
@@ -3060,7 +2961,7 @@ contract CyberCorpForkTest is Test {
 
         // Verify the transfer was successful
         assertEq(
-            CyberCertPrinter(cyberCertPrinterAddr[0]).ownerOf(0),
+            LedgerEntryToken(cyberCertPrinterAddr[0]).ownerOf(0),
             newRecipient
         );
         vm.stopPrank();
@@ -3171,9 +3072,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(bytes32(uint256(1)), block.timestamp, globalValues, parties)
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -3285,14 +3184,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -3409,14 +3301,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -3498,9 +3383,9 @@ contract CyberCorpForkTest is Test {
         vm.prank(testAddress);
         IssuanceManager(issuanceManager).upgradeToAndCall(newIssuanceManagerImpl, "");
 
-        address newCyberCertPrinterImpl = address(new CyberCertPrinter());
+        address newCyberCertPrinterImpl = address(new LedgerEntryToken());
 
-        // Owner should be able to set CyberCertPrinter reference implementation
+        // Owner should be able to set LedgerEntryToken reference implementation
         vm.prank(multisig);
         IssuanceManagerFactory(factoryAddr).setCyberCertPrinterRefImplementation(newCyberCertPrinterImpl);
         assertEq(IssuanceManagerFactory(factoryAddr).getCyberCertPrinterRefImplementation(), newCyberCertPrinterImpl);
@@ -3543,14 +3428,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -3624,7 +3502,8 @@ contract CyberCorpForkTest is Test {
                 "ipfs://test",
                 SecurityClass.SAFE,
                 SecuritySeries.SeriesPreSeed,
-                address(0)
+                address(0),
+                bytes("")
             );
 
         // Deploy new implementation
@@ -3674,14 +3553,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -3755,11 +3627,12 @@ contract CyberCorpForkTest is Test {
                 "ipfs://test",
                 SecurityClass.SAFE,
                 SecuritySeries.SeriesPreSeed,
-                address(0)
+                address(0),
+                bytes("")
             );
 
         // Deploy new implementation
-        address newCyberCertPrinterImpl = address(new CyberCertPrinter());
+        address newCyberCertPrinterImpl = address(new LedgerEntryToken());
 
         address factoryAddr = cyberCorpFactory.issuanceManagerFactory();
 
@@ -3777,7 +3650,7 @@ contract CyberCorpForkTest is Test {
         assertEq(IssuanceManager(issuanceManager).getCertPrinterBeaconImplementation(), newCyberCertPrinterImpl);
 
         //check the security type
-        assertEq(CyberCertPrinter(certPrinter).certificateUri(), "ipfs://test");
+        assertEq(LedgerEntryToken(certPrinter).certificateUri(), "ipfs://test");
     }
 
     function testUpdateCyberAgreementRegistry() public {
@@ -3987,14 +3860,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0][3] = "Limited Liability Company";
         partyValues[0][4] = "Delaware";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(2)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(2)), block.timestamp, globalValues, parties, bytes32(0));
 
         bytes memory proposerSignature = CyberAgreementUtils.signAgreementTypedData(
             vm,
@@ -4086,7 +3952,7 @@ contract CyberCorpForkTest is Test {
         );
 
         // Get the token URI and verify it contains the SAFTE details
-        string memory tokenUri = CyberCertPrinter(cyberCertPrinterAddr[0]).tokenURI(0);
+        string memory tokenUri = LedgerEntryToken(cyberCertPrinterAddr[0]).tokenURI(0);
         assertTrue(bytes(tokenUri).length > 0, "Token URI should not be empty");
         console.log("tokenUri: ", tokenUri);
         vm.stopPrank();
@@ -4139,14 +4005,15 @@ contract CyberCorpForkTest is Test {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Test Legend";
 
-        DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](1);
-        certData[0] = DealManager.CyberCertData({
+        DealManagerStorage.CyberCertData[] memory certData = new DealManagerStorage.CyberCertData[](1);
+        certData[0] = DealManagerStorage.CyberCertData({
             name: "Test Certificate",
             symbol: "TEST",
             uri: "ipfs://test-uri",
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegend
         });
 
@@ -4163,14 +4030,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0][0] = "Party Value 1";
 
         // Create signature
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0), dealManagerAddr);
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -4223,7 +4083,7 @@ contract CyberCorpForkTest is Test {
         assertTrue(id != bytes32(0), "Should have created a valid agreement ID");
 
         // Verify the certificate printer was created correctly
-        CyberCertPrinter certPrinter = CyberCertPrinter(certPrinterAddress[0]);
+        LedgerEntryToken certPrinter = LedgerEntryToken(certPrinterAddress[0]);
 
 
         // Verify the certificate name includes the company name
@@ -4301,23 +4161,25 @@ contract CyberCorpForkTest is Test {
         string[] memory warrantLegend = new string[](1);
         warrantLegend[0] = "Token Warrant Legend";
 
-        DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](2);
-        certData[0] = DealManager.CyberCertData({
+        DealManagerStorage.CyberCertData[] memory certData = new DealManagerStorage.CyberCertData[](2);
+        certData[0] = DealManagerStorage.CyberCertData({
             name: "SAFE Certificate",
             symbol: "SAFE",
             uri: "ipfs://safe-uri",
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: safeLegend
         });
-        certData[1] = DealManager.CyberCertData({
+        certData[1] = DealManagerStorage.CyberCertData({
             name: "Token Warrant",
             symbol: "TWARRANT",
             uri: "ipfs://warrant-uri",
             securityClass: SecurityClass.TokenWarrant,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: warrantLegend
         });
 
@@ -4334,14 +4196,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0][0] = "Party Value 1";
 
         // Create signature
-        bytes32 contractId = keccak256(
-            abi.encode(
-                templateId,
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(templateId, block.timestamp, globalValues, parties, bytes32(0), dealManagerAddr);
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -4394,10 +4249,10 @@ contract CyberCorpForkTest is Test {
         assertTrue(id != bytes32(0), "Should have created a valid agreement ID");
 
         // Verify the first certificate printer (SAFE)
-        CyberCertPrinter safePrinter = CyberCertPrinter(certPrinterAddress[0]);
+        LedgerEntryToken safePrinter = LedgerEntryToken(certPrinterAddress[0]);
 
         // Verify the second certificate printer (Token Warrant)
-        CyberCertPrinter warrantPrinter = CyberCertPrinter(certPrinterAddress[1]);
+        LedgerEntryToken warrantPrinter = LedgerEntryToken(certPrinterAddress[1]);
 
 
         // Verify the deal was created in the registry
@@ -4497,14 +4352,15 @@ contract CyberCorpForkTest is Test {
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Test Legend";
 
-        DealManager.CyberCertData[] memory certData = new DealManager.CyberCertData[](1);
-        certData[0] = DealManager.CyberCertData({
+        DealManagerStorage.CyberCertData[] memory certData = new DealManagerStorage.CyberCertData[](1);
+        certData[0] = DealManagerStorage.CyberCertData({
             name: "Test Certificate",
             symbol: "TEST",
             uri: "ipfs://test-uri",
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegend
         });
 
@@ -4519,14 +4375,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0] = new string[](1);
         partyValues[0][0] = "Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                templateId,
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(templateId, block.timestamp, globalValues, parties, bytes32(0), dealManagerAddr);
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -4642,14 +4491,7 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Counter Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -4790,14 +4632,7 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Counter Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -4880,7 +4715,7 @@ contract CyberCorpForkTest is Test {
         );
 
         // This should fail because the counterparty has an invalid (voided) LexChex token
-        vm.expectRevert(DealManager.AgreementConditionsNotMet.selector); // Expect revert due to condition not being met
+        vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector); // Expect revert due to condition not being met
         dealManager.signAndFinalizeDeal(
             newPartyAddr,
             contractId,
@@ -4934,14 +4769,7 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Counter Party Value 1";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -5024,7 +4852,7 @@ contract CyberCorpForkTest is Test {
         );
 
         // This should fail because the counterparty has no LexChex token
-        vm.expectRevert(DealManager.AgreementConditionsNotMet.selector); // Expect revert due to condition not being met
+        vm.expectRevert(ILexScrowStorage.AgreementConditionsNotMet.selector); // Expect revert due to condition not being met
         dealManager.signAndFinalizeDeal(
             newPartyAddr,
             contractId,
@@ -5095,14 +4923,7 @@ contract CyberCorpForkTest is Test {
         partyValues[0][0] = "Investor Party Value";
 
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                templateId,
-                1337, // salt
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(templateId, 1337, globalValues, parties, bytes32(0), address(lexchexMinter));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -5189,13 +5010,8 @@ contract CyberCorpForkTest is Test {
         dealPartyValues[1] = new string[](1);
         dealPartyValues[1][0] = "Deal Counter Party Value 1";
 
-        bytes32 dealContractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                dealGlobalValues,
-                dealParties
-            )
+        bytes32 dealContractId = _expectedAgreementId(
+            bytes32(uint256(1)), block.timestamp, dealGlobalValues, dealParties, bytes32(0)
         );
 
         bytes memory dealSignature = CyberAgreementUtils.signAgreementTypedData(
@@ -5347,14 +5163,7 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Principal Party Value";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -5471,7 +5280,7 @@ contract CyberCorpForkTest is Test {
         assertTrue(registry.hasSigned(id, testAddress), "Company should have signed");
 
         // Verify the certificate was issued to the principal (not the delegate)
-        CyberCertPrinter certPrinter = CyberCertPrinter(cyberCertPrinterAddr[0]);
+        LedgerEntryToken certPrinter = LedgerEntryToken(cyberCertPrinterAddr[0]);
         assertEq(certPrinter.ownerOf(certIds[0]), principalAddr, "Certificate should be owned by principal");
 
         console.log("Delegation test completed successfully!");
@@ -5533,14 +5342,7 @@ contract CyberCorpForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Principal Party Value";
 
-        bytes32 contractId = keccak256(
-            abi.encode(
-                bytes32(uint256(1)),
-                block.timestamp,
-                globalValues,
-                parties
-            )
-        );
+        bytes32 contractId = _expectedAgreementId(bytes32(uint256(1)), block.timestamp, globalValues, parties, bytes32(0));
 
         string[] memory globalFields = new string[](1);
         globalFields[0] = "Global Field 1";
@@ -5682,7 +5484,8 @@ contract CyberCorpForkTest is Test {
             "ipfs://test",
             SecurityClass.SAFE,
             SecuritySeries.SeriesPreSeed,
-            address(0)
+            address(0),
+            bytes("")
         );
 
         // Deploy and initialize the toggle hook with the corp's AUTH used by issuanceManager
@@ -5692,11 +5495,11 @@ contract CyberCorpForkTest is Test {
 
         // Attach the global hook via IssuanceManager (admin)
         vm.prank(testAddress);
-        IssuanceManager(issuanceManager).setGlobalRestrictionHook(certPrinter, address(hook));
+        LedgerEntryToken(certPrinter).setGlobalRestrictionHook(address(hook));
 
         // Enable global transferable on the printer (so hook decides allow/deny)
         vm.prank(issuanceManager);
-        CyberCertPrinter(certPrinter).setGlobalTransferable(true);
+        LedgerEntryToken(certPrinter).setGlobalTransferable(true);
 
         // Configure hook: default off, tokenId 1 on
         vm.startPrank(testAddress);
@@ -5731,8 +5534,8 @@ contract CyberCorpForkTest is Test {
 
         // Token 0 should be blocked by hook
         vm.startPrank(certOwner);
-        vm.expectRevert(abi.encodeWithSelector(CyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 0);
+        vm.expectRevert(abi.encodeWithSelector(ILedgerEntryToken.TransferRestricted.selector, "Transfer disabled by global hook"));
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient, 0);
         vm.stopPrank();
 
         // Token 1 should be allowed by hook, but endorsement is required by printer
@@ -5746,16 +5549,16 @@ contract CyberCorpForkTest is Test {
             endorsee: recipient,
             endorseeName: "Recipient"
         });
-        CyberCertPrinter(certPrinter).addEndorsement(1, e);
+        LedgerEntryToken(certPrinter).addEndorsement(1, e);
         vm.stopPrank();
         vm.prank(certOwner);
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 1);
-        assertEq(CyberCertPrinter(certPrinter).ownerOf(1), recipient);
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient, 1);
+        assertEq(LedgerEntryToken(certPrinter).ownerOf(1), recipient);
 
         // Token 2 should be blocked
         vm.startPrank(certOwner);
-        vm.expectRevert(abi.encodeWithSelector(CyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 2);
+        vm.expectRevert(abi.encodeWithSelector(ILedgerEntryToken.TransferRestricted.selector, "Transfer disabled by global hook"));
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient, 2);
         vm.stopPrank();
     }
 
@@ -5811,7 +5614,8 @@ contract CyberCorpForkTest is Test {
             "ipfs://test",
             SecurityClass.SAFE,
             SecuritySeries.SeriesSeed,
-            address(0)
+            address(0),
+            bytes("")
         );
 
         CertificateDetails memory cd = CertificateDetails({
@@ -5833,23 +5637,24 @@ contract CyberCorpForkTest is Test {
         // Global off; token 0 off => revert
         vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 0);
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient, 0);
         vm.stopPrank();
 
         // Enable token 0 only
         vm.prank(issuanceManager);
-        CyberCertPrinter(certPrinter).setTokenTransferable(0, true);
+        LedgerEntryToken(certPrinter).setTokenTransferable(0, true);
 
         // Transfer without endorsement: ERC721 owner changes but legal owner record does not
         address midAddr = vm.addr(0xD0);
         vm.prank(certOwner);
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, midAddr, 0);
-        assertEq(CyberCertPrinter(certPrinter).ownerOf(0), midAddr);
-        assertEq(CyberCertPrinter(certPrinter).legalOwnerOf(0), certOwner);
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, midAddr, 0);
+        assertEq(LedgerEntryToken(certPrinter).ownerOf(0), midAddr);
+        assertEq(LedgerEntryToken(certPrinter).legalOwnerOf(0), certOwner);
 
-        // Add endorsement and endorsed transfer updates legal owner record
+        // Add endorsement and endorsed transfer updates legal owner record. The holder of record endorses —
+        // midAddr only has possession — and then delivers the cert to the endorsee as a custodian would.
         Endorsement memory e = Endorsement({
-            endorser: midAddr,
+            endorser: certOwner,
             timestamp: block.timestamp,
             signatureHash: hex"01",
             registry: address(0),
@@ -5857,17 +5662,17 @@ contract CyberCorpForkTest is Test {
             endorsee: recipient,
             endorseeName: "Recipient"
         });
+        vm.prank(certOwner);
+        LedgerEntryToken(certPrinter).addEndorsement(0, e);
         vm.prank(midAddr);
-        CyberCertPrinter(certPrinter).addEndorsement(0, e);
-        vm.prank(midAddr);
-        CyberCertPrinter(certPrinter).transferFrom(midAddr, recipient, 0);
-        assertEq(CyberCertPrinter(certPrinter).ownerOf(0), recipient);
-        assertEq(CyberCertPrinter(certPrinter).legalOwnerOf(0), recipient);
+        LedgerEntryToken(certPrinter).transferFrom(midAddr, recipient, 0);
+        assertEq(LedgerEntryToken(certPrinter).ownerOf(0), recipient);
+        assertEq(LedgerEntryToken(certPrinter).legalOwnerOf(0), recipient);
 
         // Token 1 should remain blocked
         vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, vm.addr(0xBEEF), 1);
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, vm.addr(0xBEEF), 1);
         vm.stopPrank();
     }
 
@@ -5950,7 +5755,8 @@ contract CyberCorpForkTest is Test {
             "ipfs://uri",
             SecurityClass.SAFE,
             SecuritySeries.SeriesSeed,
-            address(0)
+            address(0),
+            bytes("")
         );
         CertificateDetails memory cd = CertificateDetails({
             signingOfficerName: "",
@@ -5980,27 +5786,27 @@ contract CyberCorpForkTest is Test {
             endorseeName: "R1"
         });
         vm.prank(certOwner);
-        CyberCertPrinter(certPrinter).addEndorsement(0, e0);
+        LedgerEntryToken(certPrinter).addEndorsement(0, e0);
 
         // Before enabling global: expect TokenNotTransferable
         vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient1, 0);
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient1, 0);
         vm.stopPrank();
 
         // Turn global on, transfer succeeds
         vm.prank(issuanceManager);
-        CyberCertPrinter(certPrinter).setGlobalTransferable(true);
+        LedgerEntryToken(certPrinter).setGlobalTransferable(true);
         vm.prank(certOwner);
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient1, 0);
-        assertEq(CyberCertPrinter(certPrinter).ownerOf(0), recipient1);
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient1, 0);
+        assertEq(LedgerEntryToken(certPrinter).ownerOf(0), recipient1);
 
         // Global off again
         vm.prank(issuanceManager);
-        CyberCertPrinter(certPrinter).setGlobalTransferable(false);
+        LedgerEntryToken(certPrinter).setGlobalTransferable(false);
 
         // Verify token flag not persisted
-        bool persisted = CyberCertPrinter(certPrinter).isTokenTransferable(0);
+        bool persisted = LedgerEntryToken(certPrinter).isTokenTransferable(0);
         assertEq(persisted, false);
 
         // Add endorsement for token 1 -> recipient2 and ensure it still reverts due to global off and no per-token flag
@@ -6014,10 +5820,10 @@ contract CyberCorpForkTest is Test {
             endorseeName: "R2"
         });
         vm.prank(certOwner);
-        CyberCertPrinter(certPrinter).addEndorsement(1, e1);
+        LedgerEntryToken(certPrinter).addEndorsement(1, e1);
         vm.startPrank(certOwner);
         vm.expectRevert(abi.encodeWithSignature("TokenNotTransferable()"));
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient2, 1);
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient2, 1);
         vm.stopPrank();
     }
 
@@ -6059,7 +5865,8 @@ contract CyberCorpForkTest is Test {
             "ipfs://uri",
             SecurityClass.SAFE,
             SecuritySeries.SeriesSeed,
-            address(0)
+            address(0),
+            bytes("")
         );
         CertificateDetails memory cd = CertificateDetails({
             signingOfficerName: "",
@@ -6075,14 +5882,14 @@ contract CyberCorpForkTest is Test {
 
         // Enable per-token transferability for token 0
         vm.prank(issuanceManager);
-        CyberCertPrinter(certPrinter).setTokenTransferable(0, true);
+        LedgerEntryToken(certPrinter).setTokenTransferable(0, true);
 
         // Install a denying global hook
         ToggleTransferHook hook = new ToggleTransferHook();
         BorgAuth corpAuth = IssuanceManager(issuanceManager).AUTH();
         hook.initialize(address(corpAuth));
         vm.prank(testAddress);
-        IssuanceManager(issuanceManager).setGlobalRestrictionHook(certPrinter, address(hook));
+        LedgerEntryToken(certPrinter).setGlobalRestrictionHook(address(hook));
         vm.prank(testAddress);
         hook.setDefaultTransferable(false);
 
@@ -6098,10 +5905,10 @@ contract CyberCorpForkTest is Test {
             endorseeName: "R"
         });
         vm.prank(certOwner);
-        CyberCertPrinter(certPrinter).addEndorsement(0, e);
+        LedgerEntryToken(certPrinter).addEndorsement(0, e);
         vm.startPrank(certOwner);
-        vm.expectRevert(abi.encodeWithSelector(CyberCertPrinter.TransferRestricted.selector, "Transfer disabled by global hook"));
-        CyberCertPrinter(certPrinter).transferFrom(certOwner, recipient, 0);
+        vm.expectRevert(abi.encodeWithSelector(ILedgerEntryToken.TransferRestricted.selector, "Transfer disabled by global hook"));
+        LedgerEntryToken(certPrinter).transferFrom(certOwner, recipient, 0);
         vm.stopPrank();
     }
 
@@ -6141,7 +5948,8 @@ contract CyberCorpForkTest is Test {
             "ipfs://uri",
             SecurityClass.SAFE,
             SecuritySeries.SeriesSeed,
-            address(0)
+            address(0),
+            bytes("")
         );
         CertificateDetails memory cd = CertificateDetails({
             signingOfficerName: "",
@@ -6167,11 +5975,11 @@ contract CyberCorpForkTest is Test {
             endorseeName: "R"
         });
         vm.prank(dealManagerAddr);
-        CyberCertPrinter(certPrinter).addEndorsement(0, e);
+        LedgerEntryToken(certPrinter).addEndorsement(0, e);
 
         // With both global and token flags off, transfer from dealManager should succeed (exemption), subject to hooks/endorsement
         vm.prank(dealManagerAddr);
-        CyberCertPrinter(certPrinter).transferFrom(dealManagerAddr, recipient, 0);
-        assertEq(CyberCertPrinter(certPrinter).ownerOf(0), recipient);
+        LedgerEntryToken(certPrinter).transferFrom(dealManagerAddr, recipient, 0);
+        assertEq(LedgerEntryToken(certPrinter).ownerOf(0), recipient);
     }
 }

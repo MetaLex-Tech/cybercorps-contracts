@@ -45,14 +45,14 @@ pragma solidity 0.8.28;
 import "openzeppelin-contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "../interfaces/IIssuanceManager.sol";
 import "../interfaces/ICondition.sol";
-import "../interfaces/ICyberCertPrinter.sol";
+import "../interfaces/ILedgerEntryToken.sol";
 import "../interfaces/ICyberAgreementRegistry.sol";
 import "../interfaces/ILexChex.sol";
 import "../interfaces/IRoundManagerFactory.sol";
 import "../libs/EIP712Lib.sol";
 import "../libs/RoundLib.sol";
 import "../storage/LexScrowStorage.sol";
-import "../storage/CyberCertPrinterStorage.sol";
+import "../storage/LedgerEntryTokenStorage.sol";
 import "../CyberCorpConstants.sol";
 
 interface ILexChexMinter {
@@ -75,6 +75,8 @@ struct CyberCertData {
     SecurityClass securityClass;
     SecuritySeries securitySeries;
     address extension;
+    /// @notice Series-scope payload encoded by `extension`.
+    bytes seriesData;
     string[] defaultLegend;
 }
 
@@ -118,6 +120,29 @@ struct LexChexDetails {
 library RoundManagerStorage {
     // Storage slot for our struct
     bytes32 constant STORAGE_POSITION = keccak256("cybercorp.round.manager.storage.v1");
+
+    // EIP-712 escrowed-signature domain (authority officer authorizes round parameters off-chain).
+    string constant EIP712_NAME = "RoundManager";
+    string constant EIP712_VERSION = "1";
+    bytes32 constant ESCROWEDSIGNATUREDATA_TYPEHASH = keccak256(
+        "EscrowedSignatureData(bytes32 roundId,uint8 seriesType,uint256 raiseCap,uint256 minTicket,uint256 maxTicket,uint8 roundType,uint256 startTime,uint256 endTime,bytes32 templateId,address paymentToken,uint256 pricePerUnit,uint256 valuation,address companyAddress)"
+    );
+
+    struct EscrowedSignatureData {
+        bytes32 roundId;
+        uint8 seriesType;
+        uint256 raiseCap;
+        uint256 minTicket;
+        uint256 maxTicket;
+        uint8 roundType;
+        uint256 startTime;
+        uint256 endTime;
+        bytes32 templateId;
+        address paymentToken;
+        uint256 pricePerUnit;
+        uint256 valuation;
+        address companyAddress;
+    }
 
     /// @notice Main storage layout struct that holds all round manager data
     /// @dev Uses unstructured storage pattern to avoid storage collisions
@@ -166,7 +191,7 @@ library RoundManagerStorage {
 
         address[] memory certPrinterAddresses = new address[](certData.length);
         for (uint256 i = 0; i < certData.length; i++) {
-            ICyberCertPrinter certPrinter = ICyberCertPrinter(
+            ILedgerEntryToken certPrinter = ILedgerEntryToken(
                 issuanceManager.createCertPrinter(
                     certData[i].defaultLegend,
                     string.concat(companyName, " ", certData[i].name),
@@ -174,7 +199,8 @@ library RoundManagerStorage {
                     certData[i].uri,
                     certData[i].securityClass,
                     certData[i].securitySeries,
-                    certData[i].extension
+                    certData[i].extension,
+                    certData[i].seriesData
                 )
             );
             certPrinterAddresses[i] = address(certPrinter);
@@ -228,6 +254,9 @@ library RoundManagerStorage {
         partyValuesArray[0] = round.roundPartyValues;
         partyValuesArray[1] = partyValues;
 
+        // Rounds without timed offers ignore the EOI expiry and run to the round end instead
+        uint256 expiry = round.allowTimedOffers ? eoi.expiry : round.endTime;
+
         agreementId = ICyberAgreementRegistry(ls.DEAL_REGISTRY)
             .createContract(
                 round.templateId,
@@ -237,7 +266,7 @@ library RoundManagerStorage {
                 partyValuesArray,
                 secretHash,
                 address(this),
-                eoi.expiry
+                expiry
             );
 
         Token[] memory corpAssets = new Token[](0);
@@ -250,17 +279,8 @@ library RoundManagerStorage {
             true // Will be used as fee token
         );
 
-        // Emulates LexScroWLite.createEscrow() as we couldn't call it in a library
-        uint256 expiryForEscrow = round.allowTimedOffers ? eoi.expiry : round.endTime;
-        ls.escrows[agreementId] = Escrow({
-            agreementId: agreementId,
-            counterParty: counterParty,
-            corpAssets: corpAssets,
-            buyerAssets: buyerAssets,
-            signature: abi.encodePacked(bytes32(0)),
-            expiry: expiryForEscrow,
-            status: EscrowStatus.PENDING
-        });
+        // Create the escrow via the shared LexScrowStorage library (no longer duplicated here)
+        LexScrowStorage.createEscrow(agreementId, counterParty, corpAssets, buyerAssets, expiry);
 
         if (round.roundType == RoundType.FCFS) {
             ICyberAgreementRegistry(ls.DEAL_REGISTRY)
@@ -284,23 +304,8 @@ library RoundManagerStorage {
                 ""
             );
 
-        // Emulates LexScroWLite.updateEscrow() as we couldn't call it in a library
-        Escrow storage escrow = ls.escrows[agreementId];
-        escrow.counterParty = counterParty;
-        Endorsement memory newEndorsement = Endorsement(
-            address(this),
-            block.timestamp,
-            escrow.signature,
-            ls.DEAL_REGISTRY,
-            agreementId,
-            escrow.counterParty,
-            eoi.name
-        );
-        for(uint256 i = 0; i < escrow.corpAssets.length; i++) {
-            if(escrow.corpAssets[i].tokenType == TokenType.ERC721) {
-                ICyberCertPrinter(escrow.corpAssets[i].tokenAddress).addEndorsement(escrow.corpAssets[i].tokenId, newEndorsement);
-            }
-        }
+        // Update the escrow (set counterparty + endorsements) via the shared LexScrowStorage library
+        LexScrowStorage.updateEscrow(agreementId, counterParty, eoi.name);
 
         setAgreementToRound(agreementId, roundId);
         getRoundToAgreements(roundId).push(agreementId);
@@ -423,8 +428,7 @@ library RoundManagerStorage {
             );
 
             //add officer signature from round escrowed signature
-            issuanceManager.addOfficerSignature(
-                round.certPrinter[i],
+            ILedgerEntryToken(round.certPrinter[i]).addIssuerSignature(
                 certIds[i],
                 round.escrowedSignature
             );
@@ -443,8 +447,7 @@ library RoundManagerStorage {
 
             if (secondEscrowedSignature.length > 0) {
                 for (uint256 i = 0; i < round.certPrinter.length; i++) {
-                    issuanceManager.addOfficerSignature(
-                        round.certPrinter[i],
+                    ILedgerEntryToken(round.certPrinter[i]).addIssuerSignature(
                         certIds[i],
                         secondEscrowedSignature
                     );
@@ -467,7 +470,7 @@ library RoundManagerStorage {
 
         // Effect: loop through certPrinter and add endorsement to each
         for (uint256 i = 0; i < round.certPrinter.length; i++) {
-            ICyberCertPrinter(round.certPrinter[i]).addEndorsement(
+            ILedgerEntryToken(round.certPrinter[i]).addEndorsement(
                 certIds[i],
                 endorsement
             );
@@ -591,6 +594,39 @@ library RoundManagerStorage {
 
     function getLexChexMinter() internal view returns (address) {
         return roundManagerStorage().lexChexMinter;
+    }
+
+    /// @notice Verifies an authority officer's EIP-712 signature over escrowed round parameters.
+    /// @dev Called via delegatecall from RoundManager, so address(this) is the RoundManager proxy — the
+    /// correct EIP-712 verifyingContract. external to keep this off RoundManager's bytecode.
+    /// @param signer Expected signer (authority officer EOA)
+    /// @param data Escrowed round parameters used to build the typed data
+    /// @param signature Signature bytes produced over the typed data
+    /// @return isValid True if the recovered signer matches `signer`
+    function verifyEscrowedSignature(
+        address signer,
+        EscrowedSignatureData memory data,
+        bytes memory signature
+    ) external view returns (bool) {
+        bytes32 structHash = keccak256(
+            abi.encode(
+                ESCROWEDSIGNATUREDATA_TYPEHASH,
+                data.roundId,
+                data.seriesType,
+                data.raiseCap,
+                data.minTicket,
+                data.maxTicket,
+                data.roundType,
+                data.startTime,
+                data.endTime,
+                data.templateId,
+                data.paymentToken,
+                data.pricePerUnit,
+                data.valuation,
+                data.companyAddress
+            )
+        );
+        return EIP712Lib.verifySignature(EIP712_NAME, EIP712_VERSION, address(this), signer, structHash, signature);
     }
 
     function _isStockSecurityClass(SecurityClass cls) private pure returns (bool) {

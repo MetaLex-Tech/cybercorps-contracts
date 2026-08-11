@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {Script} from "forge-std/Script.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
@@ -16,7 +16,7 @@ import {DealManagerFactory, DealManager} from "../src/DealManagerFactory.sol";
 import {RoundManagerFactory, RoundManager} from "../src/RoundManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {console} from "forge-std/console.sol";
 import "../src/CyberCorpConstants.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
@@ -68,7 +68,7 @@ contract BaseScript is Script {
         BorgAuth auth = new BorgAuth{salt: salt}(deployerAddress);
 
          address issuanceManagerImplementation = address(new IssuanceManager{salt: salt}());
-         address cyberCertPrinterImplementation = address(new CyberCertPrinter{salt: salt}());
+         address cyberCertPrinterImplementation = address(new LedgerEntryToken{salt: salt}());
          address cyberScripImplementation = address(new CyberScrip{salt: salt}());
          address issuanceManagerFactory = address(
              new ERC1967Proxy{salt: salt}(

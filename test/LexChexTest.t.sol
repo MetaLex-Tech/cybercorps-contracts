@@ -128,34 +128,9 @@ contract LexChexTest is Test {
         vm.stopPrank();
     }
 
-    // Test 4: Test burning own token
-    function testBurnOwnToken() public {
-        vm.startPrank(admin);
-        uint256 tokenId = lexchex.mint(user1, testAccreditation);
-        vm.stopPrank();
 
-        vm.expectEmit(true, true, true, true);
-        emit LexChex_Burned(user1, tokenId);
-        vm.startPrank(user1);
-        lexchex.burn(tokenId);
-        vm.stopPrank();
 
-       // vm.expectRevert("ERC721: invalid token ID");
-       //address owner = lexchex.ownerOf(tokenId);
-       //console.log("owner", owner);
-    }
-
-    // Test 5: Test burning someone else's token should fail
-    function test_RevertWhen_BurningOthersToken() public {
-        vm.startPrank(admin);
-        uint256 tokenId = lexchex.mint(user1, testAccreditation);
-        vm.stopPrank();
-
-        vm.startPrank(user2);
-        vm.expectRevert(abi.encodeWithSelector(LeXcheX.LexChex_OnlyOwnerCanBurn.selector));
-        lexchex.burn(tokenId);
-        vm.stopPrank();
-    }
+ 
 
     // Test 6: Test voiding as owner
     function testVoidAsOwner() public {
@@ -245,12 +220,6 @@ contract LexChexTest is Test {
         assertEq(lexchex.ownerOf(tokenId1), user1);
         assertEq(lexchex.ownerOf(tokenId2), user2);
         vm.stopPrank();
-    }
-
-    // Test 14: Test burning non-existent token
-    function test_RevertWhen_BurningNonExistentToken() public {
-        vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, 999));
-        lexchex.burn(999);
     }
 
     // Test 16: Test validity of non-existent token

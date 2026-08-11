@@ -5,19 +5,20 @@ import "forge-std/Test.sol";
 import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
 import {TestableCyberScrip} from "./mock/TestableCyberScrip.sol";
 import {MockTransferHook} from "./mock/MockTransferHook.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 
 contract MockCertPrinterBasic {
     string private _name;
     string private _symbol;
     mapping(uint256 => address) private _owners;
     mapping(uint256 => CertificateDetails) private _details;
+    mapping(uint256 => uint256) private _reserved;
 
     constructor(string memory name_, string memory symbol_) {
         _name = name_;
@@ -32,7 +33,10 @@ contract MockCertPrinterBasic {
         _details[id].unitsRepresented = units;
     }
 
+    function mockSetReserved(uint256 id, uint256 units) external { _reserved[id] = units; }
+
     function isVoided(uint256) external pure returns (bool) { return false; }
+    function unitsReserved(uint256 id) external view returns (uint256) { return _reserved[id]; }
     function legalOwnerOf(uint256 id) external view returns (address) { return _owners[id]; }
     function getActiveCertificateDetails(uint256 id) external view returns (CertificateDetails memory) { return _details[id]; }
     function updateCertificateDetails(uint256 id, CertificateDetails calldata det) external { _details[id] = det; }
@@ -69,7 +73,7 @@ contract IssuanceManagerScripComplianceTest is Test {
                         IssuanceManagerFactory.initialize.selector,
                         address(auth),
                         address(new IssuanceManager()),
-                        address(new CyberCertPrinter()),
+                        address(new LedgerEntryToken()),
                         address(new TestableCyberScrip())
                     )
                 )
@@ -113,6 +117,26 @@ contract IssuanceManagerScripComplianceTest is Test {
         cert.mockMintCert(0, user1, 100 ether);
         vm.prank(user1);
         issuanceManager.scripifyCert(address(cert), 0, 100 ether, address(0));
+    }
+
+    function test_scripifyCert_revertsWhenAmountExceedsFreeUnits() public {
+        cert.mockMintCert(1, user1, 100 ether);
+        cert.mockSetReserved(1, 60 ether); // only 40 free
+
+        vm.prank(user1);
+        vm.expectRevert(abi.encodeWithSignature("AmountExceedsAvailableUnits()"));
+        issuanceManager.scripifyCert(address(cert), 1, 41 ether, address(0));
+    }
+
+    function test_scripifyCert_succeedsUpToFreeUnits() public {
+        cert.mockMintCert(2, user1, 100 ether);
+        cert.mockSetReserved(2, 60 ether); // 40 free
+
+        vm.prank(user1);
+        issuanceManager.scripifyCert(address(cert), 2, 40 ether, address(0));
+
+        CertificateDetails memory det = cert.getActiveCertificateDetails(2);
+        assertEq(det.unitsRepresented, 60 ether);
     }
 
     function test_setScripRestrictionHooks_updatesHook() public {

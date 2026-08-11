@@ -94,7 +94,7 @@ contract UpgradePublicRoundsForkTest is Test {
 
         IssuanceManagerFactory imFactory = IssuanceManagerFactory(CyberCorpFactory(cyberCorpFactoryProxyAddr).issuanceManagerFactory());
         assertNotEq(imFactory.getRefImplementation(), address(0), "IssuanceManagerFactory should have reference implementation");
-        assertNotEq(imFactory.getCyberCertPrinterRefImplementation(), address(0), "IssuanceManagerFactory should have reference implementation for CyberCertPrinter");
+        assertNotEq(imFactory.getCyberCertPrinterRefImplementation(), address(0), "IssuanceManagerFactory should have reference implementation for LedgerEntryToken");
         assertNotEq(imFactory.getCyberScripRefImplementation(), address(0), "IssuanceManagerFactory should have reference implementation for CyberScrip");
 
         // Legacy ecosystem should be partially upgraded
@@ -150,6 +150,7 @@ contract UpgradePublicRoundsForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesA,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: new string[](0)
         });
 
@@ -381,8 +382,10 @@ contract UpgradePublicRoundsForkTest is Test {
             roundPartyValues,
             roundPartyValues,
             companyOwner,
-            alicePrivateKey
-        );
+            alicePrivateKey,
+            address(rm),
+            eoi.expiry,
+            bytes32(0));
 
         /*        bytes32 roundId,
         EOI memory eoi,
@@ -464,8 +467,10 @@ contract UpgradePublicRoundsForkTest is Test {
             roundPartyValues,
             roundPartyValues,
             companyOwner,
-            bobPrivateKey
-        );
+            bobPrivateKey,
+            address(rm2),
+            eoi2.expiry,
+            bytes32(0));
 
         ERC20(payable(usdc)).approve(address(rm2), type(uint256).max);
         RoundManager(rm2).submitEOI(
@@ -540,6 +545,7 @@ contract UpgradePublicRoundsForkTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegend
         });
 
@@ -640,7 +646,7 @@ contract UpgradePublicRoundsForkTest is Test {
             lxPartyValues[0][2] = eoi.jurisdiction;
             lxPartyValues[0][3] = eoi.contact;
 
-            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties));
+            bytes32 lxContractId = keccak256(abi.encode(lxTemplateId, lxSalt, lxGlobalValues, lxParties, bytes32(0), address(leXcheXMinter)));
             bytes memory lxSig = CyberAgreementUtils.signAgreementTypedData(
                 vm,
                 lxRegistry.DOMAIN_SEPARATOR(),
@@ -697,8 +703,10 @@ contract UpgradePublicRoundsForkTest is Test {
                 globalValues,
                 partyValues,
                 companyOwner,
-                bobPrivateKey
-            ),
+                bobPrivateKey,
+                address(rm),
+                eoi.expiry,
+                bytes32(0)),
             salt,
             new address[](0),
             bytes32(0)
@@ -715,7 +723,10 @@ contract UpgradePublicRoundsForkTest is Test {
         string[] memory globalValues,
         string[] memory partyValues,
         address authorityOfficer,
-        uint256 signerPrivKey
+        uint256 signerPrivKey,
+        address finalizer,
+        uint256 expiry,
+        bytes32 secretHash
     ) internal view returns (bytes memory) {
         (
             string memory legalUri,
@@ -728,7 +739,7 @@ contract UpgradePublicRoundsForkTest is Test {
         parties[0] = authorityOfficer;
         parties[1] = signer;
         bytes32 contractId = keccak256(
-            abi.encode(templateId, salt, globalValues, parties)
+            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer)
         );
         return
                             CyberAgreementUtils.signAgreementTypedData(

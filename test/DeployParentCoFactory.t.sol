@@ -60,6 +60,7 @@ contract DeployParentCoFactoryForkTest is Test {
             .setRefImplementation(address(cyberCorpV5));
 
         registry = CyberAgreementRegistry(coreDeployment.cyberAgreementRegistry);
+        CyberAgreementUtils.upgradeRegistry(vm, address(registry), coreDeployment.metalexSafe);
 
         (deployer, deployerPrivKey) = makeAddrAndKey("deployer");
 
@@ -153,11 +154,11 @@ contract DeployParentCoFactoryForkTest is Test {
         address[] memory segCoParties = new address[](2);
         segCoParties[0] = parentCoOfficer1;
         segCoParties[1] = subCorpOfficer;
-        r.expectedSegCoId = keccak256(abi.encode(segCoTemplateId, subCorpSalt, globalValues, segCoParties));
+        r.expectedSegCoId = keccak256(abi.encode(segCoTemplateId, subCorpSalt, globalValues, segCoParties, bytes32(0), address(parentCoFactory)));
 
         address[] memory boardConsentParties = new address[](1);
         boardConsentParties[0] = parentCoOfficer1;
-        r.expectedBoardConsentId = keccak256(abi.encode(boardConsentTemplateId, subCorpSalt, globalValues, boardConsentParties));
+        r.expectedBoardConsentId = keccak256(abi.encode(boardConsentTemplateId, subCorpSalt, globalValues, boardConsentParties, bytes32(0), address(parentCoFactory)));
 
         (
             string memory legalContractUri,
@@ -178,6 +179,11 @@ contract DeployParentCoFactoryForkTest is Test {
             partyValues,
             subCorpOfficerPrivKey
         );
+
+        // Sign at one timestamp, execute at another: the factory derives the agreement expiry from
+        // block.timestamp, so signing and mining in the same block would hide any dependence of the
+        // contractId on that unpredictable value.
+        vm.warp(block.timestamp + 1 hours);
 
         (
             r.subCorp,
@@ -425,7 +431,7 @@ contract DeployParentCoFactoryForkTest is Test {
         address[] memory segCoParties = new address[](2);
         segCoParties[0] = parentCoOfficer2;
         segCoParties[1] = subCorpOfficer;
-        bytes32 agreementId = keccak256(abi.encode(segCoTemplateId, subCorpSalt, globalValues, segCoParties));
+        bytes32 agreementId = keccak256(abi.encode(segCoTemplateId, subCorpSalt, globalValues, segCoParties, bytes32(0), address(parentCoFactory)));
 
         (
             string memory legalContractUri,
@@ -446,6 +452,8 @@ contract DeployParentCoFactoryForkTest is Test {
             partyValues,
             subCorpOfficerPrivKey
         );
+
+        vm.warp(block.timestamp + 1 hours); // sign and execute in different blocks, see note above
 
         (address subCorp,,,,,, bytes32 retId,) = parentCoFactory.deployCorpContractFor(
             subCorpSalt,

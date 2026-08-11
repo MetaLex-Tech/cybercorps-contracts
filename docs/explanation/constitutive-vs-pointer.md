@@ -38,7 +38,7 @@ possibility of the chain and the legal record diverging.
 * **DGCL §202** permits restrictive legends; cyberCERT extensions encode
   them.
 * **DGCL §219** governs stockholder-list rights; the cyberCORP register is
-  queryable on-chain by anyone and can be exported to any required format.
+  queryable onchain by anyone and can be exported to any required format.
 
 ## Why this is possible elsewhere
 

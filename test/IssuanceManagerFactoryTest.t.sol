@@ -43,7 +43,7 @@ pragma solidity 0.8.28;
 import {Test, console} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {UUPSUpgradeable} from "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IssuanceManagerFactory, IssuanceManagerFactoryStorage} from "../src/IssuanceManagerFactory.sol";
@@ -64,7 +64,7 @@ contract IssuanceManagerFactoryTest is Test {
 
     function test_initialize() public {
         IssuanceManager refImplementation = new IssuanceManager();
-        CyberCertPrinter cyberCertPrinterRefImplementation = new CyberCertPrinter();
+        LedgerEntryToken cyberCertPrinterRefImplementation = new LedgerEntryToken();
         CyberScrip cyberScripRefImplementation = new CyberScrip();
         IssuanceManagerFactory factoryImpl = new IssuanceManagerFactory();
 

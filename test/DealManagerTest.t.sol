@@ -48,10 +48,13 @@ import {ERC721Enumerable} from "../dependencies/openzeppelin-contracts/contracts
 import {ERC1967Proxy} from "../dependencies/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC1967} from "../dependencies/openzeppelin-contracts/contracts/interfaces/IERC1967.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
-import {DealManager, LexScroWLite} from "../src/DealManager.sol";
+import {DealManager, LexScrowStorage} from "../src/DealManager.sol";
+import {EscrowStatus} from "../src/storage/LexScrowStorage.sol";
+import {IDealManager} from "../src/interfaces/IDealManager.sol";
+import {IDealManagerStorage} from "../src/interfaces/IDealManagerStorage.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CertificateDetails, Endorsement} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails, Endorsement} from "../src/storage/LedgerEntryTokenStorage.sol";
 
 contract ERC20Mock is ERC20 {
     constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) {}
@@ -68,6 +71,10 @@ contract IssuanceManagerMock {
         CertificateDetails memory _details
     ) external returns (uint256) {
         return CyberCertPrinterMock(certAddress).mint(to);
+    }
+
+    function voidCertificate(address certAddress, uint256 tokenId) external {
+      
     }
 }
 
@@ -88,6 +95,15 @@ contract CyberCertPrinterMock is ERC721Enumerable {
 
     function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (Endorsement memory) {
         return endorsements[tokenId][index];
+    }
+
+    function burn(uint256 tokenId) external {
+        _burn(tokenId);
+    }
+
+    // DealManager now voids the seller cert directly on the printer (was routed via IssuanceManager).
+    function voidCert(uint256 tokenId) external {
+        _burn(tokenId);
     }
 }
 
@@ -364,7 +380,7 @@ contract DealManagerTest is Test {
 
     function test_PaymentFlow_ProposeDeal() public {
         // proposeDeal() is one of the two methods that'll pull certificates from the issuing company (first party)
-        // Unlike the more generic LexScroWLite, DealManager assumes the company's assets are certificates-only
+        // Unlike the more generic LexScrowStorage, DealManager assumes the company's assets are certificates-only
         // After the transaction, the company's certificates should be in escrow.
 
         // Deal configs
@@ -398,7 +414,7 @@ contract DealManagerTest is Test {
 
     function test_PaymentFlow_ProposeAndSignDeal() public {
         // proposeAndSignDeal() is one of the two methods that'll pull certificates from the issuing company (first party)
-        // Unlike the more generic LexScroWLite, DealManager assumes the company's assets are certificates-only
+        // Unlike the more generic LexScrowStorage, DealManager assumes the company's assets are certificates-only
         // The signature must be valid.
         // After the transaction, the company's certificates should be in escrow.
 
@@ -538,7 +554,7 @@ contract DealManagerTest is Test {
         );
 
         vm.expectEmit(true, true, true, true);
-        emit DealManager.DealFinalized(
+        emit IDealManagerStorage.DealFinalized(
             agreementId,
             alice,
             address(corp),
@@ -571,7 +587,7 @@ contract DealManagerTest is Test {
         );
 
         vm.expectEmit(true, true, true, true);
-        emit DealManager.DealFinalized(
+        emit IDealManagerStorage.DealFinalized(
             agreementId,
             bob,
             address(corp),
@@ -720,12 +736,16 @@ contract DealManagerTest is Test {
 
         uint256 alicePaymentTokenBalancesBefore = paymentToken.balanceOf(alice);
 
+        // Cert is escrowed on DealManager while PAID
+        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), address(dm));
+
         // Simulate Alice sign to void
         vm.prank(alice);
         dm.signToVoid(agreementId, alice, GOOD_SIGNATURE);
 
         // The agreement wasn't successfully voided yet, so no refund issued
         assertEq(paymentToken.balanceOf(alice), alicePaymentTokenBalancesBefore, "Alice should not receive the refund yet");
+        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), address(dm), "Cert should still be escrowed");
 
         // Simulate company sign to void
         registry.mockIsReadyToVoid(agreementId, true);
@@ -733,6 +753,47 @@ contract DealManagerTest is Test {
         dm.signToVoid(agreementId, companyOwner, GOOD_SIGNATURE);
 
         assertEq(paymentToken.balanceOf(alice), alicePaymentTokenBalancesBefore + 10 ether, "Alice should receive the refund");
+        _assertCertVoided(certIds[0]);
+    }
+
+    function test_SignToVoid_MutualVoidVoidsCertWithoutVoidExpiredDeal() public {
+        // A mutual void locks out voidExpiredDeal (every party is already in voidRequestedBy), so
+        // signToVoid must tear the escrowed certs down itself or they stay live forever.
+
+        (bytes32 agreementId, uint256[] memory certIds) = _proposeSignedDealAndPay(
+            alice,
+            GOOD_SIGNATURE,
+            alice
+        );
+
+        vm.prank(alice);
+        dm.signToVoid(agreementId, alice, GOOD_SIGNATURE);
+
+        registry.mockIsReadyToVoid(agreementId, true);
+        vm.prank(companyOwner);
+        dm.signToVoid(agreementId, companyOwner, GOOD_SIGNATURE);
+
+        _assertCertVoided(certIds[0]);
+
+        // The registry teardown path stays closed — cleanup must not depend on it
+        vm.warp(block.timestamp + 365 days);
+        vm.prank(companyOwner);
+        vm.expectRevert(CyberAgreementRegistry.ContractAlreadyVoided.selector);
+        dm.voidExpiredDeal(agreementId, companyOwner, GOOD_SIGNATURE);
+    }
+
+    function test_SignToVoid_PendingDealVoidsEscrowAndCert() public {
+        // Same teardown for a deal voided before payment: the escrow is re-synced to VOIDED and the
+        // certs are voided, matching voidExpiredDeal's PENDING branch.
+
+        (bytes32 agreementId, uint256[] memory certIds) = _proposeSignedDeal();
+
+        registry.mockIsReadyToVoid(agreementId, true);
+        vm.prank(companyOwner);
+        dm.signToVoid(agreementId, companyOwner, GOOD_SIGNATURE);
+
+        assertEq(uint8(dm.getEscrowDetails(agreementId).status), uint8(EscrowStatus.VOIDED), "Escrow should be voided");
+        _assertCertVoided(certIds[0]);
     }
 
     function test_PaymentFlow_RefundVoidedDeal() public {
@@ -766,6 +827,7 @@ contract DealManagerTest is Test {
         dm.refundVoidedDeal(agreementId);
 
         assertEq(paymentToken.balanceOf(alice), alicePaymentTokenBalancesBefore + 10 ether, "Alice should receive the refund");
+        _assertCertVoided(certIds[0]);
     }
 
     function test_RevertIf_PaymentFlow_RefundVoidedDealNotVoided() public {
@@ -786,8 +848,163 @@ contract DealManagerTest is Test {
         );
 
         // Refund should fail because the deal is not voided
-        vm.expectRevert(LexScroWLite.DealNotVoided.selector);
+        vm.expectRevert(LexScrowStorage.DealNotVoided.selector);
         dm.refundVoidedDeal(agreementId);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Id-space validation: primary entrypoints require a primary escrow. An id with no primary escrow
+    // (an unknown id, or a secondary-trade settlement — which never creates a LexScrow escrow) reverts
+    // DealDoesNotExist. The guard runs first, so caller/state checks are not reached.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function test_RevertIf_FinalizeDeal_UnknownDeal() public {
+        vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);
+        dm.finalizeDeal(keccak256("unknown-deal"));
+    }
+
+    function test_RevertIf_VoidExpiredDeal_UnknownDeal() public {
+        vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);
+        dm.voidExpiredDeal(keccak256("unknown-deal"), alice, "");
+    }
+
+    function test_VoidExpiredDeal_VoidsCert() public {
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        uint256 expiry = block.timestamp + 1 days;
+
+        vm.prank(owner);
+        (bytes32 agreementId, uint256[] memory certIds) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            uint256(keccak256("DealManagerTest.Deal")),
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // TODO conditions
+            bytes32(0), // secretHash
+            expiry
+        );
+
+        // Cert is now in escrow (owned by DealManager)
+        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), address(dm));
+
+        vm.warp(expiry + 1);
+
+        // signer must be a party to the agreement (companyOwner); DealManager is the finalizer so no void sig is needed
+        dm.voidExpiredDeal(agreementId, companyOwner, "");
+
+        // Cert should be burned (voided) via IssuanceManager.voidCertificate
+        vm.expectRevert();
+        CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]); // burned token should revert on ownerOf
+    }
+
+    /// @notice Regression: expiry == 0 means no deadline, so a zero-expiry deal must never be
+    /// void-expirable. Before the zero guard, voidExpiredDeal treated it as already expired and tore
+    /// down the escrow while the registry (post its own zero-expiry void fix) kept the agreement live,
+    /// splitting the legal agreement state from the asset/refund state.
+    function test_RevertIf_VoidExpiredDeal_ZeroExpiry() public {
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        vm.prank(owner);
+        (bytes32 agreementId, ) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            uint256(keccak256("DealManagerTest.ZeroExpiryDeal")),
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // conditions
+            bytes32(0), // secretHash
+            0 // expiry: no deadline
+        );
+
+        vm.expectRevert(IDealManagerStorage.DealNotExpired.selector);
+        dm.voidExpiredDeal(agreementId, companyOwner, "");
+    }
+
+    /// @notice Regression: expiry == 0 means no deadline, so a zero-expiry deal must be able to settle
+    /// through the normal payment + finalization path, even long after proposal. Before the zero guards
+    /// in signDealAndPay and finalizeEscrow, such a deal was purported-valid but could never complete.
+    function test_PaymentFlow_ZeroExpiryDealSettles() public {
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        vm.prank(owner);
+        (bytes32 agreementId, uint256[] memory certIds) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            uint256(keccak256("DealManagerTest.ZeroExpirySettles")),
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // conditions
+            bytes32(0), // secretHash
+            0 // expiry: no deadline
+        );
+
+        // A no-deadline deal settles even long after proposal
+        vm.warp(block.timestamp + 365 days);
+
+        uint256 companyBalanceBefore = paymentToken.balanceOf(companyPayable);
+
+        vm.prank(alice);
+        dm.signDealAndPay(
+            alice, // signer
+            agreementId,
+            GOOD_SIGNATURE, // signature
+            new string[](0), // partyValues
+            false, // _fillUnallocated
+            "Alice",
+            ""
+        );
+
+        vm.prank(alice);
+        dm.finalizeDeal(agreementId);
+
+        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), alice, "Alice should receive Corp Certificate");
+        assertEq(
+            paymentToken.balanceOf(companyPayable),
+            companyBalanceBefore + 10 ether,
+            "Company should receive payment tokens"
+        );
+    }
+
+    function test_RevertIf_RevokeDeal_UnknownDeal() public {
+        vm.prank(alice);
+        vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);
+        dm.revokeDeal(keccak256("unknown-deal"), alice, "");
+    }
+
+    function test_RevertIf_SignToVoid_UnknownDeal() public {
+        vm.prank(alice);
+        vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);
+        dm.signToVoid(keccak256("unknown-deal"), alice, "");
+    }
+
+    function test_RevertIf_RefundVoidedDeal_UnknownDeal() public {
+        vm.expectRevert(LexScrowStorage.DealDoesNotExist.selector);
+        dm.refundVoidedDeal(keccak256("unknown-deal"));
     }
 
     function test_UpgradeNextDealManager() public {
@@ -919,6 +1136,12 @@ contract DealManagerTest is Test {
             bytes32(0), // secretHash
             block.timestamp // expiry
         );
+    }
+
+    /// @dev The mock printer burns on voidCert, so a voided cert no longer resolves an owner.
+    function _assertCertVoided(uint256 certId) internal {
+        vm.expectRevert();
+        CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certId);
     }
 
     function _proposeSignedDealAndPay(

@@ -1,7 +1,12 @@
+---
+description: Upgrade the UUPS core suite and beacon-proxied printers
+---
+
 # Upgrade a cyberCORP
 
 All contracts use UUPS upgradeable proxies (with beacon proxies for
-`CyberCertPrinter` and `CyberScrip`). Upgrades use a **co-approval** model:
+the cert printer (`LedgerEntryToken`) and `CyberScrip`). Upgrades use a
+**co-approval** model:
 MetaLeX publishes a reference implementation, and the cyberCORP's owner opts
 in. See [Upgrade model](../reference/upgrade-model.md).
 
@@ -28,10 +33,11 @@ The `IssuanceManager`, `DealManager`, and `RoundManager` are UUPS proxies
 too; upgrade each with `upgradeToAndCall` against its factory's reference
 implementation, gated the same way.
 
-## Upgrade CyberCertPrinter / CyberScrip instances
+## Upgrade cert printer (LedgerEntryToken) / CyberScrip instances
 
 These are beacon proxies. The beacons are owned by the cyberCORP's
-`IssuanceManager`, which exposes:
+`IssuanceManager`, which exposes (both `onlyOwner`, and gated to the
+factory's published reference implementation just like the UUPS upgrades):
 
 ```solidity
 IIssuanceManager(issuanceManager).upgradeCertPrinterBeaconImplementation(newImpl);

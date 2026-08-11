@@ -4,23 +4,28 @@ pragma solidity ^0.8.28;
 import {Test, Vm} from "forge-std/Test.sol";
 import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import {CyberCorpHelper} from "./RoundManagerTest.t.sol";
+import {LegacyCyberCertData} from "./libs/LegacyCyberCorpFactory.sol";
 import {SecuritySeries, SecurityClass, CompanyOfficer} from "../src/CyberCorpConstants.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {RoundManager} from "../src/RoundManager.sol";
 import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
+import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
+import {IssuanceManager} from "../src/IssuanceManager.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {RoundLib, Round, RoundType} from "../src/libs/RoundLib.sol";
 import {RoundLib as RoundLibV3, Round as RoundV3} from "./libs/v3/RoundLib.sol";
 import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
 import {CyberCertData, EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {LexScrowStorage, Escrow, EscrowStatus} from "../src/storage/LexScrowStorage.sol";
+import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 
 interface IRoundManagerV3 {
     function createRound(
         RoundV3 memory roundDraft,
-        CyberCertData[] memory certData
+        LegacyCyberCertData[] memory certData
     ) external returns (bytes32);
 }
 
@@ -49,8 +54,8 @@ library CyberCorpHelperV3 {
 
         string[] memory defaultLegend = new string[](1);
         defaultLegend[0] = "Legend";
-        CyberCertData[] memory certData = new CyberCertData[](1);
-        certData[0] = CyberCertData({
+        LegacyCyberCertData[] memory certData = new LegacyCyberCertData[](1);
+        certData[0] = LegacyCyberCertData({
             name: "Equity",
             symbol: "EQ",
             uri: "ipfs://eq",
@@ -169,6 +174,8 @@ contract RoundManagerV3NextForkTest is Test {
 
         rmFactory = RoundManagerFactory(cyberCorpFactory.roundManagerFactory());
 
+        CyberAgreementUtils.upgradeRegistry(vm, address(registry), metalexSafe);
+
         // Create template 777 in the live registry so EOI signatures can be verified
         {
             string[] memory globalFields = new string[](1);
@@ -232,7 +239,36 @@ contract RoundManagerV3NextForkTest is Test {
 
         vm.prank(corpV3);
         RoundManager(rmV3).upgradeToAndCall(address(newRmRef), "");
-        
+
+        IssuanceManagerFactory issuanceFactory = IssuanceManagerFactory(
+            cyberCorpFactory.issuanceManagerFactory()
+        );
+        vm.startPrank(metalexSafe);
+        issuanceFactory.AUTH().updateRole(
+            deployer,
+            issuanceFactory.AUTH().OWNER_ROLE()
+        );
+        vm.stopPrank();
+        vm.startPrank(deployer);
+        IssuanceManager newIssuanceManager = new IssuanceManager();
+        address newCertPrinter = address(new LedgerEntryToken());
+        issuanceFactory.setRefImplementation(address(newIssuanceManager));
+        issuanceFactory.setCyberCertPrinterRefImplementation(newCertPrinter);
+        vm.stopPrank();
+
+        address issuanceManagerV3 = CyberCorp(corpV3).issuanceManager();
+        vm.startPrank(corpOwnerV3);
+        IssuanceManager(issuanceManagerV3).upgradeToAndCall(
+            address(newIssuanceManager),
+            ""
+        );
+        // The v3 corp owns its own cert printer beacon; it must be upgraded too,
+        // otherwise printers minted post-upgrade still use the old initialize ABI.
+        IssuanceManager(issuanceManagerV3).upgradeCertPrinterBeaconImplementation(
+            newCertPrinter
+        );
+        vm.stopPrank();
+
         // ── deploy v4 corp ───────────────
 
         (corpV4, , , , rmV4) = cyberCorpFactory.deployCyberCorp(
@@ -333,6 +369,7 @@ contract RoundManagerV3NextForkTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegend
         });
 
@@ -441,6 +478,7 @@ contract RoundManagerV3NextForkTest is Test {
             securityClass: SecurityClass.CommonStock,
             securitySeries: SecuritySeries.NA,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: defaultLegend
         });
 

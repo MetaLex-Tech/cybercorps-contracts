@@ -178,7 +178,9 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
     error LegalContractUriEmpty();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {}
+    constructor() {
+        _disableInitializers();
+    }
 
     function initialize(address _auth) public initializer {
         __UUPSUpgradeable_init();
@@ -280,8 +282,17 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         address finalizer,
         uint256 expiry
     ) public returns (bytes32 contractId) {
+        // It is critical to bind `secretHash` and `finalizer` into the id: the finalizer
+        // controls settlement and the secretHash gates who may sign, so omitting them would
+        // let a front-runner seize the same id with hostile terms and bind signers to an
+        // agreement they never authorized.
+        // `expiry` is deliberately NOT bound: callers derive it from block.timestamp at
+        // creation time, which a party signing off-chain cannot predict, so including it
+        // would make every presigned signature unverifiable.
+        // TODO: an off-chain indexer that derives contractId (rather than reading the
+        // ContractCreated event) must include these two fields.
         contractId = keccak256(
-            abi.encode(templateId, salt, globalValues, parties)
+            abi.encode(templateId, salt, globalValues, parties, secretHash, finalizer)
         );
         if (agreements[contractId].parties.length > 0) {
             revert ContractAlreadyExists();
@@ -678,12 +689,20 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         agreementData.voidRequestedBy.push(party);
         emit VoidRequested(contractId, party);
 
-        if (agreementData.expiry < block.timestamp) {
+        // Unanimity is measured against allocated (nonzero) party slots: unfilled address(0)
+        // slots in open agreements can never submit a void request (isParty rejects them), so
+        // requiring raw parties.length would leave a no-deadline open agreement un-voidable
+        // even with every actual party's consent. parties[0] is enforced nonzero at creation,
+        // so allocatedParties >= 1 and equality implies at least one request.
+        uint256 allocatedParties = 0;
+        for (uint256 i = 0; i < agreementData.parties.length; i++) {
+            if (agreementData.parties[i] != address(0)) allocatedParties++;
+        }
+
+        if (agreementData.expiry > 0 && agreementData.expiry < block.timestamp) {
             agreementData.voided = true;
         } else if (
-            agreementData.voidRequestedBy.length ==
-            agreementData.parties.length &&
-            agreementData.voidRequestedBy.length > 0
+            agreementData.voidRequestedBy.length == allocatedParties
         ) {
             agreementData.voided = true;
         } else if (
@@ -849,16 +868,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                 return true;
             }
         }
-        
-        // Check if user is a delegate for any party
-        for (uint256 i = 0; i < parties.length; i++) {
-            Delegation storage delegation = delegations[parties[i]];
-            if (delegation.delegate == user && 
-                (delegation.expiry == 0 || delegation.expiry > block.timestamp)) {
-                return true;
-            }
-        }
-        
+
         return false;
     }
 

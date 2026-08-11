@@ -9,7 +9,7 @@ import {DeploymentConstants} from "../script//libs/DeploymentConstants.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
@@ -24,7 +24,7 @@ import {BorgAuth} from "../src/libs/auth.sol";
 import {Round, RoundLib, RoundType} from "../src/libs/RoundLib.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {CyberCertData, EOI, LexChexDetails, MintRequest} from "../src/storage/RoundManagerStorage.sol";
 import {
     ShareExtension,
@@ -80,7 +80,7 @@ contract ShareExtensionForkTest is Test {
     CyberCorpFactory internal corpFactory;
     RoundManager internal roundManager;
     IIssuanceManager internal issuanceManager;
-    CyberCertPrinter internal certPrinter;
+    LedgerEntryToken internal certPrinter;
     CertificateUriBuilder internal uriBuilder;
     ShareExtension internal shareExtension;
     ShareExtensionLogic internal shareLogic;
@@ -339,7 +339,7 @@ contract ShareExtensionForkTest is Test {
                     IssuanceManagerFactory.initialize.selector,
                     address(bootstrapAuth),
                     address(new IssuanceManager()),
-                    address(new CyberCertPrinter()),
+                    address(new LedgerEntryToken()),
                     address(new CyberScrip())
                 )
             )
@@ -399,8 +399,10 @@ contract ShareExtensionForkTest is Test {
 
     function _deployShareContracts() internal {
         extensionAuth = new BorgAuth(address(this));
-        shareExtension = new ShareExtension();
-        shareExtension.initialize(address(extensionAuth));
+        shareExtension = ShareExtension(address(new ERC1967Proxy(
+            address(new ShareExtension()),
+            abi.encodeWithSelector(ShareExtension.initialize.selector, address(extensionAuth))
+        )));
         shareLogic = new ShareExtensionLogic();
     }
 
@@ -469,7 +471,7 @@ contract ShareExtensionForkTest is Test {
         vm.stopPrank();
 
         Round memory round = roundManager.getRound(roundId);
-        certPrinter = CyberCertPrinter(round.certPrinter[0]);
+        certPrinter = LedgerEntryToken(round.certPrinter[0]);
     }
 
     function _createSeriesARound(bytes memory extensionData) internal returns (bytes32 createdRoundId) {
@@ -484,6 +486,7 @@ contract ShareExtensionForkTest is Test {
             securityClass: SecurityClass.PreferredStock,
             securitySeries: SecuritySeries.SeriesA,
             extension: address(shareExtension),
+            seriesData: bytes(""),
             defaultLegend: legend
         });
 
@@ -717,7 +720,10 @@ contract ShareExtensionForkTest is Test {
         parties[0] = officer;
         parties[1] = investor;
 
-        bytes32 contractId = keccak256(abi.encode(TEMPLATE_ID, salt, _globalValues(), parties));
+        // Mirrors createContract's preimage: secretHash (bytes32(0) at the submitEOI call site) and
+        // the finalizer (the RoundManager). `expiry` is deliberately not part of the id.
+        bytes32 contractId =
+            keccak256(abi.encode(TEMPLATE_ID, salt, _globalValues(), parties, bytes32(0), address(roundManager)));
 
         return CyberAgreementUtils.signAgreementTypedData(
             vm,

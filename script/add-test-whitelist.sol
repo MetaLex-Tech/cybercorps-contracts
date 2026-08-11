@@ -16,7 +16,7 @@ import {RoundManager} from "../src/RoundManager.sol";
 import {CyberCorp} from "../src/CyberCorp.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {ILegacyFactory} from "../script/interfaces/ILegacyFactory.sol";
 

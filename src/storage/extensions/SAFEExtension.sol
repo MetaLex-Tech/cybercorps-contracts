@@ -1,4 +1,5 @@
 /*    .o.                                                                                             
+/*    .o.                                                                                             
      .888.                                                                                            
     .8"888.                                                                                           
    .8' `888.                                                                                          
@@ -55,6 +56,11 @@ contract SAFEExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
     //ofset to leave for future upgrades
     uint256[30] private __gap;
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(address _auth) external initializer {
         __UUPSUpgradeable_init();
         __BorgAuthACL_init(_auth);
@@ -68,7 +74,7 @@ contract SAFEExtension is UUPSUpgradeable, ICertificateExtension, BorgAuthACL {
         return abi.encode(data);
     }
 
-    function supportsExtensionType(bytes32 extensionType) external pure override returns (bool) {
+    function supportsExtensionType(bytes32 extensionType) external pure virtual override returns (bool) {
         return extensionType == EXTENSION_TYPE;
     }
 

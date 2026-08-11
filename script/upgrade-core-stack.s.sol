@@ -13,7 +13,7 @@ import {CyberCorp} from "../src/CyberCorp.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {DealManager} from "../src/DealManager.sol";
 import {RoundManager} from "../src/RoundManager.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CyberScrip} from "../src/CyberScrip.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CertificateImageBuilderContract} from "../src/CertificateImageBuilderContract.sol";
@@ -28,7 +28,7 @@ interface IUUPS {
     ) external payable;
 }
 
-/// @notice Upgrade script for CyberCorp + IssuanceManager + CyberCertPrinter + CyberScrip.
+/// @notice Upgrade script for CyberCorp + IssuanceManager + LedgerEntryToken + CyberScrip.
 /// @dev Default run updates factory reference implementations only.
 ///      To also upgrade a specific deployed stack, set CORP_ADDRESS env var
 ///      or call run(address[]) with explicit corp addresses.
@@ -125,7 +125,7 @@ contract BaseScript is Script {
             new CertificateImageBuilderContract{salt: UPGRADE_SALT}()
         );
         impls.cyberCertPrinterImpl = address(
-            new CyberCertPrinter{salt: UPGRADE_SALT}()
+            new LedgerEntryToken{salt: UPGRADE_SALT}()
         );
         impls.cyberScripImpl = address(new CyberScrip{salt: UPGRADE_SALT}());
         impls.issuerApprovalRecertificationCondition = address(
@@ -152,7 +152,7 @@ contract BaseScript is Script {
             impls.certificateImageBuilderImpl
         );
         console2.log(
-            "New CyberCertPrinter implementation:",
+            "New LedgerEntryToken implementation:",
             impls.cyberCertPrinterImpl
         );
         console2.log("New CyberScrip implementation:", impls.cyberScripImpl);
@@ -244,7 +244,7 @@ contract BaseScript is Script {
         vm.assertEq(
             issuanceManagerFactory.getCyberCertPrinterRefImplementation(),
             impls.cyberCertPrinterImpl,
-            "IssuanceManagerFactory CyberCertPrinter reference implementation mismatch"
+            "IssuanceManagerFactory LedgerEntryToken reference implementation mismatch"
         );
         vm.assertEq(
             issuanceManagerFactory.getCyberScripRefImplementation(),
@@ -253,7 +253,7 @@ contract BaseScript is Script {
         );
 
         console2.log(
-            "Factory refs updated: CyberCorp, IssuanceManager, DealManager, RoundManager, CyberCertPrinter, CyberScrip"
+            "Factory refs updated: CyberCorp, IssuanceManager, DealManager, RoundManager, LedgerEntryToken, CyberScrip"
         );
     }
 
@@ -379,7 +379,7 @@ contract BaseScript is Script {
         vm.assertEq(
             issuanceManager.getCertPrinterBeaconImplementation(),
             impls.cyberCertPrinterImpl,
-            "CyberCertPrinter beacon upgrade failed"
+            "LedgerEntryToken beacon upgrade failed"
         );
         vm.assertEq(
             issuanceManager.getScripBeaconImplementation(),
@@ -401,7 +401,7 @@ contract BaseScript is Script {
             roundManagerAddr.getErc1967Implementation()
         );
         console2.log(
-            "  new CyberCertPrinter beacon impl:",
+            "  new LedgerEntryToken beacon impl:",
             issuanceManager.getCertPrinterBeaconImplementation()
         );
         console2.log(

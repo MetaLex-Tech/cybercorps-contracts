@@ -2,8 +2,8 @@
 pragma solidity ^0.8.28;
 
 import {Test, console2} from "forge-std/Test.sol";
-import {ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
+import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 
 contract CyberCertPrinterReadForkTest is Test {
     address internal constant PRINTER = 0xf77f10816D376E2D1f4a3FAF548E0E9142aB11D9;
@@ -13,7 +13,7 @@ contract CyberCertPrinterReadForkTest is Test {
     }
 
     function test_ReadPrinterUriAndCertificateDetails() public {
-        ICyberCertPrinter printer = ICyberCertPrinter(PRINTER);
+        ILedgerEntryToken printer = ILedgerEntryToken(PRINTER);
 
         console2.log("printer", PRINTER);
         console2.log("name", printer.name());

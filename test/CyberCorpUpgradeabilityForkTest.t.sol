@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";
 import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {CompanyOfficer, SecurityClass, SecuritySeries} from "../src/CyberCorpConstants.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
@@ -18,7 +18,7 @@ import {RoundManagerFactory} from "../src/RoundManagerFactory.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {CyberAgreementUtils} from "./libs/CyberAgreementUtils.sol";
 import {ERC1967ProxyLib} from "./libs/ERC1967ProxyLib.sol";
 import {MockERC20} from "./mock/MockERC20.sol";
@@ -165,7 +165,7 @@ contract CyberCorpUpgradeabilityForkTest is Test {
                     IssuanceManagerFactory.initialize.selector,
                     address(metalexAuth),
                     address(new IssuanceManager{salt: salt}()),
-                    address(new CyberCertPrinter()),
+                    address(new LedgerEntryToken()),
                     address(new CyberScrip())
                 )
             )
@@ -247,6 +247,7 @@ contract CyberCorpUpgradeabilityForkTest is Test {
             securityClass: SecurityClass.SAFE,
             securitySeries: SecuritySeries.SeriesPreSeed,
             extension: address(0),
+            seriesData: bytes(""),
             defaultLegend: new string[](0)
         });
 
@@ -272,7 +273,18 @@ contract CyberCorpUpgradeabilityForkTest is Test {
         partyValues[1] = new string[](1);
         partyValues[1][0] = "Counter Party Value 1";
 
-        bytes32 expectedAgreementId = keccak256(abi.encode(TEMPLATE_ID, uint256(salt), globalValues, parties));
+        // Mirrors createContract's preimage. The finalizer is the DealManager the factory is about to
+        // deploy, so predict its CREATE2 address; `expiry` is deliberately not part of the id.
+        bytes32 expectedAgreementId = keccak256(
+            abi.encode(
+                TEMPLATE_ID,
+                uint256(salt),
+                globalValues,
+                parties,
+                bytes32(0), // secretHash, as passed below
+                dmFactory.computeDealManagerAddress(keccak256(abi.encodePacked(uint256(salt))))
+            )
+        );
 
         vm.startPrank(corpOwner);
         (cyberCorpAddr, corpAuthAddr, imAddr, dmAddr, rmAddr, cyberCertPrinterAddrs, agreementId, certIds) =
@@ -421,11 +433,11 @@ contract CyberCorpUpgradeabilityForkTest is Test {
         DealManager(dmAddr).finalizeDeal(agreementId);
 
         // Sanity check
-        assertEq(CyberCertPrinter(cyberCertPrinterAddrs[0]).ownerOf(certIds[0]), alice);
+        assertEq(LedgerEntryToken(cyberCertPrinterAddrs[0]).ownerOf(certIds[0]), alice);
 
         vm.startPrank(metalex);
 
-        // MetaLeX cannot unilaterally upgrade CyberCertPrinter implementation without company owner's consent
+        // MetaLeX cannot unilaterally upgrade LedgerEntryToken implementation without company owner's consent
         address rugImpl = address(new RugCyberCertPrinter());
         imFactory.setCyberCertPrinterRefImplementation(rugImpl);
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, BorgAuth(corpAuthAddr).OWNER_ROLE(), metalex));

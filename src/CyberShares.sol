@@ -47,13 +47,13 @@
  import "./interfaces/IIssuanceManager.sol";
  import "./interfaces/ITransferRestrictionHook.sol";
  import "./storage/CyberSharesStorage.sol";
- import "./interfaces/ICyberCertPrinter.sol";
+ import "./interfaces/ILedgerEntryToken.sol";
  import "./interfaces/IUriBuilder.sol";
  import "./CyberCorpConstants.sol";
  import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
  import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
  import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
- import "./storage/CyberCertPrinterStorage.sol"; // for types
+ import "./storage/LedgerEntryTokenStorage.sol"; // for types
  import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
  
  contract CyberShares is Initializable, ERC20Upgradeable {
@@ -270,7 +270,7 @@
 
      function certificateTokenURI(uint256 tokenId) public view returns (string memory) {
          /*require(CyberSharesStorage.exists(tokenId), "URI query for nonexistent token");
-         // Adapt from CyberCertPrinter
+         // Adapt from LedgerEntryToken
          string[] memory certLegend = CyberSharesStorage.getCertLegend(tokenId);
          // Get corp details, perhaps from issuanceManager
          address issuanceManager = CyberSharesStorage.getIssuanceManager();

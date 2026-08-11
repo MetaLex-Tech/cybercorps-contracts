@@ -1,32 +1,32 @@
-/*    .o.
-     .888.
-    .8"888.
-   .8' `888.
-  .88ooo8888.
- .8'     `888.
-o88o     o8888o
-
-
-
-ooo        ooooo               .             ooooo                  ooooooo  ooooo
-`88.       .888'             .o8             `888'                   `8888    d8'
- 888b     d'888   .ooooo.  .o888oo  .oooo.    888          .ooooo.     Y888..8P
- 8 Y88. .P  888  d88' `88b   888   `P  )88b   888         d88' `88b     `8888'
- 8  `888'   888  888ooo888   888    .oP"888   888         888ooo888    .8PY888.
- 8    Y     888  888    .o   888 . d8(  888   888       o 888    .o   d8'  `888b
-o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o88888o
-
-
-
-  .oooooo.                .o8                            .oooooo.
- d8P'  `Y8b              "888                           d8P'  `Y8b
-888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.
-888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b
-888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888
-`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o.
- `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P
-             .o..P'                                                                     888
-             `Y8P'                                                                     o888o
+/*    .o.                                                                                             
+     .888.                                                                                            
+    .8"888.                                                                                           
+   .8' `888.                                                                                          
+  .88ooo8888.                                                                                         
+ .8'     `888.                                                                                        
+o88o     o8888o                                                                                       
+                                                                                                      
+                                                                                                      
+                                                                                                      
+ooo        ooooo               .             ooooo                  ooooooo  ooooo                    
+`88.       .888'             .o8             `888'                   `8888    d8'                     
+ 888b     d'888   .ooooo.  .o888oo  .oooo.    888          .ooooo.     Y888..8P                       
+ 8 Y88. .P  888  d88' `88b   888   `P  )88b   888         d88' `88b     `8888'                        
+ 8  `888'   888  888ooo888   888    .oP"888   888         888ooo888    .8PY888.                       
+ 8    Y     888  888    .o   888 . d8(  888   888       o 888    .o   d8'  `888b                      
+o8o        o888o `Y8bod8P'   "888" `Y888""8o o888ooooood8 `Y8bod8P' o888o  o88888o                    
+                                                                                                      
+                                                                                                      
+                                                                                                      
+  .oooooo.                .o8                            .oooooo.                                     
+ d8P'  `Y8b              "888                           d8P'  `Y8b                                    
+888          oooo    ooo  888oooo.   .ooooo.  oooo d8b 888           .ooooo.  oooo d8b oo.ooooo.      
+888           `88.  .8'   d88' `88b d88' `88b `888""8P 888          d88' `88b `888""8P  888' `88b     
+888            `88..8'    888   888 888ooo888  888     888          888   888  888      888   888     
+`88b    ooo     `888'     888   888 888    .o  888     `88b    ooo  888   888  888      888   888 .o. 
+ `Y8bood8P'      .8'      `Y8bod8P' `Y8bod8P' d888b     `Y8bood8P'  `Y8bod8P' d888b     888bod8P' Y8P 
+             .o..P'                                                                     888           
+             `Y8P'                                                                     o888o          
 _______________________________________________________________________________________________________
 
 All software, documentation and other files and information in this repository (collectively, the "Software")
@@ -34,72 +34,50 @@ are copyright MetaLeX Labs, Inc., a Delaware corporation.
 
 All rights reserved.
 
-The Software is proprietary and shall not, in part or in whole, be used, copied, modified, merged, published,
+The Software is proprietary and shall not, in part or in whole, be used, copied, modified, merged, published, 
 distributed, transmitted, sublicensed, sold, or otherwise used in any form or by any means, electronic or
-mechanical, including photocopying, recording, or by any information storage and retrieval system,
+mechanical, including photocopying, recording, or by any information storage and retrieval system, 
 except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
-import "./interfaces/ICyberAgreementRegistry.sol";
+import "openzeppelin-contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./interfaces/IIssuanceManager.sol";
 import "./interfaces/ITransferRestrictionHook.sol";
-import "./interfaces/IUriBuilder.sol";
 import "./storage/LedgerEntryTokenStorage.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
+import "./interfaces/ILedgerEntryToken.sol";
+import "./interfaces/IUriBuilder.sol";
+import "./interfaces/ICyberAgreementRegistry.sol";
 
+
+/// @title LedgerEntryToken (formerly CyberCertPrinter)
+/// @dev Renamed from CyberCertPrinter. The rename is source-level only: this implementation must remain
+/// ABI- and storage-compatible with the CyberCertPrinter BeaconProxy instances already deployed, so
+/// the ILedgerEntryToken interface members (functions, errors, and events — including
+/// CyberCertPrinter_CertificateCreated), the LedgerEntryTokenStorage library and its
+/// "cybercorp.cert.printer.storage.v1" slot, and all external signatures are intentionally unchanged.
+/// Do NOT rename any of those without treating it as a breaking ABI change.
 contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     using LedgerEntryTokenStorage for LedgerEntryTokenStorage.CyberCertStorage;
 
     string public constant DEPLOY_VERSION = "4"; // For version-tracking on all deployment and future upgrades
 
-    // Custom errors
-    error NotIssuanceManager();
-    error TokenNotTransferable();
-    error TokenDoesNotExist();
-    error InvalidTokenId();
-    error URIQueryForNonexistentToken();
-    error URISetForNonexistentToken();
-    error ConversionNotImplemented();
-    error TransferRestricted(string reason);
-    error EndorsementNotSignedOrInvalid();
-    error InvalidEndorsement();
-    error InvalidLegendIndex();
-    error SignatureRequired();
-
-    //events
-    event CertificateCreated(uint256 indexed tokenId, address indexed investor, uint256 amount, uint256 cap);
-    event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
-    event CertificateSigned(uint256 indexed tokenId, bytes signature);
-    event CertificateEndorsed(
-        uint256 indexed tokenId,
-        address indexed endorser,
-        address indexed endorsee,
-        string endorseeName,
-        address registry,
-        bytes32 agreementId,
-        uint256 index,
-        uint256 timestamp
-    );
-    event HookStatusChanged(bool enabled);
-    event WhitelistUpdated(address indexed account, bool whitelisted);
-    event LedgerEntryToken_CertificateCreated(uint256 indexed tokenId);
-    event CyberCertTransfer(address indexed from, address indexed to, uint256 indexed tokenId);
-    event CertificateAssigned(
-        uint256 indexed tokenId, address indexed newOwner, string newOwnerName, string issuerName
-    );
-    event CertificateVoided(uint256 indexed tokenId, uint256 timestamp);
-    event CertificateUnvoided(uint256 indexed tokenId, uint256 timestamp);
-    event RestrictionHookSet(uint256 indexed id, address indexed hookAddress);
-    event GlobalRestrictionHookSet(address indexed hookAddress);
-    event GlobalTransferableSet(bool indexed transferable);
-
     modifier onlyIssuanceManager() {
-        if (msg.sender != LedgerEntryTokenStorage.cyberCertStorage().issuanceManager) revert NotIssuanceManager();
+        if (msg.sender != LedgerEntryTokenStorage.cyberCertStorage().issuanceManager) revert ILedgerEntryToken.NotIssuanceManager();
         _;
     }
 
-    constructor() {
+    function _requireIssuanceManagerOrAdmin() private view {
+        LedgerEntryTokenStorage.requireManagerOrAdmin();
+    }
+
+    modifier onlyIssuanceManagerOrAdmin() {
+        // routed through a single private helper (not inlined per call site) to save sapce
+        _requireIssuanceManagerOrAdmin();
+        _;
+    }
+
+    constructor()  {
         _disableInitializers();
     }
 
@@ -112,11 +90,12 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         address _issuanceManager,
         SecurityClass _securityType,
         SecuritySeries _securitySeries,
-        address _extension
+        address _extension,
+        bytes memory _seriesData
     ) external initializer {
         __ERC721_init(name, ticker);
         __ERC721Enumerable_init_unchained();
-
+        
         LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();
         s.issuanceManager = _issuanceManager;
         s.defaultLegend = _defaultLegend;
@@ -125,6 +104,7 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         s.certificateUri = _certificateUri;
         s.endorsementRequired = true;
         s.extension = _extension;
+        s.seriesData = _seriesData;
     }
 
     function updateIssuanceManager(address _issuanceManager) external onlyIssuanceManager {
@@ -132,33 +112,30 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
     }
 
     // Set a restriction hook for a specific security type
-    function setRestrictionHook(uint256 _id, address _hookAddress) external onlyIssuanceManager {
+    function setRestrictionHook(uint256 _id, address _hookAddress) external onlyIssuanceManagerOrAdmin {
         LedgerEntryTokenStorage.cyberCertStorage().restrictionHooksById[_id] = ITransferRestrictionHook(_hookAddress);
-        emit RestrictionHookSet(_id, _hookAddress);
+        emit ILedgerEntryToken.RestrictionHookSet(_id, _hookAddress);
     }
-
+    
     // Set a global restriction hook that applies to all tokens
-    function setGlobalRestrictionHook(address hookAddress) external onlyIssuanceManager {
+    function setGlobalRestrictionHook(address hookAddress) external onlyIssuanceManagerOrAdmin {
         LedgerEntryTokenStorage.cyberCertStorage().globalRestrictionHook = ITransferRestrictionHook(hookAddress);
-        emit GlobalRestrictionHookSet(hookAddress);
+        emit ILedgerEntryToken.GlobalRestrictionHookSet(hookAddress);
     }
 
-    function setGlobalTransferable(bool _transferable) external onlyIssuanceManager {
+    function setGlobalTransferable(bool _transferable) external onlyIssuanceManagerOrAdmin {
         LedgerEntryTokenStorage.cyberCertStorage().transferable = _transferable;
-        emit GlobalTransferableSet(_transferable);
+        emit ILedgerEntryToken.GlobalTransferableSet(_transferable);
     }
 
-    function safeMint(uint256 tokenId, address to, CertificateDetails memory details)
-        external
-        onlyIssuanceManager
-        returns (uint256)
-    {
+    function safeMint(
+        uint256 tokenId,
+        address to,
+        CertificateDetails memory details
+    ) external onlyIssuanceManager returns (uint256) {
+
         _safeMint(to, tokenId);
-        LedgerEntryTokenStorage.cyberCertStorage().certLegend[tokenId] =
-        LedgerEntryTokenStorage.cyberCertStorage().defaultLegend;
-        LedgerEntryTokenStorage.cyberCertStorage().certificateDetails[tokenId] = details;
-        LedgerEntryTokenStorage.cyberCertStorage().owners[tokenId] = OwnerDetails("", to);
-        emit LedgerEntryToken_CertificateCreated(tokenId);
+        LedgerEntryTokenStorage.recordMint(tokenId, to, details);
         return tokenId;
     }
 
@@ -170,75 +147,86 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         string memory investorName
     ) external onlyIssuanceManager returns (uint256) {
         _safeMint(to, tokenId);
-        LedgerEntryTokenStorage.cyberCertStorage().certLegend[tokenId] =
-        LedgerEntryTokenStorage.cyberCertStorage().defaultLegend;
-        // Store agreement details
-        LedgerEntryTokenStorage.cyberCertStorage().certificateDetails[tokenId] = details;
-        LedgerEntryTokenStorage.cyberCertStorage().owners[tokenId] = OwnerDetails(investorName, to);
-        string memory issuerName =
-            IIssuanceManager(LedgerEntryTokenStorage.cyberCertStorage().issuanceManager).companyName();
-        emit CertificateAssigned(tokenId, to, investorName, issuerName);
-        emit LedgerEntryToken_CertificateCreated(tokenId);
+        LedgerEntryTokenStorage.recordMintAndAssign(tokenId, to, details, investorName);
         return tokenId;
     }
 
-    function assignCert(address from, uint256 tokenId, address to, CertificateDetails memory details)
-        external
-        onlyIssuanceManager
-        returns (uint256)
-    {
-        if (ownerOf(tokenId) != from) revert InvalidTokenId();
-        LedgerEntryTokenStorage.cyberCertStorage().certificateDetails[tokenId] = details;
-        LedgerEntryTokenStorage.cyberCertStorage().owners[tokenId] = OwnerDetails("", to);
-        string memory issuerName =
-            IIssuanceManager(LedgerEntryTokenStorage.cyberCertStorage().issuanceManager).companyName();
-        emit CertificateAssigned(tokenId, to, "", issuerName);
+    // Overload: allowing separation of custodian `to` vs legal owner `owner`
+    // This way we can support administered hosting (to != owner) in addition to direct hosting (owner == to)
+    function safeMintAndAssign(
+        address to, // custodian
+        address owner, // legal owner
+        uint256 tokenId,
+        CertificateDetails memory details,
+        string memory ownerName
+    ) external onlyIssuanceManager returns (uint256) {
+        _safeMint(to, tokenId);
+        LedgerEntryTokenStorage.recordMintAndAssign(tokenId, owner, details, ownerName);
         return tokenId;
     }
 
+    function assignCert(
+        address from,
+        uint256 tokenId,
+        address to,
+        CertificateDetails memory details
+    ) external onlyIssuanceManager returns (uint256) {
+        if(ownerOf(tokenId) != from) revert ILedgerEntryToken.InvalidTokenId();
+        // Reserved units are escrowed for a pending deal; legal ownership can't be reassigned while on escrow.
+        if (LedgerEntryTokenStorage.getUnitsReserved(tokenId) > 0) revert ILedgerEntryToken.CertificateReserved();
+        LedgerEntryTokenStorage.recordAssign(tokenId, to, details);
+        return tokenId;
+    }
+    
     // Add endorsement (for transfers in secondary market)
+    // Only the holder of record may endorse their own cert; possession alone does not authorize it, or a
+    // custodian could endorse a cert to itself and take legal title on delivery. The IssuanceManager endorses
+    // as registrar, on the owner's signature carried in the endorsement.
     function addEndorsement(uint256 tokenId, Endorsement memory newEndorsement) public {
-        if (msg.sender != LedgerEntryTokenStorage.cyberCertStorage().issuanceManager && msg.sender != ownerOf(tokenId)) revert InvalidEndorsement();
-        LedgerEntryTokenStorage.cyberCertStorage().endorsements[tokenId].push(newEndorsement);
-        emit CertificateEndorsed(
-            tokenId,
-            newEndorsement.endorser,
-            newEndorsement.endorsee,
-            newEndorsement.endorseeName,
-            newEndorsement.registry,
-            newEndorsement.agreementId,
-            LedgerEntryTokenStorage.cyberCertStorage().endorsements[tokenId].length - 1,
-            block.timestamp
-        );
+        if(msg.sender != LedgerEntryTokenStorage.cyberCertStorage().issuanceManager && msg.sender != legalOwnerOf(tokenId)) revert ILedgerEntryToken.InvalidEndorsement();
+        LedgerEntryTokenStorage.recordEndorsement(tokenId, newEndorsement);
     }
 
-    function addIssuerSignature(uint256 tokenId, bytes calldata signature) external onlyIssuanceManager {
-        if (!_exists(tokenId)) revert TokenDoesNotExist();
-        if (signature.length == 0) revert SignatureRequired();
+    function addIssuerSignature(
+        uint256 tokenId,
+        bytes calldata signature
+    ) external onlyIssuanceManagerOrAdmin {
+        if (!_exists(tokenId)) revert ILedgerEntryToken.TokenDoesNotExist();
+        if (signature.length == 0) revert ILedgerEntryToken.SignatureRequired();
         LedgerEntryTokenStorage.cyberCertStorage().issuerSignatures[tokenId].push(signature);
-        emit CertificateSigned(tokenId, signature);
+        emit ILedgerEntryToken.CertificateSigned(tokenId, signature);
+    }
+
+    /// @notice Records a secondary-market endorsement, assembling the endorsement tuple on-chain.
+    /// @dev Admin/manager entrypoint (endorsee/name blank, registry cleared); addEndorsement covers the
+    /// manager/token-owner path with a caller-supplied Endorsement.
+    function endorseCertificate(
+        uint256 tokenId,
+        address endorser,
+        bytes memory signature,
+        bytes32 agreementId
+    ) external onlyIssuanceManagerOrAdmin {
+        LedgerEntryTokenStorage.endorseCertificate(tokenId, endorser, signature, agreementId);
+    }
+
+    /// @notice Overrides a certificate's Rule 144(d)(3) tacking anchor (tackedFromAcquisitionDate).
+    /// @dev Rewrites only that field in the cert's FundInterestData; other fields are preserved.
+    function updateCertificateTackedFromAcquisitionDate(uint256 tokenId, uint64 ts) external onlyIssuanceManagerOrAdmin {
+        LedgerEntryTokenStorage.updateTackedFromAcquisitionDate(tokenId, ts);
     }
 
     function endorseAndTransfer(uint256 tokenId, Endorsement memory newEndorsement, address from, address to) external {
         addEndorsement(tokenId, newEndorsement);
         _transfer(from, to, tokenId);
     }
-
+    
     // Update agreement details
-    function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details)
-        external
-        onlyIssuanceManager
-    {
+    function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external onlyIssuanceManager {
+        // Enforce the reserved-units invariant at the single write chokepoint: raw unitsRepresented may never
+        // drop below the units locked in pending deals. Guards against a caller writing back an effective
+        // (scripified-inflated) or otherwise under-counted balance.
+        if (details.unitsRepresented < LedgerEntryTokenStorage.getUnitsReserved(tokenId)) revert ILedgerEntryToken.ExceedsAvailableUnits();
         LedgerEntryTokenStorage.cyberCertStorage().certificateDetails[tokenId] = details;
-    }
-
-    // Restricted burning
-    function burn(uint256 tokenId) external onlyIssuanceManager {
-        _burn(tokenId);
-
-        // Clear agreement details
-        delete LedgerEntryTokenStorage.cyberCertStorage().certificateDetails[tokenId];
-        delete LedgerEntryTokenStorage.cyberCertStorage().issuerSignatures[tokenId];
     }
 
     /**
@@ -247,182 +235,138 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
      */
     function _update(address to, uint256 tokenId, address auth) internal virtual override returns (address) {
         address from = _ownerOf(tokenId);
-
+        
         // Skip restriction checks for minting (from == address(0)) and burning (to == address(0))
         if (from != address(0) && to != address(0)) {
-            // This is a transfer, check built-in transferability flag and per-token override
-            bool globalTransferable = LedgerEntryTokenStorage.cyberCertStorage().transferable;
-            bool tokenTransferable = LedgerEntryTokenStorage.isTokenTransferable(tokenId);
-            if (
-                !globalTransferable && !tokenTransferable
-                    && from
-                        != ICyberCorp(
-                                IIssuanceManager(LedgerEntryTokenStorage.cyberCertStorage().issuanceManager).CORP()
-                            ).dealManager()
-                    && from
-                        != ICyberCorp(
-                                IIssuanceManager(LedgerEntryTokenStorage.cyberCertStorage().issuanceManager).CORP()
-                            ).roundManager()
-            ) revert TokenNotTransferable();
-
-            // Check security type-specific hook if it exists
-            /*  ITransferRestrictionHook typeHook = LedgerEntryTokenStorage.cyberCertStorage().restrictionHooksById[tokenId];
-
-              if (address(typeHook) != address(0)) {
-                  (bool allowed, string memory reason) = typeHook.checkTransferRestriction(
-                      from, to, tokenId, ""
-                  );
-                  if (!allowed) revert TransferRestricted(reason);
-              }*/
-
-            // Check global hook if it exists
-            if (address(LedgerEntryTokenStorage.cyberCertStorage().globalRestrictionHook) != address(0)) {
-                (bool allowed, string memory reason) = LedgerEntryTokenStorage.cyberCertStorage().globalRestrictionHook
-                    .checkTransferRestriction(from, to, tokenId, "");
-                if (!allowed) revert TransferRestricted(reason);
-            }
-
-            address ownerAddress = LedgerEntryTokenStorage.cyberCertStorage().owners[tokenId].ownerAddress;
-            //check endorsement and update owners
-            if (from == ownerAddress) {
-                if (!LedgerEntryTokenStorage.cyberCertStorage().endorsementRequired) {
-                    emit CertificateAssigned(
-                        tokenId,
-                        to,
-                        "",
-                        IIssuanceManager(LedgerEntryTokenStorage.cyberCertStorage().issuanceManager).companyName()
-                    );
-                    LedgerEntryTokenStorage.cyberCertStorage().owners[tokenId] = OwnerDetails("", to);
-                } else if (LedgerEntryTokenStorage.cyberCertStorage().endorsements[tokenId].length > 0) {
-                    Endorsement memory endorsement = LedgerEntryTokenStorage.cyberCertStorage()
-                    .endorsements[tokenId][LedgerEntryTokenStorage.cyberCertStorage().endorsements[tokenId].length - 1];
-                    if (endorsement.endorsee == to) {
-                        // Endorsement exists; ownership will be updated
-                        emit CertificateAssigned(
-                            tokenId,
-                            to,
-                            endorsement.endorseeName,
-                            IIssuanceManager(LedgerEntryTokenStorage.cyberCertStorage().issuanceManager).companyName()
-                        );
-                        LedgerEntryTokenStorage.cyberCertStorage().owners[tokenId] =
-                            OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
-                    }
-                }
-                // NOTE: we don't revert in this block: Owner is able to transfer to another address without an endorsement, but it does not update the owner
-            } else if (LedgerEntryTokenStorage.cyberCertStorage().endorsements[tokenId].length > 0) {
-                // Token is not being transferred from the current owner. It can only be transferrred to the latest endorsee, or the current owner
-                Endorsement memory endorsement = LedgerEntryTokenStorage.cyberCertStorage()
-                .endorsements[tokenId][LedgerEntryTokenStorage.cyberCertStorage().endorsements[tokenId].length - 1];
-                if (endorsement.endorsee != to && ownerAddress != to) revert EndorsementNotSignedOrInvalid();
-
-                emit CertificateAssigned(
-                    tokenId,
-                    to,
-                    endorsement.endorseeName,
-                    IIssuanceManager(LedgerEntryTokenStorage.cyberCertStorage().issuanceManager).companyName()
-                );
-                LedgerEntryTokenStorage.cyberCertStorage().owners[tokenId] =
-                    OwnerDetails(endorsement.endorseeName, endorsement.endorsee);
-            } else {
-                revert EndorsementNotSignedOrInvalid();
-            }
+            // A cert with reserved units is escrowed for a pending deal/loan: its legal ownership is frozen
+            // until the reservation is released at settlement or void. Blocks the transfer vector; assignCert
+            // guards the reassignment vector.
+            if (LedgerEntryTokenStorage.getUnitsReserved(tokenId) > 0) revert ILedgerEntryToken.CertificateReserved();
+            // Restriction + endorsement logic lives in the external library (delegatecall)
+            // to keep this contract under the bytecode size limit
+            LedgerEntryTokenStorage.processTransfer(from, to, tokenId);
         }
         // Emit custom transfer event for indexing
-        emit CyberCertTransfer(from, to, tokenId);
-
+        emit ILedgerEntryToken.CyberCertTransfer(
+            from,
+            to,
+            tokenId
+        );
+        LedgerEntryTokenStorage.recordHolderChange(from, to);
+        
         // Call the parent implementation to handle the actual transfer
         return super._update(to, tokenId, auth);
     }
-
+    
+    /// @notice `CertificateDetails.unitsRepresented` is re-purposed to `details.unitsRepresented + scripifiedUnits` in this case
+    ///         If you need raw `unitsRepresented`, use `getActiveCertificateDetails()` instead
     // Get full agreement details
     function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory) {
-        if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
+        if (ownerOf(tokenId) == address(0)) revert ILedgerEntryToken.TokenDoesNotExist();
         return LedgerEntryTokenStorage.getCertificateDetails(tokenId);
     }
 
-    function getActiveCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory) {
-        if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
+    function getActiveCertificateDetails(
+        uint256 tokenId
+    ) external view returns (CertificateDetails memory) {
+        if (ownerOf(tokenId) == address(0)) revert ILedgerEntryToken.TokenDoesNotExist();
         return LedgerEntryTokenStorage.getActiveCertificateDetails(tokenId);
     }
 
     // Get endorsement history
-    function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (Endorsement memory details) {
-        if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
-        details = LedgerEntryTokenStorage.cyberCertStorage().endorsements[tokenId][index];
+    function getEndorsementHistory(uint256 tokenId, uint256 index) external view returns (
+        Endorsement memory details
+    ) {
+        if (ownerOf(tokenId) == address(0)) revert ILedgerEntryToken.TokenDoesNotExist();
+             details = LedgerEntryTokenStorage.cyberCertStorage().endorsements[tokenId][index];
     }
 
     function getIssuerSignatureCount(uint256 tokenId) external view returns (uint256) {
-        if (!_exists(tokenId)) revert TokenDoesNotExist();
+        if (!_exists(tokenId)) revert ILedgerEntryToken.TokenDoesNotExist();
         return LedgerEntryTokenStorage.cyberCertStorage().issuerSignatures[tokenId].length;
     }
 
     function getIssuerSignatureAt(uint256 tokenId, uint256 index) external view returns (bytes memory) {
-        if (!_exists(tokenId)) revert TokenDoesNotExist();
+        if (!_exists(tokenId)) revert ILedgerEntryToken.TokenDoesNotExist();
         return LedgerEntryTokenStorage.cyberCertStorage().issuerSignatures[tokenId][index];
     }
 
-    function voidCert(uint256 tokenId) external onlyIssuanceManager {
+    // Note voiding a cert does not impact legal owner accounting (the legal-owner enumeration keeps the
+    // voided lot; that is why `_removeFromLegalOwnerEnumeration()` is not called here). It DOES impact the
+    // look-through holder tally: a fully-voided lot no longer counts its owner as a live holder, so the
+    // tally is decremented via `recordVoidLegalOwner` (after the status flip).
+    function voidCert(uint256 tokenId) external onlyIssuanceManagerOrAdmin {
         LedgerEntryTokenStorage.setSecurityStatus(tokenId, SecurityStatus.Void);
-        emit CertificateVoided(tokenId, block.timestamp);
+        LedgerEntryTokenStorage.recordVoidLegalOwner(tokenId);
+        emit ILedgerEntryToken.CertificateVoided(tokenId, block.timestamp);
     }
 
-    function unvoidCert(uint256 tokenId) external onlyIssuanceManager {
-        if (!_exists(tokenId)) revert TokenDoesNotExist();
+    // As explained in `voidCert()`. Un-voiding restores the lot's contribution to the look-through tally,
+    // so `recordUnvoidLegalOwner` runs after the status is set back to Assigned.
+    function unvoidCert(uint256 tokenId) external onlyIssuanceManagerOrAdmin {
+        if (!_exists(tokenId)) revert ILedgerEntryToken.TokenDoesNotExist();
         LedgerEntryTokenStorage.setSecurityStatus(tokenId, SecurityStatus.Assigned);
-        emit CertificateUnvoided(tokenId, block.timestamp);
+        LedgerEntryTokenStorage.recordUnvoidLegalOwner(tokenId);
+        emit ILedgerEntryToken.CertificateUnvoided(tokenId, block.timestamp);
     }
 
     function isVoided(uint256 tokenId) external view returns (bool) {
-        if (ownerOf(tokenId) == address(0)) revert TokenDoesNotExist();
-        return LedgerEntryTokenStorage.getSecurityStatus(tokenId) == SecurityStatus.Void;
+        if (ownerOf(tokenId) == address(0)) revert ILedgerEntryToken.TokenDoesNotExist();
+        return
+            LedgerEntryTokenStorage.getSecurityStatus(tokenId) ==
+            SecurityStatus.Void;
     }
-
+    
     // URI storage functionality
     function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
-        if (!_exists(tokenId)) revert URIQueryForNonexistentToken();
+        if (!_exists(tokenId)) revert ILedgerEntryToken.URIQueryForNonexistentToken();
         return LedgerEntryTokenStorage.tokenURI(tokenId);
     }
 
-    /* // URI storage functionality
-     function tokenURIJson(uint256 tokenId) public view virtual returns (string memory) {
-         if (!_exists(tokenId)) revert URIQueryForNonexistentToken();
+   /* // URI storage functionality
+    function tokenURIJson(uint256 tokenId) public view virtual returns (string memory) {
+        if (!_exists(tokenId)) revert ILedgerEntryToken.URIQueryForNonexistentToken();
 
-         LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();
-         string[] memory certLegend = s.certLegend[tokenId];
-         ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
+        LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();
+        string[] memory certLegend = s.certLegend[tokenId];
+        ICyberCorp corp = ICyberCorp(IIssuanceManager(s.issuanceManager).CORP());
 
-         // Get registry and agreementId from first endorsement if it exists
-         address registry = address(0);
-         bytes32 agreementId = bytes32(0);
-         if (s.endorsements[tokenId].length > 0) {
-             Endorsement memory firstEndorsement = s.endorsements[tokenId][0];
-             registry = firstEndorsement.registry;
-             agreementId = firstEndorsement.agreementId;
-         }
+        // Get registry and agreementId from first endorsement if it exists
+        address registry = address(0);
+        bytes32 agreementId = bytes32(0);
+        if (s.endorsements[tokenId].length > 0) {
+            Endorsement memory firstEndorsement = s.endorsements[tokenId][0];
+            registry = firstEndorsement.registry;
+            agreementId = firstEndorsement.agreementId;
+        }
 
-     return IUriBuilder(IIssuanceManager(s.issuanceManager).uriBuilder()).buildCertificateUriNotEncoded(
-             corp.cyberCORPName(),
-             corp.cyberCORPType(),
-             corp.cyberCORPJurisdiction(),
-             corp.cyberCORPContactDetails(),
-             s.securityType,
-             s.securitySeries,
-             s.certificateUri,
-             certLegend,
-             s.certificateDetails[tokenId],
-             s.endorsements[tokenId],
-             s.owners[tokenId],
-             registry,
-             agreementId,
-             tokenId,
-             address(this),
-             address(s.extension)
-         );
-     }*/
+    return IUriBuilder(IIssuanceManager(s.issuanceManager).uriBuilder()).buildCertificateUriNotEncoded(   
+            corp.cyberCORPName(),
+            corp.cyberCORPType(),
+            corp.cyberCORPJurisdiction(),
+            corp.cyberCORPContactDetails(),
+            s.securityType,
+            s.securitySeries,
+            s.certificateUri,
+            certLegend,
+            s.certificateDetails[tokenId],
+            s.endorsements[tokenId],
+            s.owners[tokenId],
+            registry,
+            agreementId,
+            tokenId,
+            address(this),
+            address(s.extension)
+        );
+    }*/
 
     // Public getters that directly access storage
     function defaultLegend() public view returns (string[] memory) {
         return LedgerEntryTokenStorage.cyberCertStorage().defaultLegend;
+    }
+
+    function defaultRestrictiveLegends() public view returns (RestrictiveLegend[] memory) {
+        return LedgerEntryTokenStorage.cyberCertStorage().defaultLegendsV2;
     }
 
     function certificateUri() public view returns (string memory) {
@@ -445,6 +389,38 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         return LedgerEntryTokenStorage.cyberCertStorage().transferable;
     }
 
+    function holderCount() external view returns (uint256) {
+        return LedgerEntryTokenStorage.getHolderCount();
+    }
+
+    /// @notice §3(c)(1)(A) look-through holder count: Σ over live holders of max(beneficialOwnerCount, 1).
+    function lookThroughHolderCount() external view returns (uint256) {
+        return LedgerEntryTokenStorage.getLookThroughHolderCount();
+    }
+
+    /// @notice The U.S.-resident subset of `lookThroughHolderCount` (Touche Remnant counting). Past
+    /// `usTallyExpiry` this reports the full look-through count instead, because a non-US booking may
+    /// have lapsed into US unobserved.
+    function usLookThroughHolderCount() external view returns (uint256) {
+        return LedgerEntryTokenStorage.getUsLookThroughHolderCount();
+    }
+
+    /// @notice When the U.S. subtotal stops being trusted: the earliest credential expiry among holders
+    /// booked non-US, or 0 when none constrains it. Keepers resync those holders before it passes.
+    function usTallyExpiry() external view returns (uint64) {
+        return LedgerEntryTokenStorage.getUsTallyExpiry();
+    }
+
+    /// @notice True when `owner` currently holds at least one live (non-void) lot of record.
+    function isLegalHolder(address owner) external view returns (bool) {
+        return LedgerEntryTokenStorage.isLegalHolder(owner);
+    }
+
+    /// @notice The LeXcheXBadge the look-through tally samples for beneficial-owner counts and US residency.
+    function lookThroughBadge() external view returns (address) {
+        return LedgerEntryTokenStorage.getLookThroughBadge();
+    }
+
     function _exists(uint256 tokenId) internal view virtual returns (bool) {
         return _ownerOf(tokenId) != address(0);
     }
@@ -453,28 +429,18 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         return LedgerEntryTokenStorage.cyberCertStorage().endorsementRequired;
     }
 
-    function addDefaultLegend(string memory newLegend) external onlyIssuanceManager {
-        LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();
-        s.defaultLegend.push(newLegend);
+    function addDefaultLegend(string memory newLegend) external onlyIssuanceManagerOrAdmin {
+        LedgerEntryTokenStorage.addLegend(0, true, newLegend);
     }
 
-    function removeDefaultLegendAt(uint256 index) external onlyIssuanceManager {
-        LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();
-        if (index >= s.defaultLegend.length) revert InvalidLegendIndex();
-
-        // Move the last element to the index being removed (if it's not the last element)
-        // and then pop the last element
-        uint256 lastIndex = s.defaultLegend.length - 1;
-        if (index != lastIndex) {
-            s.defaultLegend[index] = s.defaultLegend[lastIndex];
-        }
-        s.defaultLegend.pop();
+    function removeDefaultLegendAt(uint256 index) external onlyIssuanceManagerOrAdmin {
+        LedgerEntryTokenStorage.removeLegendAt(0, true, index);
     }
 
     function getDefaultLegendAt(uint256 index) external view returns (string memory) {
         LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();
-        if (index >= s.defaultLegend.length) revert InvalidLegendIndex();
-
+        if (index >= s.defaultLegend.length) revert ILedgerEntryToken.InvalidLegendIndex();
+        
         return s.defaultLegend[index];
     }
 
@@ -482,33 +448,61 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         return LedgerEntryTokenStorage.cyberCertStorage().defaultLegend.length;
     }
 
-    function addCertLegend(uint256 tokenId, string memory newLegend) external onlyIssuanceManager {
-        LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();
-        s.certLegend[tokenId].push(newLegend);
+    function addDefaultRestrictiveLegend(RestrictiveLegend memory newLegend) external onlyIssuanceManagerOrAdmin {
+        LedgerEntryTokenStorage.addRestrictiveLegend(0, true, newLegend);
     }
 
-    function removeCertLegendAt(uint256 tokenId, uint256 index) external onlyIssuanceManager {
-        LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();
-        if (index >= s.certLegend[tokenId].length) revert InvalidLegendIndex();
-
-        // Move the last element to the index being removed (if it's not the last element)
-        // and then pop the last element
-        uint256 lastIndex = s.certLegend[tokenId].length - 1;
-        if (index != lastIndex) {
-            s.certLegend[tokenId][index] = s.certLegend[tokenId][lastIndex];
-        }
-        s.certLegend[tokenId].pop();
+    function removeDefaultRestrictiveLegendAt(uint256 index) external onlyIssuanceManagerOrAdmin {
+        LedgerEntryTokenStorage.removeRestrictiveLegendAt(0, true, index);
     }
+
+    function getDefaultRestrictiveLegendAt(uint256 index) external view returns (RestrictiveLegend memory) {
+        LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();
+        if (index >= s.defaultLegendsV2.length) revert ILedgerEntryToken.InvalidLegendIndex();
+
+        return s.defaultLegendsV2[index];
+    }
+
+    function getDefaultRestrictiveLegendCount() external view returns (uint256) {
+        return LedgerEntryTokenStorage.cyberCertStorage().defaultLegendsV2.length;
+    }
+
+    function addCertLegend(uint256 tokenId, string memory newLegend) external onlyIssuanceManagerOrAdmin {
+        LedgerEntryTokenStorage.addLegend(tokenId, false, newLegend);
+    }
+
+    function removeCertLegendAt(uint256 tokenId, uint256 index) external onlyIssuanceManagerOrAdmin {
+        LedgerEntryTokenStorage.removeLegendAt(tokenId, false, index);
+    }   
 
     function getCertLegendAt(uint256 tokenId, uint256 index) external view returns (string memory) {
         LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();
-        if (index >= s.certLegend[tokenId].length) revert InvalidLegendIndex();
-
+        if (index >= s.certLegend[tokenId].length) revert ILedgerEntryToken.InvalidLegendIndex();
+        
         return s.certLegend[tokenId][index];
-    }
+    }   
 
     function getCertLegendCount(uint256 tokenId) external view returns (uint256) {
         return LedgerEntryTokenStorage.cyberCertStorage().certLegend[tokenId].length;
+    }
+
+    function addCertRestrictiveLegend(uint256 tokenId, RestrictiveLegend memory newLegend) external onlyIssuanceManagerOrAdmin {
+        LedgerEntryTokenStorage.addRestrictiveLegend(tokenId, false, newLegend);
+    }
+
+    function removeCertRestrictiveLegendAt(uint256 tokenId, uint256 index) external onlyIssuanceManagerOrAdmin {
+        LedgerEntryTokenStorage.removeRestrictiveLegendAt(tokenId, false, index);
+    }
+
+    function getCertRestrictiveLegendAt(uint256 tokenId, uint256 index) external view returns (RestrictiveLegend memory) {
+        LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();
+        if (index >= s.certLegendsV2[tokenId].length) revert ILedgerEntryToken.InvalidLegendIndex();
+
+        return s.certLegendsV2[tokenId][index];
+    }
+
+    function getCertRestrictiveLegendCount(uint256 tokenId) external view returns (uint256) {
+        return LedgerEntryTokenStorage.cyberCertStorage().certLegendsV2[tokenId].length;
     }
 
     function getExtension(uint256 tokenId) external view returns (address) {
@@ -523,16 +517,124 @@ contract LedgerEntryToken is Initializable, ERC721EnumerableUpgradeable {
         LedgerEntryTokenStorage.cyberCertStorage().extension = extension;
     }
 
-    function setTokenTransferable(uint256 tokenId, bool value) external onlyIssuanceManager {
+    /// @notice Sets the series-scope extension data (this printer is the series scope).
+    /// Same pattern as per-cert extensionData; both payloads are decoded/rendered by the printer's
+    /// single `extension` contract (ICertificateExtensionV3-capable extensions handle the series section).
+    function setSeriesData(bytes memory _seriesData) external onlyIssuanceManagerOrAdmin {
+        LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();
+        s.seriesData = _seriesData;
+        emit ILedgerEntryToken.SeriesDataSet(s.extension);
+    }
+
+    /// @notice Series-scope extension data: the shared extension contract and opaque payload.
+    function getSeriesInfo()
+        external
+        view
+        returns (address extension, bytes memory seriesData)
+    {
+        LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();
+        return (s.extension, s.seriesData);
+    }
+
+    function setTokenTransferable(uint256 tokenId, bool value) external onlyIssuanceManagerOrAdmin {
         LedgerEntryTokenStorage.cyberCertStorage().tokenTransferable[tokenId] = value;
+    }
+
+    /// @notice Reserve units of a certificate against a pending deal/loan; cannot exceed the cert's units
+    function increaseUnitsReserved(uint256 tokenId, uint256 amount) external onlyIssuanceManagerOrAdmin {
+        if (!_exists(tokenId)) revert ILedgerEntryToken.TokenDoesNotExist();
+        LedgerEntryTokenStorage.increaseUnitsReserved(tokenId, amount);
+    }
+
+    /// @notice Release previously reserved units; cannot release more than is reserved
+    function decreaseUnitsReserved(uint256 tokenId, uint256 amount) external onlyIssuanceManagerOrAdmin {
+        if (!_exists(tokenId)) revert ILedgerEntryToken.TokenDoesNotExist();
+        LedgerEntryTokenStorage.decreaseUnitsReserved(tokenId, amount);
+    }
+
+    function unitsReserved(uint256 tokenId) public view returns (uint256) {
+        return LedgerEntryTokenStorage.getUnitsReserved(tokenId);
+    }
+
+    /// @notice Timestamp the certificate was issued (set at mint; admin-overridable via setIssueTimestamp).
+    function issueTimestamp(uint256 tokenId) external view returns (uint64) {
+        return LedgerEntryTokenStorage.getIssueTimestamp(tokenId);
+    }
+
+    /// @notice Admin override of a cert's issue timestamp (for off-chain-issued positions).
+    function setIssueTimestamp(uint256 tokenId, uint64 ts) external onlyIssuanceManagerOrAdmin {
+        if (!_exists(tokenId)) revert ILedgerEntryToken.TokenDoesNotExist();
+        LedgerEntryTokenStorage.setIssueTimestamp(tokenId, ts);
+    }
+
+    /// @notice Timestamp the current legal owner acquired the certificate; (re)stamped on each legal-owner change.
+    function acquisitionTimestamp(uint256 tokenId) external view returns (uint64) {
+        return LedgerEntryTokenStorage.getAcquisitionTimestamp(tokenId);
+    }
+
+    /// @notice Admin override of a cert's acquisition timestamp (e.g. to seed a seasoned migrated position).
+    function setAcquisitionTimestamp(uint256 tokenId, uint64 ts) external onlyIssuanceManagerOrAdmin {
+        if (!_exists(tokenId)) revert ILedgerEntryToken.TokenDoesNotExist();
+        LedgerEntryTokenStorage.setAcquisitionTimestamp(tokenId, ts);
     }
 
     function isTokenTransferable(uint256 tokenId) external view returns (bool) {
         return LedgerEntryTokenStorage.cyberCertStorage().tokenTransferable[tokenId];
     }
 
-    function legalOwnerOf(uint256 tokenId) external view returns (address) {
-        if (!_exists(tokenId)) revert TokenDoesNotExist();
+    function legalOwnerOf(uint256 tokenId) public view returns (address) {
+        if (!_exists(tokenId)) revert ILedgerEntryToken.TokenDoesNotExist();
         return LedgerEntryTokenStorage.cyberCertStorage().owners[tokenId].ownerAddress;
     }
+
+    /// @notice Number of certificates `owner` is the legal owner of record for (distinct from ERC-721 custody).
+    function balanceOfLegalOwner(address owner) external view returns (uint256) {
+        return LedgerEntryTokenStorage.cyberCertStorage().legalOwnerTokenCount[owner];
+    }
+
+    /// @notice The `index`-th certificate `owner` is the legal owner of record for. Enumerates by legal owner,
+    /// so it lists a holder's certs even when a custodian (e.g. an admin multisig) holds the NFTs.
+    function tokenOfLegalOwnerByIndex(address owner, uint256 index) external view returns (uint256) {
+        LedgerEntryTokenStorage.CyberCertStorage storage s = LedgerEntryTokenStorage.cyberCertStorage();
+        if (index >= s.legalOwnerTokenCount[owner]) revert ILedgerEntryToken.LegalOwnerIndexOutOfBounds();
+        return s.legalOwnedTokens[owner][index];
+    }
+
+    /// @notice Backfill the legal-owner enumeration for tokens in [startIndex, startIndex+count) of the supply.
+    /// For printers deployed before the enumeration existed: permissionless and idempotent (already-tracked
+    /// tokens are skipped), call in batches over [0, totalSupply()) after a beacon upgrade. New printers need it
+    /// only if you want to (harmlessly) re-run it.
+    function backfillLegalOwners(uint256 startIndex, uint256 count) external {
+        LedgerEntryTokenStorage.backfillLegalOwnerEnumeration(startIndex, count);
+    }
+
+    /// @notice Backfill the base acquisitionTimestamp from FundInterestExtension data. Permissionless and
+    /// idempotent; batch over the supply. See LedgerEntryTokenStorage.backfillAcquisitionTimestamp.
+    function backfillAcquisitionTimestamps(uint256 startIndex, uint256 count) external {
+        LedgerEntryTokenStorage.backfillAcquisitionTimestamp(startIndex, count);
+    }
+
+    /// @notice Wire the LeXcheXBadge the look-through tally samples. Set before the first mint on a new
+    /// printer (and before `backfillLookThroughTally` on an upgraded one).
+    function setLookThroughBadge(address badge) external onlyIssuanceManagerOrAdmin {
+        LedgerEntryTokenStorage.setLookThroughBadge(badge);
+        emit ILedgerEntryToken.LookThroughBadgeSet(badge);
+    }
+
+    /// @notice Re-read the badge and reconcile a live holder's look-through contribution (e.g. after a
+    /// re-credential). Permissionless: it can only pull the tally toward authoritative badge state.
+    function resyncHolder(address owner) external {
+        LedgerEntryTokenStorage.resyncHolder(owner);
+    }
+
+    function resyncHolders(address[] calldata owners) external {
+        LedgerEntryTokenStorage.resyncHolders(owners);
+    }
+
+    /// @notice Backfill the look-through tally for tokens in [startIndex, startIndex+count) after a beacon
+    /// upgrade. Set the badge first; permissionless and idempotent. Batch over [0, totalSupply()).
+    function backfillLookThroughTally(uint256 startIndex, uint256 count) external {
+        LedgerEntryTokenStorage.backfillLookThroughTally(startIndex, count);
+    }
+
 }

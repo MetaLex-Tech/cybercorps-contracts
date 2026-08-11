@@ -4,9 +4,9 @@ pragma solidity ^0.8.13;
 import "forge-std/Test.sol";
 import "../src/IssuanceManager.sol";
 import "../src/CyberScrip.sol";
-import "../src/CyberCertPrinter.sol";
+import "../src/LedgerEntryToken.sol";
 import "../src/interfaces/ICyberScrip.sol";
-import "../src/interfaces/ICyberCertPrinter.sol";
+import "../src/interfaces/ILedgerEntryToken.sol";
 import "../src/interfaces/ICondition.sol";
 import "../src/interfaces/ITransferRestrictionHook.sol";
 import "../src/libs/auth.sol";
@@ -34,7 +34,7 @@ contract POCMockCyberCorp {
 }
 
 /// @notice Extended mock CertPrinter for IssuanceManager-level POC tests.
-///         Mimics the real CyberCertPrinter enough for the IM to call through the interface.
+///         Mimics the real LedgerEntryToken enough for the IM to call through the interface.
 contract POCMockCertPrinter {
     mapping(uint256 => CertificateDetails) internal _details;
     mapping(uint256 => address) internal _owners;
@@ -72,6 +72,15 @@ contract POCMockCertPrinter {
         return _ownedTokens[owner_][index];
     }
 
+    // In this mock custody owner == legal owner, so the per-legal-owner enumeration is the same backing data.
+    function balanceOfLegalOwner(address owner_) external view returns (uint256) {
+        return _balances[owner_];
+    }
+
+    function tokenOfLegalOwnerByIndex(address owner_, uint256 index) external view returns (uint256) {
+        return _ownedTokens[owner_][index];
+    }
+
     function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory) {
         return _details[tokenId];
     }
@@ -94,10 +103,11 @@ contract POCMockCertPrinter {
 
     function voidCert(uint256 tokenId) external { _voided[tokenId] = true; }
     function isVoided(uint256 tokenId) external view returns (bool) { return _voided[tokenId]; }
+    function unitsReserved(uint256) external pure returns (uint256) { return 0; }
     function legalOwnerOf(uint256 tokenId) external view returns (address) { return _owners[tokenId]; }
 
     /// @dev Mock safeTransferFrom -- no IERC721Receiver check, no endorsement check.
-    ///      The real CyberCertPrinter would revert here if `to` is a contract without
+    ///      The real LedgerEntryToken would revert here if `to` is a contract without
     ///      IERC721Receiver, or if transfer restrictions / endorsements aren't met.
     function safeTransferFrom(address from, address to, uint256 tokenId) external {
         require(_owners[tokenId] == from, "not owner");
@@ -108,7 +118,7 @@ contract POCMockCertPrinter {
 
     function assignCert(address from, uint256 tokenId, address, CertificateDetails memory details) external returns (uint256) {
         require(_owners[tokenId] == from, "not owner");
-        // NOTE: the real CyberCertPrinter has _transfer commented out, so the token is NOT moved
+        // NOTE: the real LedgerEntryToken has _transfer commented out, so the token is NOT moved
         _details[tokenId] = details;
         return tokenId;
     }
@@ -191,7 +201,7 @@ contract ScripPOCTest is Test {
                     IssuanceManagerFactory.initialize.selector,
                     address(auth),
                     new IssuanceManager(),
-                    new CyberCertPrinter(),
+                    new LedgerEntryToken(),
                     new CyberScrip()
                 )
             )
@@ -268,7 +278,7 @@ contract ScripPOCTest is Test {
 
         vm.prank(owner);
         bytes memory signature = abi.encodePacked("signed-hash");
-        issuanceManager.signCertificate(address(certPrinter), certId, signature);
+        certPrinter.addIssuerSignature(certId, signature);
         assertEq(certPrinter.getIssuerSignatureCount(certId), 1, "signature should be added");
         assertEq(certPrinter.getIssuerSignatureAt(certId, 0), signature, "stored signature mismatch");
     }
@@ -345,7 +355,7 @@ contract ScripPOCTest is Test {
     // POC #4 - Full scripification path uses safeTransferFrom (High)
     //
     // The current code does: certificate.safeTransferFrom(msg.sender, dm, id)
-    // In the real CyberCertPrinter:
+    // In the real LedgerEntryToken:
     //   a) The IssuanceManager is msg.sender to CertPrinter, but isn't the
     //      token owner or approved -- transferFrom would fail
     //   b) _update override enforces endorsement checks for transfers
@@ -447,13 +457,13 @@ contract ScripPOCTest is Test {
     // =========================================================================
     // POC #6 - assignCert doesn't actually transfer the token (Medium)
     //
-    // In the real CyberCertPrinter, _transfer(from, to, tokenId) is
+    // In the real LedgerEntryToken, _transfer(from, to, tokenId) is
     // commented out inside assignCert. The function updates details but
     // the ERC721 ownership doesn't change.
     // =========================================================================
 
     function test_POC6_AssignCert_TransferCommentedOut() public {
-        // Document the issue: in CyberCertPrinter.sol line 177:
+        // Document the issue: in LedgerEntryToken.sol line 177:
         //   // _transfer(from, to, tokenId);
         // This means assignCert only updates details, not ownership.
         //
@@ -515,13 +525,13 @@ contract ScripPOCTest is Test {
     // =========================================================================
 
     function test_POC9_SetExtension_IgnoresTokenId() public {
-        // In CyberCertPrinter:
+        // In LedgerEntryToken:
         //   function setExtension(uint256 tokenId, address extension) external onlyIssuanceManager {
-        //       CyberCertPrinterStorage.cyberCertStorage().extension = extension;
+        //       LedgerEntryTokenStorage.cyberCertStorage().extension = extension;
         //   }
         //
         //   function getExtension(uint256 tokenId) external view returns (address) {
-        //       return CyberCertPrinterStorage.cyberCertStorage().extension;
+        //       return LedgerEntryTokenStorage.cyberCertStorage().extension;
         //   }
         //
         // tokenId is completely ignored - extension is a single global value.
@@ -546,12 +556,12 @@ contract ScripPOCTest is Test {
         denyHook.setAllowTransfers(false);
 
         vm.prank(owner);
-        issuanceManager.setRestrictionHook(address(certPrinter), 0, address(denyHook));
+        certPrinter.setRestrictionHook(0, address(denyHook));
 
         // Hook is stored
         assertEq(certPrinter.getRestrictionHook(0), address(denyHook), "hook stored");
 
-        // But in the real CyberCertPrinter._update, the per-token hook check
+        // But in the real LedgerEntryToken._update, the per-token hook check
         // is commented out (lines 235-242), so transfers would SUCCEED despite
         // the hook being configured to deny them.
     }
@@ -580,8 +590,8 @@ contract ScripPOCTest is Test {
     // =========================================================================
     // POC #5 - getEndorsementHistory interface mismatch (Medium)
     //
-    // ICyberCertPrinter declares getEndorsementHistory returning individual
-    // fields, but CyberCertPrinter returns Endorsement memory. These are
+    // ILedgerEntryToken declares getEndorsementHistory returning individual
+    // fields, but LedgerEntryToken returns Endorsement memory. These are
     // ABI-incompatible for external callers using the interface.
     // =========================================================================
 
@@ -594,13 +604,14 @@ contract ScripPOCTest is Test {
             "uri://real",
             SecurityClass.CommonStock,
             SecuritySeries.SeriesA,
-            address(0)
+            address(0),
+            bytes("")
         );
 
         // Avoid IssuanceManager.createCert in this PoC: it fetches tokenURI, which
         // depends on uriBuilder being configured in setUp.
         vm.prank(address(issuanceManager));
-        ICyberCertPrinter(realPrinter).safeMint(0, investor, _defaultDetails(100));
+        ILedgerEntryToken(realPrinter).safeMint(0, investor, _defaultDetails(100));
 
         bytes memory signature = abi.encodePacked(uint256(12345));
         bytes32 agreementId = keccak256("POC5");
@@ -614,11 +625,11 @@ contract ScripPOCTest is Test {
             ""
         );
         vm.prank(address(issuanceManager));
-        ICyberCertPrinter(realPrinter).addEndorsement(0, endorsement);
+        ILedgerEntryToken(realPrinter).addEndorsement(0, endorsement);
 
         // Do a raw call first (this succeeds and returns bytes).
         (bool ok, bytes memory returndata) = realPrinter.staticcall(
-            abi.encodeWithSelector(ICyberCertPrinter.getEndorsementHistory.selector, 0, 0)
+            abi.encodeWithSelector(ILedgerEntryToken.getEndorsementHistory.selector, 0, 0)
         );
         assertTrue(ok, "raw getEndorsementHistory call failed");
 

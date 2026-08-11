@@ -42,10 +42,114 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "../CyberCorpConstants.sol";
-import "./IIssuanceManager.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "openzeppelin-contracts/token/ERC721/IERC721.sol";
+
+struct CertificateDetails {
+    string signingOfficerName;
+    string signingOfficerTitle;
+    uint256 investmentAmountUSD;
+    uint256 issuerUSDValuationAtTimeOfInvestment;
+    uint256 unitsRepresented;
+    string legalDetails;
+    bytes extensionData;
+}
+
+struct Endorsement {
+    address endorser;
+    uint256 timestamp;
+    bytes signatureHash;
+    address registry;  //optional
+    bytes32 agreementId; //optional
+    address endorsee;
+    string endorseeName;
+}
+
+struct OwnerDetails {
+    string name;
+    address ownerAddress;
+}
+
+enum RestrictionType {
+    Unspecified,
+    TransferConsentRequired,
+    RestrictedSecurityRule144,
+    UnregisteredSecurities,
+    RegulationS,
+    ContentiousHardfork,
+    Custom
+}
+
+struct RestrictiveLegend {
+    RestrictionType restrictionType;
+    string title;
+    string text;
+    string jurisdiction;
+    bytes32 referenceId;
+    uint64 effectiveTimestamp;
+    uint64 expirationTimestamp;
+    bool active;
+    bytes data;
+}
 
 interface ILedgerEntryToken is IERC721 {
+    // Shared errors — declared once here so LedgerEntryToken and its storage library (via delegatecall) revert
+    // with identical selectors.
+    error NotIssuanceManager();
+    error TokenNotTransferable();
+    error TokenDoesNotExist();
+    error InvalidTokenId();
+    error URIQueryForNonexistentToken();
+    error URISetForNonexistentToken();
+    error ConversionNotImplemented();
+    error TransferRestricted(string reason);
+    error EndorsementNotSignedOrInvalid();
+    error InvalidEndorsement();
+    error InvalidLegendIndex();
+    error SignatureRequired();
+    error LegalOwnerIndexOutOfBounds();
+    error CertificateReserved();
+    error ExceedsAvailableUnits();
+    error ExceedsReservedUnits();
+    error ExtensionTypeNotSupported();
+
+    // Shared events — declared once here so LedgerEntryToken and its storage library (via delegatecall) emit
+    // with identical topics.
+    event CertificateCreated(uint256 indexed tokenId, address indexed investor, uint256 amount, uint256 cap);
+    event Converted(uint256 indexed oldTokenId, uint256 indexed newTokenId);
+    event CertificateSigned(uint256 indexed tokenId, bytes signature);
+    event CertificateEndorsed(
+        uint256 indexed tokenId,
+        address indexed endorser,
+        address indexed endorsee,
+        string endorseeName,
+        address registry,
+        bytes32 agreementId,
+        uint256 index,
+        uint256 timestamp
+    );
+    event HookStatusChanged(bool enabled);
+    event WhitelistUpdated(address indexed account, bool whitelisted);
+    event CyberCertPrinter_CertificateCreated(uint256 indexed tokenId);
+    event CyberCertTransfer(address indexed from, address indexed to, uint256 indexed tokenId);
+    event CertificateAssigned(uint256 indexed tokenId, address indexed newOwner, string newOwnerName, string issuerName);
+    event CertificateVoided(uint256 indexed tokenId, uint256 timestamp);
+    event CertificateUnvoided(uint256 indexed tokenId, uint256 timestamp);
+    event RestrictionHookSet(uint256 indexed id, address indexed hookAddress);
+    event GlobalRestrictionHookSet(address indexed hookAddress);
+    event GlobalTransferableSet(bool indexed transferable);
+    event LookThroughBadgeSet(address indexed badge);
+    event UnitsReservedUpdated(uint256 indexed tokenId, uint256 unitsReserved);
+    event IssueTimestampSet(uint256 indexed tokenId, uint64 issueTimestamp);
+    event AcquisitionTimestampSet(uint256 indexed tokenId, uint64 acquisitionTimestamp);
+    event LegalOwnerChanged(
+        uint256 indexed tokenId,
+        address indexed previousOwner,
+        address indexed newOwner,
+        string newOwnerName,
+        uint64 acquisitionTimestamp
+    );
+    event SeriesDataSet(address indexed extension);
+
     function initialize(
         string[] memory defaultLegend,
         string memory name,
@@ -54,13 +158,15 @@ interface ILedgerEntryToken is IERC721 {
         address _issuanceManager,
         SecurityClass _securityType,
         SecuritySeries _securitySeries,
-        address _extension
+        address _extension,
+        bytes memory _seriesData
     ) external;
     function name() external view returns (string memory);
     function symbol() external view returns (string memory);
     function updateIssuanceManager(address _issuanceManager) external;
     function updateDefaultLegend(string[] memory _ledger) external;
     function defaultLegend() external view returns (string[] memory);
+    function defaultRestrictiveLegends() external view returns (RestrictiveLegend[] memory);
     function setRestrictionHook(uint256 _id, address _hookAddress) external;
     function setGlobalRestrictionHook(address hookAddress) external;
     function safeMint(uint256 tokenId, address to, CertificateDetails memory details) external returns (uint256);
@@ -71,26 +177,81 @@ interface ILedgerEntryToken is IERC721 {
         CertificateDetails memory details,
         string memory investorName
     ) external returns (uint256);
-    function assignCert(address from, uint256 tokenId, address to, CertificateDetails memory details)
-        external
-        returns (uint256);
-    function addIssuerSignature(uint256 tokenId, bytes calldata signature) external;
-    function addEndorsement(uint256 tokenId, Endorsement memory newEndorsement) external;
-    function endorseAndTransfer(uint256 tokenId, Endorsement memory newEndorsement, address from, address to) external;
-    function updateCertificateDetails(uint256 tokenId, CertificateDetails calldata details) external;
-    function burn(uint256 tokenId) external;
+    function safeMintAndAssign(
+        address to, // custodian
+        address owner, // legal owner
+        uint256 tokenId,
+        CertificateDetails memory details,
+        string memory ownerName
+    ) external returns (uint256);
+    function assignCert(
+        address from,
+        uint256 tokenId,
+        address to,
+        CertificateDetails memory details
+    ) external returns (uint256);
+    function addIssuerSignature(
+        uint256 tokenId,
+        bytes calldata signature
+    ) external;
+    function addEndorsement(
+        uint256 tokenId,
+        Endorsement memory newEndorsement
+    ) external;
+    function endorseCertificate(
+        uint256 tokenId,
+        address endorser,
+        bytes memory signature,
+        bytes32 agreementId
+    ) external;
+    function updateCertificateTackedFromAcquisitionDate(
+        uint256 tokenId,
+        uint64 ts
+    ) external;
+    function endorseAndTransfer(
+        uint256 tokenId,
+        Endorsement memory newEndorsement,
+        address from,
+        address to
+    ) external;
+    function updateCertificateDetails(
+        uint256 tokenId,
+        CertificateDetails calldata details
+    ) external;
     function voidCert(uint256 tokenId) external;
     function unvoidCert(uint256 tokenId) external;
     function isVoided(uint256 tokenId) external view returns (bool);
-    function getCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory);
-    function getActiveCertificateDetails(uint256 tokenId) external view returns (CertificateDetails memory);
+    function getCertificateDetails(
+        uint256 tokenId
+    ) external view returns (CertificateDetails memory);
+    function getActiveCertificateDetails(
+        uint256 tokenId
+    ) external view returns (CertificateDetails memory);
+    function getExtension(uint256 tokenId) external view returns (address);
+    function setExtension(uint256 tokenId, address extension) external;
+    function setSeriesData(bytes memory _seriesData) external;
+    function getSeriesInfo()
+        external
+        view
+        returns (address extension, bytes memory seriesData);
     function getIssuerSignatureCount(uint256 tokenId) external view returns (uint256);
     function getIssuerSignatureAt(uint256 tokenId, uint256 index) external view returns (bytes memory);
     function addCertLegend(uint256 tokenId, string memory newLegend) external;
     function removeCertLegendAt(uint256 tokenId, uint256 index) external;
     function addDefaultLegend(string memory newLegend) external;
     function removeDefaultLegendAt(uint256 index) external;
-    function getEndorsementHistory(uint256 tokenId, uint256 index)
+    function addDefaultRestrictiveLegend(RestrictiveLegend memory newLegend) external;
+    function removeDefaultRestrictiveLegendAt(uint256 index) external;
+    function getDefaultRestrictiveLegendAt(uint256 index) external view returns (RestrictiveLegend memory);
+    function getDefaultRestrictiveLegendCount() external view returns (uint256);
+    function addCertRestrictiveLegend(uint256 tokenId, RestrictiveLegend memory newLegend) external;
+    function removeCertRestrictiveLegendAt(uint256 tokenId, uint256 index) external;
+    function getCertRestrictiveLegendAt(uint256 tokenId, uint256 index) external view returns (RestrictiveLegend memory);
+    function getCertRestrictiveLegendCount(uint256 tokenId) external view returns (uint256);
+    function getEndorsementHistory(
+        uint256 tokenId,
+        uint256 index
+    )
         external
         view
         returns (
@@ -105,11 +266,34 @@ interface ILedgerEntryToken is IERC721 {
     function tokenURI(uint256 tokenId) external view returns (string memory);
     function certificateUri() external view returns (string memory);
     function issuanceManager() external view returns (address);
-    function getExtension(uint256 tokenId) external view returns (address);
-    function setExtension(uint256 tokenId, address extension) external;
+    function holderCount() external view returns (uint256);
     function totalSupply() external view returns (uint256);
     function tokenByIndex(uint256 index) external view returns (uint256);
     function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256);
+
+    // ERC721-like APIs for legal owner
     function legalOwnerOf(uint256 tokenId) external view returns (address);
+    function balanceOfLegalOwner(address owner) external view returns (uint256);
+    function tokenOfLegalOwnerByIndex(address owner, uint256 index) external view returns (uint256);
+
+    // §3(c)(1)(A) look-through holder tally (maintained incrementally; read O(1))
+    function lookThroughHolderCount() external view returns (uint256);
+    function usLookThroughHolderCount() external view returns (uint256);
+    function usTallyExpiry() external view returns (uint64);
+    function isLegalHolder(address owner) external view returns (bool); // note the distinction vs legal owner: a legal holder must have live lots
+    function lookThroughBadge() external view returns (address);
+    function setLookThroughBadge(address badge) external;
+    function resyncHolder(address owner) external;
+    function resyncHolders(address[] calldata owners) external;
+    function backfillLookThroughTally(uint256 startIndex, uint256 count) external;
+
     function setTokenTransferable(uint256 tokenId, bool value) external;
+    function increaseUnitsReserved(uint256 tokenId, uint256 amount) external;
+    function decreaseUnitsReserved(uint256 tokenId, uint256 amount) external;
+    function unitsReserved(uint256 tokenId) external view returns (uint256);
+    function issueTimestamp(uint256 tokenId) external view returns (uint64);
+    function setIssueTimestamp(uint256 tokenId, uint64 ts) external;
+    function acquisitionTimestamp(uint256 tokenId) external view returns (uint64);
+    function setAcquisitionTimestamp(uint256 tokenId, uint64 ts) external;
+    function backfillAcquisitionTimestamps(uint256 startIndex, uint256 count) external;
 }

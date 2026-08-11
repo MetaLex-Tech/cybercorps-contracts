@@ -45,6 +45,7 @@ import "./libs/auth.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import "openzeppelin-contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/ICyberCorpSingleFactory.sol";
+import "./storage/extensions/ICyberCorpExtension.sol";
 
 /// @title CyberCorp
 /// @notice Main contract representing a corporation's on-chain presence and management
@@ -80,7 +81,14 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     address public roundManager;
     /// @notice Escrowed officer signatures that can be applied to certificates
     bytes[] public escrowedOfficerSignatures;
-    /// @notice Board state is appended for proxy storage compatibility.
+    /// @notice Extension contract that interprets `extensionData`
+    address public extension;
+    /// @notice Type selector for the active extension schema
+    bytes32 public extensionType;
+    /// @notice Raw extension payload interpreted by the active extension contract
+    bytes public extensionData;
+    /// @notice Board state is appended after the extension fields for proxy
+    /// storage compatibility (extension fields are the released layout).
     CompanyDirector[] public companyDirectors;
     mapping(address => bool) public boardMembers;
     mapping(address => bool) public officerMembers;
@@ -92,6 +100,8 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     event CompanyPayableUpdated(address indexed companyPayable, address indexed oldCompanyPayable);
     event EscrowedOfficerSignatureAdded(uint256 indexed index, address indexed officer);
     event EscrowedOfficerSignatureUpdated(uint256 indexed index, address indexed officer);
+    event CyberCORPExtensionSet(address indexed extension, bytes32 indexed extensionType);
+    event CyberCORPExtensionDataUpdated(bytes32 indexed extensionType, bytes extensionData);
     event DirectorAdded(address indexed director, uint256 index);
     event DirectorRemoved(address indexed director, uint256 index);
     event BoardGovernanceActivated(address indexed initialDirector);
@@ -100,6 +110,9 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     error NotRefImplementation();
     error SignatureRequired();
     error InvalidEscrowSignatureIndex();
+    error InvalidExtension();
+    error ExtensionTypeNotSupported();
+    error ExtensionNotConfigured();
     error BoardGovernanceNotEnforced();
     error BoardGovernanceAlreadyEnforced();
     error RoleManagerNotCyberCorp();
@@ -426,6 +439,56 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     /// @notice Gets total escrowed officer signature count
     function getEscrowedOfficerSignatureCount() external view returns (uint256) {
         return escrowedOfficerSignatures.length;
+    }
+
+    /// @notice Set or replace the active CyberCorp extension contract and schema type
+    /// @dev Setting a new extension clears any previously stored extension data
+    function setExtension(
+        address _extension,
+        bytes32 _extensionType
+    ) external onlyOwner {
+        if (_extension == address(0)) {
+            if (_extensionType != bytes32(0)) revert InvalidExtension();
+            extension = address(0);
+            extensionType = bytes32(0);
+            delete extensionData;
+            emit CyberCORPExtensionSet(address(0), bytes32(0));
+            emit CyberCORPExtensionDataUpdated(bytes32(0), "");
+            return;
+        }
+
+        if (
+            !ICyberCorpExtension(_extension).supportsExtensionType(_extensionType)
+        ) revert ExtensionTypeNotSupported();
+
+        extension = _extension;
+        extensionType = _extensionType;
+        delete extensionData;
+
+        emit CyberCORPExtensionSet(_extension, _extensionType);
+        emit CyberCORPExtensionDataUpdated(_extensionType, "");
+    }
+
+    /// @notice Update the raw extension payload for the active CyberCorp extension
+    function setExtensionData(bytes calldata _extensionData) external onlyOwner {
+        if (extension == address(0)) revert ExtensionNotConfigured();
+        extensionData = _extensionData;
+        emit CyberCORPExtensionDataUpdated(extensionType, _extensionData);
+    }
+
+    /// @notice Clear the active CyberCorp extension and any stored extension data
+    function clearExtension() external onlyOwner {
+        extension = address(0);
+        extensionType = bytes32(0);
+        delete extensionData;
+        emit CyberCORPExtensionSet(address(0), bytes32(0));
+        emit CyberCORPExtensionDataUpdated(bytes32(0), "");
+    }
+
+    /// @notice Returns the extension-provided JSON fragment for the current extension payload
+    function getExtensionURI() external view returns (string memory) {
+        if (extension == address(0) || extensionData.length == 0) return "";
+        return ICyberCorpExtension(extension).getExtensionURI(extensionData);
     }
 
     // ========================

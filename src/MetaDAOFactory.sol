@@ -156,6 +156,11 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
     error GlobalOrPartyValuesMismatch();
     error OfficerValuesMismatch();
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
     function initialize(
         address _auth,
         address _registryAddress,

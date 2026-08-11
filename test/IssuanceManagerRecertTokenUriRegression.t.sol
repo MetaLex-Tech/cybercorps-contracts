@@ -7,10 +7,11 @@ import {
     CertificateDetails,
     Endorsement,
     OwnerDetails,
+    RestrictiveLegend,
     SecurityClass,
     SecuritySeries
-} from "../src/storage/CyberCertPrinterStorage.sol";
-import {ICyberCertPrinter} from "../src/interfaces/ICyberCertPrinter.sol";
+} from "../src/storage/LedgerEntryTokenStorage.sol";
+import {ILedgerEntryToken} from "../src/interfaces/ILedgerEntryToken.sol";
 import {ICyberScrip} from "../src/interfaces/ICyberScrip.sol";
 import {ICondition} from "../src/interfaces/ICondition.sol";
 import {ITransferRestrictionHook} from "../src/interfaces/ITransferRestrictionHook.sol";
@@ -27,6 +28,32 @@ contract UriBuilderWithUnits is IUriBuilder {
         SecuritySeries,
         string memory,
         string[] memory,
+        CertificateDetails memory details,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) {
+        return
+            string.concat(
+                '{"unitsRepresented":"',
+                Strings.toString(details.unitsRepresented / 1e18),
+                '"}'
+            );
+    }
+
+    function buildCertificateUri(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        RestrictiveLegend[] memory,
         CertificateDetails memory details,
         Endorsement[] memory,
         OwnerDetails memory,
@@ -69,6 +96,32 @@ contract UriBuilderWithUnits is IUriBuilder {
                 '"}'
             );
     }
+
+    function buildCertificateUriNotEncoded(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        RestrictiveLegend[] memory,
+        CertificateDetails memory details,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) {
+        return
+            string.concat(
+                '{"unitsRepresented":"',
+                Strings.toString(details.unitsRepresented / 1e18),
+                '"}'
+            );
+    }
 }
 
 contract IssuanceManagerRecertTokenUriRegressionTest is
@@ -78,7 +131,7 @@ contract IssuanceManagerRecertTokenUriRegressionTest is
         UriBuilderWithUnits uriBuilder = new UriBuilderWithUnits();
         issuanceManager.setUriBuilder(address(uriBuilder));
 
-        ICyberCertPrinter certPrinter = _deployPrinter("Regression Cert", "REG");
+        ILedgerEntryToken certPrinter = _deployPrinter("Regression Cert", "REG");
         uint256 originalCertId = _mintCert(certPrinter, investor, 100);
         address investor2 = otherInvestor;
 
@@ -157,7 +210,7 @@ contract IssuanceManagerRecertTokenUriRegressionTest is
         UriBuilderWithUnits uriBuilder = new UriBuilderWithUnits();
         issuanceManager.setUriBuilder(address(uriBuilder));
 
-        ICyberCertPrinter certPrinter = _deployPrinter("Regression Cert", "REG");
+        ILedgerEntryToken certPrinter = _deployPrinter("Regression Cert", "REG");
         uint256 certId = _mintCert(certPrinter, investor, 100);
 
         issuanceManager.deployCyberScrip(

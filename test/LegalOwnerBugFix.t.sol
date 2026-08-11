@@ -6,14 +6,15 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 
 import "../src/IssuanceManager.sol";
 import "../src/IssuanceManagerFactory.sol";
-import "../src/CyberCertPrinter.sol";
+import "../src/LedgerEntryToken.sol";
 import "../src/CyberScrip.sol";
-import "../src/interfaces/ICyberCertPrinter.sol";
+import "../src/interfaces/ILedgerEntryToken.sol";
 import "../src/interfaces/ICyberScrip.sol";
 import "../src/interfaces/ITransferRestrictionHook.sol";
 import "../src/interfaces/ICondition.sol";
 import "../src/interfaces/IUriBuilder.sol";
 import "../src/libs/auth.sol";
+import {RestrictiveLegend} from "../src/storage/LedgerEntryTokenStorage.sol";
 
 contract LegalOwnerMockCyberCorp {
     function cyberCORPName() external pure returns (string memory) {
@@ -63,6 +64,27 @@ contract LegalOwnerMockUriBuilder is IUriBuilder {
         return "uri://mock";
     }
 
+    function buildCertificateUri(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        RestrictiveLegend[] memory,
+        CertificateDetails memory,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) {
+        return "uri://mock";
+    }
+
     function buildCertificateUriNotEncoded(
         string memory,
         string memory,
@@ -83,13 +105,34 @@ contract LegalOwnerMockUriBuilder is IUriBuilder {
     ) external pure returns (string memory) {
         return "uri://mock";
     }
+
+    function buildCertificateUriNotEncoded(
+        string memory,
+        string memory,
+        string memory,
+        string memory,
+        SecurityClass,
+        SecuritySeries,
+        string memory,
+        RestrictiveLegend[] memory,
+        CertificateDetails memory,
+        Endorsement[] memory,
+        OwnerDetails memory,
+        address,
+        bytes32,
+        uint256,
+        address,
+        address
+    ) external pure returns (string memory) {
+        return "uri://mock";
+    }
 }
 
 contract LegalOwnerBugPOCTest is Test {
     bytes32 internal constant SALT = bytes32(keccak256("LegalOwnerBugPOC"));
 
     IssuanceManager internal issuanceManager;
-    ICyberCertPrinter internal certPrinter;
+    ILedgerEntryToken internal certPrinter;
     BorgAuth internal auth;
 
     address internal owner;
@@ -109,7 +152,7 @@ contract LegalOwnerBugPOCTest is Test {
                         IssuanceManagerFactory.initialize.selector,
                         address(auth),
                         new IssuanceManager(),
-                        new CyberCertPrinter(),
+                        new LedgerEntryToken(),
                         new CyberScrip()
                     )
                 )
@@ -124,7 +167,7 @@ contract LegalOwnerBugPOCTest is Test {
             address(factory)
         );
 
-        certPrinter = ICyberCertPrinter(
+        certPrinter = ILedgerEntryToken(
             issuanceManager.createCertPrinter(
                 new string[](0),
                 "Legal Owner Cert",
@@ -132,7 +175,8 @@ contract LegalOwnerBugPOCTest is Test {
                 "uri://cert",
                 SecurityClass.CommonStock,
                 SecuritySeries.SeriesA,
-                address(0)
+                address(0),
+                bytes("")
             )
         );
     }
@@ -196,6 +240,15 @@ contract LegalOwnerBugPOCTest is Test {
             investor,
             "legal owner should be set to investor on createCertAndAssign"
         );
+    }
+
+    // The bare-mint path (createCert) sets the legal owner but historically emitted no ownership event;
+    // _setLegalOwner now emits LegalOwnerChanged from the chokepoint, so this path is observable too.
+    function test_CreateCert_EmitsLegalOwnerChanged() public {
+        uint256 nextId = certPrinter.totalSupply();
+        vm.expectEmit(true, true, true, true, address(certPrinter));
+        emit ILedgerEntryToken.LegalOwnerChanged(nextId, address(0), investor, "", uint64(block.timestamp));
+        issuanceManager.createCert(address(certPrinter), investor, _details(10));
     }
 
     function _details(uint256 units) internal pure returns (CertificateDetails memory) {

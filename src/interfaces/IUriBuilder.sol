@@ -42,10 +42,53 @@ except with the express prior written permission of the copyright holder.*/
 pragma solidity 0.8.28;
 
 import "../CyberCorpConstants.sol";
-import {CertificateDetails, Endorsement, OwnerDetails} from "../storage/CyberCertPrinterStorage.sol";
+import {
+    CertificateDetails,
+    Endorsement,
+    OwnerDetails,
+    RestrictiveLegend
+} from "./ILedgerEntryToken.sol";
 
 interface IUriBuilder {
     function buildCertificateUri(
+        string memory cyberCORPName,
+        string memory cyberCORPType,
+        string memory cyberCORPJurisdiction,
+        string memory cyberCORPContactDetails,
+        SecurityClass securityType,
+        SecuritySeries securitySeries,
+        string memory certificateUri,
+        string[] memory certLegend,
+        CertificateDetails memory details,
+        Endorsement[] memory endorsements,
+        OwnerDetails memory owner,
+        address registry,
+        bytes32 agreementId,
+        uint256 tokenId,
+        address contractAddress,
+        address extension
+    ) external view returns (string memory);
+
+    function buildCertificateUri(
+        string memory cyberCORPName,
+        string memory cyberCORPType,
+        string memory cyberCORPJurisdiction,
+        string memory cyberCORPContactDetails,
+        SecurityClass securityType,
+        SecuritySeries securitySeries,
+        string memory certificateUri,
+        RestrictiveLegend[] memory certLegend,
+        CertificateDetails memory details,
+        Endorsement[] memory endorsements,
+        OwnerDetails memory owner,
+        address registry,
+        bytes32 agreementId,
+        uint256 tokenId,
+        address contractAddress,
+        address extension
+    ) external view returns (string memory);
+
+    function buildCertificateUriNotEncoded(
         string memory cyberCORPName,
         string memory cyberCORPType,
         string memory cyberCORPJurisdiction,
@@ -72,7 +115,7 @@ interface IUriBuilder {
         SecurityClass securityType,
         SecuritySeries securitySeries,
         string memory certificateUri,
-        string[] memory certLegend,
+        RestrictiveLegend[] memory certLegend,
         CertificateDetails memory details,
         Endorsement[] memory endorsements,
         OwnerDetails memory owner,

@@ -3,7 +3,7 @@ pragma solidity ^0.8.28;
 
 import {Script} from "forge-std/Script.sol";
 import {CyberCorpFactory} from "../src/CyberCorpFactory.sol";
-import {CyberCertPrinter} from "../src/CyberCertPrinter.sol";
+import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {CyberCorpSingleFactory} from "../src/CyberCorpSingleFactory.sol";
@@ -12,7 +12,7 @@ import {CyberAgreementRegistry} from "../src/CyberAgreementRegistry.sol";
 import {DealManagerFactory} from "../src/DealManagerFactory.sol";
 import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {CertificateDetails} from "../src/storage/CyberCertPrinterStorage.sol";
+import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 import {console} from "forge-std/console.sol";
 import "../src/CyberCorpConstants.sol";
 import {CertificateUriBuilder} from "../src/CertificateUriBuilder.sol";

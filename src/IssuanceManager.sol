@@ -68,6 +68,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
     error ConditionCheckFailed();
     error NotRefImplementation();
     error InvalidScripRatio();
+    error ScripOutstanding();
     error ScripToCertMinimumNotMet();
     error ScripifyNotWhitelisted();
     error RecertificationApprovalRequired();
@@ -156,21 +157,12 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         // beacon proxies because they are managed by the same company owner and are expected to
         // share the same implementation or upgraded to a new version all at the same time.
         // Maintenance-wise, since IssuanceManager itself is upgradeable, we don't need to worry about beacon ownership transfers
-
-        address cyberCertPrinterRefImpl =
-            IIssuanceManagerFactory(_upgradeFactory).getCyberCertPrinterRefImplementation();
-        UpgradeableBeacon beaconCertPrinter = new UpgradeableBeacon(cyberCertPrinterRefImpl, address(this));
-        emit CertPrinterBeaconImplementationUpgraded(cyberCertPrinterRefImpl);
-
-        address cyberScripRefImpl = IIssuanceManagerFactory(_upgradeFactory).getCyberScripRefImplementation();
-        UpgradeableBeacon beaconScrip = new UpgradeableBeacon(cyberScripRefImpl, address(this));
-        emit ScripBeaconImplementationUpgraded(cyberScripRefImpl);
-
-        IssuanceManagerStorage.setCORP(_CORP);
-        IssuanceManagerStorage.setUriBuilder(_uriBuilder);
-        IssuanceManagerStorage.setCyberCertPrinterBeacon(beaconCertPrinter);
-        IssuanceManagerStorage.setUpgradeFactory(_upgradeFactory);
-        IssuanceManagerStorage.setCyberScripBeacon(beaconScrip);
+        // Delegated to IssuanceManagerStorage to keep this contract under the EIP-170 size limit.
+        IssuanceManagerStorage.executeInitialize(
+            _upgradeFactory,
+            _CORP,
+            _uriBuilder
+        );
     }
 
     modifier onlyUpgradeFactory() {
@@ -187,23 +179,22 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         _;
     }
 
-    /// @dev Restricts execution to contract itself or AUTH.OWNER_ROLE callers
-    modifier onlyOwnerOrSelf() {
+    /// @dev Restricts execution to contract itself or AUTH.OWNER_ROLE callers. Body in a shared private helper
+    /// (not inlined per call site) to keep this contract under the EIP-170 size limit.
+    function _requireOwnerOrSelf() private view {
         if (msg.sender != address(this)) {
             AUTH.onlyRole(AUTH.OWNER_ROLE(), msg.sender);
         }
+    }
+
+    modifier onlyOwnerOrSelf() {
+        _requireOwnerOrSelf();
         _;
     }
 
-    /// @notice Creates a new certificate printer contract
-    /// @dev Only callable by owner
-    /// @param _ledger Array of default restrictive ledgers for a certificate
-    /// @param _name Name of the certificate
-    /// @param _ticker Trading symbol
-    /// @param _certificateUri URI containing certificate metadata
-    /// @param _securityType Type of security being represented
-    /// @param _securitySeries Series of the security
-    /// @return address Address of the new certificate printer contract
+    /// @notice Creates a new certificate printer with extension-formatted series-scope data.
+    /// @dev Only callable by owner. `_seriesData` is decoded by the same `_extension` contract that
+    /// handles per-cert extensionData; pass an empty byte string when the extension has no series section.
     function createCertPrinter(
         string[] memory _ledger,
         string memory _name,
@@ -211,15 +202,89 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         string memory _certificateUri,
         SecurityClass _securityType,
         SecuritySeries _securitySeries,
-        address _extension
+        address _extension,
+        bytes memory _seriesData
     ) public onlyOwner returns (address) {
-        return IssuanceManagerStorage.executeCreateCertPrinter(
-            _ledger, _name, _ticker, _certificateUri, _securityType, _securitySeries, _extension
+        return
+            IssuanceManagerStorage.executeCreateCertPrinter(
+                _ledger,
+                _name,
+                _ticker,
+                _certificateUri,
+                _securityType,
+                _securitySeries,
+                _extension,
+                _seriesData
+            );
+    }
+
+    /// @notice Registers a new class-level LET designation (see SecurityClassInfo)
+    /// @dev Only callable by owner; classIds are sequential starting at 1 (0 = unclassified)
+    /// @param _classType Type tag for the class
+    /// @param _documentURI URI of the class-level governing document
+    /// @param _dataExtension Optional ICertificateExtension-style decoder/renderer for _classData
+    /// @param _classData extensionData-style opaque payload for the class
+    /// @return classId ID of the new class
+    function defineSecurityClass(
+        SecurityClass _classType,
+        string memory _documentURI,
+        address _dataExtension,
+        bytes memory _classData
+    ) external onlyOwner returns (uint256 classId) {
+        return
+            IssuanceManagerStorage.executeDefineSecurityClass(
+                _classType,
+                _documentURI,
+                _dataExtension,
+                _classData
+            );
+    }
+
+    /// @notice Replaces an existing class designation's fields
+    /// @dev Only callable by owner
+    function updateSecurityClass(
+        uint256 _classId,
+        SecurityClass _classType,
+        string memory _documentURI,
+        address _dataExtension,
+        bytes memory _classData
+    ) external onlyOwner {
+        IssuanceManagerStorage.executeUpdateSecurityClass(
+            _classId,
+            _classType,
+            _documentURI,
+            _dataExtension,
+            _classData
         );
+    }
+
+    /// @notice Assigns a certificate printer (the series scope) to a class; 0 clears the assignment
+    /// @dev Only callable by owner; also the backfill path for pre-existing printers
+    function setPrinterClass(address _printer, uint256 _classId) external onlyOwner {
+        IssuanceManagerStorage.executeSetPrinterClass(_printer, _classId);
+    }
+
+    /// @notice Gets a class designation by ID
+    function getSecurityClass(
+        uint256 _classId
+    ) external view returns (SecurityClassInfo memory) {
+        return IssuanceManagerStorage.getSecurityClass(_classId);
+    }
+
+    /// @notice Number of classes defined; valid classIds are 1..count
+    function getSecurityClassCount() external view returns (uint256) {
+        return IssuanceManagerStorage.getSecurityClassCount();
+    }
+
+    /// @notice The classId a printer is assigned to (0 = unclassified)
+    function getPrinterClassId(address _printer) external view returns (uint256) {
+        return IssuanceManagerStorage.getPrinterClassId(_printer);
     }
 
     /// @notice Creates a share printer and establishes its canonical terms in
     ///         the same transaction.
+    /// @dev Passes empty series data: for class-terms printers the canonical
+    ///      terms live in the controller, not in a series-data section.
     function createCertPrinterWithClassTerms(
         string[] memory _ledger,
         string memory _name,
@@ -231,7 +296,7 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         bytes calldata _extensionData
     ) external onlyOwner returns (address certAddress) {
         certAddress = IssuanceManagerStorage.executeCreateCertPrinter(
-            _ledger, _name, _ticker, _certificateUri, _securityType, _securitySeries, _extension
+            _ledger, _name, _ticker, _certificateUri, _securityType, _securitySeries, _extension, bytes("")
         );
         IShareClassTermsController(_extension).configureClassTerms(certAddress, _extensionData);
     }
@@ -337,78 +402,26 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         );
     }
 
-    /// @notice Adds an issuer's signature to a certificate
-    /// @dev Only callable by admin, requires non-empty signature bytes
-    /// @param certAddress Address of the certificate printer contract
-    /// @param tokenId ID of the certificate
-    /// @param signature Signed hash payload
-    function signCertificate(address certAddress, uint256 tokenId, bytes calldata signature) external onlyAdmin {
-        IssuanceManagerStorage.executeAddIssuerSignature(certAddress, tokenId, signature);
+    /// @notice Effectuates the secondary-trade ownership change at finalization (spec §7.4A / §7.5)
+    /// @dev Gated on OWNER_ROLE, which the SPV's DealManager holds. dealMetadata is the abi-encoded tuple
+    /// produced by DealManager.finalizeSecondaryTradeAgreement; see IssuanceManagerStorage.executeSecondaryTransfer.
+    function secondaryTransfer(bytes calldata dealMetadata) external onlyOwner {
+        IssuanceManagerStorage.executeSecondaryTransfer(dealMetadata);
     }
 
-    /// @notice Adds an officer signature to a certificate
-    /// @dev Alias maintained for IIssuanceManager compatibility
-    /// @param certAddress Address of the certificate printer contract
-    /// @param tokenId ID of the certificate
-    /// @param signature Signed hash payload
-    function addOfficerSignature(address certAddress, uint256 tokenId, bytes calldata signature) external onlyAdmin {
-        IssuanceManagerStorage.executeAddIssuerSignature(certAddress, tokenId, signature);
-    }
-
-    /// @notice Adds an endorsement for secondary market transfer
+   /* /// @notice Updates the details of an existing certificate
     /// @dev Only callable by admin
     /// @param certAddress Address of the certificate printer contract
     /// @param tokenId ID of the certificate
-    /// @param endorser Address of the endorser
-    /// @param signature Endorsement signature
-    /// @param agreementId ID of the associated agreement
-    function endorseCertificate(
+    /// @param _details Updated certificate details
+    function updateCertificateDetails(
         address certAddress,
         uint256 tokenId,
-        address endorser,
-        bytes memory signature,
-        bytes32 agreementId
+        CertificateDetails memory _details
     ) external onlyAdmin {
-        IssuanceManagerStorage.executeEndorseCertificate(certAddress, tokenId, endorser, signature, agreementId);
-    }
-
-    /* /// @notice Updates the details of an existing certificate
-     /// @dev Only callable by admin
-     /// @param certAddress Address of the certificate printer contract
-     /// @param tokenId ID of the certificate
-     /// @param _details Updated certificate details
-     function updateCertificateDetails(
-         address certAddress,
-         uint256 tokenId,
-         CertificateDetails memory _details
-     ) external onlyAdmin {
-         ILedgerEntryToken certificate = ILedgerEntryToken(certAddress);
-         certificate.updateCertificateDetails(tokenId, _details);
-     }*/
-
-    /// @notice Voids a certificate
-    /// @dev Only callable by admin
-    /// @param certAddress Address of the certificate printer contract
-    /// @param tokenId ID of the certificate to void
-    function voidCertificate(address certAddress, uint256 tokenId) external onlyAdmin {
-        IssuanceManagerStorage.executeVoidCertificate(certAddress, tokenId);
-    }
-
-    /// @notice Restores a voided certificate to assigned status
-    /// @dev Only callable by admin
-    /// @param certAddress Address of the certificate printer contract
-    /// @param tokenId ID of the certificate to unvoid
-    function unvoidCertificate(address certAddress, uint256 tokenId) external onlyAdmin {
-        IssuanceManagerStorage.executeUnvoidCertificate(certAddress, tokenId);
-    }
-
-    /// @notice Sets the global transferability status for a certificate contract
-    /// @dev Only callable by admin
-    /// @param certAddress Address of the certificate printer contract
-    /// @param transferable Whether certificates should be transferable
-    function setGlobalTransferable(address certAddress, bool transferable) external onlyAdmin {
-        IssuanceManagerStorage.executeSetGlobalTransferable(certAddress, transferable);
-    }
+        ILedgerEntryToken certificate = ILedgerEntryToken(certAddress);
+        certificate.updateCertificateDetails(tokenId, _details);
+    }*/
 
     /// @notice Upgrades the implementation of the certificate printer
     /// @dev Only callable by company owner, only upgradeable to the current reference implementation
@@ -491,6 +504,12 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         return IssuanceManagerStorage.getPrinters()[index];
     }
 
+    /// @notice Whether `printer` is a certificate printer this IssuanceManager created and still tracks
+    /// @dev Authoritative membership check against the registry; a self-reporting printer cannot forge it
+    function isPrinter(address printer) external view returns (bool) {
+        return IssuanceManagerStorage.isPrinter(printer);
+    }
+
     /// @notice Sets the URI builder contract address
     /// @dev Only callable by owner
     /// @param _uriBuilder New URI builder contract address
@@ -511,27 +530,6 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         }
     }
 
-    /// @notice Sets a restriction hook for a specific certificate
-    /// @dev Only callable by admin
-    /// @param certAddress Address of the certificate printer contract
-    /// @param _id ID of the certificate
-    /// @param _hookAddress Address of the restriction hook contract
-    function setRestrictionHook(address certAddress, uint256 _id, address _hookAddress) external onlyAdmin {
-        IssuanceManagerStorage.executeSetRestrictionHook(certAddress, _id, _hookAddress);
-    }
-
-    /// @notice Sets a global restriction hook for a certificate contract
-    /// @dev Only callable by admin
-    /// @param certAddress Address of the certificate printer contract
-    /// @param hookAddress Address of the restriction hook contract
-    function setGlobalRestrictionHook(address certAddress, address hookAddress) external onlyAdmin {
-        IssuanceManagerStorage.executeSetGlobalRestrictionHook(certAddress, hookAddress);
-    }
-
-    function setTokenTransferable(address certAddress, uint256 tokenId, bool value) external onlyAdmin {
-        IssuanceManagerStorage.executeSetTokenTransferable(certAddress, tokenId, value);
-    }
-
     /// @notice Sets the minimum scrip amount required to convert back into certs
     /// @dev Only callable by owner; set to 0 to disable the minimum
     /// @param certAddress Address of the certificate printer contract
@@ -550,40 +548,6 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
 
     function removeScripifyWhitelistIds(address certAddress, uint256[] memory ids) external onlyOwner {
         IssuanceManagerStorage.executeSetScripifyWhitelistIds(certAddress, ids, false);
-    }
-
-    /// @notice Adds a default legend to a certificate contract
-    /// @dev Only callable by admin
-    /// @param certAddress Address of the certificate printer contract
-    /// @param newLegend Text of the new legend
-    function addDefaultLegend(address certAddress, string memory newLegend) external onlyAdmin {
-        IssuanceManagerStorage.executeAddDefaultLegend(certAddress, newLegend);
-    }
-
-    /// @notice Removes a default legend from a certificate contract
-    /// @dev Only callable by admin
-    /// @param certAddress Address of the certificate printer contract
-    /// @param index Index of the legend to remove
-    function removeDefaultLegendAt(address certAddress, uint256 index) external onlyAdmin {
-        IssuanceManagerStorage.executeRemoveDefaultLegendAt(certAddress, index);
-    }
-
-    /// @notice Adds a legend to a specific certificate
-    /// @dev Only callable by admin
-    /// @param certAddress Address of the certificate printer contract
-    /// @param tokenId ID of the certificate
-    /// @param newLegend Text of the new legend
-    function addCertLegend(address certAddress, uint256 tokenId, string memory newLegend) external onlyAdmin {
-        IssuanceManagerStorage.executeAddCertLegend(certAddress, tokenId, newLegend);
-    }
-
-    /// @notice Removes a legend from a specific certificate
-    /// @dev Only callable by admin
-    /// @param certAddress Address of the certificate printer contract
-    /// @param tokenId ID of the certificate
-    /// @param index Index of the legend to remove
-    function removeCertLegendAt(address certAddress, uint256 tokenId, uint256 index) external onlyAdmin {
-        IssuanceManagerStorage.executeRemoveCertLegendAt(certAddress, tokenId, index);
     }
 
     //deploy matching erc20 contract for a cert
