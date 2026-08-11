@@ -77,8 +77,13 @@ defaultLegend}`.
   `voidExpiredDeal` cleans up expired deals, and `refundVoidedDeal` releases
   escrowed payment when an agreement was voided directly in the registry.
   `expiry == 0` means **no deadline**: such a deal can pay and finalize at
-  any time, is never void-expirable, and unwinds only via `signToVoid`
-  (all parties) or `revokeDeal` while pending.
+  any time and is never void-expirable, so it unwinds only by void request —
+  either through the DealManager (`signToVoid`, or `revokeDeal` while the
+  escrow is still pending) or by submitting `voidContractFor` straight to the
+  registry and then calling `refundVoidedDeal` to resync the escrow and
+  release payment. Either route voids the agreement once every allocated
+  party has requested it, or as soon as the proposer (party index 0) requests
+  it while still the only signer.
 * On `finalizeDeal` the deal's certificate effects (mint/assign/endorse) are
   applied via the IssuanceManager, and escrowed payment (less the platform
   fee — see `computeFee` / `getPlatformPayable`) is released.
