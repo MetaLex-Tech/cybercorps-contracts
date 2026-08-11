@@ -159,6 +159,22 @@ contract CyberAgreementRegistryTest is Test {
         assertEq(first, second);
     }
 
+    function test_createTemplatePublicRejectsSquattedMismatchedRecord() public {
+        // Interim-era squat: the owner-curated path stores DIFFERENT content at exactly the
+        // content address a later public registration derives. Idempotent adoption must verify
+        // the stored record re-derives the id, or callers would accept the attacker's template.
+        bytes32 squattedId =
+            keccak256(abi.encode(testTitle, testLegalContractUri, testGlobalFields, testPartyFields));
+        vm.prank(deployer);
+        registry.createTemplate(
+            squattedId, "Hostile Title", "ipfs://hostile", testGlobalFields, testPartyFields
+        );
+
+        vm.prank(chad);
+        vm.expectRevert(CyberAgreementRegistry.TemplateContentMismatch.selector);
+        registry.createTemplatePublic(testTitle, testLegalContractUri, testGlobalFields, testPartyFields);
+    }
+
     function test_createTemplatePublicRejectsEmptyLegalContractUri() public {
         vm.prank(alice);
         vm.expectRevert(CyberAgreementRegistry.LegalContractUriEmpty.selector);

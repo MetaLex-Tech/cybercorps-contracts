@@ -156,6 +156,7 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     error TemplateAlreadyExists();
     error TemplateDoesNotExist();
+    error TemplateContentMismatch();
     error ContractAlreadyExists();
     error ContractDoesNotExist();
     error NotAParty();
@@ -269,6 +270,22 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                 globalFields,
                 partyFields
             );
+        } else {
+            // An upgraded registry can carry interim-era records at arbitrary caller-chosen ids —
+            // including one squatted at exactly this content address with DIFFERENT content.
+            // Idempotent adoption is only safe when the stored record re-derives this id; anything
+            // else would let a caller accept an attacker's legal template under the new
+            // content-addressed API.
+            Template storage existing = templates[templateId];
+            if (
+                keccak256(
+                    abi.encode(
+                        existing.title, existing.legalContractUri, existing.globalFields, existing.partyFields
+                    )
+                ) != templateId
+            ) {
+                revert TemplateContentMismatch();
+            }
         }
     }
 

@@ -150,6 +150,48 @@ contract CyberCorpBoardAuthorityTest is Test {
         vm.stopPrank();
     }
 
+    function test_InitializeRejectsZeroFounder() public {
+        // A zero founder would be seeded as the sole director; after the one-way role-manager
+        // lock nobody could ever pass onlyEnforcedBoard again, bricking the corp.
+        CompanyOfficer memory zeroOfficer =
+            CompanyOfficer({eoa: address(0), name: "", contact: "", title: ""});
+        CyberCorp implementation = new CyberCorp();
+        vm.expectRevert(CyberCorp.InvalidOfficer.selector);
+        new ERC1967Proxy(
+            address(implementation),
+            abi.encodeCall(
+                CyberCorp.initialize,
+                (
+                    address(auth),
+                    "Zero Corp",
+                    "Corporation",
+                    "Delaware",
+                    "contact@example.com",
+                    "Delaware courts",
+                    address(0x1),
+                    address(0x2),
+                    zeroOfficer,
+                    address(0x3),
+                    address(0x4)
+                )
+            )
+        );
+    }
+
+    function test_RosterRemovalPreservesManagerAccess() public {
+        address dual = address(0x701);
+        vm.startPrank(founder);
+        corp.setDealManager(dual);
+        corp.addDirector(_director(dual));
+        assertEq(auth.userRoles(dual), auth.BOARD_ROLE());
+
+        // Removing the director seat must fall back to OWNER_ROLE while the address is still a
+        // manager pointer, mirroring how pointer rotation preserves roster authority.
+        corp.removeDirector(dual);
+        assertEq(auth.userRoles(dual), auth.OWNER_ROLE(), "manager access stripped by roster removal");
+        vm.stopPrank();
+    }
+
     function test_ManagerRotationPreservesRosterRoles() public {
         vm.startPrank(founder);
         // The sole director points a manager slot at themselves: granting must not demote the

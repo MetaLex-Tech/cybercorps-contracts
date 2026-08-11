@@ -181,6 +181,9 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         address _roundManager
     ) public initializer {
         __BorgAuthACL_init(_auth);
+        // A zero founder would be seeded as the sole director and, after the one-way
+        // role-manager lock, no usable account could ever pass onlyEnforcedBoard again.
+        if (_officer.eoa == address(0)) revert InvalidOfficer();
 
         cyberCORPName = _cyberCORPName;
         cyberCORPType = _cyberCORPType;
@@ -300,14 +303,9 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
             previousManager != address(0) && previousManager != issuanceManager
                 && previousManager != dealManager && previousManager != roundManager
         ) {
-            // Restore the roster-derived role rather than zeroing: a superseded manager address
-            // that also holds a director or officer seat keeps that seat's authority.
-            AUTH.updateRole(
-                previousManager,
-                boardMembers[previousManager]
-                    ? AUTH.BOARD_ROLE()
-                    : officerMembers[previousManager] ? AUTH.OFFICER_ROLE() : 0
-            );
+            // Restore the residual role rather than zeroing: a superseded manager address that
+            // also holds a director or officer seat keeps that seat's authority.
+            AUTH.updateRole(previousManager, _residualRole(previousManager));
         }
         // Grant only when the address does not already satisfy the owner threshold. BorgAuth
         // stores a single role per user and officers (200) / directors (300) already clear the
@@ -316,6 +314,21 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         if (newManager != address(0) && AUTH.userRoles(newManager) < AUTH.OWNER_ROLE()) {
             AUTH.updateRole(newManager, AUTH.OWNER_ROLE());
         }
+    }
+
+    /// @dev The role an address is entitled to from its REMAINING seats, evaluated after the
+    ///      roster mutation: roster seats dominate (300/200 both clear the owner threshold), and
+    ///      an address still referenced by a manager pointer keeps OWNER_ROLE — removing a
+    ///      roster seat must not strip manager access, mirroring how pointer rotation preserves
+    ///      roster authority. BorgAuth stores one role per user, so every role write must fold
+    ///      all of an address's capacities into one number.
+    function _residualRole(address account) private view returns (uint256) {
+        if (boardMembers[account]) return AUTH.BOARD_ROLE();
+        if (officerMembers[account]) return AUTH.OFFICER_ROLE();
+        if (account == issuanceManager || account == dealManager || account == roundManager) {
+            return AUTH.OWNER_ROLE();
+        }
+        return 0;
     }
 
     /// @dev Probed, not called directly: a legacy corp upgraded to this implementation keeps its
@@ -375,10 +388,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
                 companyOfficers[i] = companyOfficers[companyOfficers.length - 1];
                 companyOfficers.pop();
                 officerMembers[_address] = false;
-                AUTH.updateRole(
-                    _address,
-                    boardMembers[_address] ? AUTH.BOARD_ROLE() : 0
-                );
+                AUTH.updateRole(_address, _residualRole(_address));
                 emit OfficerRemoved(_address, i);
                 return;
             }
@@ -396,10 +406,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         companyOfficers[_index] = companyOfficers[companyOfficers.length - 1];
         companyOfficers.pop();
         officerMembers[officerEOA] = false;
-        AUTH.updateRole(
-            officerEOA,
-            boardMembers[officerEOA] ? AUTH.BOARD_ROLE() : 0
-        );
+        AUTH.updateRole(officerEOA, _residualRole(officerEOA));
         emit OfficerRemoved(officerEOA, _index);
     }
 
@@ -423,10 +430,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
                     companyDirectors[companyDirectors.length - 1];
                 companyDirectors.pop();
                 boardMembers[director] = false;
-                AUTH.updateRole(
-                    director,
-                    officerMembers[director] ? AUTH.OFFICER_ROLE() : 0
-                );
+                AUTH.updateRole(director, _residualRole(director));
                 emit DirectorRemoved(director, i);
                 return;
             }
@@ -442,10 +446,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
             companyDirectors[companyDirectors.length - 1];
         companyDirectors.pop();
         boardMembers[director] = false;
-        AUTH.updateRole(
-            director,
-            officerMembers[director] ? AUTH.OFFICER_ROLE() : 0
-        );
+        AUTH.updateRole(director, _residualRole(director));
         emit DirectorRemoved(director, index);
     }
 
