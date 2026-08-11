@@ -93,21 +93,23 @@ as the proposer (party index 0) requests while still the only signer, or —
 for a nonzero expiry only — once that expiry has passed. What differs between
 the entry points is how much DealManager-side teardown follows.
 
-* `signToVoid` is the complete route. It forwards the request and, once the
-  registry reports the agreement voided, voids the escrowed corp certificates
-  and settles the escrow: a `PAID` escrow is refunded, a `PENDING` one is
-  marked `VOIDED`.
-* `revokeDeal` is **not** a full unwind. It only forwards the request for a
-  still-pending deal (it reverts `DealNotPending` otherwise) and performs no
-  teardown of its own, so a request that tips the agreement into voided — the
-  sole-signer proposer, say — leaves the escrow `PENDING` and its certificates
-  live. Another allocated party's `signToVoid` is what cleans that up
-  afterwards.
+* `signToVoid` forwards the request and, once the registry reports the
+  agreement voided, voids the escrowed corp certificates and settles the
+  escrow: a `PAID` escrow is refunded, a `PENDING` one is marked `VOIDED`.
+* `revokeDeal` does the same for a still-pending deal (it reverts
+  `DealNotPending` otherwise): it forwards the request, and if that request
+  is the one that voids the agreement — the sole-signer proposer, say — the
+  certificates are voided and the escrow marked `VOIDED` in the same call.
 * Requests may also go straight to the registry, bypassing the DealManager
-  entirely. The escrow then lags the agreement until `refundVoidedDeal` syncs
-  it, which voids the corp certificates and refunds — but only for a `PAID`
-  escrow (`voidAndRefund` reverts `EscrowNotPaid` on a `PENDING` one, so an
-  unpaid deal voided this way still needs a party's `signToVoid`).
+  entirely. The escrow then lags the agreement until anyone calls
+  `refundVoidedDeal`, which voids the corp certificates and settles either
+  state — a `PAID` escrow is refunded, a `PENDING` one just marked `VOIDED`.
+  It reverts `DealNotVoided` while the agreement is still live, and
+  `DealVoided` once the escrow is already synced.
+
+Whichever entry point a party uses, a void request that succeeds registry-side
+always tears the DealManager escrow down with it — there is no path that
+leaves certificates live against a voided agreement.
 
 ## Secondary trading
 

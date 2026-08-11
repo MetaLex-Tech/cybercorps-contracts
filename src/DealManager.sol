@@ -280,11 +280,12 @@ contract DealManager is
     }
 
     /// @notice Revokes a pending deal
-    /// @dev Can only be called for deals in pending status
+    /// @dev Can only be called for deals in pending status; if the revoke voids the
+    /// registry agreement, the escrow is torn down (certs voided, status VOIDED) in the same call
     /// @param agreementId Unique identifier for the agreement
     /// @param signer Address of the signer
     /// @param signature Signature of the signer
-    function revokeDeal(bytes32 agreementId, address signer, bytes memory signature) public {
+    function revokeDeal(bytes32 agreementId, address signer, bytes memory signature) public nonReentrant {
         // Thin wrapper over the linked DealManagerStorage logic (delegatecall keeps storage/msg.sender)
         DealManagerStorage.revokeDeal(agreementId, signer, signature);
     }
@@ -299,9 +300,10 @@ contract DealManager is
         DealManagerStorage.signToVoid(agreementId, signer, signature);
     }
 
-    /// @notice Refund a voided deal
-    /// @dev Use this method to initiate refund if the deal agreement has been voided externally
-    /// (e.g. directly to CyberAgreementRegistry without being processed by Deal Manager)
+    /// @notice Sync and (if paid) refund a deal whose agreement has been voided externally
+    /// @dev Use this method if the deal agreement was voided directly in the
+    /// CyberAgreementRegistry without being processed by Deal Manager; works for both
+    /// PAID (refunds) and PENDING (voids escrow, nothing to refund) deals
     /// @param agreementId Unique identifier for the agreement
     function refundVoidedDeal(bytes32 agreementId) public nonReentrant {
         // Thin wrapper over the linked DealManagerStorage logic (delegatecall keeps storage/msg.sender)
