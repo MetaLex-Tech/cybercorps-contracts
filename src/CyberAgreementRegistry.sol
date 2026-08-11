@@ -258,6 +258,21 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         string[] memory globalFields,
         string[] memory partyFields
     ) external returns (bytes32 templateId) {
+        return _adoptOrCreateContentAddressedTemplate(title, legalContractUri, globalFields, partyFields);
+    }
+
+    /// @dev The single verified-adoption path for content-addressed templates: create when the
+    ///      slot is empty, adopt idempotently ONLY when the stored record re-derives this id.
+    ///      An upgraded registry can carry interim-era records at arbitrary caller-chosen ids —
+    ///      including one squatted at exactly this content address with DIFFERENT content — and
+    ///      any entry point that skipped this check would let its caller sign an attacker's
+    ///      legal template.
+    function _adoptOrCreateContentAddressedTemplate(
+        string memory title,
+        string memory legalContractUri,
+        string[] memory globalFields,
+        string[] memory partyFields
+    ) internal returns (bytes32 templateId) {
         templateId = keccak256(
             abi.encode(title, legalContractUri, globalFields, partyFields)
         );
@@ -271,11 +286,6 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
                 partyFields
             );
         } else {
-            // An upgraded registry can carry interim-era records at arbitrary caller-chosen ids —
-            // including one squatted at exactly this content address with DIFFERENT content.
-            // Idempotent adoption is only safe when the stored record re-derives this id; anything
-            // else would let a caller accept an attacker's legal template under the new
-            // content-addressed API.
             Template storage existing = templates[templateId];
             if (
                 keccak256(
@@ -413,24 +423,11 @@ contract CyberAgreementRegistry is Initializable, UUPSUpgradeable, BorgAuthACL {
         address signer,
         bytes calldata signature
     ) public returns (bytes32 contractId) {
-        // Derive template ID
-        bytes32 templateId = keccak256(abi.encode(
-            title,
-            legalContractUri,
-            globalFields,
-            partyFields
-        ));
-
-        // Create the template if needed
-        if (bytes(templates[templateId].legalContractUri).length == 0) {
-            _createTemplate(
-                templateId,
-                title,
-                legalContractUri,
-                globalFields,
-                partyFields
-            );
-        }
+        // Create-or-adopt through the single verified path: a bare existence check here would
+        // let a standalone caller create and sign against an interim-era squatted record whose
+        // content does not re-derive this id.
+        bytes32 templateId =
+            _adoptOrCreateContentAddressedTemplate(title, legalContractUri, globalFields, partyFields);
 
         contractId = createContract(
             templateId,

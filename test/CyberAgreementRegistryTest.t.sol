@@ -175,6 +175,31 @@ contract CyberAgreementRegistryTest is Test {
         registry.createTemplatePublic(testTitle, testLegalContractUri, testGlobalFields, testPartyFields);
     }
 
+    function test_createStandaloneRejectsSquattedMismatchedRecord() public {
+        // The standalone path must route through the same verified adoption as
+        // createTemplatePublic: a bare existence check would let the caller sign a squatted
+        // hostile record stored at this content address during the interim deployment.
+        bytes32 squattedId =
+            keccak256(abi.encode(testTitle, testLegalContractUri, testGlobalFields, testPartyFields));
+        vm.prank(deployer);
+        registry.createTemplate(
+            squattedId, "Hostile Title", "ipfs://hostile", testGlobalFields, testPartyFields
+        );
+
+        address[] memory parties = new address[](1);
+        parties[0] = alice;
+        string[][] memory partyValues = new string[][](1);
+        partyValues[0] = testPartyValues[0];
+
+        vm.prank(alice);
+        vm.expectRevert(CyberAgreementRegistry.TemplateContentMismatch.selector);
+        registry.createStandaloneContractAndSign(
+            testTitle, testLegalContractUri, testGlobalFields, testPartyFields,
+            uint256(keccak256("standalone-squat")), testGlobalValues, parties, partyValues,
+            block.timestamp + 10, ""
+        );
+    }
+
     function test_createTemplatePublicRejectsEmptyLegalContractUri() public {
         vm.prank(alice);
         vm.expectRevert(CyberAgreementRegistry.LegalContractUriEmpty.selector);
