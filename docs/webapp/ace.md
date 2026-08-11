@@ -60,12 +60,27 @@ for individually negotiated tickets (Reg D or Reg S).
 ### zkPassport overrides
 
 If a round restricts investment to non-U.S. persons, founders can
-manually approve a verified investor as an exception. This applies to
-any of your rounds carrying the non-U.S. condition, ACE or otherwise;
-the **Manage zkPassport Overrides** button on the round's management
-view opens the page. Enter the **investor wallet** and **Add override**
-(an onchain transaction; removing one is too). The page lists active
-overrides with when and by whom they were added.
+manually approve a verified investor as an exception.
+
+Where to find it: open your round from the rounds list so you are on
+its **management view** — the founder console with the Round / Offer /
+Raised summary cards, not the public investor page — with your owner
+wallet connected. On an ACE round carrying the non-U.S. condition, the
+action bar at the top (the same row as **Investor view** and **Edit
+Pitchdeck**) shows a **Manage zkPassport Overrides** button, sitting
+between **Bridge \<token\> to Solana** and **Set up a Ticket**:
+
+![The round management view, with Manage zkPassport Overrides in the action bar](../.gitbook/assets/webapp/zkpassport-overrides-button.png)
+
+On a non-ACE Regulation S round the button doesn't appear yet; reach
+the same page by adding `/zkpassport-overrides` to the end of the
+management view's address.
+
+On the overrides page, enter the **investor wallet** and **Add
+override** (an onchain transaction; removing one is too). The page
+lists active overrides with when and by whom they were added.
+
+![The zkPassport Overrides page](../.gitbook/assets/webapp/zkpassport-overrides-page.png)
 
 One caution: an override is granted against your company's round
 manager, not against the single round you opened it from. It satisfies
