@@ -286,7 +286,7 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
     ///      the role-manager lock keep their historical behavior: BorgAuth's owner rotates roles
     ///      directly.
     function _rotateManagerRole(address previousManager, address newManager) private {
-        if (AUTH.roleManager() != address(this)) return;
+        if (!_isRoleManagedByThisCorp()) return;
         if (previousManager == newManager) return;
         if (
             previousManager != address(0) && previousManager != issuanceManager
@@ -308,6 +308,16 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         if (newManager != address(0) && AUTH.userRoles(newManager) < AUTH.OWNER_ROLE()) {
             AUTH.updateRole(newManager, AUTH.OWNER_ROLE());
         }
+    }
+
+    /// @dev Probed, not called directly: a legacy corp upgraded to this implementation keeps its
+    ///      immutable pre-lock BorgAuth, which has no roleManager() selector — a direct call
+    ///      would revert every manager setter on exactly the corps the legacy fallback exists
+    ///      for. Missing selector reads as "not role-managed", so those corps keep their
+    ///      historical direct-role-administration behavior.
+    function _isRoleManagedByThisCorp() private view returns (bool) {
+        (bool ok, bytes memory ret) = address(AUTH).staticcall(abi.encodeWithSignature("roleManager()"));
+        return ok && ret.length >= 32 && abi.decode(ret, (address)) == address(this);
     }
 
     /// @notice Checks if an address belongs to a company officer
