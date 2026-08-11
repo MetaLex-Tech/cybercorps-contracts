@@ -207,6 +207,38 @@ contract CyberCertPrinterClassTermsTest is Test {
         controller.accountTransferMint(address(printer), 0, foreign.extensionData, 2);
     }
 
+    function test_AmendedTermsRequireCanonicalForUnitIncreases() public {
+        CertificateDetails memory details = _details(_terms("Common", 10), 1);
+        _mint(0, address(0xA11CE), details);
+
+        controller.amendClassTerms(address(printer), _extensionData(_terms("Common Amended", 20)));
+
+        // Growing the lot with the pre-amendment snapshot must revert: amendments bind new
+        // issuance, and an increase is new issuance riding into an old lot.
+        CertificateDetails memory grownOldTerms = _details(_terms("Common", 10), 5);
+        vm.expectRevert(ShareClassTermsController.ClassTermsMismatch.selector);
+        controller.accountCertificateUpdate(
+            address(printer), 0, grownOldTerms.extensionData, grownOldTerms.unitsRepresented, true
+        );
+
+        // The same increase under the canonical terms succeeds.
+        CertificateDetails memory grownCanonical = _details(_terms("Common Amended", 20), 5);
+        controller.accountCertificateUpdate(
+            address(printer), 0, grownCanonical.extensionData, grownCanonical.unitsRepresented, true
+        );
+        printer.updateCertificateDetails(0, grownCanonical);
+        assertEq(_issuedUnits(), 5);
+
+        // Decreases under the old snapshot keep working (the lot at issue still carries it).
+        _mint(1, address(0xB0B), _details(_terms("Common Amended", 20), 2));
+        CertificateDetails memory shrunk = _details(_terms("Common Amended", 20), 1);
+        controller.accountCertificateUpdate(
+            address(printer), 1, shrunk.extensionData, shrunk.unitsRepresented, true
+        );
+        printer.updateCertificateDetails(1, shrunk);
+        assertEq(_issuedUnits(), 6);
+    }
+
     function test_AmendedTermsDoNotBrickExistingCertificates() public {
         CertificateDetails memory details = _details(_terms("Common", 10), 6);
         _mint(0, address(0xA11CE), details);
