@@ -239,6 +239,33 @@ contract CyberCertPrinterClassTermsTest is Test {
         assertEq(_issuedUnits(), 6);
     }
 
+    function test_VoidedLotGrowthStillRequiresCanonicalTerms() public {
+        CertificateDetails memory details = _details(_terms("Common", 10), 1);
+        _mint(0, address(0xA11CE), details);
+        controller.amendClassTerms(address(printer), _extensionData(_terms("Common Amended", 20)));
+        printer.voidCert(0);
+        assertEq(_issuedUnits(), 0);
+
+        // Growing the VOIDED lot under the old snapshot must revert even though its accounting
+        // is deferred: unvoid would activate the larger quantity with only a cap check.
+        CertificateDetails memory grownOldTerms = _details(_terms("Common", 10), 5);
+        vm.expectRevert(ShareClassTermsController.ClassTermsMismatch.selector);
+        controller.accountCertificateUpdate(
+            address(printer), 0, grownOldTerms.extensionData, grownOldTerms.unitsRepresented, true
+        );
+
+        // Canonical growth on the voided lot is allowed, accounting deferred to unvoid.
+        CertificateDetails memory grownCanonical = _details(_terms("Common Amended", 20), 5);
+        controller.accountCertificateUpdate(
+            address(printer), 0, grownCanonical.extensionData, grownCanonical.unitsRepresented, true
+        );
+        printer.updateCertificateDetails(0, grownCanonical);
+        assertEq(_issuedUnits(), 0, "voided lot accounting must stay deferred");
+
+        printer.unvoidCert(0);
+        assertEq(_issuedUnits(), 5, "unvoid restores the grown quantity");
+    }
+
     function test_AmendedTermsDoNotBrickExistingCertificates() public {
         CertificateDetails memory details = _details(_terms("Common", 10), 6);
         _mint(0, address(0xA11CE), details);

@@ -192,16 +192,25 @@ contract ShareClassTermsController is
         ILedgerEntryToken printer = ILedgerEntryToken(certPrinter);
         CertificateDetails memory current = printer.getActiveCertificateDetails(tokenId);
         _validateClassTermsForUpdate(state, extensionData, current.extensionData);
-        if (!changesIssuedUnits || printer.isVoided(tokenId)) return;
+        // Representation-only updates (changesIssuedUnits = false, e.g. scripify and recert)
+        // stop at the relaxed validation: their unit movements are vault-side and already
+        // counted, so effective growth there is not issuance.
+        if (!changesIssuedUnits) return;
 
         uint256 oldUnits = _effectiveUnits(certPrinter, tokenId, current.unitsRepresented);
         uint256 newUnits = _effectiveUnits(certPrinter, tokenId, activeUnits);
         if (newUnits > oldUnits) {
             // Growing a lot IS new issuance, and amendments bind new issuance: an increase must
             // carry the CANONICAL terms, or 99 fresh units could ride into an old one-unit lot
-            // with grandfathered economic rights. Snapshot compatibility above covers only
-            // representation-neutral and decreasing updates.
+            // with grandfathered economic rights. Validated BEFORE the voided early-return: a
+            // voided lot can be grown by assignCert and its larger quantity becomes active at
+            // unvoid, which cap-checks but deliberately does not validate terms.
             _validateClassTerms(state, extensionData);
+        }
+        // A voided lot's accounting stays deferred until unvoid restores it (cap-checked there);
+        // the growth validation above has already run.
+        if (printer.isVoided(tokenId)) return;
+        if (newUnits > oldUnits) {
             _increaseIssuedUnits(state, newUnits - oldUnits);
         } else if (oldUnits > newUnits) {
             state.issuedUnits -= oldUnits - newUnits;
