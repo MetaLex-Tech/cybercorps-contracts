@@ -828,6 +828,21 @@ contract DealManagerTest is Test {
         assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), address(dm), "Cert should still be escrowed");
     }
 
+    function test_RevertIf_RevokeDeal_PaidDeal() public {
+        // revokeDeal is the pending-only route. A funded escrow must go through signToVoid instead,
+        // which is the path that refunds.
+
+        (bytes32 agreementId, ) = _proposeSignedDealAndPay(
+            alice,
+            GOOD_SIGNATURE,
+            alice
+        );
+
+        vm.prank(companyOwner);
+        vm.expectRevert(IDealManagerStorage.DealNotPending.selector);
+        dm.revokeDeal(agreementId, companyOwner, GOOD_SIGNATURE);
+    }
+
     function test_PaymentFlow_RefundVoidedDeal() public {
         // If the agreement is voided through the registry instead of Deal Manager,
         // DealManager should still be able to refund through other means
@@ -964,6 +979,29 @@ contract DealManagerTest is Test {
         // Cert should be burned (voided) via IssuanceManager.voidCertificate
         vm.expectRevert();
         CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]); // burned token should revert on ownerOf
+    }
+
+    function test_VoidExpiredDeal_PaidDealRefundsAndVoidsCert() public {
+        // The PAID branch: a deal that was already funded before it expired must refund the payer as
+        // well as void the certs. The test above only reaches the PENDING branch.
+
+        (bytes32 agreementId, uint256[] memory certIds) = _proposeSignedDealAndPay(
+            alice,
+            GOOD_SIGNATURE,
+            alice
+        );
+
+        uint256 alicePaymentTokenBalancesBefore = paymentToken.balanceOf(alice);
+
+        // Past expiry the real registry voids on the first request
+        registry.mockIsReadyToVoid(agreementId, true);
+
+        vm.warp(dm.getEscrowDetails(agreementId).expiry + 1);
+        dm.voidExpiredDeal(agreementId, companyOwner, "");
+
+        assertEq(uint8(dm.getEscrowDetails(agreementId).status), uint8(EscrowStatus.VOIDED), "Escrow should be voided");
+        assertEq(paymentToken.balanceOf(alice), alicePaymentTokenBalancesBefore + 10 ether, "Alice should receive the refund");
+        _assertCertVoided(certIds[0]);
     }
 
     /// @notice Regression: expiry == 0 means no deadline, so a zero-expiry deal must never be

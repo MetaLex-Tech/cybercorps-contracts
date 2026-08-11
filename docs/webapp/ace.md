@@ -53,28 +53,32 @@ you save to the cloud and share a resumable draft link. A **support chat
 link** (“Need help?”) sits on the form throughout.
 
 Once the round is live, the round header offers the usual management
-actions plus ACE extras: **Bridge your token to Solana**, **Manage
-zkPassport Overrides** (on non-U.S.-gated rounds), and **Set up a Ticket**
-for individually negotiated tickets (Reg D or Reg S).
+actions plus ACE extras: **Bridge your token to Solana** and **Set up a
+Ticket** for individually negotiated tickets (Reg D or Reg S). It also
+carries **Manage zkPassport Overrides**, which is not ACE-specific — it
+appears on any round gated to non-U.S. persons.
 
 ### zkPassport overrides
 
 If a round restricts investment to non-U.S. persons, founders can
 manually approve a verified investor as an exception.
 
+This applies to any round carrying the non-U.S. condition, ACE or not —
+a USDC-denominated Regulation S round included.
+
 Where to find it: open your round from the rounds list so you are on
 its **management view** — the founder console with the Round / Offer /
 Raised summary cards, not the public investor page — with your owner
-wallet connected. On an ACE round carrying the non-U.S. condition, the
-action bar at the top (the same row as **Investor view** and **Edit
-Pitchdeck**) shows a **Manage zkPassport Overrides** button, sitting
-between **Bridge \<token\> to Solana** and **Set up a Ticket**:
+wallet connected. The action bar at the top (the same row as **Investor
+view** and **Edit Pitchdeck**) shows a **Manage zkPassport Overrides**
+button. On an ACE round it sits between **Bridge \<token\> to Solana**
+and **Set up a Ticket**:
 
 ![The round management view, with Manage zkPassport Overrides in the action bar](../.gitbook/assets/webapp/zkpassport-overrides-button.png)
 
-On a non-ACE Regulation S round the button doesn't appear yet; reach
-the same page by adding `/zkpassport-overrides` to the end of the
-management view's address.
+If you don't see the button, check that the round actually carries the
+non-U.S. condition and that the wallet you have connected is the one
+that owns the company — the button is hidden otherwise.
 
 On the overrides page, enter the **investor wallet** and **Add
 override** (an onchain transaction; removing one is too). The page
