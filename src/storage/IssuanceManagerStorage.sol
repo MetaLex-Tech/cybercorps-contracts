@@ -1203,6 +1203,10 @@ library IssuanceManagerStorage {
 
         _withdrawVaultAssets(certAddress, units);
         ICyberScrip(scripifiedCert).forceBurn(account, amount);
+        // The burnt scrip's units are outstanding in the class-terms controller (counted at
+        // issuance, kept through their certificate's void); destroying the ERC20 is what
+        // extinguishes them, so release them here or issuedUnits stays overstated forever.
+        _releaseScripUnits(certAddress, units);
     }
 
     function executeSetScripRestrictionHooks(address certAddress, ITransferRestrictionHook[] memory hooks) external {
@@ -1350,6 +1354,12 @@ library IssuanceManagerStorage {
         }
     }
 
+    function _releaseScripUnits(address certAddress, uint256 units) private {
+        address controller = _shareClassTermsController(certAddress);
+        if (controller != address(0)) {
+            IShareClassTermsController(controller).releaseScripUnits(certAddress, units);
+        }
+    }
 
     function _shareClassTermsController(address certAddress) private view returns (address extension) {
         // Older test/non-printer integrations predate the extension getter and

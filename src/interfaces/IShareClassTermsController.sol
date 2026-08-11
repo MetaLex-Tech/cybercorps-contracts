@@ -25,6 +25,8 @@ interface IShareClassTermsController {
 
     function restoreCertificateUnits(address certPrinter, uint256 tokenId) external;
 
+    function releaseScripUnits(address certPrinter, uint256 units) external;
+
     function getClassTerms(address certPrinter)
         external
         view

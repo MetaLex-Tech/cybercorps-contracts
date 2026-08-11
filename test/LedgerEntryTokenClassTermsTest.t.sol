@@ -134,12 +134,63 @@ contract CyberCertPrinterClassTermsTest is Test {
         printer.updateCertificateDetails(0, details);
         assertEq(_issuedUnits(), 6);
 
+        // Voiding releases only the ACTIVE units (4): the 2 scripified units are still a
+        // circulating ERC20 and stay counted, or the class could issue past its cap.
         controller.releaseCertificateUnits(address(printer), 0);
         printer.voidCert(0);
-        assertEq(_issuedUnits(), 0);
+        assertEq(_issuedUnits(), 2);
         controller.restoreCertificateUnits(address(printer), 0);
         printer.unvoidCert(0);
         assertEq(_issuedUnits(), 6);
+    }
+
+    function test_VoidingScripifiedCertKeepsScripCounted_ThenForceBurnReleases() public {
+        CertificateDetails memory details = _details(_terms("Common", 10), 6);
+        _mint(0, address(0xA11CE), details);
+
+        scripifiedUnits[0] = 2;
+        details.unitsRepresented = 4;
+        controller.accountCertificateUpdate(address(printer), 0, details.extensionData, details.unitsRepresented, false);
+        printer.updateCertificateDetails(0, details);
+
+        controller.releaseCertificateUnits(address(printer), 0);
+        printer.voidCert(0);
+        assertEq(_issuedUnits(), 2, "scrip units survive their certificate's void");
+
+        // The freed capacity cannot be over-issued while the scrip circulates.
+        vm.expectRevert(abi.encodeWithSelector(ShareClassTermsController.AuthorizedSharesExceeded.selector, 10, 11));
+        CertificateDetails memory overCap = _details(_terms("Common", 10), 9);
+        controller.accountNewIssuance(address(printer), overCap.extensionData, overCap.unitsRepresented, true);
+
+        // Destroying the ERC20 (force burn) is what extinguishes the units.
+        controller.releaseScripUnits(address(printer), 2);
+        assertEq(_issuedUnits(), 0);
+    }
+
+    function test_AmendedTermsDoNotBrickExistingCertificates() public {
+        CertificateDetails memory details = _details(_terms("Common", 10), 6);
+        _mint(0, address(0xA11CE), details);
+
+        controller.amendClassTerms(address(printer), _extensionData(_terms("Common Amended", 20)));
+
+        // A representation-only update carrying the cert's ORIGINAL terms snapshot still works.
+        scripifiedUnits[0] = 2;
+        details.unitsRepresented = 4;
+        controller.accountCertificateUpdate(address(printer), 0, details.extensionData, details.unitsRepresented, false);
+        printer.updateCertificateDetails(0, details);
+        assertEq(_issuedUnits(), 6);
+
+        // Void/unvoid of a pre-amendment certificate also still works.
+        controller.releaseCertificateUnits(address(printer), 0);
+        printer.voidCert(0);
+        controller.restoreCertificateUnits(address(printer), 0);
+        printer.unvoidCert(0);
+        assertEq(_issuedUnits(), 6);
+
+        // Terms matching neither the canonical hash nor the cert's own snapshot still revert.
+        vm.expectRevert(ShareClassTermsController.ClassTermsMismatch.selector);
+        CertificateDetails memory foreign = _details(_terms("Something Else", 20), 4);
+        controller.accountCertificateUpdate(address(printer), 0, foreign.extensionData, foreign.unitsRepresented, false);
     }
 
     function test_RecertificationMintValidatesTermsWithoutIncrementing() public {

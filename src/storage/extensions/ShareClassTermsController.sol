@@ -167,13 +167,13 @@ contract ShareClassTermsController is
         _requireAuthorizedControllerCall(certPrinter);
         ClassTermsState storage state = classTerms[certPrinter];
         if (!state.configured) revert ClassTermsNotConfigured();
-        _validateClassTerms(state, extensionData);
 
         ILedgerEntryToken printer = ILedgerEntryToken(certPrinter);
+        CertificateDetails memory current = printer.getActiveCertificateDetails(tokenId);
+        _validateClassTermsForUpdate(state, extensionData, current.extensionData);
         if (!changesIssuedUnits || printer.isVoided(tokenId)) return;
 
-        uint256 oldUnits =
-            _effectiveUnits(certPrinter, tokenId, printer.getActiveCertificateDetails(tokenId).unitsRepresented);
+        uint256 oldUnits = _effectiveUnits(certPrinter, tokenId, current.unitsRepresented);
         uint256 newUnits = _effectiveUnits(certPrinter, tokenId, activeUnits);
         if (newUnits > oldUnits) {
             _increaseIssuedUnits(state, newUnits - oldUnits);
@@ -189,9 +189,10 @@ contract ShareClassTermsController is
 
         ILedgerEntryToken printer = ILedgerEntryToken(certPrinter);
         if (printer.isVoided(tokenId)) revert CertificateAlreadyVoided();
-        state.issuedUnits -= _effectiveUnits(
-            certPrinter, tokenId, printer.getActiveCertificateDetails(tokenId).unitsRepresented
-        );
+        // Release only the certificate's ACTIVE units. Units represented by still-circulating
+        // scrip stay counted against the cap: voiding the certificate does not extinguish the
+        // ERC20, so freeing its scripified units would let the class issue past authorization.
+        state.issuedUnits -= printer.getActiveCertificateDetails(tokenId).unitsRepresented;
     }
 
     function restoreCertificateUnits(address certPrinter, uint256 tokenId) external override {
@@ -201,9 +202,22 @@ contract ShareClassTermsController is
 
         ILedgerEntryToken printer = ILedgerEntryToken(certPrinter);
         if (!printer.isVoided(tokenId)) revert CertificateNotVoided();
-        CertificateDetails memory details = printer.getActiveCertificateDetails(tokenId);
-        _validateClassTerms(state, details.extensionData);
-        _increaseIssuedUnits(state, _effectiveUnits(certPrinter, tokenId, details.unitsRepresented));
+        // No terms validation: the certificate's snapshot was validated at issuance, and a later
+        // amendment must not make its unvoid revert — amendments bind new issuance, they do not
+        // retroactively rewrite certificates issued under the previous terms.
+        // Restore only the ACTIVE units, mirroring releaseCertificateUnits: the certificate's
+        // scripified units never left issuedUnits.
+        _increaseIssuedUnits(state, printer.getActiveCertificateDetails(tokenId).unitsRepresented);
+    }
+
+    /// @notice Extinguishes units whose scrip representation was destroyed (force burn).
+    /// @dev Scripified units are counted in issuedUnits from original issuance and survive their
+    ///      certificate's void, so destroying the ERC20 is the only event that releases them.
+    function releaseScripUnits(address certPrinter, uint256 units) external override {
+        _requireAuthorizedControllerCall(certPrinter);
+        ClassTermsState storage state = classTerms[certPrinter];
+        if (!state.configured) revert ClassTermsNotConfigured();
+        state.issuedUnits -= units;
     }
 
     function getClassTerms(address certPrinter)
@@ -241,6 +255,10 @@ contract ShareClassTermsController is
                 outstandingUnits += _effectiveUnits(
                     certPrinter, tokenId, printer.getActiveCertificateDetails(tokenId).unitsRepresented
                 );
+            } else {
+                // A voided certificate's scrip stays in circulation, so its scripified units are
+                // still outstanding against the cap even though its active units are gone.
+                outstandingUnits += _effectiveUnits(certPrinter, tokenId, 0);
             }
         }
     }
@@ -256,6 +274,23 @@ contract ShareClassTermsController is
         if (keccak256(termsData) != state.termsHash) {
             revert ClassTermsMismatch();
         }
+    }
+
+    /// @dev An update may carry either the canonical terms or the certificate's own existing terms
+    ///      snapshot. Amendments bind new issuance; they do not retroactively rewrite certificates
+    ///      issued under the previous terms, so a representation-only update (scripify, recert)
+    ///      that echoes the certificate's unchanged snapshot must keep working after an amendment.
+    ///      Anything that matches neither is a genuine mismatch.
+    function _validateClassTermsForUpdate(
+        ClassTermsState storage state,
+        bytes memory extensionData,
+        bytes memory currentExtensionData
+    ) private view {
+        (bytes memory termsData,) = _readClassTerms(extensionData);
+        bytes32 newHash = keccak256(termsData);
+        if (newHash == state.termsHash) return;
+        (bytes memory currentTerms,) = _readClassTerms(currentExtensionData);
+        if (newHash != keccak256(currentTerms)) revert ClassTermsMismatch();
     }
 
     function _increaseIssuedUnits(ClassTermsState storage state, uint256 units) private {
