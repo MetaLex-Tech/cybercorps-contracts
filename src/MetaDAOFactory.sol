@@ -326,7 +326,10 @@ contract MetaDAOFactory is UUPSUpgradeable, BorgAuthACL, IERC721Receiver {
 
         BorgAuth(authAddress).updateRole(issuanceManagerAddress, 99);
         BorgAuth(authAddress).updateRole(dealManagerAddress, 99);
-        BorgAuth(authAddress).setRoleManager(cyberCorpAddress);
+        // Revoke this factory's deploy-time owner role before activation; the corp claims the
+        // one-way role-manager lock itself inside activateBoardGovernance (it holds role 200),
+        // so the upgradeable factory retains no cross-corp privilege on the new auth.
+        BorgAuth(authAddress).zeroOwner();
         ICyberCorp(cyberCorpAddress).activateBoardGovernance();
 
         emit MetaCorpDeployed(cyberCorpAddress, authAddress, issuanceManagerAddress, dealManagerAddress, roundManagerAddress, address(0), 0, _officer.eoa);

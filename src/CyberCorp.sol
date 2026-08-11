@@ -211,7 +211,15 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         if (boardGovernanceEnforced) {
             revert BoardGovernanceAlreadyEnforced();
         }
-        if (AUTH.roleManager() != address(this)) {
+        // Claim the one-way role-manager lock from the corp's own authority (this corp holds
+        // role 200, which clears BorgAuth's owner threshold). Claiming corp-side lets the
+        // deploying factory revoke its own deploy-time owner role BEFORE activation — otherwise
+        // the lock would freeze the upgradeable factory's cross-corp privilege in place forever.
+        // Legacy corps cannot be hijacked through this permissionless path: they have no
+        // directors (appended storage reads empty), so the LastDirector guard below rejects them.
+        if (AUTH.roleManager() == address(0)) {
+            AUTH.setRoleManager(address(this));
+        } else if (AUTH.roleManager() != address(this)) {
             revert RoleManagerNotCyberCorp();
         }
         if (companyDirectors.length == 0) revert LastDirector();

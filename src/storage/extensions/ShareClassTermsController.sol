@@ -269,6 +269,14 @@ contract ShareClassTermsController is
         }
     }
 
+    /// @dev KNOWN OPEN SCALE ITEM (P2 follow-up, from Codex review on PR #144): this scan walks
+    ///      every certificate in one transaction with several external calls per lot. A legacy
+    ///      printer with a large enough cap table cannot complete it within the block gas limit,
+    ///      and the one-shot `configured` flag offers no cursor, so such a printer could never
+    ///      migrate. Launch-baseline printers hold dozens of lots, far from the limit; a chunked,
+    ///      resumable scan is deliberately deferred (it cannot be atomic with the manager upgrade
+    ///      by definition, so it needs its own migration mode). Tracked in
+    ///      notes/plans/protocol-improvement-plan.md.
     function _calculateOutstandingUnits(address certPrinter) private view returns (uint256 outstandingUnits) {
         ILedgerEntryToken printer = ILedgerEntryToken(certPrinter);
         uint256 supply = printer.totalSupply();

@@ -905,6 +905,14 @@ contract RoundManagerTest is Test {
         paymentToken.approve(address(roundManager), type(uint256).max);
     }
 
+    function test_DeployRevokesFactoryRoleAndLocksRoleManager() public view {
+        // The auth is constructed with the upgradeable top-level factory as owner; deploy must
+        // strip that role before the one-way role-manager lock, or every fresh corp permanently
+        // trusts the factory address on its owner-gated APIs with no Board-side removal path.
+        assertEq(BorgAuth(auth).userRoles(address(corpFactory)), 0, "factory retains a role on the fresh corp's auth");
+        assertEq(BorgAuth(auth).roleManager(), corp, "corp is not the auth's role manager");
+    }
+
     function test_RevertIf_CreateRound_InvalidSignature() public {
         CyberCertData[] memory certData = new CyberCertData[](1);
         string[] memory defaultLegend = new string[](1);

@@ -193,6 +193,14 @@ fields), but left the storage model per-certificate and `authorizedShares` unenf
   snapshot, restrict recert targets to terms-matching certificates, forbid scripification in
   mixed-terms classes, or declare that scripified units always redeem at canonical terms. A
   policy choice with legal consequences — decide before, not in, the implementing PR.
+- **Open item (2026-08-11, from Codex review on PR #144):** the controller's outstanding-unit
+  derivation at migration is a one-transaction scan over every live certificate. A legacy
+  printer with a large enough cap table exceeds the block gas limit and can then never migrate
+  (no cursor, one-shot `configured` flag). Launch-baseline printers hold dozens of lots, so this
+  binds no current corp; the fix is a chunked, resumable scan, which by definition cannot be
+  atomic with the manager upgrade and therefore needs its own migration mode (install controller
+  fail-closed first, then scan in bounded chunks, then mark configured). Deferred to its own
+  change.
 - `amendClassTerms` supports authorized corporate amendments but refuses to reduce authorization
   below issued units.
 - The first in-printer implementation was rejected after size verification: it made
