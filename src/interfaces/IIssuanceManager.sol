@@ -239,6 +239,14 @@ interface IIssuanceManager {
 
     function convertScripToCert(address certAddress, uint256 amount) external;
 
+    // Unlike other CyberScrip compliance controls, this one must be called by IssuanceManager due to
+    // its reliance on internal states.
+    function forceScripBurn(
+        address certAddress,
+        address account,
+        uint256 amount
+    ) external;
+
     // Class-level LET designations (classIds start at 1; 0 = unclassified)
     event SecurityClassDefined(
         uint256 indexed classId,

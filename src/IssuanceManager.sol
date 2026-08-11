@@ -583,32 +583,16 @@ contract IssuanceManager is Initializable, BorgAuthACL, UUPSUpgradeable {
         );
     }
 
-    function setScripRestrictionHooks(address certAddress, ITransferRestrictionHook[] memory hooks) external onlyAdmin {
-        IssuanceManagerStorage.executeSetScripRestrictionHooks(certAddress, hooks);
-    }
-
-    function disableScripForceTransfer(address certAddress) external onlyOwner {
-        IssuanceManagerStorage.executeDisableScripForceTransfer(certAddress);
-    }
-
-    function disableScripForceBurn(address certAddress) external onlyOwner {
-        IssuanceManagerStorage.executeDisableScripForceBurn(certAddress);
-    }
-
-    function disableScripFreeze(address certAddress) external onlyOwner {
-        IssuanceManagerStorage.executeDisableScripFreeze(certAddress);
-    }
-
-    function setScripFrozen(address certAddress, address account, bool isFrozen) external onlyAdmin {
-        IssuanceManagerStorage.executeSetScripFrozen(certAddress, account, isFrozen);
-    }
-
-    function forceScripTransfer(address certAddress, address from, address to, uint256 amount) external onlyAdmin {
-        IssuanceManagerStorage.executeForceScripTransfer(certAddress, from, to, amount);
-    }
-
-    function forceScripBurn(address certAddress, address account, uint256 amount) external onlyAdmin {
-        IssuanceManagerStorage.executeForceScripBurn(certAddress, account, amount);
+    function forceScripBurn(
+        address certAddress,
+        address account,
+        uint256 amount
+    ) external onlyAdmin {
+        IssuanceManagerStorage.executeForceScripBurn(
+            certAddress,
+            account,
+            amount
+        );
     }
 
     /// @notice Convert a certificate into scrip tokens, partially or fully

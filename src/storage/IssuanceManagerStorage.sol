@@ -1155,30 +1155,6 @@ library IssuanceManagerStorage {
         _releaseScripUnits(certAddress, units);
     }
 
-    function executeSetScripRestrictionHooks(address certAddress, ITransferRestrictionHook[] memory hooks) external {
-        ICyberScrip(_getScripifiedCertOrRevert(certAddress)).setRestrictionHook(hooks);
-    }
-
-    function executeDisableScripForceTransfer(address certAddress) external {
-        ICyberScrip(_getScripifiedCertOrRevert(certAddress)).disableForceTransfer();
-    }
-
-    function executeDisableScripForceBurn(address certAddress) external {
-        ICyberScrip(_getScripifiedCertOrRevert(certAddress)).disableForceBurn();
-    }
-
-    function executeDisableScripFreeze(address certAddress) external {
-        ICyberScrip(_getScripifiedCertOrRevert(certAddress)).disableFreeze();
-    }
-
-    function executeSetScripFrozen(address certAddress, address account, bool isFrozen) external {
-        ICyberScrip(_getScripifiedCertOrRevert(certAddress)).setFrozen(account, isFrozen);
-    }
-
-    function executeForceScripTransfer(address certAddress, address from, address to, uint256 amount) external {
-        ICyberScrip(_getScripifiedCertOrRevert(certAddress)).forceTransfer(from, to, amount);
-    }
-
     function executeSetRecertificationApproval(
         address certAddress,
         address investor,
@@ -1467,11 +1443,6 @@ library IssuanceManagerStorage {
         if (pool.totalAssetsWad == 0) {
             _resetVaultPositions(certAddress);
         }
-    }
-
-    function _getScripifiedCertOrRevert(address certAddress) internal view returns (address scripifiedCert) {
-        scripifiedCert = getScripifiedCert(certAddress);
-        if (scripifiedCert == address(0)) revert ScripifiedCertNotAllowed();
     }
 
     /// @dev Retires every outstanding position in one step by bumping the epoch, so an emptied pool costs

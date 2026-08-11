@@ -50,38 +50,28 @@ booleans of `deployCyberScrip`:
 
 There is **no blocklist** — only force transfer, force burn, and freeze.
 
-The underlying CyberScrip functions are `onlyIssuanceManager`; you exercise
-them through the IssuanceManager's wrappers (BorgAuth admin):
+| Power          | Exercised via (on CyberScrip)     |
+|----------------|-----------------------------------|
+| Force transfer | `forceTransfer(from, to, amount)` |
+| Force burn     | `forceBurn(account, amount)`      |
+| Freeze         | `setFrozen(account, isFrozen)`    |
 
-| Power | Exercised via (on IssuanceManager) |
-|---|---|
-| Force transfer | `forceScripTransfer(certAddress, from, to, amount)` |
-| Force burn | `forceScripBurn(certAddress, account, amount)` |
-| Freeze | `setScripFrozen(certAddress, account, isFrozen)` |
+An admin calls the scrip directly — the compliance functions are
+`onlyIssuanceManagerOrAdmin`. Force burn is the exception: it also withdraws
+the matching backing units from the cert's vault, so it is managed by IssuanceManager.
 
 ## Permanently disabling a power
 
-Each power has a one-way disable, driven through the IssuanceManager
-(`onlyOwner`): `disableScripForceTransfer(certAddress)`,
-`disableScripForceBurn(certAddress)`, `disableScripFreeze(certAddress)`.
-Once disabled, a power cannot be re-enabled; exercising it afterward reverts
-`ComplianceFeatureDisabled`.
+Each power has a one-way disable on CyberScrip — `disableForceTransfer()`,
+`disableForceBurn()`, `disableFreeze()`. Once disabled, a power cannot be
+re-enabled; exercising it afterward reverts `ComplianceFeatureDisabled`.
+Like the other controls, the disables are `onlyIssuanceManagerOrAdmin`.
 
 ## Holder cap
 
-`CyberScrip` enforces `maxHolderCount` (`0` = unlimited); transfers that
-would exceed it revert `HolderLimitExceeded`.
-
-{% hint style="warning" %}
-The setter (`setMaxHolderCount`) is `onlyIssuanceManager` and the
-IssuanceManager currently exposes **no wrapper** for it — so on production
-deployments the cap stays at its default `0` (unlimited) and cannot be
-relied on for compliance until the wiring ships.
-{% endhint %}
-
-For holder-count limits on
-secondary trades, see `HolderCapCondition` in
-[`src/libs/conditions/secondary/`](https://github.com/MetaLex-Tech/cybercorps-contracts/tree/develop/src/libs/conditions/secondary).
+`CyberScrip.setMaxHolderCount(n)` caps the holder count (`0` = unlimited);
+transfers that would exceed it revert `HolderLimitExceeded`. Like the other
+reversible controls it is `onlyIssuanceManagerOrAdmin`.
 
 ## Related
 

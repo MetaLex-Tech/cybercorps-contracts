@@ -9,9 +9,10 @@ per [LedgerEntryToken](LedgerEntryToken.md) printer, via
 * **Pattern:** beacon proxy
 * **`DEPLOY_VERSION`:** `"4"`
 
-Every state-changing function carries `onlyIssuanceManager` — the caller must
-be the IssuanceManager. Scripification and de-scripification are driven
-through the IssuanceManager.
+Scripification and de-scripification are driven through the IssuanceManager,
+so `mint` / `burnFrom` are `onlyIssuanceManager`. The compliance controls are
+`onlyIssuanceManagerOrAdmin`, so a cyberCORP admin calls them on the scrip
+directly.
 
 ## Mint / burn
 
@@ -24,11 +25,11 @@ function burnFrom(address account, uint256 amount) external onlyIssuanceManager;
 
 CyberScrip supports **three** compliance powers. There is **no blocklist**.
 
-| Power | Function | Enabled at deploy by | Disable (one-way) |
-|---|---|---|---|
-| Force transfer | `forceTransfer(from, to, amount)` | `enableForceTransfer` | `disableForceTransfer()` |
-| Force burn | `forceBurn(account, amount)` | `enableForceBurn` | `disableForceBurn()` |
-| Freeze | `setFrozen(account, isFrozen)` | `enableFreeze` | `disableFreeze()` |
+| Power          | Function                          | Gate             | Enabled at deploy by  | Disable (one-way)        |
+|----------------|-----------------------------------|------------------|-----------------------|--------------------------|
+| Force transfer | `forceTransfer(from, to, amount)` | manager or admin | `enableForceTransfer` | `disableForceTransfer()` |
+| Force burn     | `forceBurn(account, amount)`      | manager only     | `enableForceBurn`     | `disableForceBurn()`     |
+| Freeze         | `setFrozen(account, isFrozen)`    | manager or admin | `enableFreeze`        | `disableFreeze()`        |
 
 Each `disable*` function is irreversible — once a power is disabled it cannot
 be re-enabled. A power can only be exercised while its `can*` flag is true;

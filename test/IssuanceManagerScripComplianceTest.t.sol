@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import "forge-std/Test.sol";
 import "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
+import {IIssuanceManager} from "../src/interfaces/IIssuanceManager.sol";
 import {IssuanceManagerFactory} from "../src/IssuanceManagerFactory.sol";
 import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
@@ -44,6 +45,8 @@ contract MockCertPrinterBasic {
 
 contract IssuanceManagerScripComplianceTest is Test {
     bytes32 private constant SALT = keccak256("IssuanceManagerScripComplianceTest");
+
+    event MaxHolderCountUpdated(uint256 maxHolderCount);
 
     IssuanceManager public issuanceManager;
     IssuanceManagerFactory public imFactory;
@@ -139,12 +142,12 @@ contract IssuanceManagerScripComplianceTest is Test {
         assertEq(det.unitsRepresented, 60 ether);
     }
 
-    function test_setScripRestrictionHooks_updatesHook() public {
+    function test_setRestrictionHook_updatesHook() public {
         ITransferRestrictionHook[] memory newHooks = new ITransferRestrictionHook[](1);
         newHooks[0] = ITransferRestrictionHook(address(denyHook));
 
         vm.prank(admin);
-        issuanceManager.setScripRestrictionHooks(address(cert), newHooks);
+        scrip.setRestrictionHook(newHooks);
 
         vm.startPrank(user1);
         vm.expectRevert(
@@ -157,9 +160,9 @@ contract IssuanceManagerScripComplianceTest is Test {
         vm.stopPrank();
     }
 
-    function test_setScripFrozen_blocksTransfers() public {
+    function test_setFrozen_blocksTransfers() public {
         vm.prank(admin);
-        issuanceManager.setScripFrozen(address(cert), user1, true);
+        scrip.setFrozen(user1, true);
 
         vm.startPrank(user1);
         vm.expectRevert(
@@ -169,16 +172,63 @@ contract IssuanceManagerScripComplianceTest is Test {
         vm.stopPrank();
     }
 
-    function test_forceScripTransfer_ignoresHookAndFreeze() public {
+    function test_setMaxHolderCount_capIsEnforcedWhenSetByAdmin() public {
+        // user1 is the sole holder after setUp
+        vm.expectEmit(false, false, false, true, address(scrip));
+        emit MaxHolderCountUpdated(1);
+        vm.prank(admin);
+        scrip.setMaxHolderCount(1);
+        assertEq(scrip.maxHolderCount(), 1);
+
+        // a partial transfer would create a second holder
+        vm.prank(user1);
+        vm.expectRevert(abi.encodeWithSignature("HolderLimitExceeded(uint256)", 1));
+        scrip.transfer(user2, 1 ether);
+
+        // raising the cap through the same path lifts the restriction
+        vm.prank(admin);
+        scrip.setMaxHolderCount(2);
+
+        vm.prank(user1);
+        scrip.transfer(user2, 1 ether);
+        assertEq(scrip.balanceOf(user2), 1 ether);
+    }
+
+    function test_setMaxHolderCount_callableByIssuanceManager() public {
+        vm.prank(address(issuanceManager));
+        scrip.setMaxHolderCount(5);
+        assertEq(scrip.maxHolderCount(), 5);
+    }
+
+    function test_setMaxHolderCount_revertsForNonAdmin() public {
+        uint256 adminRole = auth.ADMIN_ROLE();
+
+        vm.prank(user1);
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "BorgAuth_NotAuthorized(uint256,address)",
+                adminRole,
+                user1
+            )
+        );
+        scrip.setMaxHolderCount(1);
+    }
+
+    function test_forceScripBurn_callableViaInterface() public {
+        vm.prank(admin);
+        IIssuanceManager(address(issuanceManager)).forceScripBurn(address(cert), user1, 5 ether);
+        assertEq(scrip.balanceOf(user1), 95 ether);
+    }
+
+    function test_forceTransfer_ignoresHookAndFreeze() public {
         ITransferRestrictionHook[] memory newHooks = new ITransferRestrictionHook[](1);
         newHooks[0] = ITransferRestrictionHook(address(denyHook));
-        vm.prank(admin);
-        issuanceManager.setScripRestrictionHooks(address(cert), newHooks);
 
         vm.startPrank(admin);
-        issuanceManager.setScripFrozen(address(cert), user1, true);
-        issuanceManager.setScripFrozen(address(cert), user2, true);
-        issuanceManager.forceScripTransfer(address(cert), user1, user2, 10 ether);
+        scrip.setRestrictionHook(newHooks);
+        scrip.setFrozen(user1, true);
+        scrip.setFrozen(user2, true);
+        scrip.forceTransfer(user1, user2, 10 ether);
         vm.stopPrank();
 
         assertEq(scrip.balanceOf(user1), 90 ether);
@@ -191,46 +241,49 @@ contract IssuanceManagerScripComplianceTest is Test {
         assertEq(scrip.balanceOf(user1), 95 ether);
     }
 
-    function test_disableScripForceTransfer_blocksForceTransfer() public {
-        issuanceManager.disableScripForceTransfer(address(cert));
+    function test_disableForceTransfer_blocksForceTransfer() public {
+        scrip.disableForceTransfer();
 
         vm.prank(admin);
         vm.expectRevert(abi.encodeWithSignature("ComplianceFeatureDisabled()"));
-        issuanceManager.forceScripTransfer(address(cert), user1, user2, 1 ether);
+        scrip.forceTransfer(user1, user2, 1 ether);
     }
 
-    function test_disableScripForceBurn_blocksForceBurn() public {
-        issuanceManager.disableScripForceBurn(address(cert));
+    function test_disableForceBurn_blocksForceBurn() public {
+        scrip.disableForceBurn();
 
         vm.prank(admin);
         vm.expectRevert(abi.encodeWithSignature("ComplianceFeatureDisabled()"));
         issuanceManager.forceScripBurn(address(cert), user1, 1 ether);
     }
 
-    function test_accessControl_onlyAdmin_onlyOwner() public {
+    function test_accessControl_onlyAdmin() public {
         ITransferRestrictionHook[] memory newHooks = new ITransferRestrictionHook[](1);
         newHooks[0] = ITransferRestrictionHook(address(denyHook));
-        uint256 adminRole = auth.ADMIN_ROLE();
-        uint256 ownerRole = auth.OWNER_ROLE();
+        bytes memory notAdmin = abi.encodeWithSignature(
+            "BorgAuth_NotAuthorized(uint256,address)",
+            auth.ADMIN_ROLE(),
+            user1
+        );
 
         vm.prank(user1);
-        vm.expectRevert(
-            abi.encodeWithSignature(
-                "BorgAuth_NotAuthorized(uint256,address)",
-                adminRole,
-                user1
-            )
-        );
-        issuanceManager.setScripRestrictionHooks(address(cert), newHooks);
+        vm.expectRevert(notAdmin);
+        scrip.setRestrictionHook(newHooks);
 
         vm.prank(user1);
-        vm.expectRevert(
-            abi.encodeWithSignature(
-                "BorgAuth_NotAuthorized(uint256,address)",
-                ownerRole,
-                user1
-            )
-        );
-        issuanceManager.disableScripFreeze(address(cert));
+        vm.expectRevert(notAdmin);
+        scrip.setFrozen(user2, true);
+
+        vm.prank(user1);
+        vm.expectRevert(notAdmin);
+        scrip.forceTransfer(user1, user2, 1 ether);
+
+        vm.prank(user1);
+        vm.expectRevert(notAdmin);
+        scrip.disableFreeze();
+
+        vm.prank(user1);
+        vm.expectRevert(notAdmin);
+        issuanceManager.forceScripBurn(address(cert), user1, 1 ether);
     }
 }
