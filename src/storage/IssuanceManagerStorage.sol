@@ -612,6 +612,13 @@ library IssuanceManagerStorage {
         address extension,
         bytes memory seriesData
     ) external returns (address newCert) {
+        // KNOWN OPEN INVARIANT (P2 follow-up): a CommonStock/PreferredStock printer created here
+        // with a zero or non-SHARE extension escapes class-terms accounting entirely — the
+        // _account* helpers skip when no controller is detected, so such a printer can mint
+        // stock no authorized-share cap ever sees. Gating stock classes on a controller at
+        // creation is the fix, but it requires the whole stock-minting test corpus (and any
+        // integration that mints with empty extension data) to carry real SeriesTerms payloads,
+        // so it lands as its own change. Tracked in notes/plans/protocol-improvement-plan.md.
         bytes32 salt = keccak256(abi.encodePacked(getPrinters().length, address(this)));
         newCert = Create2.deploy(0, salt, _getBytecodeCertPrinter());
         addPrinter(newCert);

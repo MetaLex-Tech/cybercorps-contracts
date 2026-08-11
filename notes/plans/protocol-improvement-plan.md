@@ -173,6 +173,15 @@ fields), but left the storage model per-certificate and `authorizedShares` unenf
 - The upgraded manager deliberately fails closed for an unmigrated legacy share renderer:
   lifecycle operations cannot silently bypass cap enforcement. Upgrade and per-printer migration
   therefore belong in one owner-controlled batch for every in-scope corp.
+- **Open item (2026-08-11, from Codex review on PR #144):** the fail-closed detection keys off the
+  extension advertising SHARE. A CommonStock/PreferredStock printer created with a **zero or
+  non-SHARE extension** escapes class-terms accounting entirely — the issuer can mint stock no
+  authorized-share cap ever sees. The fix is gating stock classes on a configured controller at
+  `executeCreateCertPrinter`, but that requires every stock-minting test suite (and any
+  integration minting with empty extension data) to carry real `SeriesTerms` payloads, so it is
+  deliberately deferred to its own change rather than landed inside the PR #144 merge. Until it
+  lands, cap enforcement for a stock printer is only as strong as its creation path installing a
+  controller (`createCertPrinterWithClassTerms` or migration).
 - `amendClassTerms` supports authorized corporate amendments but refuses to reduce authorization
   below issued units.
 - The first in-printer implementation was rejected after size verification: it made
