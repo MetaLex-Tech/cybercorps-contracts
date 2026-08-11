@@ -74,14 +74,40 @@ defaultLegend}`.
 * `conditions` are `ICondition` addresses that gate the deal; the owner can
   `addCondition` / `removeConditionAt` while the deal is still pending.
 * `expiry` and `secretHash` support timed and secret-gated deals;
-  `voidExpiredDeal` cleans up expired deals, and `refundVoidedDeal` releases
-  escrowed payment when an agreement was voided directly in the registry.
+  `voidExpiredDeal` cleans up expired deals. `expiry == 0` means **no
+  deadline**: such a deal can pay and finalize at any time and is never
+  void-expirable (`voidExpiredDeal` reverts `DealNotExpired`), so it unwinds
+  only by void request — see [Voiding a primary deal](#voiding-a-primary-deal).
 * On `finalizeDeal` the deal's certificate effects (mint/assign/endorse) are
   applied via the IssuanceManager, and escrowed payment (less the platform
   fee — see `computeFee` / `getPlatformPayable`) is released.
 * Escrow state lives in the shared `LexScrowStorage` library — see
   [LeXscroWLite](LeXscroWLite.md). `getEscrowDetails(agreementId)` and
   `conditionCheck(agreementId)` expose it.
+
+### Voiding a primary deal
+
+Every void ultimately runs through the registry's `voidContractFor`, which
+voids the agreement once every **allocated** party has requested it, as soon
+as the proposer (party index 0) requests while still the only signer, or —
+for a nonzero expiry only — once that expiry has passed. What differs between
+the entry points is how much DealManager-side teardown follows.
+
+* `signToVoid` is the complete route. It forwards the request and, once the
+  registry reports the agreement voided, voids the escrowed corp certificates
+  and settles the escrow: a `PAID` escrow is refunded, a `PENDING` one is
+  marked `VOIDED`.
+* `revokeDeal` is **not** a full unwind. It only forwards the request for a
+  still-pending deal (it reverts `DealNotPending` otherwise) and performs no
+  teardown of its own, so a request that tips the agreement into voided — the
+  sole-signer proposer, say — leaves the escrow `PENDING` and its certificates
+  live. Another allocated party's `signToVoid` is what cleans that up
+  afterwards.
+* Requests may also go straight to the registry, bypassing the DealManager
+  entirely. The escrow then lags the agreement until `refundVoidedDeal` syncs
+  it, which voids the corp certificates and refunds — but only for a `PAID`
+  escrow (`voidAndRefund` reverts `EscrowNotPaid` on a `PENDING` one, so an
+  unpaid deal voided this way still needs a party's `signToVoid`).
 
 ## Secondary trading
 
