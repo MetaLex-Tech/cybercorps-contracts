@@ -7,6 +7,7 @@ import {LedgerEntryToken} from "../src/LedgerEntryToken.sol";
 import {IssuanceManager} from "../src/IssuanceManager.sol";
 import {IIssuanceManagerFactory} from "../src/interfaces/IIssuanceManagerFactory.sol";
 import {IShareClassTermsController} from "../src/interfaces/IShareClassTermsController.sol";
+import {ICertificateExtension} from "../src/storage/extensions/ICertificateExtension.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {CertificateDetails} from "../src/storage/LedgerEntryTokenStorage.sol";
 
@@ -71,6 +72,41 @@ contract UpgradeAndMigrateShareClassTermsScript is Script {
                 revert("Source certificate has no extension data");
             }
             extensionData[i] = source.extensionData;
+        }
+
+        // Completeness check: validating only the supplied array is not enough. 4.2 fails closed
+        // on every legacy SHARE printer, so one omitted from CERT_PRINTERS would come out of this
+        // "successful" upgrade with issuance, assignment, secondary transfers, and scrip
+        // operations reverting. Enumerate the manager's full printer roster and refuse to
+        // broadcast unless every legacy SHARE printer is either in the migration batch or
+        // already carries a controller.
+        bytes32 shareType = keccak256("SHARE");
+        for (uint256 i = 0;; i++) {
+            address enumerated;
+            try issuanceManager.printers(i) returns (address p) {
+                enumerated = p;
+            } catch {
+                break;
+            }
+            address ext = LedgerEntryToken(enumerated).getExtension(0);
+            if (ext == address(0) || ext.code.length == 0) continue;
+            (bool ok, bytes memory ret) =
+                ext.staticcall(abi.encodeCall(ICertificateExtension.supportsExtensionType, (shareType)));
+            if (!ok || ret.length < 32 || !abi.decode(ret, (bool))) continue;
+            (bool isController,) =
+                ext.staticcall(abi.encodeCall(IShareClassTermsController.getClassTerms, (enumerated)));
+            if (isController) continue;
+            bool included = false;
+            for (uint256 j = 0; j < printers.length; ++j) {
+                if (printers[j] == enumerated) {
+                    included = true;
+                    break;
+                }
+            }
+            if (!included) {
+                console2.log("Legacy SHARE printer missing from CERT_PRINTERS:", enumerated);
+                revert("Legacy SHARE printer omitted from migration batch");
+            }
         }
 
         bytes memory migrationCall =
