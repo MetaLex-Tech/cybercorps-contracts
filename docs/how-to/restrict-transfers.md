@@ -1,3 +1,7 @@
+---
+description: Install transfer-restriction hooks and compliance powers on cyberSCRIP
+---
+
 # Restrict cyberSCRIP transfers
 
 cyberSCRIP is an ERC-20. You can restrict it with transfer-restriction hooks,
@@ -9,7 +13,7 @@ Hooks implement `ITransferRestrictionHook`; CyberScrip runs every installed
 hook on each transfer. See [Hooks](../reference/hooks.md).
 
 Hooks are set initially when the scrip is deployed (`typeRestrictionHooks`
-argument of `deployCyberScrip`) and can be changed afterward through the
+argument of `deployCyberScrip`) and can be replaced afterward through the
 IssuanceManager:
 
 ```solidity
@@ -19,11 +23,15 @@ address cyberScrip = IIssuanceManager(issuanceManager).deployCyberScrip(
     typeRestrictionHooks,   // ITransferRestrictionHook[]
     /* ...remaining args... */
 );
+
+// later (BorgAuth admin) — replaces the whole hook set
+IIssuanceManager(issuanceManager).setScripRestrictionHooks(certAddress, newHooks);
 ```
 
-On the `CyberCertPrinter` itself, the IssuanceManager can also set hooks for
-cyberCERT transfers: `setRestrictionHook(certAddress, id, hook)` and
-`setGlobalRestrictionHook(certAddress, hook)`.
+The cert printer (`LedgerEntryToken`) has its own hooks for cyberCERT
+transfers, set on the printer itself by the IssuanceManager or a BorgAuth
+admin: `setRestrictionHook(id, hook)` (per token) and
+`setGlobalRestrictionHook(hook)`.
 
 Implementations in
 [`src/hooks/transfer/`](https://github.com/MetaLex-Tech/cybercorps-contracts/tree/develop/src/hooks/transfer):
@@ -42,26 +50,28 @@ booleans of `deployCyberScrip`:
 
 There is **no blocklist** — only force transfer, force burn, and freeze.
 
-| Power | Exercised via (on CyberScrip) |
-|---|---|
+| Power          | Exercised via (on CyberScrip)     |
+|----------------|-----------------------------------|
 | Force transfer | `forceTransfer(from, to, amount)` |
-| Force burn | `forceBurn(account, amount)` |
-| Freeze | `setFrozen(account, isFrozen)` |
+| Force burn     | `forceBurn(account, amount)`      |
+| Freeze         | `setFrozen(account, isFrozen)`    |
 
-These functions are `onlyIssuanceManager`, so they are driven through the
-cyberCORP's IssuanceManager.
+An admin calls the scrip directly — the compliance functions are
+`onlyIssuanceManagerOrAdmin`. Force burn is the exception: it also withdraws
+the matching backing units from the cert's vault, so it is managed by IssuanceManager.
 
 ## Permanently disabling a power
 
 Each power has a one-way disable on CyberScrip — `disableForceTransfer()`,
 `disableForceBurn()`, `disableFreeze()`. Once disabled, a power cannot be
-re-enabled; exercising it afterward reverts `ComplianceFeatureDisabled`. Like
-the exercise functions, the disables are `onlyIssuanceManager`.
+re-enabled; exercising it afterward reverts `ComplianceFeatureDisabled`.
+Like the other controls, the disables are `onlyIssuanceManagerOrAdmin`.
 
 ## Holder cap
 
 `CyberScrip.setMaxHolderCount(n)` caps the holder count (`0` = unlimited);
-transfers that would exceed it revert `HolderLimitExceeded`.
+transfers that would exceed it revert `HolderLimitExceeded`. Like the other
+reversible controls it is `onlyIssuanceManagerOrAdmin`.
 
 ## Related
 

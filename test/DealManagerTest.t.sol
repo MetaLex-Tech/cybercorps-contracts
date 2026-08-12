@@ -796,6 +796,62 @@ contract DealManagerTest is Test {
         _assertCertVoided(certIds[0]);
     }
 
+    // TODO(#142): revokeDeal should run signToVoid's teardown when its own request voids the
+    // agreement. It does not, so this test pins the stranding instead of the fixed behavior.
+    // Pending fix: fix/revoke-deal-teardown lands.
+    function test_RevokeDeal_VoidingRevokeStrandsEscrowAndCert() public {
+        // A revoke that tips the agreement into voided skips the teardown signToVoid would have done.
+        // The registry moves on, the escrow does not, and nothing can catch it up afterwards.
+
+        (bytes32 agreementId, uint256[] memory certIds) = _proposeSignedDeal();
+
+        registry.mockIsReadyToVoid(agreementId, true);
+        vm.prank(companyOwner);
+        dm.revokeDeal(agreementId, companyOwner, GOOD_SIGNATURE);
+
+        assertTrue(registry.isVoided(agreementId), "Agreement should be voided");
+        assertEq(uint8(dm.getEscrowDetails(agreementId).status), uint8(EscrowStatus.PENDING), "Escrow is left pending");
+        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), address(dm), "Cert is left escrowed and live");
+
+        // No way back. The requester is already recorded, so no one can void through DealManager again,
+        vm.prank(companyOwner);
+        vm.expectRevert(CyberAgreementRegistry.ContractAlreadyVoided.selector);
+        dm.signToVoid(agreementId, companyOwner, GOOD_SIGNATURE);
+
+        // and the catch-up path only handles a PAID escrow.
+        vm.expectRevert(LexScrowStorage.EscrowNotPaid.selector);
+        dm.refundVoidedDeal(agreementId);
+    }
+
+    function test_RevokeDeal_NonVoidingRevokeLeavesEscrowPending() public {
+        // A revoke that only records a void request (other parties still have to consent) must not
+        // touch the escrow: the agreement simply isn't voided yet.
+
+        (bytes32 agreementId, uint256[] memory certIds) = _proposeSignedDeal();
+
+        vm.prank(companyOwner);
+        dm.revokeDeal(agreementId, companyOwner, GOOD_SIGNATURE);
+
+        assertFalse(registry.isVoided(agreementId), "Agreement should not be voided yet");
+        assertEq(uint8(dm.getEscrowDetails(agreementId).status), uint8(EscrowStatus.PENDING), "Escrow should stay pending");
+        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), address(dm), "Cert should still be escrowed");
+    }
+
+    function test_RevertIf_RevokeDeal_PaidDeal() public {
+        // revokeDeal is the pending-only route. A funded escrow must go through signToVoid instead,
+        // which is the path that refunds.
+
+        (bytes32 agreementId, ) = _proposeSignedDealAndPay(
+            alice,
+            GOOD_SIGNATURE,
+            alice
+        );
+
+        vm.prank(companyOwner);
+        vm.expectRevert(IDealManagerStorage.DealNotPending.selector);
+        dm.revokeDeal(agreementId, companyOwner, GOOD_SIGNATURE);
+    }
+
     function test_PaymentFlow_RefundVoidedDeal() public {
         // If the agreement is voided through the registry instead of Deal Manager,
         // DealManager should still be able to refund through other means
@@ -852,6 +908,45 @@ contract DealManagerTest is Test {
         dm.refundVoidedDeal(agreementId);
     }
 
+    // TODO(#142): refundVoidedDeal should sync a PENDING escrow too — void the certs, mark the escrow
+    // VOIDED, nothing to refund. It only handles PAID today, so this test pins that refusal.
+    // Pending fix: fix/revoke-deal-teardown lands.
+    function test_RevertIf_RefundVoidedDeal_PendingDeal() public {
+        // Parties can void the agreement directly in the registry before anyone pays. The escrow is
+        // then out of sync with no signToVoid available, and the catch-up path refuses to run.
+
+        (bytes32 agreementId, uint256[] memory certIds) = _proposeSignedDeal();
+
+        registry.mockIsVoided(agreementId, true);
+
+        vm.expectRevert(LexScrowStorage.EscrowNotPaid.selector);
+        dm.refundVoidedDeal(agreementId);
+
+        assertEq(uint8(dm.getEscrowDetails(agreementId).status), uint8(EscrowStatus.PENDING), "Escrow is left pending");
+        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), address(dm), "Cert is left escrowed and live");
+    }
+
+    function test_RevertIf_RefundVoidedDeal_AlreadySynced() public {
+        // A second sync has nothing to do — the escrow is already VOIDED — and must not silently succeed.
+
+        (bytes32 agreementId, ) = _proposeSignedDealAndPay(
+            alice,
+            GOOD_SIGNATURE,
+            alice
+        );
+
+        registry.mockIsVoided(agreementId, true);
+        dm.refundVoidedDeal(agreementId);
+
+        uint256 aliceBalanceAfterRefund = paymentToken.balanceOf(alice);
+
+        vm.expectRevert();
+        dm.refundVoidedDeal(agreementId);
+
+        assertEq(uint8(dm.getEscrowDetails(agreementId).status), uint8(EscrowStatus.VOIDED), "Escrow should stay voided");
+        assertEq(paymentToken.balanceOf(alice), aliceBalanceAfterRefund, "Refund must not pay out twice");
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Id-space validation: primary entrypoints require a primary escrow. An id with no primary escrow
     // (an unknown id, or a secondary-trade settlement — which never creates a LexScrow escrow) reverts
@@ -904,6 +999,113 @@ contract DealManagerTest is Test {
         // Cert should be burned (voided) via IssuanceManager.voidCertificate
         vm.expectRevert();
         CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]); // burned token should revert on ownerOf
+    }
+
+    function test_VoidExpiredDeal_PaidDealRefundsAndVoidsCert() public {
+        // The PAID branch: a deal that was already funded before it expired must refund the payer as
+        // well as void the certs. The test above only reaches the PENDING branch.
+
+        (bytes32 agreementId, uint256[] memory certIds) = _proposeSignedDealAndPay(
+            alice,
+            GOOD_SIGNATURE,
+            alice
+        );
+
+        uint256 alicePaymentTokenBalancesBefore = paymentToken.balanceOf(alice);
+
+        // Past expiry the real registry voids on the first request
+        registry.mockIsReadyToVoid(agreementId, true);
+
+        vm.warp(dm.getEscrowDetails(agreementId).expiry + 1);
+        dm.voidExpiredDeal(agreementId, companyOwner, "");
+
+        assertEq(uint8(dm.getEscrowDetails(agreementId).status), uint8(EscrowStatus.VOIDED), "Escrow should be voided");
+        assertEq(paymentToken.balanceOf(alice), alicePaymentTokenBalancesBefore + 10 ether, "Alice should receive the refund");
+        _assertCertVoided(certIds[0]);
+    }
+
+    /// @notice Regression: expiry == 0 means no deadline, so a zero-expiry deal must never be
+    /// void-expirable. Before the zero guard, voidExpiredDeal treated it as already expired and tore
+    /// down the escrow while the registry (post its own zero-expiry void fix) kept the agreement live,
+    /// splitting the legal agreement state from the asset/refund state.
+    function test_RevertIf_VoidExpiredDeal_ZeroExpiry() public {
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        vm.prank(owner);
+        (bytes32 agreementId, ) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            uint256(keccak256("DealManagerTest.ZeroExpiryDeal")),
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // conditions
+            bytes32(0), // secretHash
+            0 // expiry: no deadline
+        );
+
+        vm.expectRevert(IDealManagerStorage.DealNotExpired.selector);
+        dm.voidExpiredDeal(agreementId, companyOwner, "");
+    }
+
+    /// @notice Regression: expiry == 0 means no deadline, so a zero-expiry deal must be able to settle
+    /// through the normal payment + finalization path, even long after proposal. Before the zero guards
+    /// in signDealAndPay and finalizeEscrow, such a deal was purported-valid but could never complete.
+    function test_PaymentFlow_ZeroExpiryDealSettles() public {
+        string[][] memory partyValues = new string[][](2);
+        partyValues[0] = new string[](0);
+        partyValues[1] = new string[](0);
+
+        vm.prank(owner);
+        (bytes32 agreementId, uint256[] memory certIds) = dm.proposeAndSignDeal(
+            defaultCertPrinters,
+            address(paymentToken),
+            10 ether, // paymentAmount
+            0, // templateId
+            uint256(keccak256("DealManagerTest.ZeroExpirySettles")),
+            new string[](0), // globalValues
+            defaultParties,
+            defaultCertDetails,
+            companyOwner, // proposer
+            GOOD_SIGNATURE, // signature
+            partyValues,
+            new address[](0), // conditions
+            bytes32(0), // secretHash
+            0 // expiry: no deadline
+        );
+
+        // A no-deadline deal settles even long after proposal
+        vm.warp(block.timestamp + 365 days);
+
+        uint256 companyBalanceBefore = paymentToken.balanceOf(companyPayable);
+
+        vm.prank(alice);
+        dm.signDealAndPay(
+            alice, // signer
+            agreementId,
+            GOOD_SIGNATURE, // signature
+            new string[](0), // partyValues
+            false, // _fillUnallocated
+            "Alice",
+            ""
+        );
+
+        vm.prank(alice);
+        dm.finalizeDeal(agreementId);
+
+        assertEq(CyberCertPrinterMock(defaultCertPrinters[0]).ownerOf(certIds[0]), alice, "Alice should receive Corp Certificate");
+        assertEq(
+            paymentToken.balanceOf(companyPayable),
+            companyBalanceBefore + 10 ether,
+            "Company should receive payment tokens"
+        );
     }
 
     function test_RevertIf_RevokeDeal_UnknownDeal() public {

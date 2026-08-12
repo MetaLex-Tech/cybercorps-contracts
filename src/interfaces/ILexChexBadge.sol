@@ -5,9 +5,10 @@ import "./IERC5484.sol";
 import {Credential} from "../creds/storage/lexchexBadgeStorage.sol";
 
 // Fact-keys — a credential's `asserts` bitmask is the sole authority axis. VALUE keys carry a payload in the
-// matching Credential field; STATUS keys carry no payload (asserting the key IS the truth); SCOPE keys require
-// Credential.scope (the SPV entitled). Each group owns a bit block (VALUE 0-15, STATUS 16-31, SCOPE 32+) so a
-// new key joins its own kind without reshuffling, and a key's group is legible from its position.
+// matching Credential field; STATUS keys carry no payload (asserting the key IS the truth); any credential may carry a
+// scope and every read can filter on it, however, it does not always make sense to scope certain value keys (ex. K_US_STATE),
+// and the downstream consumer (ex. getUsState) might ignore the scope altogether for the same reason.
+// Each group owns a bit block (VALUE 0-15, STATUS 16-31, SCOPE 32+) so a new key joins its own kind without reshuffling.
 uint256 constant K_INVESTOR_TYPE           = 1 << 0;   // Individual / entity
 uint256 constant K_INVESTOR_JURISDICTION   = 1 << 1;   // physical country of residence/organization
 uint256 constant K_LOOKTHROUGH_JURISDICTION = 1 << 2;   // §3(c)(1)(A) look-through classification
@@ -33,9 +34,9 @@ uint256 constant ZKP_KEYS = K_ZKP_NATIONALITY_OUT | K_ZKP_BAD_ACTOR_CLEAR;
 
 uint256 constant STATUS_KEYS = K_ACCREDITED | K_QP | K_QIB | K_BAD_ACTOR_CLEAR | K_NON_US | K_ZKP_BAD_ACTOR_CLEAR;
 
-// SCOPE keys. A whitelist admits the holder to one SPV's offers (§16.2); a syndicate seats them in that
-// issuer's private circle (§4.1.3A). Separate grants an issuer makes for separate reasons, so neither key
-// ever satisfies the other, and each names the SPV it entitles in Credential.scope.
+// SCOPE keys — meaningless without an SPV, so mint rejects them without one. A whitelist admits the holder to
+// one SPV's offers (§16.2); a syndicate seats them in that issuer's private circle (§4.1.3A). Separate grants
+// an issuer makes for separate reasons, so neither key ever satisfies the other.
 uint256 constant K_SPV_WHITELIST = 1 << 32;
 uint256 constant K_SYNDICATE     = 1 << 33;
 
@@ -84,8 +85,13 @@ interface ILexChexBadge is IERC5484 {
     /// change: the credential stopped counting back at its expiryDate, which may be long before this event.
     /// Read it to track active-set size (the keeper's workload) and to confirm a sweep transaction did work.
     event CredentialSwept(address indexed owner, uint256 indexed tokenId);
+    /// @notice An issuer's authority changed. `keys` is the complete set it may assert from now on, not a
+    /// delta — read it as a replacement.
+    event IssuerKeysUpdated(address indexed issuer, uint256 keys);
 
     error LexChexBadge_SoulBound();
+    error LexChexBadge_KeysNotAuthorized(address issuer, uint256 keys);
+    error LexChexBadge_EmptyQuery();
     error LexChexBadge_TokenDoesNotExist();
     error LexChexBadge_InvalidExpiry();
     error LexChexBadge_BadAsserts();
@@ -94,6 +100,15 @@ interface ILexChexBadge is IERC5484 {
     error LexChexBadge_MissingVoidReason();
     error LexChexBadge_BoCountRequiresEntity();
     error LexChexBadge_NoValidCredential();
+
+    // ── Issuing authority ────────────────────────────────────────────────────
+    /// @notice Sets the complete set of fact-keys `issuer` may assert. The grant is the whole authority to
+    /// issue — no BorgAuth role goes with it, so a delegate cannot re-delegate. Admin-set, and a grant
+    /// outlives the admin that made it: revoking an admin does not revoke what it delegated.
+    function setIssuerKeys(address issuer, uint256 keys) external;
+    /// @notice The fact-keys `issuer` was granted; 0 means it cannot mint. Admins run the deployment and are
+    /// not listed, so read this as the authority of every issuer other than the operator itself.
+    function issuerKeys(address issuer) external view returns (uint256);
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
     function mint(address to, Credential memory cred) external returns (uint256 tokenId);
@@ -113,14 +128,54 @@ interface ILexChexBadge is IERC5484 {
 
     // ── Validity reads (issued, not voided, not expired) ─────────────────────
     function isValid(uint256 tokenId) external view returns (bool);
-    /// @notice True when the owner holds a valid credential carrying the free-form issuer label `categoryId`.
-    function hasValidCredential(address owner, bytes32 categoryId) external view returns (bool);
-    /// @notice True when the owner's valid credentials together assert every fact-key in `kindKey` (K_* status/
-    /// kind keys). Note they do not have to live in the same badge token.
+    // Both reads below walk the holder's active set with the same four filters, each off by default:
+    // `kindKey` (0 asks for no fact), `issuers` (empty accepts any), `scope` (the SPV an entitlement names) and
+    // `hook` (ICredentialQueryHook consulted per credential), plus `hookData`, the hook's own payload.
+    // A shortcut is the full form with the rest left empty. All four filters empty reverts; use hasValidLexCheX.
+
+    /// @notice True when the owner's valid credentials TOGETHER cover `kindKey`, counting only those that clear
+    /// the issuer, scope and hook filters.
+    /// @dev Keys add up across credentials, so facts attested separately still qualify the holder. The filters
+    /// apply per credential, keeping a holder who is two things at once true for both.
+    function hasValidCredentialOf(
+        address owner,
+        uint256 kindKey,
+        address[] memory issuers,
+        address scope,
+        address hook,
+        bytes memory hookData
+    ) external view returns (bool);
+    /// @notice Shortcut: a plain fact-key ask.
     function hasValidCredentialOf(address owner, uint256 kindKey) external view returns (bool);
-    /// @notice True when the owner holds a valid credential granting scoped entitlement `scopeKey` for `spv`.
-    /// An entitlement granted for another SPV never answers here.
-    function hasValidScopedCredentialOf(address owner, uint256 scopeKey, address spv) external view returns (bool);
+    /// @notice Shortcut: only credentials from an issuer in `issuers` count.
+    function hasValidCredentialOf(address owner, uint256 kindKey, address[] memory issuers) external view returns (bool);
+    /// @notice Shortcut: only credentials naming `scope`, so an entitlement answers for its own SPV.
+    function hasValidCredentialOf(address owner, uint256 kindKey, address scope) external view returns (bool);
+
+    /// @notice The owner's authoritative credential: the most recent valid one that covers `kindKey` on its own
+    /// and clears every filter. Use it when the matches contradict each other, like two different U.S. states;
+    /// for membership use hasValidCredentialOf.
+    function getMostRecentValidWith(
+        address owner,
+        uint256 kindKey,
+        address[] memory issuers,
+        address scope,
+        address hook,
+        bytes memory hookData
+    ) external view returns (uint256 tokenId, bool found);
+    /// @notice Shortcut: a plain fact-key ask.
+    function getMostRecentValidWith(address owner, uint256 kindKey) external view returns (uint256 tokenId, bool found);
+    /// @notice Shortcut: only credentials from an issuer in `issuers` count.
+    function getMostRecentValidWith(address owner, uint256 kindKey, address[] memory issuers)
+        external
+        view
+        returns (uint256 tokenId, bool found);
+    /// @notice Shortcut: only credentials naming `scope`.
+    function getMostRecentValidWith(address owner, uint256 kindKey, address scope)
+        external
+        view
+        returns (uint256 tokenId, bool found);
+
     function hasValidWhitelistFor(address owner, address spv) external view returns (bool);
     /// @notice True when the owner holds a valid syndicate seat in `spv`'s circle. Never satisfied by a
     /// whitelist credential, nor by a syndicate seat in another SPV.
@@ -151,6 +206,15 @@ interface ILexChexBadge is IERC5484 {
     /// @notice Seasoning reference (§11.1B): when the earliest valid credential carrying ALL of `kindKey` was
     /// issued. Note all kindKey specified must live on the same badge token to qualify
     function earliestValidIssuance(address owner, uint256 kindKey) external view returns (uint64);
+    /// @notice Same, with the filters, so a tier's seasoning is asked the same way its membership is.
+    function earliestValidIssuance(
+        address owner,
+        uint256 kindKey,
+        address[] memory issuers,
+        address scope,
+        address hook,
+        bytes memory hookData
+    ) external view returns (uint64);
 
     // ── Carried over from LeXcheX v1 ─────────────────────────────────────────
     function hasValidLexCheX(address owner) external view returns (bool);

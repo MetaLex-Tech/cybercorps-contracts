@@ -1,3 +1,7 @@
+---
+description: What the cyberCORPs apps do and which one you need
+---
+
 # Using the cyberCORPs apps
 
 This part of the documentation is for the people who **use** the MetaLeX
@@ -18,11 +22,27 @@ once and they appear everywhere.
 
 | App | Address | What you do there |
 |---|---|---|
-| [**cyberCORPs app**](mainframe.md) | `cybercorps.metalex.tech` | Create your company; issue and manage its securities, register of holders, and scrip. Home of the **Mainframe**. |
+| [**cyberCORPs app**](mainframe.md) | `cybercorps.metalex.tech` | Create your company; run its cap table, board, grants, and register of holders; issue and manage its securities and scrip. Home of the **Mainframe**. |
 | [**cyberRAISE**](cyberraise.md) | `cyberraise.metalex.tech` | Run fundraising rounds, and invest in them. **Rounds are created and configured here.** |
-| [**ACE**](ace.md) | `ace.metalex.tech` | Token-community fundraising — raises denominated in a community token. Currently early-access. |
+| [**ACE**](ace.md) | inside cyberRAISE | Token-community fundraising — raises denominated in a community token. (Old `ace.metalex.tech` links redirect to cyberRAISE.) |
 | [**LeXcheX**](lexchex.md) | `lexchex.metalex.tech` | Prove accredited-investor status. |
 | [**Your profile**](profile.md) | `profile.metalex.tech` | Your MetaLeX identity, accreditation status, and signing delegation. |
+
+The cyberCORPs app is big enough that its largest areas get their own
+guides:
+
+* [**The cap table**](captable.md) — the unified ledger of tokenized and
+  un-tokenized positions, importing (including the AI-assisted import),
+  and tokenizing.
+* [**Cap-table records, modeling and compliance**](captable-tools.md) —
+  §219 stockholder lists, 409A / Rule 701 / 3921 / 83(b) records, round
+  modeling, and the exit waterfall.
+* [**Token grants and onchain vesting**](grants.md) — options, RSUs, and
+  restricted stock escrowed onchain via MetaVesT.
+* [**The boardRoom and incorporation records**](boardroom.md) — officers,
+  directors, board consents, and the formation record.
+* [**For holders: your securities**](holders.md) — the stakeholder and
+  investor side: My holdings, certificates, transfers, scrip.
 
 Two more surfaces are covered separately:
 
@@ -33,9 +53,12 @@ Two more surfaces are covered separately:
 
 > **Which app do I need?**
 > Setting up or running a company → the **cyberCORPs app**.
+> Managing who owns what → [the cap table](captable.md).
+> Vesting stock to your team → [grants](grants.md).
 > Raising money, or investing in a raise → **cyberRAISE**.
 > A token community converting to equity → **ACE**.
 > Getting accredited → **LeXcheX**.
+> Holding securities someone issued you → [For holders](holders.md).
 > Editing your identity → **your profile**.
 
 ## Before you start: what you need
@@ -50,6 +73,11 @@ Two more surfaces are covered separately:
    round are desktop-only flows.
 4. **Nothing else** — there is no separate account. Your wallet is your
    identity.
+
+On cost: forming a cyberCORP, signing with cyberSign, and manual securities
+issuance on the Mainframe are free (gas aside). MetaLeX charges a **0.3%
+fee on funds an issuer claims from a cyberRAISE round** — investors pay
+nothing.
 
 ## Signing in
 

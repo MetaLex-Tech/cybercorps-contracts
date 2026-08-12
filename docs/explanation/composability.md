@@ -7,8 +7,8 @@ with. cyberSCRIP is the layer where that interaction happens.
 
 * **AMM liquidity.** A LiquiLeX Uniswap v4 pool can quote a cyberSCRIP
   against USDC continuously. The `MetalexIssuerFeeHook` routes a portion of
-  swap fees to the issuer, turning the cyberCORP into a tiny perpetual
-  fee-receiver on its own scrip.
+  swap fees to the issuer (and a portion to MetaLeX), turning the cyberCORP
+  into a tiny perpetual fee-receiver on its own scrip.
 * **Lending and money markets.** A cyberSCRIP, like USDC, is an ERC-20 with
   optional compliance powers. It can be listed as collateral on lending
   protocols that accept ERC-20s with admin extensions.
@@ -28,11 +28,13 @@ through whitelisted venues.
 
 ### Compliance powers are visible
 
-Force transfer / force burn / freeze / blocklist are public functions on the
-cyberSCRIP, even when not currently invoked. Some lending protocols will
-decline to list any ERC-20 with these powers. The **permanent disable**
-toggles (`permanentlyDisableForceTransfer`, etc.) exist for exactly this
-reason: an issuer can credibly commit to an open posture.
+Force transfer, force burn, and per-account freeze are opt-in powers chosen
+when the scrip is deployed, exercisable only through the issuer's
+`IssuanceManager`. Even when never invoked, their presence is visible, and
+some lending protocols will decline to list any ERC-20 with these powers.
+The **one-way disable** functions (`disableScripForceTransfer`,
+`disableScripForceBurn`, `disableScripFreeze`) exist for exactly this
+reason: an issuer can credibly and irreversibly commit to an open posture.
 
 ### Token possession ≠ registered ownership
 
@@ -46,7 +48,7 @@ must go through the cert layer.
 
 | Aspect | Whitelisted pool | Open pool |
 |---|---|---|
-| Per-swap check | Full LeXcheX credential | Optional zkPassport (sanctions / Reg S) |
+| Per-swap check | Transfer-hook whitelist (credentialed addresses only) | Optional zkPassport (sanctions / Reg S) |
 | Pool address | Only whitelisted addresses can hold LP | Anyone can hold LP |
 | Holder of record | Same regardless of trades | Same regardless of trades |
 | De-scripification gate | Standard | Standard (this is where compliance lives) |

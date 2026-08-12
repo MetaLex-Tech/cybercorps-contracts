@@ -30,6 +30,13 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
         _;
     }
 
+    modifier onlyIssuanceManagerOrAdmin() {
+        if (msg.sender != CyberScripStorage.getStorageData().issuanceManager) {
+            AUTH.onlyRole(AUTH.ADMIN_ROLE(), msg.sender);
+        }
+        _;
+    }
+
     constructor()  {
         _disableInitializers();
     }
@@ -135,7 +142,7 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
         super._burn(account, amount);
     }
 
-    function setRestrictionHook(ITransferRestrictionHook[] memory _transferRestrictionHooks) external onlyIssuanceManager {
+    function setRestrictionHook(ITransferRestrictionHook[] memory _transferRestrictionHooks) external onlyIssuanceManagerOrAdmin {
         CyberScripStorage.StorageData storage s = CyberScripStorage.getStorageData();
         s.transferRestrictionHooks = _transferRestrictionHooks;
     }
@@ -145,7 +152,7 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
     // ========================
 
     // Disable features (one-way). Cannot be re-enabled post-initialization
-    function disableForceTransfer() external onlyIssuanceManager {
+    function disableForceTransfer() external onlyIssuanceManagerOrAdmin {
         CyberScripStorage.StorageData storage s = CyberScripStorage.getStorageData();
         if (s.canForceTransfer) {
             s.canForceTransfer = false;
@@ -153,7 +160,7 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
         }
     }
 
-    function disableForceBurn() external onlyIssuanceManager {
+    function disableForceBurn() external onlyIssuanceManagerOrAdmin {
         CyberScripStorage.StorageData storage s = CyberScripStorage.getStorageData();
         if (s.canForceBurn) {
             s.canForceBurn = false;
@@ -161,7 +168,7 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
         }
     }
 
-    function disableFreeze() external onlyIssuanceManager {
+    function disableFreeze() external onlyIssuanceManagerOrAdmin {
         CyberScripStorage.StorageData storage s = CyberScripStorage.getStorageData();
         if (s.canFreeze) {
             s.canFreeze = false;
@@ -169,14 +176,14 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
         }
     }
 
-    function setMaxHolderCount(uint256 maxHolders) external onlyIssuanceManager {
+    function setMaxHolderCount(uint256 maxHolders) external onlyIssuanceManagerOrAdmin {
         CyberScripStorage.StorageData storage s = CyberScripStorage.getStorageData();
         s.maxHolderCount = maxHolders;
         emit MaxHolderCountUpdated(maxHolders);
     }
 
     // Freeze/unfreeze an account (only if freezing is enabled)
-    function setFrozen(address account, bool isFrozen) external onlyIssuanceManager {
+    function setFrozen(address account, bool isFrozen) external onlyIssuanceManagerOrAdmin {
         CyberScripStorage.StorageData storage s = CyberScripStorage.getStorageData();
         if (!s.canFreeze) revert ComplianceFeatureDisabled();
         s.frozen[account] = isFrozen;
@@ -184,7 +191,7 @@ contract CyberScrip is Initializable, ERC20Upgradeable, BorgAuthACL {
     }
 
     // Force transfer ignoring hooks and freezes (only if feature enabled)
-    function forceTransfer(address from, address to, uint256 amount) external onlyIssuanceManager {
+    function forceTransfer(address from, address to, uint256 amount) external onlyIssuanceManagerOrAdmin {
         if (!CyberScripStorage.getStorageData().canForceTransfer) revert ComplianceFeatureDisabled();
         require(from != address(0) && to != address(0), "force: zero addr");
         uint256 fromBalanceBefore = balanceOf(from);

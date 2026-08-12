@@ -16,8 +16,16 @@ import {IDealManager} from "../src/interfaces/IDealManager.sol";
 import {IERC5484} from "../src/interfaces/IERC5484.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {LeXcheXBadge} from "../src/creds/lexchexBadge.sol";
-import {K_INVESTOR_TYPE, K_INVESTOR_JURISDICTION, K_US_STATE, K_ACCREDITED, K_QIB, K_NON_US, InvestorType}
-    from "../src/interfaces/ILexChexBadge.sol";
+import {
+    K_INVESTOR_TYPE,
+    K_INVESTOR_JURISDICTION,
+    K_US_STATE,
+    K_ACCREDITED,
+    K_QIB,
+    K_NON_US,
+    K_SYNDICATE,
+    InvestorType
+} from "../src/interfaces/ILexChexBadge.sol";
 import {Credential} from "../src/creds/storage/lexchexBadgeStorage.sol";
 import {FundInterestData} from "../src/storage/extensions/FundInterestExtension.sol";
 import {
@@ -35,7 +43,6 @@ import {
 import {EligibilityCondition} from "../src/libs/conditions/secondary/EligibilityCondition.sol";
 import {HolderCapCondition} from "../src/libs/conditions/secondary/HolderCapCondition.sol";
 import {USStateOfResidenceCondition} from "../src/libs/conditions/secondary/USStateOfResidenceCondition.sol";
-import {LegionSoulboundCondition} from "../src/libs/conditions/secondary/LegionSoulboundCondition.sol";
 import {HoldingPeriodCondition} from "../src/libs/conditions/secondary/HoldingPeriodCondition.sol";
 import {LexChexBadgeKindCondition} from "../src/libs/conditions/secondary/LexChexBadgeKindCondition.sol";
 import {RegSDistributionComplianceCondition} from "../src/libs/conditions/secondary/RegSDistributionComplianceCondition.sol";
@@ -100,7 +107,6 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     bytes32 constant CAT_ACCREDITED = keccak256("cat.accredited");
     bytes32 constant CAT_QIB = keccak256("cat.qib");
     bytes32 constant CAT_NONUS = keccak256("cat.nonus");
-    bytes32 constant CAT_LEGION = keccak256("cat.legion");
 
     bytes2 constant CA = "CA";
 
@@ -113,6 +119,9 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     address public seller;
     uint256 public sellerKey;
     address public keeper;
+    // A second credentialing operator on the same badge, granted K_SYNDICATE and no BorgAuth role. Its
+    // credentials are what the circle gate accepts; an identical one from anyone else does not clear it.
+    address public legionIssuer;
 
     SecERC20Mock public paymentToken;
     BorgAuth public auth;
@@ -128,7 +137,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     EligibilityCondition public eligibility;
     HolderCapCondition public holderCap;
     USStateOfResidenceCondition public usState;
-    LegionSoulboundCondition public legion;
+    LexChexBadgeKindCondition public legion;
     HoldingPeriodCondition public holdingPeriod;
     LexChexBadgeKindCondition public accredited;
     LexChexBadgeKindCondition public qib;
@@ -149,6 +158,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         (owner, ownerKey) = makeAddrAndKey("owner");
         (seller, sellerKey) = makeAddrAndKey("seller");
         keeper = makeAddr("keeper");
+        legionIssuer = makeAddr("legion.issuer");
 
         paymentToken = new SecERC20Mock();
         auth = new BorgAuth(owner);
@@ -200,7 +210,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         vm.prank(owner);
         auth.updateRole(address(dm), 99);
 
-        _deployBadgeAndCategories();
+        _deployBadge();
         _deployConditions();
         _wireConditions();
 
@@ -235,13 +245,34 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         _mintCred(seller, CAT_KYC, "US", CA);
         vm.startPrank(owner);
         eligibility.setClearance(address(corp), seller, true);
-        rule144Disclosure.setDisclosurePackage(address(corp), DISCLOSURE_URI, uint64(block.timestamp));
-        section4a7Disclosure.setDisclosurePackage(
-            address(corp), DISCLOSURE_URI, uint64(block.timestamp), SECTION4A7_ACK
-        );
         holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, uint256(100), false, false);
-        legion.setConfig(address(corp), CAT_LEGION, false);
+        legion.updateIssuers(_list(legionIssuer));
         vm.stopPrank();
+        _setRule144Info(true);
+        _setSection4a7Package(true);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SPV disclosure state — the two Diagram 5a decision nodes
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @dev Rule 144(c)(2) "Current Public Info Available?". Aging the package out is the only way to answer
+    /// no: the setter rejects a zero `asOf`, so a package can be staled but never removed, and the condition
+    /// reads an absent record and a stale one the same way.
+    function _setRule144Info(bool current) internal {
+        vm.prank(owner);
+        rule144Disclosure.setDisclosurePackage(address(corp), DISCLOSURE_URI, _asOf(current));
+    }
+
+    /// @dev "SPV Has GAAP Financials for 2 Years?" — the §4(a)(7) information package, staled the same way.
+    function _setSection4a7Package(bool current) internal {
+        vm.prank(owner);
+        section4a7Disclosure.setDisclosurePackage(address(corp), DISCLOSURE_URI, _asOf(current), SECTION4A7_ACK);
+    }
+
+    /// @dev Freshness is measured from the call, so re-assert these after any warp that outruns the max age.
+    function _asOf(bool current) internal view returns (uint64) {
+        return uint64(current ? block.timestamp : block.timestamp - DISCLOSURE_MAX_AGE - 1);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -525,7 +556,247 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         dm.acceptOffer(a);
     }
 
-    /// @dev Asserts a settlement's recorded set is the SPV layer followed by `pathway`'s exemption layer.
+    // ─────────────────────────────────────────────────────────────────────────
+    // Decision-tree leaves: a pathway that is closed falls through to one that settles
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Diagram 5a "Current Public Info? → No" (P2–P5). Rule 144 closes on a seasoned lot when the 144(c)(2)
+    // package goes stale, and the buyer-type fork beneath it settles under each of the other three.
+    function test_SeasonedLot_StaleInfo_ClosesRule144_ForkSettles() public {
+        uint256[] memory lots = _mintSeasonedLots(4);
+        _setRule144Info(false);
+        _expectPostRefused(lots[0], ExemptionPathway.RULE_144, 0, address(rule144Disclosure));
+
+        // P2 — accredited buyer, SPV carries its §4(a)(7) package
+        // SPV has valid §4(a)(7) package already
+        (address accredited_, uint256 accreditedKey) = _accreditedBuyer("stale.accredited");
+        _settleUnder(lots[0], ExemptionPathway.SECTION_4A7, 1, accredited_, accreditedKey);
+
+        // P4 — QIB
+        (address qibBuyer, uint256 qibKey) = _qibBuyer("stale.qib");
+        _settleUnder(lots[1], ExemptionPathway.RULE_144A, 2, qibBuyer, qibKey);
+
+        // P5 — sophisticated but not accredited
+        (address soph, uint256 sophKey) = _sophisticatedBuyer("stale.sophisticated");
+        _settleUnder(lots[2], ExemptionPathway.SECTION_4A1HALF, 3, soph, sophKey);
+
+        // P3 — the SPV loses its §4(a)(7) package too, cornering the accredited buyer onto §4(a)(1½)
+        _setSection4a7Package(false);
+        (address cornered, uint256 corneredKey) = _accreditedBuyer("stale.cornered");
+        _expectPostRefused(lots[3], ExemptionPathway.SECTION_4A7, 4, address(section4a7Disclosure));
+        _settleUnder(lots[3], ExemptionPathway.SECTION_4A1HALF, 5, cornered, corneredKey);
+    }
+
+    // Diagram 5a "Holding Period Elapsed? → No" (P6–P9). The one-year hold is Rule 144's alone, so an
+    // unseasoned lot is refused there at posting and the same fork beneath it settles under the other three.
+    function test_UnseasonedLot_ClosesRule144_ForkSettles() public {
+        _expectPostRefused(_mintSellerLot(), ExemptionPathway.RULE_144, 10, address(holdingPeriod));
+
+        // P6 — accredited buyer, SPV carries its §4(a)(7) package
+        (address accredited_, uint256 accreditedKey) = _accreditedBuyer("unseasoned.accredited");
+        _settleUnder(_mintSellerLot(), ExemptionPathway.SECTION_4A7, 11, accredited_, accreditedKey);
+
+        // P8 — QIB
+        (address qibBuyer, uint256 qibKey) = _qibBuyer("unseasoned.qib");
+        _settleUnder(_mintSellerLot(), ExemptionPathway.RULE_144A, 12, qibBuyer, qibKey);
+
+        // P9 — sophisticated but not accredited
+        (address soph, uint256 sophKey) = _sophisticatedBuyer("unseasoned.sophisticated");
+        _settleUnder(_mintSellerLot(), ExemptionPathway.SECTION_4A1HALF, 13, soph, sophKey);
+
+        // P7 — no §4(a)(7) package either, so the accredited buyer has only §4(a)(1½) left
+        _setSection4a7Package(false);
+        (address cornered, uint256 corneredKey) = _accreditedBuyer("unseasoned.cornered");
+        uint256 lot = _mintSellerLot();
+        _expectPostRefused(lot, ExemptionPathway.SECTION_4A7, 14, address(section4a7Disclosure));
+        _settleUnder(lot, ExemptionPathway.SECTION_4A1HALF, 15, cornered, corneredKey);
+    }
+
+    // Diagram 5b right branch: a U.S. buyer of a non-U.S. SPV runs the domestic analysis and, under the Touche
+    // Remnant posture, takes one of the SPV's U.S.-resident seats — so a full count turns them away.
+    function test_ToucheRemnant_UsBuyerConsumesAUsSeat() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.touche.us");
+        _commonBuyerSetup(buyer, "US", CA);
+        _mintCred(buyer, CAT_ACCREDITED, "US", bytes2(0));
+
+        // Non-U.S. SPV posture: only U.S. residents count, and the seller already holds the single seat.
+        vm.prank(owner);
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, uint256(1), true, false);
+        assertEq(certPrinter.usLookThroughHolderCount(), 1, "seller is the only U.S. holder");
+
+        // Each live offer reserves its lot's units, so the blocked and settling attempts use separate lots.
+        bytes32 blocked =
+            _postSellOffer(_mintSellerLot(), ExemptionPathway.SECTION_4A7, uint256(keccak256("touche.us.blocked")));
+        AcceptOfferParams memory a = _sellAcceptParams(blocked, buyer, buyerKey, ExemptionPathway.SECTION_4A7, UNITS);
+        vm.expectRevert(
+            abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, address(holderCap))
+        );
+        vm.prank(buyer);
+        dm.acceptOffer(a);
+
+        // Raising the cap opens a second U.S. seat and the same buyer settles.
+        vm.prank(owner);
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, uint256(2), true, false);
+        _settle(
+            _postSellOffer(_mintSellerLot(), ExemptionPathway.SECTION_4A7, uint256(keccak256("touche.us.ok"))),
+            buyer,
+            buyerKey
+        );
+    }
+
+    // Diagram 5b left branch: the same SPV with its U.S.-resident count already at cap still settles with a
+    // non-U.S. buyer, who never increments that count.
+    function test_ToucheRemnant_NonUsBuyerSettlesAtUsCap() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("buyer.touche.nonus");
+        _commonBuyerSetup(buyer, "KY", bytes2(0));
+        _mintCred(buyer, CAT_NONUS, "KY", bytes2(0));
+
+        vm.prank(owner);
+        holderCap.setConfig(address(corp), HolderCapCondition.IcaException.SECTION_3C1, uint256(1), true, false);
+        assertEq(certPrinter.usLookThroughHolderCount(), 1, "U.S.-resident count already at cap");
+
+        _settle(_postSellOffer(ExemptionPathway.REGULATION_S, uint256(keccak256("touche.nonus"))), buyer, buyerKey);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Per-pathway gates, each at the stage it must bite
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // §4(a)(7) needs the buyer to confirm they received the information package. The confirmation is a signer
+    // value on the settlement, so it can only be checked from acceptance onward.
+    function test_RevertIf_Section4a7_BuyerOmitsAcknowledgment() public {
+        (address buyer, uint256 buyerKey) = _accreditedBuyer("4a7.noack");
+        bytes32 offerId = _postSellOffer(ExemptionPathway.SECTION_4A7, 20);
+
+        AcceptOfferParams memory a = _sellAcceptParams(
+            offerId, buyer, buyerKey, ExemptionPathway.SECTION_4A7, UNITS, _one("some other statement")
+        );
+        _expectAcceptRefused(a, buyer, address(section4a7Disclosure));
+    }
+
+    // §4(a)(1½)'s gate is the GP's sign-off, recorded per offer between posting and acceptance.
+    function test_RevertIf_Section4a1Half_NoGpSignOff() public {
+        (address buyer, uint256 buyerKey) = _sophisticatedBuyer("4a1half.nosignoff");
+        bytes32 offerId = _postSellOffer(ExemptionPathway.SECTION_4A1HALF, 21);
+
+        AcceptOfferParams memory a =
+            _sellAcceptParams(offerId, buyer, buyerKey, ExemptionPathway.SECTION_4A1HALF, UNITS);
+        _expectAcceptRefused(a, buyer, address(legalOpinion));
+    }
+
+    // Reg S measures its distribution compliance period from the seller's lot, so a lot still inside the
+    // period is refused at posting — no buyer needed.
+    function test_RevertIf_RegulationS_LotInsideCompliancePeriod() public {
+        _expectPostRefused(_mintSellerLot(), ExemptionPathway.REGULATION_S, 22, address(regS));
+    }
+
+    // A QIB credential does not imply accreditation: the badge asserts discrete facts, not a status ladder.
+    function test_RevertIf_Section4a7_QibIsNotAccreditedByImplication() public {
+        (address buyer, uint256 buyerKey) = _qibBuyer("4a7.qibonly");
+        bytes32 offerId = _postSellOffer(ExemptionPathway.SECTION_4A7, 23);
+
+        AcceptOfferParams memory a = _sellAcceptParams(offerId, buyer, buyerKey, ExemptionPathway.SECTION_4A7, UNITS);
+        _expectAcceptRefused(a, buyer, address(accredited));
+    }
+
+    // Pinning a pathway pulls its Layer 1 checks forward to posting. Left unpinned, the same defective lot
+    // posts cleanly and is only caught once a buyer elects the pathway that cares.
+    function test_UnpinnedOffer_DefersSellerSideCheckToAcceptance() public {
+        (address buyer, uint256 buyerKey) = _sophisticatedBuyer("unpinned.unseasoned");
+        uint256 lot = _mintSellerLot();
+
+        _expectPostRefused(lot, ExemptionPathway.RULE_144, 24, address(holdingPeriod));
+
+        bytes32 offerId = _postSellOffer(lot, ExemptionPathway.NONE, 25);
+        AcceptOfferParams memory a = _sellAcceptParams(offerId, buyer, buyerKey, ExemptionPathway.RULE_144, UNITS);
+        _expectAcceptRefused(a, buyer, address(holdingPeriod));
+    }
+
+    // The SPV layer is resolved for every pathway, so one uncleared buyer is turned away from all five.
+    function test_RevertIf_SpvLayerFails_BlocksEveryPathway() public {
+        (address buyer, uint256 buyerKey) = _sophisticatedBuyer("spvlayer.uncleared");
+        _setClearance(buyer, false);
+
+        uint256[] memory lots = _mintSeasonedLots(5);
+        _setRule144Info(true);
+        _setSection4a7Package(true);
+
+        ExemptionPathway[5] memory pathways = [
+            ExemptionPathway.RULE_144,
+            ExemptionPathway.SECTION_4A7,
+            ExemptionPathway.SECTION_4A1HALF,
+            ExemptionPathway.RULE_144A,
+            ExemptionPathway.REGULATION_S
+        ];
+        for (uint256 i; i < pathways.length; i++) {
+            bytes32 offerId = _postSellOffer(lots[i], pathways[i], 30 + i);
+            AcceptOfferParams memory a = _sellAcceptParams(offerId, buyer, buyerKey, pathways[i], UNITS);
+            _expectAcceptRefused(a, buyer, address(eligibility));
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Eligibility must still hold at settlement, not only at acceptance
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Finalize re-runs the threshold set, so a pathway credential that lapses in the settlement window
+    // stops the transfer.
+    function test_RevertIf_PathwayCredentialExpiresBeforeFinalize() public {
+        (address buyer, uint256 buyerKey) = makeAddrAndKey("expiring.qib");
+        _commonBuyerSetup(buyer, "US", CA);
+        _mintCred(buyer, CAT_QIB, "US", bytes2(0), uint64(block.timestamp + 2 days));
+
+        bytes32 offerId = _postSellOffer(ExemptionPathway.RULE_144A, 40);
+        bytes32 settlementId = _acceptSellOffer(offerId, buyer, buyerKey);
+
+        // Past the QIB badge's expiry and past the 24h settlement delay, still inside the 7d window.
+        vm.warp(block.timestamp + 3 days);
+        _expectFinalizeRefused(settlementId, address(qib));
+    }
+
+    // The same backstop for the SPV layer: clearance revoked after acceptance blocks settlement.
+    function test_RevertIf_SpvClearanceRevokedBeforeFinalize() public {
+        (address buyer, uint256 buyerKey) = _sophisticatedBuyer("revoked.midflight");
+        bytes32 offerId = _postSellOffer(ExemptionPathway.RULE_144, 41);
+        bytes32 settlementId = _acceptSellOffer(offerId, buyer, buyerKey);
+
+        _setClearance(buyer, false);
+        vm.warp(block.timestamp + timeSettlement.DEFAULT_DELAY() + 1);
+        _expectFinalizeRefused(settlementId, address(eligibility));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Buy side: the offeror is the buyer, so buyer-facing gates move to posting
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function test_BuyOffer_Rule144A_Settles() public {
+        (address buyer,) = _qibBuyer("buy.qib");
+
+        bytes32 offerId = _postBuyOffer(buyer, ExemptionPathway.RULE_144A, 50);
+        bytes32 settlementId = _acceptBuyOffer(offerId, sellerTokenId);
+
+        vm.warp(block.timestamp + timeSettlement.DEFAULT_DELAY() + 1);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.FINALIZED),
+            "buy-side escrow FINALIZED"
+        );
+        assertGt(certPrinter.balanceOfLegalOwner(buyer), 0, "buy offeror holds a Ledger Entry Token");
+    }
+
+    // On a sell offer the QIB check waits for a buyer; here the offeror is the buyer, so it bites at posting.
+    function test_RevertIf_BuyOffer_NonQibCannotPost144A() public {
+        (address buyer,) = _accreditedBuyer("buy.notqib");
+
+        PostOfferParams memory p = _buyOfferParams(ExemptionPathway.RULE_144A, 51);
+        vm.expectRevert(abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, address(qib)));
+        vm.prank(buyer);
+        dm.postOffer(p);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Lifecycle helper
     // ─────────────────────────────────────────────────────────────────────────
@@ -557,11 +828,29 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         assertEq(_consumed(sellerTokenId), UNITS, "seller units fully consumed");
     }
 
-    function _postSellOffer(ExemptionPathway pathway, uint256 salt) internal returns (bytes32 offerId) {
-        PostOfferParams memory p = PostOfferParams({
+    function _postSellOffer(ExemptionPathway pathway, uint256 salt) internal returns (bytes32) {
+        return _postSellOffer(sellerTokenId, pathway, salt);
+    }
+
+    function _postSellOffer(uint256 tokenId, ExemptionPathway pathway, uint256 salt)
+        internal
+        returns (bytes32 offerId)
+    {
+        PostOfferParams memory p = _sellOfferParams(tokenId, pathway, salt);
+        vm.prank(seller);
+        offerId = dm.postOffer(p);
+    }
+
+    /// @dev Kept separate from the call so revert tests can build the params before arming vm.expectRevert.
+    function _sellOfferParams(uint256 tokenId, ExemptionPathway pathway, uint256 salt)
+        internal
+        view
+        returns (PostOfferParams memory)
+    {
+        return PostOfferParams({
             side: OfferSide.SELL,
             certPrinter: address(certPrinter),
-            tokenId: sellerTokenId,
+            tokenId: tokenId,
             units: UNITS,
             paymentToken: address(paymentToken),
             consideration: CONSIDERATION,
@@ -580,8 +869,91 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0)
         });
+    }
+
+    /// @dev Mints the seller a fresh lot at the current timestamp — unseasoned for Rule 144 purposes.
+    function _mintSellerLot() internal returns (uint256 tokenId) {
+        vm.prank(owner);
+        tokenId = im.createCertAndAssign(address(certPrinter), seller, _sellerCertDetails());
+    }
+
+    /// @dev `count` lots aged past HOLD in one warp. The warp outruns the disclosure max age, so callers
+    /// re-assert the packages they need afterwards.
+    function _mintSeasonedLots(uint256 count) internal returns (uint256[] memory lots) {
+        lots = new uint256[](count);
+        for (uint256 i; i < count; i++) lots[i] = _mintSellerLot();
+        vm.warp(block.timestamp + HOLD + 1);
+    }
+
+    /// @dev Posts under `pathway` (adding the GP sign-off §4(a)(1½) needs) and settles.
+    function _settleUnder(uint256 tokenId, ExemptionPathway pathway, uint256 salt, address buyer, uint256 buyerKey)
+        internal
+    {
+        bytes32 offerId = _postSellOffer(tokenId, pathway, salt);
+        if (pathway == ExemptionPathway.SECTION_4A1HALF) {
+            vm.prank(owner);
+            legalOpinion.recordGPSignOff(address(dm), offerId);
+        }
+        _settle(offerId, buyer, buyerKey);
+    }
+
+    /// @dev Asserts posting `tokenId` under `pathway` is refused by `condition`. A refused post reserves
+    /// nothing, so the lot stays available for the pathway that does carry it.
+    function _expectPostRefused(uint256 tokenId, ExemptionPathway pathway, uint256 salt, address condition) internal {
+        PostOfferParams memory p = _sellOfferParams(tokenId, pathway, salt);
+        vm.expectRevert(abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, condition));
         vm.prank(seller);
-        offerId = dm.postOffer(p);
+        dm.postOffer(p);
+    }
+
+    /// @dev Params are built by the caller, since computing the acceptor signature makes registry view calls.
+    function _expectAcceptRefused(AcceptOfferParams memory a, address buyer, address condition) internal {
+        vm.expectRevert(abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, condition));
+        vm.prank(buyer);
+        dm.acceptOffer(a);
+    }
+
+    function _expectFinalizeRefused(bytes32 settlementId, address condition) internal {
+        vm.expectRevert(abi.encodeWithSelector(ISecondaryTradeStorage.SecondaryConditionsNotMet.selector, condition));
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+    }
+
+    // Buyer profiles from Diagram 5a's "Buyer Type?" fork. All U.S., state CA; they differ only in the
+    // status fact their credential asserts.
+
+    function _accreditedBuyer(string memory label) internal returns (address buyer, uint256 key) {
+        (buyer, key) = _sophisticatedBuyer(label);
+        _mintCred(buyer, CAT_ACCREDITED, "US", bytes2(0));
+    }
+
+    function _qibBuyer(string memory label) internal returns (address buyer, uint256 key) {
+        (buyer, key) = _sophisticatedBuyer(label);
+        _mintCred(buyer, CAT_QIB, "US", bytes2(0));
+    }
+
+    /// @dev Sophisticated but not accredited: KYC and Legion only, no status fact.
+    function _sophisticatedBuyer(string memory label) internal returns (address buyer, uint256 key) {
+        (buyer, key) = makeAddrAndKey(label);
+        _commonBuyerSetup(buyer, "US", CA);
+    }
+
+    function _setClearance(address account, bool cleared) internal {
+        vm.prank(owner);
+        eligibility.setClearance(address(corp), account, cleared);
+    }
+
+    /// @dev Accepts the offer's pinned pathway, clears the settlement period, finalizes.
+    function _settle(bytes32 offerId, address buyer, uint256 buyerKey) internal returns (bytes32 settlementId) {
+        settlementId = _acceptSellOffer(offerId, buyer, buyerKey);
+        vm.warp(block.timestamp + timeSettlement.DEFAULT_DELAY() + 1);
+        vm.prank(keeper);
+        dm.finalizeSecondaryTradeAgreement(settlementId);
+        assertEq(
+            uint8(dm.getSecondaryEscrow(settlementId).status),
+            uint8(SecondaryEscrowStatus.FINALIZED),
+            "escrow FINALIZED"
+        );
     }
 
     /// @dev Buyer elects the offer's pinned pathway; for an unpinned offer use the 4-arg overload.
@@ -612,7 +984,18 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
     ) internal view returns (AcceptOfferParams memory) {
         // The buyer records the §4(a)(7) ack as a signer value; the condition scans for its marker,
         // so carrying it on non-4a7 pathways is harmless.
-        string[] memory pv = _one(SECTION4A7_ACK);
+        return _sellAcceptParams(offerId, buyer, buyerKey, pathway, units, _one(SECTION4A7_ACK));
+    }
+
+    /// @dev Overload for tests that need to submit something other than the SPV's acknowledgment string.
+    function _sellAcceptParams(
+        bytes32 offerId,
+        address buyer,
+        uint256 buyerKey,
+        ExemptionPathway pathway,
+        uint256 units,
+        string[] memory partyValues
+    ) internal view returns (AcceptOfferParams memory) {
         return AcceptOfferParams({
             offerId: offerId,
             units: units,
@@ -621,17 +1004,72 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
             buyerHostingMode: HostingMode.DIRECT,
             adminMultisig: address(0),
             sellerTokenId: 0,
-            acceptorPartyValues: pv,
-            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey, pv),
+            acceptorPartyValues: partyValues,
+            acceptorAgreementSig: _acceptorSig(offerId, buyer, buyerKey, partyValues),
             openEndorsementSig: ""
         });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Buy-side lifecycle — the offeror is the buyer, the acceptor supplies the lot
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function _postBuyOffer(address buyer, ExemptionPathway pathway, uint256 salt) internal returns (bytes32 offerId) {
+        PostOfferParams memory p = _buyOfferParams(pathway, salt);
+        vm.prank(buyer);
+        offerId = dm.postOffer(p);
+    }
+
+    /// @dev A buy offer names no lot: the accepting seller supplies `sellerTokenId`, and the offeror's own
+    /// party values carry the §4(a)(7) ack because on this side the offeror is the buyer.
+    function _buyOfferParams(ExemptionPathway pathway, uint256 salt) internal view returns (PostOfferParams memory) {
+        return PostOfferParams({
+            side: OfferSide.BUY,
+            certPrinter: address(certPrinter),
+            tokenId: 0,
+            units: UNITS,
+            paymentToken: address(paymentToken),
+            consideration: CONSIDERATION,
+            exemptionPathway: pathway,
+            validUntil: block.timestamp + 1 days,
+            counterpartyRestrictions: "",
+            additionalTerms: "",
+            integrator: address(0),
+            templateId: TEMPLATE_ID,
+            salt: salt,
+            globalValues: new string[](0),
+            offerorPartyValues: _one(SECTION4A7_ACK),
+            offerorAgreementSig: "",
+            openEndorsementSig: "",
+            buyerName: "Bob",
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0)
+        });
+    }
+
+    function _acceptBuyOffer(bytes32 offerId, uint256 tokenId) internal returns (bytes32 settlementId) {
+        string[] memory pv = _one(SECTION4A7_ACK);
+        AcceptOfferParams memory a = AcceptOfferParams({
+            offerId: offerId,
+            units: UNITS,
+            exemptionPathway: ExemptionPathway.NONE, // ignored on a buy offer: the offer's pin governs
+            buyerName: "",
+            buyerHostingMode: HostingMode.DIRECT,
+            adminMultisig: address(0),
+            sellerTokenId: tokenId,
+            acceptorPartyValues: pv,
+            acceptorAgreementSig: _acceptorSig(offerId, seller, sellerKey, pv),
+            openEndorsementSig: "sellerEndorsement"
+        });
+        vm.prank(seller);
+        settlementId = dm.acceptOffer(a);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Setup helpers
     // ─────────────────────────────────────────────────────────────────────────
 
-    function _deployBadgeAndCategories() internal {
+    function _deployBadge() internal {
         badge = LeXcheXBadge(
             address(
                 new ERC1967Proxy(
@@ -640,6 +1078,10 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 )
             )
         );
+        // Legion issues on the shared badge, trusted for circle seats only. The grant is all it gets: no
+        // BorgAuth role, so it picks up none of the admin power this auth carries over the rest of the stack.
+        vm.prank(owner);
+        badge.setIssuerKeys(legionIssuer, K_SYNDICATE);
     }
 
     function _deployConditions() internal {
@@ -658,10 +1100,12 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
                 abi.encodeCall(USStateOfResidenceCondition.initialize, (address(auth), address(badge)))
             )
         );
-        legion = LegionSoulboundCondition(
+        legion = LexChexBadgeKindCondition(
             _proxy(
-                address(new LegionSoulboundCondition()),
-                abi.encodeCall(LegionSoulboundCondition.initialize, (address(auth), address(badge)))
+                address(new LexChexBadgeKindCondition()),
+                abi.encodeCall(
+                    LexChexBadgeKindCondition.initialize, (address(auth), address(badge), K_SYNDICATE, false)
+                )
             )
         );
         holdingPeriod = HoldingPeriodCondition(
@@ -748,7 +1192,7 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
 
     function _commonBuyerSetup(address buyer, string memory jurisdiction, bytes2 state) internal {
         _mintCred(buyer, CAT_KYC, jurisdiction, state);
-        _mintCred(buyer, CAT_LEGION, jurisdiction, state);
+        _mintSyndicate(buyer);
         vm.prank(owner);
         eligibility.setClearance(address(corp), buyer, true);
 
@@ -757,25 +1201,44 @@ contract DealManagerSecondaryTradeExemptionPathwayTest is Test {
         paymentToken.approve(address(dm), type(uint256).max);
     }
 
-    /// @dev Mints a credential whose facts follow the categoryId's role: CAT_KYC carries the residence anchor
-    /// (jurisdiction + state), CAT_ACCREDITED / CAT_QIB / CAT_NONUS assert the corresponding status fact-key,
-    /// and every categoryId is also written as the free-form label so the Legion issuer-tier gate matches.
-    function _mintCred(address to, bytes32 categoryId, string memory jurisdiction, bytes2 state) internal {
+    /// @dev Mints a credential whose facts follow `cat`: CAT_KYC carries the residence anchor (jurisdiction +
+    /// state), CAT_ACCREDITED / CAT_QIB / CAT_NONUS assert the matching status fact-key. `cat` is a test-local
+    /// way to name a profile — the badge has no such notion.
+    // TODO make it closer to real-world scenarios
+    function _mintCred(address to, bytes32 cat, string memory jurisdiction, bytes2 state) internal {
+        _mintCred(to, cat, jurisdiction, state, uint64(block.timestamp + 3650 days));
+    }
+
+    /// @dev Overload for tests that need a credential to lapse mid-trade.
+    function _mintCred(address to, bytes32 cat, string memory jurisdiction, bytes2 state, uint64 expiry)
+        internal
+    {
         Credential memory cred;
-        cred.categoryId = categoryId; // free-form label (the Legion tier gate matches on it)
         cred.investorType = InvestorType.INDIVIDUAL;
         cred.investorJurisdiction = jurisdiction;
         cred.usState = state;
-        cred.expiryDate = uint64(block.timestamp + 3650 days);
+        cred.expiryDate = expiry;
 
         uint256 asserts = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION;
         if (state != bytes2(0)) asserts |= K_US_STATE;
-        if (categoryId == CAT_ACCREDITED) asserts |= K_ACCREDITED;
-        else if (categoryId == CAT_QIB) asserts |= K_QIB;
-        else if (categoryId == CAT_NONUS) asserts |= K_NON_US;
+        if (cat == CAT_ACCREDITED) asserts |= K_ACCREDITED;
+        else if (cat == CAT_QIB) asserts |= K_QIB;
+        else if (cat == CAT_NONUS) asserts |= K_NON_US;
         cred.asserts = asserts;
 
         vm.prank(owner);
+        badge.mint(to, cred);
+    }
+
+    /// @dev A seat in Legion's circle for this SPV. Minted by Legion rather than the owner, because the gate
+    /// takes only Legion's word for who is in the circle.
+    function _mintSyndicate(address to) internal {
+        Credential memory cred;
+        cred.asserts = K_SYNDICATE;
+        cred.scope = address(corp);
+        cred.expiryDate = uint64(block.timestamp + 3650 days);
+
+        vm.prank(legionIssuer);
         badge.mint(to, cred);
     }
 

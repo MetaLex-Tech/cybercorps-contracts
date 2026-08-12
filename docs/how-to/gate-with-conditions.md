@@ -1,3 +1,7 @@
+---
+description: Attach condition contracts to issuance, deals, rounds, and secondary settlement
+---
+
 # Gate state transitions with conditions
 
 A **condition** is a contract implementing `ICondition`. Conditions gate
@@ -17,7 +21,11 @@ interface ICondition {
 
 See [Conditions](../reference/conditions.md) for the built-in conditions
 (`lexchexCondition`, `NonUSNationalityCondition`,
-`IssuerApprovalRecertificationCondition`, `OrCondition`).
+`IssuerApprovalRecertificationCondition`, `OrCondition`), plus the
+secondary-trading condition family in
+[`src/libs/conditions/secondary/`](https://github.com/MetaLex-Tech/cybercorps-contracts/tree/develop/src/libs/conditions/secondary)
+(eligibility, holding period, holder cap, Reg S distribution compliance,
+Rule 144 / Section 4(a)(7) disclosure, CFIUS, kill switch, and more).
 
 ## Where conditions are attached
 
@@ -40,6 +48,21 @@ IIssuanceManager(issuanceManager).deployCyberScrip(
 (`roundConditions`), and per-EOI in `submitEOI(..., conditions, ...)`.
 
 **A deal** — the `conditions` argument of `DealManager.proposeDeal`.
+
+**Secondary trades** — configured on the DealManager as standing lists
+rather than per-call arguments, and evaluated at post, accept, *and*
+finalize:
+
+```solidity
+// exemption-pathway conditions (also enables/disables the pathway)
+dealManager.setPathwayThresholdConditions(pathway, conditions, enabled);
+// fund-specific conditions applying to every offer
+dealManager.setSpvThresholdConditions(conditions);
+// conditions evaluated only at finalization
+dealManager.setClosingConditions(conditions);
+```
+
+See [Run a secondary trade](run-a-secondary-trade.md).
 
 ## Writing a custom condition
 

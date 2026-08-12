@@ -42,5 +42,5 @@ surface for the formed certificates.
 
 > `CyberShares` is **not** a cap-table accounting layer with
 > `authorized` / `outstanding` / `reserved` counters. The register of
-> holders is the set of CyberCertPrinter tokens; share counts are read from
-> there.
+> holders is the set of [LedgerEntryToken](LedgerEntryToken.md) certificates;
+> share counts are read from there.

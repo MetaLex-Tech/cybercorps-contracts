@@ -25,14 +25,20 @@ import {Offer} from "../../../interfaces/ISecondaryTradeStorage.sol";
 ///
 /// The first four are statuses, which follow the party anywhere. The last two are entitlements granted per
 /// SPV, so they only count for the SPV the offer belongs to.
+///
+/// Any parameterization can also name the issuers it accepts (updateIssuers); empty accepts any. A gate for
+/// one operator's own circle — an issuer tier, a non-accredited tier — is K_SYNDICATE plus that operator's
+/// address, because a shared deployment lets other issuers grant a seat in the same SPV.
 contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgradeable, BadgeScopedCondition {
     error InvalidKindKey();
 
     event ParametersUpdated(uint256 kindKey, bool checkSeller);
+    event IssuersUpdated(address[] issuers);
 
     struct LexChexBadgeKindStorage {
         uint256 kindKey;
         bool checkSeller;
+        address[] issuers; // credentials must come from one of these; empty accepts any issuer
     }
 
     bytes32 private constant STORAGE_POSITION = keccak256("metalex.condition.secondary.lexchex-badge-kind.storage.v1");
@@ -70,7 +76,8 @@ contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgrade
 
     /// @dev Keys this gate can enforce: one or more status facts, or exactly one entitlement. The rest are
     /// wiring slips —
-    ///  - empty: the badge rejects an empty key, so every trade is blocked
+    ///  - empty: asks the badge for no fact at all, which without a query hook would admit any credentialed
+    ///    holder — rejected here so a blank parameterization cannot fail open
     ///  - a value key: asks if a fact was recorded, not if the party qualifies
     ///  - an undefined bit: matches nothing, so every trade is blocked
     ///  - status and entitlement mixed: no one credential answers both
@@ -99,12 +106,25 @@ contract LexChexBadgeKindCondition is SecondaryTradingConditionBase, UUPSUpgrade
         return true;
     }
 
+    /// @notice Restricts which issuers' credentials count; empty accepts any. Set it when the gate must name a
+    /// credentialing operator rather than take any issuer's word — an issuer's own circle is the usual case.
+    function updateIssuers(address[] calldata _issuers) external onlyAdmin {
+        _kindStorage().issuers = _issuers;
+        emit IssuersUpdated(_issuers);
+    }
+
+    /// @notice Issuers whose credentials this gate accepts; empty means any.
+    function issuers() public view returns (address[] memory) {
+        return _kindStorage().issuers;
+    }
+
     /// @dev A status follows the party anywhere. An entitlement is granted per SPV, so it only counts for the
-    /// SPV this offer belongs to.
+    /// SPV this offer belongs to. Either way the issuer filter decides whose word the gate takes.
     function _holds(ILexChexBadge badge, address party, address spv) private view returns (bool) {
-        uint256 key = _kindStorage().kindKey;
-        if ((key & SCOPED_KEYS) != 0) return badge.hasValidScopedCredentialOf(party, key, spv);
-        return badge.hasValidCredentialOf(party, key);
+        LexChexBadgeKindStorage storage $ = _kindStorage();
+        // An entitlement only counts for the SPV it names. A status carries no scope, so none is asked for.
+        address scope = ($.kindKey & SCOPED_KEYS) != 0 ? spv : address(0);
+        return badge.hasValidCredentialOf(party, $.kindKey, $.issuers, scope, address(0), "");
     }
 
     /// @notice The status fact-key or entitlement this gate requires

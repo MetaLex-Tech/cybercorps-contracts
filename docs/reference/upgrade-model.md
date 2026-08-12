@@ -1,20 +1,26 @@
 # Upgrade model
 
 All contracts use UUPS upgradeable proxies (with beacon proxies for
-`CyberCertPrinter` and `CyberScrip` instances) and **ERC-7201 namespaced
-storage**. Upgrades follow a **co-approval** model.
+`LedgerEntryToken` — formerly `CyberCertPrinter` — and `CyberScrip`
+instances) and **ERC-7201 namespaced storage**. Upgrades follow a
+**co-approval** model.
 
 ## Co-approval
 
 * MetaLeX publishes new implementations to the relevant factories
   (`*Factory.setRefImplementation` / `setCyberCertPrinterRefImplementation`
   / `setCyberScripRefImplementation`).
-* Each cyberCORP's `UPGRADE_AUTHORITY` independently opts in by calling
-  `upgradeToAndCall(published, "")` on its own UUPS proxy.
+* The owner of each cyberCORP's BorgAuth independently opts in by calling
+  `upgradeToAndCall(published, "")` on its own UUPS proxy. Each contract's
+  `_authorizeUpgrade` is `onlyOwner` **and** requires the new
+  implementation to equal the factory's published `getRefImplementation()`.
 * Neither side can act unilaterally:
   * MetaLeX cannot push an upgrade.
   * An issuer cannot upgrade to an arbitrary implementation outside the
     MetaLeX-published reference.
+
+Implementation contracts call `_disableInitializers()` in their
+constructors, so only the proxies are ever initialised.
 
 This keeps MetaLeX in the role of *protocol developer and steward* rather
 than a securities intermediary with admin keys over the issuer's stock
@@ -36,9 +42,11 @@ A legacy cyberCORP can migrate to v3 architecture in place via the
 
 ## Beacons for downstream instances
 
-Even in v3, instances *owned by* an `IssuanceManager` (its `CyberCertPrinter`
-and `CyberScrip` proxies) use beacon proxies pointing at a beacon **owned by
-the IssuanceManager itself**. This keeps the suite upgrading together when
+Even in v3, instances *owned by* an `IssuanceManager` (its
+`LedgerEntryToken` cert-printer and `CyberScrip` proxies) use beacon
+proxies pointing at a beacon **owned by the IssuanceManager itself**
+(created in `IssuanceManager.initialize`, seeded from the factory's
+reference implementations). This keeps the suite upgrading together when
 the issuer chooses to upgrade, while preserving co-approval against MetaLeX.
 
 ## Architecture diagram

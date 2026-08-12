@@ -28,7 +28,7 @@ import {InvestorType} from "../../interfaces/ILexChexBadge.sol";
 /// `asserts` is the sole source of truth: a field is authoritative only when its key is asserted.
 struct Credential {
     uint256 asserts;                    // K_* fact-keys this credential attests; the authority axis
-    bytes32 categoryId;                 // free-form issuer label; off-chain meaning, never enforced on-chain
+    address issuer;                     // who minted it; consumers filter on this to pick whose word they take
     string investorName;                // who the credential names; display/audit only, no fact-key asserts it
     string investorJurisdiction;        // value for K_INVESTOR_JURISDICTION ("US"/"USA"/"United States" all read US)
     // value for K_LOOKTHROUGH_JURISDICTION — §3(c)(1)(A) ICA look-through classification, decoupled from the
@@ -38,7 +38,9 @@ struct Credential {
     InvestorType investorType;          // value for K_INVESTOR_TYPE
     bytes2 usState;                     // value for K_US_STATE
     uint32 beneficialOwnerCount;        // value for K_BO_COUNT
-    address scope;                      // SPV entitled by a scoped credential (K_SPV_WHITELIST / K_SYNDICATE)
+    // The SPV this credential is about. Any key may carry one and every read can filter on it;
+    // it is mandatory for SCOPED_KEYS.
+    address scope;
     uint64 issuanceDate;                // mint time; recency key (max) and §11.1B seasoning reference (min); immutable
     uint64 expiryDate;                  // isValid fails after it
     string voided;                      // non-empty = voided, with reason
@@ -57,14 +59,14 @@ library LeXcheXBadgeStorage {
     struct LeXcheXBadgeData {
         mapping(uint256 => Credential) credentials;         // per-token records (append-only; never deleted)
         uint256 supply;                                     // next token id / total minted
+        // What each issuer is allowed to say. mint rejects any asserted key outside the mask, so several
+        // operators can share one deployment without each of them being able to write every fact.
+        mapping(address => uint256) issuerKeys;             // issuer => K_* fact-keys it may assert
         // Active set = the holder's non-voided, not-yet-swept credentials. Compliance reads scan THIS (bounded)
         // instead of the full ERC-721 enumeration; void() evicts at once and sweep() evicts expired. Soulbound +
         // never-burned ⇒ the holder is stable, so a per-holder list + 1-based position index gives O(1) swap-pop.
         mapping(address => uint256[]) activeTokens;         // holder => active token ids
         mapping(uint256 => uint256) activePos;              // id => 1-based idx in activeTokens[holder]; 0 = inactive
-        // categoryId label index, kept active-only in lockstep with activeTokens (hasValidCredential scans it).
-        mapping(address => mapping(bytes32 => uint256[])) labelTokens; // holder => categoryId => active token ids
-        mapping(uint256 => uint256) labelPos;               // id => 1-based idx in labelTokens[holder][categoryId]
     }
 
     function badgeStorage() internal pure returns (LeXcheXBadgeData storage s) {
@@ -84,35 +86,26 @@ library LeXcheXBadgeStorage {
         badgeStorage().credentials[tokenId] = cred;
     }
 
-    // ── Active set + categoryId label index (both active-only) ─────────────────
+    // ── Active set (active-only) ───────────────────────────────────────────────
 
     function getActiveTokens(address holder) internal view returns (uint256[] storage) {
         return badgeStorage().activeTokens[holder];
     }
 
-    function getLabelTokens(address holder, bytes32 categoryId) internal view returns (uint256[] storage) {
-        return badgeStorage().labelTokens[holder][categoryId];
-    }
-
-    /// @dev Track a freshly-minted token in the holder's active set (and label index when categoryId is set).
-    function addActive(address holder, uint256 tokenId, bytes32 categoryId) internal {
+    /// @dev Track a freshly-minted token in the holder's active set.
+    function addActive(address holder, uint256 tokenId) internal {
         LeXcheXBadgeData storage s = badgeStorage();
         s.activeTokens[holder].push(tokenId);
         s.activePos[tokenId] = s.activeTokens[holder].length;
-        if (categoryId != bytes32(0)) {
-            s.labelTokens[holder][categoryId].push(tokenId);
-            s.labelPos[tokenId] = s.labelTokens[holder][categoryId].length;
-        }
     }
 
-    /// @dev Evict a voided/expired token from the active set and label index. Idempotent (no-op if absent).
+    /// @dev Evict a voided/expired token from the active set. Idempotent (no-op if absent).
     /// `holder` MUST be the token's owner — `activePos` is a global id→index map, so a mismatched pair would
     /// index into the wrong holder's array. Callers derive it from ownership, never from an argument.
     /// @return removed True when the token was still in the active set, so callers can count real evictions.
-    function removeActive(address holder, uint256 tokenId, bytes32 categoryId) internal returns (bool removed) {
+    function removeActive(address holder, uint256 tokenId) internal returns (bool removed) {
         LeXcheXBadgeData storage s = badgeStorage();
         removed = _swapPop(s.activeTokens[holder], s.activePos, tokenId);
-        if (categoryId != bytes32(0)) _swapPop(s.labelTokens[holder][categoryId], s.labelPos, tokenId);
     }
 
     function _swapPop(uint256[] storage arr, mapping(uint256 => uint256) storage pos, uint256 tokenId)

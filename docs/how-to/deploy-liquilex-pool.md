@@ -17,16 +17,19 @@ MetaLeX and the issuer.
 ## Approach
 
 1. Deploy the `MetalexIssuerFeeHook`
-   ([`src/hooks/uniswap/`](https://github.com/MetaLex-Tech/cybercorps-contracts/tree/develop/src/hooks/uniswap)).
-   Uniswap v4 imposes hook-address-suffix requirements, so deploy at a mined
+   ([`src/hooks/uniswap/`](https://github.com/MetaLex-Tech/cybercorps-contracts/tree/develop/src/hooks/uniswap))
+   and call `initialize(auth, poolManager)`. The hook declares
+   `beforeSwap`/`afterSwap` permissions (with return deltas), and Uniswap v4
+   requires the hook address to encode those flags — so deploy at a mined
    address (the standard `HookMiner` salt-mining flow).
 2. Initialise a Uniswap v4 pool pairing the `CyberScrip` against a
    stablecoin, with `hooks` set to the deployed fee hook.
-3. Seed liquidity. If the cyberSCRIP has a `WhitelistTransferHook`,
+3. Configure fees for the pool (BorgAuth admin):
+   `setPoolConfig(key, metalexRecipient, issuerRecipient, metalexFeeBps,
+   issuerFeeBps, enabled)` — both fees in basis points, combined at most
+   `10_000`.
+4. Seed liquidity. If the cyberSCRIP has a `WhitelistTransferHook`,
    whitelist the pool address.
-
-> The `MetalexIssuerFeeHook` constructor and fee configuration are not
-> reproduced here — consult the contract source for the current shape.
 
 ## Related
 
