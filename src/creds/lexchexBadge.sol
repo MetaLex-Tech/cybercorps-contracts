@@ -137,9 +137,14 @@ contract LeXcheXBadge is
         return LeXcheXBadgeStorage.badgeStorage().issuerKeys[issuer];
     }
 
-    /// @dev Non-reverting ADMIN_ROLE test. Mirrors BorgAuth's hierarchy (roles at or above the level pass)
+    /// @dev Non-reverting ADMIN_ROLE test. Asks BorgAuth rather than comparing userRoles, so an admin whose
+    /// authority comes from a role adapter counts here just as it does under onlyAdmin.
     function _isAdmin(address user) internal view returns (bool) {
-        return AUTH.userRoles(user) >= AUTH.ADMIN_ROLE();
+        try AUTH.onlyRole(AUTH.ADMIN_ROLE(), user) {
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

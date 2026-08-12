@@ -25,6 +25,7 @@ import {
     PRESET_ENTITY_LOOKTHROUGH,
     PRESET_KYC_AML
 } from "../src/interfaces/ILexChexBadge.sol";
+import {IAuthAdapter} from "../src/interfaces/IAuthAdapter.sol";
 import {BorgAuth} from "../src/libs/auth.sol";
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
@@ -894,6 +895,23 @@ contract LeXcheXBadgeTest is Test {
 
         assertEq(badge.issuerKeys(operator), 0);
         uint256 id = _mintAs(operator, makeAddr("byAdmin"), _cred(K_ACCREDITED));
+        assertEq(badge.getCredential(id).issuer, operator);
+    }
+
+    // An operator whose admin authority comes from a BorgAuth role adapter (a Safe, a Hats tree) is an admin
+    // everywhere else on this badge, so it issues without a grant like any other. Reading userRoles directly
+    // would miss it and demote it to an ungranted issuer.
+    function test_Mint_AdapterBackedAdminNeedsNoGrant() public {
+        address operator = makeAddr("adapterOperator");
+        AdminAdapter adapter = new AdminAdapter(operator);
+        uint256 adminRole = auth.ADMIN_ROLE();
+        vm.prank(owner);
+        auth.setRoleAdapter(adminRole, address(adapter));
+
+        assertEq(auth.userRoles(operator), 0, "authority is the adapter's, not a stored role");
+        assertEq(badge.issuerKeys(operator), 0);
+
+        uint256 id = _mintAs(operator, makeAddr("byAdapterAdmin"), _cred(K_ACCREDITED));
         assertEq(badge.getCredential(id).issuer, operator);
     }
 
@@ -1923,6 +1941,20 @@ contract RevertingHook is ICredentialQueryHook {
 
     function matchesCredential(address, uint256, Credential calldata, bytes calldata) external pure returns (bool) {
         revert HookFailed();
+    }
+}
+
+/// @notice A BorgAuth role adapter that grants ADMIN_ROLE to one address, standing in for the external
+/// authority (a Safe, a Hats tree) an operator can point BorgAuth at instead of storing the role.
+contract AdminAdapter is IAuthAdapter {
+    address immutable ADMIN;
+
+    constructor(address admin) {
+        ADMIN = admin;
+    }
+
+    function isAuthorized(address user) external view returns (uint256) {
+        return user == ADMIN ? 98 : 0;
     }
 }
 
