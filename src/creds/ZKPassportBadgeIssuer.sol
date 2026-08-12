@@ -12,11 +12,14 @@ import {Credential} from "./storage/lexchexBadgeStorage.sol";
 /// @author MetaLeX Labs, Inc.
 /// @notice A wallet asks for a set of facts (e.g. "not a national of these countries") and submits
 /// a ZKPassport proof; this contract runs each fact's check and, if they pass, files the credential on the badge.
-/// It holds ADMIN_ROLE and calls badge.mint/supersede; the badge just stores facts and answers yes/no.
+/// It calls badge.mint and badge.supersede. The badge only stores the facts and answers yes or no.
 /// @dev
-/// - Anyone can submit; the proof is bound to a wallet, so the credential always goes to that wallet.
-/// - Specify a set of fact-keys. _enforce runs the check each key needs; a key with no
-///   check can't be minted. Only K_ZKP_* keys are allowed, so this issuer can't assert unrelated keys.
+/// - Any person can send a proof. The proof is bound to one wallet, thus the credential always goes to that wallet.
+/// - The caller gives a set of fact-keys. _enforce does the necessary check for each key. If a key has no check,
+///   this contract cannot mint it.
+/// - The badge records this contract in the credential `issuer`. A condition that accepts only ZK proofs filters
+///   on `issuer`. Give this contract an issuerKeys grant on the badge for the keys that _enforce can check. A
+///   BorgAuth role is not necessary. The grant is the maximum set of facts that a proof can assert here.
 /// - No PII on-chain; the proof id is kept only as evidenceHash for audit.
 /// - Not a personhood check: same passport can be reused by multiple mints to different wallets.
 /// - Re-proving the same fact-set renews it in place (supersede); a holder can drop their own with void(), and an
@@ -122,7 +125,7 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
 
     // ── Issuance ─────────────────────────────────────────────────────────────
 
-    /// @notice Mint a fact-set that does NOT include K_ZKP_NATIONALITY_OUT (which needs a country list).
+    /// @notice Mints a fact-set without K_NATIONALITY_OUT. That key needs a country list.
     function submitProofAndMint(ProofVerificationParams calldata params, uint256 factKeys)
         external
         returns (uint256 tokenId)
@@ -130,25 +133,25 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
         return _submit(params, factKeys, new string[](0));
     }
 
-    /// @notice Mint a fact-set including K_ZKP_NATIONALITY_OUT: `zkpNationalityOut` is the country codes the proof
-    /// must verify the holder is excluded from, recorded on the credential.
-    function submitProofAndMint(ProofVerificationParams calldata params, uint256 factKeys, string[] calldata zkpNationalityOut)
+    /// @notice Mints a fact-set with K_NATIONALITY_OUT. `nationalityOut` is the list of countries. The proof must
+    /// show that the holder is not a national of these countries. The contract records the list on the credential.
+    function submitProofAndMint(ProofVerificationParams calldata params, uint256 factKeys, string[] calldata nationalityOut)
         external
         returns (uint256 tokenId)
     {
-        return _submit(params, factKeys, zkpNationalityOut);
+        return _submit(params, factKeys, nationalityOut);
     }
 
     /// @dev Verify a ZKPassport proof and mint (or renew) `factKeys` to the proof-bound wallet. Submittable by
     /// anyone: the credential goes to the bound sender, not the caller.
-    function _submit(ProofVerificationParams calldata params, uint256 factKeys, string[] memory zkpNationalityOut)
+    function _submit(ProofVerificationParams calldata params, uint256 factKeys, string[] memory nationalityOut)
         internal
         returns (uint256 tokenId)
     {
-        // ZK-provenance keys only, so this issuer can never assert a manual-KYC key.
-        if (factKeys == 0 || (factKeys & ~ZKP_KEYS) != 0) revert InvalidFactKeys();
-        // The country list is required iff the nationality fact is requested, and forbidden otherwise.
-        if ((factKeys & K_ZKP_NATIONALITY_OUT != 0) != (zkpNationalityOut.length != 0)) revert InvalidNationalityList();
+        if (factKeys == 0) revert InvalidFactKeys();
+        // The caller must give a country list if the fact-set has K_NATIONALITY_OUT. If the fact-set does not
+        // have that key, the caller must give an empty list.
+        if ((factKeys & K_NATIONALITY_OUT != 0) != (nationalityOut.length != 0)) revert InvalidNationalityList();
 
         IssuerStorage storage $ = _issuerStorage();
 
@@ -173,9 +176,10 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
         if (proofTimestamp <= $.lastProofTimestamp[account]) revert StaleProof();
         $.lastProofTimestamp[account] = proofTimestamp;
 
-        // Every requested fact must have its check pass, or we refuse to mint it (also blocks a fact-key with no
-        // matching check).
-        if (_enforce(factKeys, helper, params, proofTimestamp, zkpNationalityOut) != factKeys) revert UnverifiedFactKey();
+        // The check for each requested fact must be correct. If not, the contract does not mint the credential.
+        // This also stops a fact that has no check here. An operator attestation is such a fact: a proof cannot
+        // show it, thus _enforce does not return that key. The badge grant is the second limit.
+        if (_enforce(factKeys, helper, params, proofTimestamp, nationalityOut) != factKeys) revert UnverifiedFactKey();
 
         // The proof does not cover validityPeriodInSeconds — the submitter just types it in and does not need a new proof
         // to verify whatever it says. Without a cap a holder could hand themselves a credential that never needs
@@ -194,10 +198,9 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
         // uniqueIdentifier is kept solely as an audit anchor, not asserted as a readable fact.
         Credential memory cred;
         cred.asserts = factKeys;
-        cred.categoryId = bytes32(factKeys);        // free-form label mirrors the fact-set
         cred.evidenceHash = uniqueIdentifier;       // audit anchor tying the credential to its proof
         cred.expiryDate = uint64(expiresAt);
-        if (factKeys & K_ZKP_NATIONALITY_OUT != 0) cred.zkpNationalityOut = zkpNationalityOut;
+        if (factKeys & K_NATIONALITY_OUT != 0) cred.nationalityOut = nationalityOut;
 
         ILexChexBadge badgeContract = $.badge;
         mapping(uint256 => mapping(address => uint256)) storage tracked = _tracked($);
@@ -251,23 +254,24 @@ contract ZKPassportBadgeIssuer is Initializable, UUPSUpgradeable, BorgAuthACL {
         $.badge.void(tokenId, reason);
     }
 
-    /// @dev Thin, overridable check layer: run the check each requested fact-key needs and return the mask
-    /// actually checked. _submit reverts unless that covers `factKeys`, so a fact is never minted without its
-    /// check. Override to change a check or teach the issuer a new K_ZKP_* key.
+    /// @dev A small check layer. A subclass can replace it. The function does the check for each requested
+    /// fact-key. Then it returns the mask of the keys that it checked. _submit reverts if that mask does not
+    /// contain all of `factKeys`. Thus the contract mints no fact without its check. Replace this function to
+    /// change a check, or to add a new fact-key to the issuer.
     function _enforce(
         uint256 factKeys,
         IZKPassportHelper helper,
         ProofVerificationParams calldata params,
         uint256 proofTimestamp,
-        string[] memory zkpNationalityOut
+        string[] memory nationalityOut
     ) internal view virtual returns (uint256 verifiedKeys) {
-        if (factKeys & K_ZKP_NATIONALITY_OUT != 0) {
-            if (!helper.isNationalityOut(zkpNationalityOut, params.committedInputs)) revert NationalityNotExcluded();
-            verifiedKeys |= K_ZKP_NATIONALITY_OUT;
+        if (factKeys & K_NATIONALITY_OUT != 0) {
+            if (!helper.isNationalityOut(nationalityOut, params.committedInputs)) revert NationalityNotExcluded();
+            verifiedKeys |= K_NATIONALITY_OUT;
         }
-        if (factKeys & K_ZKP_BAD_ACTOR_CLEAR != 0) {
+        if (factKeys & K_BAD_ACTOR_CLEAR != 0) {
             helper.enforceSanctionsRoot(proofTimestamp, true, params.committedInputs); // strict
-            verifiedKeys |= K_ZKP_BAD_ACTOR_CLEAR;
+            verifiedKeys |= K_BAD_ACTOR_CLEAR;
         }
     }
 

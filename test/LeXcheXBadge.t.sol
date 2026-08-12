@@ -22,7 +22,7 @@ import {
     K_SPV_WHITELIST,
     K_SYNDICATE,
     K_US_STATE,
-    K_ZKP_NATIONALITY_OUT,
+    K_NATIONALITY_OUT,
     PRESET_ENTITY_LOOKTHROUGH,
     PRESET_KYC_AML
 } from "../src/interfaces/ILexChexBadge.sol";
@@ -1391,7 +1391,7 @@ contract LeXcheXBadgeTest is Test {
         _expectMissingValue(K_US_STATE);
         _expectMissingValue(K_BO_COUNT);
         _expectMissingValue(K_DATA);
-        _expectMissingValue(K_ZKP_NATIONALITY_OUT);
+        _expectMissingValue(K_NATIONALITY_OUT);
     }
 
     // `asserts` admits only defined K_* bits — an undefined bit would be an uninterpretable claim.

@@ -9,14 +9,17 @@ import {Credential} from "../creds/storage/lexchexBadgeStorage.sol";
 // scope and every read can filter on it, however, it does not always make sense to scope certain value keys (ex. K_US_STATE),
 // and the downstream consumer (ex. getUsState) might ignore the scope altogether for the same reason.
 // Each group owns a bit block (VALUE 0-15, STATUS 16-31, SCOPE 32+) so a new key joins its own kind without reshuffling.
+// Each fact has only one key. The key is the same for all issuers. A ZKPassport proof and an operator attestation
+// of the same fact use that one key. The credential records the party that made the attestation in `issuer`, and
+// all reads can filter on `issuer`. A condition that accepts only one type of attestation gives that issuer.
 uint256 constant K_INVESTOR_TYPE           = 1 << 0;   // Individual / entity
 uint256 constant K_INVESTOR_JURISDICTION   = 1 << 1;   // physical country of residence/organization
 uint256 constant K_LOOKTHROUGH_JURISDICTION = 1 << 2;   // §3(c)(1)(A) look-through classification
 uint256 constant K_US_STATE                = 1 << 3;   // U.S. state of residence/organization
 uint256 constant K_BO_COUNT                = 1 << 4;   // entity §3(c)(1)(A) look-through count
 uint256 constant K_DATA                    = 1 << 5;   // generic programmable payload (Credential.data bytes blob)
-uint256 constant K_ZKP_NATIONALITY_OUT     = 1 << 6;   // ZKPassport-verified nationality exclusion; VALUE is
-                                                       // Credential.zkpNationalityOut (string[] country codes)
+uint256 constant K_NATIONALITY_OUT         = 1 << 6;   // a list of countries. The holder is NOT a national of
+                                                       // these countries. VALUE is Credential.nationalityOut
 
 uint256 constant K_ACCREDITED      = 1 << 16;
 uint256 constant K_QP              = 1 << 17;          // qualified purchaser
@@ -24,15 +27,7 @@ uint256 constant K_QIB             = 1 << 18;          // qualified institutiona
 uint256 constant K_BAD_ACTOR_CLEAR = 1 << 19;          // Rule 506(d) disqualification cleared
 uint256 constant K_NON_US          = 1 << 20;          // Reg S (§6.5): the holder is not a U.S. person
 
-uint256 constant K_ZKP_BAD_ACTOR_CLEAR = 1 << 22;      // sanctions / bad-actor clear, per a ZKPassport proof
-
-// ZKPassport-provenance keys. Same questions as the manual-KYC keys above (is the holder non-U.S.? sanctions /
-// bad-actor clear?), but attested by a self-submitted ZKPassport proof over a government document rather than by
-// operator diligence — a different verification basis that different regimes accept differently. Kept SEPARATE
-// from the manual keys so each condition decides for itself whether to trust ZK provenance.
-uint256 constant ZKP_KEYS = K_ZKP_NATIONALITY_OUT | K_ZKP_BAD_ACTOR_CLEAR;
-
-uint256 constant STATUS_KEYS = K_ACCREDITED | K_QP | K_QIB | K_BAD_ACTOR_CLEAR | K_NON_US | K_ZKP_BAD_ACTOR_CLEAR;
+uint256 constant STATUS_KEYS = K_ACCREDITED | K_QP | K_QIB | K_BAD_ACTOR_CLEAR | K_NON_US;
 
 // SCOPE keys — meaningless without an SPV, so mint rejects them without one. A whitelist admits the holder to
 // one SPV's offers (§16.2); a syndicate seats them in that issuer's private circle (§4.1.3A). Separate grants
@@ -43,8 +38,8 @@ uint256 constant K_SYNDICATE     = 1 << 33;
 uint256 constant SCOPED_KEYS = K_SPV_WHITELIST | K_SYNDICATE;
 
 uint256 constant ALL_KEYS = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION | K_LOOKTHROUGH_JURISDICTION | K_US_STATE
-    | K_BO_COUNT | K_DATA | K_ZKP_NATIONALITY_OUT | K_ACCREDITED | K_QP | K_QIB | K_BAD_ACTOR_CLEAR | K_NON_US
-    | K_ZKP_BAD_ACTOR_CLEAR | SCOPED_KEYS;
+    | K_BO_COUNT | K_DATA | K_NATIONALITY_OUT | K_ACCREDITED | K_QP | K_QIB | K_BAD_ACTOR_CLEAR | K_NON_US
+    | SCOPED_KEYS;
 
 // Presets: recommended `asserts` per badge purpose (issuer guidance only — OR in extras as needed).
 uint256 constant PRESET_KYC_AML             = K_INVESTOR_TYPE | K_INVESTOR_JURISDICTION;
@@ -55,8 +50,7 @@ uint256 constant PRESET_QUALIFIED_PURCHASER = K_QP;
 uint256 constant PRESET_QIB                 = K_QIB;
 uint256 constant PRESET_BAD_ACTOR_CLEAR     = K_BAD_ACTOR_CLEAR;
 uint256 constant PRESET_NON_US              = K_NON_US;
-uint256 constant PRESET_ZKP_NATIONALITY_OUT = K_ZKP_NATIONALITY_OUT;
-uint256 constant PRESET_ZKP_BAD_ACTOR_CLEAR = K_ZKP_BAD_ACTOR_CLEAR;
+uint256 constant PRESET_NATIONALITY_OUT     = K_NATIONALITY_OUT;
 uint256 constant PRESET_SPV_WHITELIST       = K_SPV_WHITELIST;
 uint256 constant PRESET_SYNDICATE           = K_SYNDICATE;
 
@@ -199,9 +193,10 @@ interface ILexChexBadge is IERC5484 {
     function getInvestorJurisdiction(address owner) external view returns (string memory value, uint64 expiry);
     /// @notice §3(c)(1)(A) look-through classification; decoupled from investorJurisdiction.
     function getLookThroughJurisdiction(address owner) external view returns (string memory value, uint64 expiry);
-    /// @notice Country codes the holder was proven (via ZKPassport) NOT to be a national of; empty when none.
-    /// Membership is what a caller checks — see ZKPNationalityPolicy.
-    function getZkpNationalityOut(address owner) external view returns (string[] memory value, uint64 expiry);
+    /// @notice The list of countries where the holder is not a national. The list is empty if no credential gives
+    /// this fact. To find if one country is in the list, use NationalityPolicy. That library can also filter on
+    /// the issuer.
+    function getNationalityOut(address owner) external view returns (string[] memory value, uint64 expiry);
 
     /// @notice Seasoning reference (§11.1B): when the earliest valid credential carrying ALL of `kindKey` was
     /// issued. Note all kindKey specified must live on the same badge token to qualify

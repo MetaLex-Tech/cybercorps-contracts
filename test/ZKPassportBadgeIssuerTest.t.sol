@@ -6,17 +6,16 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 import {BorgAuth} from "../src/libs/auth.sol";
 import {LeXcheXBadge} from "../src/creds/lexchexBadge.sol";
 import {ZKPassportBadgeIssuer} from "../src/creds/ZKPassportBadgeIssuer.sol";
-import {ZKPNationalityPolicy} from "../src/libs/policies/ZKPNationalityPolicy.sol";
+import {NationalityPolicy} from "../src/libs/policies/NationalityPolicy.sol";
 import {Credential} from "../src/creds/storage/lexchexBadgeStorage.sol";
 import {
     ILexChexBadge,
     ALL_KEYS,
     K_BAD_ACTOR_CLEAR,
     K_INVESTOR_TYPE,
+    K_NATIONALITY_OUT,
     K_NON_US,
-    K_SPV_WHITELIST,
-    K_ZKP_BAD_ACTOR_CLEAR,
-    K_ZKP_NATIONALITY_OUT
+    K_SPV_WHITELIST
 } from "../src/interfaces/ILexChexBadge.sol";
 import {
     BoundData,
@@ -91,14 +90,16 @@ contract MockZKPassportVerifier is IZKPassportVerifier {
 ///     control of; a relayer may pay gas but can neither capture nor redirect it.
 ///  C. No personhood notary. A person with several wallets is simply several holders — the issuer never links or
 ///     collapses wallets to one human, exactly as any non-ZKPassport wallet is treated.
-///  D. You get what you prove. A fact-set (a combination of K_ZKP_* keys) is only minted if every fact's check
-///     passes; the nationality fact records WHICH countries were proven excluded; renewing replaces the live
-///     credential in place (supersede); a holder can drop their own with void().
+///  D. You receive only what you prove. The contract mints a fact-set only if the check for each fact is correct.
+///     The nationality fact records the countries that the proof showed. A new proof replaces the live credential
+///     (supersede). A holder can remove their own credential with void().
 ///  E. A refusal follows the person, not the wallet. Someone sanctioned, or who can't prove their nationality is
 ///     outside the excluded list, is refused every time — a fresh wallet doesn't help, because the check is against
 ///     the passport proof, not the address. Nor can a proof made for another app, chain, or moment be reused here.
-///  F. Provenance is kept separate. The issuer mints ZK-provenance facts only (K_ZKP_*) and can never assert a
-///     manual-KYC key, so each downstream condition decides on its own whether to trust a ZKPassport attestation.
+///  F. The issuer shows who made the attestation. A separate key does not. A ZK proof and an operator attestation
+///     of the same fact use one fact-key. A condition that accepts only one of them filters on the issuer. Two
+///     limits control what a proof can assert: this contract mints only the facts that it can check, and only the
+///     facts that the badge granted to it. Thus a proof never mints an operator attestation.
 ///  G. Governance owns the wiring. Only admins change verifier/badge; only the owner can evolve the contract.
 ///     Rewiring never hands one holder's standing to another.
 ///
@@ -110,7 +111,7 @@ contract MockZKPassportVerifier is IZKPassportVerifier {
 ///   • CombinedFacts_OneCredential ........ one credential can carry several facts, satisfying an AND-check ........ issue, single token
 ///
 ///  Membership read (D)
-///   • Policy_Excludes .................... ZKPNationalityPolicy answers "is X in the proven exclusion set?" ...... true / false
+///   • Policy_Excludes .................... NationalityPolicy finds country X in the list that the proof showed ... true / false
 ///
 ///  Kinds & wallets (C)
 ///   • DifferentFacts_SameWallet .......... a wallet may hold distinct facts (nationality-out + bad-actor-clear) .. both issue
@@ -128,7 +129,7 @@ contract MockZKPassportVerifier is IZKPassportVerifier {
 ///   • AdminVoid_ProofMadeAfterwards ...... a revocation is no ban: re-prove on today's facts ................. new credential
 ///   • AdminVoid_Unauthorized / EmptyReason / NoLiveCredential ... only an admin, always with a reason, and only
 ///     against something live .................................................................................. refuse
-///   • Void_AnotherHoldersCredential / Twice / AfterAdminVoidedOnBadge / ManualFactKeySpaceIsEmpty ... only your own
+///   • Void_AnotherHoldersCredential / Twice / AfterAdminVoidedOnBadge / UnmintedFactKeySpaceIsEmpty ... only your own
 ///     live credential is droppable, and liveness is re-checked on the badge, not assumed from bookkeeping ....... refuse
 ///   • CurrentTokenOf_ReportsIssuance ..... the issuer's tracking is not a liveness answer ....................... exists, not valid
 ///   • BadgeRotation_SelfVoid / Renewal / TrackingIsPerBadge ... a saved id only means anything on the badge that
@@ -154,12 +155,16 @@ contract MockZKPassportVerifier is IZKPassportVerifier {
 ///   • InvalidProof / InvalidScope / BoundChainIdMismatch / ProofExpired ... only an authentic, in-scope, in-time, on-chain proof qualifies ... refuse
 ///
 ///  Provenance, inputs & governance (F, G)
-///   • Mint_RejectsManualKey / ZeroFactKeys ..... only ZK-provenance fact-sets are mintable, never a manual key .. refuse
-///   • Mint_*SneakedIn (manual key beside a ZK key, the manual bad-actor twin, a scope key, a VALUE key, an
-///     undefined bit, EveryKeyGrab) ............. a foreign key never rides in on a legitimate one; a mixed
-///     request is refused whole, never part-minted, and leaves no credential or tracked entry ................... refuse
-///   • Mint_FactKeysScreenedBeforeProof ......... the fact-set is judged on its own terms, before the proof ..... refuse
-///   • Mint_*ViaNationalityOverload ............. the second overload carries the same screen .................... refuse
+///   • Provenance_IssuerDistinguishesTheBasis ... one fact-key, two types of attestation. A filter on the issuer
+///     separates the ZK proof from the operator attestation, for the status fact and the country list ... ZK / operator
+///   • Mint_RejectsUncheckedKey / ZeroFactKeys .. the contract never mints a fact that it cannot check .......... refuse
+///   • Mint_*SneakedIn (an unchecked key with a checked key, a scope key, a VALUE key, an undefined bit,
+///     EveryKeyGrab) ............................ a legitimate key does not let a different key through. The
+///     contract refuses the full request, mints no part of it, and keeps no record of it ....................... refuse
+///   • Mint_BeyondTheBadgeGrant / WithoutAnyGrant ... the badge grant limits the contract independently of the
+///     contract's own checks. A smaller grant, or no grant, stops the mint at the badge ........................ refuse
+///   • Mint_ZeroFactKeysScreenedBeforeProof ..... the contract refuses an empty fact-set before the proof ....... refuse
+///   • Mint_*ViaNationalityOverload ............. the second function has the same check ........................ refuse
 ///   • NationalityKey_WithoutList / ListWithoutKey / CombinedFacts_WithoutList ... the country list is required
 ///     iff the nationality fact is asked, combined fact-sets included ............................................ refuse
 ///   • UpdateVerifier_Unauthorized / Upgrade_Unauthorized / Initialize_ZeroBadge ... only the right role acts ..... refuse
@@ -168,9 +173,11 @@ contract ZKPassportBadgeIssuerTest is Test {
     string internal constant SCOPE = "identity";
     uint256 internal constant MAX_VALIDITY = 365 days;
 
-    uint256 internal constant FK_NAT_OUT = K_ZKP_NATIONALITY_OUT;
-    uint256 internal constant FK_BAD_ACTOR = K_ZKP_BAD_ACTOR_CLEAR;
-    uint256 internal constant FK_BOTH = K_ZKP_NATIONALITY_OUT | K_ZKP_BAD_ACTOR_CLEAR;
+    uint256 internal constant FK_NAT_OUT = K_NATIONALITY_OUT;
+    uint256 internal constant FK_BAD_ACTOR = K_BAD_ACTOR_CLEAR;
+    uint256 internal constant FK_BOTH = K_NATIONALITY_OUT | K_BAD_ACTOR_CLEAR;
+    // The facts that the badge lets this contract assert. A ZKPassport proof can show these facts.
+    uint256 internal constant GRANT = K_NATIONALITY_OUT | K_BAD_ACTOR_CLEAR;
 
     BorgAuth internal auth;
     LeXcheXBadge internal badge;
@@ -206,8 +213,9 @@ contract ZKPassportBadgeIssuerTest is Test {
             )
         );
 
-        // The issuer mints on the badge — it needs ADMIN_ROLE on the shared BorgAuth.
-        auth.updateRole(address(issuer), auth.ADMIN_ROLE());
+        // The contract mints on the badge with a grant for each key. It has no BorgAuth role. Thus it receives
+        // none of the admin control of the deployment that a role gives.
+        badge.setIssuerKeys(address(issuer), GRANT);
     }
 
     // ── Happy path, value-fact & recipient binding ───────────────────────────
@@ -217,10 +225,10 @@ contract ZKPassportBadgeIssuerTest is Test {
         uint256 tokenId = issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, _excluded("USA"));
 
         assertTrue(badge.isValid(tokenId));
-        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
-        assertFalse(badge.hasValidCredentialOf(alice, K_NON_US), "manual key deliberately not satisfied");
+        assertTrue(badge.hasValidCredentialOf(alice, K_NATIONALITY_OUT));
+        assertFalse(badge.hasValidCredentialOf(alice, K_NON_US), "a fact that was not proved is not established");
 
-        (string[] memory list, uint64 expiry) = badge.getZkpNationalityOut(alice);
+        (string[] memory list, uint64 expiry) = badge.getNationalityOut(alice);
         assertEq(list.length, 1);
         assertEq(list[0], "USA");
         assertEq(uint256(expiry), 1000 + 1 days);
@@ -239,8 +247,8 @@ contract ZKPassportBadgeIssuerTest is Test {
 
         assertEq(badge.getActiveTokenIds(alice).length, 1, "one credential carries both facts");
         assertTrue(badge.hasValidCredentialOf(alice, FK_BOTH));
-        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
-        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_BAD_ACTOR_CLEAR));
+        assertTrue(badge.hasValidCredentialOf(alice, K_NATIONALITY_OUT));
+        assertTrue(badge.hasValidCredentialOf(alice, K_BAD_ACTOR_CLEAR));
     }
 
     // ── Membership read via the policy library ───────────────────────────────
@@ -251,14 +259,14 @@ contract ZKPassportBadgeIssuerTest is Test {
         codes[1] = "IRN";
         issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, codes);
 
-        (bool exUsa,) = ZKPNationalityPolicy.excludes(badge, alice, "USA");
-        (bool exIrn,) = ZKPNationalityPolicy.excludes(badge, alice, "IRN");
-        (bool exCan,) = ZKPNationalityPolicy.excludes(badge, alice, "CAN");
+        (bool exUsa,) = NationalityPolicy.excludes(badge, alice, "USA");
+        (bool exIrn,) = NationalityPolicy.excludes(badge, alice, "IRN");
+        (bool exCan,) = NationalityPolicy.excludes(badge, alice, "CAN");
         assertTrue(exUsa);
         assertTrue(exIrn);
         assertFalse(exCan, "a country not in the proven set is not excluded");
 
-        (bool exOther,) = ZKPNationalityPolicy.excludes(badge, aliceWallet2, "USA");
+        (bool exOther,) = NationalityPolicy.excludes(badge, aliceWallet2, "USA");
         assertFalse(exOther, "a wallet with no credential excludes nothing");
     }
 
@@ -272,8 +280,8 @@ contract ZKPassportBadgeIssuerTest is Test {
         vm.warp(1100);
         issuer.submitProofAndMint(_params(alice, 1100, 1 days), FK_BAD_ACTOR);
 
-        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
-        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_BAD_ACTOR_CLEAR));
+        assertTrue(badge.hasValidCredentialOf(alice, K_NATIONALITY_OUT));
+        assertTrue(badge.hasValidCredentialOf(alice, K_BAD_ACTOR_CLEAR));
         assertEq(badge.getActiveTokenIds(alice).length, 2);
     }
 
@@ -284,8 +292,8 @@ contract ZKPassportBadgeIssuerTest is Test {
         uint256 id2 = issuer.submitProofAndMint(_params(aliceWallet2, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
 
         assertTrue(id1 != id2);
-        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
-        assertTrue(badge.hasValidCredentialOf(aliceWallet2, K_ZKP_NATIONALITY_OUT));
+        assertTrue(badge.hasValidCredentialOf(alice, K_NATIONALITY_OUT));
+        assertTrue(badge.hasValidCredentialOf(aliceWallet2, K_NATIONALITY_OUT));
     }
 
     // ── Lifecycle: renewal supersedes, void does not block re-mint ───────────
@@ -307,12 +315,12 @@ contract ZKPassportBadgeIssuerTest is Test {
     function test_Void_SelfService_HolderDropsOwnCredential() public {
         vm.warp(1000);
         uint256 tokenId = issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, _excluded("USA"));
-        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+        assertTrue(badge.hasValidCredentialOf(alice, K_NATIONALITY_OUT));
 
         vm.prank(alice);
         issuer.void(FK_NAT_OUT);
         assertFalse(badge.isValid(tokenId));
-        assertFalse(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+        assertFalse(badge.hasValidCredentialOf(alice, K_NATIONALITY_OUT));
 
         // Coming back is the holder's own call, and it takes a new proof.
         vm.warp(1100);
@@ -326,7 +334,7 @@ contract ZKPassportBadgeIssuerTest is Test {
         uint256 tokenId = issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, _excluded("USA"));
 
         badge.void(tokenId, "compliance review");
-        assertFalse(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+        assertFalse(badge.hasValidCredentialOf(alice, K_NATIONALITY_OUT));
 
         vm.warp(1100);
         uint256 fresh = issuer.submitProofAndMint(_params(alice, 1100, 1 days), FK_NAT_OUT, _excluded("USA"));
@@ -349,7 +357,7 @@ contract ZKPassportBadgeIssuerTest is Test {
         issuer.void(FK_NAT_OUT);
 
         assertTrue(badge.isValid(tokenId), "a stranger's call leaves the credential standing");
-        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+        assertTrue(badge.hasValidCredentialOf(alice, K_NATIONALITY_OUT));
     }
 
     function test_Revert_Void_Twice() public {
@@ -385,7 +393,7 @@ contract ZKPassportBadgeIssuerTest is Test {
         issuer.void(FK_NAT_OUT, alice, "sanctions hit");
 
         assertFalse(badge.isValid(tokenId));
-        assertFalse(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+        assertFalse(badge.hasValidCredentialOf(alice, K_NATIONALITY_OUT));
         assertEq(badge.getCredential(tokenId).voided, "sanctions hit", "the admin's reason is what the badge records");
         assertEq(issuer.lastProofTimestampOf(alice), 2000, "the revoke moved the floor to now");
 
@@ -417,7 +425,7 @@ contract ZKPassportBadgeIssuerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(BorgAuth.BorgAuth_NotAuthorized.selector, uint256(98), bob));
         issuer.void(FK_NAT_OUT, alice, "not yours to revoke");
 
-        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+        assertTrue(badge.hasValidCredentialOf(alice, K_NATIONALITY_OUT));
     }
 
     // The badge refuses an unexplained void, so a revocation always leaves a reason on the record.
@@ -433,9 +441,9 @@ contract ZKPassportBadgeIssuerTest is Test {
         issuer.void(FK_NAT_OUT, alice, "nothing to revoke");
     }
 
-    // void() takes a raw fact-set and never validates it. Nothing can be voided in a key space this issuer cannot
-    // mint into, because only a mint records a tracked credential.
-    function test_Revert_Void_ManualFactKeySpaceIsEmpty() public {
+    // void() accepts a fact-set and does not examine it. The contract can void nothing in a key space where it
+    // minted no credential, because only a mint records a credential in the register.
+    function test_Revert_Void_UnmintedFactKeySpaceIsEmpty() public {
         issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
 
         vm.startPrank(alice);
@@ -463,7 +471,7 @@ contract ZKPassportBadgeIssuerTest is Test {
         vm.prank(alice);
         issuer.void(FK_NAT_OUT);
         assertFalse(badge.isValid(natOnly));
-        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT), "still answered by the combined credential");
+        assertTrue(badge.hasValidCredentialOf(alice, K_NATIONALITY_OUT), "still answered by the combined credential");
     }
 
     // Renewal REPLACES the exclusion set; it does not accumulate. A country proven excluded last time stops being
@@ -471,14 +479,14 @@ contract ZKPassportBadgeIssuerTest is Test {
     function test_Renewal_ReplacesExclusionList_DoesNotAccumulate() public {
         vm.warp(1000);
         issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_NAT_OUT, _excluded("USA"));
-        (bool usaBefore,) = ZKPNationalityPolicy.excludes(badge, alice, "USA");
+        (bool usaBefore,) = NationalityPolicy.excludes(badge, alice, "USA");
         assertTrue(usaBefore);
 
         vm.warp(1100);
         issuer.submitProofAndMint(_params(alice, 1100, 1 days), FK_NAT_OUT, _excluded("IRN"));
 
-        (bool usaAfter,) = ZKPNationalityPolicy.excludes(badge, alice, "USA");
-        (bool irnAfter,) = ZKPNationalityPolicy.excludes(badge, alice, "IRN");
+        (bool usaAfter,) = NationalityPolicy.excludes(badge, alice, "USA");
+        (bool irnAfter,) = NationalityPolicy.excludes(badge, alice, "IRN");
         assertFalse(usaAfter, "the superseded list is gone, not merged");
         assertTrue(irnAfter);
     }
@@ -545,7 +553,7 @@ contract ZKPassportBadgeIssuerTest is Test {
         vm.expectRevert(ZKPassportBadgeIssuer.StaleProof.selector);
         issuer.submitProofAndMint(p, FK_NAT_OUT, list);
 
-        assertFalse(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT), "the drop stands");
+        assertFalse(badge.hasValidCredentialOf(alice, K_NATIONALITY_OUT), "the drop stands");
     }
 
     // The same replay against an admin's revocation, which matters more: the sanctions check is anchored to the
@@ -563,7 +571,7 @@ contract ZKPassportBadgeIssuerTest is Test {
         vm.expectRevert(ZKPassportBadgeIssuer.StaleProof.selector);
         issuer.submitProofAndMint(p, FK_NAT_OUT, list);
 
-        assertFalse(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT), "the revocation stands");
+        assertFalse(badge.hasValidCredentialOf(alice, K_NATIONALITY_OUT), "the revocation stands");
     }
 
     // Nothing to undo here — the credential is live. The proof doesn't cover the validity period, so a replayer
@@ -604,7 +612,7 @@ contract ZKPassportBadgeIssuerTest is Test {
         vm.expectRevert(ZKPassportBadgeIssuer.StaleProof.selector);
         issuer.submitProofAndMint(unsubmitted, FK_NAT_OUT, list);
 
-        assertFalse(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT), "the drop stands");
+        assertFalse(badge.hasValidCredentialOf(alice, K_NATIONALITY_OUT), "the drop stands");
     }
 
     // The floor is not a lockout — anything proven after the drop is fine.
@@ -618,7 +626,7 @@ contract ZKPassportBadgeIssuerTest is Test {
 
         uint256 fresh = issuer.submitProofAndMint(_params(alice, 2001, 1 days), FK_NAT_OUT, _excluded("USA"));
         assertTrue(badge.isValid(fresh));
-        assertTrue(badge.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+        assertTrue(badge.hasValidCredentialOf(alice, K_NATIONALITY_OUT));
     }
 
     // The floor is per WALLET, not per fact-set: dropping one fact-set also refuses older proofs for the others.
@@ -674,7 +682,7 @@ contract ZKPassportBadgeIssuerTest is Test {
 
         assertTrue(other.isValid(collidingId), "the stranger's credential is untouched");
         assertEq(other.ownerOf(minted), alice, "the credential vests in the proven wallet");
-        assertTrue(other.hasValidCredentialOf(alice, K_ZKP_NATIONALITY_OUT));
+        assertTrue(other.hasValidCredentialOf(alice, K_NATIONALITY_OUT));
     }
 
     // Rotating away doesn't wipe the old badge's records, so rotating back finds them intact.
@@ -699,11 +707,12 @@ contract ZKPassportBadgeIssuerTest is Test {
         );
 
         Credential memory cred;
-        cred.asserts = K_NON_US; // an unrelated manual-KYC credential, nothing to do with ZKPassport
+        cred.asserts = K_NON_US; // a different credential from an operator. It has no relation to ZKPassport.
         cred.expiryDate = uint64(block.timestamp + 30 days);
         collidingId = other.mint(bob, cred);
         assertEq(collidingId, aliceId, "the ids collide, which is the whole hazard");
 
+        other.setIssuerKeys(address(issuer), GRANT); // the new badge gives the same grant as the first badge
         issuer.updateBadge(address(other));
     }
 
@@ -822,8 +831,43 @@ contract ZKPassportBadgeIssuerTest is Test {
 
     // ── Provenance, inputs & governance ──────────────────────────────────────
 
-    function test_Revert_Mint_RejectsManualKey() public {
-        vm.expectRevert(ZKPassportBadgeIssuer.InvalidFactKeys.selector);
+    // Bad-actor-clear asks one question: is this person disqualified? The answer is the same fact for all parties.
+    // Therefore the operator attestation and the ZK proof use the SAME fact-key. Only the recorded issuer
+    // separates them. A condition that accepts only a passport proof filters on the issuer, and it does not see
+    // the operator attestation. A condition that accepts both does not filter. The country list is the same, and
+    // the policy library reads it in the two conditions.
+    function test_Provenance_IssuerDistinguishesTheBasis_NotTheFactKey() public {
+        vm.warp(1000);
+        issuer.submitProofAndMint(_params(alice, 1000, 1 days), FK_BOTH, _excluded("USA"));
+
+        // The operator asserts the same facts for bob, but from its own examination.
+        Credential memory operatorCred;
+        operatorCred.asserts = FK_BOTH;
+        operatorCred.nationalityOut = _excluded("USA");
+        operatorCred.expiryDate = uint64(block.timestamp + 1 days);
+        badge.mint(bob, operatorCred);
+
+        assertTrue(badge.hasValidCredentialOf(alice, K_BAD_ACTOR_CLEAR), "no filter: the two types answer");
+        assertTrue(badge.hasValidCredentialOf(bob, K_BAD_ACTOR_CLEAR));
+
+        address[] memory zkOnly = new address[](1);
+        zkOnly[0] = address(issuer);
+        assertTrue(badge.hasValidCredentialOf(alice, K_BAD_ACTOR_CLEAR, zkOnly), "a proof shows the fact");
+        assertFalse(badge.hasValidCredentialOf(bob, K_BAD_ACTOR_CLEAR, zkOnly), "an operator attestation, not a proof");
+
+        (bool aliceProved,) = NationalityPolicy.excludes(badge, alice, "USA", zkOnly);
+        (bool bobProved,) = NationalityPolicy.excludes(badge, bob, "USA", zkOnly);
+        (bool bobAnyIssuer,) = NationalityPolicy.excludes(badge, bob, "USA");
+        assertTrue(aliceProved);
+        assertFalse(bobProved, "a proof did not show the operator list");
+        assertTrue(bobAnyIssuer, "but it answers a caller that accepts all issuers");
+    }
+
+    // This contract cannot mint a fact that it cannot check. The key itself is permitted: an operator can assert
+    // the same fact from its own examination. But a proof cannot show the fact. Therefore this contract must not
+    // record it.
+    function test_Revert_Mint_RejectsUncheckedKey() public {
+        vm.expectRevert(ZKPassportBadgeIssuer.UnverifiedFactKey.selector);
         issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), K_NON_US);
     }
 
@@ -832,32 +876,26 @@ contract ZKPassportBadgeIssuerTest is Test {
         issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), 0);
     }
 
-    // A lone manual key is the obvious attempt; the dangerous one rides along with a key this issuer really can
-    // mint, hoping the legitimate half carries the passenger through. Every mixed request is refused whole — the
-    // issuer never mints "the part it was allowed to", so a ZKPassport proof can never end up backing a fact that
-    // operator diligence is supposed to establish.
-    function test_Revert_Mint_ManualKeySneakedInAlongsideZkpKey() public {
+    // A request with only an unchecked key is the first attempt. The more dangerous attempt sends that key with a
+    // key that this contract can mint. The legitimate key must not let the other key through. The contract refuses
+    // the full request and mints no part of it. Thus a ZKPassport proof never supports a fact that an operator
+    // must establish.
+    function test_Revert_Mint_UncheckedKeySneakedInAlongsideCheckedOne() public {
         _expectFactKeysRefused(FK_NAT_OUT | K_NON_US, _excluded("USA"));
     }
 
-    // The closest call: manual and ZK bad-actor ask the same question, differing only in who vouched. Asking for
-    // both would let a ZK proof mint the manually-attested twin.
-    function test_Revert_Mint_ManualBadActorSneakedInBesideItsZkTwin() public {
-        _expectFactKeysRefused(FK_BAD_ACTOR | K_BAD_ACTOR_CLEAR, _empty());
-    }
-
-    // A scope key entitles the holder to one SPV's offers. It is an issuer's grant, never something a passport
-    // proves, and the credential carries no scope — so it must die at the fact-key gate.
+    // A scope key gives the holder access to the offers of one SPV. An issuer grants it. A passport does not show
+    // it, and the credential has no scope. Therefore the contract must refuse the key as unverified.
     function test_Revert_Mint_ScopeKeySneakedIn() public {
         _expectFactKeysRefused(FK_BAD_ACTOR | K_SPV_WHITELIST, _empty());
     }
 
-    // A VALUE key would need a payload this issuer never collects; sneaking one in would file a hollow fact.
+    // A VALUE key needs data that this contract does not collect. Such a key would record an empty fact.
     function test_Revert_Mint_ValueKeySneakedIn() public {
         _expectFactKeysRefused(FK_NAT_OUT | K_INVESTOR_TYPE, _excluded("USA"));
     }
 
-    // An undefined bit is an uninterpretable claim, and the whole-mask grabs are the lazy version of the same try.
+    // An undefined bit is a claim with no meaning. A request for the full mask is the same attempt, but simpler.
     function test_Revert_Mint_UndefinedBitSneakedIn() public {
         _expectFactKeysRefused(FK_BAD_ACTOR | (1 << 7), _empty());
     }
@@ -867,20 +905,48 @@ contract ZKPassportBadgeIssuerTest is Test {
         _expectFactKeysRefused(type(uint256).max, _excluded("USA"));
     }
 
-    // The fact-key screen runs before the proof is consulted, so a bad fact-set is refused on its own terms rather
-    // than incidentally, by whatever the proof happens to fail on first.
-    function test_Revert_Mint_FactKeysScreenedBeforeProof() public {
+    // The badge grant is a second, independent limit. If you make the grant smaller, the contract cannot record a
+    // fact, although it can check that fact correctly. Thus an operator can control a delegated issuer, and no
+    // change to the code of that issuer is necessary.
+    function test_Revert_Mint_BeyondTheBadgeGrant() public {
+        badge.setIssuerKeys(address(issuer), K_NATIONALITY_OUT); // bad-actor-clear withdrawn
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILexChexBadge.LexChexBadge_KeysNotAuthorized.selector, address(issuer), K_BAD_ACTOR_CLEAR
+            )
+        );
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_BAD_ACTOR);
+    }
+
+    // A new deployment of the issuer receives no authority. A mint needs a grant on the badge. This is the result
+    // of the removal of the ADMIN_ROLE that the contract needed before.
+    function test_Revert_Mint_WithoutAnyGrant() public {
+        badge.setIssuerKeys(address(issuer), 0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILexChexBadge.LexChexBadge_KeysNotAuthorized.selector, address(issuer), K_NATIONALITY_OUT
+            )
+        );
+        issuer.submitProofAndMint(_params(alice, block.timestamp, 1 days), FK_NAT_OUT, _excluded("USA"));
+    }
+
+    // The contract refuses an empty fact-set before it reads the proof. The request asks for no fact, thus the
+    // contract has nothing to check.
+    function test_Revert_Mint_ZeroFactKeysScreenedBeforeProof() public {
         verifier.setShouldVerify(false);
         ProofVerificationParams memory p = _params(alice, block.timestamp, 1 days);
         vm.expectRevert(ZKPassportBadgeIssuer.InvalidFactKeys.selector);
-        issuer.submitProofAndMint(p, FK_BAD_ACTOR | K_NON_US);
+        issuer.submitProofAndMint(p, 0);
     }
 
-    // The nationality overload takes a second argument, so it must carry the same screen and not become the soft way in.
-    function test_Revert_Mint_ManualKeySneakedInViaNationalityOverload() public {
+    // The nationality function has a second argument. It must do the same check, and it must not be an easier way
+    // to mint an unchecked key.
+    function test_Revert_Mint_UncheckedKeySneakedInViaNationalityOverload() public {
         ProofVerificationParams memory p = _params(alice, block.timestamp, 1 days);
         string[] memory list = _excluded("USA");
-        vm.expectRevert(ZKPassportBadgeIssuer.InvalidFactKeys.selector);
+        vm.expectRevert(ZKPassportBadgeIssuer.UnverifiedFactKey.selector);
         issuer.submitProofAndMint(p, FK_NAT_OUT | K_NON_US, list);
     }
 
@@ -936,13 +1002,14 @@ contract ZKPassportBadgeIssuerTest is Test {
         return new string[](0);
     }
 
-    /// @dev Asserts `factKeys` is refused and that the attempt left nothing behind — no credential on the badge
-    /// and no tracked entry, so a rejected request can never be mistaken later for a granted one.
+    /// @dev Makes sure that the contract refuses `factKeys`, and that the attempt kept no data. There must be no
+    /// credential on the badge and no entry in the register. Thus no person can read a refused request later as
+    /// an approved request.
     function _expectFactKeysRefused(uint256 factKeys, string[] memory list) internal {
         ProofVerificationParams memory p = _params(alice, block.timestamp, 1 days);
         uint256 balanceBefore = badge.balanceOf(alice);
 
-        vm.expectRevert(ZKPassportBadgeIssuer.InvalidFactKeys.selector);
+        vm.expectRevert(ZKPassportBadgeIssuer.UnverifiedFactKey.selector);
         if (list.length == 0) issuer.submitProofAndMint(p, factKeys);
         else issuer.submitProofAndMint(p, factKeys, list);
 

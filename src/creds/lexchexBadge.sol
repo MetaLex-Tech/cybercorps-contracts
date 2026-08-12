@@ -83,8 +83,8 @@ import "../interfaces/ICredentialQueryHook.sol";
 /// | K_BO_COUNT & K_INVESTOR_TYPE | getEffectiveBeneficialOwnerCount | 0 / >0                      | ICA §3(c)(1)(A)          |
 /// | K_ACCREDITED / K_QP / K_QIB  | hasValidCredentialOf             | absent / asserted           | Reg D; Rule 144A         |
 /// | K_NON_US                     | hasValidCredentialOf             | absent / asserted           | Reg S                    |
-/// | K_ZKP_NATIONALITY_OUT        | getZkpNationalityOut             | EMPTY / country codes       | Reg S — ZK proof         |
-/// | K_ZKP_BAD_ACTOR_CLEAR        | hasValidCredentialOf             | absent / asserted           | 506(d) — ZK proof        |
+/// | K_BAD_ACTOR_CLEAR            | hasValidCredentialOf             | absent / asserted           | Rule 506(d)              |
+/// | K_NATIONALITY_OUT            | getNationalityOut                | EMPTY / country codes       | Reg S; sanctions         |
 /// | K_SPV_WHITELIST              | hasValidWhitelistFor             | absent / scoped to an SPV   | offer visibility (§16.2) |
 /// | K_SYNDICATE                  | hasValidSyndicateFor             | absent / scoped to an SPV   | issuer circle (§4.1.3A)  |
 ///
@@ -93,6 +93,9 @@ import "../interfaces/ICredentialQueryHook.sol";
 ///   role and picks up none of the admin power a shared auth would carry with it. `mint` records who issued,
 ///   and an issuer voids only its own work. So one deployment can host several operators, and a reader can
 ///   tell whose word a fact rests on. Admins run the deployment and issue anything.
+/// - The `issuer` shows who made the attestation. The key does not. A ZKPassport proof and an operator attestation
+///   of the same fact use one key. A reader that accepts only one of them filters on `issuers`. Therefore a new
+///   type of verifier needs a new grant, but not a new key.
 /// - Tokens are deliberately NOT burnable — revocation is void-only, so every credential (voided, expired, or
 ///   superseded) is retained on-chain for audit. Void is one-way.
 /// - `data` is a generic programmable payload gated by
@@ -453,13 +456,14 @@ contract LeXcheXBadge is
         return (cred.lookThroughJurisdiction, cred.expiryDate);
     }
 
-    /// @notice Country codes the owner was proven (via ZKPassport) NOT to be a national of; empty when none. The
-    /// badge reports the raw list — membership ("is X excluded?") is the caller's check (see ZKPNationalityPolicy).
-    function getZkpNationalityOut(address owner) public view returns (string[] memory value, uint64 expiry) {
-        (uint256 tokenId, bool found) = _mostRecentValidWith(owner, K_ZKP_NATIONALITY_OUT);
+    /// @notice The list of countries where the owner is not a national. The list is empty if no credential gives
+    /// this fact. The badge gives the full list. The caller must find if one country is in the list. To do that,
+    /// use NationalityPolicy.
+    function getNationalityOut(address owner) public view returns (string[] memory value, uint64 expiry) {
+        (uint256 tokenId, bool found) = getMostRecentValidWith(owner, K_NATIONALITY_OUT);
         if (!found) return (new string[](0), 0);
         Credential storage cred = LeXcheXBadgeStorage.getCredential(tokenId);
-        return (cred.zkpNationalityOut, cred.expiryDate);
+        return (cred.nationalityOut, cred.expiryDate);
     }
 
     /// @notice Seasoning reference for the UI (§11.1B): when the earliest matching valid credential was issued;
@@ -637,7 +641,7 @@ contract LeXcheXBadge is
             revert LexChexBadge_BoCountRequiresEntity();
         }
         if ((a & K_DATA) != 0 && cred.data.length == 0) revert LexChexBadge_MissingValue(K_DATA);
-        if ((a & K_ZKP_NATIONALITY_OUT) != 0 && cred.zkpNationalityOut.length == 0) revert LexChexBadge_MissingValue(K_ZKP_NATIONALITY_OUT);
+        if ((a & K_NATIONALITY_OUT) != 0 && cred.nationalityOut.length == 0) revert LexChexBadge_MissingValue(K_NATIONALITY_OUT);
         if ((a & SCOPED_KEYS) != 0 && cred.scope == address(0)) revert LexChexBadge_MissingScope();
     }
 

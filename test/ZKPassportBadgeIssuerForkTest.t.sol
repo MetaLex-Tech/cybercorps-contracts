@@ -6,7 +6,7 @@ import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.so
 import {BorgAuth} from "../src/libs/auth.sol";
 import {LeXcheXBadge} from "../src/creds/lexchexBadge.sol";
 import {ZKPassportBadgeIssuer} from "../src/creds/ZKPassportBadgeIssuer.sol";
-import {K_ZKP_NATIONALITY_OUT} from "../src/interfaces/ILexChexBadge.sol";
+import {K_NATIONALITY_OUT} from "../src/interfaces/ILexChexBadge.sol";
 import {IZKPassportHelper, IZKPassportVerifier, ProofVerificationParams} from "../src/interfaces/IZKPassportVerifier.sol";
 import {NonUSNationalityConditionHelper} from "./NonUSNationalityConditionForkTest.t.sol";
 
@@ -63,7 +63,7 @@ contract ZKPassportBadgeIssuerForkTest is Test {
                 )
             )
         );
-        auth.updateRole(address(issuer), auth.ADMIN_ROLE());
+        badge.setIssuerKeys(address(issuer), K_NATIONALITY_OUT);
     }
 
     /// @notice The country list IS bound to the proof, unlike the validity period. A submitter cannot pass a
@@ -81,7 +81,7 @@ contract ZKPassportBadgeIssuerForkTest is Test {
         assertFalse(helper.isNationalityOut(shortened, params.committedInputs), "a subset does not");
 
         vm.expectRevert(ZKPassportBadgeIssuer.NationalityNotExcluded.selector);
-        issuer.submitProofAndMint(params, K_ZKP_NATIONALITY_OUT, shortened);
+        issuer.submitProofAndMint(params, K_NATIONALITY_OUT, shortened);
     }
 
     /// @notice A real proof mints the nationality-exclusion credential, expiring per the declared validity period.
@@ -91,12 +91,12 @@ contract ZKPassportBadgeIssuerForkTest is Test {
         assertEq(params.serviceConfig.validityPeriodInSeconds, DECLARED_VALIDITY, "sample proof validity changed");
 
         vm.warp(SIGNED_TS);
-        uint256 tokenId = issuer.submitProofAndMint(params, K_ZKP_NATIONALITY_OUT, excludedCountries);
+        uint256 tokenId = issuer.submitProofAndMint(params, K_NATIONALITY_OUT, excludedCountries);
 
-        assertTrue(badge.hasValidCredentialOf(account, K_ZKP_NATIONALITY_OUT), "credential vests in the bound wallet");
+        assertTrue(badge.hasValidCredentialOf(account, K_NATIONALITY_OUT), "credential vests in the bound wallet");
         assertEq(uint256(badge.getCredential(tokenId).expiryDate), SIGNED_TS + DECLARED_VALIDITY);
 
-        (string[] memory list,) = badge.getZkpNationalityOut(account);
+        (string[] memory list,) = badge.getNationalityOut(account);
         assertEq(list.length, excludedCountries.length);
     }
 
@@ -117,8 +117,8 @@ contract ZKPassportBadgeIssuerForkTest is Test {
 
         // The issuer is not.
         vm.expectRevert(ZKPassportBadgeIssuer.MaxValidityPeriodExceeded.selector);
-        issuer.submitProofAndMint(params, K_ZKP_NATIONALITY_OUT, excludedCountries);
-        assertFalse(badge.hasValidCredentialOf(account, K_ZKP_NATIONALITY_OUT), "no credential issued");
+        issuer.submitProofAndMint(params, K_NATIONALITY_OUT, excludedCountries);
+        assertFalse(badge.hasValidCredentialOf(account, K_NATIONALITY_OUT), "no credential issued");
     }
 
     /// @notice The neighbouring fields in the very same struct ARE committed to the proof: rewriting `domain` or
@@ -133,7 +133,7 @@ contract ZKPassportBadgeIssuerForkTest is Test {
 
         vm.warp(SIGNED_TS);
         vm.expectRevert(bytes("Invalid domain or scope"));
-        issuer.submitProofAndMint(params, K_ZKP_NATIONALITY_OUT, excludedCountries);
+        issuer.submitProofAndMint(params, K_NATIONALITY_OUT, excludedCountries);
     }
 
     /// @notice The issuer must also be the audience the proof was made for: a proof for another app is refused even
@@ -155,6 +155,6 @@ contract ZKPassportBadgeIssuerForkTest is Test {
 
         vm.warp(SIGNED_TS);
         vm.expectRevert(ZKPassportBadgeIssuer.InvalidScope.selector);
-        other.submitProofAndMint(params, K_ZKP_NATIONALITY_OUT, excludedCountries);
+        other.submitProofAndMint(params, K_NATIONALITY_OUT, excludedCountries);
     }
 }
