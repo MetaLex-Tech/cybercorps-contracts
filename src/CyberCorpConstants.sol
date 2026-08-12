@@ -94,6 +94,20 @@ struct CompanyOfficer {
     string title;
 }
 
+struct CompanyDirector {
+    address eoa;
+    string name;
+    string contact;
+    string title;
+}
+
+struct BoardInfo {
+    uint256 seats;
+    string votingRule;
+    address chairman;
+    address boardSafe;
+}
+
 enum ExercisePriceMethod {
     perToken,
     perWarrant
