@@ -488,12 +488,11 @@ contract CyberCorp is Initializable, BorgAuthACL, UUPSUpgradeable {
         emit BoardAuthorityAdapterUpdated(adapter);
     }
 
-    /// @notice Board-gated wrapper for the BorgAuth ownership handoff.
-    function initTransferAuthOwnership(
-        address newOwner
-    ) external onlyEnforcedBoard {
-        AUTH.initTransferOwnership(newOwner);
-    }
+    // NOTE deliberately absent: no wrapper for BorgAuth.initTransferOwnership. Accepting that
+    // handoff grants the recipient a raw OWNER_ROLE outside the roster/manager model, which the
+    // role-manager lock then makes irrevocable — no residual-role rotation covers it and the
+    // corp exposes no raw revocation. Every legitimate authority is expressible as a roster
+    // seat (director/officer) or a manager pointer, all of which rotate and revoke properly.
 
     function setCompanyPayable(
         address _companyPayable
