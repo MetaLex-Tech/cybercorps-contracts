@@ -47,6 +47,12 @@ import {SecondaryConditionIntegrationBase} from "./SecondaryConditionIntegration
 // | 8  | SYNDICATE       | this SPV                |  pass  | seated in the issuer's circle      |
 // | 9  | SYNDICATE       | whitelist on this SPV   |  fail  | admission is not a seat            |
 //
+// Issuer filter — whose word the gate takes; empty accepts any
+// | #  | config          | buyer's grant           | expect | rationale                          |
+// |----|-----------------|-------------------------|:------:|------------------------------------|
+// | 9a | no issuers named | any issuer's seat      |  pass  | an empty filter means "anyone's"   |
+// | 9b | issuers = [A]    | issuer B's seat        |  fail  | the filter is the whole point      |
+//
 // Config/authorization
 // | #  | case                              | expect                |
 // |----|-----------------------------------|-----------------------|
@@ -92,6 +98,22 @@ contract LexChexBadgeKindConditionTest is SecondaryConditionIntegrationBase {
         Credential memory c;
         c.scope = spv;
         _mintCred(who, kindKey, c);
+    }
+
+    /// @dev An operator that may seat people, holding no BorgAuth role.
+    function _delegate(string memory name) internal returns (address issuer) {
+        issuer = makeAddr(name);
+        badge.setIssuerKeys(issuer, K_SYNDICATE);
+    }
+
+    /// @dev Same as _grantScoped, but minted BY `issuer`, so the credential records whose word it is.
+    function _grantScopedFrom(address issuer, address who, uint256 kindKey, address spv) internal {
+        Credential memory c;
+        c.scope = spv;
+        c.asserts = kindKey;
+        c.expiryDate = uint64(block.timestamp + 3650 days);
+        vm.prank(issuer);
+        badge.mint(who, c);
     }
 
     function _check(LexChexBadgeKindCondition c, bytes32 offerId, bytes32 agreementId) internal view returns (bool) {
@@ -166,6 +188,31 @@ contract LexChexBadgeKindConditionTest is SecondaryConditionIntegrationBase {
         _grantScoped(buyer, K_SPV_WHITELIST, address(corp));
         (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
         assertFalse(_check(c, offerId, settlementId));
+    }
+
+    // 9a — no issuer named, so any operator's seat admits.
+    function test_NoIssuerFilter_AnyIssuersSeatAdmits() public {
+        LexChexBadgeKindCondition c = _deploy(K_SYNDICATE, false);
+        _grantScopedFrom(_delegate("issuerA"), buyer, K_SYNDICATE, address(corp));
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertTrue(_check(c, offerId, settlementId));
+    }
+
+    // 9b — with an issuer named, another operator's seat in the same SPV does not admit.
+    function test_IssuerFilter_ExcludesOtherIssuersSeat() public {
+        address accepted = _delegate("acceptedIssuer");
+        LexChexBadgeKindCondition c = _deploy(K_SYNDICATE, false);
+        address[] memory only = new address[](1);
+        only[0] = accepted;
+        c.updateIssuers(only);
+        assertEq(c.issuers().length, 1);
+
+        _grantScopedFrom(_delegate("otherIssuer"), buyer, K_SYNDICATE, address(corp));
+        (bytes32 offerId, bytes32 settlementId) = _postAndAcceptSell();
+        assertFalse(_check(c, offerId, settlementId));
+
+        _grantScopedFrom(accepted, buyer, K_SYNDICATE, address(corp));
+        assertTrue(_check(c, offerId, settlementId));
     }
 
     // ── Config / authorization ──────────────────────────────────────────────
